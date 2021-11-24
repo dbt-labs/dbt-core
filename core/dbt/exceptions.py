@@ -2,7 +2,9 @@ import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import get_secret_env
+from dbt.events.functions import fire_event
+from dbt.events.types import GeneralWarningMsg, GeneralWarningException
 from dbt.node_types import NodeType
 from dbt import flags
 from dbt.ui import line_wrap_message, warning_tag
@@ -242,6 +244,15 @@ class ValidationException(RuntimeException):
     MESSAGE = "Validation Error"
 
 
+class ParsingException(RuntimeException):
+    CODE = 10015
+    MESSAGE = "Parsing Error"
+
+    @property
+    def type(self):
+        return 'Parsing'
+
+
 class JSONValidationException(ValidationException):
     def __init__(self, typename, errors):
         self.typename = typename
@@ -390,6 +401,8 @@ class CommandError(RuntimeException):
         super().__init__(message)
         self.cwd = cwd
         self.cmd = cmd
+        for secret in get_secret_env():
+            self.cmd = str(self.cmd).replace(secret, "*****")
         self.args = (cwd, cmd, message)
 
     def __str__(self):
@@ -444,12 +457,24 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 
 
+def raise_parsing_error(msg, node=None) -> NoReturn:
+    raise ParsingException(msg, node)
+
+
 def raise_database_error(msg, node=None) -> NoReturn:
     raise DatabaseException(msg, node)
 
 
 def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(msg)
+
+
+def disallow_secret_env_var(env_var_name) -> NoReturn:
+    """Raise an error when a secret env var is referenced outside allowed
+    rendering contexts"""
+    msg = ("Secret env vars are allowed only in profiles.yml or packages.yml. "
+           "Found '{env_var_name}' referenced elsewhere.")
+    raise_parsing_error(msg.format(env_var_name=env_var_name))
 
 
 def invalid_type_error(method_name, arg_name, got_value, expected_type,
@@ -464,6 +489,15 @@ def invalid_type_error(method_name, arg_name, got_value, expected_type,
     raise_compiler_error(msg.format(version=version, method_name=method_name,
                          arg_name=arg_name, expected_type=expected_type,
                          got_value=got_value, got_type=got_type))
+
+
+def invalid_bool_error(got_value, macro_name) -> NoReturn:
+    """Raise a CompilationException when an macro expects a boolean but gets some
+    other value.
+    """
+    msg = ("Macro '{macro_name}' returns '{got_value}'.  It is not type 'bool' "
+           "and cannot not be converted reliably to a bool.")
+    raise_compiler_error(msg.format(macro_name=macro_name, got_value=got_value))
 
 
 def ref_invalid_args(model, args) -> NoReturn:
@@ -604,14 +638,6 @@ def source_target_not_found(
         model, target_name, target_table_name, disabled
     )
     raise_compiler_error(msg, model)
-
-
-def ref_disabled_dependency(model, target_model):
-    raise_compiler_error(
-        "Model '{}' depends on model '{}' which is disabled in "
-        "the project config".format(model.unique_id,
-                                    target_model.unique_id),
-        model)
 
 
 def dependency_not_found(model, target_model_name):
@@ -975,19 +1001,14 @@ def warn_or_error(msg, node=None, log_fmt=None):
     if flags.WARN_ERROR:
         raise_compiler_error(msg, node)
     else:
-        if log_fmt is not None:
-            msg = log_fmt.format(msg)
-        logger.warning(msg)
+        fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
 
 
 def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        msg = str(exc)
-        if log_fmt is not None:
-            msg = log_fmt.format(msg)
-        logger.warning(msg)
+        fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
 
 
 def warn(msg, node=None):

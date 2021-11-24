@@ -1,11 +1,12 @@
+import pathlib
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
 )
 
 from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
-from dbt.exceptions import CompilationException
-from dbt.parser.search import FilesystemSearcher
+from dbt.exceptions import ParsingException
+from dbt.parser.search import filesystem_search
 from typing import Optional
 
 
@@ -53,17 +54,17 @@ def validate_yaml(file_path, dct):
             if not isinstance(dct[key], list):
                 msg = (f"The schema file at {file_path} is "
                        f"invalid because the value of '{key}' is not a list")
-                raise CompilationException(msg)
+                raise ParsingException(msg)
             for element in dct[key]:
                 if not isinstance(element, dict):
                     msg = (f"The schema file at {file_path} is "
                            f"invalid because a list element for '{key}' is not a dictionary")
-                    raise CompilationException(msg)
+                    raise ParsingException(msg)
                 if 'name' not in element:
                     msg = (f"The schema file at {file_path} is "
                            f"invalid because a list element for '{key}' does not have a "
                            "name attribute.")
-                    raise CompilationException(msg)
+                    raise ParsingException(msg)
 
 
 # Special processing for big seed files
@@ -85,15 +86,21 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
 # them into a bunch of FileSource objects
 def get_source_files(project, paths, extension, parse_file_type, saved_files):
     # file path list
-    fp_list = list(FilesystemSearcher(
+    fp_list = filesystem_search(
         project, paths, extension
-    ))
+    )
     # file block list
     fb_list = []
     for fp in fp_list:
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
+        # singular tests live in /tests but only generic tests live
+        # in /tests/generic so we want to skip those
         else:
+            if parse_file_type == ParseFileType.SingularTest:
+                path = pathlib.Path(fp.relative_path)
+                if path.parts[0] == 'generic':
+                    continue
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
             if file:
@@ -137,7 +144,12 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['SingularTestParser'] = read_files_for_parser(
-        project, files, project.test_paths, '.sql', ParseFileType.Test, saved_files
+        project, files, project.test_paths, '.sql', ParseFileType.SingularTest, saved_files
+    )
+
+    # all generic tests within /tests must be nested under a /generic subfolder
+    project_files['GenericTestParser'] = read_files_for_parser(
+        project, files, project.generic_test_paths, '.sql', ParseFileType.GenericTest, saved_files
     )
 
     project_files['SeedParser'] = read_files_for_parser(

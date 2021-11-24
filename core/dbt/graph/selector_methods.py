@@ -18,6 +18,7 @@ from dbt.contracts.graph.parsed import (
     HasTestMetadata,
     ParsedSingularTestNode,
     ParsedExposure,
+    ParsedMetric,
     ParsedGenericTestNode,
     ParsedSourceDefinition,
 )
@@ -45,6 +46,8 @@ class MethodName(StrEnum):
     ResourceType = 'resource_type'
     State = 'state'
     Exposure = 'exposure'
+    Metric = 'metric'
+    Result = 'result'
 
 
 def is_selected_node(fqn: List[str], node_selector: str):
@@ -71,7 +74,7 @@ def is_selected_node(fqn: List[str], node_selector: str):
     return True
 
 
-SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure]
+SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure, ParsedMetric]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -118,13 +121,25 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, exposure
 
+    def metric_nodes(
+        self,
+        included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, ParsedMetric]]:
+
+        for key, metric in self.manifest.metrics.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, metric
+
     def all_nodes(
         self,
         included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
         yield from chain(self.parsed_nodes(included_nodes),
                          self.source_nodes(included_nodes),
-                         self.exposure_nodes(included_nodes))
+                         self.exposure_nodes(included_nodes),
+                         self.metric_nodes(included_nodes))
 
     def configurable_nodes(
         self,
@@ -136,9 +151,10 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
-    ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode]]]:
+    ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode, ParsedMetric]]]:
         yield from chain(self.parsed_nodes(included_nodes),
-                         self.exposure_nodes(included_nodes))
+                         self.exposure_nodes(included_nodes),
+                         self.metric_nodes(included_nodes))
 
     @abc.abstractmethod
     def search(
@@ -242,6 +258,33 @@ class ExposureSelectorMethod(SelectorMethod):
             raise RuntimeException(msg)
 
         for node, real_node in self.exposure_nodes(included_nodes):
+            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+                continue
+            if target_name not in (real_node.name, SELECTOR_GLOB):
+                continue
+
+            yield node
+
+
+class MetricSelectorMethod(SelectorMethod):
+    def search(
+        self, included_nodes: Set[UniqueId], selector: str
+    ) -> Iterator[UniqueId]:
+        parts = selector.split('.')
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid metric selector value "{}". Metrics must be of '
+                'the form ${{metric_name}} or '
+                '${{metric_package.metric_name}}'
+            ).format(selector)
+            raise RuntimeException(msg)
+
+        for node, real_node in self.metric_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
                 continue
             if target_name not in (real_node.name, SELECTOR_GLOB):
@@ -511,8 +554,27 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.sources[node]
             elif node in manifest.exposures:
                 previous_node = manifest.exposures[node]
+            elif node in manifest.metrics:
+                previous_node = manifest.metrics[node]
 
             if checker(previous_node, real_node):
+                yield node
+
+
+class ResultSelectorMethod(SelectorMethod):
+    def search(
+        self, included_nodes: Set[UniqueId], selector: str
+    ) -> Iterator[UniqueId]:
+        if self.previous_state is None or self.previous_state.results is None:
+            raise InternalException(
+                'No comparison run_results'
+            )
+        matches = set(
+            result.unique_id for result in self.previous_state.results
+            if result.status == selector
+        )
+        for node, real_node in self.all_nodes(included_nodes):
+            if node in matches:
                 yield node
 
 
@@ -526,8 +588,11 @@ class MethodManager:
         MethodName.Config: ConfigSelectorMethod,
         MethodName.TestName: TestNameSelectorMethod,
         MethodName.TestType: TestTypeSelectorMethod,
+        MethodName.ResourceType: ResourceTypeSelectorMethod,
         MethodName.State: StateSelectorMethod,
         MethodName.Exposure: ExposureSelectorMethod,
+        MethodName.Metric: MetricSelectorMethod,
+        MethodName.Result: ResultSelectorMethod,
     }
 
     def __init__(

@@ -1,31 +1,38 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/dbt-labs/dbt-core/6c6649f9129d5d108aa3b0526f634cd8f3a9d1ed/etc/dbt-logo-full.svg" alt="dbt logo" width="500"/>
+  <img src="https://raw.githubusercontent.com/dbt-labs/dbt-core/ec7dee39f793aa4f7dd3dae37282cc87664813e4/etc/dbt-logo-full.svg" alt="dbt logo" width="500"/>
+</p>
+<p align="center">
+  <a href="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml">
+    <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml/badge.svg?event=push" alt="Unit Tests Badge"/>
+  </a>
+  <a href="https://github.com/dbt-labs/dbt-core/actions/workflows/integration.yml">
+    <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/integration.yml/badge.svg?event=push" alt="Integration Tests Badge"/>
+  </a>
 </p>
 
-**[dbt](https://www.getdbt.com/)** (data build tool) enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
+**[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
 dbt is the T in ELT. Organize, cleanse, denormalize, filter, rename, and pre-aggregate the raw data in your warehouse so that it's ready for analysis.
 
 ## dbt-postgres
 
-The `dbt-postgres` package contains all of the code required to make dbt operate on a Postgres database. For
+The `dbt-postgres` package contains all of the code enabling dbt to work with a Postgres database. For
 more information on using dbt with Postgres, consult [the docs](https://docs.getdbt.com/docs/profile-postgres).
 
+## Getting started
 
-## Find out more
+- [Install dbt](https://docs.getdbt.com/docs/installation)
+- Read the [introduction](https://docs.getdbt.com/docs/introduction/) and [viewpoint](https://docs.getdbt.com/docs/about/viewpoint/)
 
--   Check out the [Introduction to dbt](https://docs.getdbt.com/docs/introduction/).
--   Read the [dbt Viewpoint](https://docs.getdbt.com/docs/about/viewpoint/).
+## Join the dbt Community
 
-## Join thousands of analysts in the dbt community
-
--   Join the [chat](http://community.getdbt.com/) on Slack.
--   Find community posts on [dbt Discourse](https://discourse.getdbt.com).
+- Be part of the conversation in the [dbt Community Slack](http://community.getdbt.com/)
+- Read more on the [dbt Community Discourse](https://discourse.getdbt.com)
 
 ## Reporting bugs and contributing code
 
--   Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt-core/issues/new).
--   Want to help us build dbt? Check out the [Contributing Getting Started Guide](https://github.com/dbt-labs/dbt-core/blob/HEAD/CONTRIBUTING.md)
+- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt-core/issues/new)
+- Want to help us build dbt? Check out the [Contributing Guide](https://github.com/dbt-labs/dbt-core/blob/HEAD/CONTRIBUTING.md)
 
 ## Code of Conduct
 

@@ -284,6 +284,7 @@ class PartialProject(RenderComponents):
             selectors_dict=rendered_selectors,
         )
 
+    # Called by 'collect_parts' in RuntimeConfig
     def render(self, renderer: DbtProjectYamlRenderer) -> 'Project':
         try:
             rendered = self.get_rendered(renderer)
@@ -304,7 +305,7 @@ class PartialProject(RenderComponents):
                 )
                 raise DbtProjectError(msg.format(deprecated_path=deprecated_path,
                                                  exp_path=exp_path))
-            deprecations.warn('project_config_path',
+            deprecations.warn(f'project-config-{deprecated_path}',
                               deprecated_path=deprecated_path,
                               exp_path=exp_path)
 
@@ -397,6 +398,8 @@ class PartialProject(RenderComponents):
             vars_dict = cfg.vars
 
         vars_value = VarProvider(vars_dict)
+        # There will never be any project_env_vars when it's first created
+        project_env_vars: Dict[str, Any] = {}
         on_run_start: List[str] = value_or(cfg.on_run_start, [])
         on_run_end: List[str] = value_or(cfg.on_run_end, [])
 
@@ -444,6 +447,7 @@ class PartialProject(RenderComponents):
             vars=vars_value,
             config_version=cfg.config_version,
             unrendered=unrendered,
+            project_env_vars=project_env_vars,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -556,6 +560,7 @@ class Project:
     query_comment: QueryComment
     config_version: int
     unrendered: RenderComponents
+    project_env_vars: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -563,6 +568,13 @@ class Project:
             self.model_paths, self.seed_paths, self.snapshot_paths,
             self.analysis_paths, self.macro_paths
         )
+
+    @property
+    def generic_test_paths(self):
+        generic_test_paths = []
+        for test_path in self.test_paths:
+            generic_test_paths.append(os.path.join(test_path, 'generic'))
+        return generic_test_paths
 
     def __str__(self):
         cfg = self.to_project_config(with_packages=True)
@@ -637,26 +649,6 @@ class Project:
             project_root,
             verify_version=verify_version,
         )
-
-    @classmethod
-    def render_from_dict(
-        cls,
-        project_root: str,
-        project_dict: Dict[str, Any],
-        packages_dict: Dict[str, Any],
-        selectors_dict: Dict[str, Any],
-        renderer: DbtProjectYamlRenderer,
-        *,
-        verify_version: bool = False
-    ) -> 'Project':
-        partial = PartialProject.from_dicts(
-            project_root=project_root,
-            project_dict=project_dict,
-            packages_dict=packages_dict,
-            selectors_dict=selectors_dict,
-            verify_version=verify_version,
-        )
-        return partial.render(renderer)
 
     @classmethod
     def from_project_root(

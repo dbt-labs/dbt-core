@@ -22,6 +22,7 @@ from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ParsedMacro,
     ParsedExposure,
+    ParsedMetric,
     ParsedSeedNode,
     Docs,
     MacroDependsOn,
@@ -33,6 +34,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.graph.unparsed import (
     ExposureType,
+    MetricFilter,
     FreshnessThreshold,
     MaturityType,
     Quoting,
@@ -122,7 +124,7 @@ def base_parsed_model_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Model),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -182,6 +184,7 @@ def basic_parsed_model_object():
         config=NodeConfig(),
         meta={},
         checksum=FileHash.from_contents(''),
+        created_at=1.0,
     )
 
 
@@ -190,7 +193,7 @@ def minimal_parsed_model_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Model),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -211,7 +214,7 @@ def complex_parsed_model_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Model),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -404,7 +407,7 @@ def basic_parsed_seed_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Seed),
         'path': '/root/seeds/seed.csv',
         'original_file_path': 'seeds/seed.csv',
@@ -477,7 +480,7 @@ def minimal_parsed_seed_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Seed),
         'path': '/root/seeds/seed.csv',
         'original_file_path': 'seeds/seed.csv',
@@ -497,7 +500,7 @@ def complex_parsed_seed_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Seed),
         'path': '/root/seeds/seed.csv',
         'original_file_path': 'seeds/seed.csv',
@@ -718,6 +721,8 @@ def patched_model_object():
 def test_patch_parsed_model(basic_parsed_model_object, basic_parsed_model_patch_object, patched_model_object):
     pre_patch = basic_parsed_model_object
     pre_patch.patch(basic_parsed_model_patch_object)
+    pre_patch.created_at = 1.0
+    patched_model_object.created_at = 1.0
     assert patched_model_object == pre_patch
 
 
@@ -745,7 +750,7 @@ def base_parsed_hook_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Operation),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -815,7 +820,7 @@ def complex_parsed_hook_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Operation),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -933,7 +938,7 @@ def minimal_parsed_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -958,7 +963,7 @@ def basic_parsed_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -1030,7 +1035,7 @@ def complex_parsed_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -1372,7 +1377,7 @@ def basic_timestamp_snapshot_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Snapshot),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -1504,7 +1509,7 @@ def basic_check_snapshot_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
-        'created_at': 1,
+        'created_at': 1.0,
         'resource_type': str(NodeType.Snapshot),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -1716,7 +1721,7 @@ class TestParsedMacro(ContractTestCase):
             'name': 'foo',
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
-            'created_at': 1,
+            'created_at': 1.0,
             'package_name': 'test',
             'macro_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
@@ -1807,7 +1812,7 @@ def minimum_parsed_source_definition_dict():
         'root_path': '/root',
         'path': '/root/models/sources.yml',
         'original_file_path': '/root/models/sources.yml',
-        'created_at': 1,
+        'created_at': 1.0,
         'database': 'some_db',
         'schema': 'some_schema',
         'fqn': ['test', 'source', 'my_source', 'my_source_table'],
@@ -1828,7 +1833,7 @@ def basic_parsed_source_definition_dict():
         'root_path': '/root',
         'path': '/root/models/sources.yml',
         'original_file_path': '/root/models/sources.yml',
-        'created_at': 1,
+        'created_at': 1.0,
         'database': 'some_db',
         'schema': 'some_schema',
         'fqn': ['test', 'source', 'my_source', 'my_source_table'],
@@ -1884,7 +1889,7 @@ def complex_parsed_source_definition_dict():
         'root_path': '/root',
         'path': '/root/models/sources.yml',
         'original_file_path': '/root/models/sources.yml',
-        'created_at': 1,
+        'created_at': 1.0,
         'database': 'some_db',
         'schema': 'some_schema',
         'fqn': ['test', 'source', 'my_source', 'my_source_table'],
@@ -1906,6 +1911,7 @@ def complex_parsed_source_definition_dict():
         },
         'freshness': {
             'warn_after': {'period': 'hour', 'count': 1},
+            'error_after': {}
         },
         'loaded_at_field': 'loaded_at',
         'unrendered_config': {},
@@ -2038,7 +2044,7 @@ def minimal_parsed_exposure_dict():
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
         'description': '',
-        'created_at': 1,
+        'created_at': 1.0,
     }
 
 
@@ -2066,7 +2072,7 @@ def basic_parsed_exposure_dict():
         'description': '',
         'meta': {},
         'tags': [],
-        'created_at': 1,
+        'created_at': 1.0,
     }
 
 
@@ -2093,7 +2099,7 @@ def complex_parsed_exposure_dict():
     return {
         'name': 'my_exposure',
         'type': 'analysis',
-        'created_at': 1,
+        'created_at': 1.0,
         'owner': {
             'email': 'test@example.com',
             'name': 'A Name',
@@ -2179,3 +2185,79 @@ def test_compare_unchanged_parsed_exposure(func, basic_parsed_exposure_object):
 def test_compare_changed_exposure(func, basic_parsed_exposure_object):
     node, compare = func(basic_parsed_exposure_object)
     assert not node.same_contents(compare)
+
+
+# METRICS
+@pytest.fixture
+def minimal_parsed_metric_dict():
+    return {
+        'name': 'my_metric',
+        'type': 'count',
+        'timestamp': 'created_at',
+        'time_grains': ['day'],
+        'fqn': ['test', 'metrics', 'my_metric'],
+        'unique_id': 'metric.test.my_metric',
+        'package_name': 'test',
+        'meta': {},
+        'tags': [],
+        'path': 'models/something.yml',
+        'root_path': '/usr/src/app',
+        'original_file_path': 'models/something.yml',
+        'description': '',
+        'created_at': 1.0,
+    }
+
+
+@pytest.fixture
+def basic_parsed_metric_dict():
+    return {
+        'name': 'new_customers',
+        'label': 'New Customers',
+        'model': 'ref("dim_customers")',
+        'type': 'count',
+        'sql': 'user_id',
+        'timestamp': 'signup_date',
+        'time_grains': ['day', 'week', 'month'],
+        'dimensions': ['plan', 'country'],
+        'filters': [
+            {
+                "field": "is_paying",
+                "value": "true",
+                "operator": "=",
+            }
+        ],
+        'resource_type': 'metric',
+        'refs': [['dim_customers']],
+        'sources': [],
+        'fqn': ['test', 'metrics', 'my_metric'],
+        'unique_id': 'metric.test.my_metric',
+        'package_name': 'test',
+        'path': 'models/something.yml',
+        'root_path': '/usr/src/app',
+        'original_file_path': 'models/something.yml',
+        'description': '',
+        'meta': {},
+        'tags': [],
+        'created_at': 1.0,
+        'depends_on': {
+            'nodes': [],
+            'macros': [],
+        },
+    }
+
+
+@pytest.fixture
+def basic_parsed_metric_object():
+    return ParsedMetric(
+        name='my_metric',
+        type='count',
+        fqn=['test', 'metrics', 'my_metric'],
+        unique_id='metric.test.my_metric',
+        package_name='test',
+        path='models/something.yml',
+        root_path='/usr/src/app',
+        original_file_path='models/something.yml',
+        description='',
+        meta={},
+        tags=[]
+    )

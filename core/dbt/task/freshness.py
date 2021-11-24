@@ -4,8 +4,6 @@ import time
 
 from .base import BaseRunner
 from .printer import (
-    print_start_line,
-    print_freshness_result_line,
     print_run_result_error,
 )
 from .runnable import GraphRunnableTask
@@ -16,7 +14,11 @@ from dbt.contracts.results import (
     SourceFreshnessResult, FreshnessStatus
 )
 from dbt.exceptions import RuntimeException, InternalException
-from dbt.logger import print_timestamped_line
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    FreshnessCheckComplete, PrintStartLine, PrintHookEndErrorLine,
+    PrintHookEndErrorStaleLine, PrintHookEndWarnLine, PrintHookEndPassLine
+)
 from dbt.node_types import NodeType
 
 from dbt.graph import ResourceTypeSelector
@@ -34,10 +36,61 @@ class FreshnessRunner(BaseRunner):
 
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
-        print_start_line(description, self.node_index, self.num_nodes)
+        fire_event(
+            PrintStartLine(
+                description=description,
+                index=self.node_index,
+                total=self.num_nodes
+            )
+        )
 
     def after_execute(self, result):
-        print_freshness_result_line(result, self.node_index, self.num_nodes)
+        if hasattr(result, 'node'):
+            source_name = result.node.source_name
+            table_name = result.node.name
+        else:
+            source_name = result.source_name
+            table_name = result.table_name
+        if result.status == FreshnessStatus.RuntimeErr:
+            fire_event(
+                PrintHookEndErrorLine(
+                    source_name=source_name,
+                    table_name=table_name,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        elif result.status == FreshnessStatus.Error:
+            fire_event(
+                PrintHookEndErrorStaleLine(
+                    source_name=source_name,
+                    table_name=table_name,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        elif result.status == FreshnessStatus.Warn:
+            fire_event(
+                PrintHookEndWarnLine(
+                    source_name=source_name,
+                    table_name=table_name,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        else:
+            fire_event(
+                PrintHookEndPassLine(
+                    source_name=source_name,
+                    table_name=table_name,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
 
     def error_result(self, node, message, start_time, timing_info):
         return self._build_run_result(
@@ -170,4 +223,4 @@ class FreshnessTask(GraphRunnableTask):
             ):
                 print_run_result_error(result)
 
-        print_timestamped_line('Done.')
+        fire_event(FreshnessCheckComplete())

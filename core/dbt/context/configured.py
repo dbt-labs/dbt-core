@@ -1,14 +1,18 @@
-from typing import Any, Dict
+import os
+from typing import Any, Dict, Optional
 
 from dbt.contracts.connection import AdapterRequiredConfig
+from dbt.logger import SECRET_ENV_PREFIX
 from dbt.node_types import NodeType
 from dbt.utils import MultiDict
 
-from dbt.context.base import contextproperty, Var
+from dbt.context.base import contextproperty, contextmember, Var
 from dbt.context.target import TargetContext
+from dbt.exceptions import raise_parsing_error, disallow_secret_env_var
 
 
 class ConfiguredContext(TargetContext):
+    # subclasses are SchemaYamlContext, MacroResolvingContext, ManifestContext
     config: AdapterRequiredConfig
 
     def __init__(
@@ -63,16 +67,42 @@ class ConfiguredVar(Var):
         return self.get_missing_var(var_name)
 
 
+class SchemaYamlVars():
+    def __init__(self):
+        self.env_vars = {}
+        self.vars = {}
+
+
 class SchemaYamlContext(ConfiguredContext):
-    def __init__(self, config, project_name: str):
+    # subclass is DocsRuntimeContext
+    def __init__(self, config, project_name: str, schema_yaml_vars: Optional[SchemaYamlVars]):
         super().__init__(config)
         self._project_name = project_name
+        self.schema_yaml_vars = schema_yaml_vars
 
     @contextproperty
     def var(self) -> ConfiguredVar:
         return ConfiguredVar(
             self._ctx, self.config, self._project_name
         )
+
+    @contextmember
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        return_value = None
+        if var.startswith(SECRET_ENV_PREFIX):
+            disallow_secret_env_var(var)
+        if var in os.environ:
+            return_value = os.environ[var]
+        elif default is not None:
+            return_value = default
+
+        if return_value is not None:
+            if self.schema_yaml_vars:
+                self.schema_yaml_vars.env_vars[var] = return_value
+            return return_value
+        else:
+            msg = f"Env var required but not provided: '{var}'"
+            raise_parsing_error(msg)
 
 
 class MacroResolvingContext(ConfiguredContext):
@@ -86,10 +116,10 @@ class MacroResolvingContext(ConfiguredContext):
         )
 
 
-def generate_schema_yml(
-    config: AdapterRequiredConfig, project_name: str
+def generate_schema_yml_context(
+        config: AdapterRequiredConfig, project_name: str, schema_yaml_vars: SchemaYamlVars = None
 ) -> Dict[str, Any]:
-    ctx = SchemaYamlContext(config, project_name)
+    ctx = SchemaYamlContext(config, project_name, schema_yaml_vars)
     return ctx.to_dict()
 
 

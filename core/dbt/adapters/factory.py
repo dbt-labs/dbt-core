@@ -8,10 +8,9 @@ from dbt.include.global_project import (
     PACKAGE_PATH as GLOBAL_PROJECT_PATH,
     PROJECT_NAME as GLOBAL_PROJECT_NAME,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import AdapterImportError, PluginLoadError
 from dbt.contracts.connection import Credentials, AdapterRequiredConfig
-
-
 from dbt.adapters.protocol import (
     AdapterProtocol,
     AdapterConfig,
@@ -67,11 +66,12 @@ class AdapterContainer:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtime error
             if exc.name == 'dbt.adapters.' + name:
+                fire_event(AdapterImportError(exc=exc))
                 raise RuntimeException(f'Could not find adapter type {name}!')
-            logger.info(f'Error importing adapter: {exc}')
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
-            logger.debug('', exc_info=True)
+
+            fire_event(PluginLoadError())
             raise
         plugin: AdapterPlugin = mod.Plugin
         plugin_type = plugin.adapter.type()

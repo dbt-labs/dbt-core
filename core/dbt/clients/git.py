@@ -2,7 +2,12 @@ import re
 import os.path
 
 from dbt.clients.system import run_cmd, rmdir
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    GitSparseCheckoutSubdirectory, GitProgressCheckoutRevision,
+    GitProgressUpdatingExistingDependency, GitProgressPullingNewDependency,
+    GitNothingToDo, GitProgressUpdatedCheckoutRange, GitProgressCheckedOutAt
+)
 import dbt.exceptions
 from packaging import version
 
@@ -12,13 +17,23 @@ def _is_commit(revision: str) -> bool:
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
 
 
+def _raise_git_cloning_error(repo, revision, error):
+    stderr = error.stderr.decode('utf-8').strip()
+    if 'usage: git' in stderr:
+        stderr = stderr.split('\nusage: git')[0]
+    if re.match("fatal: destination path '(.+)' already exists", stderr):
+        raise error
+
+    dbt.exceptions.bad_package_spec(repo, revision, stderr)
+
+
 def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None):
     has_revision = revision is not None
     is_commit = _is_commit(revision or "")
 
     clone_cmd = ['git', 'clone', '--depth', '1']
     if subdirectory:
-        logger.debug('  Subdirectory specified: {}, using sparse checkout.'.format(subdirectory))
+        fire_event(GitSparseCheckoutSubdirectory(subdir=subdirectory))
         out, _ = run_cmd(cwd, ['git', '--version'], env={'LC_ALL': 'C'})
         git_version = version.parse(re.search(r"\d+\.\d+\.\d+", out.decode("utf-8")).group(0))
         if not git_version >= version.parse("2.25.0"):
@@ -36,10 +51,18 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
 
     if dirname is not None:
         clone_cmd.append(dirname)
-    result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
+    try:
+        result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
+    except dbt.exceptions.CommandResultError as exc:
+        _raise_git_cloning_error(repo, revision, exc)
 
     if subdirectory:
-        run_cmd(os.path.join(cwd, dirname or ''), ['git', 'sparse-checkout', 'set', subdirectory])
+        cwd_subdir = os.path.join(cwd, dirname or '')
+        clone_cmd_subdir = ['git', 'sparse-checkout', 'set', subdirectory]
+        try:
+            run_cmd(cwd_subdir, clone_cmd_subdir)
+        except dbt.exceptions.CommandResultError as exc:
+            _raise_git_cloning_error(repo, revision, exc)
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, '.git'))
@@ -54,7 +77,7 @@ def list_tags(cwd):
 
 
 def _checkout(cwd, repo, revision):
-    logger.debug('  Checking out revision {}.'.format(revision))
+    fire_event(GitProgressCheckoutRevision(revision=revision))
 
     fetch_cmd = ["git", "fetch", "origin", "--depth", "1"]
 
@@ -111,14 +134,17 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
     except dbt.exceptions.CommandResultError as exc:
         err = exc.stderr.decode('utf-8')
         exists = re.match("fatal: destination path '(.+)' already exists", err)
-        if not exists:  # something else is wrong, raise it
+        if not exists:
+            print(
+                '\nSomething went wrong while cloning {}'.format(repo) +
+                '\nCheck the debug logs for more information')
             raise
 
     directory = None
     start_sha = None
     if exists:
         directory = exists.group(1)
-        logger.debug('Updating existing dependency {}.', directory)
+        fire_event(GitProgressUpdatingExistingDependency(dir=directory))
     else:
         matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
         if matches is None:
@@ -126,17 +152,18 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
                 f'Error cloning {repo} - never saw "Cloning into ..." from git'
             )
         directory = matches.group(1)
-        logger.debug('Pulling new dependency {}.', directory)
+        fire_event(GitProgressPullingNewDependency(dir=directory))
     full_path = os.path.join(cwd, directory)
     start_sha = get_current_sha(full_path)
     checkout(full_path, repo, revision)
     end_sha = get_current_sha(full_path)
     if exists:
         if start_sha == end_sha:
-            logger.debug('  Already at {}, nothing to do.', start_sha[:7])
+            fire_event(GitNothingToDo(sha=start_sha[:7]))
         else:
-            logger.debug('  Updated checkout from {} to {}.',
-                         start_sha[:7], end_sha[:7])
+            fire_event(GitProgressUpdatedCheckoutRange(
+                start_sha=start_sha[:7], end_sha=end_sha[:7]
+            ))
     else:
-        logger.debug('  Checked out at {}.', end_sha[:7])
+        fire_event(GitProgressCheckedOutAt(end_sha=end_sha[:7]))
     return os.path.join(directory, subdirectory or '')

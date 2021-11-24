@@ -2,9 +2,9 @@
 import os
 import sys
 
-if sys.version_info < (3, 6):
+if sys.version_info < (3, 7):
     print('Error: dbt does not support this version of Python.')
-    print('Please upgrade to Python 3.6 or higher.')
+    print('Please upgrade to Python 3.7 or higher.')
     sys.exit(1)
 
 
@@ -41,7 +41,7 @@ def _dbt_psycopg2_name():
 
 
 package_name = "dbt-postgres"
-package_version = "1.0.0b1"
+package_version = "1.0.0rc2"
 description = """The postgres adpter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -54,7 +54,7 @@ setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description=description,
+    long_description=long_description,
     long_description_content_type='text/markdown',
     author="dbt Labs",
     author_email="info@dbtlabs.com",
@@ -82,10 +82,9 @@ setup(
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: POSIX :: Linux',
 
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
-    python_requires=">=3.6.2",
+    python_requires=">=3.7",
 )

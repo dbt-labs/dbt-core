@@ -16,6 +16,7 @@ from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
 from .context_config import ContextConfig
+from dbt.logger import SECRET_ENV_PREFIX
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
@@ -31,11 +32,13 @@ from dbt.contracts.graph.compiled import (
 from dbt.contracts.graph.parsed import (
     ParsedMacro,
     ParsedExposure,
+    ParsedMetric,
     ParsedSeedNode,
     ParsedSourceDefinition,
 )
 from dbt.exceptions import (
     CompilationException,
+    ParsingException,
     InternalException,
     ValidationException,
     RuntimeException,
@@ -47,9 +50,10 @@ from dbt.exceptions import (
     ref_bad_context,
     source_target_not_found,
     wrapped_exports,
+    raise_parsing_error,
+    disallow_secret_env_var,
 )
 from dbt.config import IsFQNResource
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
 from dbt.utils import (
@@ -144,7 +148,7 @@ class BaseDatabaseWrapper:
         elif isinstance(namespace, str):
             search_packages = self._adapter.config.get_macro_search_order(namespace)
             if not search_packages and namespace in self._adapter.config.dependencies:
-                search_packages = [namespace]
+                search_packages = [self.config.project_name, namespace]
         else:
             # Not a string and not None so must be a list
             raise CompilationException(
@@ -162,10 +166,10 @@ class BaseDatabaseWrapper:
                     macro = self._namespace.get_from_package(
                         package_name, search_name
                     )
-                except CompilationException as exc:
-                    raise CompilationException(
-                        f'In dispatch: {exc.msg}',
-                    ) from exc
+                except CompilationException:
+                    # Only raise CompilationException if macro is not found in
+                    # any package
+                    macro = None
 
                 if package_name is None:
                     attempts.append(search_name)
@@ -323,7 +327,7 @@ class ParseConfigObject(Config):
     def require(self, name, validator=None):
         return ''
 
-    def get(self, name, validator=None, default=None):
+    def get(self, name, default=None, validator=None):
         return ''
 
     def persist_relation_docs(self) -> bool:
@@ -367,7 +371,7 @@ class RuntimeConfigObject(Config):
 
         return to_return
 
-    def get(self, name, validator=None, default=None):
+    def get(self, name, default=None, validator=None):
         to_return = self._lookup(name, default)
 
         if validator is not None and default is not None:
@@ -636,6 +640,7 @@ T = TypeVar('T')
 
 # Base context collection, used for parsing configs.
 class ProviderContext(ManifestContext):
+    # subclasses are MacroContext, ModelContext, TestContext
     def __init__(
         self,
         model,
@@ -1161,6 +1166,35 @@ class ProviderContext(ManifestContext):
         )
         raise CompilationException(msg)
 
+    @contextmember
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        """The env_var() function. Return the environment variable named 'var'.
+        If there is no such environment variable set, return the default.
+
+        If the default is None, raise an exception for an undefined variable.
+        """
+        return_value = None
+        if var.startswith(SECRET_ENV_PREFIX):
+            disallow_secret_env_var(var)
+        if var in os.environ:
+            return_value = os.environ[var]
+        elif default is not None:
+            return_value = default
+
+        if return_value is not None:
+            # Save the env_var value in the manifest and the var name in the source_file.
+            # If this is compiling, do not save because it's irrelevant to parsing.
+            if self.model and not hasattr(self.model, 'compiled'):
+                self.manifest.env_vars[var] = return_value
+                source_file = self.manifest.files[self.model.file_id]
+                # Schema files should never get here
+                if source_file.parse_file_type != 'schema':
+                    source_file.env_vars.append(var)
+            return return_value
+        else:
+            msg = f"Env var required but not provided: '{var}'"
+            raise_parsing_error(msg)
+
 
 class MacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:
@@ -1262,7 +1296,7 @@ class ModelContext(ProviderContext):
 
 
 # This is called by '_context_for', used in 'render_with_context'
-def generate_parser_model(
+def generate_parser_model_context(
     model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1279,7 +1313,7 @@ def generate_parser_model(
     return ctx.to_dict()
 
 
-def generate_generate_component_name_macro(
+def generate_generate_name_macro_context(
     macro: ParsedMacro,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1290,7 +1324,7 @@ def generate_generate_component_name_macro(
     return ctx.to_dict()
 
 
-def generate_runtime_model(
+def generate_runtime_model_context(
     model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1301,7 +1335,7 @@ def generate_runtime_model(
     return ctx.to_dict()
 
 
-def generate_runtime_macro(
+def generate_runtime_macro_context(
     macro: ParsedMacro,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1355,6 +1389,44 @@ def generate_parse_exposure(
     }
 
 
+class MetricRefResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        package = None
+        if len(args) == 1:
+            name = args[0]
+        elif len(args) == 2:
+            package, name = args
+        else:
+            ref_invalid_args(self.model, args)
+        self.validate_args(name, package)
+        self.model.refs.append(list(args))
+        return ''
+
+    def validate_args(self, name, package):
+        if not isinstance(name, str):
+            raise ParsingException(
+                f'In a metrics section in {self.model.original_file_path} '
+                f'the name argument to ref() must be a string'
+            )
+
+
+def generate_parse_metrics(
+    metric: ParsedMetric,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    package_name: str,
+) -> Dict[str, Any]:
+    project = config.load_dependencies()[package_name]
+    return {
+        'ref': MetricRefResolver(
+            None,
+            metric,
+            project,
+            manifest,
+        ),
+    }
+
+
 # This class is currently used by the schema parser in order
 # to limit the number of macros in the context by using
 # the TestMacroNamespace
@@ -1389,8 +1461,13 @@ class TestContext(ProviderContext):
     # 'depends_on.macros' by using the TestMacroNamespace
     def _build_test_namespace(self):
         depends_on_macros = []
+        # all generic tests use a macro named 'get_where_subquery' to wrap 'model' arg
+        # see generic_test_builders.build_model_str
+        get_where_subquery = self.macro_resolver.macros_by_name.get('get_where_subquery')
+        if get_where_subquery:
+            depends_on_macros.append(get_where_subquery.unique_id)
         if self.model.depends_on and self.model.depends_on.macros:
-            depends_on_macros = self.model.depends_on.macros
+            depends_on_macros.extend(self.model.depends_on.macros)
         lookup_macros = depends_on_macros.copy()
         for macro_unique_id in lookup_macros:
             lookup_macro = self.macro_resolver.macros.get(macro_unique_id)
@@ -1402,6 +1479,30 @@ class TestContext(ProviderContext):
             depends_on_macros
         )
         self.namespace = macro_namespace
+
+    @contextmember
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        return_value = None
+        if var.startswith(SECRET_ENV_PREFIX):
+            disallow_secret_env_var(var)
+        if var in os.environ:
+            return_value = os.environ[var]
+        elif default is not None:
+            return_value = default
+
+        if return_value is not None:
+            # Save the env_var value in the manifest and the var name in the source_file
+            if self.model:
+                self.manifest.env_vars[var] = return_value
+                # the "model" should only be test nodes, but just in case, check
+                if self.model.resource_type == NodeType.Test and self.model.file_key_name:
+                    source_file = self.manifest.files[self.model.file_id]
+                    (yaml_key, name) = self.model.file_key_name.split('.')
+                    source_file.add_env_var(var, yaml_key, name)
+            return return_value
+        else:
+            msg = f"Env var required but not provided: '{var}'"
+            raise_parsing_error(msg)
 
 
 def generate_test_context(

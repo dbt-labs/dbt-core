@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
@@ -25,7 +25,7 @@ class BasePPTest(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['seeds'],
+            'seed-paths': ['seeds'],
             'test-paths': ['tests'],
             'macro-paths': ['macros'],
             'analysis-paths': ['analyses'],
@@ -41,6 +41,7 @@ class BasePPTest(DBTIntegrationTest):
         # delete files in this directory without tests interfering with each other.
         os.mkdir(os.path.join(self.test_root_dir, 'models'))
         os.mkdir(os.path.join(self.test_root_dir, 'tests'))
+        os.mkdir(os.path.join(self.test_root_dir, 'tests', 'generic'))
         os.mkdir(os.path.join(self.test_root_dir, 'seeds'))
         os.mkdir(os.path.join(self.test_root_dir, 'macros'))
         os.mkdir(os.path.join(self.test_root_dir, 'analyses'))
@@ -476,6 +477,7 @@ class TestMacros(BasePPTest):
         results, log_output = self.run_dbt_and_capture(['--partial-parse', 'run'])
         self.assertTrue('Starting full parse.' in log_output)
 
+
 class TestSnapshots(BasePPTest):
 
     @use_profile('postgres')
@@ -508,3 +510,40 @@ class TestSnapshots(BasePPTest):
         self.rm_file(normalize('snapshots/snapshot.sql'))
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 1)
+
+
+class TestTests(BasePPTest):
+
+    @use_profile('postgres')
+    def test_postgres_pp_generic_tests(self):
+
+        # initial run 
+        self.setup_directories()
+        self.copy_file('test-files/orders.sql', 'models/orders.sql')
+        self.copy_file('test-files/generic_schema.yml', 'models/schema.yml')
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
+        manifest = get_manifest()
+        expected_nodes = ['model.test.orders', 'test.test.unique_orders_id.1360ecc70e']
+        self.assertCountEqual(expected_nodes, list(manifest.nodes.keys()))
+
+        # add generic test in test-path
+        self.copy_file('test-files/generic_test.sql', 'tests/generic/generic_test.sql')
+        self.copy_file('test-files/generic_test_schema.yml', 'models/schema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 1)
+        manifest = get_manifest()
+        test_id = 'test.test.is_odd_orders_id.82834fdc5b'
+        self.assertIn(test_id, manifest.nodes)
+        expected_nodes = ['model.test.orders', 'test.test.unique_orders_id.1360ecc70e', 'test.test.is_odd_orders_id.82834fdc5b']
+        self.assertCountEqual(expected_nodes, list(manifest.nodes.keys()))
+
+        # edit generic test in test-path
+        self.copy_file('test-files/generic_test_edited.sql', 'tests/generic/generic_test.sql')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 1)
+        manifest = get_manifest()
+        test_id = 'test.test.is_odd_orders_id.82834fdc5b'
+        self.assertIn(test_id, manifest.nodes)
+        expected_nodes = ['model.test.orders', 'test.test.unique_orders_id.1360ecc70e', 'test.test.is_odd_orders_id.82834fdc5b']
+        self.assertCountEqual(expected_nodes, list(manifest.nodes.keys()))

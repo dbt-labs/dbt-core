@@ -15,7 +15,8 @@ from dbt.exceptions import DbtProjectError
 from dbt.exceptions import ValidationException
 from dbt.exceptions import RuntimeException
 from dbt.exceptions import validator_error_message
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.types import MissingProfileTarget
+from dbt.events.functions import fire_event
 from dbt.utils import coerce_dict_str
 
 from .renderer import ProfileRenderer
@@ -91,6 +92,7 @@ class Profile(HasCredentials):
     user_config: UserConfig
     threads: int
     credentials: Credentials
+    profile_env_vars: Dict[str, Any]
 
     def __init__(
         self,
@@ -108,6 +110,7 @@ class Profile(HasCredentials):
         self.user_config = user_config
         self.threads = threads
         self.credentials = credentials
+        self.profile_env_vars = {}  # never available on init
 
     def to_profile_info(
         self, serialize_credentials: bool = False
@@ -291,10 +294,7 @@ class Profile(HasCredentials):
             target_name = renderer.render_value(raw_profile['target'])
         else:
             target_name = 'default'
-            logger.debug(
-                "target not specified in profile '{}', using '{}'"
-                .format(profile_name, target_name)
-            )
+            fire_event(MissingProfileTarget(profile_name=profile_name, target_name=target_name))
 
         raw_profile_data = cls._get_profile_data(
             raw_profile, profile_name, target_name

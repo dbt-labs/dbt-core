@@ -16,7 +16,7 @@ class TestSimpleCycle(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_simple_cycle(self):
         message = "Found a cycle.*"
-        with self.assertRaisesRegexp(Exception, message):
+        with self.assertRaisesRegex(Exception, message):
             self.run_dbt(["run"])
 
 class TestComplexCycle(DBTIntegrationTest):
@@ -33,5 +33,5 @@ class TestComplexCycle(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_simple_cycle(self):
         message = "Found a cycle.*"
-        with self.assertRaisesRegexp(Exception, message):
+        with self.assertRaisesRegex(Exception, message):
             self.run_dbt(["run"])

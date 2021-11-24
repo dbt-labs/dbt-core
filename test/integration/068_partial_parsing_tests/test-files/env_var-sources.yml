@@ -1,0 +1,18 @@
+version: 2
+sources:
+  - name: seed_sources
+    schema: "{{ target.schema }}"
+    database: "{{ env_var('ENV_VAR_DATABASE') }}"
+    tables:
+      - name: raw_customers
+        columns:
+          - name: id
+            tests:
+              - not_null:
+                  severity: "{{ env_var('ENV_VAR_SEVERITY') }}"
+              - unique
+          - name: first_name
+          - name: last_name
+          - name: email
+
+

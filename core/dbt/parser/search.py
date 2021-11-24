@@ -8,7 +8,7 @@ from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
 from dbt.config import Project
 from dbt.contracts.files import FilePath, AnySourceFile
-from dbt.exceptions import CompilationException, InternalException
+from dbt.exceptions import ParsingException, InternalException
 
 
 # What's the point of wrapping a SourceFile with this class?
@@ -63,31 +63,24 @@ class FullBlock(FileBlock):
         return self.block.full_block
 
 
-class FilesystemSearcher(Iterable[FilePath]):
-    def __init__(
-        self, project: Project, relative_dirs: List[str], extension: str
-    ) -> None:
-        self.project = project
-        self.relative_dirs = relative_dirs
-        self.extension = extension
-
-    def __iter__(self) -> Iterator[FilePath]:
-        ext = "[!.#~]*" + self.extension
-
-        root = self.project.project_root
-
-        for result in find_matching(root, self.relative_dirs, ext):
-            if 'searched_path' not in result or 'relative_path' not in result:
-                raise InternalException(
-                    'Invalid result from find_matching: {}'.format(result)
-                )
-            file_match = FilePath(
-                searched_path=result['searched_path'],
-                relative_path=result['relative_path'],
-                modification_time=result['modification_time'],
-                project_root=root,
+def filesystem_search(project: Project, relative_dirs: List[str], extension: str):
+    ext = "[!.#~]*" + extension
+    root = project.project_root
+    file_path_list = []
+    for result in find_matching(root, relative_dirs, ext):
+        if 'searched_path' not in result or 'relative_path' not in result:
+            raise InternalException(
+                'Invalid result from find_matching: {}'.format(result)
             )
-            yield file_match
+        file_match = FilePath(
+            searched_path=result['searched_path'],
+            relative_path=result['relative_path'],
+            modification_time=result['modification_time'],
+            project_root=root,
+        )
+        file_path_list.append(file_match)
+
+    return file_path_list
 
 
 Block = Union[BlockContents, FullBlock]
@@ -120,7 +113,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
                 assert isinstance(block, BlockTag)
                 yield block
 
-        except CompilationException as exc:
+        except ParsingException as exc:
             if exc.node is None:
                 exc.add_node(source_file)
             raise

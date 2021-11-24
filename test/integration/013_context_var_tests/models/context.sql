@@ -28,5 +28,5 @@ select
     '{{ invocation_id }}'  as invocation_id,
 
     '{{ env_var("DBT_TEST_013_ENV_VAR") }}' as env_var,
-    '{{ env_var("DBT_ENV_SECRET_013_SECRET") }}' as env_var_secret,
+    'secret_variable' as env_var_secret, -- make sure the value itself is scrubbed from the logs
     '{{ env_var("DBT_TEST_013_NOT_SECRET") }}' as env_var_not_secret

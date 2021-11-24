@@ -2,6 +2,7 @@ from test.integration.base import DBTIntegrationTest,  use_profile
 import io
 import json
 import os
+import re
 
 import dbt.exceptions
 from dbt.version import __version__ as dbt_version
@@ -52,28 +53,31 @@ class TestDefaultQueryComments(DBTIntegrationTest):
         super().tearDown()
 
     def run_get_json(self, expect_pass=True):
-        self.run_dbt(
+        res, raw_logs = self.run_dbt_and_capture(
             ['--debug', '--log-format=json', 'run'],
             expect_pass=expect_pass
         )
-        logs = []
-        for line in self.stringbuf.getvalue().split('\n'):
+
+        parsed_logs = []
+        for line in raw_logs.split('\n'):
             try:
                 log = json.loads(line)
             except ValueError:
                 continue
 
-            if log['extra'].get('run_state') != 'running':
-                continue
-            logs.append(log)
-        self.assertGreater(len(logs), 0)
-        return logs
+            parsed_logs.append(log)
+        
+        # empty lists evaluate as False
+        self.assertTrue(parsed_logs)
+        return parsed_logs
 
     def query_comment(self, model_name, log):
+        # N.B: a temporary string replacement regex to strip the HH:MM:SS from the log line if present.
+        # TODO: make this go away when structured logging is stable 
+        log_msg = re.sub("(?:[01]\d|2[0123]):(?:[012345]\d):(?:[012345]\d \| )", "", log['msg'])
         prefix = 'On {}: '.format(model_name)
-
-        if log['message'].startswith(prefix):
-            msg = log['message'][len(prefix):]
+        if log_msg.startswith(prefix):
+            msg = log_msg[len(prefix):]
             if msg in {'COMMIT', 'BEGIN', 'ROLLBACK'}:
                 return None
             return msg
@@ -88,7 +92,7 @@ class TestDefaultQueryComments(DBTIntegrationTest):
             if msg is not None and self.matches_comment(msg):
                 seen = True
 
-        self.assertTrue(seen, 'Never saw a matching log message! Logs:\n{}'.format('\n'.join(l['message'] for l in logs)))
+        self.assertTrue(seen, 'Never saw a matching log message! Logs:\n{}'.format('\n'.join(l['msg'] for l in logs)))
 
     @use_profile('postgres')
     def test_postgres_comments(self):

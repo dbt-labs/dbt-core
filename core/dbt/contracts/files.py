@@ -18,7 +18,8 @@ class ParseFileType(StrEnum):
     Model = 'model'
     Snapshot = 'snapshot'
     Analysis = 'analysis'
-    Test = 'test'
+    SingularTest = 'singular_test'
+    GenericTest = 'generic_test'
     Seed = 'seed'
     Documentation = 'docs'
     Schema = 'schema'
@@ -30,7 +31,8 @@ parse_file_type_to_parser = {
     ParseFileType.Model: 'ModelParser',
     ParseFileType.Snapshot: 'SnapshotParser',
     ParseFileType.Analysis: 'AnalysisParser',
-    ParseFileType.Test: 'SingularTestParser',
+    ParseFileType.SingularTest: 'SingularTestParser',
+    ParseFileType.GenericTest: 'GenericTestParser',
     ParseFileType.Seed: 'SeedParser',
     ParseFileType.Documentation: 'DocumentationParser',
     ParseFileType.Schema: 'SchemaParser',
@@ -188,6 +190,7 @@ class SourceFile(BaseSourceFile):
     nodes: List[str] = field(default_factory=list)
     docs: List[str] = field(default_factory=list)
     macros: List[str] = field(default_factory=list)
+    env_vars: List[str] = field(default_factory=list)
 
     @classmethod
     def big_seed(cls, path: FilePath) -> 'SourceFile':
@@ -220,6 +223,7 @@ class SchemaSourceFile(BaseSourceFile):
     tests: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
+    metrics: List[str] = field(default_factory=list)
     # node patches contain models, seeds, snapshots, analyses
     ndp: List[str] = field(default_factory=list)
     # any macro patches in this file by macro unique_id.
@@ -228,6 +232,7 @@ class SchemaSourceFile(BaseSourceFile):
     # Patches are only against external sources. Sources can be
     # created too, but those are in 'sources'
     sop: List[SourceKey] = field(default_factory=list)
+    env_vars: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -250,7 +255,7 @@ class SchemaSourceFile(BaseSourceFile):
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
         # Remove partial parsing specific data
-        for key in ('pp_files', 'pp_test_index', 'pp_dict'):
+        for key in ('pp_test_index', 'pp_dict'):
             if key in dct:
                 del dct[key]
         return dct
@@ -296,6 +301,22 @@ class SchemaSourceFile(BaseSourceFile):
             for name in self.tests[key]:
                 test_ids.extend(self.tests[key][name])
         return test_ids
+
+    def add_env_var(self, var, yaml_key, name):
+        if yaml_key not in self.env_vars:
+            self.env_vars[yaml_key] = {}
+        if name not in self.env_vars[yaml_key]:
+            self.env_vars[yaml_key][name] = []
+        if var not in self.env_vars[yaml_key][name]:
+            self.env_vars[yaml_key][name].append(var)
+
+    def delete_from_env_vars(self, yaml_key, name):
+        # We delete all vars for this yaml_key/name because the
+        # entry has been scheduled for reparsing.
+        if yaml_key in self.env_vars and name in self.env_vars[yaml_key]:
+            del self.env_vars[yaml_key][name]
+            if not self.env_vars[yaml_key]:
+                del self.env_vars[yaml_key]
 
 
 AnySourceFile = Union[SchemaSourceFile, SourceFile]

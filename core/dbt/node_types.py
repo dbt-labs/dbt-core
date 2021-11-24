@@ -10,11 +10,14 @@ class NodeType(StrEnum):
     Snapshot = 'snapshot'
     Operation = 'operation'
     Seed = 'seed'
+    # TODO: rm?
     RPCCall = 'rpc'
+    SqlOperation = 'sql'
     Documentation = 'docs'
     Source = 'source'
     Macro = 'macro'
     Exposure = 'exposure'
+    Metric = 'metric'
 
     @classmethod
     def executable(cls) -> List['NodeType']:
@@ -27,6 +30,7 @@ class NodeType(StrEnum):
             cls.Seed,
             cls.Documentation,
             cls.RPCCall,
+            cls.SqlOperation
         ]
 
     @classmethod
@@ -46,7 +50,8 @@ class NodeType(StrEnum):
             cls.Source,
             cls.Macro,
             cls.Analysis,
-            cls.Exposure
+            cls.Exposure,
+            cls.Metric
         ]
 
     def pluralize(self) -> str:

@@ -36,7 +36,7 @@ class DBTDeprecation:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
             msg = ui.line_wrap_message(
-                desc, prefix='* Deprecation Warning: '
+                desc, prefix='* Deprecation Warning:\n\n'
             )
             dbt.exceptions.warn_or_error(msg)
             self.track_deprecation_warn()
@@ -61,11 +61,18 @@ class PackageInstallPathDeprecation(DBTDeprecation):
 
 
 class ConfigPathDeprecation(DBTDeprecation):
-    _name = 'project_config_path'
     _description = '''\
     The `{deprecated_path}` config has been deprecated in favor of `{exp_path}`.
     Please update your `dbt_project.yml` configuration to reflect this change.
     '''
+
+
+class ConfigSourcePathDeprecation(ConfigPathDeprecation):
+    _name = 'project-config-source-paths'
+
+
+class ConfigDataPathDeprecation(ConfigPathDeprecation):
+    _name = 'project-config-data-paths'
 
 
 _adapter_renamed_description = """\
@@ -106,7 +113,8 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
-    ConfigPathDeprecation(),
+    ConfigSourcePathDeprecation(),
+    ConfigDataPathDeprecation(),
     PackageInstallPathDeprecation(),
     PackageRedirectDeprecation()
 ]

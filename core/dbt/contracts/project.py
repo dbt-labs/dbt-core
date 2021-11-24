@@ -1,7 +1,6 @@
 from dbt.contracts.util import Replaceable, Mergeable, list_str
 from dbt.contracts.connection import QueryComment, UserConfigContract
 from dbt.helper_types import NoValue
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.dataclass_schema import (
     dbtClassMixin, ValidationError,
     HyphenatedDbtClassMixin,
@@ -238,6 +237,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     fail_fast: Optional[bool] = None
     use_experimental_parser: Optional[bool] = None
     static_parser: Optional[bool] = None
+    indirect_selection: Optional[str] = None
 
 
 @dataclass

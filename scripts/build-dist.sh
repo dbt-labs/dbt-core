@@ -24,6 +24,6 @@ do
 done
 
 cd "$DBT_PATH"
-$PYTHON_BIN setup.py sdist bdist_wheel
+$PYTHON_BIN setup.py sdist
 
 set +x

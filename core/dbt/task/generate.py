@@ -16,7 +16,10 @@ from dbt.contracts.results import (
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
-from dbt.logger import GLOBAL_LOGGER as logger, print_timestamped_line
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    WriteCatalogFailure, CatalogWritten, CannotGenerateDocs, BuildingCatalog
+)
 from dbt.parser.manifest import ManifestLoader
 import dbt.utils
 import dbt.compilation
@@ -203,9 +206,7 @@ class GenerateTask(CompileTask):
         if self.args.compile:
             compile_results = CompileTask.run(self)
             if any(r.status == NodeStatus.Error for r in compile_results):
-                print_timestamped_line(
-                    'compile failed, cannot generate docs'
-                )
+                fire_event(CannotGenerateDocs())
                 return CatalogArtifact.from_results(
                     nodes={},
                     sources={},
@@ -238,7 +239,7 @@ class GenerateTask(CompileTask):
 
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):
-            print_timestamped_line("Building catalog")
+            fire_event(BuildingCatalog())
             catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
@@ -267,15 +268,8 @@ class GenerateTask(CompileTask):
             self.write_manifest()
 
         if exceptions:
-            logger.error(
-                'dbt encountered {} failure{} while writing the catalog'
-                .format(len(exceptions), (len(exceptions) != 1) * 's')
-            )
-
-        print_timestamped_line(
-            'Catalog written to {}'.format(os.path.abspath(path))
-        )
-
+            fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
+        fire_event(CatalogWritten(path=os.path.abspath(path)))
         return results
 
     def get_catalog_results(

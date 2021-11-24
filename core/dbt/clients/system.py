@@ -15,8 +15,12 @@ from typing import (
     Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
 )
 
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd, SystemStdOutMsg,
+    SystemStdErrMsg, SystemReportReturnCode
+)
 import dbt.exceptions
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 if sys.platform == 'win32':
@@ -65,9 +69,7 @@ def find_matching(
                 try:
                     modification_time = os.path.getmtime(absolute_path)
                 except OSError:
-                    logger.exception(
-                        f"Error retrieving modification time for file {absolute_path}"
-                    )
+                    fire_event(SystemErrorRetrievingModTime(path=absolute_path))
                 if reobj.match(local_file):
                     matching.append({
                         'searched_path': relative_path_to_search,
@@ -161,10 +163,7 @@ def write_file(path: str, contents: str = '') -> bool:
                 reason = 'Path was possibly too long'
             # all our hard work and the path was still too long. Log and
             # continue.
-            logger.debug(
-                f'Could not write to path {path}({len(path)} characters): '
-                f'{reason}\nexception: {exc}'
-            )
+            fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=exc))
         else:
             raise
     return True
@@ -412,7 +411,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 def run_cmd(
     cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None
 ) -> Tuple[bytes, bytes]:
-    logger.debug('Executing "{}"'.format(' '.join(cmd)))
+    fire_event(SystemExecutingCmd(cmd=cmd))
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
@@ -438,11 +437,11 @@ def run_cmd(
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    logger.debug('STDOUT: "{!s}"'.format(out))
-    logger.debug('STDERR: "{!s}"'.format(err))
+    fire_event(SystemStdOutMsg(bmsg=out))
+    fire_event(SystemStdErrMsg(bmsg=err))
 
     if proc.returncode != 0:
-        logger.debug('command return code={}'.format(proc.returncode))
+        fire_event(SystemReportReturnCode(returncode=proc.returncode))
         raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode,
                                                 out, err)
 

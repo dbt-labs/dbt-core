@@ -7,7 +7,8 @@ from typing import (
 )
 from dbt.exceptions import InternalException
 from dbt.utils import translate_aliases
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import NewConnectionOpening
 from typing_extensions import Protocol
 from dbt.dataclass_schema import (
     dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, HyphenatedDbtClassMixin,
@@ -101,10 +102,7 @@ class LazyHandle:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:
-        logger.debug(
-            'Opening a new connection, currently in state {}'
-            .format(connection.state)
-        )
+        fire_event(NewConnectionOpening(connection_state=connection.state))
         return self.opener(connection)
 
 

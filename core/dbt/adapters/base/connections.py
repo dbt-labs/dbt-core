@@ -18,7 +18,17 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    NewConnection,
+    ConnectionReused,
+    ConnectionLeftOpen,
+    ConnectionLeftOpen2,
+    ConnectionClosed,
+    ConnectionClosed2,
+    Rollback,
+    RollbackFailed
+)
 from dbt import flags
 
 
@@ -136,14 +146,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         if conn.name == conn_name and conn.state == 'open':
             return conn
 
-        logger.debug(
-            'Acquiring new {} connection "{}".'.format(self.TYPE, conn_name))
+        fire_event(NewConnection(conn_name=conn_name, conn_type=self.TYPE))
 
         if conn.state == 'open':
-            logger.debug(
-                'Re-using an available connection from the pool (formerly {}).'
-                .format(conn.name)
-            )
+            fire_event(ConnectionReused(conn_name=conn_name))
         else:
             conn.handle = LazyHandle(self.open)
 
@@ -190,11 +196,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         with self.lock:
             for connection in self.thread_connections.values():
                 if connection.state not in {'closed', 'init'}:
-                    logger.debug("Connection '{}' was left open."
-                                 .format(connection.name))
+                    fire_event(ConnectionLeftOpen(conn_name=connection.name))
                 else:
-                    logger.debug("Connection '{}' was properly closed."
-                                 .format(connection.name))
+                    fire_event(ConnectionClosed(conn_name=connection.name))
                 self.close(connection)
 
             # garbage collect these connections
@@ -220,20 +224,17 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         try:
             connection.handle.rollback()
         except Exception:
-            logger.debug(
-                'Failed to rollback {}'.format(connection.name),
-                exc_info=True
-            )
+            fire_event(RollbackFailed(conn_name=connection.name))
 
     @classmethod
     def _close_handle(cls, connection: Connection) -> None:
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, 'close'):
-            logger.debug(f'On {connection.name}: Close')
+            fire_event(ConnectionClosed2(conn_name=connection.name))
             connection.handle.close()
         else:
-            logger.debug(f'On {connection.name}: No close available on handle')
+            fire_event(ConnectionLeftOpen2(conn_name=connection.name))
 
     @classmethod
     def _rollback(cls, connection: Connection) -> None:
@@ -244,7 +245,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 f'"{connection.name}", but it does not have one open!'
             )
 
-        logger.debug(f'On {connection.name}: ROLLBACK')
+        fire_event(Rollback(conn_name=connection.name))
         cls._rollback_handle(connection)
 
         connection.transaction_open = False
@@ -256,7 +257,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             return connection
 
         if connection.transaction_open and connection.handle:
-            logger.debug('On {}: ROLLBACK'.format(connection.name))
+            fire_event(Rollback(conn_name=connection.name))
             cls._rollback_handle(connection)
         connection.transaction_open = False
 

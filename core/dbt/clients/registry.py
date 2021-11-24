@@ -1,7 +1,11 @@
 import functools
 import requests
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    RegistryProgressMakingGETRequest,
+    RegistryProgressGETResponse
+)
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import deprecations
 import os
 
@@ -25,11 +29,14 @@ def _get_with_retries(path, registry_base_url=None):
 
 def _get(path, registry_base_url=None):
     url = _get_url(path, registry_base_url)
-    logger.debug('Making package registry request: GET {}'.format(url))
+    fire_event(RegistryProgressMakingGETRequest(url=url))
     resp = requests.get(url, timeout=30)
-    logger.debug('Response from registry: GET {} {}'.format(url,
-                                                            resp.status_code))
+    fire_event(RegistryProgressGETResponse(url=url, resp_code=resp.status_code))
     resp.raise_for_status()
+    if resp is None:
+        raise requests.exceptions.ContentDecodingError(
+            'Request error: The response is None', response=resp
+        )
     return resp.json()
 
 

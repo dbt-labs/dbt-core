@@ -6,11 +6,12 @@ from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.contracts.files import FilePath, SourceFile
-from dbt.exceptions import CompilationException
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.exceptions import ParsingException
+from dbt.events.functions import fire_event
+from dbt.events.types import MacroFileParse
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
-from dbt.parser.search import FileBlock, FilesystemSearcher
+from dbt.parser.search import FileBlock, filesystem_search
 from dbt.utils import MACRO_PREFIX
 
 
@@ -18,11 +19,11 @@ class MacroParser(BaseParser[ParsedMacro]):
     # This is only used when creating a MacroManifest separate
     # from the normal parsing flow.
     def get_paths(self) -> List[FilePath]:
-        return list(FilesystemSearcher(
+        return filesystem_search(
             project=self.project,
             relative_dirs=self.project.macro_paths,
             extension='.sql',
-        ))
+        )
 
     @property
     def resource_type(self) -> NodeType:
@@ -61,14 +62,14 @@ class MacroParser(BaseParser[ParsedMacro]):
                 )
                 if isinstance(t, jinja.BlockTag)
             ]
-        except CompilationException as exc:
+        except ParsingException as exc:
             exc.add_node(base_node)
             raise
 
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
-            except CompilationException as e:
+            except ParsingException as e:
                 e.add_node(base_node)
                 raise
 
@@ -77,7 +78,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             if len(macro_nodes) != 1:
                 # things have gone disastrously wrong, we thought we only
                 # parsed one block!
-                raise CompilationException(
+                raise ParsingException(
                     f'Found multiple macros in {block.full_block}, expected 1',
                     node=base_node
                 )
@@ -96,7 +97,7 @@ class MacroParser(BaseParser[ParsedMacro]):
         source_file = block.file
         assert isinstance(source_file.contents, str)
         original_file_path = source_file.path.original_file_path
-        logger.debug("Parsing {}".format(original_file_path))
+        fire_event(MacroFileParse(path=original_file_path))
 
         # this is really only used for error messages
         base_node = UnparsedMacro(

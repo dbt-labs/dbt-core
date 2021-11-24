@@ -10,10 +10,10 @@ from dbt.dataclass_schema import ValidationError
 from dbt import utils
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import (
-    generate_parser_model,
-    generate_generate_component_name_macro,
+    generate_parser_model_context,
+    generate_generate_name_macro_context,
 )
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import (
@@ -23,7 +23,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
-    CompilationException, validator_error_message, InternalException
+    ParsingException, validator_error_message, InternalException
 )
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -101,7 +101,7 @@ class RelationUpdate:
                 f'No macro with name generate_{component}_name found'
             )
 
-        root_context = generate_generate_component_name_macro(
+        root_context = generate_generate_name_macro_context(
             macro, config, manifest
         )
         self.updater = MacroGenerator(macro, root_context)
@@ -247,12 +247,12 @@ class ConfiguredParser(
                 original_file_path=block.path.original_file_path,
                 raw_sql=block.contents,
             )
-            raise CompilationException(msg, node=node)
+            raise ParsingException(msg, node=node)
 
     def _context_for(
         self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> Dict[str, Any]:
-        return generate_parser_model(
+        return generate_parser_model_context(
             parsed_node, self.root_project, self.manifest, config
         )
 
@@ -260,17 +260,13 @@ class ConfiguredParser(
         # Given the parsed node and a ContextConfig to use during parsing,
         # render the node's sql wtih macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
+        context = self._context_for(parsed_node, config)
 
-        # during parsing, we don't have a connection, but we might need one, so
-        # we have to acquire it.
-        with get_adapter(self.root_project).connection_for(parsed_node):
-            context = self._context_for(parsed_node, config)
-
-            # this goes through the process of rendering, but just throws away
-            # the rendered result. The "macro capture" is the point?
-            get_rendered(
-                parsed_node.raw_sql, context, parsed_node, capture_macros=True
-            )
+        # this goes through the process of rendering, but just throws away
+        # the rendered result. The "macro capture" is the point?
+        get_rendered(
+            parsed_node.raw_sql, context, parsed_node, capture_macros=True
+        )
         return context
 
     # This is taking the original config for the node, converting it to a dict,
@@ -382,7 +378,7 @@ class ConfiguredParser(
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             msg = validator_error_message(exc)
-            raise CompilationException(msg, node=node) from exc
+            raise ParsingException(msg, node=node) from exc
 
     def add_result_node(self, block: FileBlock, node: ManifestNodes):
         if node.config.enabled:

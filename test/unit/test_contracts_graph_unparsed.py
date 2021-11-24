@@ -7,7 +7,7 @@ from dbt.contracts.graph.unparsed import (
     FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
     UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
-    ExposureType
+    ExposureType, UnparsedMetric, MetricFilter
 )
 from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
@@ -174,8 +174,8 @@ class TestFreshnessThreshold(ContractTestCase):
     ContractType = FreshnessThreshold
 
     def test_empty(self):
-        empty = self.ContractType(None, None)
-        self.assert_symmetric(empty, {})
+        empty = self.ContractType()
+        self.assert_symmetric(empty, {'error_after': {}, 'warn_after': {}})
         self.assertEqual(empty.status(float('Inf')), FreshnessStatus.Pass)
         self.assertEqual(empty.status(0), FreshnessStatus.Pass)
 
@@ -209,15 +209,12 @@ class TestFreshnessThreshold(ContractTestCase):
         )
         threshold = self.ContractType(
             warn_after=Time(count=18, period=TimePeriod.hour),
-            error_after=Time(count=2, period=TimePeriod.day),
+            error_after=Time(count=None, period=None),
         )
         self.assertEqual(threshold, t1.merged(t2))
 
-        error_seconds = timedelta(days=3).total_seconds()
         warn_seconds = timedelta(days=1).total_seconds()
         pass_seconds = timedelta(hours=3).total_seconds()
-        self.assertEqual(threshold.status(
-            error_seconds), FreshnessStatus.Error)
         self.assertEqual(threshold.status(warn_seconds), FreshnessStatus.Warn)
         self.assertEqual(threshold.status(pass_seconds), FreshnessStatus.Pass)
 
@@ -252,7 +249,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
         to_dict = {
             'name': 'foo',
             'description': '',
-            'freshness': {},
+            'freshness': {'error_after': {}, 'warn_after': {}},
             'quoting': {},
             'tables': [],
             'loader': '',
@@ -278,7 +275,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'description': 'a description',
             'quoting': {'database': False},
             'loader': 'some_loader',
-            'freshness': {},
+            'freshness': {'error_after': {}, 'warn_after': {}},
             'tables': [],
             'meta': {},
             'tags': [],
@@ -312,7 +309,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'name': 'foo',
             'description': '',
             'loader': '',
-            'freshness': {},
+            'freshness': {'error_after': {}, 'warn_after': {}},
             'quoting': {},
             'meta': {},
             'tables': [
@@ -323,7 +320,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     'tests': [],
                     'columns': [],
                     'quoting': {},
-                    'freshness': {},
+                    'freshness': {'error_after': {}, 'warn_after': {}},
                     'meta': {},
                     'tags': [],
                 },
@@ -334,7 +331,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     'tests': [],
                     'columns': [],
                     'quoting': {'database': True},
-                    'freshness': {},
+                    'freshness': {'error_after': {}, 'warn_after': {}},
                     'meta': {},
                     'tags': [],
                 },
@@ -656,6 +653,76 @@ class TestUnparsedExposure(ContractTestCase):
         self.assert_fails_validation(tst)
 
         del tst['owner']
+        self.assert_fails_validation(tst)
+
+    def test_bad_tags(self):
+        tst = self.get_ok_dict()
+        tst['tags'] = [123]
+        self.assert_fails_validation(tst)
+
+
+class TestUnparsedMetric(ContractTestCase):
+    ContractType = UnparsedMetric
+
+    def get_ok_dict(self):
+        return {
+            'name': 'new_customers',
+            'label': 'New Customers',
+            'model': 'ref("dim_customers")',
+            'description': 'New customers',
+            'type': 'count',
+            'sql': 'user_id',
+            'timestamp': 'signup_date',
+            'time_grains': ['day', 'week', 'month'],
+            'dimensions': ['plan', 'country'],
+            'filters': [
+                {
+                    "field": "is_paying",
+                    "value": "True",
+                    "operator": "=",
+                }
+            ],
+            'tags': [],
+            'meta': {
+                'is_okr': True
+            },
+        }
+
+    def test_ok(self):
+        metric = self.ContractType(
+            name='new_customers',
+            label='New Customers',
+            model='ref("dim_customers")',
+            description="New customers",
+            type='count',
+            sql="user_id",
+            timestamp="signup_date",
+            time_grains=['day', 'week', 'month'],
+            dimensions=['plan', 'country'],
+            filters=[MetricFilter(
+               field="is_paying",
+               value='True',
+               operator="=",
+            )],
+            meta={'is_okr': True},
+        )
+        dct = self.get_ok_dict()
+        self.assert_symmetric(metric, dct)
+        pickle.loads(pickle.dumps(metric))
+
+    def test_bad_metric_no_type(self):
+        tst = self.get_ok_dict()
+        del tst['type']
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_no_model(self):
+        tst = self.get_ok_dict()
+        tst['model'] = None
+        self.assert_fails_validation(tst)
+
+    def test_bad_filter_missing_things(self):
+        tst = self.get_ok_dict()
+        del tst['filters'][0]['operator']
         self.assert_fails_validation(tst)
 
     def test_bad_tags(self):

@@ -1,10 +1,17 @@
+import os
 from copy import deepcopy
 from typing import MutableMapping, Dict, List
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import (
     AnySourceFile, ParseFileType, parse_file_type_to_parser,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    PartialParsingEnabled, PartialParsingAddedFile, PartialParsingDeletedFile,
+    PartialParsingUpdatedFile, PartialParsingNodeMissingInSourceFile, PartialParsingMissingNodes,
+    PartialParsingChildMapMissingUniqueID, PartialParsingUpdateSchemaFile,
+    PartialParsingDeletedSource, PartialParsingDeletedExposure, PartialParsingDeletedMetric
+)
 from dbt.node_types import NodeType
 
 
@@ -13,7 +20,12 @@ mssat_files = (
     ParseFileType.Seed,
     ParseFileType.Snapshot,
     ParseFileType.Analysis,
-    ParseFileType.Test,
+    ParseFileType.SingularTest,
+)
+
+mg_files = (
+    ParseFileType.Macro,
+    ParseFileType.GenericTest,
 )
 
 
@@ -57,9 +69,12 @@ class PartialParsing:
         self.project_parser_files = {}
         self.deleted_manifest = Manifest()
         self.macro_child_map: Dict[str, List[str]] = {}
+        (self.env_vars_changed_source_files, self.env_vars_changed_schema_files) = \
+            self.build_env_vars_to_files()
         self.build_file_diff()
         self.processing_file = None
         self.deleted_special_override_macro = False
+        self.disabled_by_file_id = self.saved_manifest.build_disabled_by_file_id()
 
     def skip_parsing(self):
         return (
@@ -87,7 +102,7 @@ class PartialParsing:
             if self.saved_files[file_id].parse_file_type == ParseFileType.Schema:
                 deleted_schema_files.append(file_id)
             else:
-                if self.saved_files[file_id].parse_file_type == ParseFileType.Macro:
+                if self.saved_files[file_id].parse_file_type in mg_files:
                     changed_or_deleted_macro_file = True
                 deleted.append(file_id)
 
@@ -105,9 +120,22 @@ class PartialParsing:
                         raise Exception(f"Serialization failure for {file_id}")
                     changed_schema_files.append(file_id)
                 else:
-                    if self.saved_files[file_id].parse_file_type == ParseFileType.Macro:
+                    if self.saved_files[file_id].parse_file_type in mg_files:
                         changed_or_deleted_macro_file = True
                     changed.append(file_id)
+
+        # handle changed env_vars for non-schema-files
+        for file_id in self.env_vars_changed_source_files:
+            if file_id in deleted or file_id in changed:
+                continue
+            changed.append(file_id)
+
+        # handle changed env_vars for schema files
+        for file_id in self.env_vars_changed_schema_files.keys():
+            if file_id in deleted_schema_files or file_id in changed_schema_files:
+                continue
+            changed_schema_files.append(file_id)
+
         file_diff = {
             "deleted": deleted,
             "deleted_schema_files": deleted_schema_files,
@@ -118,10 +146,9 @@ class PartialParsing:
         }
         if changed_or_deleted_macro_file:
             self.macro_child_map = self.saved_manifest.build_macro_child_map()
-        logger.debug(f"Partial parsing enabled: "
-                     f"{len(deleted) + len(deleted_schema_files)} files deleted, "
-                     f"{len(added)} files added, "
-                     f"{len(changed) + len(changed_schema_files)} files changed.")
+        deleted = len(deleted) + len(deleted_schema_files)
+        changed = len(changed) + len(changed_schema_files)
+        fire_event(PartialParsingEnabled(deleted=deleted, added=len(added), changed=changed))
         self.file_diff = file_diff
 
     # generate the list of files that need parsing
@@ -187,7 +214,7 @@ class PartialParsing:
         self.saved_files[file_id] = source_file
         # update pp_files to parse
         self.add_to_pp_files(source_file)
-        logger.debug(f"Partial parsing: added file: {file_id}")
+        fire_event(PartialParsingAddedFile(file_id=file_id))
 
     def handle_added_schema_file(self, source_file):
         source_file.pp_dict = source_file.dict_from_yaml.copy()
@@ -212,14 +239,14 @@ class PartialParsing:
             self.deleted_manifest.files[file_id] = self.saved_manifest.files.pop(file_id)
 
         # macros
-        if saved_source_file.parse_file_type == ParseFileType.Macro:
+        if saved_source_file.parse_file_type in mg_files:
             self.delete_macro_file(saved_source_file, follow_references=True)
 
         # docs
         if saved_source_file.parse_file_type == ParseFileType.Documentation:
             self.delete_doc_node(saved_source_file)
 
-        logger.debug(f"Partial parsing: deleted file: {file_id}")
+        fire_event(PartialParsingDeletedFile(file_id=file_id))
 
     # Updates for non-schema files
     def update_in_saved(self, file_id):
@@ -228,13 +255,13 @@ class PartialParsing:
 
         if new_source_file.parse_file_type in mssat_files:
             self.update_mssat_in_saved(new_source_file, old_source_file)
-        elif new_source_file.parse_file_type == ParseFileType.Macro:
+        elif new_source_file.parse_file_type in mg_files:
             self.update_macro_in_saved(new_source_file, old_source_file)
         elif new_source_file.parse_file_type == ParseFileType.Documentation:
             self.update_doc_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
-        logger.debug(f"Partial parsing: updated file: {file_id}")
+        fire_event(PartialParsingUpdatedFile(file_id=file_id))
 
     # Models, seeds, snapshots: patches and tests
     # analyses: patches, no tests
@@ -252,7 +279,7 @@ class PartialParsing:
         else:
             # It's not clear when this would actually happen.
             # Logging in case there are other associated errors.
-            logger.debug(f"Partial parsing: node not found for source_file {old_source_file}")
+            fire_event(PartialParsingNodeMissingInSourceFile(source_file=old_source_file))
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
@@ -267,13 +294,18 @@ class PartialParsing:
             # delete node in saved
             node = self.saved_manifest.nodes.pop(unique_id)
             self.deleted_manifest.nodes[unique_id] = node
-        elif unique_id in self.saved_manifest.disabled:
+        elif (source_file.file_id in self.disabled_by_file_id and
+                unique_id in self.saved_manifest.disabled):
+            # This node is disabled. Find the node and remove it from disabled dictionary.
             for dis_index, dis_node in enumerate(self.saved_manifest.disabled[unique_id]):
                 if dis_node.file_id == source_file.file_id:
                     node = dis_node
                     break
             if dis_node:
-                del self.saved_manifest.disabled[dis_index]
+                # Remove node from disabled and unique_id from disabled dict if necessary
+                del self.saved_manifest.disabled[unique_id][dis_index]
+                if not self.saved_manifest.disabled[unique_id]:
+                    self.saved_manifest.disabled.pop(unique_id)
         else:
             # Has already been deleted by another action
             return
@@ -324,7 +356,7 @@ class PartialParsing:
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
         if not source_file.nodes:
-            logger.debug(f"No nodes found for source file {source_file.file_id}")
+            fire_event(PartialParsingMissingNodes(file_id=source_file.file_id))
             return
         # There is generally only 1 node for SQL files, except for macros
         for unique_id in source_file.nodes:
@@ -337,7 +369,7 @@ class PartialParsing:
         if unique_id in self.saved_manifest.child_map:
             self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
         else:
-            logger.debug(f"Partial parsing: {unique_id} not found in child_map")
+            fire_event(PartialParsingChildMapMissingUniqueID(unique_id=unique_id))
 
     def schedule_nodes_for_parsing(self, unique_ids):
         for unique_id in unique_ids:
@@ -378,6 +410,18 @@ class PartialParsing:
                     if exposure_element:
                         self.delete_schema_exposure(schema_file, exposure_element)
                         self.merge_patch(schema_file, 'exposures', exposure_element)
+            elif unique_id in self.saved_manifest.metrics:
+                metric = self.saved_manifest.metrics[unique_id]
+                file_id = metric.file_id
+                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                    schema_file = self.saved_files[file_id]
+                    metrics = []
+                    if 'metrics' in schema_file.dict_from_yaml:
+                        metrics = schema_file.dict_from_yaml['metrics']
+                    metric_element = self.get_schema_element(metrics, metric.name)
+                    if metric_element:
+                        self.delete_schema_metric(schema_file, metric_element)
+                        self.merge_patch(schema_file, 'metrics', metric_element)
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
@@ -529,7 +573,7 @@ class PartialParsing:
         # schedule parsing
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
-        logger.debug(f"Partial parsing: update schema file: {file_id}")
+        fire_event(PartialParsingUpdateSchemaFile(file_id=file_id))
 
     # Delete schema files -- a variation on change_schema_file
     def delete_schema_file(self, file_id):
@@ -545,6 +589,10 @@ class PartialParsing:
         # loop through comparing previous dict_from_yaml with current dict_from_yaml
         # Need to do the deleted/added/changed thing, just like the files lists
 
+        env_var_changes = {}
+        if schema_file.file_id in self.env_vars_changed_schema_files:
+            env_var_changes = self.env_vars_changed_schema_files[schema_file.file_id]
+
         # models, seeds, snapshots, analyses
         for dict_key in ['models', 'seeds', 'snapshots', 'analyses']:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
@@ -558,53 +606,118 @@ class PartialParsing:
             if key_diff['added']:
                 for elem in key_diff['added']:
                     self.merge_patch(schema_file, dict_key, elem)
+            # Handle schema file updates due to env_var changes
+            if dict_key in env_var_changes and dict_key in new_yaml_dict:
+                for name in env_var_changes[dict_key]:
+                    if name in key_diff['changed_or_deleted_names']:
+                        continue
+                    elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                    if elem:
+                        self.delete_schema_mssa_links(schema_file, dict_key, elem)
+                        self.merge_patch(schema_file, dict_key, elem)
 
         # sources
-        source_diff = self.get_diff_for('sources', saved_yaml_dict, new_yaml_dict)
+        dict_key = 'sources'
+        source_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if source_diff['changed']:
             for source in source_diff['changed']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, 'sources', source['name'])
-                self.merge_patch(schema_file, 'sources', source)
+                self.remove_tests(schema_file, dict_key, source['name'])
+                self.merge_patch(schema_file, dict_key, source)
         if source_diff['deleted']:
             for source in source_diff['deleted']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, 'sources', source['name'])
+                self.remove_tests(schema_file, dict_key, source['name'])
         if source_diff['added']:
             for source in source_diff['added']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
-                self.merge_patch(schema_file, 'sources', source)
+                self.merge_patch(schema_file, dict_key, source)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in source_diff['changed_or_deleted_names']:
+                    continue
+                source = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if source:
+                    if 'overrides' in source:
+                        self.remove_source_override_target(source)
+                    self.delete_schema_source(schema_file, source)
+                    self.remove_tests(schema_file, dict_key, source['name'])
+                    self.merge_patch(schema_file, dict_key, source)
 
         # macros
-        macro_diff = self.get_diff_for('macros', saved_yaml_dict, new_yaml_dict)
+        dict_key = 'macros'
+        macro_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if macro_diff['changed']:
             for macro in macro_diff['changed']:
                 self.delete_schema_macro_patch(schema_file, macro)
-                self.merge_patch(schema_file, 'macros', macro)
+                self.merge_patch(schema_file, dict_key, macro)
         if macro_diff['deleted']:
             for macro in macro_diff['deleted']:
                 self.delete_schema_macro_patch(schema_file, macro)
         if macro_diff['added']:
             for macro in macro_diff['added']:
-                self.merge_patch(schema_file, 'macros', macro)
+                self.merge_patch(schema_file, dict_key, macro)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in macro_diff['changed_or_deleted_names']:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_macro_patch(schema_file, macro)
+                    self.merge_patch(schema_file, dict_key, macro)
 
         # exposures
-        exposure_diff = self.get_diff_for('exposures', saved_yaml_dict, new_yaml_dict)
+        dict_key = 'exposures'
+        exposure_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if exposure_diff['changed']:
             for exposure in exposure_diff['changed']:
                 self.delete_schema_exposure(schema_file, exposure)
-                self.merge_patch(schema_file, 'exposures', exposure)
+                self.merge_patch(schema_file, dict_key, exposure)
         if exposure_diff['deleted']:
             for exposure in exposure_diff['deleted']:
                 self.delete_schema_exposure(schema_file, exposure)
         if exposure_diff['added']:
             for exposure in exposure_diff['added']:
-                self.merge_patch(schema_file, 'exposures', exposure)
+                self.merge_patch(schema_file, dict_key, exposure)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in exposure_diff['changed_or_deleted_names']:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_exposure(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
+
+        # metrics
+        dict_key = 'metrics'
+        metric_diff = self.get_diff_for('metrics', saved_yaml_dict, new_yaml_dict)
+        if metric_diff['changed']:
+            for metric in metric_diff['changed']:
+                self.delete_schema_metric(schema_file, metric)
+                self.merge_patch(schema_file, dict_key, metric)
+        if metric_diff['deleted']:
+            for metric in metric_diff['deleted']:
+                self.delete_schema_metric(schema_file, metric)
+        if metric_diff['added']:
+            for metric in metric_diff['added']:
+                self.merge_patch(schema_file, dict_key, metric)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in metric_diff['changed_or_deleted_names']:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_metric(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
 
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
@@ -643,6 +756,7 @@ class PartialParsing:
             "deleted": deleted_elements,
             "added": added_elements,
             "changed": changed_elements,
+            "changed_or_deleted_names": list(changed) + list(deleted),
         }
         return diff
 
@@ -661,6 +775,7 @@ class PartialParsing:
                     found = True
             if not found:
                 pp_dict[key].append(patch)
+        schema_file.delete_from_env_vars(key, patch['name'])
         self.add_to_pp_files(schema_file)
 
     # For model, seed, snapshot, analysis schema dictionary keys,
@@ -723,7 +838,7 @@ class PartialParsing:
                     self.deleted_manifest.sources[unique_id] = source
                     schema_file.sources.remove(unique_id)
                     self.schedule_referencing_nodes_for_parsing(unique_id)
-                    logger.debug(f"Partial parsing: deleted source {unique_id}")
+                    fire_event(PartialParsingDeletedSource(unique_id=unique_id))
 
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
@@ -751,7 +866,21 @@ class PartialParsing:
                     self.deleted_manifest.exposures[unique_id] = \
                         self.saved_manifest.exposures.pop(unique_id)
                     schema_file.exposures.remove(unique_id)
-                    logger.debug(f"Partial parsing: deleted exposure {unique_id}")
+                    fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
+
+    # metric are created only from schema files, so just delete
+    # the metric.
+    def delete_schema_metric(self, schema_file, metric_dict):
+        metric_name = metric_dict['name']
+        metrics = schema_file.metrics.copy()
+        for unique_id in metrics:
+            metric = self.saved_manifest.metrics[unique_id]
+            if unique_id in self.saved_manifest.metrics:
+                if metric.name == metric_name:
+                    self.deleted_manifest.metrics[unique_id] = \
+                        self.saved_manifest.metrics.pop(unique_id)
+                    schema_file.metrics.remove(unique_id)
+                    fire_event(PartialParsingDeletedMetric(id=unique_id))
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
@@ -784,3 +913,60 @@ class PartialParsing:
             self.remove_tests(orig_file, 'sources', orig_source['name'])
             self.merge_patch(orig_file, 'sources', orig_source)
             self.add_to_pp_files(orig_file)
+
+    # This builds a dictionary of files that need to be scheduled for parsing
+    # because the env var has changed.
+    # source_files
+    #   env_vars_changed_source_files: [file_id, file_id...]
+    # schema_files
+    #   env_vars_changed_schema_files: {file_id: {"yaml_key": [name, ..]}}
+    def build_env_vars_to_files(self):
+        unchanged_vars = []
+        changed_vars = []
+        delete_vars = []
+        # Check whether the env_var has changed and add it to
+        # an unchanged or changed list
+        for env_var in self.saved_manifest.env_vars:
+            prev_value = self.saved_manifest.env_vars[env_var]
+            current_value = os.getenv(env_var)
+            if current_value is None:
+                # env_var no longer set, remove from manifest
+                delete_vars.append(env_var)
+            if prev_value == current_value:
+                unchanged_vars.append(env_var)
+            else:  # prev_value != current_value
+                changed_vars.append(env_var)
+        for env_var in delete_vars:
+            del self.saved_manifest.env_vars[env_var]
+
+        env_vars_changed_source_files = []
+        env_vars_changed_schema_files = {}
+        # The SourceFiles contain a list of env_vars that were used in the file.
+        # The SchemaSourceFiles contain a dictionary of yaml_key to schema entry names to
+        # a list of vars.
+        # Create a list of file_ids for source_files that need to be reparsed, and
+        # a dictionary of file_ids to yaml_keys to names.
+        for source_file in self.saved_files.values():
+            file_id = source_file.file_id
+            if not source_file.env_vars:
+                continue
+            if source_file.parse_file_type == ParseFileType.Schema:
+                for yaml_key in source_file.env_vars.keys():
+                    for name in source_file.env_vars[yaml_key].keys():
+                        for env_var in source_file.env_vars[yaml_key][name]:
+                            if env_var in changed_vars:
+                                if file_id not in env_vars_changed_schema_files:
+                                    env_vars_changed_schema_files[file_id] = {}
+                                if yaml_key not in env_vars_changed_schema_files[file_id]:
+                                    env_vars_changed_schema_files[file_id][yaml_key] = []
+                                if name not in env_vars_changed_schema_files[file_id][yaml_key]:
+                                    env_vars_changed_schema_files[file_id][yaml_key].append(name)
+                                break  # if one env_var is changed we can stop
+
+            else:
+                for env_var in source_file.env_vars:
+                    if env_var in changed_vars:
+                        env_vars_changed_source_files.append(file_id)
+                        break  # if one env_var is changed we can stop
+
+        return (env_vars_changed_source_files, env_vars_changed_schema_files)

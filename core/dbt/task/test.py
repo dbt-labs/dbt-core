@@ -1,12 +1,14 @@
+from distutils.util import strtobool
+
 from dataclasses import dataclass
-from dbt import utils
+from dbt.utils import _coerce_decimal
+from dbt.events.format import pluralize
 from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Union
+from typing import Union
 
 from .compile import CompileRunner
 from .run import RunTask
-from .printer import print_start_line, print_test_result_line
 
 from dbt.contracts.graph.compiled import (
     CompiledSingularTestNode,
@@ -15,16 +17,22 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
-from dbt.context.providers import generate_runtime_model
+from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    PrintErrorTestResult, PrintPassTestResult, PrintWarnTestResult,
+    PrintFailureTestResult, PrintStartLine
+)
 from dbt.exceptions import (
     InternalException,
+    invalid_bool_error,
     missing_materialization
 )
 from dbt.graph import (
     ResourceTypeSelector,
 )
-from dbt.node_types import NodeType, RunHookType
+from dbt.node_types import NodeType
 from dbt import flags
 
 
@@ -34,6 +42,23 @@ class TestResultData(dbtClassMixin):
     should_warn: bool
     should_error: bool
 
+    @classmethod
+    def validate(cls, data):
+        data['should_warn'] = cls.convert_bool_type(data['should_warn'])
+        data['should_error'] = cls.convert_bool_type(data['should_error'])
+        super().validate(data)
+
+    def convert_bool_type(field) -> bool:
+        # if it's type string let python decide if it's a valid value to convert to bool
+        if isinstance(field, str):
+            try:
+                return bool(strtobool(field))  # type: ignore
+            except ValueError:
+                raise invalid_bool_error(field, 'get_test_sql')
+
+        # need this so we catch both true bools and 0/1
+        return bool(field)
+
 
 class TestRunner(CompileRunner):
     def describe_node(self):
@@ -41,11 +66,57 @@ class TestRunner(CompileRunner):
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        print_test_result_line(result, self.node_index, self.num_nodes)
+        model = result.node
+
+        if result.status == TestStatus.Error:
+            fire_event(
+                PrintErrorTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        elif result.status == TestStatus.Pass:
+            fire_event(
+                PrintPassTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        elif result.status == TestStatus.Warn:
+            fire_event(
+                PrintWarnTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time,
+                    failures=result.failures
+                )
+            )
+        elif result.status == TestStatus.Fail:
+            fire_event(
+                PrintFailureTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time,
+                    failures=result.failures
+                )
+            )
+        else:
+            raise RuntimeError("unexpected status: {}".format(result.status))
 
     def print_start_line(self):
-        description = self.describe_node()
-        print_start_line(description, self.node_index, self.num_nodes)
+        fire_event(
+            PrintStartLine(
+                description=self.describe_node(),
+                index=self.node_index,
+                total=self.num_nodes
+            )
+        )
 
     def before_execute(self):
         self.print_start_line()
@@ -55,7 +126,7 @@ class TestRunner(CompileRunner):
         test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
         manifest: Manifest
     ) -> TestResultData:
-        context = generate_runtime_model(
+        context = generate_runtime_model_context(
             test, self.config, manifest
         )
 
@@ -100,7 +171,7 @@ class TestRunner(CompileRunner):
         test_result_dct: PrimitiveDict = dict(
             zip(
                 [column_name.lower() for column_name in table.column_names],
-                map(utils._coerce_decimal, table.rows[0])
+                map(_coerce_decimal, table.rows[0])
             )
         )
         TestResultData.validate(test_result_dct)
@@ -111,7 +182,7 @@ class TestRunner(CompileRunner):
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
-        num_errors = utils.pluralize(result.failures, 'result')
+        num_errors = pluralize(result.failures, 'result')
         status = None
         message = None
         failures = 0
@@ -164,12 +235,6 @@ class TestTask(RunTask):
 
     def raise_on_first_error(self):
         return False
-
-    def safe_run_hooks(
-        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
-    ) -> None:
-        # Don't execute on-run-* hooks for tests
-        pass
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:

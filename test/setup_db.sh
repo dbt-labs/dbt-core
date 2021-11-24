@@ -1,6 +1,5 @@
 #!/bin/bash
 set -x
-
 env | grep '^PG'
 
 # If you want to run this script for your own postgresql (run with
@@ -29,6 +28,15 @@ function connect_circle() {
 if [[ -n $CIRCLECI ]]; then
 	connect_circle
 fi
+
+for i in {1..10}; do
+	if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" ; then
+		break
+	fi
+
+    echo "Waiting for postgres to be ready..."
+    sleep 2;
+done;
 
 createdb dbt
 psql -c "CREATE ROLE root WITH PASSWORD 'password';"

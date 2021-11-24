@@ -16,16 +16,18 @@ from .selector_spec import (
     SelectionIntersection,
     SelectionDifference,
     SelectionCriteria,
+    IndirectSelection
 )
 
 INTERSECTION_DELIMITER = ','
 
-DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*']
+DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*', 'metric:*']
 DEFAULT_EXCLUDES: List[str] = []
 
 
 def parse_union(
-    components: List[str], expect_exists: bool, greedy: bool = False
+    components: List[str], expect_exists: bool,
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(
@@ -36,7 +38,7 @@ def parse_union(
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
         intersection_components: List[SelectionSpec] = [
-            SelectionCriteria.from_single_spec(part, greedy=greedy)
+            SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
         union_components.append(SelectionIntersection(
@@ -52,21 +54,36 @@ def parse_union(
 
 
 def parse_union_from_default(
-    raw: Optional[List[str]], default: List[str], greedy: bool = False
+    raw: Optional[List[str]], default: List[str],
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     components: List[str]
     expect_exists: bool
     if raw is None:
-        return parse_union(components=default, expect_exists=False, greedy=greedy)
+        return parse_union(
+            components=default,
+            expect_exists=False,
+            indirect_selection=indirect_selection)
     else:
-        return parse_union(components=raw, expect_exists=True, greedy=greedy)
+        return parse_union(
+            components=raw,
+            expect_exists=True,
+            indirect_selection=indirect_selection)
 
 
 def parse_difference(
     include: Optional[List[str]], exclude: Optional[List[str]]
 ) -> SelectionDifference:
-    included = parse_union_from_default(include, DEFAULT_INCLUDES, greedy=bool(flags.GREEDY))
-    excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, greedy=True)
+
+    included = parse_union_from_default(
+        include,
+        DEFAULT_INCLUDES,
+        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
+    )
+    excluded = parse_union_from_default(
+        exclude,
+        DEFAULT_EXCLUDES,
+        indirect_selection=IndirectSelection.Eager)
     return SelectionDifference(components=[included, excluded])
 
 
@@ -148,7 +165,7 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
     union_def_parts = _get_list_dicts(definition, 'union')
     include, exclude = _parse_include_exclude_subdefs(union_def_parts)
 
-    union = SelectionUnion(components=include, greedy_warning=False)
+    union = SelectionUnion(components=include)
 
     if exclude is None:
         union.raw = definition
@@ -156,8 +173,7 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
     else:
         return SelectionDifference(
             components=[union, exclude],
-            raw=definition,
-            greedy_warning=False
+            raw=definition
         )
 
 
@@ -166,7 +182,7 @@ def parse_intersection_definition(
 ) -> SelectionSpec:
     intersection_def_parts = _get_list_dicts(definition, 'intersection')
     include, exclude = _parse_include_exclude_subdefs(intersection_def_parts)
-    intersection = SelectionIntersection(components=include, greedy_warning=False)
+    intersection = SelectionIntersection(components=include)
 
     if exclude is None:
         intersection.raw = definition
@@ -174,8 +190,7 @@ def parse_intersection_definition(
     else:
         return SelectionDifference(
             components=[intersection, exclude],
-            raw=definition,
-            greedy_warning=False
+            raw=definition
         )
 
 
@@ -209,7 +224,7 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
     if diff_arg is None:
         return base
     else:
-        return SelectionDifference(components=[base, diff_arg], greedy_warning=False)
+        return SelectionDifference(components=[base, diff_arg])
 
 
 def parse_from_definition(

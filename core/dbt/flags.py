@@ -17,7 +17,6 @@ PROFILES_DIR = os.path.expanduser(
 STRICT_MODE = False  # Only here for backwards compatibility
 FULL_REFRESH = False  # subcommand
 STORE_FAILURES = False  # subcommand
-GREEDY = None  # subcommand
 
 # Global CLI commands
 USE_EXPERIMENTAL_PARSER = None
@@ -32,6 +31,8 @@ VERSION_CHECK = None
 FAIL_FAST = None
 SEND_ANONYMOUS_USAGE_STATS = None
 PRINTER_WIDTH = 80
+WHICH = None
+INDIRECT_SELECTION = None
 
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
@@ -49,7 +50,8 @@ flag_defaults = {
     "VERSION_CHECK": True,
     "FAIL_FAST": False,
     "SEND_ANONYMOUS_USAGE_STATS": True,
-    "PRINTER_WIDTH": 80
+    "PRINTER_WIDTH": 80,
+    "INDIRECT_SELECTION": 'eager'
 }
 
 
@@ -77,11 +79,10 @@ def env_set_path(key: str) -> Optional[Path]:
         return Path(value)
 
 
-SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
-SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
 MACRO_DEBUGGING = env_set_truthy('DBT_MACRO_DEBUGGING')
 DEFER_MODE = env_set_truthy('DBT_DEFER_TO_STATE')
 ARTIFACT_STATE_PATH = env_set_path('DBT_ARTIFACT_STATE_PATH')
+ENABLE_LEGACY_LOGGER = env_set_truthy('DBT_ENABLE_LEGACY_LOGGER')
 
 
 def _get_context():
@@ -96,14 +97,15 @@ MP_CONTEXT = _get_context()
 def set_from_args(args, user_config):
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, \
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
-        USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, GREEDY, \
-        VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH
+        USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, INDIRECT_SELECTION, \
+        VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
+        WHICH
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
     FULL_REFRESH = getattr(args, 'full_refresh', FULL_REFRESH)
     STORE_FAILURES = getattr(args, 'store_failures', STORE_FAILURES)
-    GREEDY = getattr(args, 'greedy', GREEDY)
+    WHICH = getattr(args, 'which', WHICH)
 
     # global cli flags with env var and user_config alternatives
     USE_EXPERIMENTAL_PARSER = get_flag_value('USE_EXPERIMENTAL_PARSER', args, user_config)
@@ -119,6 +121,7 @@ def set_from_args(args, user_config):
     FAIL_FAST = get_flag_value('FAIL_FAST', args, user_config)
     SEND_ANONYMOUS_USAGE_STATS = get_flag_value('SEND_ANONYMOUS_USAGE_STATS', args, user_config)
     PRINTER_WIDTH = get_flag_value('PRINTER_WIDTH', args, user_config)
+    INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config)
 
 
 def get_flag_value(flag, args, user_config):
@@ -131,7 +134,7 @@ def get_flag_value(flag, args, user_config):
         if env_value is not None and env_value != '':
             env_value = env_value.lower()
             # non Boolean values
-            if flag in ['LOG_FORMAT', 'PRINTER_WIDTH', 'PROFILES_DIR']:
+            if flag in ['LOG_FORMAT', 'PRINTER_WIDTH', 'PROFILES_DIR', 'INDIRECT_SELECTION']:
                 flag_value = env_value
             else:
                 flag_value = env_set_bool(env_value)
@@ -162,4 +165,5 @@ def get_flag_dict():
         "fail_fast": FAIL_FAST,
         "send_anonymous_usage_stats": SEND_ANONYMOUS_USAGE_STATS,
         "printer_width": PRINTER_WIDTH,
+        "indirect_selection": INDIRECT_SELECTION
     }

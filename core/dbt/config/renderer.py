@@ -1,12 +1,14 @@
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 
 from dbt.clients.jinja import get_rendered, catch_jinja
-
+from dbt.context.target import TargetContext
+from dbt.context.secret import SecretContext
+from dbt.context.base import BaseContext
+from dbt.contracts.connection import HasCredentials
 from dbt.exceptions import (
     DbtProjectError, CompilationException, RecursionException
 )
-from dbt.node_types import NodeType
-from dbt.utils import deep_map
+from dbt.utils import deep_map_render
 
 
 Keypath = Tuple[Union[str, int], ...]
@@ -47,7 +49,7 @@ class BaseRenderer:
         self, data: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            return deep_map(self.render_entry, data)
+            return deep_map_render(self.render_entry, data)
         except RecursionException:
             raise DbtProjectError(
                 f'Cycle detected: {self.name} input has a reference to itself',
@@ -98,6 +100,23 @@ class ProjectPostprocessor(Dict[Keypath, Callable[[Any], Any]]):
 
 class DbtProjectYamlRenderer(BaseRenderer):
     _KEYPATH_HANDLERS = ProjectPostprocessor()
+
+    def __init__(
+        self, profile: Optional[HasCredentials] = None,
+        cli_vars: Optional[Dict[str, Any]] = None
+    ) -> None:
+        # Generate contexts here because we want to save the context
+        # object in order to retrieve the env_vars. This is almost always
+        # a TargetContext, but in the debug task we want a project
+        # even when we don't have a profile.
+        if cli_vars is None:
+            cli_vars = {}
+        if profile:
+            self.ctx_obj = TargetContext(profile, cli_vars)
+        else:
+            self.ctx_obj = BaseContext(cli_vars)  # type:ignore
+        context = self.ctx_obj.to_dict()
+        super().__init__(context)
 
     @property
     def name(self):
@@ -157,82 +176,36 @@ class DbtProjectYamlRenderer(BaseRenderer):
         return True
 
 
-class ProfileRenderer(BaseRenderer):
-    @property
-    def name(self):
-        'Profile'
-
-
-class SchemaYamlRenderer(BaseRenderer):
-    DOCUMENTABLE_NODES = frozenset(
-        n.pluralize() for n in NodeType.documentable()
-    )
-
-    @property
-    def name(self):
-        return 'Rendering yaml'
-
-    def _is_norender_key(self, keypath: Keypath) -> bool:
-        """
-        models:
-            - name: blah
-            - description: blah
-              tests: ...
-            - columns:
-                - name:
-                - description: blah
-                  tests: ...
-
-        Return True if it's tests or description - those aren't rendered
-        """
-        if len(keypath) >= 2 and keypath[1] in ('tests', 'description'):
-            return True
-
-        if (
-            len(keypath) >= 4 and
-            keypath[1] == 'columns' and
-            keypath[3] in ('tests', 'description')
-        ):
-            return True
-
-        return False
-
-    # don't render descriptions or test keyword arguments
-    def should_render_keypath(self, keypath: Keypath) -> bool:
-        if len(keypath) < 2:
-            return True
-
-        if keypath[0] not in self.DOCUMENTABLE_NODES:
-            return True
-
-        if len(keypath) < 3:
-            return True
-
-        if keypath[0] == NodeType.Source.pluralize():
-            if keypath[2] == 'description':
-                return False
-            if keypath[2] == 'tables':
-                if self._is_norender_key(keypath[3:]):
-                    return False
-        elif keypath[0] == NodeType.Macro.pluralize():
-            if keypath[2] == 'arguments':
-                if self._is_norender_key(keypath[3:]):
-                    return False
-            elif self._is_norender_key(keypath[1:]):
-                return False
-        else:  # keypath[0] in self.DOCUMENTABLE_NODES:
-            if self._is_norender_key(keypath[1:]):
-                return False
-        return True
-
-
-class PackageRenderer(BaseRenderer):
-    @property
-    def name(self):
-        return 'Packages config'
-
-
 class SelectorRenderer(BaseRenderer):
     @property
     def name(self):
         return 'Selector config'
+
+
+class SecretRenderer(BaseRenderer):
+    def __init__(
+        self, cli_vars: Optional[Dict[str, Any]] = None
+    ) -> None:
+        # Generate contexts here because we want to save the context
+        # object in order to retrieve the env_vars.
+        if cli_vars is None:
+            cli_vars = {}
+        self.ctx_obj = SecretContext(cli_vars)
+        context = self.ctx_obj.to_dict()
+        super().__init__(context)
+
+    @property
+    def name(self):
+        return 'Secret'
+
+
+class ProfileRenderer(SecretRenderer):
+    @property
+    def name(self):
+        return 'Profile'
+
+
+class PackageRenderer(SecretRenderer):
+    @property
+    def name(self):
+        return 'Packages config'
