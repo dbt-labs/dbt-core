@@ -498,7 +498,7 @@ class InvocationProcessor(logbook.Processor):
         if active_user is not None:
             record.extra.update(
                 {
-                "invocation_id": get_invocation_id(),
+                    "run_started_at": active_user.run_started_at.isoformat(),
                     "invocation_id": get_invocation_id(),
                 }
             )

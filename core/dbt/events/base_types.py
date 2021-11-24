@@ -69,6 +69,7 @@ class Event(metaclass=ABCMeta):
     @classmethod
     def get_invocation_id(cls) -> str:
         from dbt.events.functions import get_invocation_id
+
         return get_invocation_id()
 
 
