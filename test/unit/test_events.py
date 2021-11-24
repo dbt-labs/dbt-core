@@ -1,6 +1,6 @@
 from dbt.events import AdapterLogger
 from dbt.events.types import AdapterEventDebug
-from dbt.events.base_types import Cli,File,Event
+from dbt.events.base_types import Event
 import inspect
 from unittest import TestCase
 
@@ -49,9 +49,7 @@ class TestAdapterLogger(TestCase):
 
 class TestEventCodes(TestCase):
 
-    def setUp(self):
-        pass
-
+    # takes in a class and finds any subclasses for it
     def get_all_subclasses(self, cls):
         all_subclasses = []
         for subclass in cls.__subclasses__():
@@ -60,6 +58,7 @@ class TestEventCodes(TestCase):
         return set(all_subclasses)
 
     # checks to see if event codes are duplicated to keep codes singluar and clear.
+    # also checks that event codes follow correct namming convention ex. E001
     def test_event_codes(self):
         all_concrete = self.get_all_subclasses(Event)
         all_codes = set()
