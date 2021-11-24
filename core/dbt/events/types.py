@@ -2480,7 +2480,7 @@ if 1 == 0:
     MacroFileParse(path="")
     PartialParsingFullReparseBecauseOfError()
     PartialParsingFile(file_dict={})
-    PartialParsingExceptionFile(file='')
+    PartialParsingExceptionFile(file="")
     PartialParsingException(exc_info={})
     PartialParsingSkipParsing()
     PartialParsingMacroChangeStartFullParse()
