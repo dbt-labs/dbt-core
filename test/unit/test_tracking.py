@@ -35,7 +35,7 @@ class TestTracking(unittest.TestCase):
         assert dbt.tracking.active_user.invocation_id == invocation_id
         assert dbt.tracking.active_user.run_started_at == run_started_at
 
-        # this should generate a whole new user object -> new invocation_id/run_started_at
+        # this should generate a whole new user object -> new run_started_at
         dbt.tracking.do_not_track()
         assert isinstance(dbt.tracking.active_user, dbt.tracking.User)
 
@@ -43,7 +43,8 @@ class TestTracking(unittest.TestCase):
         assert dbt.tracking.active_user.id is None
         assert isinstance(dbt.tracking.active_user.invocation_id, str)
         assert isinstance(dbt.tracking.active_user.run_started_at, datetime.datetime)
-        assert dbt.tracking.active_user.invocation_id != invocation_id
+        # invocation_id no longer only linked to active_user so it doesn't change
+        assert dbt.tracking.active_user.invocation_id == invocation_id
         # if you use `!=`, you might hit a race condition (especially on windows)
         assert dbt.tracking.active_user.run_started_at is not run_started_at
 

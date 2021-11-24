@@ -88,6 +88,11 @@ class Event(metaclass=ABCMeta):
             self.pid = os.getpid()
         return self.pid
 
+    @classmethod
+    def get_invocation_id(cls) -> str:
+        from dbt.events.functions import get_invocation_id
+        return get_invocation_id()
+
 
 class File(Event, metaclass=ABCMeta):
     # Solely the human readable message. Timestamps and formatting will be added by the logger.
