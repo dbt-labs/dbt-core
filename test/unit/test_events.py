@@ -49,21 +49,18 @@ class TestAdapterLogger(TestCase):
 
 class TestEventCodes(TestCase):
 
-    def get_all_subclasses(self,cls):
+    def setUp(self):
+        pass
+
+    def get_all_subclasses(self, cls):
         all_subclasses = []
         for subclass in cls.__subclasses__():
             all_subclasses.append(subclass)
             all_subclasses.extend(self.get_all_subclasses(subclass))
         return set(all_subclasses)
 
-
-    def setUp(self):
-        pass
-
-    # this interface is documented for adapter maintainers to plug into
-    # so we should test that it at the very least doesn't explode.
+    # checks to see if event codes are duplicated to keep codes singluar and clear.
     def test_event_codes(self):
-        # all_concrete = # all subclasses (any depth) of Event
         all_concrete = self.get_all_subclasses(Event)
         all_codes = set()
 
@@ -72,6 +69,6 @@ class TestEventCodes(TestCase):
                 # must be in the form 1 capital letter, 3 digits
                 self.assertTrue('^[A-Z][0-9]{3}', event.code)
                 # cannot have been used already
-                self.assertFalse(event.code in all_codes,f'{event.code}')
+                self.assertFalse(event.code in all_codes, f'{event.code} is assigned more than once. Check types.py for duplicates.')
                 all_codes.add(event.code)
                 
