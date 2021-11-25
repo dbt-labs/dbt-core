@@ -216,7 +216,7 @@ class GraphRunnableTask(ManifestTask):
                         report_node_data=runner.node,
                         unique_id=runner.node.unique_id,
                         node_status="started",  #TODO: since there's no result yet there's no value.
-                        # node_started_at=startctx  # TODO: this sticks the timestamp in exta for old logging
+                        node_started_at=startctx  # TODO: this sticks the timestamp in exta for old logging
                     )
                 )
             status: Dict[str, str] = {}
@@ -295,6 +295,7 @@ class GraphRunnableTask(ManifestTask):
             runner = self.get_runner(node)
             # we finally know what we're running! Make sure we haven't decided
             # to skip it due to upstream failures
+            # breakpoint()
             if runner.node.unique_id in self._skipped_children:
                 cause = self._skipped_children.pop(runner.node.unique_id)
                 runner.do_skip(cause=cause)

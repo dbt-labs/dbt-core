@@ -140,6 +140,7 @@ class Event(metaclass=ABCMeta):
 class NodeInfo(Event, metaclass=ABCMeta):
     report_node_data: Any
     node_status: str
+    node_started_at: datetime
 
     def get_node_info(self):
         node_info = Node(

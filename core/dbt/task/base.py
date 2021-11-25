@@ -57,7 +57,7 @@ class BaseTask(metaclass=ABCMeta):
 
     def __init__(self, args, config):
         self.args = args
-        self.args.single_threaded = False
+        self.args.single_threaded #= False
         self.config = config
 
     @classmethod
