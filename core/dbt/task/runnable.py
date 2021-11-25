@@ -209,11 +209,14 @@ class GraphRunnableTask(ManifestTask):
             startctx = TimestampNamed('node_started_at')
             index = self.index_offset(runner.node_index)
             extended_metadata = ModelMetadata(runner.node, index)
+            
             with startctx, extended_metadata:
                 fire_event(
                     NodeStart(
                         report_node_data=runner.node,
-                        unique_id=runner.node.unique_id
+                        unique_id=runner.node.unique_id,
+                        node_status="started",  #TODO: since there's no result yet there's no value.
+                        # node_started_at=startctx  # TODO: this sticks the timestamp in exta for old logging
                     )
                 )
             status: Dict[str, str] = {}
@@ -226,7 +229,9 @@ class GraphRunnableTask(ManifestTask):
                     fire_event(
                         NodeFinished(
                             report_node_data=runner.node,
-                            unique_id=runner.node.unique_id
+                            unique_id=runner.node.unique_id,
+                            node_status=status['node_status'],
+                            # node_started_at=finishctx  # TODO: this sticks the timestamp in exta for old logging
                         )
                     )
 
