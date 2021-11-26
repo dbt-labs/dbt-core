@@ -195,7 +195,7 @@ class ManifestLoader:
             start_load_all = time.perf_counter()
 
             projects = config.load_dependencies()
-            loader = ManifestLoader(config, projects, macro_hook)
+            loader = cls(config, projects, macro_hook)
 
             manifest = loader.load()
 
