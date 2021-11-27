@@ -114,22 +114,11 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
     return fb_list
 
 
-def read_files_for_parser(project, files, dirs, extension, parse_ft, saved_files):
-    parser_files = []
-    source_files = get_source_files(
-        project, dirs, extension, parse_ft, saved_files
-    )
-    for sf in source_files:
-        files[sf.file_id] = sf
-        parser_files.append(sf.file_id)
-    return parser_files
-
-
 # This needs to read files for multiple projects, so the 'files'
 # dictionary needs to be passed in. What determines the order of
 # the various projects? Is the root project always last? Do the
 # non-root projects need to be done separately in order?
-def read_files(project, files, parser_files, saved_files):
+def read_files(project, parser_files, saved_files):
 
     parser_file_types_with_paths = [
         (ParseFileType.Macro, project.macro_paths, ".sql"),
@@ -143,8 +132,8 @@ def read_files(project, files, parser_files, saved_files):
         (ParseFileType.Schema, project.all_source_paths, [".yml", ".yaml"]),
     ]
     project_files = {
-        parse_file_type_to_parser[parser_file_type]: read_files_for_parser(
-            project, files, dirs, extension, parser_file_type, saved_files
+        parse_file_type_to_parser[parser_file_type]: get_source_files(
+            project, dirs, extension, parser_file_type, saved_files
         )
         for parser_file_type, dirs, extension in parser_file_types_with_paths
     }
