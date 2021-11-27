@@ -1,7 +1,13 @@
 import pathlib
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
-    FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
+    FilePath,
+    ParseFileType,
+    SourceFile,
+    FileHash,
+    AnySourceFile,
+    SchemaSourceFile,
+    parse_file_type_to_parser,
 )
 
 from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
@@ -127,42 +133,21 @@ def read_files(project, files, parser_files, saved_files):
 
     project_files = {}
 
-    project_files['MacroParser'] = read_files_for_parser(
-        project, files, project.macro_paths, '.sql', ParseFileType.Macro, saved_files
-    )
-
-    project_files['ModelParser'] = read_files_for_parser(
-        project, files, project.model_paths, '.sql', ParseFileType.Model, saved_files
-    )
-
-    project_files['SnapshotParser'] = read_files_for_parser(
-        project, files, project.snapshot_paths, '.sql', ParseFileType.Snapshot, saved_files
-    )
-
-    project_files['AnalysisParser'] = read_files_for_parser(
-        project, files, project.analysis_paths, '.sql', ParseFileType.Analysis, saved_files
-    )
-
-    project_files['SingularTestParser'] = read_files_for_parser(
-        project, files, project.test_paths, '.sql', ParseFileType.SingularTest, saved_files
-    )
-
-    # all generic tests within /tests must be nested under a /generic subfolder
-    project_files['GenericTestParser'] = read_files_for_parser(
-        project, files, project.generic_test_paths, '.sql', ParseFileType.GenericTest, saved_files
-    )
-
-    project_files['SeedParser'] = read_files_for_parser(
-        project, files, project.seed_paths, '.csv', ParseFileType.Seed, saved_files
-    )
-
-    project_files['DocumentationParser'] = read_files_for_parser(
-        project, files, project.docs_paths, '.md', ParseFileType.Documentation, saved_files
-    )
-
-    project_files['SchemaParser'] = read_files_for_parser(
-        project, files, project.all_source_paths, '.yml', ParseFileType.Schema, saved_files
-    )
+    parser_file_types_with_paths = [
+        (ParseFileType.Macro, project.macro_paths, ".sql"),
+        (ParseFileType.Model, project.model_paths, ".sql"),
+        (ParseFileType.Snapshot, project.snapshot_paths, ".sql"),
+        (ParseFileType.Analysis, project.analysis_paths, ".sql"),
+        (ParseFileType.SingularTest, project.test_paths, ".sql"),
+        (ParseFileType.GenericTest, project.generic_test_paths, ".sql"),
+        (ParseFileType.Seed, project.seed_paths, ".csv"),
+        (ParseFileType.Documentation, project.docs_paths, ".md"),
+        (ParseFileType.Schema, project.all_source_paths, ".yml"),
+    ]
+    for parser_file_type, dirs, extension in parser_file_types_with_paths:
+        project_files[parse_file_type_to_parser[parser_file_type]] = read_files_for_parser(
+            project, files, dirs, extension, parser_file_type, saved_files
+        )
 
     # Also read .yaml files for schema files. Might be better to change
     # 'read_files_for_parser' accept an array in the future.
