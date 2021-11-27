@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 import pathlib
+from typing import Dict, List
+
 from dbt.config import Project
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
@@ -122,8 +122,8 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
 # the various projects? Is the root project always last? Do the
 # non-root projects need to be done separately in order?
 def read_files(
-    project: Project, saved_files: dict[str, SourceFile]
-) -> dict[str, list[SourceFile]]:
+    project: Project, saved_files: Dict[str, SourceFile]
+) -> Dict[str, List[SourceFile]]:
     """
     Read files all files within a project.
 
@@ -131,12 +131,12 @@ def read_files(
     ----------
     project : Project
         A project.
-    saved_files : dict[str, SourceFile]
+    saved_files : Dict[str, SourceFile]
         The saved files. Functions as a cache for already loaded files.
 
     Returns
     -------
-    dict[str, list[SourceFile]]
+    Dict[str, List[SourceFile]]
         All files within a project mached for each parser type.
     """
     parser_file_types_with_paths = [
