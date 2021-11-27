@@ -123,7 +123,7 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
 # non-root projects need to be done separately in order?
 def read_files(
     project: Project, saved_files: dict[str, SourceFile]
-) -> dict[str, SourceFile]:
+) -> dict[str, list[SourceFile]]:
     """
     Read files all files within a project.
 
@@ -136,7 +136,7 @@ def read_files(
 
     Returns
     -------
-    dict[str, List[SourceFile]]
+    dict[str, list[SourceFile]]
         All files within a project mached for each parser type.
     """
     parser_file_types_with_paths = [
