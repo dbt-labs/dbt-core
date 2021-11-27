@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import pathlib
+from dbt.config import Project
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath,
@@ -118,8 +121,24 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
 # dictionary needs to be passed in. What determines the order of
 # the various projects? Is the root project always last? Do the
 # non-root projects need to be done separately in order?
-def read_files(project, parser_files, saved_files):
+def read_files(
+    project: Project, saved_files: dict[str, SourceFile]
+) -> dict[str, SourceFile]:
+    """
+    Read files all files within a project.
 
+    Parameters
+    ----------
+    project : Project
+        A project.
+    saved_files : dict[str, SourceFile]
+        The saved files. Functions as a cache for already loaded files.
+
+    Returns
+    -------
+    dict[str, List[SourceFile]]
+        All files within a project mached for each parser type.
+    """
     parser_file_types_with_paths = [
         (ParseFileType.Macro, project.macro_paths, ".sql"),
         (ParseFileType.Model, project.model_paths, ".sql"),
@@ -138,5 +157,4 @@ def read_files(project, parser_files, saved_files):
         for parser_file_type, dirs, extension in parser_file_types_with_paths
     }
 
-    # Store the parser files for this particular project
-    parser_files[project.project_name] = project_files
+    return project_files
