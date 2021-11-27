@@ -22,7 +22,7 @@ class DateTimeSerialization(SerializationStrategy):
         out = value.isoformat()
         # Assume UTC if timezone is missing
         if value.tzinfo is None:
-            out = out + "Z"
+            out += "Z"
         return out
 
     def deserialize(self, value):

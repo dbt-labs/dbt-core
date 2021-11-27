@@ -17,16 +17,16 @@ class MacroCalls(unittest.TestCase):
             "{% macro lr_macro() %} {{ return(load_result('relations').table) }} {% endmacro %}",
             "{% macro get_snapshot_unique_id() -%} {{ return(adapter.dispatch('get_snapshot_unique_id')()) }} {%- endmacro %}",
             "{% macro get_columns_in_query(select_sql) -%} {{ return(adapter.dispatch('get_columns_in_query')(select_sql)) }} {% endmacro %}",
-            """{% macro test_mutually_exclusive_ranges(model) %}                   
-                with base as (   
+            """{% macro test_mutually_exclusive_ranges(model) %}
+                with base as (
                     select {{ get_snapshot_unique_id() }} as dbt_unique_id,
-                    *                      
+                    *
                     from {{ model }} )
                 {% endmacro %}""",
             "{% macro test_my_test(model) %} select {{ dbt_utils.current_timestamp() }} {% endmacro %}",
             "{% macro some_test(model) -%} {{ return(adapter.dispatch('test_some_kind4', 'foo_utils4')) }} {%- endmacro %}",
             "{% macro some_test(model) -%} {{ return(adapter.dispatch('test_some_kind5', macro_namespace = 'foo_utils5')) }} {%- endmacro %}",
-        ] 
+        ]
 
         self.possible_macro_calls = [
             ['nested_macro'],
@@ -47,6 +47,6 @@ class MacroCalls(unittest.TestCase):
         for macro_string in self.macro_strings:
             possible_macro_calls = statically_extract_macro_calls(macro_string, ctx)
             self.assertEqual(self.possible_macro_calls[index], possible_macro_calls)
-            index = index + 1
+            index += 1
 
 
