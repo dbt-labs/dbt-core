@@ -700,7 +700,7 @@ class ManifestLoader:
         key_list.sort()
         env_var_str = ""
         for key in key_list:
-            env_var_str += f'{key}:{config.project_env_vars[key]}|'
+            env_var_str += f"{key}:{config.project_env_vars[key]}|"
         project_env_vars_hash = FileHash.from_contents(env_var_str)
 
         # Create a FileHash of the env_vars in the project
@@ -708,7 +708,7 @@ class ManifestLoader:
         key_list.sort()
         env_var_str = ""
         for key in key_list:
-            env_var_str += f'{key}:{config.profile_env_vars[key]}|'
+            env_var_str += f"{key}:{config.profile_env_vars[key]}|"
         profile_env_vars_hash = FileHash.from_contents(env_var_str)
 
         # Create a FileHash of the profile file
