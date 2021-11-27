@@ -229,12 +229,17 @@ class ManifestLoader:
             for project in self.all_projects.values()
         }
 
-        for files in project_parser_files.values():
-            for file in files:
-                saved_files[file.file_id] = file
+        for project_files in project_parser_files.values():
+            for files in project_files.values():
+                for file in files:
+                    self.manifest.files[file.file_id] = file
+
         project_parser_files = {
-            project_name: list(map(lambda file: file.file_id, files))
-            for project_name, files in project_parser_files.items()
+            project_name: {
+                parser_name: list(map(lambda file: file.file_id, files))
+                for parser_name, files in project_files.items()
+            }
+            for project_name, project_files in project_parser_files.items()
         }
 
         orig_project_parser_files = project_parser_files
