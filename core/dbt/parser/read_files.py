@@ -131,8 +131,6 @@ def read_files_for_parser(project, files, dirs, extension, parse_ft, saved_files
 # non-root projects need to be done separately in order?
 def read_files(project, files, parser_files, saved_files):
 
-    project_files = {}
-
     parser_file_types_with_paths = [
         (ParseFileType.Macro, project.macro_paths, ".sql"),
         (ParseFileType.Model, project.model_paths, ".sql"),
@@ -144,10 +142,12 @@ def read_files(project, files, parser_files, saved_files):
         (ParseFileType.Documentation, project.docs_paths, ".md"),
         (ParseFileType.Schema, project.all_source_paths, [".yml", ".yaml"]),
     ]
-    for parser_file_type, dirs, extension in parser_file_types_with_paths:
-        project_files[parse_file_type_to_parser[parser_file_type]] = read_files_for_parser(
+    project_files = {
+        parse_file_type_to_parser[parser_file_type]: read_files_for_parser(
             project, files, dirs, extension, parser_file_type, saved_files
         )
+        for parser_file_type, dirs, extension in parser_file_types_with_paths
+    }
 
     # Store the parser files for this particular project
     parser_files[project.project_name] = project_files
