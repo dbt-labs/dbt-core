@@ -10,11 +10,13 @@
 - Use more augmented assignment statements ([#4315](https://github.com/dbt-labs/dbt-core/issues/4315)), ([#4311](https://github.com/dbt-labs/dbt-core/pull/4331))
 - Adjust logic when finding approximate matches for models and tests ([#3835](https://github.com/dbt-labs/dbt-core/issues/3835)), [#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 - Restore small previous behaviors for logging: JSON formatting for first few events; `WARN`-level stdout for `list` task; include tracking events in `dbt.log` ([#4341](https://github.com/dbt-labs/dbt-core/pull/4341))
+- Refactor `read_files` to be functional and let `filesystem_search` accept multiple file extensions ([#4348](https://github.com/dbt-labs/dbt-core/pull/4348))
 
 Contributors:
 - [@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))
 - [@emilieschario](https://github.com/emilieschario) ([#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 - [@sneznaj](https://github.com/sneznaj) ([#4349](https://github.com/dbt-labs/dbt-core/pull/4349))
+- [@JCZuurmond](https://github.com/jczuurmond) ([#4348](https://github.com/dbt-labs/dbt-core/pull/4348))
 
 ## dbt-core 1.0.0rc2 (November 22, 2021)
 
