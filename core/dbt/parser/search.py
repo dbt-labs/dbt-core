@@ -63,22 +63,47 @@ class FullBlock(FileBlock):
         return self.block.full_block
 
 
-def filesystem_search(project: Project, relative_dirs: List[str], extension: str):
-    ext = "[!.#~]*" + extension
-    root = project.project_root
+def filesystem_search(
+    project: Project,
+    relative_dirs: List[str],
+    extension: Union[str, List[str]],
+) -> List[FilePath]:
+    """
+    Search for files in the project.
+
+    Parameters
+    ----------
+    project : Project
+        The project to search in.
+    relative_dirs : List[str]
+        The directories in which is searched, relative to the project root.
+    extension : Union[str, List[str]]
+        The extension(s) of the files to include.
+
+    Returns
+    -------
+    List[FilePath] :
+        The found file paths.
+    """
+    if isinstance(extension, str):
+        extension = [extension]
+
     file_path_list = []
-    for result in find_matching(root, relative_dirs, ext):
-        if 'searched_path' not in result or 'relative_path' not in result:
-            raise InternalException(
-                'Invalid result from find_matching: {}'.format(result)
+    for ext in extension:
+        ext = "[!.#~]*" + ext  # https://docs.python.org/3/library/fnmatch.html
+        root = project.project_root
+        for result in find_matching(root, relative_dirs, ext):
+            if "searched_path" not in result or "relative_path" not in result:
+                raise InternalException(
+                    "Invalid result from find_matching: {}".format(result)
+                )
+            file_match = FilePath(
+                searched_path=result["searched_path"],
+                relative_path=result["relative_path"],
+                modification_time=result["modification_time"],
+                project_root=root,
             )
-        file_match = FilePath(
-            searched_path=result['searched_path'],
-            relative_path=result['relative_path'],
-            modification_time=result['modification_time'],
-            project_root=root,
-        )
-        file_path_list.append(file_match)
+            file_path_list.append(file_match)
 
     return file_path_list
 
