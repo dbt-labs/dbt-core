@@ -142,19 +142,12 @@ def read_files(project, files, parser_files, saved_files):
         (ParseFileType.GenericTest, project.generic_test_paths, ".sql"),
         (ParseFileType.Seed, project.seed_paths, ".csv"),
         (ParseFileType.Documentation, project.docs_paths, ".md"),
-        (ParseFileType.Schema, project.all_source_paths, ".yml"),
+        (ParseFileType.Schema, project.all_source_paths, [".yml", ".yaml"]),
     ]
     for parser_file_type, dirs, extension in parser_file_types_with_paths:
         project_files[parse_file_type_to_parser[parser_file_type]] = read_files_for_parser(
             project, files, dirs, extension, parser_file_type, saved_files
         )
-
-    # Also read .yaml files for schema files. Might be better to change
-    # 'read_files_for_parser' accept an array in the future.
-    yaml_files = read_files_for_parser(
-        project, files, project.all_source_paths, '.yaml', ParseFileType.Schema, saved_files
-    )
-    project_files['SchemaParser'].extend(yaml_files)
 
     # Store the parser files for this particular project
     parser_files[project.project_name] = project_files
