@@ -220,12 +220,23 @@ class ManifestLoader:
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
         start_read_files = time.perf_counter()
-        project_parser_files = {}
         saved_files = {}
         if self.saved_manifest:
             saved_files = self.saved_manifest.files
-        for project in self.all_projects.values():
-            read_files(project, self.manifest.files, project_parser_files, saved_files)
+
+        project_parser_files = {
+            project.project_name: read_files(project, saved_files)
+            for project in self.all_projects.values()
+        }
+
+        for files in project_parser_files.values():
+            for file in files:
+                saved_files[file.file_id] = file
+        project_parser_files = {
+            project_name: list(map(lambda file: file.file_id, files))
+            for project_name, files in project_parser_files.items()
+        }
+
         orig_project_parser_files = project_parser_files
         self._perf_info.path_count = len(self.manifest.files)
         self._perf_info.read_files_elapsed = (time.perf_counter() - start_read_files)
