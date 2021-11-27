@@ -229,10 +229,13 @@ class ManifestLoader:
             for project in self.all_projects.values()
         }
 
-        for project_files in project_parser_files.values():
-            for files in project_files.values():
-                for file in files:
-                    self.manifest.files[file.file_id] = file
+        all_files = {
+            file.file_id: file
+            for project_files in project_parser_files.values()
+            for files in project_files.values()
+            for file in files
+        }
+        self.manifest.files.update(all_files)
 
         project_parser_files = {
             project_name: {
