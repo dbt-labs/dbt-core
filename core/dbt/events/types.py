@@ -10,9 +10,9 @@ from dbt.events.stubs import (
 )
 from dbt import ui
 from dbt.events.base_types import (
-    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException, NodeInfo
+    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
 )
-from dbt.events.format import format_fancy_output_line, pluralize, node_state, node_status
+from dbt.events.format import format_fancy_output_line, pluralize, node_states, node_statuses
 from dbt.node_types import NodeType
 from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, TypeVar
 
@@ -2326,11 +2326,11 @@ class DefaultSelector(InfoLevel, Cli, File):
 
 
 @dataclass
-class NodeStart(DebugLevel, Cli, File, NodeInfo):
+class NodeStart(DebugLevel, Cli, File):
     unique_id: str
     report_node_data: ParsedModelNode
-    status: str = node_status['running']
-    state: str = node_state['started']
+    node_status: str = node_statuses['running']
+    node_state: str = node_states['started']
     code: str = "Q023"
 
     def message(self) -> str:
@@ -2338,12 +2338,11 @@ class NodeStart(DebugLevel, Cli, File, NodeInfo):
 
 
 @dataclass
-class NodeFinished(DebugLevel, Cli, File, NodeInfo):
+class NodeFinished(DebugLevel, Cli, File):
     unique_id: str
     report_node_data: ParsedModelNode
-    unique_id: str
-    status: str = node_status['pass']
-    state: str = node_state['success']
+    node_status: str = node_statuses['pass']
+    node_state: str = node_states['success']
     code: str = "Q024"
 
     def message(self) -> str:
@@ -2621,11 +2620,11 @@ class GeneralWarningException(WarnLevel, Cli, File):
 
 # TODO: new event
 @dataclass
-class NodeStartModel(InfoLevel, Cli, File, NodeInfo):
+class NodeStartModel(InfoLevel, Cli, File):
     report_node_data: CompiledModelNode
     code: str = "Z9999"  # TODO: set codes
-    status: str = node_status['running']
-    state: str = node_state['started']
+    node_status: str = node_statuses['running']
+    node_state: str = node_states['started']
 
     def message(self) -> str:
         return 'Start Model'

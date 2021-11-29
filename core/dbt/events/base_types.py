@@ -4,8 +4,7 @@ from datetime import datetime
 import json
 import os
 import threading
-from typing import Any, Dict, Optional
-
+from typing import Any, Optional
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # These base types define the _required structure_ for the concrete event #
@@ -59,6 +58,9 @@ class Event(metaclass=ABCMeta):
     log_version: int = 1
     ts: Optional[datetime] = None  # use getter for non-optional
     pid: Optional[int] = None  # use getter for non-optional
+    report_node_data: Optional[Any] = None
+    node_status: Optional[str] = None
+    node_state: Optional[str] = None
 
     # four digit string code that uniquely identifies this type of event
     # uniqueness and valid characters are enforced by tests
@@ -119,6 +121,21 @@ class Event(metaclass=ABCMeta):
         from dbt.events.functions import get_invocation_id
         return get_invocation_id()
 
+    def get_node_info(self) -> Any:
+        if self.report_node_data:
+            return {
+                "type": 'node_status',
+                "node_path": self.report_node_data.path,
+                "node_name": self.report_node_data.name,
+                "resource_type": self.report_node_data.resource_type,
+                "node_materialized": self.report_node_data.config.materialized,
+                "node_started_at": "TODO",
+                "unique_id": self.report_node_data.unique_id,
+                "node_finished_at": "TODO",
+                "node_status": self.node_status,
+                "run_state": self.node_state
+            }
+
 
 class File(Event, metaclass=ABCMeta):
     # Solely the human readable message. Timestamps and formatting will be added by the logger.
@@ -132,19 +149,3 @@ class Cli(Event, metaclass=ABCMeta):
     def cli_msg(self) -> str:
         # returns the event msg unless overriden in the concrete class
         return self.message()
-
-
-class NodeInfo(Event, metaclass=ABCMeta):
-    def get_node_info(self) -> Dict:
-        return {
-            "type": 'node_status',
-            "node_path": self.report_node_data.path,
-            "node_name": self.report_node_data.name,
-            "resource_type": self.report_node_data.resource_type,
-            "node_materialized": self.report_node_data.config.materialized,
-            "node_started_at": "TODO",
-            "unique_id": self.report_node_data.unique_id,
-            "node_finished_at": "TODO",
-            "node_status": self.status,
-            "run_state": self.state
-        }
