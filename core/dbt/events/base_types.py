@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import os
 import threading
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -109,6 +109,38 @@ class Event(metaclass=ABCMeta):
         if not self.pid:
             self.pid = os.getpid()
         return self.pid
+    
+    def node_info(self) -> Dict:
+    #          Examples
+    # "node_info": 
+    #     {"node_path": "models/slow.sql", 
+    #     "node_name": "slow", 
+    #     "resource_type": "model", 
+    #     "node_materialized": "table", 
+    #     "node_started_at": "2021-10-05T13:17:28.018613", 
+    #     "unique_id": "model.my_new_project.slow", 
+    #     "run_state": "running"}}
+    # "node_info": 
+    #     {"node_path": "models/slow.sql", 
+    #     "node_name": "slow", 
+    #     "resource_type": "model", 
+    #     "node_materialized": "table", 
+    #     "node_started_at": "2021-10-05T13:17:28.018613", 
+    #     "unique_id": "model.my_new_project.slow", 
+    #     "node_finished_at": "2021-10-05T13:17:29.134126", 
+    #     "node_status": "passed", 
+    #     "run_state": "running"}}
+        return {
+            "node_path": "models/slow.sql", 
+            "node_name": "slow", 
+            "resource_type": "model", 
+            "node_materialized": "table", 
+            "node_started_at": "2021-10-05T13:17:28.018613", 
+            "unique_id": "model.my_new_project.slow", 
+            "node_finished_at": "2021-10-05T13:17:29.134126", 
+            "node_status": "passed", 
+            "run_state": "running"
+        }
 
     # in theory threads can change so we don't cache them.
     def get_thread_name(self) -> str:
