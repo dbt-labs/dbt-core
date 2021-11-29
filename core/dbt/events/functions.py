@@ -40,7 +40,7 @@ format_json = False
 invocation_id: Optional[str] = None
 
 
-def setup_event_logger(log_path):
+def setup_event_logger(log_path, level_override=None):
     make_log_dir_if_missing(log_path)
     this.format_json = flags.LOG_FORMAT == 'json'
     # USE_COLORS can be None if the app just started and the cli flags
@@ -48,7 +48,7 @@ def setup_event_logger(log_path):
     this.format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
     log_dest = os.path.join(log_path, 'dbt.log')
-    level = logging.DEBUG if flags.DEBUG else logging.INFO
+    level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
     # overwrite the STDOUT_LOG logger with the configured one
     this.STDOUT_LOG = logging.getLogger('configured_std_out')

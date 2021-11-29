@@ -223,7 +223,8 @@ def run_from_args(parsed):
 
     # we can now use the logger for stdout
     # set log_format in the logger
-    parsed.cls.pre_init_hook(parsed)
+    # if 'list' task: set stdout to WARN instead of INFO
+    level_override = parsed.cls.pre_init_hook(parsed)
 
     fire_event(MainReportVersion(v=dbt.version.installed))
 
@@ -237,7 +238,7 @@ def run_from_args(parsed):
         log_path = getattr(task.config, 'log_path', None)
     # we can finally set the file logger up
     log_manager.set_path(log_path)
-    setup_event_logger(log_path or 'logs')
+    setup_event_logger(log_path or 'logs', level_override)
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true
         fire_event(MainTrackingUserState(dbt.tracking.active_user.state()))
 
