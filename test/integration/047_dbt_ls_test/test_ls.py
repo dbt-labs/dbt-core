@@ -42,7 +42,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         log_manager.stdout_console()
         full_args = ['ls']
         if args is not None:
-            full_args = full_args + args
+            full_args += args
 
         result = self.run_dbt(args=full_args, expect_pass=expect_pass)
 
@@ -484,13 +484,13 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.assertEqual(set(results), {'test.incremental'})
 
         self.run_dbt_ls(['--select', 'config.incremental_strategy:insert_overwrite'], expect_pass=True)
-    
+
     def expect_selected_keys(self):
         """Expect selected fields of the the selected model
         """
         expectations = [{
-            'database': self.default_database, 
-            'schema': self.unique_schema(), 
+            'database': self.default_database,
+            'schema': self.unique_schema(),
             'alias': 'inner'
             }]
         results = self.run_dbt_ls(['--model', 'inner', '--output', 'json', '--output-keys', 'database,schema,alias'])
@@ -498,7 +498,7 @@ class TestStrictUndefined(DBTIntegrationTest):
 
         for got, expected in zip(results, expectations):
             self.assertEqualJSON(got, expected)
-    
+
         """Expect selected fields of the test resource types
         """
         expectations = [
@@ -510,7 +510,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.assertEqual(len(results), len(expectations))
 
         for got, expected in zip(
-            sorted(results, key=lambda x: json.loads(x).get("name")), 
+            sorted(results, key=lambda x: json.loads(x).get("name")),
             sorted(expectations, key=lambda x: x.get("name"))
             ):
             self.assertEqualJSON(got, expected)

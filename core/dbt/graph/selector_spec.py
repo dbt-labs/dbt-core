@@ -149,7 +149,7 @@ class SelectionCriteria:
         method_name, method_arguments = cls.parse_method(dct)
         meth_name = str(method_name)
         if method_arguments:
-            meth_name = meth_name + '.' + '.'.join(method_arguments)
+            meth_name += '.' + '.'.join(method_arguments)
         dct['method'] = meth_name
         dct = {k: v for k, v in dct.items() if (v is not None and v != '')}
         if 'childrens_parents' in dct:

@@ -2,12 +2,19 @@
 
 ### Fixes
 - Support partial parsing of env_vars in metrics ([#4253](https://github.com/dbt-labs/dbt-core/issues/4293), [#4322](https://github.com/dbt-labs/dbt-core/pull/4322))
+- Fix typo in `UnparsedSourceDefinition.__post_serialize__` ([#3545](https://github.com/dbt-labs/dbt-core/issues/3545), [#4349](https://github.com/dbt-labs/dbt-core/pull/4349))
 
 ### Under the hood
 - Change some CompilationExceptions to ParsingExceptions ([#4254](http://github.com/dbt-labs/dbt-core/issues/4254), [#4328](https://github.com/dbt-core/pull/4328))
 - Reorder logic for static parser sampling to speed up model parsing ([#4332](https://github.com/dbt-labs/dbt-core/pull/4332))
+- Use more augmented assignment statements ([#4315](https://github.com/dbt-labs/dbt-core/issues/4315)), ([#4311](https://github.com/dbt-labs/dbt-core/pull/4331))
+- Adjust logic when finding approximate matches for models and tests ([#3835](https://github.com/dbt-labs/dbt-core/issues/3835)), [#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 - Restore small previous behaviors for logging: JSON formatting for first few events; `WARN`-level stdout for `list` task; include tracking events in `dbt.log` ([#4341](https://github.com/dbt-labs/dbt-core/pull/4341))
 
+Contributors:
+- [@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))
+- [@emilieschario](https://github.com/emilieschario) ([#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
+- [@sneznaj](https://github.com/sneznaj) ([#4349](https://github.com/dbt-labs/dbt-core/pull/4349))
 
 ## dbt-core 1.0.0rc2 (November 22, 2021)
 
@@ -106,7 +113,7 @@ Contributors:
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
 - Remove connection from `render_with_context` during parsing, thereby removing misleading log message ([#3137](https://github.com/dbt-labs/dbt-core/issues/3137), [#4062](https://github.com/dbt-labas/dbt-core/pull/4062))
 - Wait for postgres docker container to be ready in `setup_db.sh`. ([#3876](https://github.com/dbt-labs/dbt-core/issues/3876), [#3908](https://github.com/dbt-labs/dbt-core/pull/3908))
-- Prefer macros defined in the project over the ones in a package by default ([#4106](https://github.com/dbt-labs/dbt-core/issues/4106), [#4114](https://github.com/dbt-labs/dbt-core/pull/4114)) 
+- Prefer macros defined in the project over the ones in a package by default ([#4106](https://github.com/dbt-labs/dbt-core/issues/4106), [#4114](https://github.com/dbt-labs/dbt-core/pull/4114))
 - Dependency updates ([#4079](https://github.com/dbt-labs/dbt-core/pull/4079)), ([#3532](https://github.com/dbt-labs/dbt-core/pull/3532)
 - Schedule partial parsing for SQL files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4101](https://github.com/dbt-labs/dbt-core/pull/4101))
 - Schedule partial parsing for schema files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4162](https://github.com/dbt-labs/dbt-core/pull/4162))
