@@ -285,7 +285,7 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if 'freshnewss' not in dct and self.freshness is None:
+        if 'freshness' not in dct and self.freshness is None:
             dct['freshness'] = None
         return dct
 

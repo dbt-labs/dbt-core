@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 import os
+import threading
 from typing import Any, Optional
 
 
@@ -108,6 +109,10 @@ class Event(metaclass=ABCMeta):
         if not self.pid:
             self.pid = os.getpid()
         return self.pid
+
+    # in theory threads can change so we don't cache them.
+    def get_thread_name(self) -> str:
+        return threading.current_thread().getName()
 
     @classmethod
     def get_invocation_id(cls) -> str:
