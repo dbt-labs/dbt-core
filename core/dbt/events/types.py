@@ -1940,12 +1940,11 @@ class EndOfRunSummary(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintStartLine(InfoLevel, Cli, File):
-    # TODO: add node info
-    # report_node_data: ParsedModelNode
+class PrintStartLine(InfoLevel, Cli, File, NodeInfo):
     description: str
     index: int
     total: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Z031"
 
     def message(self) -> str:
@@ -1959,12 +1958,12 @@ class PrintStartLine(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintHookStartLine(InfoLevel, Cli, File):
-    # report_node_data: CompiledModelNode
+class PrintHookStartLine(InfoLevel, Cli, File, NodeInfo):
     statement: str
     index: int
     total: int
     truncate: bool
+    report_node_data: Any  # TODO: be explicit
     code: str = "Z032"
 
     def message(self) -> str:
@@ -1977,13 +1976,14 @@ class PrintHookStartLine(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintHookEndLine(InfoLevel, Cli, File):
+class PrintHookEndLine(InfoLevel, Cli, File, NodeInfo):
     statement: str
     status: str
     index: int
     total: int
     execution_time: int
     truncate: bool
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q007"
 
     def message(self) -> str:
@@ -1997,12 +1997,13 @@ class PrintHookEndLine(InfoLevel, Cli, File):
 
 
 @dataclass
-class SkippingDetails(InfoLevel, Cli, File):
+class SkippingDetails(InfoLevel, Cli, File, NodeInfo):
     resource_type: str
     schema: str
     node_name: str
     index: int
     total: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Z033"
 
     def message(self) -> str:
@@ -2017,11 +2018,12 @@ class SkippingDetails(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintErrorTestResult(ErrorLevel, Cli, File):
+class PrintErrorTestResult(ErrorLevel, Cli, File, NodeInfo):
     name: str
     index: int
     num_models: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q008"
 
     def message(self) -> str:
@@ -2035,11 +2037,12 @@ class PrintErrorTestResult(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintPassTestResult(InfoLevel, Cli, File):
+class PrintPassTestResult(InfoLevel, Cli, File, NodeInfo):
     name: str
     index: int
     num_models: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q009"
 
     def message(self) -> str:
@@ -2053,12 +2056,13 @@ class PrintPassTestResult(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintWarnTestResult(WarnLevel, Cli, File):
+class PrintWarnTestResult(WarnLevel, Cli, File, NodeInfo):
     name: str
     index: int
     num_models: int
     execution_time: int
     failures: List[str]
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q010"
 
     def message(self) -> str:
@@ -2072,12 +2076,13 @@ class PrintWarnTestResult(WarnLevel, Cli, File):
 
 
 @dataclass
-class PrintFailureTestResult(ErrorLevel, Cli, File):
+class PrintFailureTestResult(ErrorLevel, Cli, File, NodeInfo):
     name: str
     index: int
     num_models: int
     execution_time: int
     failures: List[str]
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q011"
 
     def message(self) -> str:
@@ -2107,12 +2112,13 @@ class PrintSkipBecauseError(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintModelErrorResultLine(ErrorLevel, Cli, File):
+class PrintModelErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     description: str
     status: str
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Z035"
 
     def message(self) -> str:
@@ -2126,12 +2132,13 @@ class PrintModelErrorResultLine(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintModelResultLine(InfoLevel, Cli, File):
+class PrintModelResultLine(InfoLevel, Cli, File, NodeInfo):
     description: str
     status: str
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q012"
 
     def message(self) -> str:
@@ -2326,7 +2333,7 @@ class DefaultSelector(InfoLevel, Cli, File):
 class NodeStart(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
-    node_status: str
+    # node_status: str
     code: str = "Q023"
 
     def message(self) -> str:
@@ -2337,7 +2344,7 @@ class NodeStart(DebugLevel, Cli, File, NodeInfo):
 class NodeFinished(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
-    node_status: str
+    # node_status: str
     # TODO: possibly pass entire RunResult
     code: str = "Q024"
 
@@ -2822,7 +2829,7 @@ if 1 == 0:
     FirstRunResultError(msg='')
     AfterFirstRunResultError(msg='')
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
-    PrintStartLine(description='', index=0, total=0)
+    PrintStartLine(description='', index=0, total=0, report_node_data='')
     PrintHookStartLine(statement='', index=0, total=0, truncate=False)
     PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False)
     SkippingDetails(resource_type='', schema='', node_name='', index=0, total=0)
@@ -2848,8 +2855,8 @@ if 1 == 0:
     PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0)
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
-    NodeStart(report_node_data=ParsedModelNode(), unique_id='', node_status='')
-    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', node_status='')
+    NodeStart(report_node_data=ParsedModelNode(), unique_id='')
+    NodeFinished(report_node_data=ParsedModelNode(), unique_id='')
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
     StarterProjectPath(dir='')

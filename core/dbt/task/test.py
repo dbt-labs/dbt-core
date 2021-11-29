@@ -74,7 +74,8 @@ class TestRunner(CompileRunner):
                     name=model.name,
                     index=self.node_index,
                     num_models=self.num_nodes,
-                    execution_time=result.execution_time
+                    execution_time=result.execution_time,
+                    report_node_data=model
                 )
             )
         elif result.status == TestStatus.Pass:
@@ -83,7 +84,8 @@ class TestRunner(CompileRunner):
                     name=model.name,
                     index=self.node_index,
                     num_models=self.num_nodes,
-                    execution_time=result.execution_time
+                    execution_time=result.execution_time,
+                    report_node_data=model
                 )
             )
         elif result.status == TestStatus.Warn:
@@ -93,7 +95,8 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    failures=result.failures
+                    failures=result.failures,
+                    report_node_data=model
                 )
             )
         elif result.status == TestStatus.Fail:
@@ -103,7 +106,8 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    failures=result.failures
+                    failures=result.failures,
+                    report_node_data=model
                 )
             )
         else:
@@ -114,7 +118,8 @@ class TestRunner(CompileRunner):
             PrintStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
-                total=self.num_nodes
+                total=self.num_nodes,
+                report_node_data=self.node
             )
         )
 

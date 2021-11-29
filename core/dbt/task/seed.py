@@ -27,7 +27,8 @@ class SeedRunner(ModelRunner):
             PrintStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
-                total=self.num_nodes
+                total=self.num_nodes,
+                report_node_data=self.node
             )
         )
 
