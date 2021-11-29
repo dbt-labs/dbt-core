@@ -629,6 +629,12 @@ class ParsedSourceDefinition(
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
+    _event_status: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_serialize__(self, dct):
+        if '_event_status' in dct:
+            del dct['_event_status']
+        return dct
 
     def same_database_representation(
         self, other: 'ParsedSourceDefinition'
