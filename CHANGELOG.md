@@ -7,11 +7,11 @@
 - Change some CompilationExceptions to ParsingExceptions ([#4254](http://github.com/dbt-labs/dbt-core/issues/4254), [#4328](https://github.com/dbt-core/pull/4328))
 - Reorder logic for static parser sampling to speed up model parsing ([#4332](https://github.com/dbt-labs/dbt-core/pull/4332))
 - Use more augmented assignment statements ([#4315](https://github.com/dbt-labs/dbt-core/issues/4315)), ([#4311](https://github.com/dbt-labs/dbt-core/pull/4331))
-- Adjust logic when finding approximate matches for models and tests ([#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
+- Adjust logic when finding approximate matches for models and tests ([#3835](https://github.com/dbt-labs/dbt-core/issues/3835)), [#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 
 Contributors:
-[@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))
-
+- [@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))
+- [@emilieschario](https://github.com/emilieschario) ([#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 
 ## dbt-core 1.0.0rc2 (November 22, 2021)
 
@@ -115,7 +115,6 @@ Contributors:
 - Schedule partial parsing for SQL files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4101](https://github.com/dbt-labs/dbt-core/pull/4101))
 - Schedule partial parsing for schema files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4162](https://github.com/dbt-labs/dbt-core/pull/4162))
 - Skip partial parsing when env_vars change in dbt_project or profile ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4212](https://github.com/dbt-labs/dbt-core/pull/4212))
-
 
 Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
