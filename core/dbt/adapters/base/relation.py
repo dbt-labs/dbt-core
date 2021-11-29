@@ -90,7 +90,7 @@ class BaseRelation(FakeAPIObject, Hashable):
                 exact_match = False
 
             if (
-                self.path.get_lowered_part(k).strip(self.quote_character) != 
+                self.path.get_lowered_part(k).strip(self.quote_character) !=
                 v.lower().strip(self.quote_character)
             ):
                 approximate_match = False
