@@ -1,12 +1,10 @@
 from test.integration.base import DBTIntegrationTest,  use_profile
-import io
 import json
 import os
 import re
 
 import dbt.exceptions
 from dbt.version import __version__ as dbt_version
-from dbt.logger import log_manager
 
 
 class TestDefaultQueryComments(DBTIntegrationTest):
@@ -41,19 +39,8 @@ class TestDefaultQueryComments(DBTIntegrationTest):
     def models(self):
         return self.dir('models')
 
-    def setUp(self):
-        super().setUp()
-        self.initial_stdout = log_manager.stdout
-        self.initial_stderr = log_manager.stderr
-        self.stringbuf = io.StringIO()
-        log_manager.set_output_stream(self.stringbuf)
-
-    def tearDown(self):
-        log_manager.set_output_stream(self.initial_stdout, self.initial_stderr)
-        super().tearDown()
-
     def run_get_json(self, expect_pass=True):
-        res, raw_logs = self.run_dbt_and_capture(
+        _, raw_logs = self.run_dbt_and_capture(
             ['--debug', '--log-format=json', 'run'],
             expect_pass=expect_pass
         )
@@ -66,14 +53,13 @@ class TestDefaultQueryComments(DBTIntegrationTest):
                 continue
 
             parsed_logs.append(log)
-        
         # empty lists evaluate as False
         self.assertTrue(parsed_logs)
         return parsed_logs
 
     def query_comment(self, model_name, log):
         # N.B: a temporary string replacement regex to strip the HH:MM:SS from the log line if present.
-        # TODO: make this go away when structured logging is stable 
+        # TODO: make this go away when structured logging is stable
         log_msg = re.sub("(?:[01]\d|2[0123]):(?:[012345]\d):(?:[012345]\d \| )", "", log['msg'])
         prefix = 'On {}: '.format(model_name)
         if log_msg.startswith(prefix):

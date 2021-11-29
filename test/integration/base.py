@@ -530,7 +530,6 @@ class DBTIntegrationTest(unittest.TestCase):
             stringbuf = capture_stdout_logs()
             res = self.run_dbt(*args, **kwargs)
             stdout = stringbuf.getvalue()
-
         finally:
             stop_capture_stdout_logs()
 

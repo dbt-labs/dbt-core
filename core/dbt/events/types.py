@@ -772,6 +772,12 @@ class DumpBeforeRenameSchema(DebugLevel, Cli, File):
         func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
         return f"before rename: {func_returns}"
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.graph_func:  # type: ignore
+            return str(val())
+
+        return val
+
 
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, Cli, File):
@@ -1440,6 +1446,12 @@ class GenericExceptionOnRun(ErrorLevel, Cli, File):
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 @dataclass
