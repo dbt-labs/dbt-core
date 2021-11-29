@@ -57,9 +57,17 @@ class ListTask(GraphRunnableTask):
     @classmethod
     def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
+        # Filter out all INFO-level logging to allow piping ls output to jq, etc
+        # WARN level will still include all warnings + errors
+        # Do this by:
+        #  - returning the log level so that we can pass it into the 'level_override'
+        #    arg of events.functions.setup_event_logger() -- good!
+        #  - mutating the initialized, not-yet-configured STDOUT event logger
+        #    because it's being configured too late -- bad! TODO refactor!
         log_manager.stderr_console()
         event_logger.STDOUT_LOG.level = logging.WARN
         super().pre_init_hook(args)
+        return logging.WARN
 
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
