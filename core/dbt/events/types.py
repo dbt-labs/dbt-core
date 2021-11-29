@@ -7,7 +7,7 @@ from dbt.events.base_types import (
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
-from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar
 
 
 # The classes in this file represent the data necessary to describe a
@@ -734,7 +734,7 @@ class DumpBeforeAddGraph(DebugLevel, Cli, File):
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
         # TODO remove when we've upgraded to a mypy version without that bug
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        func_returns = self.graph_func()  # type: ignore
         return f"before adding : {func_returns}"
 
     # TODO should we manually cache the graph here so it doesn't get called for the message
@@ -755,7 +755,7 @@ class DumpAfterAddGraph(DebugLevel, Cli, File):
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        func_returns = self.graph_func()  # type: ignore
         return f"after adding: {func_returns}"
 
     # TODO should we manually cache the graph here so it doesn't get called for the message
@@ -776,7 +776,7 @@ class DumpBeforeRenameSchema(DebugLevel, Cli, File):
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        func_returns = self.graph_func()  # type: ignore
         return f"before rename: {func_returns}"
 
     def fields_to_json(self, val: Any) -> Any:
@@ -793,7 +793,7 @@ class DumpAfterRenameSchema(DebugLevel, Cli, File):
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        func_returns = self.graph_func()  # type: ignore
         return f"after rename: {func_returns}"
 
     def fields_to_json(self, val: Any) -> Any:
