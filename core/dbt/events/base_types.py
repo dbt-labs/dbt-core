@@ -38,6 +38,20 @@ class ErrorLevel():
         return "error"
 
 
+class Node():
+    def __init__(self, node):
+        self.type = 'node_status'
+        self.node_path = node.path
+        self.node_name = node.name
+        self.resource_type = node.resource_type
+        self.materialized = node.config.materialized
+        self.node_started_at = "TODO"
+        self.unique_id = node.unique_id
+        self.node_finished_at = "TODO"
+        self.node_status = "TODO"  # node.node_status pull from contract
+        self.run_state = "TODO"  # node.run_status can i pull from contract
+
+
 @dataclass
 class ShowException():
     # N.B.:
@@ -58,9 +72,7 @@ class Event(metaclass=ABCMeta):
     log_version: int = 1
     ts: Optional[datetime] = None  # use getter for non-optional
     pid: Optional[int] = None  # use getter for non-optional
-    report_node_data: Optional[Any] = None
-    node_status: Optional[str] = None
-    node_state: Optional[str] = None
+    node_info: Optional[Node]
 
     # four digit string code that uniquely identifies this type of event
     # uniqueness and valid characters are enforced by tests
@@ -121,20 +133,17 @@ class Event(metaclass=ABCMeta):
         from dbt.events.functions import get_invocation_id
         return get_invocation_id()
 
-    def get_node_info(self) -> Any:
-        if self.report_node_data:
-            return {
-                "type": 'node_status',
-                "node_path": self.report_node_data.path,
-                "node_name": self.report_node_data.name,
-                "resource_type": self.report_node_data.resource_type,
-                "node_materialized": self.report_node_data.config.materialized,
-                "node_started_at": "TODO",
-                "unique_id": self.report_node_data.unique_id,
-                "node_finished_at": "TODO",
-                "node_status": self.node_status,
-                "run_state": self.node_state
-            }
+    def get_node_info(self):
+        return None
+
+
+class NodeInfo(Event, metaclass=ABCMeta):
+    report_node_data: Any
+    node_status: str
+    run_state: str
+
+    def get_node_info(self):
+        return vars(Node(self.report_node_data))
 
 
 class File(Event, metaclass=ABCMeta):
