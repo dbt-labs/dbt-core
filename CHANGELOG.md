@@ -7,9 +7,11 @@
 - Change some CompilationExceptions to ParsingExceptions ([#4254](http://github.com/dbt-labs/dbt-core/issues/4254), [#4328](https://github.com/dbt-core/pull/4328))
 - Reorder logic for static parser sampling to speed up model parsing ([#4332](https://github.com/dbt-labs/dbt-core/pull/4332))
 - Use more augmented assignment statements ([#4315](https://github.com/dbt-labs/dbt-core/issues/4315)), ([#4311](https://github.com/dbt-labs/dbt-core/pull/4331))
+- Adjust logic when finding approximate matches for models and tests ([#3835](https://github.com/dbt-labs/dbt-core/issues/3835)), [#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 
 Contributors:
-[@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))
+- [@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))
+- [@emilieschario](https://github.com/emilieschario) ([#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 
 ## dbt-core 1.0.0rc2 (November 22, 2021)
 
