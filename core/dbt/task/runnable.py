@@ -224,7 +224,8 @@ class GraphRunnableTask(ManifestTask):
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
                 runner.node._event_status['node_status'] = str(result.status)
-                runner.node._event_status['dbt_internal__finished_at'] = datetime.utcnow().isoformat()
+                runner.node._event_status['dbt_internal__finished_at'] = \
+                    datetime.utcnow().isoformat()
             finally:
                 finishctx = TimestampNamed('finished_at')
                 with finishctx, DbtModelState(status):
