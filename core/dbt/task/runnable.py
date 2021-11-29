@@ -34,7 +34,7 @@ from dbt.events.types import (
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.results import NodeStatus, RunExecutionResult
+from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     InternalException,
@@ -209,13 +209,14 @@ class GraphRunnableTask(ManifestTask):
             startctx = TimestampNamed('node_started_at')
             index = self.index_offset(runner.node_index)
             runner.node.config['started_at'] = datetime.utcnow().isoformat()
+            runner.node.config['node_status'] = RunningStatus.Started
             extended_metadata = ModelMetadata(runner.node, index)
 
             with startctx, extended_metadata:
                 fire_event(
                     NodeStart(
                         report_node_data=runner.node,
-                        unique_id=runner.node.unique_id
+                        unique_id=runner.node.unique_id,
                     )
                 )
             status: Dict[str, str] = {}
@@ -235,6 +236,7 @@ class GraphRunnableTask(ManifestTask):
                     )
             del runner.node.config["started_at"]
             del runner.node.config["finished_at"]
+            del runner.node.config["node_status"]
 
         fail_fast = flags.FAIL_FAST
 
