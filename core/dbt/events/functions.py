@@ -112,7 +112,6 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
 
     return scrubbed
 
-
 # returns a dictionary representation of the event fields. You must specify which of the
 # available messages you would like to use (i.e. - e.message, e.cli_msg(), e.file_msg())
 # used for constructing json formatted events. includes secrets which must be scrubbed at
@@ -121,13 +120,16 @@ def event_to_serializable_dict(
     e: T_Event, ts_fn: Callable[[datetime], str],
     msg_fn: Callable[[T_Event], str]
 ) -> Dict[str, Any]:
-    data: Optional[dict] = None
+    data = dict()
     if hasattr(e, '__dataclass_fields__'):
-        data = {
-            x: e.fields_to_json(getattr(e, x)) for x, y
-            in e.__dataclass_fields__.items()  # type: ignore[attr-defined]
-            if type(y._field_type) == _FIELD_BASE
-        }
+        for field, value in e.__dataclass_fields__.items():
+            if type(value._field_type) != _FIELD_BASE:
+                _json_value = e.fields_to_json(value)
+
+                if not isinstance(_json_value, Exception):
+                    data[field] = _json_value
+                else:
+                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}" 
 
     return {
         'log_version': e.log_version,
