@@ -324,3 +324,10 @@ def get_invocation_id() -> str:
     if invocation_id is None:
         invocation_id = str(uuid.uuid4())
     return invocation_id
+
+
+def set_invocation_id() -> None:
+    # This is primarily for setting the invocation_id for separate
+    # commands in the dbt servers. It shouldn't be necessary for the CLI.
+    global invocation_id
+    invocation_id = str(uuid.uuid4())
