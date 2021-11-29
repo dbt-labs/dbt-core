@@ -20,9 +20,10 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, Deque
 from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
 from collections import deque
 
-# create the global event history buffer with a max size of 1M records
+# create the global event history buffer with a max size of 100k records
+# TODO: make the maxlen something configurable from the command line via args(?)
 global EVENT_HISTORY
-EVENT_HISTORY: Deque = deque(maxlen=1000000)
+EVENT_HISTORY: Deque = deque(maxlen=100000)
 
 # create the global file logger with no configuration
 global FILE_LOG
@@ -289,7 +290,7 @@ def fire_event(e: Event) -> None:
     # if and only if the event history deque will be completely filled by this event
     # fire warning that old events are now being dropped
     global EVENT_HISTORY
-    if len(EVENT_HISTORY) == (1000000 - 1):
+    if len(EVENT_HISTORY) == (100000 - 1):
         EVENT_HISTORY.append(e)
         fire_event(EventBufferFull())
     else:

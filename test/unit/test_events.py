@@ -1,6 +1,10 @@
+from dbt import events
 from dbt.events import AdapterLogger
-from dbt.events.types import AdapterEventDebug
+from dbt.events.types import AdapterEventDebug, EventBufferFull
 from dbt.events.base_types import Event
+from dbt.events.functions import EVENT_HISTORY, fire_event
+from dbt.events.test_types import UnitTestInfo
+
 import inspect
 from unittest import TestCase
 
@@ -70,4 +74,21 @@ class TestEventCodes(TestCase):
                 # cannot have been used already
                 self.assertFalse(event.code in all_codes, f'{event.code} is assigned more than once. Check types.py for duplicates.')
                 all_codes.add(event.code)
-                
+
+class TestEventBuffer(TestCase):
+
+    # ensure events are populated to the buffer exactly once
+    def test_buffer_populates(self):
+        fire_event(UnitTestInfo(msg="Test Event 1"))
+        fire_event(UnitTestInfo(msg="Test Event 2"))
+        self.assertTrue(
+            EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 1
+        )
+
+    # ensure events drop from the front of the buffer when buffer maxsize is reached
+    def test_buffer_FIFOs(self):
+        for n in range(0,100001):
+            fire_event(UnitTestInfo(msg=f"Test Event {n}"))
+        self.assertTrue(
+            EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
+        )
