@@ -287,7 +287,7 @@ class BaseRunner(metaclass=ABCMeta):
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node):
-            ctx.node._event_status['node_status'] = str(RunningStatus.Compiling)
+            ctx.node._event_status['node_status'] = RunningStatus.Compiling
             fire_event(
                 NodeCompiling(
                     report_node_data=ctx.node,
@@ -303,7 +303,7 @@ class BaseRunner(metaclass=ABCMeta):
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model:
-                ctx.node._event_status['node_status'] = str(RunningStatus.Executing)
+                ctx.node._event_status['node_status'] = RunningStatus.Executing
                 fire_event(
                     NodeExecuting(
                         report_node_data=ctx.node,
