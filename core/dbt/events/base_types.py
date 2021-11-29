@@ -46,8 +46,8 @@ class Node():
     resource_type: str
     materialized: str
     node_status: str
-    node_started_at: str
-    node_finished_at: str
+    node_started_at: datetime
+    node_finished_at: datetime
     type: str = 'node_status'
 
 
@@ -140,7 +140,6 @@ class Event(metaclass=ABCMeta):
 class NodeInfo(Event, metaclass=ABCMeta):
     report_node_data: Any  # Union[ParsedModelNode, ...] TODO: resolve circular imports
     node_status: str
-    # node_started_at: datetime
 
     def get_node_info(self):
         node_info = Node(
@@ -150,9 +149,8 @@ class NodeInfo(Event, metaclass=ABCMeta):
             resource_type=self.report_node_data.resource_type,
             materialized=self.report_node_data.config.materialized,
             node_status=self.node_status,
-            node_started_at="TODO",  # TODO: where to fill?  leverage/convert TimestampNamed
-                                     # in logger.py?
-            node_finished_at="TODO"
+            node_started_at=self.report_node_data.config.get("started_at"),
+            node_finished_at=self.report_node_data.config.get("finished_at")
         )
         return vars(node_info)  # TODO: can just return node_info after #4326 is merged in
 
