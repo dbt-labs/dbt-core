@@ -10,7 +10,7 @@ from dbt.events.stubs import (
 )
 from dbt import ui
 from dbt.events.base_types import (
-    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
+    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException, NodeInfo
 )
 from dbt.events.format import format_fancy_output_line, pluralize, node_state, node_status
 from dbt.node_types import NodeType
@@ -1952,7 +1952,12 @@ class PrintStartLine(InfoLevel, Cli, File):
 
     def message(self) -> str:
         msg = f"START {self.description}"
-        return format_fancy_output_line(msg=msg, status=self.status, index=self.index, total=self.total)
+        return format_fancy_output_line(
+            msg=msg,
+            status=self.status,
+            index=self.index,
+            total=self.total
+        )
 
 
 @dataclass
@@ -2321,25 +2326,28 @@ class DefaultSelector(InfoLevel, Cli, File):
 
 
 @dataclass
-class NodeStart(DebugLevel, Cli, File):
+class NodeStart(DebugLevel, Cli, File, NodeInfo):
+    unique_id: str
     report_node_data: ParsedModelNode
     status: str = node_status['running']
     state: str = node_state['started']
     code: str = "Q023"
 
     def message(self) -> str:
-        return f"Began running node {self.report_node_data.unique_id}"
+        return f"Began running node {self.unique_id}"
 
 
 @dataclass
-class NodeFinished(DebugLevel, Cli, File):
+class NodeFinished(DebugLevel, Cli, File, NodeInfo):
+    unique_id: str
     report_node_data: ParsedModelNode
+    unique_id: str
     status: str = node_status['pass']
     state: str = node_state['success']
     code: str = "Q024"
 
     def message(self) -> str:
-        return f"Finished running node {self.report_node_data.unique_id}"
+        return f"Finished running node {self.unique_id}"
 
 
 @dataclass
@@ -2613,7 +2621,7 @@ class GeneralWarningException(WarnLevel, Cli, File):
 
 # TODO: new event
 @dataclass
-class NodeStartModel(InfoLevel, Cli, File):
+class NodeStartModel(InfoLevel, Cli, File, NodeInfo):
     report_node_data: CompiledModelNode
     code: str = "Z9999"  # TODO: set codes
     status: str = node_status['running']
@@ -2838,8 +2846,8 @@ if 1 == 0:
     PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0)
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
-    NodeStart(unique_id='')
-    NodeFinished(unique_id='')
+    NodeStart(report_node_data=ParsedModelNode(), unique_id='')
+    NodeFinished(report_node_data=ParsedModelNode(), unique_id='')
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
     StarterProjectPath(dir='')

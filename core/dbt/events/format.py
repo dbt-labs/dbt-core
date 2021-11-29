@@ -5,7 +5,7 @@ from typing import Optional, Union
 
 node_state = {
     "queued": "queued",
-    "skipped" : "skipped",
+    "skipped": "skipped",
     "started": "started",
     "success": "success",
     "failed": "failed"
@@ -17,6 +17,7 @@ node_status = {
     "error": "error",
     "fail": "fail"
 }
+
 
 def format_fancy_output_line(
         msg: str, status: str, index: Optional[int],
