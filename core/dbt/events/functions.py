@@ -154,7 +154,8 @@ def event_to_dict(e: T_Event, msg_fn: Callable[[T_Event], str]) -> dict:
         'level': level,
         'data': Optional[Dict[str, Any]],
         'event_data_serialized': True,
-        'invocation_id': e.get_invocation_id()
+        'invocation_id': e.get_invocation_id(),
+        'thread_name': e.get_thread_name()
     }
 
 
