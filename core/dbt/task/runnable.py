@@ -208,7 +208,7 @@ class GraphRunnableTask(ManifestTask):
         with RUNNING_STATE, uid_context:
             startctx = TimestampNamed('node_started_at')
             index = self.index_offset(runner.node_index)
-            runner.node._event_status['started_at'] = datetime.utcnow().isoformat()
+            runner.node._event_status['dbt_internal__started_at'] = datetime.utcnow().isoformat()
             runner.node._event_status['node_status'] = str(RunningStatus.Started)
             extended_metadata = ModelMetadata(runner.node, index)
 
@@ -224,7 +224,7 @@ class GraphRunnableTask(ManifestTask):
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
                 runner.node._event_status['node_status'] = str(result.status)
-                runner.node._event_status['finished_at'] = datetime.utcnow().isoformat()
+                runner.node._event_status['dbt_internal__finished_at'] = datetime.utcnow().isoformat()
             finally:
                 finishctx = TimestampNamed('finished_at')
                 with finishctx, DbtModelState(status):
@@ -235,8 +235,8 @@ class GraphRunnableTask(ManifestTask):
                             run_result=result
                         )
                     )
-            del runner.node._event_status["started_at"]
-            del runner.node._event_status["finished_at"]
+            del runner.node._event_status["dbt_internal__started_at"]
+            del runner.node._event_status["dbt_internal__finished_at"]
             del runner.node._event_status["node_status"]
 
         fail_fast = flags.FAIL_FAST
