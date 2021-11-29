@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from datetime import datetime
+import json
 import os
 import threading
 from typing import Any, Optional
@@ -76,6 +77,26 @@ class Event(metaclass=ABCMeta):
     @abstractmethod
     def message(self) -> str:
         raise Exception("msg not implemented for Event")
+
+    # override this method to convert non-json serializable fields to json.
+    # for override examples, see existing concrete types.
+    #
+    # there is no type-level mechanism to have mypy enforce json serializability, so we just try
+    # to serialize and raise an exception at runtime when that fails. This safety mechanism
+    # only works if we have attempted to serialize every concrete event type in our tests.
+    def fields_to_json(self, field_value: Any) -> Any:
+        try:
+            json.dumps(field_value, sort_keys=True)
+            return field_value
+        except TypeError:
+            val_type = type(field_value).__name__
+            event_type = type(self).__name__
+            return Exception(
+                f"type {val_type} is not serializable to json."
+                f" First make sure that the call sites for {event_type} match the type hints"
+                f" and if they do, you can override Event::fields_to_json in {event_type} in"
+                " types.py to define your own serialization function to any valid json type"
+            )
 
     # exactly one time stamp per concrete event
     def get_ts(self) -> datetime:

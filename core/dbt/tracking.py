@@ -262,7 +262,7 @@ def track(user, *args, **kwargs):
     if user.do_not_track:
         return
     else:
-        fire_event(SendingEvent(kwargs=kwargs))
+        fire_event(SendingEvent(kwargs=str(kwargs)))
         try:
             tracker.track_struct_event(*args, **kwargs)
         except Exception:

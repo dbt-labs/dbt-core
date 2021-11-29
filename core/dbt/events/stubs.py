@@ -26,11 +26,6 @@ class _CachedRelation:
     inner: Any
 
 
-class AdapterResponse:
-    code: Optional[str]
-    rows_affected: Optional[int]
-
-
 class BaseRelation:
     path: Any
     type: Optional[Any]
