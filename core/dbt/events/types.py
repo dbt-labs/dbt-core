@@ -2328,7 +2328,7 @@ class NodeStart(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
     node_status: str
-    node_started_at: datetime
+    # node_started_at: datetime
     code: str = "Q023"
 
     def message(self) -> str:

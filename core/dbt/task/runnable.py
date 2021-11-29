@@ -216,7 +216,7 @@ class GraphRunnableTask(ManifestTask):
                         report_node_data=runner.node,
                         unique_id=runner.node.unique_id,
                         node_status="started",  #TODO: since there's no result yet there's no value.
-                        node_started_at=startctx  # TODO: this sticks the timestamp in exta for old logging
+                        # node_started_at=startctx  # TODO: this sticks the timestamp in exta for old logging
                     )
                 )
             status: Dict[str, str] = {}

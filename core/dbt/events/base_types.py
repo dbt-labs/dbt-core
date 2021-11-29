@@ -138,9 +138,9 @@ class Event(metaclass=ABCMeta):
 
 @dataclass  #type: ignore
 class NodeInfo(Event, metaclass=ABCMeta):
-    report_node_data: Any
+    report_node_data: Any  # Union[ParsedModelNode, ...] TODO: resolve circular imports
     node_status: str
-    node_started_at: datetime
+    # node_started_at: datetime
 
     def get_node_info(self):
         node_info = Node(
@@ -149,7 +149,7 @@ class NodeInfo(Event, metaclass=ABCMeta):
             unique_id=self.report_node_data.unique_id,
             resource_type=self.report_node_data.resource_type,
             materialized=self.report_node_data.config.materialized,
-            node_status=self.node_status,  # self.node_status  # pull from contract
+            node_status=self.node_status,
             node_started_at="TODO",  # TODO: where to fill?  leverage/convert TimestampNamed in logger.py?
             node_finished_at="TODO"
         )
