@@ -58,6 +58,12 @@ class collect_timing_info:
             fire_event(TimingInfoCollected())
 
 
+class RunningStatus(StrEnum):
+    Started = 'started'
+    Compiling = 'compiling'
+    Executing = 'executing'
+
+
 class NodeStatus(StrEnum):
     Success = "success"
     Error = "error"
