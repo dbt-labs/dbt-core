@@ -57,9 +57,14 @@ class ListTask(GraphRunnableTask):
     @classmethod
     def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
-        log_manager.stderr_console()
-        event_logger.STDOUT_LOG.level = logging.WARN
         super().pre_init_hook(args)
+        log_manager.stderr_console()
+        # filter out all INFO-level logging to allow piping ls output to jq, etc
+        # WARN level will still include all warnings + errors
+        # if user has specified DEBUG level (dbt --debug), don't override
+        # TODO refactor!
+        if event_logger.STDOUT_LOG.level == logging.INFO:
+            event_logger.STDOUT_LOG.level = logging.WARN
 
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
