@@ -148,7 +148,7 @@ def event_to_serializable_dict(
         'invocation_id': e.get_invocation_id(),
         'thread_name': e.get_thread_name(),
         'node_info': e.get_node_info()  # TODO: update to just `node_info` and more calling this to
-                                        # `event_to_serializable_dict` after #4326 gets merged in.  
+                                        # `event_to_serializable_dict` after #4326 gets merged in.
                                         # also remove refrence to node_info in Event class
     }
 

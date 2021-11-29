@@ -136,7 +136,7 @@ class Event(metaclass=ABCMeta):
         return None
 
 
-@dataclass  #type: ignore
+@dataclass  # type: ignore
 class NodeInfo(Event, metaclass=ABCMeta):
     report_node_data: Any  # Union[ParsedModelNode, ...] TODO: resolve circular imports
     node_status: str
@@ -150,10 +150,11 @@ class NodeInfo(Event, metaclass=ABCMeta):
             resource_type=self.report_node_data.resource_type,
             materialized=self.report_node_data.config.materialized,
             node_status=self.node_status,
-            node_started_at="TODO",  # TODO: where to fill?  leverage/convert TimestampNamed in logger.py?
+            node_started_at="TODO",  # TODO: where to fill?  leverage/convert TimestampNamed
+                                     # in logger.py?
             node_finished_at="TODO"
         )
-        return vars(node_info)  #TODO: can just return node_info after #4326 is merged in
+        return vars(node_info)  # TODO: can just return node_info after #4326 is merged in
 
 
 class File(Event, metaclass=ABCMeta):

@@ -1,6 +1,5 @@
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from dbt.events.stubs import (
     _CachedRelation,
     BaseRelation,
@@ -2341,7 +2340,7 @@ class NodeFinished(DebugLevel, Cli, File, NodeInfo):
     report_node_data: ParsedModelNode
     node_status: str
     # node_started_at: datetime
-    #TODO: possibly pass entire RunResult
+    # TODO: possibly pass entire RunResult
     code: str = "Q024"
 
     def message(self) -> str:
@@ -2349,7 +2348,7 @@ class NodeFinished(DebugLevel, Cli, File, NodeInfo):
 
 
 @dataclass
-class QueryCancelationUnsupported(InfoLevel, Cli, File, NodeInfo):
+class QueryCancelationUnsupported(InfoLevel, Cli, File):
     type: str
     code: str = "Q025"
 
@@ -2851,8 +2850,8 @@ if 1 == 0:
     PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0)
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
-    NodeStart(report_node_data=ParsedModelNode(), unique_id='')
-    NodeFinished(report_node_data=ParsedModelNode(), unique_id='')
+    NodeStart(report_node_data=ParsedModelNode(), unique_id='', node_status='')
+    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', node_status='')
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
     StarterProjectPath(dir='')
