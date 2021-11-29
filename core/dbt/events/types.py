@@ -151,7 +151,7 @@ class MainReportArgs(DebugLevel, Cli, File):
 
 
 @dataclass
-class MainTrackingUserState(DebugLevel, Cli):
+class MainTrackingUserState(DebugLevel, Cli, File):
     user_state: str
     code: str = "A003"
 
@@ -2515,7 +2515,7 @@ class DisableTracking(WarnLevel, Cli, File):
 
 
 @dataclass
-class SendingEvent(DebugLevel, Cli):
+class SendingEvent(DebugLevel, Cli, File):
     kwargs: str
     code: str = "Z040"
 

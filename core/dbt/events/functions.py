@@ -40,7 +40,7 @@ format_json = False
 invocation_id: Optional[str] = None
 
 
-def setup_event_logger(log_path):
+def setup_event_logger(log_path, level_override=None):
     make_log_dir_if_missing(log_path)
     this.format_json = flags.LOG_FORMAT == 'json'
     # USE_COLORS can be None if the app just started and the cli flags
@@ -48,7 +48,7 @@ def setup_event_logger(log_path):
     this.format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
     log_dest = os.path.join(log_path, 'dbt.log')
-    level = logging.DEBUG if flags.DEBUG else logging.INFO
+    level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
     # overwrite the STDOUT_LOG logger with the configured one
     this.STDOUT_LOG = logging.getLogger('configured_std_out')
@@ -138,7 +138,8 @@ def event_to_serializable_dict(
         'msg': msg_fn(e),
         'level': e.level_tag(),
         'data': data,
-        'invocation_id': e.get_invocation_id()
+        'invocation_id': e.get_invocation_id(),
+        'thread_name': e.get_thread_name()
     }
 
 
@@ -289,3 +290,10 @@ def get_invocation_id() -> str:
     if invocation_id is None:
         invocation_id = str(uuid.uuid4())
     return invocation_id
+
+
+def set_invocation_id() -> None:
+    # This is primarily for setting the invocation_id for separate
+    # commands in the dbt servers. It shouldn't be necessary for the CLI.
+    global invocation_id
+    invocation_id = str(uuid.uuid4())
