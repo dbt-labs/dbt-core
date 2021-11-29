@@ -1,6 +1,11 @@
 import argparse
 from dataclasses import dataclass
-from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
+from dbt.events.stubs import (
+    _CachedRelation,
+    BaseRelation,
+    CompiledModelNode,
+    _ReferenceKey
+)
 from dbt import ui
 from dbt.events.base_types import (
     Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
@@ -2593,6 +2598,19 @@ class GeneralWarningException(WarnLevel, Cli, File):
             return str(val)
 
         return val
+
+
+# TODO: remove from Cli
+@dataclass
+class ModelNodeStart(InfoLevel, Cli, File):
+    model: CompiledModelNode
+
+    def message(self) -> str:
+        return 'Start Model'
+    
+    def node_info(self) -> Dict:
+        state: str = 'running'
+        return super().node_info(self.model, state)
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
