@@ -2540,6 +2540,7 @@ class FoundStats(InfoLevel, Cli, File):
         return f"Found {self.stat_line}"
 
 
+# TODO: should this have NodeInfo on it?
 @dataclass
 class CompilingNode(DebugLevel, Cli, File):
     unique_id: str
@@ -2961,7 +2962,7 @@ if 1 == 0:
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
     NodeStart(report_node_data=ParsedModelNode(), unique_id='')
-    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', result='')
+    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', run_result='')
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
     NodeCompiling(report_node_data=ParsedModelNode(), unique_id='')
