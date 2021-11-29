@@ -176,7 +176,7 @@ def event_to_serializable_dict(
         "msg": e.message(),
         "level": e.level_tag(),
         "data": log_line,
-        'invocation_id': e.get_invocation_id(),
+        "invocation_id": e.get_invocation_id(),
         "thread_name": e.get_thread_name(),
         'code': e.code
     }
