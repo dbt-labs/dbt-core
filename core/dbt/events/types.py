@@ -2380,6 +2380,26 @@ class ConcurrencyLine(InfoLevel, Cli, File):
 
 
 @dataclass
+class NodeCompiling(DebugLevel, Cli, File, NodeInfo):
+    unique_id: str
+    report_node_data: ParsedModelNode
+    code: str = "Q030"
+
+    def message(self) -> str:
+        return f"Began compiling node {self.unique_id}"
+
+
+@dataclass
+class NodeExecuting(DebugLevel, Cli, File, NodeInfo):
+    unique_id: str
+    report_node_data: ParsedModelNode
+    code: str = "Q031"
+
+    def message(self) -> str:
+        return f"Began executing node {self.unique_id}"
+
+
+@dataclass
 class StarterProjectPath(DebugLevel, Cli, File):
     dir: str
     code: str = "A017"
@@ -2944,6 +2964,8 @@ if 1 == 0:
     NodeFinished(report_node_data=ParsedModelNode(), unique_id='', result='')
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
+    NodeCompiling(report_node_data=ParsedModelNode(), unique_id='')
+    NodeExecuting(report_node_data=ParsedModelNode(), unique_id='')
     StarterProjectPath(dir='')
     ConfigFolderDirectory(dir='')
     NoSampleProfileFound(adapter='')
