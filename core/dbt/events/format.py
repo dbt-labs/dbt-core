@@ -3,6 +3,21 @@ from dbt.node_types import NodeType
 from typing import Optional, Union
 
 
+node_state = {
+    "queued": "queued",
+    "skipped" : "skipped",
+    "started": "started",
+    "success": "success",
+    "failed": "failed"
+}
+
+node_status = {
+    "running": "running",
+    "pass": "pass",
+    "error": "error",
+    "fail": "fail"
+}
+
 def format_fancy_output_line(
         msg: str, status: str, index: Optional[int],
         total: Optional[int], execution_time: Optional[float] = None,

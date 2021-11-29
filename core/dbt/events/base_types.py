@@ -110,37 +110,22 @@ class Event(metaclass=ABCMeta):
             self.pid = os.getpid()
         return self.pid
     
-    def node_info(self, state: str) -> Dict:
-    #          Examples
-    # "node_info": 
-    #     {"node_path": "models/slow.sql", 
-    #     "node_name": "slow", 
-    #     "resource_type": "model", 
-    #     "node_materialized": "table", 
-    #     "node_started_at": "2021-10-05T13:17:28.018613", 
-    #     "unique_id": "model.my_new_project.slow", 
-    #     "run_state": "running"}}
-    # "node_info": 
-    #     {"node_path": "models/slow.sql", 
-    #     "node_name": "slow", 
-    #     "resource_type": "model", 
-    #     "node_materialized": "table", 
-    #     "node_started_at": "2021-10-05T13:17:28.018613", 
-    #     "unique_id": "model.my_new_project.slow", 
-    #     "node_finished_at": "2021-10-05T13:17:29.134126", 
-    #     "node_status": "passed", 
-    #     "run_state": "running"}}
-        return {
-            "node_path": self.path, 
-            "node_name": self.name, 
-            "resource_type": self.resource_type, 
-            "node_materialized": self.materialized, 
-            "node_started_at": "TODO", 
-            "unique_id": self.unique_id, 
-            "node_finished_at": "TODO", 
-            "node_status": "TODO", 
-            "run_state": state
-        }
+    def get_node_info(self) -> Dict:
+        if hasattr(self, 'report_node_data'):
+            return {
+                "type": 'node_status',
+                "node_path": self.report_node_data.path,
+                "node_name": self.report_node_data.name,
+                "resource_type": self.report_node_data.resource_type,
+                "node_materialized": self.report_node_data.config.materialized,
+                "node_started_at": "TODO",
+                "unique_id": self.report_node_data.unique_id,
+                "node_finished_at": "TODO",
+                "node_status": self.status,
+                "run_state": self.state
+            }
+        else:
+            return None
 
     # in theory threads can change so we don't cache them.
     def get_thread_name(self) -> str:

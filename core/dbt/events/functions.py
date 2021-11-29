@@ -140,7 +140,8 @@ def event_to_serializable_dict(
         'level': e.level_tag(),
         'data': data,
         'invocation_id': e.get_invocation_id(),
-        'thread_name': e.get_thread_name()
+        'thread_name': e.get_thread_name(),
+        'node_info': e.get_node_info()
     }
 
 
