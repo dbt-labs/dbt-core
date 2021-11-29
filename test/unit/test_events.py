@@ -92,3 +92,6 @@ class TestEventBuffer(TestCase):
         self.assertTrue(
             EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
         )
+        self.assertTrue(
+            EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
+        )
