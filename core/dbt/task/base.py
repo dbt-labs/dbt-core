@@ -432,7 +432,8 @@ class BaseRunner(metaclass=ABCMeta):
                         schema=schema_name,
                         node_name=node_name,
                         index=self.node_index,
-                        total=self.num_nodes
+                        total=self.num_nodes,
+                        report_node_data=self.node
                     )
                 )
 

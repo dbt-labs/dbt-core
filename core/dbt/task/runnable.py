@@ -215,8 +215,7 @@ class GraphRunnableTask(ManifestTask):
                 fire_event(
                     NodeStart(
                         report_node_data=runner.node,
-                        unique_id=runner.node.unique_id,
-                        node_status="started"
+                        unique_id=runner.node.unique_id
                     )
                 )
             status: Dict[str, str] = {}
@@ -230,8 +229,7 @@ class GraphRunnableTask(ManifestTask):
                     fire_event(
                         NodeFinished(
                             report_node_data=runner.node,
-                            unique_id=runner.node.unique_id,
-                            node_status=status['node_status']
+                            unique_id=runner.node.unique_id
                         )
                     )
             del runner.node.config["started_at"]

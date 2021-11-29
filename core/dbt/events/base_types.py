@@ -139,7 +139,7 @@ class Event(metaclass=ABCMeta):
 @dataclass  # type: ignore
 class NodeInfo(Event, metaclass=ABCMeta):
     report_node_data: Any  # Union[ParsedModelNode, ...] TODO: resolve circular imports
-    node_status: str
+    # node_status: str
 
     def get_node_info(self):
         node_info = Node(
@@ -148,7 +148,7 @@ class NodeInfo(Event, metaclass=ABCMeta):
             unique_id=self.report_node_data.unique_id,
             resource_type=self.report_node_data.resource_type,
             materialized=self.report_node_data.config.materialized,
-            node_status=self.node_status,
+            node_status="TODO",
             node_started_at=self.report_node_data.config.get("started_at"),
             node_finished_at=self.report_node_data.config.get("finished_at")
         )

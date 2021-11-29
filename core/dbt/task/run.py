@@ -177,7 +177,8 @@ class ModelRunner(CompileRunner):
             PrintStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
-                total=self.num_nodes
+                total=self.num_nodes,
+                report_node_data=self.node
             )
         )
 
@@ -190,7 +191,8 @@ class ModelRunner(CompileRunner):
                     status=result.status,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time
+                    execution_time=result.execution_time,
+                    report_node_data=self.node
                 )
             )
         else:
@@ -200,7 +202,8 @@ class ModelRunner(CompileRunner):
                     status=result.message,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time
+                    execution_time=result.execution_time,
+                    report_node_data=self.node
                 )
             )
 
@@ -352,7 +355,8 @@ class RunTask(CompileTask):
                             statement=hook_text,
                             index=idx,
                             total=num_hooks,
-                            truncate=True
+                            truncate=True,
+                            report_node_data=hook
                         )
                     )
 
@@ -372,7 +376,8 @@ class RunTask(CompileTask):
                             index=idx,
                             total=num_hooks,
                             execution_time=timer.elapsed,
-                            truncate=True
+                            truncate=True,
+                            report_node_data=hook
                         )
                     )
 

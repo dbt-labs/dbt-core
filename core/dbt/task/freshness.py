@@ -40,7 +40,8 @@ class FreshnessRunner(BaseRunner):
             PrintStartLine(
                 description=description,
                 index=self.node_index,
-                total=self.num_nodes
+                total=self.num_nodes,
+                report_node_data=self.node
             )
         )
 
