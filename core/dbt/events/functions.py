@@ -131,6 +131,10 @@ def event_to_serializable_dict(
                     data[field] = _json_value
                 else:
                     data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
+    node_info = dict()
+    if hasattr(e, 'report_node_data'):
+        e.get_node_info()
+    
     event_dict =  {
         'type': 'log_line',
         'log_version': e.log_version,
@@ -141,9 +145,7 @@ def event_to_serializable_dict(
         'data': data,
         'invocation_id': e.get_invocation_id(),
         'thread_name': e.get_thread_name(),
-        'node_info': e.get_node_info()  # TODO: update to just `node_info` and more calling this to
-                                        # `event_to_serializable_dict` after #4326 gets merged in.
-                                        # also remove refrence to node_info in Event class
+        'node_info': node_info
     }
 
     return event_dict

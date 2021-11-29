@@ -132,9 +132,6 @@ class Event(metaclass=ABCMeta):
         from dbt.events.functions import get_invocation_id
         return get_invocation_id()
 
-    def get_node_info(self):
-        return None
-
 
 @dataclass  # type: ignore
 class NodeInfo(Event, metaclass=ABCMeta):
@@ -151,7 +148,7 @@ class NodeInfo(Event, metaclass=ABCMeta):
             node_started_at=self.report_node_data._event_status.get("started_at"),
             node_finished_at=self.report_node_data._event_status.get("finished_at")
         )
-        return vars(node_info)  # TODO: can just return node_info after #4326 is merged in
+        return node_info
 
 
 class File(Event, metaclass=ABCMeta):
