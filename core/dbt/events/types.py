@@ -2351,7 +2351,7 @@ class NodeStart(DebugLevel, Cli, File, NodeInfo):
 class NodeFinished(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
-    result: Any  # RunResult
+    run_result: Any  # RunResult
     code: str = "Q024"
 
     def message(self) -> str:
