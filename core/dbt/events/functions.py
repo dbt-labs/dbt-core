@@ -2,7 +2,7 @@
 from colorama import Style
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import Cli, Event, File, ShowException
-from dbt.events.types import T_Event
+from dbt.events.types import EventBufferFull, T_Event
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
@@ -16,9 +16,13 @@ from logging.handlers import RotatingFileHandler
 import numbers
 import os
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, Deque
 from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
+from collections import deque
 
+# create the global event history buffer with a max size of 1M records
+global EVENT_HISTORY
+EVENT_HISTORY: Deque = deque(maxlen=1000000)
 
 # create the global file logger with no configuration
 global FILE_LOG
@@ -281,7 +285,15 @@ def send_exc_to_logger(
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
 def fire_event(e: Event) -> None:
-    # TODO manage history in phase 2:  EVENT_HISTORY.append(e)
+
+    # if and only if the event history deque will be completely filled by this event
+    # fire warning that old events are now being dropped
+    global EVENT_HISTORY
+    if len(EVENT_HISTORY) == (1000000 - 1):
+        EVENT_HISTORY.append(e)
+        fire_event(EventBufferFull())
+    else:
+        EVENT_HISTORY.append(e)
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
     if flags.ENABLE_LEGACY_LOGGER:
