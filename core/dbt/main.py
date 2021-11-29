@@ -223,6 +223,7 @@ def run_from_args(parsed):
 
     # we can now use the logger for stdout
     # set log_format in the logger
+    # if 'list' task: set stdout to WARN instead of INFO
     level_override = parsed.cls.pre_init_hook(parsed)
 
     fire_event(MainReportVersion(v=dbt.version.installed))
