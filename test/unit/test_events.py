@@ -1,8 +1,11 @@
+from argparse import Namespace
 from dbt.events import AdapterLogger
+from dbt.events.functions import event_to_serializable_dict
 from dbt.events.types import *
 from dbt.events.base_types import Event
 from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
 import inspect
+import json
 from unittest import TestCase
 
 
@@ -251,7 +254,7 @@ sample_values = [
     SeedHeaderSeperator(len_header=0),
     RunResultWarning(resource_type='', node_name='', path=''),
     RunResultFailure(resource_type='', node_name='', path=''),
-    StatsLine(stats={}),
+    StatsLine(stats={'pass':0, 'warn':0, 'error':0, 'skip':0, 'total':0}),
     RunResultError(msg=''),
     RunResultErrorNoMessage(status=''),
     SQLCompiledPath(path=''),
@@ -314,7 +317,23 @@ sample_values = [
     TrackingInitializeFailure(),
     RetryExternalCall(attempt=0, max=0),
     GeneralWarningMsg(msg='', log_fmt=''),
-    GeneralWarningException(exc=Exception(''), log_fmt='')
+    GeneralWarningException(exc=Exception(''), log_fmt=''),
+    PartialParsingProfileEnvVarsChanged(),
+    AdapterEventDebug('', '', ()),
+    AdapterEventInfo('', '', ()),
+    AdapterEventWarning('', '', ()),
+    AdapterEventError('', '', ()),
+    PrintDebugStackTrace(),
+    MainReportArgs(Namespace()),
+    RegistryProgressMakingGETRequest(''),
+    DepsUTD(),
+    CatchRunException('', Exception('')),
+    HandleInternalException(Exception('')),
+    PartialParsingNotEnabled(),
+    SQlRunnerException(Exception('')),
+    DropRelation(''),
+    PartialParsingProjectEnvVarsChanged(),
+    RegistryProgressGETResponse('', '')
 ]
 
 
@@ -324,15 +343,20 @@ class TestEventJSONSerialization(TestCase):
     # event types that take `Any` are not possible to test in this way since some will serialize
     # just fine and others won't.
     def test_all_serializable(self):
-        all_events = get_all_subclasses(Event)
-        all_event_values = set(map(lambda x: x.__class__, sample_values))
-        diff = all_events.difference(all_event_values)
-        self.assertFalse(diff, f"test is missing concrete values in `sample_values`. Please add the missing values for the following event classes: {diff}")
+        all_non_abstract_events = set(filter(lambda x: not inspect.isabstract(x), get_all_subclasses(Event)))
+        all_event_values_list = list(map(lambda x: x.__class__, sample_values))
+        diff = all_non_abstract_events.difference(set(all_event_values_list))
+        self.assertFalse(diff, f"test is missing concrete values in `sample_values`. Please add the values for the aforementioned event classes")
+
+        # make sure everything in the list is a value not a type
+        for event in sample_values:
+            self.assertFalse(type(event) == type)
 
         # if we have everything we need to test, try to serialize everything
-        for event in all_event_values:
+        for event in sample_values:
+            d = event_to_serializable_dict(event, lambda dt: dt.isoformat(), lambda x: x.message())
             try:
-                json.dumps(event_to_serializable_dict(event))
+                json.dumps(d)
             except TypeError as e:
-                raise Exception(f"Event is not serializable to json. Originating exception: {e}")
+                raise Exception(f"{event} is not serializable to json. Originating exception: {e}")
                 
