@@ -6,6 +6,7 @@
 ### Under the hood
 - Change some CompilationExceptions to ParsingExceptions ([#4254](http://github.com/dbt-labs/dbt-core/issues/4254), [#4328](https://github.com/dbt-core/pull/4328))
 - Reorder logic for static parser sampling to speed up model parsing ([#4332](https://github.com/dbt-labs/dbt-core/pull/4332))
+- Restore small previous behaviors for logging: JSON formatting for first few events; `WARN`-level stdout for `list` task; include tracking events in `dbt.log` ([#4341](https://github.com/dbt-labs/dbt-core/pull/4341))
 
 
 ## dbt-core 1.0.0rc2 (November 22, 2021)
