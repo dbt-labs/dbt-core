@@ -346,6 +346,13 @@ class SystemCouldNotWrite(DebugLevel, Cli, File):
             f"{self.reason}\nexception: {self.exc}"
         )
 
+    # overriding default json serialization for this event
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 @dataclass
 class SystemExecutingCmd(DebugLevel, Cli, File):
@@ -772,6 +779,12 @@ class DumpBeforeRenameSchema(DebugLevel, Cli, File):
         func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
         return f"before rename: {func_returns}"
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.graph_func:  # type: ignore
+            return str(val())
+
+        return val
+
 
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, Cli, File):
@@ -783,6 +796,12 @@ class DumpAfterRenameSchema(DebugLevel, Cli, File):
         func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
         return f"after rename: {func_returns}"
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.graph_func:  # type: ignore
+            return str(val())
+
+        return val
+
 
 @dataclass
 class AdapterImportError(InfoLevel, Cli, File):
@@ -791,6 +810,12 @@ class AdapterImportError(InfoLevel, Cli, File):
 
     def message(self) -> str:
         return f"Error importing adapter: {self.exc}"
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val())
+
+        return val
 
 
 @dataclass
@@ -846,6 +871,12 @@ class ProfileLoadError(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return f"Profile not loaded due to error: {self.exc}"
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 @dataclass
 class ProfileNotFound(InfoLevel, Cli, File):
@@ -883,6 +914,12 @@ class CatchRunException(ShowException, DebugLevel, Cli, File):
         )
         return error
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 # TODO: Remove? (appears to be uncalled)
 @dataclass
@@ -892,6 +929,12 @@ class HandleInternalException(ShowException, DebugLevel, Cli, File):
 
     def message(self) -> str:
         return str(self.exc)
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 # TODO: Remove? (appears to be uncalled)
 
@@ -912,6 +955,12 @@ class MessageHandleGenericException(ErrorLevel, Cli, File):
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 # TODO: Remove? (appears to be uncalled)
 
@@ -1089,6 +1138,12 @@ class ParsedFileLoadFailed(ShowException, DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 @dataclass
@@ -1303,6 +1358,12 @@ class RunningOperationCaughtError(ErrorLevel, Cli, File):
     def message(self) -> str:
         return f'Encountered an error while running operation: {self.exc}'
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 @dataclass
 class RunningOperationUncaughtError(ErrorLevel, Cli, File):
@@ -1311,6 +1372,12 @@ class RunningOperationUncaughtError(ErrorLevel, Cli, File):
 
     def message(self) -> str:
         return f'Encountered an error while running operation: {self.exc}'
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 @dataclass
@@ -1329,6 +1396,12 @@ class DbtProjectErrorException(ErrorLevel, Cli, File):
     def message(self) -> str:
         return f"  ERROR: {str(self.exc)}"
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 @dataclass
 class DbtProfileError(ErrorLevel, Cli, File):
@@ -1345,6 +1418,12 @@ class DbtProfileErrorException(ErrorLevel, Cli, File):
 
     def message(self) -> str:
         return f"  ERROR: {str(self.exc)}"
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 @dataclass
@@ -1393,6 +1472,12 @@ class CatchableExceptionOnRun(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return str(self.exc)
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 @dataclass
 class InternalExceptionOnRun(DebugLevel, Cli, File):
@@ -1412,6 +1497,12 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
             error=str(self.exc).strip(),
             note=INTERNAL_ERROR_STRING
         )
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message
@@ -1441,6 +1532,12 @@ class GenericExceptionOnRun(ErrorLevel, Cli, File):
             error=str(self.exc).strip()
         )
 
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
+
 
 @dataclass
 class NodeConnectionReleaseError(ShowException, DebugLevel, Cli, File):
@@ -1451,6 +1548,12 @@ class NodeConnectionReleaseError(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return ('Error releasing connection for node {}: {!s}'
                 .format(self.node_name, self.exc))
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 @dataclass
@@ -1771,6 +1874,12 @@ class SQlRunnerException(ShowException, DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f"Got an exception: {self.exc}"
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 @dataclass
@@ -2478,6 +2587,12 @@ class GeneralWarningException(WarnLevel, Cli, File):
         if self.log_fmt is not None:
             return self.log_fmt.format(str(self.exc))
         return str(self.exc)
+
+    def fields_to_json(self, val: Any) -> Any:
+        if val == self.exc:
+            return str(val)
+
+        return val
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
