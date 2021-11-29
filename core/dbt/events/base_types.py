@@ -47,7 +47,7 @@ class Node():
     materialized: str
     node_status: str
     node_started_at: datetime
-    node_finished_at: datetime
+    node_finished_at: Optional[datetime]
     type: str = 'node_status'
 
 
@@ -145,7 +145,7 @@ class NodeInfo(Event, metaclass=ABCMeta):
             node_path=self.report_node_data.path,
             node_name=self.report_node_data.name,
             unique_id=self.report_node_data.unique_id,
-            resource_type=self.report_node_data.resource_type,
+            resource_type=self.report_node_data.resource_type.value,
             materialized=self.report_node_data.config.materialized,
             node_status=self.report_node_data._event_status.get('node_status'),
             node_started_at=self.report_node_data._event_status.get("started_at"),
