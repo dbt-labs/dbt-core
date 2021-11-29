@@ -23,7 +23,8 @@ class SnapshotRunner(ModelRunner):
                     cfg=cfg,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time
+                    execution_time=result.execution_time,
+                    report_node_data=model
                 )
             )
         else:
@@ -34,7 +35,8 @@ class SnapshotRunner(ModelRunner):
                     cfg=cfg,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time
+                    execution_time=result.execution_time,
+                    report_node_data=model
                 )
             )
 

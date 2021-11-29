@@ -254,8 +254,6 @@ def send_exc_to_logger(
 # to files, etc.)
 def fire_event(e: Event) -> None:
     # TODO manage history in phase 2:  EVENT_HISTORY.append(e)
-    # if e.code == "Q012":
-    #     breakpoint()
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
     if flags.ENABLE_LEGACY_LOGGER:
