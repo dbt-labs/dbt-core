@@ -209,7 +209,7 @@ class GraphRunnableTask(ManifestTask):
             startctx = TimestampNamed('node_started_at')
             index = self.index_offset(runner.node_index)
             runner.node._event_status['dbt_internal__started_at'] = datetime.utcnow().isoformat()
-            runner.node._event_status['node_status'] = str(RunningStatus.Started)
+            runner.node._event_status['node_status'] = RunningStatus.Started
             extended_metadata = ModelMetadata(runner.node, index)
 
             with startctx, extended_metadata:
@@ -223,7 +223,7 @@ class GraphRunnableTask(ManifestTask):
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
-                runner.node._event_status['node_status'] = str(result.status)
+                runner.node._event_status['node_status'] = result.status
                 runner.node._event_status['dbt_internal__finished_at'] = \
                     datetime.utcnow().isoformat()
             finally:
@@ -236,6 +236,8 @@ class GraphRunnableTask(ManifestTask):
                             run_result=result
                         )
                     )
+            # `_event_status` dict is only used for logging.  Make sure
+            # it gets deleted when we're done with it
             del runner.node._event_status["dbt_internal__started_at"]
             del runner.node._event_status["dbt_internal__finished_at"]
             del runner.node._event_status["node_status"]
