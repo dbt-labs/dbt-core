@@ -440,7 +440,7 @@ class MacroEventDebug(DebugLevel, Cli, File):
 class NewConnection(DebugLevel, Cli, File):
     conn_type: str
     conn_name: str
-    code: str = "E001"
+    code: str = "E005"
 
     def message(self) -> str:
         return f'Acquiring new {self.conn_type} connection "{self.conn_name}"'
@@ -449,7 +449,7 @@ class NewConnection(DebugLevel, Cli, File):
 @dataclass
 class ConnectionReused(DebugLevel, Cli, File):
     conn_name: str
-    code: str = "E002"
+    code: str = "E006"
 
     def message(self) -> str:
         return f"Re-using an available connection from the pool (formerly {self.conn_name})"
@@ -458,7 +458,7 @@ class ConnectionReused(DebugLevel, Cli, File):
 @dataclass
 class ConnectionLeftOpen(DebugLevel, Cli, File):
     conn_name: Optional[str]
-    code: str = "E003"
+    code: str = "E007"
 
     def message(self) -> str:
         return f"Connection '{self.conn_name}' was left open."
@@ -467,7 +467,7 @@ class ConnectionLeftOpen(DebugLevel, Cli, File):
 @dataclass
 class ConnectionClosed(DebugLevel, Cli, File):
     conn_name: Optional[str]
-    code: str = "E004"
+    code: str = "E008"
 
     def message(self) -> str:
         return f"Connection '{self.conn_name}' was properly closed."
@@ -476,7 +476,7 @@ class ConnectionClosed(DebugLevel, Cli, File):
 @dataclass
 class RollbackFailed(ShowException, DebugLevel, Cli, File):
     conn_name: Optional[str]
-    code: str = "E005"
+    code: str = "E009"
 
     def message(self) -> str:
         return f"Failed to rollback '{self.conn_name}'"
@@ -486,7 +486,7 @@ class RollbackFailed(ShowException, DebugLevel, Cli, File):
 @dataclass
 class ConnectionClosed2(DebugLevel, Cli, File):
     conn_name: Optional[str]
-    code: str = "E038"
+    code: str = "E010"
 
     def message(self) -> str:
         return f"On {self.conn_name}: Close"
@@ -496,7 +496,7 @@ class ConnectionClosed2(DebugLevel, Cli, File):
 @dataclass
 class ConnectionLeftOpen2(DebugLevel, Cli, File):
     conn_name: Optional[str]
-    code: str = "E006"
+    code: str = "E011"
 
     def message(self) -> str:
         return f"On {self.conn_name}: No close available on handle"
@@ -505,7 +505,7 @@ class ConnectionLeftOpen2(DebugLevel, Cli, File):
 @dataclass
 class Rollback(DebugLevel, Cli, File):
     conn_name: Optional[str]
-    code: str = "E007"
+    code: str = "E012"
 
     def message(self) -> str:
         return f"On {self.conn_name}: ROLLBACK"
@@ -516,7 +516,7 @@ class CacheMiss(DebugLevel, Cli, File):
     conn_name: Any  # TODO mypy says this is `Callable[[], str]`??  ¯\_(ツ)_/¯
     database: Optional[str]
     schema: str
-    code: str = "E008"
+    code: str = "E013"
 
     def message(self) -> str:
         return (
@@ -530,7 +530,7 @@ class ListRelations(DebugLevel, Cli, File):
     database: Optional[str]
     schema: str
     relations: List[BaseRelation]
-    code: str = "E009"
+    code: str = "E014"
 
     def message(self) -> str:
         return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
@@ -540,7 +540,7 @@ class ListRelations(DebugLevel, Cli, File):
 class ConnectionUsed(DebugLevel, Cli, File):
     conn_type: str
     conn_name: Optional[str]
-    code: str = "E010"
+    code: str = "E015"
 
     def message(self) -> str:
         return f'Using {self.conn_type} connection "{self.conn_name}"'
@@ -550,7 +550,7 @@ class ConnectionUsed(DebugLevel, Cli, File):
 class SQLQuery(DebugLevel, Cli, File):
     conn_name: Optional[str]
     sql: str
-    code: str = "E011"
+    code: str = "E016"
 
     def message(self) -> str:
         return f"On {self.conn_name}: {self.sql}"
@@ -560,7 +560,7 @@ class SQLQuery(DebugLevel, Cli, File):
 class SQLQueryStatus(DebugLevel, Cli, File):
     status: Union[AdapterResponse, str]
     elapsed: float
-    code: str = "E012"
+    code: str = "E017"
 
     def message(self) -> str:
         return f"SQL status: {self.status} in {self.elapsed} seconds"
@@ -569,7 +569,7 @@ class SQLQueryStatus(DebugLevel, Cli, File):
 @dataclass
 class SQLCommit(DebugLevel, Cli, File):
     conn_name: str
-    code: str = "E013"
+    code: str = "E018"
 
     def message(self) -> str:
         return f"On {self.conn_name}: COMMIT"
@@ -580,7 +580,7 @@ class ColTypeChange(DebugLevel, Cli, File):
     orig_type: str
     new_type: str
     table: str
-    code: str = "E014"
+    code: str = "E019"
 
     def message(self) -> str:
         return f"Changing col type from {self.orig_type} to {self.new_type} in table {self.table}"
@@ -589,7 +589,7 @@ class ColTypeChange(DebugLevel, Cli, File):
 @dataclass
 class SchemaCreation(DebugLevel, Cli, File):
     relation: BaseRelation
-    code: str = "E015"
+    code: str = "E020"
 
     def message(self) -> str:
         return f'Creating schema "{self.relation}"'
@@ -598,7 +598,7 @@ class SchemaCreation(DebugLevel, Cli, File):
 @dataclass
 class SchemaDrop(DebugLevel, Cli, File):
     relation: BaseRelation
-    code: str = "E016"
+    code: str = "E021"
 
     def message(self) -> str:
         return f'Dropping schema "{self.relation}".'
@@ -610,7 +610,7 @@ class SchemaDrop(DebugLevel, Cli, File):
 class UncachedRelation(DebugLevel, Cli, File):
     dep_key: _ReferenceKey
     ref_key: _ReferenceKey
-    code: str = "E017"
+    code: str = "E022"
 
     def message(self) -> str:
         return (
@@ -624,7 +624,7 @@ class UncachedRelation(DebugLevel, Cli, File):
 class AddLink(DebugLevel, Cli, File):
     dep_key: _ReferenceKey
     ref_key: _ReferenceKey
-    code: str = "E018"
+    code: str = "E023"
 
     def message(self) -> str:
         return f"adding link, {self.dep_key} references {self.ref_key}"
@@ -633,7 +633,7 @@ class AddLink(DebugLevel, Cli, File):
 @dataclass
 class AddRelation(DebugLevel, Cli, File):
     relation: _CachedRelation
-    code: str = "E019"
+    code: str = "E024"
 
     def message(self) -> str:
         return f"Adding relation: {str(self.relation)}"
@@ -642,7 +642,7 @@ class AddRelation(DebugLevel, Cli, File):
 @dataclass
 class DropMissingRelation(DebugLevel, Cli, File):
     relation: _ReferenceKey
-    code: str = "E039"
+    code: str = "E025"
 
     def message(self) -> str:
         return f"dropped a nonexistent relationship: {str(self.relation)}"
@@ -652,7 +652,7 @@ class DropMissingRelation(DebugLevel, Cli, File):
 class DropCascade(DebugLevel, Cli, File):
     dropped: _ReferenceKey
     consequences: Set[_ReferenceKey]
-    code: str = "E020"
+    code: str = "E026"
 
     def message(self) -> str:
         return f"drop {self.dropped} is cascading to {self.consequences}"
@@ -661,7 +661,7 @@ class DropCascade(DebugLevel, Cli, File):
 @dataclass
 class DropRelation(DebugLevel, Cli, File):
     dropped: _ReferenceKey
-    code: str = "E021"
+    code: str = "E027"
 
     def message(self) -> str:
         return f"Dropping relation: {self.dropped}"
@@ -672,7 +672,7 @@ class UpdateReference(DebugLevel, Cli, File):
     old_key: _ReferenceKey
     new_key: _ReferenceKey
     cached_key: _ReferenceKey
-    code: str = "E022"
+    code: str = "E028"
 
     def message(self) -> str:
         return f"updated reference from {self.old_key} -> {self.cached_key} to "\
@@ -682,7 +682,7 @@ class UpdateReference(DebugLevel, Cli, File):
 @dataclass
 class TemporaryRelation(DebugLevel, Cli, File):
     key: _ReferenceKey
-    code: str = "E023"
+    code: str = "E029"
 
     def message(self) -> str:
         return f"old key {self.key} not found in self.relations, assuming temporary"
@@ -692,7 +692,7 @@ class TemporaryRelation(DebugLevel, Cli, File):
 class RenameSchema(DebugLevel, Cli, File):
     old_key: _ReferenceKey
     new_key: _ReferenceKey
-    code: str = "E024"
+    code: str = "E030"
 
     def message(self) -> str:
         return f"Renaming relation {self.old_key} to {self.new_key}"
@@ -701,7 +701,7 @@ class RenameSchema(DebugLevel, Cli, File):
 @dataclass
 class DumpBeforeAddGraph(DebugLevel, Cli, File):
     graph_func: Callable[[], Dict[str, List[str]]]
-    code: str = "E025"
+    code: str = "E031"
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
@@ -713,7 +713,7 @@ class DumpBeforeAddGraph(DebugLevel, Cli, File):
 @dataclass
 class DumpAfterAddGraph(DebugLevel, Cli, File):
     graph_func: Callable[[], Dict[str, List[str]]]
-    code: str = "E026"
+    code: str = "E032"
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
@@ -724,7 +724,7 @@ class DumpAfterAddGraph(DebugLevel, Cli, File):
 @dataclass
 class DumpBeforeRenameSchema(DebugLevel, Cli, File):
     graph_func: Callable[[], Dict[str, List[str]]]
-    code: str = "E027"
+    code: str = "E033"
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
@@ -735,7 +735,7 @@ class DumpBeforeRenameSchema(DebugLevel, Cli, File):
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, Cli, File):
     graph_func: Callable[[], Dict[str, List[str]]]
-    code: str = "E028"
+    code: str = "E034"
 
     def message(self) -> str:
         # workaround for https://github.com/python/mypy/issues/6910
@@ -746,7 +746,7 @@ class DumpAfterRenameSchema(DebugLevel, Cli, File):
 @dataclass
 class AdapterImportError(InfoLevel, Cli, File):
     exc: ModuleNotFoundError
-    code: str = "E029"
+    code: str = "E035"
 
     def message(self) -> str:
         return f"Error importing adapter: {self.exc}"
@@ -754,7 +754,7 @@ class AdapterImportError(InfoLevel, Cli, File):
 
 @dataclass
 class PluginLoadError(ShowException, DebugLevel, Cli, File):
-    code: str = "E030"
+    code: str = "E036"
 
     def message(self):
         pass
@@ -763,7 +763,7 @@ class PluginLoadError(ShowException, DebugLevel, Cli, File):
 @dataclass
 class NewConnectionOpening(DebugLevel, Cli, File):
     connection_state: str
-    code: str = "E031"
+    code: str = "E037"
 
     def message(self) -> str:
         return f"Opening a new connection, currently in state {self.connection_state}"
@@ -1266,7 +1266,7 @@ class RunningOperationCaughtError(ErrorLevel, Cli, File):
 @dataclass
 class RunningOperationUncaughtError(ErrorLevel, Cli, File):
     exc: Exception
-    code: str = "W001"
+    code: str = "FF01"
 
     def message(self) -> str:
         return f'Encountered an error while running operation: {self.exc}'
@@ -1531,7 +1531,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel, Cli, File):
 @dataclass
 class DatabaseErrorRunning(InfoLevel, Cli, File):
     hook_type: str
-    code: str = "E040"
+    code: str = "E038"
 
     def message(self) -> str:
         return f"Database error while running {self.hook_type}"
@@ -1549,7 +1549,7 @@ class EmptyLine(InfoLevel, Cli, File):
 class HooksRunning(InfoLevel, Cli, File):
     num_hooks: int
     hook_type: str
-    code: str = "E032"
+    code: str = "E039"
 
     def message(self) -> str:
         plural = 'hook' if self.num_hooks == 1 else 'hooks'
@@ -1560,7 +1560,7 @@ class HooksRunning(InfoLevel, Cli, File):
 class HookFinished(InfoLevel, Cli, File):
     stat_line: str
     execution: str
-    code: str = "E033"
+    code: str = "E040"
 
     def message(self) -> str:
         return f"Finished running {self.stat_line}{self.execution}."
@@ -1569,7 +1569,7 @@ class HookFinished(InfoLevel, Cli, File):
 @dataclass
 class WriteCatalogFailure(ErrorLevel, Cli, File):
     num_exceptions: int
-    code: str = "E034"
+    code: str = "E041"
 
     def message(self) -> str:
         return (f"dbt encountered {self.num_exceptions} failure{(self.num_exceptions != 1) * 's'} "
@@ -1579,7 +1579,7 @@ class WriteCatalogFailure(ErrorLevel, Cli, File):
 @dataclass
 class CatalogWritten(InfoLevel, Cli, File):
     path: str
-    code: str = "E035"
+    code: str = "E042"
 
     def message(self) -> str:
         return f"Catalog written to {self.path}"
@@ -1587,7 +1587,7 @@ class CatalogWritten(InfoLevel, Cli, File):
 
 @dataclass
 class CannotGenerateDocs(InfoLevel, Cli, File):
-    code: str = "E036"
+    code: str = "E043"
 
     def message(self) -> str:
         return "compile failed, cannot generate docs"
@@ -1595,7 +1595,7 @@ class CannotGenerateDocs(InfoLevel, Cli, File):
 
 @dataclass
 class BuildingCatalog(InfoLevel, Cli, File):
-    code: str = "E037"
+    code: str = "E044"
 
     def message(self) -> str:
         return "Building catalog"
@@ -1839,7 +1839,7 @@ class SkippingDetails(InfoLevel, Cli, File):
     node_name: str
     index: int
     total: int
-    code: str = "Z034"
+    code: str = "Z033"
 
     def message(self) -> str:
         if self.resource_type in NodeType.refable():
@@ -1932,7 +1932,7 @@ class PrintSkipBecauseError(ErrorLevel, Cli, File):
     relation: str
     index: int
     total: int
-    code: str = "Z035"
+    code: str = "Z034"
 
     def message(self) -> str:
         msg = f'SKIP relation {self.schema}.{self.relation} due to ephemeral model error'
@@ -1949,7 +1949,7 @@ class PrintModelErrorResultLine(ErrorLevel, Cli, File):
     index: int
     total: int
     execution_time: int
-    code: str = "Z036"
+    code: str = "Z035"
 
     def message(self) -> str:
         info = "ERROR creating"
@@ -2305,7 +2305,7 @@ class DepsSetDownloadDirectory(DebugLevel, Cli, File):
 
 @dataclass
 class EnsureGitInstalled(ErrorLevel, Cli, File):
-    code: str = "Z037"
+    code: str = "Z036"
 
     def message(self) -> str:
         return ('Make sure git is installed on your machine. More '
@@ -2315,7 +2315,7 @@ class EnsureGitInstalled(ErrorLevel, Cli, File):
 
 @dataclass
 class DepsCreatingLocalSymlink(DebugLevel, Cli, File):
-    code: str = "Z038"
+    code: str = "Z037"
 
     def message(self) -> str:
         return '  Creating symlink to local dependency.'
@@ -2323,7 +2323,7 @@ class DepsCreatingLocalSymlink(DebugLevel, Cli, File):
 
 @dataclass
 class DepsSymlinkNotAvailable(DebugLevel, Cli, File):
-    code: str = "Z039"
+    code: str = "Z038"
 
     def message(self) -> str:
         return '  Symlinks are not available on this OS, copying dependency.'
@@ -2358,7 +2358,7 @@ class WritingInjectedSQLForNode(DebugLevel, Cli, File):
 
 @dataclass
 class DisableTracking(WarnLevel, Cli, File):
-    code: str = "Z040"
+    code: str = "Z039"
 
     def message(self) -> str:
         return "Error sending message, disabling tracking"
@@ -2367,7 +2367,7 @@ class DisableTracking(WarnLevel, Cli, File):
 @dataclass
 class SendingEvent(DebugLevel, Cli):
     kwargs: str
-    code: str = "Z041"
+    code: str = "Z040"
 
     def message(self) -> str:
         return f"Sending event: {self.kwargs}"
@@ -2375,7 +2375,7 @@ class SendingEvent(DebugLevel, Cli):
 
 @dataclass
 class SendEventFailure(DebugLevel, Cli, File):
-    code: str = "Z042"
+    code: str = "Z041"
 
     def message(self) -> str:
         return "An error was encountered while trying to send an event"
@@ -2383,7 +2383,7 @@ class SendEventFailure(DebugLevel, Cli, File):
 
 @dataclass
 class FlushEvents(DebugLevel, Cli):
-    code: str = "Z043"
+    code: str = "Z042"
 
     def message(self) -> str:
         return "Flushing usage events"
@@ -2391,7 +2391,7 @@ class FlushEvents(DebugLevel, Cli):
 
 @dataclass
 class FlushEventsFailure(DebugLevel, Cli):
-    code: str = "Z044"
+    code: str = "Z043"
 
     def message(self) -> str:
         return "An error was encountered while trying to flush usage events"
@@ -2399,7 +2399,7 @@ class FlushEventsFailure(DebugLevel, Cli):
 
 @dataclass
 class TrackingInitializeFailure(ShowException, DebugLevel, Cli, File):
-    code: str = "Z045"
+    code: str = "Z044"
 
     def message(self) -> str:
         return "Got an exception trying to initialize tracking"
@@ -2409,7 +2409,7 @@ class TrackingInitializeFailure(ShowException, DebugLevel, Cli, File):
 class RetryExternalCall(DebugLevel, Cli, File):
     attempt: int
     max: int
-    code: str = "Z046"
+    code: str = "Z045"
 
     def message(self) -> str:
         return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
@@ -2419,7 +2419,7 @@ class RetryExternalCall(DebugLevel, Cli, File):
 class GeneralWarningMsg(WarnLevel, Cli, File):
     msg: str
     log_fmt: str
-    code: str = "Z047"
+    code: str = "Z046"
 
     def message(self) -> str:
         if self.log_fmt is not None:
@@ -2431,7 +2431,7 @@ class GeneralWarningMsg(WarnLevel, Cli, File):
 class GeneralWarningException(WarnLevel, Cli, File):
     exc: Exception
     log_fmt: str
-    code: str = "Z048"
+    code: str = "Z047"
 
     def message(self) -> str:
         if self.log_fmt is not None:
@@ -2453,7 +2453,6 @@ if 1 == 0:
     MainKeyboardInterrupt()
     MainEncounteredError(BaseException(''))
     MainStackTrace('')
-    MainReportVersion('')
     MainTrackingUserState('')
     ParsingStart()
     ParsingCompiling()
@@ -2529,25 +2528,9 @@ if 1 == 0:
     DumpAfterRenameSchema(dump_callable)
     AdapterImportError(ModuleNotFoundError())
     PluginLoadError()
-    ReportPerformancePath(path='')
-    GitSparseCheckoutSubdirectory(subdir='')
-    GitProgressCheckoutRevision(revision='')
-    GitProgressUpdatingExistingDependency(dir='')
-    GitProgressPullingNewDependency(dir='')
-    GitNothingToDo(sha='')
-    GitProgressUpdatedCheckoutRange(start_sha='', end_sha='')
-    GitProgressCheckedOutAt(end_sha='')
-    SystemErrorRetrievingModTime(path='')
-    SystemCouldNotWrite(path='', reason='', exc=Exception(''))
-    SystemExecutingCmd(cmd=[''])
-    SystemStdOutMsg(bmsg=b'')
-    SystemStdErrMsg(bmsg=b'')
     SystemReportReturnCode(returncode=0)
     SelectorAlertUpto3UnusedNodes(node_names=[])
     SelectorAlertAllUnusedNodes(node_names=[])
-    SelectorReportInvalidSelector(selector_methods={'': ''}, spec_method='', raw_spec='')
-    MacroEventInfo(msg='')
-    MacroEventDebug(msg='')
     NewConnectionOpening(connection_state='')
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
@@ -2559,6 +2542,7 @@ if 1 == 0:
     MacroFileParse(path='')
     PartialParsingFullReparseBecauseOfError()
     PartialParsingFile(file_dict={})
+    PartialParsingExceptionFile(file='')
     PartialParsingException(exc_info={})
     PartialParsingSkipParsing()
     PartialParsingMacroChangeStartFullParse()

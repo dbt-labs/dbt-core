@@ -15,6 +15,7 @@ from logging import Logger
 from logging.handlers import RotatingFileHandler
 import numbers
 import os
+import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
 
@@ -36,6 +37,7 @@ STDOUT_LOG.addHandler(stdout_handler)
 
 format_color = True
 format_json = False
+invocation_id: Optional[str] = None
 
 
 def setup_event_logger(log_path):
@@ -151,7 +153,8 @@ def event_to_dict(e: T_Event, msg_fn: Callable[[T_Event], str]) -> dict:
         'msg': msg_fn(e),
         'level': level,
         'data': Optional[Dict[str, Any]],
-        'event_data_serialized': True
+        'event_data_serialized': True,
+        'invocation_id': e.get_invocation_id()
     }
 
 
@@ -314,3 +317,10 @@ def fire_event(e: Event) -> None:
                 stack_info=e.stack_info,
                 extra=e.extra
             )
+
+
+def get_invocation_id() -> str:
+    global invocation_id
+    if invocation_id is None:
+        invocation_id = str(uuid.uuid4())
+    return invocation_id

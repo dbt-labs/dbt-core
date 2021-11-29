@@ -28,7 +28,7 @@ from dbt.exceptions import (
     RuntimeException,
     missing_materialization,
 )
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DatabaseErrorRunning, EmptyLine, HooksRunning, HookFinished,
     PrintModelErrorResultLine, PrintModelResultLine, PrintStartLine,
@@ -102,7 +102,7 @@ def get_hook(source, index):
 def track_model_run(index, num_nodes, run_model_result):
     if tracking.active_user is None:
         raise InternalException('cannot track model run with no active user')
-    invocation_id = tracking.active_user.invocation_id
+    invocation_id = get_invocation_id()
     tracking.track_model_run({
         "invocation_id": invocation_id,
         "index": index,

@@ -50,7 +50,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # not when the experimental parser flag is on.
         exp_sample: bool = False
         # sampling the stable static parser against jinja is significantly
-        # more expensive and therefor done far less frequently.
+        # more expensive and therefore done far less frequently.
         stable_sample: bool = False
         # there are two samples above, and it is perfectly fine if both happen
         # at the same time. If that happens, the experimental parser, stable
@@ -148,20 +148,24 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 )
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
-        # if the static parser failed, add the correct messages for tracking
-        elif isinstance(statically_parsed, str):
-            if statically_parsed == "cannot_parse":
-                result += ["01_stable_parser_cannot_parse"]
-            elif statically_parsed == "has_banned_macro":
-                result += ["08_has_banned_macro"]
-
-            super().render_update(node, config)
-            fire_event(StaticParserFallbackJinjaRendering(path=node.path))
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
             super().render_update(node, config)
             fire_event(StaticParserFallbackJinjaRendering(path=node.path))
+
+            # if sampling, add the correct messages for tracking
+            if exp_sample and isinstance(experimental_sample, str):
+                if experimental_sample == "cannot_parse":
+                    result += ["01_experimental_parser_cannot_parse"]
+                elif experimental_sample == "has_banned_macro":
+                    result += ["08_has_banned_macro"]
+            elif stable_sample and isinstance(statically_parsed, str):
+                if statically_parsed == "cannot_parse":
+                    result += ["81_stable_parser_cannot_parse"]
+                elif statically_parsed == "has_banned_macro":
+                    result += ["88_has_banned_macro"]
+
         # only send the tracking event if there is at least one result code
         if result:
             # fire a tracking event. this fires one event for every sample

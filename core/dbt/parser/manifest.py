@@ -19,7 +19,7 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
 )
 from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     PartialParsingFullReparseBecauseOfError, PartialParsingExceptionFile, PartialParsingFile,
     PartialParsingException, PartialParsingSkipParsing, PartialParsingMacroChangeStartFullParse,
@@ -398,7 +398,7 @@ class ManifestLoader:
                     block = FileBlock(self.manifest.files[file_id])
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking
-                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+                    self._perf_info.parsed_path_count += 1
             # generic tests hisotrically lived in the macros directoy but can now be nested
             # in a /generic directory under /tests so we want to process them here as well
             if 'GenericTestParser' in parser_files:
@@ -407,7 +407,7 @@ class ManifestLoader:
                     block = FileBlock(self.manifest.files[file_id])
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking
-                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+                    self._perf_info.parsed_path_count += 1
 
         self.build_macro_resolver()
         # Look at changed macros and update the macro.depends_on.macros
@@ -450,7 +450,7 @@ class ManifestLoader:
                     parser.parse_file(block, dct=dct)
                 else:
                     parser.parse_file(block)
-                project_parsed_path_count = project_parsed_path_count + 1
+                project_parsed_path_count += 1
 
             # Save timing info
             project_loader_info.parsers.append(ParserInfo(
@@ -458,7 +458,7 @@ class ManifestLoader:
                 parsed_path_count=project_parsed_path_count,
                 elapsed=time.perf_counter() - parser_start_timer
             ))
-            total_parsed_path_count = total_parsed_path_count + project_parsed_path_count
+            total_parsed_path_count += project_parsed_path_count
 
         # HookParser doesn't run from loaded files, just dbt_project.yml,
         # so do separately
@@ -478,7 +478,7 @@ class ManifestLoader:
         project_loader_info.parsed_path_count = (
             project_loader_info.parsed_path_count + total_parsed_path_count
         )
-        project_loader_info.elapsed = project_loader_info.elapsed + elapsed
+        project_loader_info.elapsed += elapsed
         self._perf_info.parsed_path_count = (
             self._perf_info.parsed_path_count + total_parsed_path_count
         )
@@ -629,10 +629,7 @@ class ManifestLoader:
                     # We don't want to have stale generated_at dates
                     manifest.metadata.generated_at = datetime.utcnow()
                     # or invocation_ids
-                    if dbt.tracking.active_user:
-                        manifest.metadata.invocation_id = dbt.tracking.active_user.invocation_id
-                    else:
-                        manifest.metadata.invocation_id = None
+                    manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
             except Exception as exc:
                 fire_event(ParsedFileLoadFailed(path=path, exc=exc))
@@ -690,7 +687,7 @@ class ManifestLoader:
         key_list.sort()
         env_var_str = ''
         for key in key_list:
-            env_var_str = env_var_str + f'{key}:{config.project_env_vars[key]}|'
+            env_var_str += f'{key}:{config.project_env_vars[key]}|'
         project_env_vars_hash = FileHash.from_contents(env_var_str)
 
         # Create a FileHash of the env_vars in the project
@@ -698,7 +695,7 @@ class ManifestLoader:
         key_list.sort()
         env_var_str = ''
         for key in key_list:
-            env_var_str = env_var_str + f'{key}:{config.profile_env_vars[key]}|'
+            env_var_str += f'{key}:{config.profile_env_vars[key]}|'
         profile_env_vars_hash = FileHash.from_contents(env_var_str)
 
         # Create a FileHash of the profile file
@@ -772,7 +769,7 @@ class ManifestLoader:
 
     # Create tracking event for saving performance info
     def track_project_load(self):
-        invocation_id = dbt.tracking.active_user.invocation_id
+        invocation_id = get_invocation_id()
         dbt.tracking.track_project_load({
             "invocation_id": invocation_id,
             "project_id": self.root_project.hashed_name(),
