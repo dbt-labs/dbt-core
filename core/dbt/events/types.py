@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from dbt.events.stubs import (
     _CachedRelation,
     BaseRelation,
-    BaseRelation,
     ParsedModelNode,
     _ReferenceKey
 )

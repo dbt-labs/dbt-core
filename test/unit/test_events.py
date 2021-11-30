@@ -262,7 +262,7 @@ sample_values = [
     FirstRunResultError(msg=''),
     AfterFirstRunResultError(msg=''),
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
-    PrintStartLine(description='', index=0, total=0),
+    PrintStartLine(description='', index=0, total=0, report_node_data=''),
     PrintHookStartLine(statement='', index=0, total=0, truncate=False),
     PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False),
     SkippingDetails(resource_type='', schema='', node_name='', index=0, total=0),
