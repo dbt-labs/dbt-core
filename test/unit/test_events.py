@@ -92,15 +92,16 @@ class TestEventBuffer(TestCase):
         )
 
     # ensure events drop from the front of the buffer when buffer maxsize is reached
-    def test_buffer_FIFOs(self):
-        for n in range(0,100001):
-            fire_event(UnitTestInfo(msg=f"Test Event {n}"))
-        self.assertTrue(
-            EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
-        )
-        self.assertTrue(
-            EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
-        )
+    # TODO commenting out till we can make this not spit out 100k log lines.
+    # def test_buffer_FIFOs(self):
+    #     for n in range(0,100001):
+    #         fire_event(UnitTestInfo(msg=f"Test Event {n}"))
+    #     self.assertTrue(
+    #         EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
+    #     )
+    #     self.assertTrue(
+    #         EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
+    #     )
 
 def dump_callable():
     return dict()
