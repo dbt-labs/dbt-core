@@ -65,9 +65,9 @@ class collect_timing_info:
 
 
 class RunningStatus(StrEnum):
-    Started = 'started'
-    Compiling = 'compiling'
-    Executing = 'executing'
+    Started = "started"
+    Compiling = "compiling"
+    Executing = "executing"
 
 
 class NodeStatus(StrEnum):

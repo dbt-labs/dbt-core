@@ -172,7 +172,7 @@ def event_to_serializable_dict(
         del log_line["code"]
 
     event_dict = {
-        'type': 'log_line',
+        "type": "log_line",
         "log_version": LOG_VERSION,
         "ts": get_ts_rfc3339(),
         'pid': e.get_pid(),
@@ -180,7 +180,7 @@ def event_to_serializable_dict(
         'level': e.level_tag(),
         "data": log_line,
         'invocation_id': e.get_invocation_id(),
-        'thread_name': e.get_thread_name(),
+        "thread_name": e.get_thread_name(),
         'code': e.code
     }
 

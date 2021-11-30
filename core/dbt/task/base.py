@@ -8,7 +8,11 @@ from dbt import tracking
 from dbt import flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    NodeStatus, RunResult, collect_timing_info, RunStatus, RunningStatus
+    NodeStatus,
+    RunResult,
+    collect_timing_info,
+    RunStatus,
+    RunningStatus,
 )
 from dbt.exceptions import (
     NotImplementedException,
@@ -23,8 +27,20 @@ from dbt.events.types import (
     DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
     ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
     CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
-    NodeConnectionReleaseError, PrintDebugStackTrace, SkippingDetails, PrintSkipBecauseError,
-    NodeCompiling, NodeExecuting
+    DbtProfileErrorException,
+    ProfileListTitle,
+    ListSingleProfile,
+    NoDefinedProfiles,
+    ProfileHelpMessage,
+    CatchableExceptionOnRun,
+    InternalExceptionOnRun,
+    GenericExceptionOnRun,
+    NodeConnectionReleaseError,
+    PrintDebugStackTrace,
+    SkippingDetails,
+    PrintSkipBecauseError,
+    NodeCompiling,
+    NodeExecuting,
 )
 from .printer import print_run_result_error
 
@@ -298,7 +314,7 @@ class BaseRunner(metaclass=ABCMeta):
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node):
-            ctx.node._event_status['node_status'] = RunningStatus.Compiling
+            ctx.node._event_status["node_status"] = RunningStatus.Compiling
             fire_event(
                 NodeCompiling(
                     node_info=ctx.node.node_info,
@@ -314,7 +330,7 @@ class BaseRunner(metaclass=ABCMeta):
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model:
-                ctx.node._event_status['node_status'] = RunningStatus.Executing
+                ctx.node._event_status["node_status"] = RunningStatus.Executing
                 fire_event(
                     NodeExecuting(
                         node_info=ctx.node.node_info,

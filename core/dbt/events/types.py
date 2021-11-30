@@ -1668,12 +1668,7 @@ class PrintStartLine(InfoLevel, NodeInfo):
 
     def message(self) -> str:
         msg = f"START {self.description}"
-        return format_fancy_output_line(
-            msg=msg,
-            status='RUN',
-            index=self.index,
-            total=self.total
-        )
+        return format_fancy_output_line(msg=msg, status="RUN", index=self.index, total=self.total)
 
 
 @dataclass
@@ -2534,43 +2529,43 @@ if 1 == 0:
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
     PrintStartLine(description="", index=0, total=0, node_info={})
     PrintHookStartLine(
-        statement='',
+        statement="",
         index=0,
         total=0,
         node_info={},
     )
     PrintHookEndLine(
-        statement='',
-        status='',
+        statement="",
+        status="",
         index=0,
         total=0,
         execution_time=0,
         node_info={},
     )
     SkippingDetails(
-        resource_type='',
-        schema='',
-        node_name='',
+        resource_type="",
+        schema="",
+        node_name="",
         index=0,
         total=0,
         node_info={},
     )
     PrintErrorTestResult(
-        name='',
+        name="",
         index=0,
         num_models=0,
         execution_time=0,
         node_info={},
     )
     PrintPassTestResult(
-        name='',
+        name="",
         index=0,
         num_models=0,
         execution_time=0,
         node_info={},
     )
     PrintWarnTestResult(
-        name='',
+        name="",
         index=0,
         num_models=0,
         execution_time=0,
@@ -2578,7 +2573,7 @@ if 1 == 0:
         node_info={},
     )
     PrintFailureTestResult(
-        name='',
+        name="",
         index=0,
         num_models=0,
         execution_time=0,
@@ -2587,24 +2582,24 @@ if 1 == 0:
     )
     PrintSkipBecauseError(schema='', relation='', index=0, total=0)
     PrintModelErrorResultLine(
-        description='',
-        status='',
+        description="",
+        status="",
         index=0,
         total=0,
         execution_time=0,
         node_info={},
     )
     PrintModelResultLine(
-        description='',
-        status='',
+        description="",
+        status="",
         index=0,
         total=0,
         execution_time=0,
         node_info={},
     )
     PrintSnapshotErrorResultLine(
-        status='',
-        description='',
+        status="",
+        description="",
         cfg={},
         index=0,
         total=0,
@@ -2612,8 +2607,8 @@ if 1 == 0:
         node_info={},
     )
     PrintSnapshotResultLine(
-        status='',
-        description='',
+        status="",
+        description="",
         cfg={},
         index=0,
         total=0,
@@ -2621,50 +2616,50 @@ if 1 == 0:
         node_info={},
     )
     PrintSeedErrorResultLine(
-        status='',
+        status="",
         index=0,
         total=0,
         execution_time=0,
-        schema='',
-        relation='',
+        schema="",
+        relation="",
         node_info={},
     )
     PrintSeedResultLine(
-        status='',
+        status="",
         index=0,
         total=0,
         execution_time=0,
-        schema='',
-        relation='',
+        schema="",
+        relation="",
         node_info={},
     )
     PrintHookEndErrorLine(
-        source_name='',
-        table_name='',
+        source_name="",
+        table_name="",
         index=0,
         total=0,
         execution_time=0,
         node_info={},
     )
     PrintHookEndErrorStaleLine(
-        source_name='',
-        table_name='',
+        source_name="",
+        table_name="",
         index=0,
         total=0,
         execution_time=0,
         node_info={},
     )
     PrintHookEndWarnLine(
-        source_name='',
-        table_name='',
+        source_name="",
+        table_name="",
         index=0,
         total=0,
         execution_time=0,
         node_info={},
     )
     PrintHookEndPassLine(
-        source_name='',
-        table_name='',
+        source_name="",
+        table_name="",
         index=0,
         total=0,
         execution_time=0,

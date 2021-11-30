@@ -236,8 +236,8 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
     def __post_serialize__(self, dct):
         if "config_call_dict" in dct:
             del dct["config_call_dict"]
-        if '_event_status' in dct:
-            del dct['_event_status']
+        if "_event_status" in dct:
+            del dct["_event_status"]
         return dct
 
     @classmethod
@@ -642,8 +642,8 @@ class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     created_at: float = field(default_factory=lambda: time.time())
 
     def __post_serialize__(self, dct):
-        if '_event_status' in dct:
-            del dct['_event_status']
+        if "_event_status" in dct:
+            del dct["_event_status"]
         return dct
 
     def same_database_representation(self, other: "ParsedSourceDefinition") -> bool:
