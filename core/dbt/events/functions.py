@@ -3,7 +3,7 @@ from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import Cli, Event, File, ShowException
-from dbt.events.types import T_Event
+from dbt.events.types import EventBufferFull, T_Event
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
@@ -18,7 +18,13 @@ import os
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Union
 from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
+from collections import deque
 
+# create the global event history buffer with a max size of 100k records
+# python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
+# TODO: make the maxlen something configurable from the command line via args(?)
+global EVENT_HISTORY
+EVENT_HISTORY = deque(maxlen=100000)  # type: ignore
 
 # create the global file logger with no configuration
 global FILE_LOG
@@ -248,7 +254,14 @@ def send_exc_to_logger(
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
 def fire_event(e: Event) -> None:
-    # TODO manage history in phase 2:  EVENT_HISTORY.append(e)
+
+    # if and only if the event history deque will be completely filled by this event
+    # fire warning that old events are now being dropped
+    global EVENT_HISTORY
+    if len(EVENT_HISTORY) == ((EVENT_HISTORY.maxlen or 100000) - 1):
+        fire_event(EventBufferFull())
+
+    EVENT_HISTORY.append(e)
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
     if flags.ENABLE_LEGACY_LOGGER:
