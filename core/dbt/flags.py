@@ -51,7 +51,7 @@ flag_defaults = {
     "FAIL_FAST": False,
     "SEND_ANONYMOUS_USAGE_STATS": True,
     "PRINTER_WIDTH": 80,
-    "INDIRECT_SELECTION": 'eager',
+    "INDIRECT_SELECTION": "eager",
     "LOG_CACHE_EVENTS": False,
     "EVENT_BUFFER_SIZE": 100000
 }
@@ -124,7 +124,7 @@ def set_from_args(args, user_config):
     SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
     PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config)
-    LOG_CACHE_EVENTS = get_flag_value('LOG_CACHE_EVENTS', args, user_config)
+    LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
     EVENT_BUFFER_SIZE = get_flag_value('EVENT_BUFFER_SIZE', args, user_config)
 
 

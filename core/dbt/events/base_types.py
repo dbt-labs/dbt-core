@@ -12,7 +12,7 @@ from typing import Any, Dict
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-class Cache():
+class Cache:
     # Events with this class will only be logged when the `--log-cache-events` flag is passed
     pass
 
