@@ -5,6 +5,7 @@ from argparse import Namespace
 from dbt.events import AdapterLogger
 from dbt.events.functions import event_to_serializable_dict
 from dbt.events.types import *
+from dbt.events.test_types import *
 from dbt.events.base_types import Event
 from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
 import inspect
@@ -358,7 +359,14 @@ sample_values = [
     SQlRunnerException(Exception('')),
     DropRelation(''),
     PartialParsingProjectEnvVarsChanged(),
-    RegistryProgressGETResponse('', '')
+    RegistryProgressGETResponse('', ''),
+    IntegrationTestDebug(''),
+    IntegrationTestInfo(''),
+    IntegrationTestWarn(''),
+    IntegrationTestError(''),
+    IntegrationTestException(''),
+    EventBufferFull(),
+    UnitTestInfo('')
 ]
 
 
