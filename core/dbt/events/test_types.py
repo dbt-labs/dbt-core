@@ -72,4 +72,4 @@ if 1 == 0:
     IntegrationTestWarn(msg="")
     IntegrationTestError(msg="")
     IntegrationTestException(msg="")
-    UnitTestInfo(msg='')
+    UnitTestInfo(msg="")
