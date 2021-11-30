@@ -4,13 +4,15 @@ from dbt.events.stubs import (
     _CachedRelation,
     BaseRelation,
     CompiledModelNode,
+    BaseRelation,
+    ParsedModelNode,
     _ReferenceKey
 )
 from dbt import ui
 from dbt.events.base_types import (
     Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
 )
-from dbt.events.format import format_fancy_output_line, pluralize
+from dbt.events.format import format_fancy_output_line, pluralize, node_state, node_status
 from dbt.node_types import NodeType
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar
 
@@ -1940,28 +1942,33 @@ class EndOfRunSummary(InfoLevel, Cli, File):
 
 @dataclass
 class PrintStartLine(InfoLevel, Cli, File):
+    # TODO: add node info
+    # report_node_data: ParsedModelNode
     description: str
     index: int
     total: int
+    status: str = 'RUN'
     code: str = "Z031"
 
     def message(self) -> str:
         msg = f"START {self.description}"
-        return format_fancy_output_line(msg=msg, status='RUN', index=self.index, total=self.total)
+        return format_fancy_output_line(msg=msg, status=self.status, index=self.index, total=self.total)
 
 
 @dataclass
 class PrintHookStartLine(InfoLevel, Cli, File):
+    # report_node_data: CompiledModelNode
     statement: str
     index: int
     total: int
     truncate: bool
+    status: str = 'RUN'
     code: str = "Z032"
 
     def message(self) -> str:
         msg = f"START hook: {self.statement}"
         return format_fancy_output_line(msg=msg,
-                                        status='RUN',
+                                        status=self.status,
                                         index=self.index,
                                         total=self.total,
                                         truncate=self.truncate)
@@ -2315,15 +2322,18 @@ class DefaultSelector(InfoLevel, Cli, File):
 
 @dataclass
 class NodeStart(DebugLevel, Cli, File):
-    unique_id: str
+    report_node_data: ParsedModelNode
+    status: str = node_status['running']
+    state: str = node_state['started']
     code: str = "Q023"
 
     def message(self) -> str:
-        return f"Began running node {self.unique_id}"
+        return f"Began running node {self.report_node_data.unique_id}"
 
 
 @dataclass
 class NodeFinished(DebugLevel, Cli, File):
+    # TODO: add node_info
     unique_id: str
     code: str = "Q024"
 
