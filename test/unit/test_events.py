@@ -1,19 +1,12 @@
-<<<<<<< HEAD
 from dbt import events
-from dbt.events import AdapterLogger
-from dbt.events.types import AdapterEventDebug, EventBufferFull
-from dbt.events.base_types import Event
 from dbt.events.functions import EVENT_HISTORY, fire_event
 from dbt.events.test_types import UnitTestInfo
-
-=======
 from argparse import Namespace
 from dbt.events import AdapterLogger
 from dbt.events.functions import event_to_serializable_dict
 from dbt.events.types import *
 from dbt.events.base_types import Event
 from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
->>>>>>> main
 import inspect
 import json
 from unittest import TestCase
