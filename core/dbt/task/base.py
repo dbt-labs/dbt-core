@@ -8,7 +8,7 @@ from dbt import tracking
 from dbt import flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    NodeStatus, RunResult, collect_timing_info, RunStatus
+    NodeStatus, RunResult, collect_timing_info, RunStatus, RunningStatus
 )
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
@@ -21,7 +21,8 @@ from dbt.events.types import (
     DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
     ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
     CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
-    NodeConnectionReleaseError, PrintDebugStackTrace, SkippingDetails, PrintSkipBecauseError
+    NodeConnectionReleaseError, PrintDebugStackTrace, SkippingDetails, PrintSkipBecauseError,
+    NodeCompiling, NodeExecuting
 )
 from .printer import print_run_result_error
 
@@ -286,6 +287,13 @@ class BaseRunner(metaclass=ABCMeta):
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node):
+            ctx.node._event_status['node_status'] = RunningStatus.Compiling
+            fire_event(
+                NodeCompiling(
+                    report_node_data=ctx.node,
+                    unique_id=ctx.node.unique_id,
+                )
+            )
             with collect_timing_info('compile') as timing_info:
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
@@ -295,6 +303,13 @@ class BaseRunner(metaclass=ABCMeta):
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model:
+                ctx.node._event_status['node_status'] = RunningStatus.Executing
+                fire_event(
+                    NodeExecuting(
+                        report_node_data=ctx.node,
+                        unique_id=ctx.node.unique_id,
+                    )
+                )
                 with collect_timing_info('execute') as timing_info:
                     result = self.run(ctx.node, manifest)
                     ctx.node = result.node
@@ -432,7 +447,8 @@ class BaseRunner(metaclass=ABCMeta):
                         schema=schema_name,
                         node_name=node_name,
                         index=self.node_index,
-                        total=self.num_nodes
+                        total=self.num_nodes,
+                        report_node_data=self.node
                     )
                 )
 

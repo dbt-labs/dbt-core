@@ -3,12 +3,12 @@ attrs==21.2.0
 Babel==2.9.1
 certifi==2021.10.8
 cffi==1.15.0
-charset-normalizer==2.0.7
+charset-normalizer==2.0.8
 click==8.0.3
 colorama==0.4.4
-dbt-core==1.0.0rc2
+dbt-core==1.0.0rc3
 dbt-extractor==0.4.0
-dbt-postgres==1.0.0rc2
+dbt-postgres==1.0.0rc3
 future==0.18.2
 hologram==0.0.14
 idna==3.3
@@ -21,7 +21,7 @@ Logbook==1.5.3
 MarkupSafe==2.0.1
 mashumaro==2.9
 minimal-snowplow-tracker==0.0.2
-msgpack==1.0.2
+msgpack==1.0.3
 networkx==2.6.3
 packaging==21.3
 parsedatetime==2.4
