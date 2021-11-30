@@ -38,6 +38,11 @@ class ErrorLevel():
         return "error"
 
 
+class Cache():
+    # Events with this class will only be logged when the `--log-cache-events` flag is passed
+    pass
+
+
 @dataclass
 class Node():
     node_path: str
