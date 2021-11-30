@@ -17,8 +17,9 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Union
-from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
+from dataclasses import _FIELD_BASE, asdict  # type: ignore[attr-defined]
 from collections import deque
+
 
 # create the global event history buffer with a max size of 100k records
 # python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
@@ -131,17 +132,15 @@ def event_to_serializable_dict(
     node_info = dict()
     if hasattr(e, '__dataclass_fields__'):
         for field, value in e.__dataclass_fields__.items():  # type: ignore[attr-defined]
+            if field == 'report_node_data':
+                node_info = asdict(e.get_node_info())
             if type(value._field_type) != _FIELD_BASE:
                 _json_value = e.fields_to_json(value)
 
                 if not isinstance(_json_value, Exception):
                     data[field] = _json_value
                 else:
-                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
-        
-        if 'report_node_data' in e.__dataclass_fields__:
-            breakpoint()
-            node_info = e.get_node_info()
+                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"            
 
     event_dict = {
         'type': 'log_line',
