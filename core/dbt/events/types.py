@@ -7,7 +7,7 @@ from dbt.events.base_types import (
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
-from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, TypeVar
+from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar
 
 
 # The classes in this file represent the data necessary to describe a
@@ -729,79 +729,42 @@ class RenameSchema(DebugLevel, Cli, File):
 
 @dataclass
 class DumpBeforeAddGraph(DebugLevel, Cli, File):
-    graph_func: Callable[[], Dict[str, List[str]]]
+    # large value. delay not necessary since every debug level message is logged anyway.
+    dump: Dict[str, List[str]]
     code: str = "E031"
 
     def message(self) -> str:
-        # workaround for https://github.com/python/mypy/issues/6910
-        # TODO remove when we've upgraded to a mypy version without that bug
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
-        return f"before adding : {func_returns}"
-
-    # TODO should we manually cache the graph here so it doesn't get called for the message
-    # and serialization separately??
-    #
-    # overriding default json serialization for this event
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.graph_func:  # type: ignore
-            return str(val())
-
-        return val
+        return f"before adding : {self.dump}"
 
 
 @dataclass
 class DumpAfterAddGraph(DebugLevel, Cli, File):
-    graph_func: Callable[[], Dict[str, List[str]]]
+    # large value. delay not necessary since every debug level message is logged anyway.
+    dump: Dict[str, List[str]]
     code: str = "E032"
 
     def message(self) -> str:
-        # workaround for https://github.com/python/mypy/issues/6910
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
-        return f"after adding: {func_returns}"
-
-    # TODO should we manually cache the graph here so it doesn't get called for the message
-    # and serialization separately??
-    #
-    # overriding default json serialization for this event
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.graph_func:  # type: ignore
-            return str(val())
-
-        return val
+        return f"after adding: {self.dump}"
 
 
 @dataclass
 class DumpBeforeRenameSchema(DebugLevel, Cli, File):
-    graph_func: Callable[[], Dict[str, List[str]]]
+    # large value. delay not necessary since every debug level message is logged anyway.
+    dump: Dict[str, List[str]]
     code: str = "E033"
 
     def message(self) -> str:
-        # workaround for https://github.com/python/mypy/issues/6910
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
-        return f"before rename: {func_returns}"
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.graph_func:  # type: ignore
-            return str(val())
-
-        return val
+        return f"before rename: {self.dump}"
 
 
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, Cli, File):
-    graph_func: Callable[[], Dict[str, List[str]]]
+    # large value. delay not necessary since every debug level message is logged anyway.
+    dump: Dict[str, List[str]]
     code: str = "E034"
 
     def message(self) -> str:
-        # workaround for https://github.com/python/mypy/issues/6910
-        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
-        return f"after rename: {func_returns}"
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.graph_func:  # type: ignore
-            return str(val())
-
-        return val
+        return f"after rename: {self.dump}"
 
 
 @dataclass
@@ -2611,9 +2574,6 @@ class EventBufferFull(WarnLevel, Cli, File):
 #
 # TODO remove these lines once we run mypy everywhere.
 if 1 == 0:
-    def dump_callable():
-        return {"": [""]}  # for instantiating `Dump...` methods which take callables.
-
     MainReportVersion('')
     MainKeyboardInterrupt()
     MainEncounteredError(BaseException(''))
@@ -2687,10 +2647,10 @@ if 1 == 0:
         old_key=_ReferenceKey(database="", schema="", identifier=""),
         new_key=_ReferenceKey(database="", schema="", identifier="")
     )
-    DumpBeforeAddGraph(dump_callable)
-    DumpAfterAddGraph(dump_callable)
-    DumpBeforeRenameSchema(dump_callable)
-    DumpAfterRenameSchema(dump_callable)
+    DumpBeforeAddGraph(dict())
+    DumpAfterAddGraph(dict())
+    DumpBeforeRenameSchema(dict())
+    DumpAfterRenameSchema(dict())
     AdapterImportError(ModuleNotFoundError())
     PluginLoadError()
     SystemReportReturnCode(returncode=0)

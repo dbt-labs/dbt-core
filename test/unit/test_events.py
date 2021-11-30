@@ -391,6 +391,5 @@ class TestEventJSONSerialization(TestCase):
             try:
                 json.dumps(d)
             except TypeError as e:
-                breakpoint()
                 raise Exception(f"{event} is not serializable to json. Originating exception: {e}")
                 
