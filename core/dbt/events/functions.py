@@ -2,7 +2,7 @@
 from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo
+from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo, Cache
 from dbt.events.types import EventBufferFull, T_Event
 import dbt.flags as flags
 # TODO this will need to move eventually
@@ -262,6 +262,9 @@ def send_exc_to_logger(
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
 def fire_event(e: Event) -> None:
+    # skip logs when `--log-cache-events` is not passed
+    if isinstance(e, Cache) and not flags.LOG_CACHE_EVENTS:
+        return
     # if and only if the event history deque will be completely filled by this event
     # fire warning that old events are now being dropped
     global EVENT_HISTORY
