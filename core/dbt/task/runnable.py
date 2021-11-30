@@ -229,7 +229,8 @@ class GraphRunnableTask(ManifestTask):
                     fire_event(
                         NodeFinished(
                             report_node_data=runner.node,
-                            unique_id=runner.node.unique_id
+                            unique_id=runner.node.unique_id,
+                            run_result=result
                         )
                     )
             del runner.node.config["started_at"]
@@ -295,7 +296,6 @@ class GraphRunnableTask(ManifestTask):
             runner = self.get_runner(node)
             # we finally know what we're running! Make sure we haven't decided
             # to skip it due to upstream failures
-            # breakpoint()
             if runner.node.unique_id in self._skipped_children:
                 cause = self._skipped_children.pop(runner.node.unique_id)
                 runner.do_skip(cause=cause)

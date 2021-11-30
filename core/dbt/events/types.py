@@ -2152,13 +2152,14 @@ class PrintModelResultLine(InfoLevel, Cli, File, NodeInfo):
 
 
 @dataclass
-class PrintSnapshotErrorResultLine(ErrorLevel, Cli, File):
+class PrintSnapshotErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     status: str
     description: str
     cfg: Dict
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q013"
 
     def message(self) -> str:
@@ -2172,13 +2173,14 @@ class PrintSnapshotErrorResultLine(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintSnapshotResultLine(InfoLevel, Cli, File):
+class PrintSnapshotResultLine(InfoLevel, Cli, File, NodeInfo):
     status: str
     description: str
     cfg: Dict
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q014"
 
     def message(self) -> str:
@@ -2192,13 +2194,14 @@ class PrintSnapshotResultLine(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintSeedErrorResultLine(ErrorLevel, Cli, File):
+class PrintSeedErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     status: str
     index: int
     total: int
     execution_time: int
     schema: str
     relation: str
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q015"
 
     def message(self) -> str:
@@ -2212,13 +2215,14 @@ class PrintSeedErrorResultLine(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintSeedResultLine(InfoLevel, Cli, File):
+class PrintSeedResultLine(InfoLevel, Cli, File, NodeInfo):
     status: str
     index: int
     total: int
     execution_time: int
     schema: str
     relation: str
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q016"
 
     def message(self) -> str:
@@ -2232,12 +2236,13 @@ class PrintSeedResultLine(InfoLevel, Cli, File):
 
 
 @dataclass
-class PrintHookEndErrorLine(ErrorLevel, Cli, File):
+class PrintHookEndErrorLine(ErrorLevel, Cli, File, NodeInfo):
     source_name: str
     table_name: str
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q017"
 
     def message(self) -> str:
@@ -2251,12 +2256,13 @@ class PrintHookEndErrorLine(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintHookEndErrorStaleLine(ErrorLevel, Cli, File):
+class PrintHookEndErrorStaleLine(ErrorLevel, Cli, File, NodeInfo):
     source_name: str
     table_name: str
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q018"
 
     def message(self) -> str:
@@ -2270,12 +2276,13 @@ class PrintHookEndErrorStaleLine(ErrorLevel, Cli, File):
 
 
 @dataclass
-class PrintHookEndWarnLine(WarnLevel, Cli, File):
+class PrintHookEndWarnLine(WarnLevel, Cli, File, NodeInfo):
     source_name: str
     table_name: str
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q019"
 
     def message(self) -> str:
@@ -2289,12 +2296,13 @@ class PrintHookEndWarnLine(WarnLevel, Cli, File):
 
 
 @dataclass
-class PrintHookEndPassLine(InfoLevel, Cli, File):
+class PrintHookEndPassLine(InfoLevel, Cli, File, NodeInfo):
     source_name: str
     table_name: str
     index: int
     total: int
     execution_time: int
+    report_node_data: Any  # TODO: be explicit
     code: str = "Q020"
 
     def message(self) -> str:
@@ -2333,7 +2341,6 @@ class DefaultSelector(InfoLevel, Cli, File):
 class NodeStart(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
-    # node_status: str
     code: str = "Q023"
 
     def message(self) -> str:
@@ -2344,8 +2351,7 @@ class NodeStart(DebugLevel, Cli, File, NodeInfo):
 class NodeFinished(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
-    # node_status: str
-    # TODO: possibly pass entire RunResult
+    result: Any  # RunResult
     code: str = "Q024"
 
     def message(self) -> str:
@@ -2830,33 +2836,131 @@ if 1 == 0:
     AfterFirstRunResultError(msg='')
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
     PrintStartLine(description='', index=0, total=0, report_node_data='')
-    PrintHookStartLine(statement='', index=0, total=0, truncate=False)
-    PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False)
-    SkippingDetails(resource_type='', schema='', node_name='', index=0, total=0)
-    PrintErrorTestResult(name='', index=0, num_models=0, execution_time=0)
-    PrintPassTestResult(name='', index=0, num_models=0, execution_time=0)
-    PrintWarnTestResult(name='', index=0, num_models=0, execution_time=0, failures=[])
-    PrintFailureTestResult(name='', index=0, num_models=0, execution_time=0, failures=[])
+    PrintHookStartLine(statement='', index=0, total=0, truncate=False, report_node_data='')
+    PrintHookEndLine(
+        statement='',
+        status='',
+        index=0,
+        total=0,
+        execution_time=0,
+        truncate=False,
+        report_node_data=''
+    )
+    SkippingDetails(
+        resource_type='',
+        schema='',
+        node_name='',
+        index=0,
+        total=0,
+        report_node_data=''
+    )
+    PrintErrorTestResult(name='', index=0, num_models=0, execution_time=0, report_node_data='')
+    PrintPassTestResult(name='', index=0, num_models=0, execution_time=0, report_node_data='')
+    PrintWarnTestResult(
+        name='',
+        index=0,
+        num_models=0,
+        execution_time=0,
+        failures=[],
+        report_node_data=''
+    )
+    PrintFailureTestResult(
+        name='',
+        index=0,
+        num_models=0,
+        execution_time=0,
+        failures=[],
+        report_node_data=''
+    )
     PrintSkipBecauseError(schema='', relation='', index=0, total=0)
-    PrintModelErrorResultLine(description='', status='', index=0, total=0, execution_time=0)
-    PrintModelResultLine(description='', status='', index=0, total=0, execution_time=0)
-    PrintSnapshotErrorResultLine(status='',
-                                 description='',
-                                 cfg={},
-                                 index=0,
-                                 total=0,
-                                 execution_time=0)
-    PrintSnapshotResultLine(status='', description='', cfg={}, index=0, total=0, execution_time=0)
-    PrintSeedErrorResultLine(status='', index=0, total=0, execution_time=0, schema='', relation='')
-    PrintSeedResultLine(status='', index=0, total=0, execution_time=0, schema='', relation='')
-    PrintHookEndErrorLine(source_name='', table_name='', index=0, total=0, execution_time=0)
-    PrintHookEndErrorStaleLine(source_name='', table_name='', index=0, total=0, execution_time=0)
-    PrintHookEndWarnLine(source_name='', table_name='', index=0, total=0, execution_time=0)
-    PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0)
+    PrintModelErrorResultLine(
+        description='',
+        status='',
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintModelResultLine(
+        description='',
+        status='',
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintSnapshotErrorResultLine(
+        status='',
+        description='',
+        cfg={},
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintSnapshotResultLine(
+        status='',
+        description='',
+        cfg={},
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintSeedErrorResultLine(
+        status='',
+        index=0,
+        total=0,
+        execution_time=0,
+        schema='',
+        relation='',
+        report_node_data=''
+    )
+    PrintSeedResultLine(
+        status='',
+        index=0,
+        total=0,
+        execution_time=0,
+        schema='',
+        relation='',
+        report_node_data=''
+    )
+    PrintHookEndErrorLine(
+        source_name='',
+        table_name='',
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintHookEndErrorStaleLine(
+        source_name='',
+        table_name='',
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintHookEndWarnLine(
+        source_name='',
+        table_name='',
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
+    PrintHookEndPassLine(
+        source_name='',
+        table_name='',
+        index=0,
+        total=0,
+        execution_time=0,
+        report_node_data=''
+    )
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
     NodeStart(report_node_data=ParsedModelNode(), unique_id='')
-    NodeFinished(report_node_data=ParsedModelNode(), unique_id='')
+    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', result='')
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
     StarterProjectPath(dir='')
