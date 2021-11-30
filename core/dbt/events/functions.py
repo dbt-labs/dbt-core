@@ -257,7 +257,6 @@ def send_exc_to_logger(
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
 def fire_event(e: Event) -> None:
-
     # if and only if the event history deque will be completely filled by this event
     # fire warning that old events are now being dropped
     global EVENT_HISTORY
