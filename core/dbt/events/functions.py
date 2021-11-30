@@ -17,7 +17,7 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Union
-from dataclasses import _FIELD_BASE, asdict  # type: ignore[attr-defined]
+import dataclasses
 from collections import deque
 
 
@@ -131,16 +131,16 @@ def event_to_serializable_dict(
     data = dict()
     node_info = dict()
     if hasattr(e, '__dataclass_fields__'):
-        for field, value in e.__dataclass_fields__.items():  # type: ignore[attr-defined]
-            if isinstance(e, NodeInfo):
-                node_info = asdict(e.get_node_info())
-            if type(value._field_type) != _FIELD_BASE:
-                _json_value = e.fields_to_json(value)
+        for field, value in dataclasses.asdict(e).items():  # type: ignore[attr-defined]
+            _json_value = e.fields_to_json(value)
 
-                if not isinstance(_json_value, Exception):
-                    data[field] = _json_value
-                else:
-                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
+            if isinstance(e, NodeInfo):
+                node_info = dataclasses.asdict(e.get_node_info())
+
+            if not isinstance(_json_value, Exception):
+                data[field] = _json_value
+            else:
+                data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
 
     event_dict = {
         'type': 'log_line',
