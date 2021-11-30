@@ -13,6 +13,7 @@ from io import StringIO, TextIOWrapper
 import logbook
 import logging
 from logging import Logger
+import sys
 from logging.handlers import RotatingFileHandler
 import os
 import uuid
@@ -38,7 +39,7 @@ FILE_LOG.addHandler(null_handler)
 global STDOUT_LOG
 STDOUT_LOG = logging.getLogger('default_stdout')
 STDOUT_LOG.setLevel(logging.INFO)
-stdout_handler = logging.StreamHandler()
+stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setLevel(logging.INFO)
 STDOUT_LOG.addHandler(stdout_handler)
 
@@ -64,7 +65,7 @@ def setup_event_logger(log_path, level_override=None):
     FORMAT = "%(message)s"
     stdout_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
-    stdout_handler = logging.StreamHandler()
+    stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setFormatter(stdout_passthrough_formatter)
     stdout_handler.setLevel(level)
     # clear existing stdout TextIOWrapper stream handlers
