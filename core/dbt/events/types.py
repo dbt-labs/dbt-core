@@ -10,7 +10,7 @@ from dbt.events.stubs import (
 )
 from dbt import ui
 from dbt.events.base_types import (
-    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException, NodeInfo
+    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException, NodeInfo, Cache
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
@@ -636,7 +636,7 @@ class SchemaDrop(DebugLevel, Cli, File):
 # TODO pretty sure this is only ever called in dead code
 # see: core/dbt/adapters/cache.py _add_link vs add_link
 @dataclass
-class UncachedRelation(DebugLevel, Cli, File):
+class UncachedRelation(DebugLevel, Cli, File, Cache):
     dep_key: _ReferenceKey
     ref_key: _ReferenceKey
     code: str = "E022"
@@ -650,7 +650,7 @@ class UncachedRelation(DebugLevel, Cli, File):
 
 
 @dataclass
-class AddLink(DebugLevel, Cli, File):
+class AddLink(DebugLevel, Cli, File, Cache):
     dep_key: _ReferenceKey
     ref_key: _ReferenceKey
     code: str = "E023"
@@ -660,7 +660,7 @@ class AddLink(DebugLevel, Cli, File):
 
 
 @dataclass
-class AddRelation(DebugLevel, Cli, File):
+class AddRelation(DebugLevel, Cli, File, Cache):
     relation: _CachedRelation
     code: str = "E024"
 
@@ -676,7 +676,7 @@ class AddRelation(DebugLevel, Cli, File):
 
 
 @dataclass
-class DropMissingRelation(DebugLevel, Cli, File):
+class DropMissingRelation(DebugLevel, Cli, File, Cache):
     relation: _ReferenceKey
     code: str = "E025"
 
@@ -685,7 +685,7 @@ class DropMissingRelation(DebugLevel, Cli, File):
 
 
 @dataclass
-class DropCascade(DebugLevel, Cli, File):
+class DropCascade(DebugLevel, Cli, File, Cache):
     dropped: _ReferenceKey
     consequences: Set[_ReferenceKey]
     code: str = "E026"
@@ -695,7 +695,7 @@ class DropCascade(DebugLevel, Cli, File):
 
 
 @dataclass
-class DropRelation(DebugLevel, Cli, File):
+class DropRelation(DebugLevel, Cli, File, Cache):
     dropped: _ReferenceKey
     code: str = "E027"
 
@@ -704,7 +704,7 @@ class DropRelation(DebugLevel, Cli, File):
 
 
 @dataclass
-class UpdateReference(DebugLevel, Cli, File):
+class UpdateReference(DebugLevel, Cli, File, Cache):
     old_key: _ReferenceKey
     new_key: _ReferenceKey
     cached_key: _ReferenceKey
@@ -716,7 +716,7 @@ class UpdateReference(DebugLevel, Cli, File):
 
 
 @dataclass
-class TemporaryRelation(DebugLevel, Cli, File):
+class TemporaryRelation(DebugLevel, Cli, File, Cache):
     key: _ReferenceKey
     code: str = "E029"
 
@@ -725,7 +725,7 @@ class TemporaryRelation(DebugLevel, Cli, File):
 
 
 @dataclass
-class RenameSchema(DebugLevel, Cli, File):
+class RenameSchema(DebugLevel, Cli, File, Cache):
     old_key: _ReferenceKey
     new_key: _ReferenceKey
     code: str = "E030"
@@ -735,7 +735,7 @@ class RenameSchema(DebugLevel, Cli, File):
 
 
 @dataclass
-class DumpBeforeAddGraph(DebugLevel, Cli, File):
+class DumpBeforeAddGraph(DebugLevel, Cli, File, Cache):
     # large value. delay not necessary since every debug level message is logged anyway.
     dump: Dict[str, List[str]]
     code: str = "E031"
@@ -745,7 +745,7 @@ class DumpBeforeAddGraph(DebugLevel, Cli, File):
 
 
 @dataclass
-class DumpAfterAddGraph(DebugLevel, Cli, File):
+class DumpAfterAddGraph(DebugLevel, Cli, File, Cache):
     # large value. delay not necessary since every debug level message is logged anyway.
     dump: Dict[str, List[str]]
     code: str = "E032"
@@ -755,7 +755,7 @@ class DumpAfterAddGraph(DebugLevel, Cli, File):
 
 
 @dataclass
-class DumpBeforeRenameSchema(DebugLevel, Cli, File):
+class DumpBeforeRenameSchema(DebugLevel, Cli, File, Cache):
     # large value. delay not necessary since every debug level message is logged anyway.
     dump: Dict[str, List[str]]
     code: str = "E033"
@@ -765,7 +765,7 @@ class DumpBeforeRenameSchema(DebugLevel, Cli, File):
 
 
 @dataclass
-class DumpAfterRenameSchema(DebugLevel, Cli, File):
+class DumpAfterRenameSchema(DebugLevel, Cli, File, Cache):
     # large value. delay not necessary since every debug level message is logged anyway.
     dump: Dict[str, List[str]]
     code: str = "E034"

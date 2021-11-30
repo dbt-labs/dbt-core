@@ -33,6 +33,7 @@ SEND_ANONYMOUS_USAGE_STATS = None
 PRINTER_WIDTH = 80
 WHICH = None
 INDIRECT_SELECTION = None
+LOG_CACHE_EVENTS = None
 
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
@@ -51,7 +52,8 @@ flag_defaults = {
     "FAIL_FAST": False,
     "SEND_ANONYMOUS_USAGE_STATS": True,
     "PRINTER_WIDTH": 80,
-    "INDIRECT_SELECTION": 'eager'
+    "INDIRECT_SELECTION": 'eager',
+    "LOG_CACHE_EVENTS": False
 }
 
 
@@ -99,7 +101,7 @@ def set_from_args(args, user_config):
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
         USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, INDIRECT_SELECTION, \
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
-        WHICH
+        WHICH, LOG_CACHE_EVENTS
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
@@ -122,6 +124,7 @@ def set_from_args(args, user_config):
     SEND_ANONYMOUS_USAGE_STATS = get_flag_value('SEND_ANONYMOUS_USAGE_STATS', args, user_config)
     PRINTER_WIDTH = get_flag_value('PRINTER_WIDTH', args, user_config)
     INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config)
+    LOG_CACHE_EVENTS = get_flag_value('LOG_CACHE_EVENTS', args, user_config)
 
 
 def get_flag_value(flag, args, user_config):
@@ -165,5 +168,6 @@ def get_flag_dict():
         "fail_fast": FAIL_FAST,
         "send_anonymous_usage_stats": SEND_ANONYMOUS_USAGE_STATS,
         "printer_width": PRINTER_WIDTH,
-        "indirect_selection": INDIRECT_SELECTION
+        "indirect_selection": INDIRECT_SELECTION,
+        "log_cache_events": LOG_CACHE_EVENTS
     }
