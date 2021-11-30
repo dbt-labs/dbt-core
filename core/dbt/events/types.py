@@ -4,7 +4,9 @@ from dbt.events.stubs import (
     _CachedRelation,
     BaseRelation,
     ParsedModelNode,
-    _ReferenceKey
+    ParsedHookNode,
+    _ReferenceKey,
+    RunResult
 )
 from dbt import ui
 from dbt.events.base_types import (
@@ -1943,7 +1945,7 @@ class PrintStartLine(InfoLevel, Cli, File, NodeInfo):
     description: str
     index: int
     total: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Z031"
 
     def message(self) -> str:
@@ -1962,7 +1964,7 @@ class PrintHookStartLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     truncate: bool
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: Any  # TODO use ParsedHookNode here
     code: str = "Z032"
 
     def message(self) -> str:
@@ -1982,7 +1984,7 @@ class PrintHookEndLine(InfoLevel, Cli, File, NodeInfo):
     total: int
     execution_time: int
     truncate: bool
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: Any  # TODO use ParsedHookNode here
     code: str = "Q007"
 
     def message(self) -> str:
@@ -2002,7 +2004,7 @@ class SkippingDetails(InfoLevel, Cli, File, NodeInfo):
     node_name: str
     index: int
     total: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Z033"
 
     def message(self) -> str:
@@ -2022,7 +2024,7 @@ class PrintErrorTestResult(ErrorLevel, Cli, File, NodeInfo):
     index: int
     num_models: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q008"
 
     def message(self) -> str:
@@ -2041,7 +2043,7 @@ class PrintPassTestResult(InfoLevel, Cli, File, NodeInfo):
     index: int
     num_models: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q009"
 
     def message(self) -> str:
@@ -2061,7 +2063,7 @@ class PrintWarnTestResult(WarnLevel, Cli, File, NodeInfo):
     num_models: int
     execution_time: int
     failures: List[str]
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q010"
 
     def message(self) -> str:
@@ -2081,7 +2083,7 @@ class PrintFailureTestResult(ErrorLevel, Cli, File, NodeInfo):
     num_models: int
     execution_time: int
     failures: List[str]
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q011"
 
     def message(self) -> str:
@@ -2117,7 +2119,7 @@ class PrintModelErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Z035"
 
     def message(self) -> str:
@@ -2137,7 +2139,7 @@ class PrintModelResultLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q012"
 
     def message(self) -> str:
@@ -2158,7 +2160,7 @@ class PrintSnapshotErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q013"
 
     def message(self) -> str:
@@ -2179,7 +2181,7 @@ class PrintSnapshotResultLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q014"
 
     def message(self) -> str:
@@ -2200,7 +2202,7 @@ class PrintSeedErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     execution_time: int
     schema: str
     relation: str
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q015"
 
     def message(self) -> str:
@@ -2221,7 +2223,7 @@ class PrintSeedResultLine(InfoLevel, Cli, File, NodeInfo):
     execution_time: int
     schema: str
     relation: str
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedModelNode
     code: str = "Q016"
 
     def message(self) -> str:
@@ -2241,7 +2243,7 @@ class PrintHookEndErrorLine(ErrorLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedHookNode
     code: str = "Q017"
 
     def message(self) -> str:
@@ -2261,7 +2263,7 @@ class PrintHookEndErrorStaleLine(ErrorLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedHookNode
     code: str = "Q018"
 
     def message(self) -> str:
@@ -2281,7 +2283,7 @@ class PrintHookEndWarnLine(WarnLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedHookNode
     code: str = "Q019"
 
     def message(self) -> str:
@@ -2301,7 +2303,7 @@ class PrintHookEndPassLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     execution_time: int
-    report_node_data: Any  # TODO: be explicit
+    report_node_data: ParsedHookNode
     code: str = "Q020"
 
     def message(self) -> str:
@@ -2350,7 +2352,7 @@ class NodeStart(DebugLevel, Cli, File, NodeInfo):
 class NodeFinished(DebugLevel, Cli, File, NodeInfo):
     unique_id: str
     report_node_data: ParsedModelNode
-    run_result: Any  # RunResult
+    run_result: RunResult
     code: str = "Q024"
 
     def message(self) -> str:
@@ -2836,8 +2838,14 @@ if 1 == 0:
     FirstRunResultError(msg='')
     AfterFirstRunResultError(msg='')
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
-    PrintStartLine(description='', index=0, total=0, report_node_data='')
-    PrintHookStartLine(statement='', index=0, total=0, truncate=False, report_node_data='')
+    PrintStartLine(description='', index=0, total=0, report_node_data=ParsedModelNode())
+    PrintHookStartLine(
+        statement='',
+        index=0,
+        total=0,
+        truncate=False,
+        report_node_data=ParsedHookNode()
+    )
     PrintHookEndLine(
         statement='',
         status='',
@@ -2845,7 +2853,7 @@ if 1 == 0:
         total=0,
         execution_time=0,
         truncate=False,
-        report_node_data=''
+        report_node_data=ParsedHookNode()
     )
     SkippingDetails(
         resource_type='',
@@ -2853,17 +2861,29 @@ if 1 == 0:
         node_name='',
         index=0,
         total=0,
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
-    PrintErrorTestResult(name='', index=0, num_models=0, execution_time=0, report_node_data='')
-    PrintPassTestResult(name='', index=0, num_models=0, execution_time=0, report_node_data='')
+    PrintErrorTestResult(
+        name='',
+        index=0,
+        num_models=0,
+        execution_time=0,
+        report_node_data=ParsedModelNode()
+    )
+    PrintPassTestResult(
+        name='',
+        index=0,
+        num_models=0,
+        execution_time=0,
+        report_node_data=ParsedModelNode()
+    )
     PrintWarnTestResult(
         name='',
         index=0,
         num_models=0,
         execution_time=0,
         failures=[],
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintFailureTestResult(
         name='',
@@ -2871,7 +2891,7 @@ if 1 == 0:
         num_models=0,
         execution_time=0,
         failures=[],
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintSkipBecauseError(schema='', relation='', index=0, total=0)
     PrintModelErrorResultLine(
@@ -2880,7 +2900,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintModelResultLine(
         description='',
@@ -2888,7 +2908,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintSnapshotErrorResultLine(
         status='',
@@ -2897,7 +2917,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintSnapshotResultLine(
         status='',
@@ -2906,7 +2926,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintSeedErrorResultLine(
         status='',
@@ -2915,7 +2935,7 @@ if 1 == 0:
         execution_time=0,
         schema='',
         relation='',
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintSeedResultLine(
         status='',
@@ -2924,7 +2944,7 @@ if 1 == 0:
         execution_time=0,
         schema='',
         relation='',
-        report_node_data=''
+        report_node_data=ParsedModelNode()
     )
     PrintHookEndErrorLine(
         source_name='',
@@ -2932,7 +2952,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedHookNode()
     )
     PrintHookEndErrorStaleLine(
         source_name='',
@@ -2940,7 +2960,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedHookNode()
     )
     PrintHookEndWarnLine(
         source_name='',
@@ -2948,7 +2968,7 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedHookNode()
     )
     PrintHookEndPassLine(
         source_name='',
@@ -2956,12 +2976,12 @@ if 1 == 0:
         index=0,
         total=0,
         execution_time=0,
-        report_node_data=''
+        report_node_data=ParsedHookNode()
     )
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
     NodeStart(report_node_data=ParsedModelNode(), unique_id='')
-    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', run_result='')
+    NodeFinished(report_node_data=ParsedModelNode(), unique_id='', run_result=RunResult())
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(concurrency_line='')
     NodeCompiling(report_node_data=ParsedModelNode(), unique_id='')
