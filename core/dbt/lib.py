@@ -12,6 +12,7 @@ RuntimeArgs = namedtuple(
 def get_dbt_config(project_dir, single_threaded=False):
     from dbt.config.runtime import RuntimeConfig
     import dbt.adapters.factory
+    import dbt.events.functions
 
     if os.getenv('DBT_PROFILES_DIR'):
         profiles_dir = os.getenv('DBT_PROFILES_DIR')
@@ -28,6 +29,8 @@ def get_dbt_config(project_dir, single_threaded=False):
     dbt.adapters.factory.reset_adapters()
     # Load the relevant adapter
     dbt.adapters.factory.register_adapter(config)
+    # Set invocation id
+    dbt.events.functions.set_invocation_id()
 
     return config
 

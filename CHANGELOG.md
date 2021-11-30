@@ -9,6 +9,7 @@
 - Reorder logic for static parser sampling to speed up model parsing ([#4332](https://github.com/dbt-labs/dbt-core/pull/4332))
 - Use more augmented assignment statements ([#4315](https://github.com/dbt-labs/dbt-core/issues/4315)), ([#4311](https://github.com/dbt-labs/dbt-core/pull/4331))
 - Adjust logic when finding approximate matches for models and tests ([#3835](https://github.com/dbt-labs/dbt-core/issues/3835)), [#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
+- Restore small previous behaviors for logging: JSON formatting for first few events; `WARN`-level stdout for `list` task; include tracking events in `dbt.log` ([#4341](https://github.com/dbt-labs/dbt-core/pull/4341))
 
 Contributors:
 - [@sarah-weatherbee](https://github.com/sarah-weatherbee) ([#4331](https://github.com/dbt-labs/dbt-core/pull/4331))

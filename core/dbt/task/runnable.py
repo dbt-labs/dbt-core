@@ -189,6 +189,8 @@ class GraphRunnableTask(ManifestTask):
 
     def get_runner(self, node):
         adapter = get_adapter(self.config)
+        run_count: int = 0
+        num_nodes: int = 0
 
         if node.is_ephemeral_model:
             run_count = 0
@@ -209,7 +211,7 @@ class GraphRunnableTask(ManifestTask):
             extended_metadata = ModelMetadata(runner.node, index)
             with startctx, extended_metadata:
                 fire_event(NodeStart(unique_id=runner.node.unique_id))
-            status: Dict[str, str]
+            status: Dict[str, str] = {}
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
