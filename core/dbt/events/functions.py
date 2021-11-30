@@ -16,14 +16,15 @@ from logging.handlers import RotatingFileHandler
 import numbers
 import os
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, Deque
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
 from collections import deque
 
 # create the global event history buffer with a max size of 100k records
+# python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
 # TODO: make the maxlen something configurable from the command line via args(?)
 global EVENT_HISTORY
-EVENT_HISTORY: Deque = deque(maxlen=100000)
+EVENT_HISTORY = deque(maxlen=100000)  # type: ignore
 
 # create the global file logger with no configuration
 global FILE_LOG
@@ -290,11 +291,10 @@ def fire_event(e: Event) -> None:
     # if and only if the event history deque will be completely filled by this event
     # fire warning that old events are now being dropped
     global EVENT_HISTORY
-    if len(EVENT_HISTORY) == (100000 - 1):
-        EVENT_HISTORY.append(e)
+    if len(EVENT_HISTORY) == ((EVENT_HISTORY.maxlen or 100000) - 1):
         fire_event(EventBufferFull())
-    else:
-        EVENT_HISTORY.append(e)
+
+    EVENT_HISTORY.append(e)
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
     if flags.ENABLE_LEGACY_LOGGER:
