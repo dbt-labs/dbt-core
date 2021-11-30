@@ -1,7 +1,11 @@
+from dbt import events
+from dbt.events.functions import EVENT_HISTORY, fire_event
+from dbt.events.test_types import UnitTestInfo
 from argparse import Namespace
 from dbt.events import AdapterLogger
 from dbt.events.functions import event_to_serializable_dict
 from dbt.events.types import *
+from dbt.events.test_types import *
 from dbt.events.base_types import Event
 from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
 import inspect
@@ -77,6 +81,28 @@ class TestEventCodes(TestCase):
                 self.assertFalse(event.code in all_codes, f'{event.code} is assigned more than once. Check types.py for duplicates.')
                 all_codes.add(event.code)
 
+
+class TestEventBuffer(TestCase):
+
+    # ensure events are populated to the buffer exactly once
+    def test_buffer_populates(self):
+        fire_event(UnitTestInfo(msg="Test Event 1"))
+        fire_event(UnitTestInfo(msg="Test Event 2"))
+        self.assertTrue(
+            EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 1
+        )
+
+    # ensure events drop from the front of the buffer when buffer maxsize is reached
+    # TODO commenting out till we can make this not spit out 100k log lines.
+    # def test_buffer_FIFOs(self):
+    #     for n in range(0,100001):
+    #         fire_event(UnitTestInfo(msg=f"Test Event {n}"))
+    #     self.assertTrue(
+    #         EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
+    #     )
+    #     self.assertTrue(
+    #         EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
+    #     )
 
 def dump_callable():
     return dict()
@@ -333,7 +359,14 @@ sample_values = [
     SQlRunnerException(Exception('')),
     DropRelation(''),
     PartialParsingProjectEnvVarsChanged(),
-    RegistryProgressGETResponse('', '')
+    RegistryProgressGETResponse('', ''),
+    IntegrationTestDebug(''),
+    IntegrationTestInfo(''),
+    IntegrationTestWarn(''),
+    IntegrationTestError(''),
+    IntegrationTestException(''),
+    EventBufferFull(),
+    UnitTestInfo('')
 ]
 
 

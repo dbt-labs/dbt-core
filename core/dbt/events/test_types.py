@@ -57,6 +57,15 @@ class IntegrationTestException(ShowException, ErrorLevel, Cli):
         return f"Integration Test: {self.msg}"
 
 
+@dataclass
+class UnitTestInfo(InfoLevel, Cli):
+    msg: str
+    code: str = "T006"
+
+    def message(self) -> str:
+        return f"Unit Test: {self.msg}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -69,3 +78,4 @@ if 1 == 0:
     IntegrationTestWarn(msg='')
     IntegrationTestError(msg='')
     IntegrationTestException(msg='')
+    UnitTestInfo(msg='')
