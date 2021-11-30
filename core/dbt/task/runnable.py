@@ -210,7 +210,12 @@ class GraphRunnableTask(ManifestTask):
             index = self.index_offset(runner.node_index)
             extended_metadata = ModelMetadata(runner.node, index)
             with startctx, extended_metadata:
-                fire_event(NodeStart(unique_id=runner.node.unique_id))
+                fire_event(
+                    NodeStart(
+                        report_node_data=runner.node,
+                        unique_id=runner.node.unique_id
+                    )
+                )
             status: Dict[str, str] = {}
             try:
                 result = runner.run_with_hooks(self.manifest)
@@ -218,7 +223,12 @@ class GraphRunnableTask(ManifestTask):
             finally:
                 finishctx = TimestampNamed('node_finished_at')
                 with finishctx, DbtModelState(status):
-                    fire_event(NodeFinished(report_node_data=runner.node))
+                    fire_event(
+                        NodeFinished(
+                            report_node_data=runner.node,
+                            unique_id=runner.node.unique_id
+                        )
+                    )
 
         fail_fast = flags.FAIL_FAST
 

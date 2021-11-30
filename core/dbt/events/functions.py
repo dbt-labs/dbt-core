@@ -137,8 +137,7 @@ def event_to_serializable_dict(
                     data[field] = _json_value
                 else:
                     data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
-
-    return {
+    event_dict =  {
         'log_version': e.log_version,
         'ts': ts_fn(e.get_ts()),
         'pid': e.get_pid(),
@@ -149,6 +148,8 @@ def event_to_serializable_dict(
         'thread_name': e.get_thread_name(),
         'node_info': e.get_node_info()
     }
+
+    return event_dict
 
 
 # translates an Event to a completely formatted text-based log line

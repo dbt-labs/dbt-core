@@ -109,23 +109,6 @@ class Event(metaclass=ABCMeta):
         if not self.pid:
             self.pid = os.getpid()
         return self.pid
-    
-    def get_node_info(self) -> Dict:
-        if hasattr(self, 'report_node_data'):
-            return {
-                "type": 'node_status',
-                "node_path": self.report_node_data.path,
-                "node_name": self.report_node_data.name,
-                "resource_type": self.report_node_data.resource_type,
-                "node_materialized": self.report_node_data.config.materialized,
-                "node_started_at": "TODO",
-                "unique_id": self.report_node_data.unique_id,
-                "node_finished_at": "TODO",
-                "node_status": self.status,
-                "run_state": self.state
-            }
-        else:
-            return None
 
     # in theory threads can change so we don't cache them.
     def get_thread_name(self) -> str:
@@ -149,3 +132,19 @@ class Cli(Event, metaclass=ABCMeta):
     def cli_msg(self) -> str:
         # returns the event msg unless overriden in the concrete class
         return self.message()
+
+
+class NodeInfo(Event, metaclass=ABCMeta):
+    def get_node_info(self) -> Dict:
+        return {
+            "type": 'node_status',
+            "node_path": self.report_node_data.path,
+            "node_name": self.report_node_data.name,
+            "resource_type": self.report_node_data.resource_type,
+            "node_materialized": self.report_node_data.config.materialized,
+            "node_started_at": "TODO",
+            "unique_id": self.report_node_data.unique_id,
+            "node_finished_at": "TODO",
+            "node_status": self.status,
+            "run_state": self.state
+        }

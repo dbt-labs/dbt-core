@@ -40,13 +40,11 @@ class InformationSchema(BaseRelation):
     information_schema_view: Optional[str]
 
 
-
-
 class CompiledNode():
-    compiled_sql: Optional[str] = ...
-    extra_ctes_injected: bool = ...
-    extra_ctes: List[Any] = ...
-    relation_name: Optional[str] = ...
+    compiled_sql: Optional[str]
+    extra_ctes_injected: bool
+    extra_ctes: List[Any]
+    relation_name: Optional[str]
 
 
 class CompiledModelNode(CompiledNode):
