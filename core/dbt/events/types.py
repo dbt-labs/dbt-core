@@ -110,7 +110,8 @@ class MainEncounteredError(ErrorLevel, Cli):
 
     # overriding default json serialization for this event
     def fields_to_json(self, val: Any) -> Any:
-        if val == self.e:
+        # equality on BaseException is not good enough of a comparison here
+        if isinstance(val, BaseException):
             return str(val)
 
         return val
@@ -661,7 +662,7 @@ class AddRelation(DebugLevel, Cli, File):
 
     # overriding default json serialization for this event
     def fields_to_json(self, val: Any) -> Any:
-        if val == self.relation:
+        if isinstance(val, _CachedRelation):
             return str(val)
 
         return val
