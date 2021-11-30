@@ -1,6 +1,11 @@
 import argparse
 from dataclasses import dataclass
-from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
+from dbt.events.stubs import (
+    _CachedRelation,
+    BaseRelation,
+    CompiledModelNode,
+    _ReferenceKey
+)
 from dbt import ui
 from dbt.events.base_types import (
     Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
