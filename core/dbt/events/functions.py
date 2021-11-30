@@ -128,6 +128,7 @@ def event_to_serializable_dict(
     msg_fn: Callable[[T_Event], str]
 ) -> Dict[str, Any]:
     data = dict()
+    node_info = dict()
     if hasattr(e, '__dataclass_fields__'):
         for field, value in e.__dataclass_fields__.items():  # type: ignore[attr-defined]
             if type(value._field_type) != _FIELD_BASE:
@@ -137,11 +138,12 @@ def event_to_serializable_dict(
                     data[field] = _json_value
                 else:
                     data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
-    node_info = dict()
-    if hasattr(e, 'report_node_data'):
-        e.get_node_info()
-    
-    event_dict =  {
+        
+        if 'report_node_data' in e.__dataclass_fields__:
+            breakpoint()
+            node_info = e.get_node_info()
+
+    event_dict = {
         'type': 'log_line',
         'log_version': e.log_version,
         'ts': ts_fn(e.get_ts()),
