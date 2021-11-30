@@ -3,6 +3,7 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Dict,
 )
 
 # N.B.:
@@ -53,3 +54,19 @@ class CompiledModelNode(CompiledNode):
 
 class ParsedModelNode():
     resource_type: Any
+
+
+class ParsedHookNode():
+    resource_type: Any
+    index: Optional[int]
+
+
+class RunResult():
+    status: str
+    timing: List[Any]
+    thread_id: str
+    execution_time: float
+    adapter_response: Dict[str, Any]
+    message: Optional[str]
+    failures: Optional[int]
+    node: Any

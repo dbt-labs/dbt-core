@@ -2,7 +2,7 @@
 from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.base_types import Cli, Event, File, ShowException
+from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo
 from dbt.events.types import EventBufferFull, T_Event
 import dbt.flags as flags
 # TODO this will need to move eventually
@@ -132,7 +132,7 @@ def event_to_serializable_dict(
     node_info = dict()
     if hasattr(e, '__dataclass_fields__'):
         for field, value in e.__dataclass_fields__.items():  # type: ignore[attr-defined]
-            if field == 'report_node_data':
+            if isinstance(e, NodeInfo):
                 node_info = asdict(e.get_node_info())
             if type(value._field_type) != _FIELD_BASE:
                 _json_value = e.fields_to_json(value)
@@ -140,7 +140,7 @@ def event_to_serializable_dict(
                 if not isinstance(_json_value, Exception):
                     data[field] = _json_value
                 else:
-                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"            
+                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
 
     event_dict = {
         'type': 'log_line',
