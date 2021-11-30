@@ -3,7 +3,7 @@ from dbt.node_types import NodeType
 from typing import Optional, Union
 
 
-node_state = {
+node_states = {
     "queued": "queued",
     "skipped": "skipped",
     "started": "started",
@@ -11,7 +11,7 @@ node_state = {
     "failed": "failed"
 }
 
-node_status = {
+node_statuses = {
     "running": "running",
     "pass": "pass",
     "error": "error",
