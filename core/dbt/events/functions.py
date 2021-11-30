@@ -2,7 +2,7 @@
 from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.base_types import Cli, Event, File, ShowException
+from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo
 from dbt.events.types import EventBufferFull, T_Event
 import dbt.flags as flags
 # TODO this will need to move eventually
@@ -17,8 +17,9 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Union
-from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
+from dataclasses import _FIELD_BASE, asdict  # type: ignore[attr-defined]
 from collections import deque
+
 
 # create the global event history buffer with a max size of 100k records
 # python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
@@ -128,8 +129,11 @@ def event_to_serializable_dict(
     msg_fn: Callable[[T_Event], str]
 ) -> Dict[str, Any]:
     data = dict()
+    node_info = dict()
     if hasattr(e, '__dataclass_fields__'):
         for field, value in e.__dataclass_fields__.items():  # type: ignore[attr-defined]
+            if isinstance(e, NodeInfo):
+                node_info = asdict(e.get_node_info())
             if type(value._field_type) != _FIELD_BASE:
                 _json_value = e.fields_to_json(value)
 
@@ -138,7 +142,8 @@ def event_to_serializable_dict(
                 else:
                     data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
 
-    return {
+    event_dict = {
+        'type': 'log_line',
         'log_version': e.log_version,
         'ts': ts_fn(e.get_ts()),
         'pid': e.get_pid(),
@@ -146,8 +151,11 @@ def event_to_serializable_dict(
         'level': e.level_tag(),
         'data': data,
         'invocation_id': e.get_invocation_id(),
-        'thread_name': e.get_thread_name()
+        'thread_name': e.get_thread_name(),
+        'node_info': node_info
     }
+
+    return event_dict
 
 
 # translates an Event to a completely formatted text-based log line
@@ -254,7 +262,6 @@ def send_exc_to_logger(
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
 def fire_event(e: Event) -> None:
-
     # if and only if the event history deque will be completely filled by this event
     # fire warning that old events are now being dropped
     global EVENT_HISTORY

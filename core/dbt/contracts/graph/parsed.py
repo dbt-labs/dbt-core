@@ -194,6 +194,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
+    _event_status: Dict[str, Any] = field(default_factory=dict)
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if (os.path.basename(self.path) ==
@@ -223,6 +224,8 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
     def __post_serialize__(self, dct):
         if 'config_call_dict' in dct:
             del dct['config_call_dict']
+        if '_event_status' in dct:
+            del dct['_event_status']
         return dct
 
     @classmethod
@@ -626,6 +629,12 @@ class ParsedSourceDefinition(
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
+    _event_status: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_serialize__(self, dct):
+        if '_event_status' in dct:
+            del dct['_event_status']
+        return dct
 
     def same_database_representation(
         self, other: 'ParsedSourceDefinition'

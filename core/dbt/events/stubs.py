@@ -1,7 +1,9 @@
 from typing import (
     Any,
+    List,
     NamedTuple,
     Optional,
+    Dict,
 )
 
 # N.B.:
@@ -37,3 +39,34 @@ class BaseRelation:
 
 class InformationSchema(BaseRelation):
     information_schema_view: Optional[str]
+
+
+class CompiledNode():
+    compiled_sql: Optional[str]
+    extra_ctes_injected: bool
+    extra_ctes: List[Any]
+    relation_name: Optional[str]
+
+
+class CompiledModelNode(CompiledNode):
+    resource_type: Any
+
+
+class ParsedModelNode():
+    resource_type: Any
+
+
+class ParsedHookNode():
+    resource_type: Any
+    index: Optional[int]
+
+
+class RunResult():
+    status: str
+    timing: List[Any]
+    thread_id: str
+    execution_time: float
+    adapter_response: Dict[str, Any]
+    message: Optional[str]
+    failures: Optional[int]
+    node: Any

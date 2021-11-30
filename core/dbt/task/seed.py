@@ -27,7 +27,8 @@ class SeedRunner(ModelRunner):
             PrintStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
-                total=self.num_nodes
+                total=self.num_nodes,
+                report_node_data=self.node
             )
         )
 
@@ -50,7 +51,8 @@ class SeedRunner(ModelRunner):
                     total=self.num_nodes,
                     execution_time=result.execution_time,
                     schema=self.node.schema,
-                    relation=model.alias
+                    relation=model.alias,
+                    report_node_data=model
                 )
             )
         else:
@@ -61,7 +63,8 @@ class SeedRunner(ModelRunner):
                     total=self.num_nodes,
                     execution_time=result.execution_time,
                     schema=self.node.schema,
-                    relation=model.alias
+                    relation=model.alias,
+                    report_node_data=model
                 )
             )
 

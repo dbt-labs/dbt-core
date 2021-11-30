@@ -6,12 +6,16 @@ from dbt.events import AdapterLogger
 from dbt.events.functions import event_to_serializable_dict
 from dbt.events.types import *
 from dbt.events.test_types import *
-from dbt.events.base_types import Event
-from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey
+from dbt.events.base_types import Event, Node
+from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey, ParsedModelNode
 import inspect
 import json
+import datetime
 from unittest import TestCase
-
+from dbt.contracts.graph.parsed import (
+    ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
+)
+from dbt.contracts.files import FileHash
 
 # takes in a class and finds any subclasses for it
 def get_all_subclasses(cls):
@@ -106,6 +110,41 @@ class TestEventBuffer(TestCase):
 
 def dump_callable():
     return dict()
+    
+
+def MockNode():
+    return ParsedModelNode(
+        alias='model_one',
+        name='model_one',
+        database='dbt',
+        schema='analytics',
+        resource_type=NodeType.Model,
+        unique_id='model.root.model_one',
+        fqn=['root', 'model_one'],
+        package_name='root',
+        original_file_path='model_one.sql',
+        root_path='/usr/src/app',
+        refs=[],
+        sources=[],
+        depends_on=DependsOn(),
+        config=NodeConfig.from_dict({
+            'enabled': True,
+            'materialized': 'view',
+            'persist_docs': {},
+            'post-hook': [],
+            'pre-hook': [],
+            'vars': {},
+            'quoting': {},
+            'column_types': {},
+            'tags': [],
+        }),
+        tags=[],
+        path='model_one.sql',
+        raw_sql='',
+        description='',
+        columns={},
+        checksum=FileHash.from_contents(''),
+    )
 
 
 sample_values = [
@@ -288,34 +327,37 @@ sample_values = [
     FirstRunResultError(msg=''),
     AfterFirstRunResultError(msg=''),
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
-    PrintStartLine(description='', index=0, total=0),
-    PrintHookStartLine(statement='', index=0, total=0, truncate=False),
-    PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False),
-    SkippingDetails(resource_type='', schema='', node_name='', index=0, total=0),
-    PrintErrorTestResult(name='', index=0, num_models=0, execution_time=0),
-    PrintPassTestResult(name='', index=0, num_models=0, execution_time=0),
-    PrintWarnTestResult(name='', index=0, num_models=0, execution_time=0, failures=[]),
-    PrintFailureTestResult(name='', index=0, num_models=0, execution_time=0, failures=[]),
+    PrintStartLine(description='', index=0, total=0, report_node_data=MockNode()),
+    PrintHookStartLine(statement='', index=0, total=0, truncate=False, report_node_data=MockNode()),
+    PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False, report_node_data=MockNode()),
+    SkippingDetails(resource_type='', schema='', node_name='', index=0, total=0, report_node_data=MockNode()),
+    PrintErrorTestResult(name='', index=0, num_models=0, execution_time=0, report_node_data=MockNode()),
+    PrintPassTestResult(name='', index=0, num_models=0, execution_time=0, report_node_data=MockNode()),
+    PrintWarnTestResult(name='', index=0, num_models=0, execution_time=0, failures=[], report_node_data=MockNode()),
+    PrintFailureTestResult(name='', index=0, num_models=0, execution_time=0, failures=[], report_node_data=MockNode()),
     PrintSkipBecauseError(schema='', relation='', index=0, total=0),
-    PrintModelErrorResultLine(description='', status='', index=0, total=0, execution_time=0),
-    PrintModelResultLine(description='', status='', index=0, total=0, execution_time=0),
+    PrintModelErrorResultLine(description='', status='', index=0, total=0, execution_time=0, report_node_data=MockNode()),
+    PrintModelResultLine(description='', status='', index=0, total=0, execution_time=0, report_node_data=MockNode()),
     PrintSnapshotErrorResultLine(status='',
                                  description='',
                                  cfg={},
                                  index=0,
                                  total=0,
-                                 execution_time=0),
-    PrintSnapshotResultLine(status='', description='', cfg={}, index=0, total=0, execution_time=0),
-    PrintSeedErrorResultLine(status='', index=0, total=0, execution_time=0, schema='', relation=''),
-    PrintSeedResultLine(status='', index=0, total=0, execution_time=0, schema='', relation=''),
-    PrintHookEndErrorLine(source_name='', table_name='', index=0, total=0, execution_time=0),
-    PrintHookEndErrorStaleLine(source_name='', table_name='', index=0, total=0, execution_time=0),
-    PrintHookEndWarnLine(source_name='', table_name='', index=0, total=0, execution_time=0),
-    PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0),
+                                 execution_time=0,
+                                 report_node_data=MockNode()),
+    PrintSnapshotResultLine(status='', description='', cfg={}, index=0, total=0, execution_time=0, report_node_data=MockNode()),
+    PrintSeedErrorResultLine(status='', index=0, total=0, execution_time=0, schema='', relation='', report_node_data=MockNode()),
+    PrintSeedResultLine(status='', index=0, total=0, execution_time=0, schema='', relation='', report_node_data=MockNode()),
+    PrintHookEndErrorLine(source_name='', table_name='', index=0, total=0, execution_time=0, report_node_data=MockNode()),
+    PrintHookEndErrorStaleLine(source_name='', table_name='', index=0, total=0, execution_time=0, report_node_data=MockNode()),
+    PrintHookEndWarnLine(source_name='', table_name='', index=0, total=0, execution_time=0, report_node_data=MockNode()),
+    PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0, report_node_data=MockNode()),
     PrintCancelLine(conn_name=''),
     DefaultSelector(name=''),
-    NodeStart(unique_id=''),
-    NodeFinished(unique_id=''),
+    NodeStart(unique_id='', report_node_data=MockNode()),
+    NodeCompiling(unique_id='', report_node_data=MockNode()),
+    NodeExecuting(unique_id='', report_node_data=MockNode()),
+    NodeFinished(unique_id='', report_node_data=MockNode(), run_result=''),
     QueryCancelationUnsupported(type=''),
     ConcurrencyLine(concurrency_line=''),
     StarterProjectPath(dir=''),

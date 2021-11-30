@@ -34,7 +34,7 @@ from dbt.events.types import (
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.results import NodeStatus, RunExecutionResult
+from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     InternalException,
@@ -208,17 +208,39 @@ class GraphRunnableTask(ManifestTask):
         with RUNNING_STATE, uid_context:
             startctx = TimestampNamed('node_started_at')
             index = self.index_offset(runner.node_index)
+            runner.node._event_status['dbt_internal__started_at'] = datetime.utcnow().isoformat()
+            runner.node._event_status['node_status'] = RunningStatus.Started
             extended_metadata = ModelMetadata(runner.node, index)
+
             with startctx, extended_metadata:
-                fire_event(NodeStart(unique_id=runner.node.unique_id))
+                fire_event(
+                    NodeStart(
+                        report_node_data=runner.node,
+                        unique_id=runner.node.unique_id,
+                    )
+                )
             status: Dict[str, str] = {}
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
+                runner.node._event_status['node_status'] = result.status
+                runner.node._event_status['dbt_internal__finished_at'] = \
+                    datetime.utcnow().isoformat()
             finally:
-                finishctx = TimestampNamed('node_finished_at')
+                finishctx = TimestampNamed('finished_at')
                 with finishctx, DbtModelState(status):
-                    fire_event(NodeFinished(unique_id=runner.node.unique_id))
+                    fire_event(
+                        NodeFinished(
+                            report_node_data=runner.node,
+                            unique_id=runner.node.unique_id,
+                            run_result=result
+                        )
+                    )
+            # `_event_status` dict is only used for logging.  Make sure
+            # it gets deleted when we're done with it
+            del runner.node._event_status["dbt_internal__started_at"]
+            del runner.node._event_status["dbt_internal__finished_at"]
+            del runner.node._event_status["node_status"]
 
         fail_fast = flags.FAIL_FAST
 
