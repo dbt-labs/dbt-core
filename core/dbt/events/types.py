@@ -2649,25 +2649,14 @@ class GeneralWarningException(WarnLevel, Cli, File):
         return val
 
 
-<<<<<<< HEAD
 @dataclass
-<<<<<<< HEAD
 class EventBufferFull(WarnLevel, Cli, File):
     code: str = "Z048"
-=======
-class NodeStartModel(InfoLevel, Cli, File):
-    report_node_data: CompiledModelNode
-    code: str = "Z9999"  # TODO: set codes
-    node_status: str = node_statuses['running']
-    node_state: str = node_states['started']
->>>>>>> dd8b7320 (fixed failures)
 
     def message(self) -> str:
         return "Internal event buffer full. Earliest events will be dropped (FIFO)."
 
 
-=======
->>>>>>> 527df156 (convert to classes)
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
