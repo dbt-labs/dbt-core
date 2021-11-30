@@ -1,5 +1,7 @@
 ## dbt-core 1.0.0 (Release TBD)
 
+## dbt-core 1.0.0rc3 (November 30, 2021)
+
 ### Fixes
 - Support partial parsing of env_vars in metrics ([#4253](https://github.com/dbt-labs/dbt-core/issues/4293), [#4322](https://github.com/dbt-labs/dbt-core/pull/4322))
 - Fix typo in `UnparsedSourceDefinition.__post_serialize__` ([#3545](https://github.com/dbt-labs/dbt-core/issues/3545), [#4349](https://github.com/dbt-labs/dbt-core/pull/4349))
