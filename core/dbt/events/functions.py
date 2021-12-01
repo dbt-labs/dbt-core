@@ -167,8 +167,7 @@ def create_stdout_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) ->
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
-    level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
-    log_line: str = f"{color_tag}{ts} | [ {level} ] | {scrubbed_msg}"
+    log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"
     return log_line
 
 
@@ -181,10 +180,11 @@ def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> s
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
+    level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     thread = ''
     if threading.current_thread().getName():
         thread = f' ({threading.current_thread().getName()}):'
-    log_line = log_line + f"{color_tag}{ts}{thread} {scrubbed_msg}"
+    log_line = log_line + f"{color_tag}{ts} [{level}]{thread} {scrubbed_msg}"
     return log_line
 
 
