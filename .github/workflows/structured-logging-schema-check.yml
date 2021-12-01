@@ -63,8 +63,8 @@ jobs:
 
   # runs the schema tests
   test-schema:
-    needs: [sample-logs]
     name: Test Runner
+    needs: [sample-logs]
     runs-on: ubuntu-latest
     env:
       # turns warnings into errors
