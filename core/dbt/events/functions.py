@@ -178,7 +178,7 @@ def event_to_serializable_dict(
         "data": log_line,
         "invocation_id": e.get_invocation_id(),
         "thread_name": e.get_thread_name(),
-        'code': e.code
+        "code": e.code,
     }
 
     return event_dict
