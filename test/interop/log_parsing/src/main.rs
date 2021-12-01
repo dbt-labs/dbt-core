@@ -4,13 +4,14 @@ fn main() {}
 
 #[cfg(test)]
 mod tests {
-    use chrono::NaiveDateTime;
+    use chrono::{DateTime, Utc};
     use serde::{Deserialize, Serialize};
     use std::env;
     use std::fs::File;
     use std::io::{self, BufRead};
     use std::path::Path;
 
+    //
     trait ValueTest {
         fn value_test(&self) -> ();
     }
@@ -19,8 +20,8 @@ mod tests {
     struct LogLine {
         log_version: isize,
         r#type: String,
-        #[serde(with = "custom_date_format")]
-        ts: NaiveDateTime, // TODO how do we want to handle timezone?
+        code: String,
+        ts: DateTime<Utc>,
         pid: isize,
         msg: String,
         level: String,
@@ -53,33 +54,6 @@ mod tests {
         }
     }
 
-    // logs output timestamps like this: "2021-11-30T12:31:04.312814"
-    // which is not within the default rfc3339 + ISO8601 format because of the seconds decimal place.
-    // this requires handling the date with "%Y-%m-%dT%H:%M:%S%.6f" which requires this
-    // boilerplate-looking module.
-    mod custom_date_format {
-        use chrono::NaiveDateTime;
-        use serde::{self, Deserialize, Deserializer, Serializer};
-
-        const FORMAT: &'static str = "%Y-%m-%dT%H:%M:%S%.6f";
-
-        pub fn serialize<S>(date: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let s = format!("{}", date.format(FORMAT));
-            serializer.serialize_str(&s)
-        }
-
-        pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let s = String::deserialize(deserializer)?;
-            NaiveDateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)
-        }
-    }
-
     // TODO stub: should read from file
     fn get_input() -> Vec<String> {
         let path = env::var("LOG").expect("must pass log path to tests with env var `LOG=path/to/dbt.log`");
@@ -94,6 +68,7 @@ mod tests {
         contents 
 
         // let serialized: &str = r#"{"data": {"code": "I011","path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-11-30T12:31:04.312814","type": "log_line"}"#;
+        // let serialized: &str = r#"{"code": "I011", "data": {"path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-12-01T21:33:53.239614Z","type": "log_line"}"#;
         // vec![serialized.to_owned()]
     }
 
