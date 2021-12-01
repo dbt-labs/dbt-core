@@ -41,7 +41,7 @@ jobs:
 
   # run the performance measurements on the current or default branch
   sample-logs:
-    name: Measure Dev Branch
+    name: Sample Logs
     runs-on: ubuntu-latest
     steps:
       - name: checkout dev
