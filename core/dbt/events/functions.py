@@ -132,12 +132,12 @@ def event_to_serializable_dict(
     data = dict()
     node_info = dict()
     if hasattr(e, '__dataclass_fields__'):
+        if isinstance(e, NodeInfo):
+            node_info = dataclasses.asdict(e.get_node_info())
+
         for field, value in dataclasses.asdict(e).items():  # type: ignore[attr-defined]
             if field not in ["code", "report_node_data"]:
                 _json_value = e.fields_to_json(value)
-
-                if isinstance(e, NodeInfo):
-                    node_info = dataclasses.asdict(e.get_node_info())
 
                 if not isinstance(_json_value, Exception):
                     data[field] = _json_value
