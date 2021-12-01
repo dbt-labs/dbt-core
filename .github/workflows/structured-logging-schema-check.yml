@@ -8,7 +8,7 @@
 
 
 name: Structured Logging Schema Check
-  on:
+on:
   push:
     branches:
       - "main"
