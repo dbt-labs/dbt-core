@@ -1,0 +1,85 @@
+# This Action checks makes a dbt run to sample json structured logs
+# and checks that they conform to the currently documented schema.
+# 
+# If this action fails it either means we have unintentionally deviated
+# from our documented structured logging schema, or we need to bump the
+# version of our structured logging and add new documentation to
+# communicate these changes.
+
+
+name: Structured Logging Schema Check
+  on:
+  push:
+    branches:
+      - "main"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
+  workflow_dispatch:
+
+
+# TODO how to only do rust stuff (like fmt) when developing the rust?
+jobs:
+  # checks fmt of runner code
+  # purposefully not a dependency of any other job
+  # will block merging, but not prevent developing
+  fmt:
+    name: Cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --manifest-path performance/runner/Cargo.toml --all -- --check
+
+  # run the performance measurements on the current or default branch
+  sample-logs:
+    name: Measure Dev Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout dev
+        uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2.2.2
+        with:
+          python-version: "3.8"
+      - name: install dbt
+        run: pip install -r dev-requirements.txt -r editable-requirements.txt
+      - name: init project
+        run: dbt init -s sample_project   # TODO this project gives us a crummy sample. Upgrade.
+      - name: run dbt
+        run: cd sample_project && dbt --log-format=json --debug parse &> dbt.log # TODO make a runnable project
+      - uses: actions/upload-artifact@v2
+        with:
+          name: dbt.log
+          path: sample_project/ # TODO update this path once we really use a logfile above
+
+  # runs the schema tests
+  test-schema:
+    needs: [sample-logs]
+    name: Test Runner
+    runs-on: ubuntu-latest
+    env:
+      # turns warnings into errors
+      RUSTFLAGS: "-D warnings"
+    - uses: actions/download-artifact@v2
+        with:
+          name: dbt.log
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: dbt.log
