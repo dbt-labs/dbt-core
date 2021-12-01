@@ -55,6 +55,7 @@ jobs:
       - name: init project
         run: dbt init -s sample_project   # TODO this project gives us a crummy sample. Upgrade.
       - name: run dbt
+        continue-on-error: true  # TODO not necessary after we fix vv
         run: cd sample_project && dbt --log-format=json --debug parse &> dbt.log # TODO make a runnable project
       - uses: actions/upload-artifact@v2
         with:
