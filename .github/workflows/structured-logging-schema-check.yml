@@ -69,10 +69,10 @@ jobs:
     env:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
-    - uses: actions/download-artifact@v2
+    steps:
+      - uses: actions/download-artifact@v2
         with:
           name: dbt.log
-    steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
