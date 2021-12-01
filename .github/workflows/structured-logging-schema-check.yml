@@ -83,7 +83,7 @@ jobs:
           toolchain: stable
           override: true
       - name: ls
-        run: ls
+        run: ls /home/runner/work/dbt-core/dbt-core/
       - name: run tests
         run: LOG="/home/runner/work/dbt-core/dbt-core/dbt.log" cargo test --manifest-path test/interop/log_parsing/Cargo.toml
       # - uses: actions-rs/cargo@v1
