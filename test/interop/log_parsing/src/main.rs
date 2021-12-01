@@ -59,7 +59,12 @@ mod tests {
         let serialized: &str = r#"{"data": {"code": "I011","path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-11-30T12:31:04.312814","type": "log_line"}"#;
         vec![serialized.to_owned()]
     }
-    
+
+    fn deserialized_input(log_lines: &[String]) -> serde_json::Result<Vec<LogLine>> {
+        log_lines.into_iter().map(|log_line| {
+            serde_json::from_str::<LogLine>(log_line)
+        }).collect()
+    }
     
     fn deserialize_serialize_loop(log_lines: &[String]) -> serde_json::Result<Vec<(String, String)>> {
         log_lines.into_iter().map(|log_line| {
@@ -69,6 +74,20 @@ mod tests {
                         .map(|json| (log_line.clone(), json))
                 })
         }).collect()
+    }
+
+    #[test]
+    fn test_expected_values() {
+        let log_lines = deserialized_input(&get_input())
+            .unwrap_or_else(|_| {
+                assert!(false, "input failed to deserialize");
+                vec![] // unreachable stub
+            });
+
+        for log_line in log_lines {
+            // bumping this log version should be a well thought out decision.
+            assert_eq!(log_line.log_version, 1)
+        }
     }
 
     #[test]
