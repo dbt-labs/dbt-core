@@ -76,6 +76,8 @@ mod tests {
         }).collect()
     }
 
+    // If this test breaks we have made a change that could break downstream consumers' apps
+    // Either revert the change in dbt, or bump the log_version and add new docs to communicate the change
     #[test]
     fn test_expected_values() {
         let log_lines = deserialized_input(&get_input())
@@ -85,11 +87,26 @@ mod tests {
             });
 
         for log_line in log_lines {
-            // bumping this log version should be a well thought out decision.
-            assert_eq!(log_line.log_version, 1)
+            assert_eq!(
+                log_line.log_version, 1,
+                "The log version changed. Be sure this was intentional."
+            );
+
+            assert_eq!(
+                log_line.r#type, "log_line".to_owned(),
+                "The type value has changed. If this is intentional, bump the log version"
+            );
+
+            assert!(
+                ["debug", "info", "warn", "error"].iter().any(|level| **level == log_line.level),
+                "log level had unexpected value {}", log_line.level
+            );
         }
     }
 
+    // If this test breaks, dbt has logged a line that is out of sync with this schema version.
+    // Either conform these log lines to this schema or update this schema, bump the log_version
+    // and add new docs to communicate the change
     #[test]
     fn deserialize_serialize_is_unchanged() {
         let objects: Result<Vec<(serde_json::Value, serde_json::Value)>, serde_json::Error> = deserialize_serialize_loop(&get_input())
