@@ -17,6 +17,7 @@ on:
   pull_request:
   workflow_dispatch:
 
+jobs:
   # run the performance measurements on the current or default branch
   sample-logs:
     name: Sample Logs
