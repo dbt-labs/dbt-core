@@ -19,9 +19,14 @@ on:
 
 jobs:
   # run the performance measurements on the current or default branch
-  sample-logs:
-    name: Sample Logs
+  test-schema:
+    name: Test Log Schema
     runs-on: ubuntu-latest
+    env:
+      # turns warnings into errors
+      RUSTFLAGS: "-D warnings"
+      # points tests to the log file
+      LOG: "/home/runner/work/dbt-core/dbt-core/sample_project/dbt.log"
     steps:
       - name: checkout dev
         uses: actions/checkout@v2
@@ -29,43 +34,19 @@ jobs:
         uses: actions/setup-python@v2.2.2
         with:
           python-version: "3.8"
-      - name: install dbt
-        run: pip install -r dev-requirements.txt -r editable-requirements.txt
-      - name: init project
-        run: dbt init -s sample_project   # TODO this project gives us a crummy sample. Upgrade.
-      - name: run dbt
-        continue-on-error: true  # TODO not necessary after we fix vv
-        run: cd sample_project && dbt --log-format=json --debug parse &> dbt.log # TODO make a runnable project
-      - name: ls
-        run: ls sample_project
-      - uses: actions/upload-artifact@v2
-        with:
-          name: dbtlog
-          path: sample_project/dbt.log # TODO update this path once we really use a logfile above
-
-  # runs the schema tests
-  test-schema:
-    name: Test Log Schema
-    needs: [sample-logs]
-    runs-on: ubuntu-latest
-    env:
-      # turns warnings into errors
-      RUSTFLAGS: "-D warnings"
-    steps:
-      - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: actions/download-artifact@v2
+      - name: install dbt
+        run: pip install -r dev-requirements.txt -r editable-requirements.txt
+      - name: init project
+        run: dbt init -s sample_project   # TODO this project gives us a crummy sample. Upgrade.
+      - name: sample logs
+        continue-on-error: true  # TODO not necessary after we fix vv
+        run: cd sample_project && dbt --log-format=json --debug parse &> dbt.log # TODO make a runnable project
+      - uses: actions-rs/cargo@v1
         with:
-          name: dbtlog
-      - name: ls
-        run: ls /home/runner/work/dbt-core/dbt-core/
-      - name: run tests
-        run: LOG="/home/runner/work/dbt-core/dbt-core/dbt.log" cargo test --manifest-path test/interop/log_parsing/Cargo.toml
-      # - uses: actions-rs/cargo@v1
-      #   with:
-      #     command: test
-      #     args: LOG="./dbt.log" --manifest-path test/interop/log_parsing/Cargo.toml
+          command: test
+          args: LOG="./dbt.log" --manifest-path test/interop/log_parsing/Cargo.toml
