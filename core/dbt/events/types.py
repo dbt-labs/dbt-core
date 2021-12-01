@@ -1727,7 +1727,7 @@ class PrintStartLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     report_node_data: ParsedModelNode
-    code: str = "Z031"
+    code: str = "Q033"
 
     def message(self) -> str:
         msg = f"START {self.description}"
@@ -1745,8 +1745,8 @@ class PrintHookStartLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     truncate: bool
-    report_node_data: Any  # TODO use ParsedHookNode here
-    code: str = "Z032"
+    report_node_data: ParsedHookNode
+    code: str = "Q032"
 
     def message(self) -> str:
         msg = f"START hook: {self.statement}"
@@ -1765,7 +1765,7 @@ class PrintHookEndLine(InfoLevel, Cli, File, NodeInfo):
     total: int
     execution_time: int
     truncate: bool
-    report_node_data: Any  # TODO use ParsedHookNode here
+    report_node_data: ParsedHookNode
     code: str = "Q007"
 
     def message(self) -> str:
@@ -1786,7 +1786,7 @@ class SkippingDetails(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     report_node_data: ParsedModelNode
-    code: str = "Z033"
+    code: str = "Q034"
 
     def message(self) -> str:
         if self.resource_type in NodeType.refable():
@@ -1901,7 +1901,7 @@ class PrintModelErrorResultLine(ErrorLevel, Cli, File, NodeInfo):
     total: int
     execution_time: int
     report_node_data: ParsedModelNode
-    code: str = "Z035"
+    code: str = "Q035"
 
     def message(self) -> str:
         info = "ERROR creating"
