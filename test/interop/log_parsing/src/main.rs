@@ -1,3 +1,4 @@
+
 // main doesn't do anything. Just run the tests
 fn main() {}
 
@@ -5,6 +6,10 @@ fn main() {}
 mod tests {
     use chrono::NaiveDateTime;
     use serde::{Deserialize, Serialize};
+    use std::env;
+    use std::fs::File;
+    use std::io::{self, BufRead};
+    use std::path::Path;
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     struct LogLine {
@@ -50,8 +55,25 @@ mod tests {
 
     // TODO stub: should read from file
     fn get_input() -> Vec<String> {
-        let serialized: &str = r#"{"data": {"code": "I011","path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-11-30T12:31:04.312814","type": "log_line"}"#;
-        vec![serialized.to_owned()]
+        let path = env::var("LOG").expect("must pass log path to tests with env var `LOG=path/to/dbt.log`");
+        println!("{}", path);
+
+        let lines = read_lines(Path::new(&path))
+            .expect("Something went wrong opening the log file");
+
+        let contents = lines.into_iter().collect::<Result<Vec<String>, io::Error>>()
+            .expect("Something went wrong reading lines of the log file");
+
+        contents 
+
+        // let serialized: &str = r#"{"data": {"code": "I011","path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-11-30T12:31:04.312814","type": "log_line"}"#;
+        // vec![serialized.to_owned()]
+    }
+
+    fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+    where P: AsRef<Path>, {
+        let file = File::open(filename)?;
+        Ok(io::BufReader::new(file).lines())
     }
 
     fn deserialized_input(log_lines: &[String]) -> serde_json::Result<Vec<LogLine>> {
