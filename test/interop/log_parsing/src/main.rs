@@ -11,6 +11,10 @@ mod tests {
     use std::io::{self, BufRead};
     use std::path::Path;
 
+    trait ValueTest {
+        fn value_test(&self) -> ();
+    }
+
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     struct LogLine {
         log_version: isize,
@@ -24,6 +28,29 @@ mod tests {
         thread_name: String,
         data: serde_json::Value,      // TODO be more specific
         node_info: serde_json::Value, // TODO be more specific
+    }
+
+    impl ValueTest for LogLine {
+        fn value_test(&self){
+            assert_eq!(
+                self.log_version, 1,
+                "The log version changed. Be sure this was intentional."
+            );
+
+            assert_eq!(
+                self.r#type,
+                "log_line".to_owned(),
+                "The type value has changed. If this is intentional, bump the log version"
+            );
+
+            assert!(
+                ["debug", "info", "warn", "error"]
+                    .iter()
+                    .any(|level| **level == self.level),
+                "log level had unexpected value {}",
+                self.level
+            );
+        }
     }
 
     // logs output timestamps like this: "2021-11-30T12:31:04.312814"
@@ -106,24 +133,7 @@ mod tests {
         });
 
         for log_line in log_lines {
-            assert_eq!(
-                log_line.log_version, 1,
-                "The log version changed. Be sure this was intentional."
-            );
-
-            assert_eq!(
-                log_line.r#type,
-                "log_line".to_owned(),
-                "The type value has changed. If this is intentional, bump the log version"
-            );
-
-            assert!(
-                ["debug", "info", "warn", "error"]
-                    .iter()
-                    .any(|level| **level == log_line.level),
-                "log level had unexpected value {}",
-                log_line.level
-            );
+            log_line.value_test()
         }
     }
 
