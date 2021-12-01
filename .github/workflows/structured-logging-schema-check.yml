@@ -49,4 +49,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: LOG="./dbt.log" --manifest-path test/interop/log_parsing/Cargo.toml
+          args: --manifest-path test/interop/log_parsing/Cargo.toml
