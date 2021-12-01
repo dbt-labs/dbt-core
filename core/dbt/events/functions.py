@@ -183,7 +183,10 @@ def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> s
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     thread = ''
     if threading.current_thread().getName():
-        thread = f' ({threading.current_thread().getName()}):'
+        thread_name = threading.current_thread().getName()
+        thread_name = thread_name[:10]
+        thread_name = thread_name.ljust(10, ' ')
+        thread = f' [{thread_name}]:'
     log_line = log_line + f"{color_tag}{ts} [{level}]{thread} {scrubbed_msg}"
     return log_line
 
