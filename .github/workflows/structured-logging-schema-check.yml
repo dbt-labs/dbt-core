@@ -17,28 +17,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-
-# TODO how to only do rust stuff (like fmt) when developing the rust?
-jobs:
-  # checks fmt of runner code
-  # purposefully not a dependency of any other job
-  # will block merging, but not prevent developing
-  fmt:
-    name: Cargo fmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --manifest-path performance/runner/Cargo.toml --all -- --check
-
   # run the performance measurements on the current or default branch
   sample-logs:
     name: Sample Logs
