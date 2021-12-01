@@ -342,7 +342,7 @@ class RunTask(CompileTask):
         finishctx = TimestampNamed('node_finished_at')
 
         for idx, hook in enumerate(ordered_hooks, start=1):
-            hook._event_status['dbt_internal__started_at'] = datetime.utcnow().isoformat()
+            hook._event_status['started_at'] = datetime.utcnow().isoformat()
             hook._event_status['node_status'] = RunningStatus.Started
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
                                     extra_context)
@@ -370,7 +370,7 @@ class RunTask(CompileTask):
                                                     fetch=False)
 
                 self.ran_hooks.append(hook)
-                hook._event_status['dbt_internal__finished_at'] = datetime.utcnow().isoformat()
+                hook._event_status['finished_at'] = datetime.utcnow().isoformat()
                 with finishctx, DbtModelState({'node_status': 'passed'}):
                     hook._event_status['node_status'] = RunStatus.Success
                     fire_event(
@@ -386,8 +386,8 @@ class RunTask(CompileTask):
                     )
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
-            del hook._event_status["dbt_internal__started_at"]
-            del hook._event_status["dbt_internal__finished_at"]
+            del hook._event_status["started_at"]
+            del hook._event_status["finished_at"]
             del hook._event_status["node_status"]
 
         self._total_executed += len(ordered_hooks)
