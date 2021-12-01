@@ -64,7 +64,7 @@ jobs:
 
   # runs the schema tests
   test-schema:
-    name: Test Runner
+    name: Test Log Schema
     needs: [sample-logs]
     runs-on: ubuntu-latest
     env:
@@ -83,4 +83,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: dbt.log
+          args: dbt.log --manifest-path test/interop/log_parsing/Cargo.toml
