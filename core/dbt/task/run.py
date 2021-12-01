@@ -364,15 +364,15 @@ class RunTask(CompileTask):
 
                 status = 'OK'
 
-                
                 with Timer() as timer:
                     if len(sql.strip()) > 0:
                         status, _ = adapter.execute(sql, auto_begin=False,
                                                     fetch=False)
+
                 self.ran_hooks.append(hook)
                 hook._event_status['dbt_internal__finished_at'] = datetime.utcnow().isoformat()
                 with finishctx, DbtModelState({'node_status': 'passed'}):
-                    hook._event_status['node_status'] = NodeStatus.Pass
+                    hook._event_status['node_status'] = RunStatus.Success
                     fire_event(
                         PrintHookEndLine(
                             statement=hook_text,
