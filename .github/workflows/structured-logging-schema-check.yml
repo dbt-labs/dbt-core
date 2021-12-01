@@ -61,7 +61,7 @@ jobs:
         run: ls sample_project
       - uses: actions/upload-artifact@v2
         with:
-          name: dbt.log
+          name: dbtlog
           path: sample_project/dbt.log # TODO update this path once we really use a logfile above
 
   # runs the schema tests
@@ -73,19 +73,19 @@ jobs:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
     steps:
-      - uses: actions/download-artifact@v2
-        with:
-          name: dbt.log
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+      - uses: actions/download-artifact@v2
+        with:
+          name: log
       - name: ls
         run: ls /home/runner/work/dbt-core/dbt-core/
       - name: run tests
-        run: LOG="/home/runner/work/dbt-core/dbt-core/dbt.log" cargo test --manifest-path test/interop/log_parsing/Cargo.toml
+        run: LOG="/home/runner/work/dbt-core/dbt-core/dbtlog" cargo test --manifest-path test/interop/log_parsing/Cargo.toml
       # - uses: actions-rs/cargo@v1
       #   with:
       #     command: test
