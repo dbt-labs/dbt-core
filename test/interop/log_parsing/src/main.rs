@@ -10,6 +10,7 @@ mod tests {
     use std::fs::File;
     use std::io::{self, BufRead};
     use std::path::Path;
+    use walkdir::WalkDir;
 
     //
     trait ValueTest {
@@ -54,22 +55,30 @@ mod tests {
         }
     }
 
-    // TODO stub: should read from file
     fn get_input() -> Vec<String> {
-        let path = env::var("LOG").expect("must pass log path to tests with env var `LOG=path/to/dbt.log`");
-        println!("{}", path);
+        let log_name = "dbt.log";
 
-        let lines = read_lines(Path::new(&path))
-            .expect("Something went wrong opening the log file");
+        let path = env::var("LOG_DIR").expect("must pass log path to tests with env var `LOG_DIR=logs/live/here/`");
+        println!("Looking for files named `{}` in {}", log_name, path);
 
-        let contents = lines.into_iter().collect::<Result<Vec<String>, io::Error>>()
-            .expect("Something went wrong reading lines of the log file");
-
-        contents 
-
-        // let serialized: &str = r#"{"data": {"code": "I011","path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-11-30T12:31:04.312814","type": "log_line"}"#;
-        // let serialized: &str = r#"{"code": "I011", "data": {"path": "tests/generic/builtin.sql"},"invocation_id": "0c3303e3-2c5c-47f5-bc69-dfaae7843f6f","level": "debug","log_version": 1,"msg": "Parsing tests/generic/builtin.sql","node_info": {},"pid": 59758,"thread_name": "MainThread","ts": "2021-12-01T21:33:53.239614Z","type": "log_line"}"#;
-        // vec![serialized.to_owned()]
+        WalkDir::new(path)
+            .follow_links(true)
+            .into_iter()
+            .filter_map(|e| e.ok()) 
+            .filter_map(|e| {
+                let f_name = e.file_name().to_string_lossy();
+                if f_name.ends_with(log_name) {
+                    let lines = read_lines(e.path())
+                        .expect(&format!("Something went wrong opening the log file {}", f_name));
+                    let contents = lines.into_iter().collect::<Result<Vec<String>, io::Error>>()
+                        .expect(&format!("Something went wrong reading lines of the log file {}", f_name));
+                    Some(contents)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect()
     }
 
     fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
@@ -81,6 +90,9 @@ mod tests {
     fn deserialized_input(log_lines: &[String]) -> serde_json::Result<Vec<LogLine>> {
         log_lines
             .into_iter()
+            // if the log line isn't valid json format, toss it
+            .filter(|log_line| serde_json::from_str::<serde_json::Value>(log_line).is_ok())
+            // attempt to deserialize into our LogLine type
             .map(|log_line| serde_json::from_str::<LogLine>(log_line))
             .collect()
     }

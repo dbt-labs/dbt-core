@@ -26,26 +26,42 @@ jobs:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
       # points tests to the log file
-      LOG: "/home/runner/work/dbt-core/dbt-core/sample_project/dbt.log"
+      LOG_DIR: "/home/runner/work/dbt-core/dbt-core/logs"
+      # tells integration tests to output into json format
+      DBT_LOG_FORMAT: 'json'
     steps:
+
       - name: checkout dev
         uses: actions/checkout@v2
+
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
         with:
           python-version: "3.8"
+
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+
       - name: install dbt
         run: pip install -r dev-requirements.txt -r editable-requirements.txt
+
+      - name: Set up postgres
+        uses: ./.github/actions/setup-postgres-linux
+
+      - name: Run integration tests
+        continue-on-error: true  # we don't care if these pass, we just want the log output
+        run: tox
+
       - name: init project
         run: dbt init -s sample_project   # TODO this project gives us a crummy sample. Upgrade.
+
       - name: sample logs
         continue-on-error: true  # TODO not necessary after we fix vv
         run: cd sample_project && dbt --log-format=json --debug parse &> dbt.log # TODO make a runnable project
+
       - uses: actions-rs/cargo@v1
         with:
           command: test
