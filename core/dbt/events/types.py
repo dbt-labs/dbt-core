@@ -379,40 +379,6 @@ class SystemReportReturnCode(DebugLevel, Cli, File):
     def message(self) -> str:
         return f"command return code={self.returncode}"
 
-# TODO remove?? Not called outside of this file
-
-
-@dataclass
-class SelectorAlertUpto3UnusedNodes(InfoLevel, Cli, File):
-    node_names: List[str]
-    code: str = "I_NEED_A_CODE_5"
-
-    def message(self) -> str:
-        summary_nodes_str = ("\n  - ").join(self.node_names[:3])
-        and_more_str = (
-            f"\n  - and {len(self.node_names) - 3} more" if len(self.node_names) > 4 else ""
-        )
-        return (
-            f"\nSome tests were excluded because at least one parent is not selected. "
-            f"Use the --greedy flag to include them."
-            f"\n  - {summary_nodes_str}{and_more_str}"
-        )
-
-# TODO remove?? Not called outside of this file
-
-
-@dataclass
-class SelectorAlertAllUnusedNodes(DebugLevel, Cli, File):
-    node_names: List[str]
-    code: str = "I_NEED_A_CODE_6"
-
-    def message(self) -> str:
-        debug_nodes_str = ("\n  - ").join(self.node_names)
-        return (
-            f"Full list of tests that were excluded:"
-            f"\n  - {debug_nodes_str}"
-        )
-
 
 @dataclass
 class SelectorReportInvalidSelector(InfoLevel, Cli, File):
@@ -860,67 +826,7 @@ class InvalidVarsYAML(ErrorLevel, Cli, File):
     code: str = "A008"
 
     def message(self) -> str:
-        return "The YAML provided in the --vars argument is not valid.\n"
-
-
-# TODO: Remove? (appears to be uncalled)
-@dataclass
-class CatchRunException(ShowException, DebugLevel, Cli, File):
-    build_path: Any
-    exc: Exception
-    code: str = "I_NEED_A_CODE_1"
-
-    def message(self) -> str:
-        INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If the \
-                            error persists, open an issue at https://github.com/dbt-labs/dbt-core
-                            """.strip()
-        prefix = f'Internal error executing {self.build_path}'
-        error = "{prefix}\n{error}\n\n{note}".format(
-                prefix=ui.red(prefix),
-                error=str(self.exc).strip(),
-                note=INTERNAL_ERROR_STRING
-        )
-        return error
-
-
-# TODO: Remove? (appears to be uncalled)
-@dataclass
-class HandleInternalException(ShowException, DebugLevel, Cli, File):
-    exc: Exception
-    code: str = "I_NEED_A_CODE_2"
-
-    def message(self) -> str:
-        return str(self.exc)
-
-# TODO: Remove? (appears to be uncalled)
-
-
-@dataclass
-class MessageHandleGenericException(ErrorLevel, Cli, File):
-    build_path: str
-    unique_id: str
-    exc: Exception
-    code: str = "I_NEED_A_CODE_3"
-
-    def message(self) -> str:
-        node_description = self.build_path
-        if node_description is None:
-            node_description = self.unique_id
-        prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(
-            prefix=ui.red(prefix),
-            error=str(self.exc).strip()
-        )
-
-# TODO: Remove? (appears to be uncalled)
-
-
-@dataclass
-class DetailsHandleGenericException(ShowException, DebugLevel, Cli, File):
-    code: str = "I_NEED_A_CODE_4"
-
-    def message(self) -> str:
-        return ''
+        return "The YAML provided in the --vars argument is not valid."
 
 
 @dataclass
@@ -1564,7 +1470,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel, Cli, File):
     code: str = "M019"
 
     def message(self) -> str:
-        return ('\nUpdates available for packages: {} \
+        return ('Updates available for packages: {} \
                 \nUpdate your versions in packages.yml, then run dbt deps'.format(self.packages))
 
 
@@ -1681,7 +1587,7 @@ class ServingDocsExitInfo(InfoLevel, Cli, File):
     code: str = "Z020"
 
     def message(self) -> str:
-        return "Press Ctrl+C to exit.\n\n"
+        return "Press Ctrl+C to exit."
 
 
 @dataclass
@@ -1732,7 +1638,7 @@ class StatsLine(InfoLevel, Cli, File):
     code: str = "Z023"
 
     def message(self) -> str:
-        stats_line = ("\nDone. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}")
+        stats_line = ("Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}")
         return stats_line.format(**self.stats)
 
 
@@ -2260,11 +2166,12 @@ class QueryCancelationUnsupported(InfoLevel, Cli, File):
 
 @dataclass
 class ConcurrencyLine(InfoLevel, Cli, File):
-    concurrency_line: str
+    num_threads: int
+    target_name: str
     code: str = "Q026"
 
     def message(self) -> str:
-        return self.concurrency_line
+        return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
 @dataclass
@@ -2625,8 +2532,6 @@ if 1 == 0:
     AdapterImportError(ModuleNotFoundError())
     PluginLoadError()
     SystemReportReturnCode(returncode=0)
-    SelectorAlertUpto3UnusedNodes(node_names=[])
-    SelectorAlertAllUnusedNodes(node_names=[])
     NewConnectionOpening(connection_state='')
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
@@ -2672,8 +2577,6 @@ if 1 == 0:
     PartialParsingDeletedExposure(unique_id='')
     InvalidDisabledSourceInTestNode(msg='')
     InvalidRefInTestNode(msg='')
-    MessageHandleGenericException(build_path='', unique_id='', exc=Exception(''))
-    DetailsHandleGenericException()
     RunningOperationCaughtError(exc=Exception(''))
     RunningOperationUncaughtError(exc=Exception(''))
     DbtProjectError()
@@ -2869,7 +2772,7 @@ if 1 == 0:
     NodeStart(report_node_data=ParsedModelNode(), unique_id='')
     NodeFinished(report_node_data=ParsedModelNode(), unique_id='', run_result=RunResult())
     QueryCancelationUnsupported(type='')
-    ConcurrencyLine(concurrency_line='')
+    ConcurrencyLine(num_threads=0, target_name='')
     NodeCompiling(report_node_data=ParsedModelNode(), unique_id='')
     NodeExecuting(report_node_data=ParsedModelNode(), unique_id='')
     StarterProjectPath(dir='')
