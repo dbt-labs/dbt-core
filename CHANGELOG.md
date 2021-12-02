@@ -1,5 +1,14 @@
 ## dbt-core 1.0.0 (Release TBD)
 
+### Fixes
+- Configure the CLI logger destination to use stdout instead of stderr ([#4376](https://github.com/dbt-labs/dbt-core/pull/4376))
+
+### Under the hood
+- Only log cache events if `LOG_CACHE_EVENTS` is enabled, and disable by default. This restores previous behavior ([#4369](https://github.com/dbt-labs/dbt-core/pull/4369))
+- Move event codes to be a top-level attribute of JSON-formatted logs, rather than nested in `data` ([#4381](https://github.com/dbt-labs/dbt-core/pull/4381))
+- Fix failing integration test on Windows ([#4380](https://github.com/dbt-labs/dbt-core/pull/4380))
+- Clean up warning messages for `clean` + `deps` ([#4366](https://github.com/dbt-labs/dbt-core/pull/4366))
+
 ## dbt-core 1.0.0rc3 (November 30, 2021)
 
 ### Fixes
