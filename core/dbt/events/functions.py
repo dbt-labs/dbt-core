@@ -195,21 +195,21 @@ def create_info_text_log_line(e: T_Event) -> str:
 
 
 def create_debug_text_log_line(e: T_Event) -> str:
-    log_line: str = ''
+    log_line: str = ""
     # Create a separator if this is the beginning of an invocation
     if type(e) == MainReportVersion:
-        separator = 30 * '='
+        separator = 30 * "="
         log_line = f"\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n"
-    color_tag: str = '' if this.format_color else Style.RESET_ALL
+    color_tag: str = "" if this.format_color else Style.RESET_ALL
     ts: str = get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
-    thread = ''
+    thread = ""
     if threading.current_thread().getName():
         thread_name = threading.current_thread().getName()
         thread_name = thread_name[:10]
-        thread_name = thread_name.ljust(10, ' ')
-        thread = f' [{thread_name}]:'
+        thread_name = thread_name.ljust(10, " ")
+        thread = f" [{thread_name}]:"
     log_line = log_line + f"{color_tag}{ts} [{level}]{thread} {scrubbed_msg}"
     return log_line
 
