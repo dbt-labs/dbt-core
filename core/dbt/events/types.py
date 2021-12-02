@@ -878,7 +878,7 @@ class HandleInternalException(ShowException, DebugLevel, Cli, File):
 
 
 @dataclass
-class MessageHandleGenericException(ShowException, ErrorLevel, Cli, File):
+class MessageHandleGenericException(ErrorLevel, Cli, File):
     build_path: str
     unique_id: str
     exc: Exception
@@ -1277,7 +1277,7 @@ class InvalidRefInTestNode(WarnLevel, Cli, File):
 
 
 @dataclass
-class RunningOperationCaughtError(ShowException, ErrorLevel, Cli, File):
+class RunningOperationCaughtError(ErrorLevel, Cli, File):
     exc: Exception
     code: str = "Q001"
 
@@ -1286,7 +1286,7 @@ class RunningOperationCaughtError(ShowException, ErrorLevel, Cli, File):
 
 
 @dataclass
-class RunningOperationUncaughtError(ShowException, ErrorLevel, Cli, File):
+class RunningOperationUncaughtError(ErrorLevel, Cli, File):
     exc: Exception
     code: str = "FF01"
 
@@ -1303,7 +1303,7 @@ class DbtProjectError(ErrorLevel, Cli, File):
 
 
 @dataclass
-class DbtProjectErrorException(ShowException, ErrorLevel, Cli, File):
+class DbtProjectErrorException(ErrorLevel, Cli, File):
     exc: Exception
     code: str = "A010"
 
@@ -1320,7 +1320,7 @@ class DbtProfileError(ErrorLevel, Cli, File):
 
 
 @dataclass
-class DbtProfileErrorException(ShowException, ErrorLevel, Cli, File):
+class DbtProfileErrorException(ErrorLevel, Cli, File):
     exc: Exception
     code: str = "A012"
 
@@ -1376,7 +1376,7 @@ class CatchableExceptionOnRun(ShowException, DebugLevel, Cli, File):
 
 
 @dataclass
-class InternalExceptionOnRun(ShowException, DebugLevel, Cli, File):
+class InternalExceptionOnRun(DebugLevel, Cli, File):
     build_path: str
     exc: Exception
     code: str = "W003"
@@ -1406,7 +1406,7 @@ class PrintDebugStackTrace(ShowException, DebugLevel, Cli, File):
 
 
 @dataclass
-class GenericExceptionOnRun(ShowException, ErrorLevel, Cli, File):
+class GenericExceptionOnRun(ErrorLevel, Cli, File):
     build_path: str
     unique_id: str
     exc: Exception
@@ -2501,7 +2501,7 @@ class GeneralWarningMsg(WarnLevel, Cli, File):
 
 
 @dataclass
-class GeneralWarningException(ShowException, WarnLevel, Cli, File):
+class GeneralWarningException(WarnLevel, Cli, File):
     exc: Exception
     log_fmt: str
     code: str = "Z047"
