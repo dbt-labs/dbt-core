@@ -221,24 +221,22 @@ def track_run(task):
 def run_from_args(parsed):
     log_cache_events(getattr(parsed, 'log_cache_events', False))
 
-    # we can now use the logger for stdout
-    # set log_format in the logger
-    # if 'list' task: set stdout to WARN instead of INFO
-    level_override = parsed.cls.pre_init_hook(parsed)
-
-    fire_event(MainReportVersion(v=str(dbt.version.installed)))
-
     # this will convert DbtConfigErrors into RuntimeExceptions
     # task could be any one of the task objects
     task = parsed.cls.from_args(args=parsed)
-    fire_event(MainReportArgs(args=parsed))
 
+    # Set up logging
     log_path = None
     if task.config is not None:
         log_path = getattr(task.config, 'log_path', None)
-    # we can finally set the file logger up
     log_manager.set_path(log_path)
+    # if 'list' task: set stdout to WARN instead of INFO
+    level_override = parsed.cls.pre_init_hook(parsed)
     setup_event_logger(log_path or 'logs', level_override)
+
+    fire_event(MainReportVersion(v=str(dbt.version.installed)))
+    fire_event(MainReportArgs(args=parsed))
+
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true
         fire_event(MainTrackingUserState(dbt.tracking.active_user.state()))
 
