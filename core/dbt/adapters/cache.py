@@ -1,8 +1,8 @@
 import threading
-from collections import namedtuple
 from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+from dbt.adapters.reference_keys import _make_key, _ReferenceKey
 import dbt.exceptions
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -21,18 +21,6 @@ from dbt.events.types import (
     UpdateReference
 )
 from dbt.utils import lowercase
-
-_ReferenceKey = namedtuple('_ReferenceKey', 'database schema identifier')
-
-
-def _make_key(relation) -> _ReferenceKey:
-    """Make _ReferenceKeys with lowercase values for the cache so we don't have
-    to keep track of quoting
-    """
-    # databases and schemas can both be None
-    return _ReferenceKey(lowercase(relation.database),
-                         lowercase(relation.schema),
-                         lowercase(relation.identifier))
 
 
 def dot_separated(key: _ReferenceKey) -> str:
@@ -334,7 +322,7 @@ class RelationsCache:
         :param BaseRelation relation: The underlying relation.
         """
         cached = _CachedRelation(relation)
-        fire_event(AddRelation(relation=cached))
+        fire_event(AddRelation(relation=_make_key(cached)))
         fire_event(DumpBeforeAddGraph(dump=self.dump_graph()))
 
         with self.lock:
