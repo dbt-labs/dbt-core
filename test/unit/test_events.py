@@ -1,19 +1,20 @@
-from dbt import events
-from dbt.events.functions import EVENT_HISTORY, fire_event
+
 from dbt.events.test_types import UnitTestInfo
 from argparse import Namespace
 from dbt.events import AdapterLogger
 from dbt.events.functions import event_to_serializable_dict
 from dbt.events.types import *
 from dbt.events.test_types import *
-from dbt.events.base_types import Event, Node
+from dbt.events.base_types import Event
 from dbt.events.stubs import _CachedRelation, BaseRelation, _ReferenceKey, ParsedModelNode
+from importlib import reload
+import dbt.events.functions as event_funcs
+import dbt.flags as flags
 import inspect
 import json
-import datetime
 from unittest import TestCase
 from dbt.contracts.graph.parsed import (
-    ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
+    ParsedModelNode, NodeConfig, DependsOn
 )
 from dbt.contracts.files import FileHash
 
@@ -88,25 +89,29 @@ class TestEventCodes(TestCase):
 
 class TestEventBuffer(TestCase):
 
+    def setUp(self) -> None:
+        flags.EVENT_BUFFER_SIZE = 10
+        reload(event_funcs)
+
     # ensure events are populated to the buffer exactly once
     def test_buffer_populates(self):
-        fire_event(UnitTestInfo(msg="Test Event 1"))
-        fire_event(UnitTestInfo(msg="Test Event 2"))
+        event_funcs.fire_event(UnitTestInfo(msg="Test Event 1"))
+        event_funcs.fire_event(UnitTestInfo(msg="Test Event 2"))
         self.assertTrue(
-            EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 1
+            event_funcs.EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 1
         )
 
     # ensure events drop from the front of the buffer when buffer maxsize is reached
-    # TODO commenting out till we can make this not spit out 100k log lines.
-    # def test_buffer_FIFOs(self):
-    #     for n in range(0,100001):
-    #         fire_event(UnitTestInfo(msg=f"Test Event {n}"))
-    #     self.assertTrue(
-    #         EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
-    #     )
-    #     self.assertTrue(
-    #         EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
-    #     )
+    def test_buffer_FIFOs(self):
+        for n in range(0,(flags.EVENT_BUFFER_SIZE + 1)):
+            event_funcs.fire_event(UnitTestInfo(msg=f"Test Event {n}"))
+        
+        self.assertTrue(
+            event_funcs.EVENT_HISTORY.count(EventBufferFull(code='Z048')) == 1
+        )
+        self.assertTrue(
+             event_funcs.EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
+         )
 
 def MockNode():
     return ParsedModelNode(
