@@ -4,8 +4,8 @@ from dbt.adapters.reference_keys import _make_key, _ReferenceKey
 from dbt.events.stubs import (
     _CachedRelation,
     BaseRelation,
-    ParsedModelNode,
     ParsedHookNode,
+    ParsedModelNode,
     RunResult
 )
 from dbt import ui
@@ -1745,7 +1745,7 @@ class PrintHookStartLine(InfoLevel, Cli, File, NodeInfo):
     index: int
     total: int
     truncate: bool
-    report_node_data: ParsedHookNode
+    report_node_data: Any  # TODO: resolve ParsedHookNode circular import
     code: str = "Q032"
 
     def message(self) -> str:
@@ -1765,7 +1765,7 @@ class PrintHookEndLine(InfoLevel, Cli, File, NodeInfo):
     total: int
     execution_time: int
     truncate: bool
-    report_node_data: ParsedHookNode
+    report_node_data: Any  # TODO: resolve ParsedHookNode circular import
     code: str = "Q007"
 
     def message(self) -> str:

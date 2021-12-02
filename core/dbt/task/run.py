@@ -364,8 +364,7 @@ class RunTask(CompileTask):
 
                 with Timer() as timer:
                     if len(sql.strip()) > 0:
-                        response, _ = adapter.execute(sql, auto_begin=False,
-                                                    fetch=False)
+                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
                         status = response._message
                     else:
                         status = 'OK'
