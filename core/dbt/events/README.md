@@ -10,8 +10,8 @@ In `events.types` add a new class that represents the new event. All events must
 
 ## Required for Every Event
 
-- A unique `code` that indicates the type
-- a loglevel
+- a string attribute `code`, that's unique across events
+- assign a log level by extending `DebugLevel`, `InfoLevel`, `WarnLevel`, or `ErrorLevel`
 - a message()
 - extend `File` and/or `Cli` based on where it should output
 
