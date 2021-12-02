@@ -38,7 +38,7 @@ class CleanTask(BaseTask):
         """
         move_to_nearest_project_dir(self.args)
         if ('dbt_modules' in self.config.clean_targets and
-           self.config.packages_install_path != 'dbt_modules'):
+           self.config.packages_install_path not in self.config.clean_targets):
             deprecations.warn('install-packages-path')
         for path in self.config.clean_targets:
             fire_event(CheckCleanPath(path=path))

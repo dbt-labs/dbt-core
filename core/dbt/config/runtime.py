@@ -545,8 +545,12 @@ class UnsetProfileConfig(RuntimeConfig):
                 args, profile_renderer, profile_name
             )
         except (DbtProjectError, DbtProfileError) as exc:
+            selected_profile_name = Profile.pick_profile_name(
+                args_profile_name=getattr(args, 'profile', None),
+                project_profile_name=profile_name
+            )
             fire_event(ProfileLoadError(exc=exc))
-            fire_event(ProfileNotFound(profile_name=profile_name))
+            fire_event(ProfileNotFound(profile_name=selected_profile_name))
             # return the poisoned form
             profile = UnsetProfile()
             # disable anonymous usage statistics
