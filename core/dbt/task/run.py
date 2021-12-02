@@ -362,12 +362,13 @@ class RunTask(CompileTask):
                         )
                     )
 
-                status = 'OK'
-
                 with Timer() as timer:
                     if len(sql.strip()) > 0:
-                        status, _ = adapter.execute(sql, auto_begin=False,
+                        response, _ = adapter.execute(sql, auto_begin=False,
                                                     fetch=False)
+                        status = response._message
+                    else:
+                        status = 'OK'
 
                 self.ran_hooks.append(hook)
                 hook._event_status['finished_at'] = datetime.utcnow().isoformat()
@@ -376,7 +377,7 @@ class RunTask(CompileTask):
                     fire_event(
                         PrintHookEndLine(
                             statement=hook_text,
-                            status=str(status),
+                            status=status,
                             index=idx,
                             total=num_hooks,
                             execution_time=timer.elapsed,

@@ -543,7 +543,7 @@ class SQLQuery(DebugLevel, Cli, File):
 
 @dataclass
 class SQLQueryStatus(DebugLevel, Cli, File):
-    status: str  # could include AdapterResponse if we resolve circular imports
+    status: str
     elapsed: float
     code: str = "E017"
 

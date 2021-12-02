@@ -59,8 +59,7 @@ class FreshnessRunner(BaseRunner):
                     table_name=table_name,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    report_node_data=self.node
+                    execution_time=result.execution_time
                 )
             )
         elif result.status == FreshnessStatus.Error:
@@ -70,8 +69,7 @@ class FreshnessRunner(BaseRunner):
                     table_name=table_name,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    report_node_data=self.node
+                    execution_time=result.execution_time
                 )
             )
         elif result.status == FreshnessStatus.Warn:
@@ -81,8 +79,7 @@ class FreshnessRunner(BaseRunner):
                     table_name=table_name,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    report_node_data=self.node
+                    execution_time=result.execution_time
                 )
             )
         else:
@@ -92,8 +89,7 @@ class FreshnessRunner(BaseRunner):
                     table_name=table_name,
                     index=self.node_index,
                     total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    report_node_data=self.node
+                    execution_time=result.execution_time
                 )
             )
 
