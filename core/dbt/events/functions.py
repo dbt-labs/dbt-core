@@ -25,9 +25,8 @@ from collections import deque
 
 # create the global event history buffer with a max size of 100k records
 # python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
-# TODO: make the maxlen something configurable from the command line via args(?)
 global EVENT_HISTORY
-EVENT_HISTORY = deque(maxlen=100000)  # type: ignore
+EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
 # create the global file logger with no configuration
 global FILE_LOG
@@ -310,13 +309,15 @@ def fire_event(e: Event) -> None:
     # skip logs when `--log-cache-events` is not passed
     if isinstance(e, Cache) and not flags.LOG_CACHE_EVENTS:
         return
+
     # if and only if the event history deque will be completely filled by this event
     # fire warning that old events are now being dropped
     global EVENT_HISTORY
-    if len(EVENT_HISTORY) == ((EVENT_HISTORY.maxlen or 100000) - 1):
+    if len(EVENT_HISTORY) == (flags.EVENT_BUFFER_SIZE - 1):
+        EVENT_HISTORY.append(e)
         fire_event(EventBufferFull())
-
-    EVENT_HISTORY.append(e)
+    else:
+        EVENT_HISTORY.append(e)
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
     if flags.ENABLE_LEGACY_LOGGER:
