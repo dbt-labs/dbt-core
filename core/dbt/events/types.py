@@ -617,6 +617,7 @@ class SchemaCreation(DebugLevel, Cli, File):
     def asdict(cls, data: list) -> dict:
         return dict((k, str(v)) for k, v in data)
 
+
 @dataclass
 class SchemaDrop(DebugLevel, Cli, File):
     relation: BaseRelation
@@ -694,8 +695,9 @@ class DropCascade(DebugLevel, Cli, File, Cache):
             if isinstance(v, list):
                 d[k] = [str(x) for x in v]
             else:
-                d[k] = str(v)
+                d[k] = str(v)  # type: ignore
         return d
+
 
 @dataclass
 class DropRelation(DebugLevel, Cli, File, Cache):
