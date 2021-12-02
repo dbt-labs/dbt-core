@@ -56,6 +56,7 @@ from dbt.parser.manifest import ManifestLoader
 import dbt.exceptions
 from dbt import flags
 import dbt.utils
+from dbt.ui import warning_tag
 
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
@@ -377,10 +378,8 @@ class GraphRunnableTask(ManifestTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
-        text = "Concurrency: {} threads (target='{}')"
-        concurrency_line = text.format(num_threads, target_name)
         with NodeCount(self.num_nodes):
-            fire_event(ConcurrencyLine(concurrency_line=concurrency_line))
+            fire_event(ConcurrencyLine(num_threads=num_threads, target_name=target_name))
         with TextOnly():
             fire_event(EmptyLine())
 
@@ -461,8 +460,11 @@ class GraphRunnableTask(ManifestTask):
             )
 
         if len(self._flattened_nodes) == 0:
-            warn_or_error("\nWARNING: Nothing to do. Try checking your model "
-                          "configs and model specification args")
+            with TextOnly():
+                fire_event(EmptyLine())
+            msg = "Nothing to do. Try checking your model " \
+                  "configs and model specification args"
+            warn_or_error(msg, log_fmt=warning_tag('{}'))
             result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),

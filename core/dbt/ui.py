@@ -66,6 +66,4 @@ def line_wrap_message(
 
 
 def warning_tag(msg: str) -> str:
-    # no longer needed, since new logging includes colorized log level
-    # return f'[{yellow("WARNING")}]: {msg}'
-    return msg
+    return f'[{yellow("WARNING")}]: {msg}'
