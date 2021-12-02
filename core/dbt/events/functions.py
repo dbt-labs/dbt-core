@@ -132,18 +132,25 @@ def event_to_serializable_dict(
 ) -> Dict[str, Any]:
     data = dict()
     node_info = dict()
-    if hasattr(e, '__dataclass_fields__'):
-        if isinstance(e, NodeInfo):
-            node_info = dataclasses.asdict(e.get_node_info())
+    log_line = dict()
+    try:
+        log_line = dataclasses.asdict(e, dict_factory=type(e).asdict)
+    except AttributeError:
+        event_type = type(e).__name__
+        raise Exception(  # TODO this may hang async threads
+            f"type {event_type} is not serializable to json."
+            f" First make sure that the call sites for {event_type} match the type hints"
+            f" and if they do, you can override the dataclass method `asdict` in {event_type} in"
+            " types.py to define your own serialization function to a dictionary of valid json"
+            " types"
+        )
 
-        for field, value in dataclasses.asdict(e).items():  # type: ignore[attr-defined]
-            if field not in ["code", "report_node_data"]:
-                _json_value = e.fields_to_json(value)
+    if isinstance(e, NodeInfo):
+        node_info = dataclasses.asdict(e.get_node_info())
 
-                if not isinstance(_json_value, Exception):
-                    data[field] = _json_value
-                else:
-                    data[field] = f"JSON_SERIALIZE_FAILED: {type(value).__name__, 'NA'}"
+    for field, value in log_line.items():  # type: ignore[attr-defined]
+        if field not in ["code", "report_node_data"]:
+            data[field] = value
 
     event_dict = {
         'type': 'log_line',
