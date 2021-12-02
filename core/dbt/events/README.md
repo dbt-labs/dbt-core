@@ -6,7 +6,53 @@ The Events module is the implmentation for structured logging. These events repr
 The event module provides types that represent what is happening in dbt in `events.types`. These types are intended to represent an exhaustive list of all things happening within dbt that will need to be logged, streamed, or printed. To fire an event, `events.functions::fire_event` is the entry point to the module from everywhere in dbt.
 
 # Adding a New Event
-In `events.types` add a new class that represents the new event. This may be a simple class with no values, or it may be a dataclass with some values to construct downstream messaging. Only include the data necessary to construct this message within this class. You must extend all destinations (e.g. - if your log message belongs on the cli, extend `CliEventABC`) as well as the loglevel this event belongs to.
+In `events.types` add a new class that represents the new event. All events must be a dataclass with, at minimum, a code.  You may also include some other values to construct downstream messaging. Only include the data necessary to construct this message within this class. You must extend all destinations (e.g. - if your log message belongs on the cli, extend `Cli`) as well as the loglevel this event belongs to.  This system has been designed to take full advantage of mypy so running it will catch anything you may miss.
+
+## Required for Every Event
+
+- a string attribute `code`, that's unique across events
+- assign a log level by extending `DebugLevel`, `InfoLevel`, `WarnLevel`, or `ErrorLevel`
+- a message()
+- extend `File` and/or `Cli` based on where it should output
+
+Example
+```
+@dataclass
+class PartialParsingDeletedExposure(DebugLevel, Cli, File):
+    unique_id: str
+    code: str = "I049"
+
+    def message(self) -> str:
+        return f"Partial parsing: deleted exposure {self.unique_id}"
+
+```
+
+## Optional (based on your event)
+
+- Events associated with node status changes must have `report_node_data` passed in and be extended with `NodeInfo`
+- define `asdict` if your data is not serializable to json
+
+Example
+```
+@dataclass
+class SuperImportantNodeEvent(InfoLevel, File, NodeInfo):
+    node_name: str
+    run_result: RunResult
+    report_node_data: ParsedModelNode  # may vary
+    code: str = "Q036"
+
+    def message(self) -> str:
+        return f"{self.node_name} had overly verbose result of {run_result}"
+
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
+
+```
+
+All values other than `code` and `report_node_data` will be included in the `data` node of the json log output.
+
+Once your event has been added, add a dummy call to your new event at the bottom of `types.py` and also add your new Event to the list `sample_values` in `test/unit/test_events.py'.
 
 # Adapter Maintainers
 To integrate existing log messages from adapters, you likely have a line of code like this in your adapter already:
