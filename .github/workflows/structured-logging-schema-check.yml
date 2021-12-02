@@ -51,17 +51,13 @@ jobs:
       - name: Set up postgres
         uses: ./.github/actions/setup-postgres-linux
 
+      # integration tests generate a ton of logs in different files. the next step will find them all.
+      # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        continue-on-error: true  # we don't care if these pass, we just want the log output
-        run: tox
+        run: tox -e py38-postgres
 
-      - name: init project
-        run: dbt init -s sample_project   # TODO this project gives us a crummy sample. Upgrade.
-
-      - name: sample logs
-        continue-on-error: true  # TODO not necessary after we fix vv
-        run: cd sample_project && dbt --log-format=json --debug parse &> dbt.log # TODO make a runnable project
-
+      # apply our schema tests to every log event from the previous step
+      # skips any output that isn't valid json
       - uses: actions-rs/cargo@v1
         with:
           command: test
