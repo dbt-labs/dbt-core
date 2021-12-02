@@ -115,14 +115,6 @@ class MainEncounteredError(ErrorLevel, Cli):
     def message(self) -> str:
         return f"Encountered an error:\n{str(self.e)}"
 
-    # overriding default json serialization for this event
-    def fields_to_json(self, val: Any) -> Any:
-        # equality on BaseException is not good enough of a comparison here
-        if isinstance(val, BaseException):
-            return str(val)
-
-        return val
-
 
 @dataclass
 class MainStackTrace(DebugLevel, Cli):
@@ -150,12 +142,11 @@ class MainReportArgs(DebugLevel, Cli, File):
     def message(self):
         return f"running dbt with arguments {str(self.args)}"
 
-    # overriding default json serialization for this event
-    def fields_to_json(self, val: Any) -> Any:
-        if isinstance(val, argparse.Namespace):
-            return str(val)
-
-        return val
+    def asdict(self) -> dict:
+        return {
+            'code': self.code,
+            'args': str(self.args)
+        }
 
 
 @dataclass
@@ -353,13 +344,6 @@ class SystemCouldNotWrite(DebugLevel, Cli, File):
             f"Could not write to path {self.path}({len(self.path)} characters): "
             f"{self.reason}\nexception: {self.exc}"
         )
-
-    # overriding default json serialization for this event
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -667,12 +651,11 @@ class AddRelation(DebugLevel, Cli, File, Cache):
     def message(self) -> str:
         return f"Adding relation: {str(self.relation)}"
 
-    # overriding default json serialization for this event
-    def fields_to_json(self, val: Any) -> Any:
-        if isinstance(val, _CachedRelation):
-            return str(val)
-
-        return val
+    def asdict(self) -> dict:
+        return {
+            'code': self.code,
+            'relation': str(self.relation)
+        }
 
 
 @dataclass
@@ -782,11 +765,11 @@ class AdapterImportError(InfoLevel, Cli, File):
     def message(self) -> str:
         return f"Error importing adapter: {self.exc}"
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val())
-
-        return val
+    def asdict(self) -> dict:
+        return {
+            'code': self.code,
+            'exc': str(self.exc)
+        }
 
 
 @dataclass
@@ -842,12 +825,6 @@ class ProfileLoadError(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return f"Profile not loaded due to error: {self.exc}"
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 
 @dataclass
 class ProfileNotFound(InfoLevel, Cli, File):
@@ -885,12 +862,6 @@ class CatchRunException(ShowException, DebugLevel, Cli, File):
         )
         return error
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 
 # TODO: Remove? (appears to be uncalled)
 @dataclass
@@ -901,17 +872,11 @@ class HandleInternalException(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return str(self.exc)
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 # TODO: Remove? (appears to be uncalled)
 
 
 @dataclass
-class MessageHandleGenericException(ErrorLevel, Cli, File):
+class MessageHandleGenericException(ShowException, ErrorLevel, Cli, File):
     build_path: str
     unique_id: str
     exc: Exception
@@ -926,12 +891,6 @@ class MessageHandleGenericException(ErrorLevel, Cli, File):
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 # TODO: Remove? (appears to be uncalled)
 
@@ -1109,12 +1068,6 @@ class ParsedFileLoadFailed(ShowException, DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -1322,33 +1275,21 @@ class InvalidRefInTestNode(WarnLevel, Cli, File):
 
 
 @dataclass
-class RunningOperationCaughtError(ErrorLevel, Cli, File):
+class RunningOperationCaughtError(ShowException, ErrorLevel, Cli, File):
     exc: Exception
     code: str = "Q001"
 
     def message(self) -> str:
         return f'Encountered an error while running operation: {self.exc}'
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 
 @dataclass
-class RunningOperationUncaughtError(ErrorLevel, Cli, File):
+class RunningOperationUncaughtError(ShowException, ErrorLevel, Cli, File):
     exc: Exception
     code: str = "FF01"
 
     def message(self) -> str:
         return f'Encountered an error while running operation: {self.exc}'
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -1360,18 +1301,12 @@ class DbtProjectError(ErrorLevel, Cli, File):
 
 
 @dataclass
-class DbtProjectErrorException(ErrorLevel, Cli, File):
+class DbtProjectErrorException(ShowException, ErrorLevel, Cli, File):
     exc: Exception
     code: str = "A010"
 
     def message(self) -> str:
         return f"  ERROR: {str(self.exc)}"
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -1383,18 +1318,12 @@ class DbtProfileError(ErrorLevel, Cli, File):
 
 
 @dataclass
-class DbtProfileErrorException(ErrorLevel, Cli, File):
+class DbtProfileErrorException(ShowException, ErrorLevel, Cli, File):
     exc: Exception
     code: str = "A012"
 
     def message(self) -> str:
         return f"  ERROR: {str(self.exc)}"
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -1443,15 +1372,9 @@ class CatchableExceptionOnRun(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return str(self.exc)
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 
 @dataclass
-class InternalExceptionOnRun(DebugLevel, Cli, File):
+class InternalExceptionOnRun(ShowException, DebugLevel, Cli, File):
     build_path: str
     exc: Exception
     code: str = "W003"
@@ -1469,12 +1392,6 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
             note=INTERNAL_ERROR_STRING
         )
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 
 # This prints the stack trace at the debug level while allowing just the nice exception message
 # at the error level - or whatever other level chosen.  Used in multiple places.
@@ -1487,7 +1404,7 @@ class PrintDebugStackTrace(ShowException, DebugLevel, Cli, File):
 
 
 @dataclass
-class GenericExceptionOnRun(ErrorLevel, Cli, File):
+class GenericExceptionOnRun(ShowException, ErrorLevel, Cli, File):
     build_path: str
     unique_id: str
     exc: Exception
@@ -1503,12 +1420,6 @@ class GenericExceptionOnRun(ErrorLevel, Cli, File):
             error=str(self.exc).strip()
         )
 
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
-
 
 @dataclass
 class NodeConnectionReleaseError(ShowException, DebugLevel, Cli, File):
@@ -1519,12 +1430,6 @@ class NodeConnectionReleaseError(ShowException, DebugLevel, Cli, File):
     def message(self) -> str:
         return ('Error releasing connection for node {}: {!s}'
                 .format(self.node_name, self.exc))
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -1845,12 +1750,6 @@ class SQlRunnerException(ShowException, DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f"Got an exception: {self.exc}"
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
@@ -2596,7 +2495,7 @@ class GeneralWarningMsg(WarnLevel, Cli, File):
 
 
 @dataclass
-class GeneralWarningException(WarnLevel, Cli, File):
+class GeneralWarningException(ShowException, WarnLevel, Cli, File):
     exc: Exception
     log_fmt: str
     code: str = "Z047"
@@ -2605,12 +2504,6 @@ class GeneralWarningException(WarnLevel, Cli, File):
         if self.log_fmt is not None:
             return self.log_fmt.format(str(self.exc))
         return str(self.exc)
-
-    def fields_to_json(self, val: Any) -> Any:
-        if val == self.exc:
-            return str(val)
-
-        return val
 
 
 @dataclass
