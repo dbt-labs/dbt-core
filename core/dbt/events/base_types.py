@@ -130,8 +130,12 @@ class Event(metaclass=ABCMeta):
     def asdict(cls, data: list) -> dict:
         d = dict()
         for k, v in data:
-            if isinstance(v, Exception):
+            # stringify all exceptions
+            if isinstance(v, Exception) or isinstance(v, BaseException):
                 d[k] = str(v)
+            # skip all binary data
+            elif isinstance(v, bytes):
+                continue
             else:
                 d[k] = v
         return d

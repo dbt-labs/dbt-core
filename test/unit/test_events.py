@@ -108,10 +108,6 @@ class TestEventBuffer(TestCase):
     #         EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
     #     )
 
-def dump_callable():
-    return dict()
-    
-
 def MockNode():
     return ParsedModelNode(
         alias='model_one',
@@ -221,10 +217,10 @@ sample_values = [
         old_key=_ReferenceKey(database="", schema="", identifier=""),
         new_key=_ReferenceKey(database="", schema="", identifier="")
     ),
-    DumpBeforeAddGraph(dump_callable),
-    DumpAfterAddGraph(dump_callable),
-    DumpBeforeRenameSchema(dump_callable),
-    DumpAfterRenameSchema(dump_callable),
+    DumpBeforeAddGraph(dict()),
+    DumpAfterAddGraph(dict()),
+    DumpBeforeRenameSchema(dict()),
+    DumpAfterRenameSchema(dict()),
     AdapterImportError(ModuleNotFoundError()),
     PluginLoadError(),
     SystemReportReturnCode(returncode=0),
@@ -429,7 +425,7 @@ class TestEventJSONSerialization(TestCase):
 
         # if we have everything we need to test, try to serialize everything
         for event in sample_values:
-            d = event_to_serializable_dict(event, lambda dt: dt.isoformat(), lambda x: x.message())
+            d = event_to_serializable_dict(event, lambda _: event.get_ts_rfc3339(), lambda x: x.message())
             try:
                 json.dumps(d)
             except TypeError as e:

@@ -613,6 +613,9 @@ class SchemaCreation(DebugLevel, Cli, File):
     def message(self) -> str:
         return f'Creating schema "{self.relation}"'
 
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
 
 @dataclass
 class SchemaDrop(DebugLevel, Cli, File):
@@ -621,6 +624,10 @@ class SchemaDrop(DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f'Dropping schema "{self.relation}".'
+
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
 
 
 # TODO pretty sure this is only ever called in dead code
@@ -680,6 +687,15 @@ class DropCascade(DebugLevel, Cli, File, Cache):
     def message(self) -> str:
         return f"drop {self.dropped} is cascading to {self.consequences}"
 
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        d = dict()
+        for k, v in data:
+            if isinstance(v, list):
+                d[k] = [str(x) for x in v]
+            else:
+                d[k] = str(v)
+        return d
 
 @dataclass
 class DropRelation(DebugLevel, Cli, File, Cache):
