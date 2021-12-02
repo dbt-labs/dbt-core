@@ -5,6 +5,7 @@ import dbt.clients.agate_helper
 from dbt.contracts.connection import Connection
 import dbt.exceptions
 from dbt.adapters.base import BaseAdapter, available
+from dbt.adapters.cache import _make_key
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.events.functions import fire_event
 from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
@@ -182,7 +183,7 @@ class SQLAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        fire_event(SchemaCreation(relation=relation))
+        fire_event(SchemaCreation(relation=_make_key(relation)))
         kwargs = {
             'relation': relation,
         }
@@ -193,7 +194,7 @@ class SQLAdapter(BaseAdapter):
 
     def drop_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        fire_event(SchemaDrop(relation=relation))
+        fire_event(SchemaDrop(relation=_make_key(relation)))
         kwargs = {
             'relation': relation,
         }

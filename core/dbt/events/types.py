@@ -1,11 +1,11 @@
 import argparse
 from dataclasses import dataclass
+from dbt.adapters.reference_keys import _make_key, _ReferenceKey
 from dbt.events.stubs import (
     _CachedRelation,
     BaseRelation,
     ParsedModelNode,
     ParsedHookNode,
-    _ReferenceKey,
     RunResult
 )
 from dbt import ui
@@ -506,7 +506,7 @@ class CacheMiss(DebugLevel, Cli, File):
 class ListRelations(DebugLevel, Cli, File):
     database: Optional[str]
     schema: str
-    relations: List[BaseRelation]
+    relations: List[_ReferenceKey]
     code: str = "E014"
 
     def message(self) -> str:
@@ -573,20 +573,16 @@ class ColTypeChange(DebugLevel, Cli, File):
 
 @dataclass
 class SchemaCreation(DebugLevel, Cli, File):
-    relation: BaseRelation
+    relation: _ReferenceKey
     code: str = "E020"
 
     def message(self) -> str:
         return f'Creating schema "{self.relation}"'
 
-    @classmethod
-    def asdict(cls, data: list) -> dict:
-        return dict((k, str(v)) for k, v in data)
-
 
 @dataclass
 class SchemaDrop(DebugLevel, Cli, File):
-    relation: BaseRelation
+    relation: _ReferenceKey
     code: str = "E021"
 
     def message(self) -> str:
@@ -625,15 +621,11 @@ class AddLink(DebugLevel, Cli, File, Cache):
 
 @dataclass
 class AddRelation(DebugLevel, Cli, File, Cache):
-    relation: _CachedRelation
+    relation: _ReferenceKey
     code: str = "E024"
 
     def message(self) -> str:
         return f"Adding relation: {str(self.relation)}"
-
-    @classmethod
-    def asdict(cls, data: list) -> dict:
-        return dict((k, str(v)) for k, v in data)
 
 
 @dataclass
@@ -2499,8 +2491,8 @@ if 1 == 0:
     SQLQueryStatus(status="", elapsed=0.1)
     SQLCommit(conn_name="")
     ColTypeChange(orig_type="", new_type="", table="")
-    SchemaCreation(relation=BaseRelation())
-    SchemaDrop(relation=BaseRelation())
+    SchemaCreation(relation=_make_key(BaseRelation()))
+    SchemaDrop(relation=_make_key(BaseRelation()))
     UncachedRelation(
         dep_key=_ReferenceKey(database="", schema="", identifier=""),
         ref_key=_ReferenceKey(database="", schema="", identifier=""),
@@ -2509,7 +2501,7 @@ if 1 == 0:
         dep_key=_ReferenceKey(database="", schema="", identifier=""),
         ref_key=_ReferenceKey(database="", schema="", identifier=""),
     )
-    AddRelation(relation=_CachedRelation())
+    AddRelation(relation=_make_key(_CachedRelation()))
     DropMissingRelation(relation=_ReferenceKey(database="", schema="", identifier=""))
     DropCascade(
         dropped=_ReferenceKey(database="", schema="", identifier=""),

@@ -63,7 +63,7 @@ class DepsTask(BaseTask):
                 source_type = package.source_type()
                 version = package.get_version()
 
-                fire_event(DepsStartPackageInstall(package=package))
+                fire_event(DepsStartPackageInstall(package=package.nice_version_name()))
                 package.install(self.config, renderer)
                 fire_event(DepsInstallInfo(version_name=package.nice_version_name()))
                 if source_type == 'hub':
