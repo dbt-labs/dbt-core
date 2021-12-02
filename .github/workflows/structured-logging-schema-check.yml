@@ -54,7 +54,7 @@ jobs:
       # integration tests generate a ton of logs in different files. the next step will find them all.
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        run: tox -e py38-postgres
+        run: tox -e py38-postgres -- -nauto
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
