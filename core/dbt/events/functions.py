@@ -3,7 +3,7 @@ from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo, Cache
-from dbt.events.types import EventBufferFull, T_Event
+from dbt.events.types import EventBufferFull, T_Event, MainReportVersion
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
@@ -17,6 +17,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 import os
 import uuid
+import threading
 from typing import Any, Callable, Dict, List, Optional, Union
 import dataclasses
 from collections import deque
@@ -164,12 +165,31 @@ def event_to_serializable_dict(
 # translates an Event to a completely formatted text-based log line
 # you have to specify which message you want. (i.e. - e.message, e.cli_msg(), e.file_msg())
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
-def create_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+def create_stdout_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
+    log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"
+    return log_line
+
+
+def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+    log_line: str = ''
+    # Create a separator if this is the beginning of an invocation
+    if type(e) == MainReportVersion:
+        separator = 30 * '='
+        log_line = f'\n\n{separator} {e.get_ts()} | {get_invocation_id()} {separator}\n'
+    color_tag: str = '' if this.format_color else Style.RESET_ALL
+    ts: str = e.get_ts().strftime("%H:%M:%S.%f")
+    scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
-    log_line: str = f"{color_tag}{ts} | [ {level} ] | {scrubbed_msg}"
+    thread = ''
+    if threading.current_thread().getName():
+        thread_name = threading.current_thread().getName()
+        thread_name = thread_name[:10]
+        thread_name = thread_name.ljust(10, ' ')
+        thread = f' [{thread_name}]:'
+    log_line = log_line + f"{color_tag}{ts} [{level}]{thread} {scrubbed_msg}"
     return log_line
 
 
@@ -181,13 +201,14 @@ def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     return scrub_secrets(raw_log_line, env_secrets())
 
 
-# calls create_text_log_line() or create_json_log_line() according to logger config
-def create_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
-    return (
-        create_json_log_line(e, msg_fn)
-        if this.format_json else
-        create_text_log_line(e, msg_fn)
-    )
+# calls create_stdout_text_log_line() or create_json_log_line() according to logger config
+def create_log_line(e: T_Event, msg_fn: Callable[[T_Event], str], file_output=False) -> str:
+    if this.format_json:
+        return create_json_log_line(e, msg_fn)  # json output, both console and file
+    elif file_output is True:
+        return create_file_text_log_line(e, msg_fn)  # default file output
+    else:
+        return create_stdout_text_log_line(e, msg_fn)  # console output
 
 
 # allows for resuse of this obnoxious if else tree.
@@ -287,7 +308,7 @@ def fire_event(e: Event) -> None:
 
     # always logs debug level regardless of user input
     if isinstance(e, File):
-        log_line = create_log_line(e, msg_fn=lambda x: x.file_msg())
+        log_line = create_log_line(e, msg_fn=lambda x: x.file_msg(), file_output=True)
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
