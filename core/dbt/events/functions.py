@@ -109,10 +109,7 @@ def setup_event_logger(log_path, level_override=None):
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
     file_handler = RotatingFileHandler(
-        filename=log_dest,
-        encoding='utf8',
-        maxBytes=10 * 1024 * 1024,  # 10 mb
-        backupCount=5
+        filename=log_dest, encoding="utf8", maxBytes=10 * 1024 * 1024, backupCount=5  # 10 mb
     )
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
