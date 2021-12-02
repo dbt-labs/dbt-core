@@ -829,66 +829,6 @@ class InvalidVarsYAML(ErrorLevel, Cli, File):
         return "The YAML provided in the --vars argument is not valid."
 
 
-# TODO: Remove? (appears to be uncalled)
-@dataclass
-class CatchRunException(ShowException, DebugLevel, Cli, File):
-    build_path: Any
-    exc: Exception
-    code: str = "I_NEED_A_CODE_1"
-
-    def message(self) -> str:
-        INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If the \
-                            error persists, open an issue at https://github.com/dbt-labs/dbt-core
-                            """.strip()
-        prefix = f'Internal error executing {self.build_path}'
-        error = "{prefix}\n{error}\n\n{note}".format(
-                prefix=ui.red(prefix),
-                error=str(self.exc).strip(),
-                note=INTERNAL_ERROR_STRING
-        )
-        return error
-
-
-# TODO: Remove? (appears to be uncalled)
-@dataclass
-class HandleInternalException(ShowException, DebugLevel, Cli, File):
-    exc: Exception
-    code: str = "I_NEED_A_CODE_2"
-
-    def message(self) -> str:
-        return str(self.exc)
-
-# TODO: Remove? (appears to be uncalled)
-
-
-@dataclass
-class MessageHandleGenericException(ErrorLevel, Cli, File):
-    build_path: str
-    unique_id: str
-    exc: Exception
-    code: str = "I_NEED_A_CODE_3"
-
-    def message(self) -> str:
-        node_description = self.build_path
-        if node_description is None:
-            node_description = self.unique_id
-        prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(
-            prefix=ui.red(prefix),
-            error=str(self.exc).strip()
-        )
-
-# TODO: Remove? (appears to be uncalled)
-
-
-@dataclass
-class DetailsHandleGenericException(ShowException, DebugLevel, Cli, File):
-    code: str = "I_NEED_A_CODE_4"
-
-    def message(self) -> str:
-        return ''
-
-
 @dataclass
 class GenericTestFileParse(DebugLevel, Cli, File):
     path: str
@@ -2637,8 +2577,6 @@ if 1 == 0:
     PartialParsingDeletedExposure(unique_id='')
     InvalidDisabledSourceInTestNode(msg='')
     InvalidRefInTestNode(msg='')
-    MessageHandleGenericException(build_path='', unique_id='', exc=Exception(''))
-    DetailsHandleGenericException()
     RunningOperationCaughtError(exc=Exception(''))
     RunningOperationUncaughtError(exc=Exception(''))
     DbtProjectError()
