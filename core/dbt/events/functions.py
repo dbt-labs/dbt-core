@@ -225,10 +225,7 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
 
 
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
-def create_log_line(
-    e: T_Event,
-    file_output=False
-) -> Optional[str]:
+def create_log_line(e: T_Event, file_output=False) -> Optional[str]:
     if this.format_json:
         return create_json_log_line(e)  # json output, both console and file
     elif file_output is True or flags.DEBUG:
@@ -330,7 +327,7 @@ def fire_event(e: Event) -> None:
                     log_line=log_line,
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
-                    extra=e.extra
+                    extra=e.extra,
                 )
 
 

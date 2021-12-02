@@ -959,9 +959,8 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            msg = f'Found patch for macro "{patch.name}" ' \
-                  f'which was not found'
-            warn_or_error(msg, log_fmt=warning_tag('{}'))
+            msg = f'Found patch for macro "{patch.name}" ' f"which was not found"
+            warn_or_error(msg, log_fmt=warning_tag("{}"))
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")

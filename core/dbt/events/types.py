@@ -1407,7 +1407,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
     code: str = "M019"
 
     def message(self) -> str:
-        return ('Updates available for packages: {} \
+        return "Updates available for packages: {} \
                 \nUpdate your versions in packages.yml, then run dbt deps'.format(self.packages))
 
 
@@ -1575,7 +1575,7 @@ class StatsLine(InfoLevel):
     code: str = "Z023"
 
     def message(self) -> str:
-        stats_line = ("Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}")
+        stats_line = "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}"
         return stats_line.format(**self.stats)
 
 
@@ -2707,7 +2707,7 @@ if 1 == 0:
     NodeStart(node_info={}, unique_id="")
     NodeFinished(node_info={}, unique_id="", run_result={})
     QueryCancelationUnsupported(type="")
-    ConcurrencyLine(num_threads=0, target_name='')
+    ConcurrencyLine(num_threads=0, target_name="")
     NodeCompiling(node_info={}, unique_id="")
     NodeExecuting(node_info={}, unique_id="")
     StarterProjectPath(dir="")

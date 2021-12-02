@@ -10,7 +10,13 @@ from dbt.deps.resolver import resolve_packages
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DepsNoPackagesFound, DepsStartPackageInstall, DepsUpdateAvailable, DepsUTD,
-    DepsInstallInfo, DepsListSubdirectory, DepsNotifyUpdatesAvailable, EmptyLine
+    DepsStartPackageInstall,
+    DepsUpdateAvailable,
+    DepsUTD,
+    DepsInstallInfo,
+    DepsListSubdirectory,
+    DepsNotifyUpdatesAvailable,
+    EmptyLine,
 )
 from dbt.clients import system
 
