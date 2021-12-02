@@ -18,24 +18,24 @@ In `events.types` add a new class that represents the new event. All events must
 Example
 ```
 @dataclass
-class SuperImportantNodeEvent(DebugLevel, Cli, File):
-    node_name: str
-    code: str = "Q035"
+class PartialParsingDeletedExposure(DebugLevel, Cli, File):
+    unique_id: str
+    code: str = "I049"
 
     def message(self) -> str:
-        return f"Running important node {self.node_name}"
+        return f"Partial parsing: deleted exposure {self.unique_id}"
 
 ```
 
 ## Optional (based on your event)
 
-- Events associated with node status changes must have `report_node_data` passed in and be extended with `Cache`
-- define `asdict` if your data is not serializable
+- Events associated with node status changes must have `report_node_data` passed in and be extended with `NodeInfo`
+- define `asdict` if your data is not serializable to json
 
 Example
 ```
 @dataclass
-class SuperImportantNodeEvent(InfoLevel, File):
+class SuperImportantNodeEvent(InfoLevel, File, NodeInfo):
     node_name: str
     run_result: RunResult
     report_node_data: ParsedModelNode  # may vary
