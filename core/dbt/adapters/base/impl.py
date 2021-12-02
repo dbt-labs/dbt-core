@@ -676,7 +676,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         relations = self.list_relations_without_caching(
             schema_relation
         )
-        fire_event(ListRelations(database=database, schema=schema, relations=[_make_key(x) for x in relations]))
+        fire_event(ListRelations(
+            database=database,
+            schema=schema,
+            relations=[_make_key(x) for x in relations]
+        ))
 
         return relations
 
