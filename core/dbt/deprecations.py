@@ -30,9 +30,7 @@ class DBTDeprecation:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
             msg = ui.line_wrap_message(desc, prefix="Deprecated functionality\n\n")
-                desc, prefix='Deprecated functionality\n\n'
-            )
-            dbt.exceptions.warn_or_error(msg, log_fmt=ui.warning_tag('{}'))
+            dbt.exceptions.warn_or_error(msg, log_fmt=ui.warning_tag("{}"))
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
