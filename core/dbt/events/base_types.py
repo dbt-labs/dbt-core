@@ -66,17 +66,6 @@ class ShowException():
         self.stack_info: Any = None
         self.extra: Any = None
 
-    def asdict(self):
-        d = dict()
-
-        for k, v in self.__dict__.items():
-            if isinstance(v, Exception):
-                d[k] = str(v)
-            else:
-                d[k] = v
-
-        return d
-
 
 # TODO add exhaustiveness checking for subclasses
 # can't use ABCs with @dataclass because of https://github.com/python/mypy/issues/5374
@@ -135,6 +124,17 @@ class Event(metaclass=ABCMeta):
     def get_invocation_id(cls) -> str:
         from dbt.events.functions import get_invocation_id
         return get_invocation_id()
+
+    # default dict factory for all events. can override on concrete classes.
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        d = dict()
+        for k, v in data:
+            if isinstance(v, Exception):
+                d[k] = str(v)
+            else:
+                d[k] = v
+        return d
 
 
 @dataclass  # type: ignore

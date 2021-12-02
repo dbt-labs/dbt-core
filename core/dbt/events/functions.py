@@ -134,10 +134,7 @@ def event_to_serializable_dict(
     node_info = dict()
     log_line = dict()
     try:
-        if hasattr(e, 'asdict'):
-            log_line = dataclasses.asdict(e, dict_factory=type(e).asdict)  # type: ignore
-        else:
-            log_line = dataclasses.asdict(e)
+        log_line = dataclasses.asdict(e, dict_factory=type(e).asdict)
     except AttributeError:
         event_type = type(e).__name__
         raise Exception(  # TODO this may hang async threads
