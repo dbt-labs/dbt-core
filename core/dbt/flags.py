@@ -54,7 +54,7 @@ flag_defaults = {
     "PRINTER_WIDTH": 80,
     "INDIRECT_SELECTION": "eager",
     "LOG_CACHE_EVENTS": False,
-    "EVENT_BUFFER_SIZE": 100000
+    "EVENT_BUFFER_SIZE": 100000,
 }
 
 
@@ -102,7 +102,9 @@ def set_from_args(args, user_config):
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
     # black insists in putting them all on one line
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
-        WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE
+    global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
+    global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
+    global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
@@ -126,7 +128,7 @@ def set_from_args(args, user_config):
     PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value("INDIRECT_SELECTION", args, user_config)
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
-    EVENT_BUFFER_SIZE = get_flag_value('EVENT_BUFFER_SIZE', args, user_config)
+    EVENT_BUFFER_SIZE = get_flag_value("EVENT_BUFFER_SIZE", args, user_config)
 
 
 def get_flag_value(flag, args, user_config):
@@ -140,11 +142,11 @@ def get_flag_value(flag, args, user_config):
             env_value = env_value.lower()
             # non Boolean values
             if flag in [
-                'LOG_FORMAT',
-                'PRINTER_WIDTH',
-                'PROFILES_DIR',
-                'INDIRECT_SELECTION',
-                'EVENT_BUFFER_SIZE'
+                "LOG_FORMAT",
+                "PRINTER_WIDTH",
+                "PROFILES_DIR",
+                "INDIRECT_SELECTION",
+                "EVENT_BUFFER_SIZE",
             ]:
                 flag_value = env_value
             else:
@@ -153,7 +155,7 @@ def get_flag_value(flag, args, user_config):
             flag_value = getattr(user_config, lc_flag)
         else:
             flag_value = flag_defaults[flag]
-    if flag in ['PRINTER_WIDTH', 'EVENT_BUFFER_SIZE']:  # must be ints
+    if flag in ["PRINTER_WIDTH", "EVENT_BUFFER_SIZE"]:  # must be ints
         flag_value = int(flag_value)
     if flag == 'PROFILES_DIR':
         flag_value = os.path.abspath(flag_value)
@@ -178,5 +180,5 @@ def get_flag_dict():
         "printer_width": PRINTER_WIDTH,
         "indirect_selection": INDIRECT_SELECTION,
         "log_cache_events": LOG_CACHE_EVENTS,
-        "event_buffer_size": EVENT_BUFFER_SIZE
+        "event_buffer_size": EVENT_BUFFER_SIZE,
     }
