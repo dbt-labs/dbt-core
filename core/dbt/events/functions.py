@@ -3,7 +3,7 @@ from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo, Cache
-from dbt.events.types import EventBufferFull, T_Event, MainReportVersion
+from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
@@ -203,6 +203,8 @@ def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> s
 # translates an Event to a completely formatted json log line
 # you have to specify which message you want. (i.e. - e.message(), e.cli_msg(), e.file_msg())
 def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+    if type(e) == EmptyLine:
+        return ""  # will not be sent to logger
     # using preformatted string instead of formatting it here to be extra careful about timezone
     values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339(), lambda x: msg_fn(x))
     raw_log_line = json.dumps(values, sort_keys=True)
@@ -222,6 +224,8 @@ def create_log_line(e: T_Event, msg_fn: Callable[[T_Event], str], file_output=Fa
 # allows for resuse of this obnoxious if else tree.
 # do not use for exceptions, it doesn't pass along exc_info, stack_info, or extra
 def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
+    if not log_line:
+        return
     if level_tag == 'test':
         # TODO after implmenting #3977 send to new test level
         l.debug(log_line)
