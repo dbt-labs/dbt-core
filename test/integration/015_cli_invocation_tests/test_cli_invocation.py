@@ -41,9 +41,17 @@ def temporary_working_directory() -> str:
     out : str
         The temporary working directory.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with change_working_directory(tmpdir):
-            yield tmpdir
+    # N.B: supressing the OSError is necessary for older (pre 3.10) versions of python 
+    # which do not support the `ignore_cleanup_errors` in tempfile::TemporaryDirectory.
+    # See: https://github.com/python/cpython/pull/24793
+    #
+    # In our case the cleanup is redundent since windows handles clearing 
+    # Appdata/Local/Temp at the os level anyway.
+
+    with contextlib.suppress(OSError):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with change_working_directory(tmpdir):
+                yield tmpdir
 
 
 def get_custom_profiles_config(database_host, custom_schema):
