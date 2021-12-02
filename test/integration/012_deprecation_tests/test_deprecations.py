@@ -43,7 +43,7 @@ class TestConfigPathDeprecation(BaseTestDeprecations):
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(['--warn-error', 'debug'])
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
-        expected = "The `data-paths` config has been deprecated"
+        expected = "The `data-paths` config has been renamed"
         assert expected in exc_str
 
 
