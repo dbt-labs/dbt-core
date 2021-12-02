@@ -196,7 +196,8 @@ def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> s
 # translates an Event to a completely formatted json log line
 # you have to specify which message you want. (i.e. - e.message(), e.cli_msg(), e.file_msg())
 def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
-    values = event_to_serializable_dict(e, lambda dt: dt.isoformat(), lambda x: msg_fn(x))
+    # using preformatted string instead of formatting it here to be extra careful about timezone
+    values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339(), lambda x: msg_fn(x))
     raw_log_line = json.dumps(values, sort_keys=True)
     return scrub_secrets(raw_log_line, env_secrets())
 

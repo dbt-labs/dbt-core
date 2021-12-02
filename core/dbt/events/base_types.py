@@ -75,6 +75,7 @@ class Event(metaclass=ABCMeta):
     # fields that should be on all events with their default implementations
     log_version: int = 1
     ts: Optional[datetime] = None  # use getter for non-optional
+    ts_rfc3339: Optional[str] = None  # use getter for non-optional
     pid: Optional[int] = None  # use getter for non-optional
     node_info: Optional[Node]
 
@@ -119,8 +120,16 @@ class Event(metaclass=ABCMeta):
     # exactly one time stamp per concrete event
     def get_ts(self) -> datetime:
         if not self.ts:
-            self.ts = datetime.now()
+            self.ts = datetime.utcnow()
+            self.ts_rfc3339 = self.ts.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         return self.ts
+
+    # preformatted time stamp
+    def get_ts_rfc3339(self) -> str:
+        if not self.ts_rfc3339:
+            # get_ts() creates the formatted string too so all time logic is centralized
+            self.get_ts()
+        return self.ts_rfc3339  # type: ignore
 
     # exactly one pid per concrete event
     def get_pid(self) -> int:
