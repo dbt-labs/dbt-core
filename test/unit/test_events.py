@@ -196,8 +196,8 @@ sample_values = [
     SQLQueryStatus(status="", elapsed=0.1),
     SQLCommit(conn_name=""),
     ColTypeChange(orig_type="", new_type="", table=""),
-    SchemaCreation(relation=BaseRelation()),
-    SchemaDrop(relation=BaseRelation()),
+    SchemaCreation(relation=_ReferenceKey(database="", schema="", identifier="")),
+    SchemaDrop(relation=_ReferenceKey(database="", schema="", identifier="")),
     UncachedRelation(
         dep_key=_ReferenceKey(database="", schema="", identifier=""),
         ref_key=_ReferenceKey(database="", schema="", identifier=""),
@@ -206,7 +206,7 @@ sample_values = [
         dep_key=_ReferenceKey(database="", schema="", identifier=""),
         ref_key=_ReferenceKey(database="", schema="", identifier=""),
     ),
-    AddRelation(relation=_CachedRelation()),
+    AddRelation(relation=_ReferenceKey(database="", schema="", identifier="")),
     DropMissingRelation(relation=_ReferenceKey(database="", schema="", identifier="")),
     DropCascade(
         dropped=_ReferenceKey(database="", schema="", identifier=""),

@@ -39,7 +39,7 @@ from dbt.adapters.base.relation import (
     ComponentName, BaseRelation, InformationSchema, SchemaSearchMap
 )
 from dbt.adapters.base import Column as BaseColumn
-from dbt.adapters.cache import RelationsCache
+from dbt.adapters.cache import RelationsCache, _make_key
 
 
 SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
@@ -676,7 +676,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         relations = self.list_relations_without_caching(
             schema_relation
         )
-        fire_event(ListRelations(database=database, schema=schema, relations=relations))
+        fire_event(ListRelations(
+            database=database,
+            schema=schema,
+            relations=[_make_key(x) for x in relations]
+        ))
 
         return relations
 
