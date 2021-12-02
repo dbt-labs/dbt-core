@@ -6,7 +6,7 @@ The Events module is the implmentation for structured logging. These events repr
 The event module provides types that represent what is happening in dbt in `events.types`. These types are intended to represent an exhaustive list of all things happening within dbt that will need to be logged, streamed, or printed. To fire an event, `events.functions::fire_event` is the entry point to the module from everywhere in dbt.
 
 # Adding a New Event
-In `events.types` add a new class that represents the new event. All events must be a dataclass with, at minimum, a code.  You may also include some other values to construct downstream messaging. Only include the data necessary to construct this message within this class. You must extend all destinations (e.g. - if your log message belongs on the cli, extend `Cli`) as well as the loglevel this event belongs to.
+In `events.types` add a new class that represents the new event. All events must be a dataclass with, at minimum, a code.  You may also include some other values to construct downstream messaging. Only include the data necessary to construct this message within this class. You must extend all destinations (e.g. - if your log message belongs on the cli, extend `Cli`) as well as the loglevel this event belongs to.  This system has been designed to take full advantage of mypy so running it will catch anything you may miss.
 
 ## Required for Every Event
 
@@ -15,11 +15,40 @@ In `events.types` add a new class that represents the new event. All events must
 - a message()
 - extend `File` and/or `Cli` based on where it should output
 
+Example
+```
+@dataclass
+class SuperImportantNodeEvent(DebugLevel, Cli, File):
+    node_name: str
+    code: str = "Q035"
+
+    def message(self) -> str:
+        return f"Running important node {self.node_name}"
+
+```
+
 ## Optional (based on your event)
 
 - Events associated with node status changes must have `report_node_data` passed in and be extended with `Cache`
-- define `fields_to_json` if your data is not serializable
+- define `asdict` if your data is not serializable
 
+Example
+```
+@dataclass
+class SuperImportantNodeEvent(InfoLevel, File):
+    node_name: str
+    run_result: RunResult
+    report_node_data: ParsedModelNode  # may vary
+    code: str = "Q036"
+
+    def message(self) -> str:
+        return f"{self.node_name} had overly verbose result of {run_result}"
+
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
+
+```
 
 All values other than `code` and `report_node_data` will be included in the `data` node of the json log output.
 
