@@ -202,9 +202,9 @@ def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> s
 
 # translates an Event to a completely formatted json log line
 # you have to specify which message you want. (i.e. - e.message(), e.cli_msg(), e.file_msg())
-def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> Optional[str]:
     if type(e) == EmptyLine:
-        return ""  # will not be sent to logger
+        return None  # will not be sent to logger
     # using preformatted string instead of formatting it here to be extra careful about timezone
     values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339(), lambda x: msg_fn(x))
     raw_log_line = json.dumps(values, sort_keys=True)
@@ -212,7 +212,11 @@ def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
 
 
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
-def create_log_line(e: T_Event, msg_fn: Callable[[T_Event], str], file_output=False) -> str:
+def create_log_line(
+    e: T_Event,
+    msg_fn: Callable[[T_Event], str],
+    file_output=False
+) -> Optional[str]:
     if this.format_json:
         return create_json_log_line(e, msg_fn)  # json output, both console and file
     elif file_output is True:
@@ -314,15 +318,16 @@ def fire_event(e: Event) -> None:
         # using Event::message because the legacy logger didn't differentiate messages by
         # destination
         log_line = create_log_line(e, msg_fn=lambda x: x.message())
-
-        send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
+        if log_line:
+            send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
         return  # exit the function to avoid using the current logger as well
 
     # always logs debug level regardless of user input
     if isinstance(e, File):
         log_line = create_log_line(e, msg_fn=lambda x: x.file_msg(), file_output=True)
         # doesn't send exceptions to exception logger
-        send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
+        if log_line:
+            send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
     if isinstance(e, Cli):
         # explicitly checking the debug flag here so that potentially expensive-to-construct
@@ -331,18 +336,19 @@ def fire_event(e: Event) -> None:
             return  # eat the message in case it was one of the expensive ones
 
         log_line = create_log_line(e, msg_fn=lambda x: x.cli_msg())
-        if not isinstance(e, ShowException):
-            send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
-        # CliEventABC and ShowException
-        else:
-            send_exc_to_logger(
-                STDOUT_LOG,
-                level_tag=e.level_tag(),
-                log_line=log_line,
-                exc_info=e.exc_info,
-                stack_info=e.stack_info,
-                extra=e.extra
-            )
+        if log_line:
+            if not isinstance(e, ShowException):
+                send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
+            # CliEventABC and ShowException
+            else:
+                send_exc_to_logger(
+                    STDOUT_LOG,
+                    level_tag=e.level_tag(),
+                    log_line=log_line,
+                    exc_info=e.exc_info,
+                    stack_info=e.stack_info,
+                    extra=e.extra
+                )
 
 
 def get_invocation_id() -> str:
