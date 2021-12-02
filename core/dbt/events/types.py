@@ -142,11 +142,9 @@ class MainReportArgs(DebugLevel, Cli, File):
     def message(self):
         return f"running dbt with arguments {str(self.args)}"
 
-    def asdict(self) -> dict:
-        return {
-            'code': self.code,
-            'args': str(self.args)
-        }
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
 
 
 @dataclass
@@ -526,7 +524,7 @@ class Rollback(DebugLevel, Cli, File):
 
 @dataclass
 class CacheMiss(DebugLevel, Cli, File):
-    conn_name: Any  # TODO mypy says this is `Callable[[], str]`??  ¯\_(ツ)_/¯
+    conn_name: str
     database: Optional[str]
     schema: str
     code: str = "E013"
@@ -547,6 +545,14 @@ class ListRelations(DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
+
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        d = dict()
+        for k, v in data:
+            if type(v) == list:
+                d[k] = [str(x) for x in v]
+        return d
 
 
 @dataclass
@@ -651,11 +657,9 @@ class AddRelation(DebugLevel, Cli, File, Cache):
     def message(self) -> str:
         return f"Adding relation: {str(self.relation)}"
 
-    def asdict(self) -> dict:
-        return {
-            'code': self.code,
-            'relation': str(self.relation)
-        }
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
 
 
 @dataclass
@@ -765,11 +769,9 @@ class AdapterImportError(InfoLevel, Cli, File):
     def message(self) -> str:
         return f"Error importing adapter: {self.exc}"
 
-    def asdict(self) -> dict:
-        return {
-            'code': self.code,
-            'exc': str(self.exc)
-        }
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
 
 
 @dataclass
@@ -2220,6 +2222,10 @@ class NodeFinished(DebugLevel, Cli, File, NodeInfo):
 
     def message(self) -> str:
         return f"Finished running node {self.unique_id}"
+
+    @classmethod
+    def asdict(cls, data: list) -> dict:
+        return dict((k, str(v)) for k, v in data)
 
 
 @dataclass

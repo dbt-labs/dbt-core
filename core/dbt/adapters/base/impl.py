@@ -291,7 +291,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         if (database, schema) not in self.cache:
             fire_event(
                 CacheMiss(
-                    conn_name=self.nice_connection_name,
+                    conn_name=self.nice_connection_name(),
                     database=database,
                     schema=schema
                 )
