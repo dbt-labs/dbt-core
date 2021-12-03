@@ -21,6 +21,8 @@
 - Add `node_type` contextual info to more events ([#4378](https://github.com/dbt-labs/dbt-core/pull/4378))
 - Make `materialized` config optional in `node_type` ([#4417](https://github.com/dbt-labs/dbt-core/pull/4417))
 - Stringify exception in `GenericExceptionOnRun` to support JSON serialization ([#4424](https://github.com/dbt-labs/dbt-core/pull/4424))
+- Add "interop" tests for machine consumption of structured log output ([#4327](https://github.com/dbt-labs/dbt-core/pull/4327))
+- Relax version specifier for `dbt-extractor` to `~=0.4.0`, to support compiled wheels for additional architectures when available ([#4427](https://github.com/dbt-labs/dbt-core/pull/4427))
 
 ## dbt-core 1.0.0rc3 (November 30, 2021)
 
