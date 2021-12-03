@@ -181,7 +181,7 @@ def event_to_serializable_dict(
 # translates an Event to a completely formatted text-based log line
 # you have to specify which message you want. (i.e. - e.message, e.cli_msg(), e.file_msg())
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
-def create_stdout_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+def create_info_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
@@ -189,7 +189,7 @@ def create_stdout_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) ->
     return log_line
 
 
-def create_file_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+def create_debug_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     log_line: str = ''
     # Create a separator if this is the beginning of an invocation
     if type(e) == MainReportVersion:
@@ -228,10 +228,10 @@ def create_log_line(
 ) -> Optional[str]:
     if this.format_json:
         return create_json_log_line(e, msg_fn)  # json output, both console and file
-    elif file_output is True:
-        return create_file_text_log_line(e, msg_fn)  # default file output
+    elif file_output is True or flags.DEBUG:
+        return create_debug_text_log_line(e, msg_fn)  # default file output
     else:
-        return create_stdout_text_log_line(e, msg_fn)  # console output
+        return create_info_text_log_line(e, msg_fn)  # console output
 
 
 # allows for resuse of this obnoxious if else tree.
