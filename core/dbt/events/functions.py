@@ -23,8 +23,9 @@ import dataclasses
 from collections import deque
 
 
-# create the global event history buffer with a max size of 100k records
+# create the global event history buffer with the default max size (10k)
 # python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
+# TODO the flags module has not yet been resolved when this is created
 global EVENT_HISTORY
 EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
@@ -49,6 +50,10 @@ invocation_id: Optional[str] = None
 
 
 def setup_event_logger(log_path, level_override=None):
+    # flags have been resolved, and log_path is known
+    global EVENT_HISTORY
+    EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
+
     make_log_dir_if_missing(log_path)
     this.format_json = flags.LOG_FORMAT == 'json'
     # USE_COLORS can be None if the app just started and the cli flags
