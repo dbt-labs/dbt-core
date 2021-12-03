@@ -1,4 +1,28 @@
-## dbt-core 1.0.0 (Release TBD)
+## dbt-core 1.0.0 (December 3, 2021)
+
+### Fixes
+- Configure the CLI logger destination to use stdout instead of stderr ([#4368](https://github.com/dbt-labs/dbt-core/pull/4368))
+- Make the size of `EVENT_HISTORY` configurable, via `EVENT_BUFFER_SIZE` global config ([#4411](https://github.com/dbt-labs/dbt-core/pull/4411), [#4416](https://github.com/dbt-labs/dbt-core/pull/4416))
+- Change type of `log_format` in `profiles.yml` user config to be string, not boolean ([#4394](https://github.com/dbt-labs/dbt-core/pull/4394))
+
+### Under the hood
+- Only log cache events if `LOG_CACHE_EVENTS` is enabled, and disable by default. This restores previous behavior ([#4369](https://github.com/dbt-labs/dbt-core/pull/4369))
+- Move event codes to be a top-level attribute of JSON-formatted logs, rather than nested in `data` ([#4381](https://github.com/dbt-labs/dbt-core/pull/4381))
+- Fix failing integration test on Windows ([#4380](https://github.com/dbt-labs/dbt-core/pull/4380))
+- Clean up warning messages for `clean` + `deps` ([#4366](https://github.com/dbt-labs/dbt-core/pull/4366))
+- Use RFC3339 timestamps for log messages ([#4384](https://github.com/dbt-labs/dbt-core/pull/4384))
+- Different text output for console (info) and file (debug) logs ([#4379](https://github.com/dbt-labs/dbt-core/pull/4379), [#4418](https://github.com/dbt-labs/dbt-core/pull/4418))
+- Remove unused events. More structured `ConcurrencyLine`. Replace `\n` message starts/ends with `EmptyLine` events, and exclude `EmptyLine` from JSON-formatted output ([#4388](https://github.com/dbt-labs/dbt-core/pull/4388))
+- Update `events` module README ([#4395](https://github.com/dbt-labs/dbt-core/pull/4395))
+- Rework approach to JSON serialization for events with non-standard properties ([#4396](https://github.com/dbt-labs/dbt-core/pull/4396))
+- Update legacy logger file name to `dbt.log.legacy` ([#4402](https://github.com/dbt-labs/dbt-core/pull/4402))
+- Rollover `dbt.log` at 10 MB, and keep up to 5 backups, restoring previous behavior ([#4405](https://github.com/dbt-labs/dbt-core/pull/4405))
+- Use reference keys instead of full relation objects in cache events ([#4410](https://github.com/dbt-labs/dbt-core/pull/4410))
+- Add `node_type` contextual info to more events ([#4378](https://github.com/dbt-labs/dbt-core/pull/4378))
+- Make `materialized` config optional in `node_type` ([#4417](https://github.com/dbt-labs/dbt-core/pull/4417))
+- Stringify exception in `GenericExceptionOnRun` to support JSON serialization ([#4424](https://github.com/dbt-labs/dbt-core/pull/4424))
+- Add "interop" tests for machine consumption of structured log output ([#4327](https://github.com/dbt-labs/dbt-core/pull/4327))
+- Relax version specifier for `dbt-extractor` to `~=0.4.0`, to support compiled wheels for additional architectures when available ([#4427](https://github.com/dbt-labs/dbt-core/pull/4427))
 
 ## dbt-core 1.0.0rc3 (November 30, 2021)
 
