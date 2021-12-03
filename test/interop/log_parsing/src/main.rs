@@ -12,7 +12,8 @@ mod tests {
     use std::path::Path;
     use walkdir::WalkDir;
 
-    //
+    // each nested type of LogLine should define its own value_test function
+    // that asserts values are within an expected set of values when possible.
     trait ValueTest {
         fn value_test(&self) -> ();
     }
@@ -86,7 +87,7 @@ mod tests {
     fn get_input() -> Vec<String> {
         let log_name = "dbt.log";
 
-        let path = env::var("LOG_DIR").expect("must pass log path to tests with env var `LOG_DIR=logs/live/here/`");
+        let path = env::var("LOG_DIR").expect("must pass absolute log path to tests with env var `LOG_DIR=/logs/live/here/`");
         println!("Looking for files named `{}` in {}", log_name, path);
 
         WalkDir::new(path)

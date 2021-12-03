@@ -17,6 +17,8 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions: read-all
+
 jobs:
   # run the performance measurements on the current or default branch
   test-schema:
@@ -33,6 +35,8 @@ jobs:
 
       - name: checkout dev
         uses: actions/checkout@v2
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
@@ -57,9 +61,7 @@ jobs:
       # integration tests generate a ton of logs in different files. the next step will find them all.
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        # run: tox -e py38-postgres -- -nauto   <- TODO we can use this once json formatted integration tests no longer hang
-        # small subset of integration tests that don't hang:
-        run: python3 -m pytest test/integration/001_simple_copy_test test/integration/002_varchar_widening_test test/integration/003_simple_reference_test test/integration/006_simple_dependency_test test/integration/007_graph_selection_tests test/integration/008_schema_tests_test test/integration/009_data_tests_test test/integration/010_permission_tests test/integration/011_invalid_model_tests test/integration/012_deprecation_tests test/integration/013_context_var_tests test/integration/014_hook_tests test/integration/015_cli_invocation_tests test/integration/016_macro_tests test/integration/017_runtime_materialization_tests test/integration/018_adapter_ddl_tests test/integration/019_analysis_tests test/integration/020_ephemeral_test test/integration/021_concurrency_test test/integration/023_exit_codes_test test/integration/024_custom_schema_test test/integration/025_duplicate_model_test test/integration/025_timezones_test test/integration/026_aliases_test test/integration/027_cycle_test test/integration/028_cli_vars test/integration/029_docs_generate_tests test/integration/030_statement_test test/integration/031_thread_count_test test/integration/033_event_tracking_test test/integration/035_changing_relation_type_test test/integration/035_docs_blocks test/integration/037_external_reference_test test/integration/038_caching_test test/integration/039_config_test
+        run: tox -e py38-postgres -- -nauto
 
       # apply our schema tests to every log event from the previous step
       # skips any output that isn't valid json
