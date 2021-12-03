@@ -11,7 +11,7 @@ import dbt.exceptions
 import dbt.semver
 
 
-PYPI_VERSION_URL = 'https://pypi.org/pypi/dbt/json'
+PYPI_VERSION_URL = 'https://pypi.org/pypi/dbt-core/json'
 
 
 def get_latest_version():
