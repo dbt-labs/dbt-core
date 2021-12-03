@@ -17,20 +17,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = env::var("LOG_DIR").expect("must pass absolute log path to tests with env var `LOG_DIR=/logs/live/here/`");
     
     println!("Looking for files named `{}` in {}", log_name, path);
-
     let lines: Vec<String> = get_input(&path, log_name)?;
+    println!("collected {} log lines.", lines.len());
 
+    println!("");
+
+    println!("testing type-level schema compliance by deserializing each line...");
     let log_lines: Vec<LogLine> = deserialized_input(&lines)
         .map_err(|e| format!("schema test failure: json doesn't match type definition\n{}", e))?;
+    println!("Done.");
+
+    println!("");
+    println!("because we skip non-json log lines, there are {} collected values to test.", log_lines.len());
+    println!("");
 
     // make sure when we read a string in then output it back to a string the two strings
     // contain all the same key-value pairs.
+    println!("testing serialization loop to make sure all key-value pairs are accounted for");
     test_deserialize_serialize_is_unchanged(&lines);
+    println!("Done.");
+
+    println!("");
 
     // make sure each log_line contains the values we expect
+    println!("testing that the field values in each log line are expected");
     for log_line in log_lines {
         log_line.value_test()
     }
+    println!("Done.");
 
     Ok(())
 }
