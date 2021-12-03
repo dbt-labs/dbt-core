@@ -1,7 +1,7 @@
-## dbt-core 1.0.0 (Release TBD)
+## dbt-core 1.0.0 (December 3, 2021)
 
 ### Fixes
-- Configure the CLI logger destination to use stdout instead of stderr ([#4376](https://github.com/dbt-labs/dbt-core/pull/4376))
+- Configure the CLI logger destination to use stdout instead of stderr ([#4368](https://github.com/dbt-labs/dbt-core/pull/4368))
 - Make the size of `EVENT_HISTORY` configurable, via `EVENT_BUFFER_SIZE` global config ([#4411](https://github.com/dbt-labs/dbt-core/pull/4411), [#4416](https://github.com/dbt-labs/dbt-core/pull/4416))
 - Change type of `log_format` in `profiles.yml` user config to be string, not boolean ([#4394](https://github.com/dbt-labs/dbt-core/pull/4394))
 
