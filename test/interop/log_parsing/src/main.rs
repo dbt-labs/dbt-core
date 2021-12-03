@@ -22,6 +22,7 @@ mod tests {
         log_version: isize,
         r#type: String,
         code: String,
+        #[serde(with = "custom_date_format")]
         ts: DateTime<Utc>,
         pid: isize,
         msg: String,
@@ -60,12 +61,12 @@ mod tests {
     // this requires handling the date with "%Y-%m-%dT%H:%M:%S%.6f" which requires this
     // boilerplate-looking module.
     mod custom_date_format {
-        use chrono::NaiveDateTime;
+        use chrono::{NaiveDateTime, DateTime, Utc};
         use serde::{self, Deserialize, Deserializer, Serializer};
 
         const FORMAT: &'static str = "%Y-%m-%dT%H:%M:%S%.6fZ";
 
-        pub fn serialize<S>(date: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+        pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
@@ -73,12 +74,12 @@ mod tests {
             serializer.serialize_str(&s)
         }
 
-        pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+        pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
         where
             D: Deserializer<'de>,
         {
             let s = String::deserialize(deserializer)?;
-            NaiveDateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)
+            Ok(DateTime::<Utc>::from_utc(NaiveDateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)?, Utc))
         }
     }
 
