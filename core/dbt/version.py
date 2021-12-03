@@ -13,7 +13,7 @@ import dbt.semver
 from dbt.ui import green, red, yellow
 from dbt import flags
 
-PYPI_VERSION_URL = 'https://pypi.org/pypi/dbt-core/json'
+PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
 
 def get_latest_version(version_url: str = PYPI_VERSION_URL):
