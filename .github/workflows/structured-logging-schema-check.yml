@@ -1,0 +1,71 @@
+# This Action checks makes a dbt run to sample json structured logs
+# and checks that they conform to the currently documented schema.
+# 
+# If this action fails it either means we have unintentionally deviated
+# from our documented structured logging schema, or we need to bump the
+# version of our structured logging and add new documentation to
+# communicate these changes.
+
+
+name: Structured Logging Schema Check
+on:
+  push:
+    branches:
+      - "main"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  # run the performance measurements on the current or default branch
+  test-schema:
+    name: Test Log Schema
+    runs-on: ubuntu-latest
+    env:
+      # turns warnings into errors
+      RUSTFLAGS: "-D warnings"
+      # points tests to the log file
+      LOG_DIR: "/home/runner/work/dbt-core/dbt-core/logs"
+      # tells integration tests to output into json format
+      DBT_LOG_FORMAT: 'json'
+    steps:
+
+      - name: checkout dev
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v2.2.2
+        with:
+          python-version: "3.8"
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: install dbt
+        run: pip install -r dev-requirements.txt -r editable-requirements.txt
+
+      - name: Set up postgres
+        uses: ./.github/actions/setup-postgres-linux
+
+      - name: ls
+        run: ls
+
+      # integration tests generate a ton of logs in different files. the next step will find them all.
+      # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
+      - name: Run integration tests
+        run: tox -e py38-postgres -- -nauto
+
+      # apply our schema tests to every log event from the previous step
+      # skips any output that isn't valid json
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --manifest-path test/interop/log_parsing/Cargo.toml
