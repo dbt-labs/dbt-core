@@ -333,8 +333,8 @@ class RunTask(CompileTask):
         finishctx = TimestampNamed("node_finished_at")
 
         for idx, hook in enumerate(ordered_hooks, start=1):
-            hook._event_status['started_at'] = datetime.utcnow().isoformat()
-            hook._event_status['node_status'] = RunningStatus.Started
+            hook._event_status["started_at"] = datetime.utcnow().isoformat()
+            hook._event_status["node_status"] = RunningStatus.Started
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
                                     extra_context)
 
@@ -357,12 +357,12 @@ class RunTask(CompileTask):
                         response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
                         status = response._message
                     else:
-                        status = 'OK'
+                        status = "OK"
 
                 self.ran_hooks.append(hook)
-                hook._event_status['finished_at'] = datetime.utcnow().isoformat()
+                hook._event_status["finished_at"] = datetime.utcnow().isoformat()
                 with finishctx, DbtModelState({'node_status': 'passed'}):
-                    hook._event_status['node_status'] = RunStatus.Success
+                    hook._event_status["node_status"] = RunStatus.Success
                     fire_event(
                         PrintHookEndLine(
                             statement=hook_text,
