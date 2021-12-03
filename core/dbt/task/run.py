@@ -11,7 +11,7 @@ from .printer import (
     print_run_end_messages,
     get_counts,
 )
-
+from datetime import datetime
 from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
@@ -21,7 +21,7 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.contracts.results import NodeStatus, RunResult, RunStatus
+from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus
 from dbt.exceptions import (
     CompilationException,
     InternalException,
@@ -342,6 +342,8 @@ class RunTask(CompileTask):
         finishctx = TimestampNamed('node_finished_at')
 
         for idx, hook in enumerate(ordered_hooks, start=1):
+            hook._event_status['started_at'] = datetime.utcnow().isoformat()
+            hook._event_status['node_status'] = RunningStatus.Started
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
                                     extra_context)
 
@@ -360,19 +362,21 @@ class RunTask(CompileTask):
                         )
                     )
 
-                status = 'OK'
-
                 with Timer() as timer:
                     if len(sql.strip()) > 0:
-                        status, _ = adapter.execute(sql, auto_begin=False,
-                                                    fetch=False)
-                self.ran_hooks.append(hook)
+                        response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
+                        status = response._message
+                    else:
+                        status = 'OK'
 
+                self.ran_hooks.append(hook)
+                hook._event_status['finished_at'] = datetime.utcnow().isoformat()
                 with finishctx, DbtModelState({'node_status': 'passed'}):
+                    hook._event_status['node_status'] = RunStatus.Success
                     fire_event(
                         PrintHookEndLine(
                             statement=hook_text,
-                            status=str(status),
+                            status=status,
                             index=idx,
                             total=num_hooks,
                             execution_time=timer.elapsed,
@@ -380,6 +384,11 @@ class RunTask(CompileTask):
                             report_node_data=hook
                         )
                     )
+            # `_event_status` dict is only used for logging.  Make sure
+            # it gets deleted when we're done with it
+            del hook._event_status["started_at"]
+            del hook._event_status["finished_at"]
+            del hook._event_status["node_status"]
 
         self._total_executed += len(ordered_hooks)
 
