@@ -357,7 +357,7 @@ class BaseRunner(metaclass=ABCMeta):
             GenericExceptionOnRun(
                 build_path=self.node.build_path,
                 unique_id=self.node.unique_id,
-                exc=str(e)  # TODO: unstring this when serialization is fixed
+                exc=str(e),  # TODO: unstring this when serialization is fixed
             )
         )
         fire_event(PrintDebugStackTrace())
