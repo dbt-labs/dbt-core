@@ -7,7 +7,7 @@ charset-normalizer==2.0.8
 click==8.0.3
 colorama==0.4.4
 dbt-core==1.0.0rc3
-dbt-extractor==0.4.0
+dbt-extractor~=0.4.0
 dbt-postgres==1.0.0rc3
 future==0.18.2
 hologram==0.0.14
