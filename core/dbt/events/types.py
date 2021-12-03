@@ -1323,9 +1323,9 @@ class PrintDebugStackTrace(ShowException, DebugLevel, Cli, File):
 
 @dataclass
 class GenericExceptionOnRun(ErrorLevel, Cli, File):
-    build_path: str
+    build_path: Optional[str]
     unique_id: str
-    exc: Exception
+    exc: str  # TODO: make this the actual exception once we have a better searilization strategy
     code: str = "W004"
 
     def message(self) -> str:
@@ -2581,7 +2581,7 @@ if 1 == 0:
     ProfileHelpMessage()
     CatchableExceptionOnRun(exc=Exception(''))
     InternalExceptionOnRun(build_path='', exc=Exception(''))
-    GenericExceptionOnRun(build_path='', unique_id='', exc=Exception(''))
+    GenericExceptionOnRun(build_path='', unique_id='', exc='')
     NodeConnectionReleaseError(node_name='', exc=Exception(''))
     CheckCleanPath(path='')
     ConfirmCleanPath(path='')

@@ -286,7 +286,7 @@ sample_values = [
     ProfileHelpMessage(),
     CatchableExceptionOnRun(exc=Exception('')),
     InternalExceptionOnRun(build_path='', exc=Exception('')),
-    GenericExceptionOnRun(build_path='', unique_id='', exc=Exception('')),
+    GenericExceptionOnRun(build_path='', unique_id='', exc=''),
     NodeConnectionReleaseError(node_name='', exc=Exception('')),
     CheckCleanPath(path=''),
     ConfirmCleanPath(path=''),
