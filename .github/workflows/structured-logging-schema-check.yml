@@ -67,5 +67,5 @@ jobs:
       # skips any output that isn't valid json
       - uses: actions-rs/cargo@v1
         with:
-          command: test
+          command: run
           args: --manifest-path test/interop/log_parsing/Cargo.toml
