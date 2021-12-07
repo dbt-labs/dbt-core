@@ -1,3 +1,7 @@
+## dbt-core 1.0.1 (Release TBD)
+### Fixes
+- Fix a bug where the user wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
+
 ## dbt-core 1.0.0 (December 3, 2021)
 
 ### Fixes
