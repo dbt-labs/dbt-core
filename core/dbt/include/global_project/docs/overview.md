@@ -35,7 +35,7 @@ Note that you can also right-click on models to interactively filter and explore
 
 ### More information
 
-- [What is dbt](https://docs.getdbt.com/docs/overview)?
+- [What is dbt](https://docs.getdbt.com/docs/introduction)?
 - Read the [dbt viewpoint](https://docs.getdbt.com/docs/viewpoint)
 - [Installation](https://docs.getdbt.com/docs/installation)
 - Join the [dbt Community](https://www.getdbt.com/community/) for questions and discussion
