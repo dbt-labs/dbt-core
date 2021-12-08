@@ -1,3 +1,11 @@
+## dbt-core 1.0.1 (TBD)
+
+### Fixes
+- Fix wrong url in the dbt docs overview homepage ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
+
+Contributors:
+- [remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
+
 ## dbt-core 1.0.0 (December 3, 2021)
 
 ### Fixes
