@@ -375,7 +375,7 @@ class PartialParsing:
         for unique_id in unique_ids:
             if unique_id in self.saved_manifest.nodes:
                 node = self.saved_manifest.nodes[unique_id]
-                if node.resource_type == NodeType.Test:
+                if node.resource_type == NodeType.Test and node.test_node_type == 'generic':
                     # test nodes are handled separately. Must be removed from schema file
                     continue
                 file_id = node.file_id
@@ -498,7 +498,9 @@ class PartialParsing:
         for unique_id in unique_ids:
             if unique_id in self.saved_manifest.nodes:
                 node = self.saved_manifest.nodes[unique_id]
-                if node.resource_type == NodeType.Test:
+                # Both generic tests from yaml files and singular tests have NodeType.Test
+                # so check for generic test.
+                if node.resource_type == NodeType.Test and node.test_node_type == 'generic':
                     schema_file_id = node.file_id
                     schema_file = self.saved_manifest.files[schema_file_id]
                     (key, name) = schema_file.get_key_and_name_for_test(node.unique_id)
@@ -670,8 +672,8 @@ class PartialParsing:
                     continue
                 elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if elem:
-                    self.delete_schema_macro_patch(schema_file, macro)
-                    self.merge_patch(schema_file, dict_key, macro)
+                    self.delete_schema_macro_patch(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
 
         # exposures
         dict_key = 'exposures'

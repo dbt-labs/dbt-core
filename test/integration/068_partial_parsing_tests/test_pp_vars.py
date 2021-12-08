@@ -41,7 +41,7 @@ class BasePPTest(DBTIntegrationTest):
         os.mkdir(os.path.join(self.test_root_dir, 'tests'))
         os.mkdir(os.path.join(self.test_root_dir, 'macros'))
         os.mkdir(os.path.join(self.test_root_dir, 'seeds'))
-
+        os.environ['DBT_PP_TEST'] = 'true'
 
 
 class EnvVarTest(BasePPTest):

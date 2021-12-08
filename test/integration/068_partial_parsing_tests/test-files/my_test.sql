@@ -1,2 +1,2 @@
 select
-   * from {{ ref('customers') }} where customer_id > 100
+   * from {{ ref('customers') }} where first_name = '{{ macro_something() }}'
