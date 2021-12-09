@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import re
 import shutil
-from typing import Optional
+from typing import Any, Mapping, Optional, Sequence
 
 import yaml
 import click
@@ -48,13 +48,30 @@ Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
 Happy modeling!
 """
 
+class YAMLType(click.ParamType):
+    """Custom YAML type for click parameters and prompts."""
+
+    name = "yaml"
+
+    def convert(
+        self,
+        value: Any,
+        param: Optional[click.Parameter],
+        ctx: Optional[click.Context],
+    ) -> Any:
+        if isinstance(value, str):
+            return yaml.safe_load(value)
+        return value
+
+
 # https://click.palletsprojects.com/en/8.0.x/api/?highlight=float#types
 click_type_mapping = {
     "string": click.STRING,
     "int": click.INT,
     "float": click.FLOAT,
     "bool": click.BOOL,
-    None: None
+    "yaml": YAMLType(),
+    None: None,
 }
 
 
