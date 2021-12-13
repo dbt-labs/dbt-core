@@ -75,7 +75,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
             fire_event(
                 SQLQueryStatus(
-                    status=self.get_response(cursor)._message,
+                    status=str(self.get_response(cursor)),
                     elapsed=round((time.time() - pre), 2)
                 )
             )
