@@ -315,7 +315,7 @@ class PartialParsing:
         if node.patch_path:
             file_id = node.patch_path
             # it might be changed...  then what?
-            if file_id not in self.file_diff['deleted']:
+            if file_id not in self.file_diff['deleted'] and file_id in self.saved_files:
                 # schema_files should already be updated
                 schema_file = self.saved_files[file_id]
                 dict_key = parse_file_type_to_key[source_file.parse_file_type]
