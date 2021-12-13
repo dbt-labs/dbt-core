@@ -435,7 +435,9 @@ class PartialParsing:
         self.check_for_special_deleted_macros(source_file)
         self.handle_macro_file_links(source_file, follow_references)
         file_id = source_file.file_id
-        self.deleted_manifest.files[file_id] = self.saved_files.pop(file_id)
+        # It's not clear when this file_id would not exist in saved_files
+        if file_id in self.saved_files:
+            self.deleted_manifest.files[file_id] = self.saved_files.pop(file_id)
 
     def check_for_special_deleted_macros(self, source_file):
         for unique_id in source_file.macros:
