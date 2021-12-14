@@ -159,15 +159,11 @@ class NodeInfo(Event, metaclass=ABCMeta):
         return node_info
 
 
-class File(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def file_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
+# prevents an event from going to the file
+class NoFile():
+    pass
 
 
-class Cli(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def cli_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
+# prevents an event from going to stdout
+class NoStdOut():
+    pass

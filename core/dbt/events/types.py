@@ -10,7 +10,7 @@ from dbt.events.stubs import (
 )
 from dbt import ui
 from dbt.events.base_types import (
-    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException, NodeInfo, Cache
+    NoStdOut, Event, NoFile, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException, NodeInfo, Cache
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
