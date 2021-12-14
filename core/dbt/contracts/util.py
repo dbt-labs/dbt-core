@@ -9,6 +9,7 @@ from dbt.clients.system import write_json, read_json
 from dbt.exceptions import (
     InternalException,
     RuntimeException,
+    IncompatibleSchemaException
 )
 from dbt.version import __version__
 from dbt.events.functions import get_invocation_id
@@ -158,6 +159,8 @@ def get_metadata_env() -> Dict[str, str]:
     }
 
 
+# This is used in the ManifestMetadata, RunResultsMetadata, RunOperationResultMetadata,
+# FreshnessMetadata, and CatalogMetadata classes
 @dataclasses.dataclass
 class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
@@ -177,6 +180,17 @@ class BaseArtifactMetadata(dbtClassMixin):
         return dct
 
 
+# This is used as a class decorator to set the schema_version in the
+# 'dbt_schema_version' class attribute. (It's copied into the metadata objects.)
+# Name attributes of SchemaVersion in classes with the 'schema_version' decorator:
+#   manifest
+#   run-results
+#   run-operation-result
+#   sources
+#   catalog
+#   remote-compile-result
+#   remote-execution-result
+#   remote-run-result
 def schema_version(name: str, version: int):
     def inner(cls: Type[VersionedSchema]):
         cls.dbt_schema_version = SchemaVersion(
@@ -187,6 +201,7 @@ def schema_version(name: str, version: int):
     return inner
 
 
+# This is used in the ArtifactMixin and RemoteResult classes
 @dataclasses.dataclass
 class VersionedSchema(dbtClassMixin):
     dbt_schema_version: ClassVar[SchemaVersion]
@@ -198,6 +213,30 @@ class VersionedSchema(dbtClassMixin):
             result['$id'] = str(cls.dbt_schema_version)
         return result
 
+    @classmethod
+    def read_and_check_versions(cls, path: str):
+        try:
+            data = read_json(path)
+        except (EnvironmentError, ValueError) as exc:
+            raise RuntimeException(
+                f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
+            ) from exc
+
+        # Check metadata version. There is a class variable 'dbt_schema_version', but
+        # that doesn't show up in artifacts, where it only exists in the 'metadata'
+        # dictionary.
+        if hasattr(cls, 'dbt_schema_version'):
+            if 'metadata' in data and 'dbt_schema_version' in data['metadata']:
+                previous_schema_version = data['metadata']['dbt_schema_version']
+                # cls.dbt_schema_version is a SchemaVersion object
+                if str(cls.dbt_schema_version) != previous_schema_version:
+                    raise IncompatibleSchemaException(
+                        expected=str(cls.dbt_schema_version),
+                        found=previous_schema_version
+                    )
+
+        return cls.from_dict(data)  # type: ignore
+
 
 T = TypeVar('T', bound='ArtifactMixin')
 
@@ -205,6 +244,8 @@ T = TypeVar('T', bound='ArtifactMixin')
 # metadata should really be a Generic[T_M] where T_M is a TypeVar bound to
 # BaseArtifactMetadata. Unfortunately this isn't possible due to a mypy issue:
 # https://github.com/python/mypy/issues/7520
+# This is used in the WritableManifest, RunResultsArtifact, RunOperationResultsArtifact,
+# and CatalogArtifact
 @dataclasses.dataclass(init=False)
 class ArtifactMixin(VersionedSchema, Writable, Readable):
     metadata: BaseArtifactMetadata

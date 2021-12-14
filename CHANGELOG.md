@@ -5,6 +5,7 @@
 - Fix redefined status param of SQLQueryStatus to typecheck the string which passes on `._message` value of `AdapterResponse` or the `str` value sent by adapter plugin.  ([#4463](https://github.com/dbt-labs/dbt-core/pull/4463#issuecomment-990174166))
 - Fix `DepsStartPackageInstall` event to use package name instead of version number. ([#4482](https://github.com/dbt-labs/dbt-core/pull/4482))
 - Reimplement log message to use adapter name instead of the object method. ([#4501](https://github.com/dbt-labs/dbt-core/pull/4501))
+- Issue better error message for incompatible schemas ([#4470](https://github.com/dbt-labs/dbt-core/pull/4442), [#4497](https://github.com/dbt-labs/dbt-core/pull/4497))
 
 ###  Docs
 - Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
