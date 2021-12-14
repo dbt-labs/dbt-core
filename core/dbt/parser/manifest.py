@@ -291,7 +291,7 @@ class ManifestLoader:
                         exc_info['full_reparse_reason'] = ReparseReason.exception
                         dbt.tracking.track_partial_parser(exc_info)
 
-                    if os.environ.get('DBT_PP_TEST'):
+                    if os.environ.get("DBT_PP_TEST"):
                         raise exc
 
         if self.manifest._parsing_info is None:

@@ -439,7 +439,7 @@ class ParsedSingularTestNode(ParsedNode):
 
     @property
     def test_node_type(self):
-        return 'singular'
+        return "singular"
 
 
 @dataclass
@@ -460,7 +460,7 @@ class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
 
     @property
     def test_node_type(self):
-        return 'generic'
+        return "generic"
 
 
 @dataclass
