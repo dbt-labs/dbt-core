@@ -294,7 +294,7 @@ sample_values = [
     FinishedCleanPaths(),
     OpenCommand(open_cmd='', profiles_dir=''),
     DepsNoPackagesFound(),
-    DepsStartPackageInstall(package=''),
+    DepsStartPackageInstall(package_name=''),
     DepsInstallInfo(version_name=''),
     DepsUpdateAvailable(version_latest=''),
     DepsListSubdirectory(subdirectory=''),

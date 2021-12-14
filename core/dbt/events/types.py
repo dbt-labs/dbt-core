@@ -1414,11 +1414,11 @@ class DepsNoPackagesFound(InfoLevel, Cli, File):
 
 @dataclass
 class DepsStartPackageInstall(InfoLevel, Cli, File):
-    package: str
+    package_name: str
     code: str = "M014"
 
     def message(self) -> str:
-        return f"Installing {self.package}"
+        return f"Installing {self.package_name}"
 
 
 @dataclass
@@ -2589,7 +2589,7 @@ if 1 == 0:
     FinishedCleanPaths()
     OpenCommand(open_cmd='', profiles_dir='')
     DepsNoPackagesFound()
-    DepsStartPackageInstall(package='')
+    DepsStartPackageInstall(package_name='')
     DepsInstallInfo(version_name='')
     DepsUpdateAvailable(version_latest='')
     DepsListSubdirectory(subdirectory='')
