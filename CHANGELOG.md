@@ -32,6 +32,7 @@
 - Add deps module README ([#4686](https://github.com/dbt-labs/dbt-core/pull/4686/))
 - Initial conversion of tests to pytest ([#4690](https://github.com/dbt-labs/dbt-core/issues/4690), [#4691](https://github.com/dbt-labs/dbt-core/pull/4691))
 - Fix errors in Windows for tests/functions ([#4781](https://github.com/dbt-labs/dbt-core/issues/4781), [#4767](https://github.com/dbt-labs/dbt-core/pull/4767))
+- Enable more dialects to snapshot sources with added columns, even those that don't support boolean datatypes ([#4489](https://github.com/dbt-labs/dbt-core/pull/4489))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
