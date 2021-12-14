@@ -2534,7 +2534,7 @@ if 1 == 0:
     FinishedCleanPaths()
     OpenCommand(open_cmd="", profiles_dir="")
     DepsNoPackagesFound()
-    DepsStartPackageInstall(package_name='')
+    DepsStartPackageInstall(package_name="")
     DepsInstallInfo(version_name="")
     DepsUpdateAvailable(version_latest="")
     DepsListSubdirectory(subdirectory="")
