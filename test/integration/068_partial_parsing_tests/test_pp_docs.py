@@ -37,6 +37,7 @@ class TestDocs(DBTIntegrationTest):
         os.mkdir(os.path.join(self.test_root_dir, 'macros'))
         os.mkdir(os.path.join(self.test_root_dir, 'analyses'))
         os.mkdir(os.path.join(self.test_root_dir, 'snapshots'))
+        os.environ['DBT_PP_TEST'] = 'true'
 
 
     @use_profile('postgres')
