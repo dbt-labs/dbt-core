@@ -424,7 +424,7 @@ class TestEventJSONSerialization(TestCase):
 
         # if we have everything we need to test, try to serialize everything
         for event in sample_values:
-            d = event_to_serializable_dict(event, lambda _: event.get_ts_rfc3339(), lambda x: x.message())
+            d = event_to_serializable_dict(event, lambda _: event.get_ts_rfc3339())
             try:
                 json.dumps(d)
             except TypeError as e:
