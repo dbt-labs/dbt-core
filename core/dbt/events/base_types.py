@@ -11,32 +11,6 @@ from typing import Any, Optional
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-# in preparation for #3977
-class TestLevel():
-    def level_tag(self) -> str:
-        return "test"
-
-
-class DebugLevel():
-    def level_tag(self) -> str:
-        return "debug"
-
-
-class InfoLevel():
-    def level_tag(self) -> str:
-        return "info"
-
-
-class WarnLevel():
-    def level_tag(self) -> str:
-        return "warn"
-
-
-class ErrorLevel():
-    def level_tag(self) -> str:
-        return "error"
-
-
 class Cache():
     # Events with this class will only be logged when the `--log-cache-events` flag is passed
     pass
@@ -139,6 +113,32 @@ class Event(metaclass=ABCMeta):
             else:
                 d[k] = v
         return d
+
+
+# in preparation for #3977
+class TestLevel(Event):
+    def level_tag(self) -> str:
+        return "test"
+
+
+class DebugLevel(Event):
+    def level_tag(self) -> str:
+        return "debug"
+
+
+class InfoLevel(Event):
+    def level_tag(self) -> str:
+        return "info"
+
+
+class WarnLevel(Event):
+    def level_tag(self) -> str:
+        return "warn"
+
+
+class ErrorLevel(Event):
+    def level_tag(self) -> str:
+        return "error"
 
 
 @dataclass  # type: ignore

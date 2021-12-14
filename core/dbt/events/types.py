@@ -49,7 +49,7 @@ T_Event = TypeVar('T_Event', bound=Event)
 # https://github.com/python/mypy/issues/5374
 
 @dataclass  # type: ignore
-class AdapterEventBase():
+class AdapterEventBase(Event):
     name: str
     base_msg: str
     args: Tuple[Any, ...]
