@@ -18,6 +18,9 @@
 ###  Docs
 - Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
 
+### Under the hood
+- Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496))
+
 Contributors:
 - [remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
 
