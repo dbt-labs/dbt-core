@@ -101,8 +101,3 @@ class TestLoader(unittest.TestCase):
             project_root=normalize(self.root_project_config.project_root),
         )
         return SourceFile(path=path, checksum=checksum)
-
-        self.parser.parse_file.assert_called_once_with(FileBlock(file=source_file))
-
-# Note: none of the tests in this test case made sense with the removal
-# of the old method of partial parsing. 
