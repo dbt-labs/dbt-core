@@ -14,7 +14,8 @@ class PreviousState:
         manifest_path = self.path / 'manifest.json'
         if manifest_path.exists() and manifest_path.is_file():
             try:
-                self.manifest = WritableManifest.read(str(manifest_path))
+                # we want to bail with an error if schema versions don't match
+                self.manifest = WritableManifest.read_and_check_versions(str(manifest_path))
             except IncompatibleSchemaException as exc:
                 exc.add_filename(str(manifest_path))
                 raise
@@ -22,7 +23,8 @@ class PreviousState:
         results_path = self.path / 'run_results.json'
         if results_path.exists() and results_path.is_file():
             try:
-                self.results = RunResultsArtifact.read(str(results_path))
+                # we want to bail with an error if schema versions don't match
+                self.results = RunResultsArtifact.read_and_check_versions(str(results_path))
             except IncompatibleSchemaException as exc:
                 exc.add_filename(str(results_path))
                 raise
