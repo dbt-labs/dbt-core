@@ -208,4 +208,4 @@ class TestModifiedState(DBTIntegrationTest):
         # This tests that a different schema version in the file throws an error
         with self.assertRaises(IncompatibleSchemaException) as exc:
             results = self.run_dbt(['ls', '-s',  'state:modified',  '--state',  './previous_state'])
-            self.assertRegex(str(exc), r"Expected a schema version")
+            self.assertEqual(exc.CODE, 10014)
