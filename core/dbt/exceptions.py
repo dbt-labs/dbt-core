@@ -692,9 +692,11 @@ def missing_materialization(model, adapter_type):
 
 
 def bad_package_spec(repo, spec, error_message):
-    raise InternalException(
-        "Error checking out spec='{}' for repo {}\n{}".format(
-            spec, repo, error_message))
+    msg = "Error checking out spec='{}' for repo {}\n{}".format(spec, repo, error_message)
+    for secret in get_secret_env():
+        msg = str(msg).replace(secret, "*****")
+
+    raise InternalException(msg)
 
 
 def raise_cache_inconsistent(message):
