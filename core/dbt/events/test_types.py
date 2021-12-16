@@ -1,12 +1,5 @@
 from dataclasses import dataclass
-from .types import (
-    InfoLevel,
-    DebugLevel,
-    WarnLevel,
-    ErrorLevel,
-    ShowException,
-    NoFile
-)
+from .types import InfoLevel, DebugLevel, WarnLevel, ErrorLevel, ShowException, NoFile
 
 
 # Keeping log messages for testing separate since they are used for debugging.
