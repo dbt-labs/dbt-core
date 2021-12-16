@@ -4,11 +4,7 @@ from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
-from dbt.exceptions import (
-    InternalException,
-    RuntimeException,
-    IncompatibleSchemaException
-)
+from dbt.exceptions import InternalException, RuntimeException, IncompatibleSchemaException
 from dbt.version import __version__
 from dbt.events.functions import get_invocation_id
 from dbt.dataclass_schema import dbtClassMixin
