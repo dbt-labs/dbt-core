@@ -15,7 +15,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models-2"
+        return "models-invalid-disabled"
 
     @use_profile('postgres')
     def test_postgres_view_with_incremental_attributes(self):
@@ -38,7 +38,7 @@ class TestDisabledModelReference(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models-3"
+        return "models-disabled"
 
     @use_profile('postgres')
     def test_postgres_view_with_incremental_attributes(self):
@@ -72,7 +72,7 @@ class TestInvalidMacroCall(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models-4"
+        return "models-invalid-macro"
 
     @staticmethod
     def dir(path):
@@ -91,7 +91,7 @@ class TestInvalidMacroCall(DBTIntegrationTest):
             self.run_dbt(['compile'])
 
         macro_path = os.path.join('bad-macros', 'macros.sql')
-        model_path = os.path.join('models-4', 'bad_macro.sql')
+        model_path = os.path.join('models-invalid-macro', 'bad_macro.sql')
 
         self.assertIn(f'> in macro some_macro ({macro_path})', str(exc.exception))
         self.assertIn(f'> called by model bad_macro ({model_path})', str(exc.exception))
