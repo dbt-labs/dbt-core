@@ -105,12 +105,12 @@ class ErrorLevel(EventSerialization, Event):
 
 
 # prevents an event from going to the file
-class NoFile():
+class NoFile:
     pass
 
 
 # prevents an event from going to stdout
-class NoStdOut():
+class NoStdOut:
     pass
 
 

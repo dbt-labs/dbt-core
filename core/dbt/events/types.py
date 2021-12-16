@@ -3,8 +3,15 @@ from dbt.adapters.reference_keys import _ReferenceKey
 from dbt import ui
 from dbt.helper_types import Lazy
 from dbt.events.base_types import (
-    Event, NoFile, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException,
-    NodeInfo, Cache
+    Event,
+    NoFile,
+    DebugLevel,
+    InfoLevel,
+    WarnLevel,
+    ErrorLevel,
+    ShowException,
+    NodeInfo,
+    Cache,
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.events.serialization import EventSerialization

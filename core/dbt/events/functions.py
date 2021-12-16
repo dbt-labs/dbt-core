@@ -176,7 +176,7 @@ def event_to_serializable_dict(
         "log_version": LOG_VERSION,
         "ts": get_ts_rfc3339(),
         'pid': e.get_pid(),
-        'msg': e.message(),
+        "msg": e.message(),
         'level': e.level_tag(),
         "data": log_line,
         'invocation_id': e.get_invocation_id(),
