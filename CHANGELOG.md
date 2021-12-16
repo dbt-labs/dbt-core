@@ -3,11 +3,10 @@
 ### Fixes
 - Fix wrong url in the dbt docs overview homepage ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
 - Fix redefined status param of SQLQueryStatus to typecheck the string which passes on `._message` value of `AdapterResponse` or the `str` value sent by adapter plugin.  ([#4463](https://github.com/dbt-labs/dbt-core/pull/4463#issuecomment-990174166))
-<<<<<<< HEAD
 - Fix `DepsStartPackageInstall` event to use package name instead of version number. ([#4482](https://github.com/dbt-labs/dbt-core/pull/4482))
-=======
+
+###  Docs
 - Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
->>>>>>> b55730c53 (Add changelog)
 
 Contributors:
 - [remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
