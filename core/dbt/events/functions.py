@@ -2,7 +2,7 @@
 from colorama import Style
 from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.base_types import Cli, Event, File, ShowException, NodeInfo, Cache
+from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, NodeInfo, Cache
 from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
 import dbt.flags as flags
 # TODO this will need to move eventually
@@ -131,13 +131,11 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
-# returns a dictionary representation of the event fields. You must specify which of the
-# available messages you would like to use (i.e. - e.message, e.cli_msg(), e.file_msg())
-# used for constructing json formatted events. includes secrets which must be scrubbed at
-# the usage site.
+# returns a dictionary representation of the event fields.
+# the message may contain secrets which must be scrubbed at the usage site.
 def event_to_serializable_dict(
-    e: T_Event, ts_fn: Callable[[datetime], str],
-    msg_fn: Callable[[T_Event], str]
+    e: T_Event,
+    ts_fn: Callable[[datetime], str]
 ) -> Dict[str, Any]:
     data = dict()
     node_info = dict()
@@ -166,7 +164,7 @@ def event_to_serializable_dict(
         'log_version': e.log_version,
         'ts': ts_fn(e.get_ts()),
         'pid': e.get_pid(),
-        'msg': msg_fn(e),
+        'msg': e.message(),
         'level': e.level_tag(),
         'data': data,
         'invocation_id': e.get_invocation_id(),
@@ -179,17 +177,16 @@ def event_to_serializable_dict(
 
 
 # translates an Event to a completely formatted text-based log line
-# you have to specify which message you want. (i.e. - e.message, e.cli_msg(), e.file_msg())
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
-def create_info_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+def create_info_text_log_line(e: T_Event) -> str:
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.get_ts().strftime("%H:%M:%S")
-    scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
+    scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"
     return log_line
 
 
-def create_debug_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+def create_debug_text_log_line(e: T_Event) -> str:
     log_line: str = ''
     # Create a separator if this is the beginning of an invocation
     if type(e) == MainReportVersion:
@@ -197,7 +194,7 @@ def create_debug_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> 
         log_line = f'\n\n{separator} {e.get_ts()} | {get_invocation_id()} {separator}\n'
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.get_ts().strftime("%H:%M:%S.%f")
-    scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
+    scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     thread = ''
     if threading.current_thread().getName():
@@ -210,12 +207,11 @@ def create_debug_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> 
 
 
 # translates an Event to a completely formatted json log line
-# you have to specify which message you want. (i.e. - e.message(), e.cli_msg(), e.file_msg())
-def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> Optional[str]:
+def create_json_log_line(e: T_Event) -> Optional[str]:
     if type(e) == EmptyLine:
         return None  # will not be sent to logger
-    # using preformatted string instead of formatting it here to be extra careful about timezone
-    values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339(), lambda x: msg_fn(x))
+    # using preformatted ts string instead of formatting it here to be extra careful about timezone
+    values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339())
     raw_log_line = json.dumps(values, sort_keys=True)
     return scrub_secrets(raw_log_line, env_secrets())
 
@@ -223,15 +219,14 @@ def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> Option
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
 def create_log_line(
     e: T_Event,
-    msg_fn: Callable[[T_Event], str],
     file_output=False
 ) -> Optional[str]:
     if this.format_json:
-        return create_json_log_line(e, msg_fn)  # json output, both console and file
+        return create_json_log_line(e)  # json output, both console and file
     elif file_output is True or flags.DEBUG:
-        return create_debug_text_log_line(e, msg_fn)  # default file output
+        return create_debug_text_log_line(e)  # default file output
     else:
-        return create_info_text_log_line(e, msg_fn)  # console output
+        return create_info_text_log_line(e)  # console output
 
 
 # allows for resuse of this obnoxious if else tree.
@@ -328,29 +323,28 @@ def fire_event(e: Event) -> None:
     if flags.ENABLE_LEGACY_LOGGER:
         # using Event::message because the legacy logger didn't differentiate messages by
         # destination
-        log_line = create_log_line(e, msg_fn=lambda x: x.message())
+        log_line = create_log_line(e)
         if log_line:
             send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
         return  # exit the function to avoid using the current logger as well
 
     # always logs debug level regardless of user input
-    if isinstance(e, File):
-        log_line = create_log_line(e, msg_fn=lambda x: x.file_msg(), file_output=True)
+    if not isinstance(e, NoFile):
+        log_line = create_log_line(e, file_output=True)
         # doesn't send exceptions to exception logger
         if log_line:
             send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
-    if isinstance(e, Cli):
+    if not isinstance(e, NoStdOut):
         # explicitly checking the debug flag here so that potentially expensive-to-construct
         # log messages are not constructed if debug messages are never shown.
         if e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
 
-        log_line = create_log_line(e, msg_fn=lambda x: x.cli_msg())
+        log_line = create_log_line(e)
         if log_line:
             if not isinstance(e, ShowException):
                 send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
-            # CliEventABC and ShowException
             else:
                 send_exc_to_logger(
                     STDOUT_LOG,
