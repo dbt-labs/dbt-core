@@ -213,14 +213,13 @@ class VersionedSchema(dbtClassMixin):
         # Check metadata version. There is a class variable 'dbt_schema_version', but
         # that doesn't show up in artifacts, where it only exists in the 'metadata'
         # dictionary.
-        if hasattr(cls, 'dbt_schema_version'):
-            if 'metadata' in data and 'dbt_schema_version' in data['metadata']:
-                previous_schema_version = data['metadata']['dbt_schema_version']
+        if hasattr(cls, "dbt_schema_version"):
+            if "metadata" in data and "dbt_schema_version" in data["metadata"]:
+                previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
                 if str(cls.dbt_schema_version) != previous_schema_version:
                     raise IncompatibleSchemaException(
-                        expected=str(cls.dbt_schema_version),
-                        found=previous_schema_version
+                        expected=str(cls.dbt_schema_version), found=previous_schema_version
                     )
 
         return cls.from_dict(data)  # type: ignore
