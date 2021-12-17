@@ -470,10 +470,10 @@ def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
 
 def raise_git_cloning_problem(repo) -> NoReturn:
     repo = scrub_secrets(repo, env_secrets())
-    msg = '''\
+    msg = """\
     Something went wrong while cloning {}
     Check the debug logs for more information
-    '''
+    """
     raise RuntimeException(msg.format(repo))
 
 

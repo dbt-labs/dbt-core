@@ -13,8 +13,11 @@ from dbt.events.types import (
     GitProgressCheckedOutAt,
 )
 from dbt.exceptions import (
-    CommandResultError, RuntimeException, bad_package_spec, raise_git_cloning_error,
-    raise_git_cloning_problem
+    CommandResultError,
+    RuntimeException,
+    bad_package_spec,
+    raise_git_cloning_error,
+    raise_git_cloning_problem,
 )
 from packaging import version
 
