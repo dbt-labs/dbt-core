@@ -399,7 +399,6 @@ class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message='Error running command'):
         super().__init__(message)
         self.cwd = cwd
-        cmd = scrub_secrets(str(cmd), env_secrets())
         self.cmd = cmd
         self.args = (cwd, cmd, message)
 
@@ -467,7 +466,20 @@ def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(scrub_secrets(msg, env_secrets()))
 
 
+def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
+    def __init__(self, cwd, cmd, returncode, stdout, stderr,
+                 message='Got a non-zero returncode'):
+        self.returncode = returncode
+        self.stdout = scrub_secrets(stdout, env_secrets())
+        self.stderr = scrub_secrets(stderr, env_secrets())
+        message = scrub_secrets(message, env_secrets())
+        self.args = (cwd, cmd, returncode, stdout, stderr, message)
+
+    raise error
+
+
 def raise_git_cloning_problem(repo) -> NoReturn:
+    repo = scrub_secrets(repo, env_secrets())
     msg = '''\
     Something went wrong while cloning {}
     Check the debug logs for more information
