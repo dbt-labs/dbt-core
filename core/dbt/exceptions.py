@@ -475,10 +475,6 @@ def raise_git_cloning_problem(repo) -> NoReturn:
     raise RuntimeException(msg.format(repo))
 
 
-def raise_git_cloning_error(msg) -> NoReturn:
-    raise RuntimeException(msg)
-
-
 def disallow_secret_env_var(env_var_name) -> NoReturn:
     """Raise an error when a secret env var is referenced outside allowed
     rendering contexts"""
