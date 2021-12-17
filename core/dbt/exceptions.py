@@ -467,14 +467,7 @@ def raise_dependency_error(msg) -> NoReturn:
 
 
 def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
-    def __init__(self, cwd, cmd, returncode, stdout, stderr,
-                 message='Got a non-zero returncode'):
-        self.returncode = returncode
-        self.stdout = scrub_secrets(stdout, env_secrets())
-        self.stderr = scrub_secrets(stderr, env_secrets())
-        message = scrub_secrets(message, env_secrets())
-        self.args = (cwd, cmd, returncode, stdout, stderr, message)
-
+    error.cmd = scrub_secrets(str(error.cmd), env_secrets())
     raise error
 
 
