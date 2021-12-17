@@ -2,8 +2,7 @@ import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
 
-from dbt.logger import get_secret_env
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, scrub_secrets, env_secrets
 from dbt.events.types import GeneralWarningMsg, GeneralWarningException
 from dbt.node_types import NodeType
 from dbt import flags
@@ -54,7 +53,7 @@ class RuntimeException(RuntimeError, Exception):
     def __init__(self, msg, node=None):
         self.stack = []
         self.node = node
-        self.msg = msg
+        self.msg = scrub_secrets(msg, env_secrets())
 
     def add_node(self, node=None):
         if node is not None and node is not self.node:
@@ -401,8 +400,6 @@ class CommandError(RuntimeException):
         super().__init__(message)
         self.cwd = cwd
         self.cmd = cmd
-        for secret in get_secret_env():
-            self.cmd = str(self.cmd).replace(secret, "*****")
         self.args = (cwd, cmd, message)
 
     def __str__(self):
@@ -466,7 +463,21 @@ def raise_database_error(msg, node=None) -> NoReturn:
 
 
 def raise_dependency_error(msg) -> NoReturn:
-    raise DependencyException(msg)
+    raise DependencyException(scrub_secrets(msg, env_secrets()))
+
+
+def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
+    error.cmd = scrub_secrets(str(error.cmd), env_secrets())
+    raise error
+
+
+def raise_git_cloning_problem(repo) -> NoReturn:
+    repo = scrub_secrets(repo, env_secrets())
+    msg = '''\
+    Something went wrong while cloning {}
+    Check the debug logs for more information
+    '''
+    raise RuntimeException(msg.format(repo))
 
 
 def disallow_secret_env_var(env_var_name) -> NoReturn:
@@ -692,9 +703,9 @@ def missing_materialization(model, adapter_type):
 
 
 def bad_package_spec(repo, spec, error_message):
-    raise InternalException(
-        "Error checking out spec='{}' for repo {}\n{}".format(
-            spec, repo, error_message))
+    msg = "Error checking out spec='{}' for repo {}\n{}".format(spec, repo, error_message)
+
+    raise InternalException(scrub_secrets(msg, env_secrets()))
 
 
 def raise_cache_inconsistent(message):
@@ -999,7 +1010,7 @@ def raise_duplicate_alias(
 
 def warn_or_error(msg, node=None, log_fmt=None):
     if flags.WARN_ERROR:
-        raise_compiler_error(msg, node)
+        raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
     else:
         fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
 
