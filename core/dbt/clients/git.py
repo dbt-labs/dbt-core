@@ -9,7 +9,8 @@ from dbt.events.types import (
     GitNothingToDo, GitProgressUpdatedCheckoutRange, GitProgressCheckedOutAt
 )
 from dbt.exceptions import (
-    CommandResultError, RuntimeException, bad_package_spec, raise_cloning_problem
+    CommandResultError, RuntimeException, bad_package_spec, raise_git_cloning_error,
+    raise_git_cloning_problem
 )
 from packaging import version
 
@@ -24,7 +25,7 @@ def _raise_git_cloning_error(repo, revision, error):
     if 'usage: git' in stderr:
         stderr = stderr.split('\nusage: git')[0]
     if re.match("fatal: destination path '(.+)' already exists", stderr):
-        raise error
+        raise raise_git_cloning_error(error)
 
     bad_package_spec(repo, revision, stderr)
 
@@ -137,7 +138,7 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
         err = exc.stderr.decode('utf-8')
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:
-            raise_cloning_problem()
+            raise_git_cloning_problem()
 
     directory = None
     start_sha = None

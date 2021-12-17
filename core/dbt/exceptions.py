@@ -399,7 +399,7 @@ class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message='Error running command'):
         super().__init__(message)
         self.cwd = cwd
-        cmd = scrub_secrets(cmd, env_secrets())
+        cmd = scrub_secrets(str(cmd), env_secrets())
         self.cmd = cmd
         self.args = (cwd, cmd, message)
 
@@ -467,8 +467,7 @@ def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(scrub_secrets(msg, env_secrets()))
 
 
-def raise_cloning_problem(repo) -> NoReturn:
-    repo = scrub_secrets(repo, env_secrets())
+def raise_git_cloning_problem(repo) -> NoReturn:
     msg = '''\
     Something went wrong while cloning {}
     Check the debug logs for more information
@@ -476,8 +475,8 @@ def raise_cloning_problem(repo) -> NoReturn:
     raise RuntimeException(msg.format(repo))
 
 
-def raise_git_cloning_problem(msg) -> NoReturn:
-    raise RuntimeException(scrub_secrets(msg, env_secrets()))
+def raise_git_cloning_error(msg) -> NoReturn:
+    raise RuntimeException(msg)
 
 
 def disallow_secret_env_var(env_var_name) -> NoReturn:
