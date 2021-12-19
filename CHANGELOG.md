@@ -7,6 +7,7 @@
 - Reimplement log message to use adapter name instead of the object method. ([#4501](https://github.com/dbt-labs/dbt-core/pull/4501))
 - Issue better error message for incompatible schemas ([#4470](https://github.com/dbt-labs/dbt-core/pull/4442), [#4497](https://github.com/dbt-labs/dbt-core/pull/4497))
 - Remove secrets from error related to packages. ([#4507](https://github.com/dbt-labs/dbt-core/pull/4507))
+- Prevent coercion of boolean values (`True`, `False`) to numeric values (`0`, `1`) in query results ([#4511](https://github.com/dbt-labs/dbt-core/issues/4511), [#4512](https://github.com/dbt-labs/dbt-core/pull/4512))
 
 ###  Docs
 - Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))

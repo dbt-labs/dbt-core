@@ -13,6 +13,18 @@ from dbt.exceptions import RuntimeException
 BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
 
 
+class Number(agate.data_types.Number):
+    # undo the change in https://github.com/wireservice/agate/pull/733
+    # i.e. do not cast True and False to numeric 1 and 0
+    def cast(self, d):
+        if type(d) == bool:
+            raise agate.exceptions.CastError(
+                'Do not cast True to 1 or False to 0.'
+            )
+        else:
+            return super().cast(d)
+
+
 class ISODateTime(agate.data_types.DateTime):
     def cast(self, d):
         # this is agate.data_types.DateTime.cast with the "clever" bits removed
@@ -41,7 +53,7 @@ def build_type_tester(
 ) -> agate.TypeTester:
 
     types = [
-        agate.data_types.Number(null_values=('null', '')),
+        Number(null_values=('null', '')),
         agate.data_types.Date(null_values=('null', ''),
                               date_format='%Y-%m-%d'),
         agate.data_types.DateTime(null_values=('null', ''),

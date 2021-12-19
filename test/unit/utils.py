@@ -255,7 +255,7 @@ class TestAdapterConversions(TestCase):
             return agate.TimeDelta()
 
         for instance in agate_helper.DEFAULT_TYPE_TESTER._possible_types:
-            if type(instance) is column_type:
+            if isinstance(instance, column_type):  # include child types
                 return instance
 
         raise ValueError(f'no tester for {column_type}')
