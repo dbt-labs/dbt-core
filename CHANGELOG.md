@@ -1,5 +1,7 @@
 ## dbt-core 1.0.1 (TBD)
 
+## dbt-core 1.0.1rc1 (December 20, 2021)
+
 ### Fixes
 - Fix wrong url in the dbt docs overview homepage ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
 - Fix redefined status param of SQLQueryStatus to typecheck the string which passes on `._message` value of `AdapterResponse` or the `str` value sent by adapter plugin.  ([#4463](https://github.com/dbt-labs/dbt-core/pull/4463#issuecomment-990174166))
