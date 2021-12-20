@@ -1186,10 +1186,12 @@ class ProviderContext(ManifestContext):
             # If this is compiling, do not save because it's irrelevant to parsing.
             if self.model and not hasattr(self.model, 'compiled'):
                 self.manifest.env_vars[var] = return_value
-                source_file = self.manifest.files[self.model.file_id]
-                # Schema files should never get here
-                if source_file.parse_file_type != 'schema':
-                    source_file.env_vars.append(var)
+                # hooks come from dbt_project.yml which doesn't have a real file_id
+                if self.model.file_id in self.manifest.files:
+                    source_file = self.manifest.files[self.model.file_id]
+                    # Schema files should never get here
+                    if source_file.parse_file_type != 'schema':
+                        source_file.env_vars.append(var)
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
