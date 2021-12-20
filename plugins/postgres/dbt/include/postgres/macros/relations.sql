@@ -22,7 +22,7 @@
         from pg_class
     ),
     dependency as (
-        select
+        select distinct
             pg_depend.objid as id,
             pg_depend.refobjid as ref
         from pg_depend
