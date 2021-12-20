@@ -1135,7 +1135,7 @@ class ProviderContext(ManifestContext):
                 if self.model.file_id in self.manifest.files:
                     source_file = self.manifest.files[self.model.file_id]
                     # Schema files should never get here
-                    if source_file.parse_file_type != 'schema':
+                    if source_file.parse_file_type != "schema":
                         source_file.env_vars.append(var)
             return return_value
         else:
