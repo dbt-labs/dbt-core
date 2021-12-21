@@ -4,7 +4,6 @@ from dbt import ui
 from dbt.helper_types import Lazy
 from dbt.events.base_types import (
     Event,
-    NoFile,
     DebugLevel,
     InfoLevel,
     WarnLevel,
@@ -94,7 +93,7 @@ class AdapterEventError(ErrorLevel, AdapterEventBase, ShowException):
 
 
 @dataclass
-class MainKeyboardInterrupt(InfoLevel, NoFile):
+class MainKeyboardInterrupt(InfoLevel):
     code: str = "Z001"
 
     def message(self) -> str:
@@ -102,7 +101,7 @@ class MainKeyboardInterrupt(InfoLevel, NoFile):
 
 
 @dataclass
-class MainEncounteredError(ErrorLevel, NoFile):
+class MainEncounteredError(ErrorLevel):
     e: BaseException
     code: str = "Z002"
 
@@ -111,7 +110,7 @@ class MainEncounteredError(ErrorLevel, NoFile):
 
 
 @dataclass
-class MainStackTrace(DebugLevel, NoFile):
+class MainStackTrace(ErrorLevel):
     stack_trace: str
     code: str = "Z003"
 
@@ -1354,7 +1353,7 @@ class NodeConnectionReleaseError(ShowException, DebugLevel):
 
 
 @dataclass
-class CheckCleanPath(InfoLevel, NoFile):
+class CheckCleanPath(InfoLevel):
     path: str
     code: str = "Z012"
 
@@ -1363,7 +1362,7 @@ class CheckCleanPath(InfoLevel, NoFile):
 
 
 @dataclass
-class ConfirmCleanPath(InfoLevel, NoFile):
+class ConfirmCleanPath(InfoLevel):
     path: str
     code: str = "Z013"
 
@@ -1372,7 +1371,7 @@ class ConfirmCleanPath(InfoLevel, NoFile):
 
 
 @dataclass
-class ProtectedCleanPath(InfoLevel, NoFile):
+class ProtectedCleanPath(InfoLevel):
     path: str
     code: str = "Z014"
 
@@ -1381,7 +1380,7 @@ class ProtectedCleanPath(InfoLevel, NoFile):
 
 
 @dataclass
-class FinishedCleanPaths(InfoLevel, NoFile):
+class FinishedCleanPaths(InfoLevel):
     code: str = "Z015"
 
     def message(self) -> str:
@@ -2382,7 +2381,7 @@ class SendEventFailure(DebugLevel):
 
 
 @dataclass
-class FlushEvents(DebugLevel, NoFile):
+class FlushEvents(DebugLevel):
     code: str = "Z042"
 
     def message(self) -> str:
@@ -2390,7 +2389,7 @@ class FlushEvents(DebugLevel, NoFile):
 
 
 @dataclass
-class FlushEventsFailure(DebugLevel, NoFile):
+class FlushEventsFailure(DebugLevel):
     code: str = "Z043"
 
     def message(self) -> str:
