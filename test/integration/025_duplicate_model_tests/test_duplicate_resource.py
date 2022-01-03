@@ -10,7 +10,7 @@ class TestDuplicateSchemaResource(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models-naming-dupes-1"
+        return "models-naming-dupes"
 
     @use_profile("postgres")
     def test_postgres_duplicate_model_and_exposure(self):
