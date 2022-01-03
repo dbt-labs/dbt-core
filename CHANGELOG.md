@@ -17,6 +17,7 @@
 - Remove secrets from error related to packages. ([#4507](https://github.com/dbt-labs/dbt-core/pull/4507))
 - Prevent coercion of boolean values (`True`, `False`) to numeric values (`0`, `1`) in query results ([#4511](https://github.com/dbt-labs/dbt-core/issues/4511), [#4512](https://github.com/dbt-labs/dbt-core/pull/4512))
 - Fix error with an env_var in a project hook ([#4523](https://github.com/dbt-labs/dbt-core/issues/4523), [#4524](https://github.com/dbt-labs/dbt-core/pull/4524))
+- Add additional windows compat logic for colored log output. ([#4443](https://github.com/dbt-labs/dbt-core/issues/4443))
 
 ###  Docs
 - Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
