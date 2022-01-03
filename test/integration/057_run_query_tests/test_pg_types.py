@@ -6,7 +6,7 @@ class TestPostgresTypes(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "pg_query_types_060"
+        return "pg_query_types_057"
 
     @property
     def models(self):
