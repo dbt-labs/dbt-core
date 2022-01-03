@@ -359,7 +359,7 @@ class GraphRunnableTask(ManifestTask):
         adapter = get_adapter(self.config)
 
         if not adapter.is_cancelable():
-            fire_event(QueryCancelationUnsupported(type=adapter.type))
+            fire_event(QueryCancelationUnsupported(type=adapter.type()))
         else:
             with adapter.connection_named('master'):
                 for conn_name in adapter.cancel_open_connections():

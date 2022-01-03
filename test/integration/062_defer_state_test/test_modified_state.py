@@ -6,7 +6,7 @@ import string
 
 import pytest
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, IncompatibleSchemaException
 
 
 class TestModifiedState(DBTIntegrationTest):
@@ -36,7 +36,7 @@ class TestModifiedState(DBTIntegrationTest):
         for entry in os.listdir(self.test_original_source_path):
             src = os.path.join(self.test_original_source_path, entry)
             tst = os.path.join(self.test_root_dir, entry)
-            if entry in {'models', 'seeds', 'macros'}:
+            if entry in {'models', 'seeds', 'macros', 'previous_state'}:
                 shutil.copytree(src, tst)
             elif os.path.isdir(entry) or entry.endswith('.sql'):
                 os.symlink(src, tst)
@@ -202,3 +202,10 @@ class TestModifiedState(DBTIntegrationTest):
         results, stdout = self.run_dbt_and_capture(['run', '--models', '+state:modified', '--state', './state'])
         assert len(results) == 1
         assert results[0].node.name == 'view_model'
+
+    @use_profile('postgres')
+    def test_postgres_previous_version_manifest(self):
+        # This tests that a different schema version in the file throws an error
+        with self.assertRaises(IncompatibleSchemaException) as exc:
+            results = self.run_dbt(['ls', '-s',  'state:modified',  '--state',  './previous_state'])
+            self.assertEqual(exc.CODE, 10014)

@@ -1,9 +1,26 @@
 ## dbt-core 1.0.1 (TBD)
 
+### Features
+- New Dockerfile to support specific db adapters and platforms.  See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
+
+### Under the hood
+- Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496))
+
+## dbt-core 1.0.1rc1 (December 20, 2021)
+
 ### Fixes
 - Fix wrong url in the dbt docs overview homepage ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
 - Fix redefined status param of SQLQueryStatus to typecheck the string which passes on `._message` value of `AdapterResponse` or the `str` value sent by adapter plugin.  ([#4463](https://github.com/dbt-labs/dbt-core/pull/4463#issuecomment-990174166))
-- Fix escape sequences so colored log output is system compatible. ([#4443](https://github.com/dbt-labs/dbt-core/issues/4443))
+- Fix `DepsStartPackageInstall` event to use package name instead of version number. ([#4482](https://github.com/dbt-labs/dbt-core/pull/4482))
+- Reimplement log message to use adapter name instead of the object method. ([#4501](https://github.com/dbt-labs/dbt-core/pull/4501))
+- Issue better error message for incompatible schemas ([#4470](https://github.com/dbt-labs/dbt-core/pull/4442), [#4497](https://github.com/dbt-labs/dbt-core/pull/4497))
+- Remove secrets from error related to packages. ([#4507](https://github.com/dbt-labs/dbt-core/pull/4507))
+- Prevent coercion of boolean values (`True`, `False`) to numeric values (`0`, `1`) in query results ([#4511](https://github.com/dbt-labs/dbt-core/issues/4511), [#4512](https://github.com/dbt-labs/dbt-core/pull/4512))
+- Fix error with an env_var in a project hook ([#4523](https://github.com/dbt-labs/dbt-core/issues/4523), [#4524](https://github.com/dbt-labs/dbt-core/pull/4524))
+- Add additional windows compat logic for colored log output. ([#4443](https://github.com/dbt-labs/dbt-core/issues/4443))
+
+###  Docs
+- Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
 
 Contributors:
 - [remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))

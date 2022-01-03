@@ -154,3 +154,28 @@ class TestAgateHelper(unittest.TestCase):
 
         for i, row in enumerate(tbl):
             self.assertEqual(list(row), expected[i])
+
+    def test_nocast_bool_01(self):
+        # True and False values should not be cast to 1 and 0, and vice versa
+        # See: https://github.com/dbt-labs/dbt-core/issues/4511
+
+        column_names = ['a', 'b']
+        result_set = [
+            {'a': True, 'b': 1},
+            {'a': False, 'b': 0},
+        ]
+
+        tbl = agate_helper.table_from_data_flat(data=result_set, column_names=column_names)
+        self.assertEqual(len(tbl), len(result_set))
+
+        assert isinstance(tbl.column_types[0], agate.data_types.Boolean)
+        assert isinstance(tbl.column_types[1], agate.data_types.Number)
+
+        expected = [
+            [True, Decimal(1)],
+            [False, Decimal(0)],
+        ]
+
+        for i, row in enumerate(tbl):
+            self.assertEqual(list(row), expected[i])
+

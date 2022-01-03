@@ -1,4 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import os
 
 
 class TestPrePostRunHooks(DBTIntegrationTest):
@@ -22,6 +23,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
             'run_started_at',
             'invocation_id'
         ]
+        os.environ['TERM_TEST'] = 'TESTING'
 
     @property
     def schema(self):
@@ -41,6 +43,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
                 "{{ custom_run_hook('start', target, run_started_at, invocation_id) }}",
                 "create table {{ target.schema }}.start_hook_order_test ( id int )",
                 "drop table {{ target.schema }}.start_hook_order_test",
+                "{{ log(env_var('TERM_TEST'), info=True) }}",
             ],
             "on-run-end": [
                 "{{ custom_run_hook('end', target, run_started_at, invocation_id) }}",
