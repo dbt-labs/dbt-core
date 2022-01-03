@@ -1,10 +1,12 @@
-## dbt-core 1.0.1 (TBD)
+## dbt-core 1.1.0 (TBD)
 
 ### Features
 - New Dockerfile to support specific db adapters and platforms.  See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
 
 ### Under the hood
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496))
+
+## dbt-core 1.0.1 (January 03, 2022)
 
 ## dbt-core 1.0.1rc1 (December 20, 2021)
 
@@ -227,7 +229,7 @@ Contributors:
 - [@laxjesse](https://github.com/laxjesse) ([#4019](https://github.com/dbt-labs/dbt-core/pull/4019))
 - [@gitznik](https://github.com/Gitznik) ([#4124](https://github.com/dbt-labs/dbt-core/pull/4124))
 
-## dbt 0.21.1 (Release TBD)
+## dbt 0.21.1 (November 29, 2021)
 
 ### Fixes
 - Add `get_where_subquery` to test macro namespace, fixing custom generic tests that rely on introspecting the `model` arg at parse time ([#4195](https://github.com/dbt-labs/dbt/issues/4195), [#4197](https://github.com/dbt-labs/dbt/pull/4197))
@@ -371,7 +373,7 @@ Contributors:
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt-core/pull/3526))
 - [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt-core/pull/3547))
 
-## dbt 0.20.2 (Release TBD)
+## dbt 0.20.2 (September 07, 2021)
 
 ### Under the hood
 
