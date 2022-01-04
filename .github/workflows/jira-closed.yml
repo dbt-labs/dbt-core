@@ -1,0 +1,40 @@
+# **what?**
+# Closes mirrored Jira issue
+
+# **why?**
+# Jira needs to be kept up-to-date
+
+# **when?**
+# On issue closing, deletion
+
+name: Jira Issue Closed
+
+on:
+  issues:
+    types: [closed, deleted]
+
+jobs:
+  close-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Jira login
+        uses: atlassian/gajira-login@master
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+
+      - name: Extract issue from title
+        id: extract
+        env:
+          TITLE: "${{ github.event.issue.title }}"
+        run: |
+          jira=$(echo -n $TITLE | awk '{print $1}' | awk -F'[][]' '{print $2}')
+          echo ::set-output name=jira::$jira
+
+      - name: Transition issue in Jira
+        if: startsWith(steps.extract.outputs.jira, 'CORE-')
+        uses: atlassian/gajira-transition@master
+        with:
+          issue: "${{ steps.extract.outputs.jira }}"
+          transition: "Done"
