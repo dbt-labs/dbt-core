@@ -18,7 +18,7 @@ class BaseDependencyTest(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "local_models"
+        return "models_local"
 
     def base_schema(self):
         return self.unique_schema()
@@ -57,7 +57,7 @@ class TestSimpleDependency(BaseDependencyTest):
 
     @property
     def models(self):
-        return 'local_models'
+        return 'models_local'
 
     def base_schema(self):
         return self.unique_schema()
@@ -87,7 +87,7 @@ class TestSimpleDependency(BaseDependencyTest):
         self.run_dbt(['deps'])
         self.run_dbt(['seed'])
         # this should work
-        local_path = os.path.join('local_models', 'my_model.sql')
+        local_path = os.path.join('models_local', 'my_model.sql')
         results = self.run_dbt(
             ['run', '--models',  f'+{local_path}'],
         )
@@ -110,7 +110,7 @@ class TestMissingDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "sad_iteration_models"
+        return "models_missing_dependency"
 
     @use_profile('postgres')
     def test_postgres_missing_dependency(self):
@@ -132,7 +132,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
     def project_config(self):
         return {
             'config-version': 2,
-            'macro-paths': ['schema_override_macros'],
+            'macro-paths': ['macros_schema_override'],
             'models': {
                 'schema': 'dbt_test',
             },
@@ -184,7 +184,7 @@ class TestSimpleDependencyNoVersionCheckConfig(TestSimpleDependency):
     def project_config(self):
         return {
             'config-version': 2,
-            'macro-paths': ['schema_override_macros'],
+            'macro-paths': ['macros_schema_override'],
             'models': {
                 'schema': 'dbt_test',
             },
@@ -277,7 +277,7 @@ class TestSimpleDependencyDuplicateName(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "local_models"
+        return "models_local"
 
     @property
     def packages_config(self):

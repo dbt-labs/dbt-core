@@ -16,8 +16,8 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "snapshot-paths": ['check-snapshots'],
-            "test-paths": ['check-snapshots-expected'],
+            "snapshot-paths": ['snapshots-check'],
+            "test-paths": ['test-check-snapshots-expected'],
             "model-paths": [],
         }
 

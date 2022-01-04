@@ -6,7 +6,7 @@ class TestTimezones(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "timezones_025"
+        return "timezones_022"
 
     @property
     def models(self):

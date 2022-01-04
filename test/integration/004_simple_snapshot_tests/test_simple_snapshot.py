@@ -42,7 +42,7 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
         return {
             'config-version': 2,
             "seed-paths": ['seeds'],
-            "snapshot-paths": ['test-snapshots-pg'],
+            "snapshot-paths": ['snapshots-pg'],
             'macro-paths': ['macros'],
         }
 
@@ -82,8 +82,8 @@ class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            'macro-paths': ['custom-snapshot-macros', 'macros'],
-            'snapshot-paths': ['test-snapshots-checkall'],
+            'macro-paths': ['macros-custom-snapshot', 'macros'],
+            'snapshot-paths': ['snapshots-checkall'],
             'seeds': {
                 'quote_columns': False,
             }
@@ -133,8 +133,8 @@ class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            'macro-paths': ['custom-snapshot-macros', 'macros'],
-            'snapshot-paths': ['test-snapshots-pg-custom'],
+            'macro-paths': ['macros-custom-snapshot', 'macros'],
+            'snapshot-paths': ['snapshots-pg-custom'],
         }
 
     @use_profile('postgres')
@@ -164,8 +164,8 @@ class TestNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            'macro-paths': ['custom-snapshot-macros', 'macros'],
-            'snapshot-paths': ['test-snapshots-pg-custom-namespaced'],
+            'macro-paths': ['macros-custom-snapshot', 'macros'],
+            'snapshot-paths': ['snapshots-pg-custom-namespaced'],
         }
 
     @use_profile('postgres')
@@ -189,8 +189,8 @@ class TestInvalidNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            'macro-paths': ['custom-snapshot-macros', 'macros'],
-            'snapshot-paths': ['test-snapshots-pg-custom-invalid'],
+            'macro-paths': ['macros-custom-snapshot', 'macros'],
+            'snapshot-paths': ['snapshots-pg-custom-invalid'],
         }
 
     def run_snapshot(self):
@@ -215,8 +215,8 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            "snapshot-paths": ['test-snapshots-select',
-                               'test-snapshots-pg'],
+            "snapshot-paths": ['snapshots-select',
+                               'snapshots-pg'],
             'macro-paths': ['macros'],
         }
 
@@ -268,7 +268,7 @@ class TestConfiguredSnapshotFileSelects(TestSimpleSnapshotFileSelects):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            "snapshot-paths": ['test-snapshots-select-noconfig'],
+            "snapshot-paths": ['snapshots-select-noconfig'],
             "snapshots": {
                 "test": {
                     "target_schema": self.unique_schema(),
@@ -301,7 +301,7 @@ class TestCrossSchemaSnapshotFiles(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        paths = ['test-snapshots-pg']
+        paths = ['snapshots-pg']
         return {
             'config-version': 2,
             'snapshot-paths': paths,
@@ -338,7 +338,7 @@ class TestBadSnapshot(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "snapshot-paths": ['test-snapshots-invalid'],
+            "snapshot-paths": ['snapshots-invalid'],
             'macro-paths': ['macros'],
         }
 
@@ -369,7 +369,7 @@ class TestCheckCols(TestSimpleSnapshotFiles):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            "snapshot-paths": ['test-check-col-snapshots'],
+            "snapshot-paths": ['snapshots-check-col'],
             'macro-paths': ['macros'],
         }
 
@@ -380,7 +380,7 @@ class TestConfiguredCheckCols(TestCheckCols):
         return {
             'config-version': 2,
             'seed-paths': ['seeds'],
-            "snapshot-paths": ['test-check-col-snapshots-noconfig'],
+            "snapshot-paths": ['snapshots-check-col-noconfig'],
             "snapshots": {
                 "test": {
                     "target_schema": self.unique_schema(),
@@ -426,7 +426,7 @@ class TestUpdatedAtCheckCols(TestCheckCols):
          return {
              'config-version': 2,
             'seed-paths': ['seeds'],
-             "snapshot-paths": ['test-check-col-snapshots-noconfig'],
+             "snapshot-paths": ['snapshots-check-col-noconfig'],
              "snapshots": {
                  "test": {
                      "target_schema": self.unique_schema(),
@@ -457,7 +457,7 @@ class TestLongText(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "snapshot-paths": ['test-snapshots-longtext'],
+            "snapshot-paths": ['snapshots-longtext'],
             'macro-paths': ['macros'],
         }
 
@@ -494,8 +494,8 @@ class TestSlowQuery(DBTIntegrationTest):
     def project_config(self):
         return {
             "config-version": 2,
-            "snapshot-paths": ['test-snapshots-slow'],
-            "test-paths": ["test-snapshots-slow-tests"],
+            "snapshot-paths": ['snapshots-slow'],
+            "test-paths": ["test-snapshots-slow"],
         }
 
     @use_profile('postgres')
@@ -527,8 +527,8 @@ class TestChangingStrategy(DBTIntegrationTest):
     def project_config(self):
         return {
             "config-version": 2,
-            "snapshot-paths": ['test-snapshots-changing-strategy'],
-            "test-paths": ["test-snapshots-changing-strategy-tests"],
+            "snapshot-paths": ['snapshots-changing-strategy'],
+            "test-paths": ["test-snapshots-changing-strategy"],
         }
 
     @use_profile('postgres')
@@ -561,7 +561,7 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        paths = ['test-snapshots-pg']
+        paths = ['snapshots-pg']
 
         return {
             'config-version': 2,

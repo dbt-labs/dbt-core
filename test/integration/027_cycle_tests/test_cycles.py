@@ -6,7 +6,7 @@ class TestSimpleCycle(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "cycles_simple_025"
+        return "cycles_simple_027"
 
     @property
     def models(self):
@@ -23,7 +23,7 @@ class TestComplexCycle(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "cycles_complex_025"
+        return "cycles_complex_027"
 
     @property
     def models(self):

@@ -677,13 +677,13 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test-context-models2"
+        return "test-context-models-namespaced"
 
     @property
     def project_config(self):
         return {
             'config-version': 2,
-            "macro-paths": ["test-context-macros2"],
+            "macro-paths": ["test-context-macros-namespaced"],
             "dispatch": [
                 {
                     "macro_namespace": "test_utils",

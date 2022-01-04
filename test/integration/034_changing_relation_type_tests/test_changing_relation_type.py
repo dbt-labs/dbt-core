@@ -6,7 +6,7 @@ class TestChangingRelationType(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "changing_relation_type_035"
+        return "changing_relation_type_034"
 
     @staticmethod
     def dir(path):
