@@ -28,7 +28,6 @@ from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plug
 class GraphTest(unittest.TestCase):
 
     def tearDown(self):
-        self.write_gpickle_patcher.stop()
         self.mock_filesystem_search.stop()
         self.mock_hook_constructor.stop()
         self.load_state_check.stop()
@@ -57,13 +56,6 @@ class GraphTest(unittest.TestCase):
         self.macro_manifest = MacroManifest(
             {n.unique_id: n for n in generate_name_macros('test_models_compile')})
         self.mock_models = []  # used by filesystem_searcher
-
-        # Create gpickle patcher
-        self.write_gpickle_patcher = patch('networkx.write_gpickle')
-        def mock_write_gpickle(graph, outfile):
-            self.graph_result = graph
-        self.mock_write_gpickle = self.write_gpickle_patcher.start()
-        self.mock_write_gpickle.side_effect = mock_write_gpickle
 
         # Create file filesystem searcher
         self.filesystem_search = patch('dbt.parser.read_files.filesystem_search')
@@ -139,7 +131,10 @@ class GraphTest(unittest.TestCase):
         }
         cfg.update(extra_cfg)
 
-        return config_from_parts_or_dicts(project=cfg, profile=self.profile)
+        config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
+        dbt.flags.set_from_args({}, config)
+        dbt.flags.PARTIAL_PARSE = False
+        return config
 
     def get_compiler(self, project):
         return dbt.compilation.Compiler(project)

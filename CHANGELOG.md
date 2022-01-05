@@ -5,6 +5,7 @@
 
 ### Under the hood
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
+- Clean up test deprecation warnings ([#3988](https://github.com/dbt-labs/dbt-core/issue/3988), [#4556](https://github.com/dbt-labs/dbt-core/pull/4556))
 
 ## dbt-core 1.0.1 (January 03, 2022)
 
