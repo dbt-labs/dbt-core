@@ -13,7 +13,7 @@ name: Jira Label Mirroring
 on:
   issues:
     types: [labeled, unlabeled]
-    
+
 permissions:
   issues: read
 
