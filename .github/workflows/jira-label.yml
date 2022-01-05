@@ -1,0 +1,55 @@
+# **what?**
+# Mirrors issue labels into Jira. Includes adding a new label
+# to an existing issue or removing a label as well
+
+# **why?**
+# Jira is our tool for tracking and we need to see these labels in there
+
+# **when?**
+# On labels being added or removed from issues
+
+name: Jira Label Mirroring
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+    
+permissions:
+  issues: read
+
+jobs:
+  extract-id:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.issue.title, '[CT-')
+    outputs:
+      issueId: ${{ steps.extract.outputs.issueId }}
+    steps:
+      - name: Extract issue from title
+        id: extract
+        env:
+          TITLE: "${{ github.event.issue.title }}"
+        run: |
+          ID=$(echo -n $TITLE | awk '{print $1}' | awk -F'[][]' '{print $2}')
+          echo ::set-output name=issueId::$ID
+          
+  edit-label:
+    runs-on: ubuntu-latest
+    needs: extract-id
+    env:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    steps:
+      - name: Setup Jira
+        uses: atlassian/gajira-cli@v2.0.2
+        
+      - name: Login
+        uses: atlassian/gajira-login@v2.0.0
+
+      - name: Add label
+        if: github.event.action == 'labeled'
+        run: jira labels add ${{ needs.extract-id.outputs.issueId }} ${{ github.event.label.name }}
+
+      - name: Remove label
+        if: github.event.action == 'unlabeled'
+        run: jira labels remove ${{ needs.extract-id.outputs.issueId }} ${{ github.event.label.name }}
