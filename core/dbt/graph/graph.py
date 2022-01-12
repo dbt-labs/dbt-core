@@ -35,10 +35,7 @@ class Graph:
         # This used to use nx.utils.reversed(self.graph), but that is deprecated,
         # so changing to use self.graph.reverse(copy=False) as recommeneded
         G = self.graph.reverse(copy=False) if self.graph.is_directed() else self.graph
-        anc = nx.single_source_shortest_path_length(G=G,
-                                                    source=node,
-                                                    cutoff=max_depth)\
-            .keys()
+        anc = nx.single_source_shortest_path_length(G=G, source=node, cutoff=max_depth).keys()
         return anc - {node}
 
     def descendants(

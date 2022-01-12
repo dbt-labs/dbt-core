@@ -160,7 +160,7 @@ class Linker:
         for node_id in self.graph:
             data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
-        with open(outfile, 'wb') as outfh:
+        with open(outfile, "wb") as outfh:
             pickle.dump(out_graph, outfh, protocol=pickle.HIGHEST_PROTOCOL)
 
 
