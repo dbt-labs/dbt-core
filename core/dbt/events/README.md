@@ -29,28 +29,10 @@ class PartialParsingDeletedExposure(DebugLevel, Cli, File):
 
 ## Optional (based on your event)
 
-- Events associated with node status changes must have `report_node_data` passed in and be extended with `NodeInfo`
-- define `asdict` if your data is not serializable to json
+- Events associated with node status changes must be extended with `NodeInfo` which contains a node_info attribute
 
-Example
-```
-@dataclass
-class SuperImportantNodeEvent(InfoLevel, File, NodeInfo):
-    node_name: str
-    run_result: RunResult
-    report_node_data: ParsedModelNode  # may vary
-    code: str = "Q036"
 
-    def message(self) -> str:
-        return f"{self.node_name} had overly verbose result of {run_result}"
-
-    @classmethod
-    def asdict(cls, data: list) -> dict:
-        return dict((k, str(v)) for k, v in data)
-
-```
-
-All values other than `code` and `report_node_data` will be included in the `data` node of the json log output.
+All values other than `code` and `node_info` will be included in the `data` node of the json log output.
 
 Once your event has been added, add a dummy call to your new event at the bottom of `types.py` and also add your new Event to the list `sample_values` in `test/unit/test_events.py'.
 
