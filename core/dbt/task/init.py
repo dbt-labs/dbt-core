@@ -50,7 +50,8 @@ Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
 Happy modeling!
 """
 
-# https://click.palletsprojects.com/en/8.0.x/api/?highlight=float#types
+# https://click.palletsprojects.com/en/8.0.x/api/#types
+# click v7.0 has UNPROCESSED, STRING, INT, FLOAT, BOOL, and UUID available.
 click_type_mapping = {
     "string": click.STRING,
     "int": click.INT,
