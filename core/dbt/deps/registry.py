@@ -1,4 +1,5 @@
 import os
+import functools
 from typing import List
 
 from dbt import semver
@@ -14,6 +15,7 @@ from dbt.exceptions import (
     DependencyException,
     package_not_found,
 )
+from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 
 class RegistryPackageMixin:
@@ -68,9 +70,28 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         system.make_directory(os.path.dirname(tar_path))
 
         download_url = metadata.downloads.tarball
-        system.download_with_retries(download_url, tar_path)
         deps_path = project.packages_install_path
         package_name = self.get_project_name(project, renderer)
+
+        download_untar_fn = functools.partial(
+            self.download_and_untar,
+            download_url,
+            tar_path,
+            deps_path,
+            package_name
+        )
+        connection_exception_retry(download_untar_fn, 5)
+
+    def download_and_untar(self, download_url, tar_path, deps_path, package_name):
+        """
+        Sometimes the download of the files fails and we want to retry.  Sometimes the
+        download appears successful but the file did not make it through as expected
+        (generally due to a github incident).  Either way we want to retry downloading
+        and untarring to see if we can get a success.  Call this within
+        `_connection_exception_retry`
+        """
+
+        system.download(download_url, tar_path)
         system.untar_package(tar_path, deps_path, package_name)
 
 

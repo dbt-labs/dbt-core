@@ -10,6 +10,7 @@ import jinja2
 import json
 import os
 import requests
+from tarfile import ReadError
 import time
 from pathlib import PosixPath, WindowsPath
 
@@ -600,7 +601,7 @@ class MultiDict(Mapping[str, Any]):
 
 def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
     """Attempts to run a function that makes an external call, if the call fails
-    on a connection error or timeout, it will be tried up to 5 more times.
+    on a connection error, timeout or other exception, it will be tried up to 5 more times.
     """
     try:
         return fn()
@@ -608,6 +609,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         requests.exceptions.ConnectionError,
         requests.exceptions.Timeout,
         requests.exceptions.ContentDecodingError,
+        ReadError,
     ) as exc:
         if attempt <= max_attempts - 1:
             fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
