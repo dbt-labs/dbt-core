@@ -18,6 +18,18 @@ DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 class Name(ValidatedStringMixin):
     ValidationRegex = r'^[^\d\W]\w*$'
 
+    @classmethod
+    def is_valid(cls, value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+
+        try:
+            cls.validate(value)
+        except ValidationError:
+            return False
+
+        return True
+
 
 register_pattern(Name, r'^[^\d\W]\w*$')
 
