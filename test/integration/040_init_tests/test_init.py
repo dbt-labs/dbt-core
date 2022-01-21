@@ -327,7 +327,7 @@ test:
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
-            call.prompt('What is the desired project name?'),
+            call.prompt("Enter a name for your project (letters, digits, underscore)"),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
             call.prompt('port', default=5432, hide_input=False, type=click.INT),
@@ -535,6 +535,48 @@ models:
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
+    def test_postgres_init_invalid_project_name_cli(self, mock_prompt, mock_confirm):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+
+        os.remove('dbt_project.yml')
+        invalid_name = 'name-with-hyphen'
+        valid_name = self.get_project_name()
+        manager.prompt.side_effect = [
+            valid_name
+        ]
+
+        self.run_dbt(['init', invalid_name, '-s'])
+        manager.assert_has_calls([
+            call.prompt("Enter a name for your project (letters, digits, underscore)"),
+        ])
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    def test_postgres_init_invalid_project_name_prompt(self, mock_prompt, mock_confirm):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+
+        os.remove('dbt_project.yml')
+
+        invalid_name = 'name-with-hyphen'
+        valid_name = self.get_project_name()
+        manager.prompt.side_effect = [
+            invalid_name, valid_name
+        ]
+
+        self.run_dbt(['init', '-s'])
+        manager.assert_has_calls([
+            call.prompt("Enter a name for your project (letters, digits, underscore)"),
+            call.prompt("Enter a name for your project (letters, digits, underscore)"),
+        ])
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
     def test_postgres_init_skip_profile_setup(self, mock_prompt, mock_confirm):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
@@ -546,20 +588,12 @@ models:
         project_name = self.get_project_name()
         manager.prompt.side_effect = [
             project_name,
-            1,
-            'localhost',
-            5432,
-            'test_username',
-            'test_password',
-            'test_db',
-            'test_schema',
-            4,
         ]
 
         # provide project name through the ini command
         self.run_dbt(['init', '-s'])
         manager.assert_has_calls([
-          call.prompt('What is the desired project name?')
+            call.prompt("Enter a name for your project (letters, digits, underscore)")
         ])
 
         with open(os.path.join(self.test_root_dir, project_name, 'dbt_project.yml'), 'r') as f:
