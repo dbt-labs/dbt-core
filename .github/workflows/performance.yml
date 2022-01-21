@@ -132,25 +132,23 @@ jobs:
     name: Measure Baseline Branch
     runs-on: ubuntu-latest
     steps:
-      - name: checkout latest
-        uses: actions/checkout@v2
-        with:
-          ref: "0.20.latest"
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
         with:
           python-version: "3.8"
-      - name: move repo up a level
-        run: mkdir ${{ github.workspace }}/../baseline/ && cp -r ${{ github.workspace }} ${{ github.workspace }}/../baseline
-      - name: "[debug] ls new dbt location"
-        run: ls ${{ github.workspace }}/../baseline/dbt/
-      # installation creates egg-links so we have to preserve source
-      - name: install dbt from new location
-        run: cd ${{ github.workspace }}/../baseline/dbt/ && pip install -r dev-requirements.txt -r editable-requirements.txt
       # checkout the current branch to get all the target projects
       # this deletes the old checked out code which is why we had to copy before
-      - name: checkout dev
+      - name: checkout current
         uses: actions/checkout@v2
+
+      - name: checkout baseline
+        uses: actions/checkout@v2
+        with:
+          path: baseline
+          ref: "0.20.latest"
+      - name: install dbt from new location
+        run: cd ${{ github.workspace }}/baseline && pip install -r dev-requirements.txt -r editable-requirements.txt
+
       - name: install hyperfine
         run: wget https://github.com/sharkdp/hyperfine/releases/download/v1.11.0/hyperfine_1.11.0_amd64.deb && sudo dpkg -i hyperfine_1.11.0_amd64.deb
 
