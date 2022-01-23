@@ -246,3 +246,48 @@ class TestSimpleDependencyNoProfile(TestSimpleDependency):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.run_dbt(["clean", "--profiles-dir", tmpdir])
         return result
+
+class TestSimpleDependencyBadProfile(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_dependency_006"
+
+    @property
+    def models(self):
+        return "models"
+
+    def postgres_profile(self):
+        # Need to set the environment variable here initially because
+        # the unittest setup does a load_config.
+        os.environ['PROFILE_TEST_HOST'] = self.database_host
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'postgres',
+                        'threads': 4,
+                        'host': "{{ env_var('PROFILE_TEST_HOST') }}",
+                        'port': 5432,
+                        'user': 'root',
+                        'pass': 'password',
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                },
+                'target': 'default2'
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_deps_bad_profile(self):
+        del os.environ['PROFILE_TEST_HOST']
+        self.run_dbt(["deps"])
+
+    @use_profile('postgres')
+    def test_postgres_clean_bad_profile(self):
+        del os.environ['PROFILE_TEST_HOST']
+        self.run_dbt(["clean"])
