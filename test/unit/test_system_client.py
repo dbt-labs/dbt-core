@@ -2,6 +2,7 @@ import os
 import shutil
 import stat
 import unittest
+import tarfile
 from tempfile import mkdtemp, NamedTemporaryFile
 
 from dbt.exceptions import ExecutableError, WorkingDirectoryError
@@ -185,3 +186,44 @@ class TestFindMatching(unittest.TestCase):
             shutil.rmtree(self.base_dir)
         except:
             pass
+
+
+class TestUntarPackage(unittest.TestCase):
+
+    def setUp(self):
+        self.base_dir = mkdtemp()
+        self.tempdir = mkdtemp(dir=self.base_dir)
+
+    def test_untar_package_success(self):
+        with NamedTemporaryFile(
+            prefix='my-package.2', suffix='.tar.gz', dir=self.tempdir
+        ) as named_file:
+            with tarfile.open(fileobj=f, mode='w:gz') as tar:
+                tar.add("something")
+            dest_path = ""  # TODO: fill
+
+            dbt.clients.system.untar_package(named_file.name, dest_path)
+            self.assertIsFile(dest_path)
+
+    
+    # def test_untar_package_failure(self):
+    #     with NamedTemporaryFile(
+    #         prefix='my-broken-package.2', suffix='.tar.gz', dir=self.tempdir
+    #     ) as named_file:
+    #         dest_path = ""  # TODO: fill
+    #         dbt.clients.system.untar_package(
+    #             named_file.name, dest_path,
+    #         )
+    #         with self.assertRaises(tarfile.ReadError) as exc:
+    #             dbt.clients.system.untar_package(named_file.name, dest_path)
+    #         self.assertEqual("empty file", str(exc.exception))
+
+    
+    def test_untar_package_empty(self):
+        with NamedTemporaryFile(
+            prefix='my-empty-package.2', suffix='.tar.gz', dir=self.tempdir
+        ) as named_file:
+            dest_path = ""
+            with self.assertRaises(tarfile.ReadError) as exc:
+                dbt.clients.system.untar_package(named_file.name, dest_path)
+            self.assertEqual("empty file", str(exc.exception))
