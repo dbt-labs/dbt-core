@@ -45,7 +45,7 @@ INVALID_VERSION_ERROR = """\
 This version of dbt is not supported with the '{package}' package.
   Installed version of dbt: {installed}
   Required version of dbt for '{package}': {version_spec}
-Check the requirements for the '{package}' package, or run dbt again with \
+Check for a different version of the '{package}' package, or run dbt again with \
 --no-version-check
 """
 
@@ -54,7 +54,7 @@ IMPOSSIBLE_VERSION_ERROR = """\
 The package version requirement can never be satisfied for the '{package}
 package.
   Required versions of dbt for '{package}': {version_spec}
-Check the requirements for the '{package}' package, or run dbt again with \
+Check for a different version of the '{package}' package, or run dbt again with \
 --no-version-check
 """
 
