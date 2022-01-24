@@ -1,6 +1,6 @@
 # **what?**
-# Mirrors issues into Jira. Includes the information: title
-# description, GitHub Issue ID and URL
+# Mirrors issues into Jira. Includes the information: title,
+# GitHub Issue ID and URL
 
 # **why?**
 # Jira is our tool for tracking and we need to see these issues in there
@@ -18,81 +18,9 @@ permissions:
   issues: write
 
 jobs:
-  create-issue:
-    runs-on: ubuntu-latest
-    if: |
-      ((github.event.action == 'opened') || 
-      (github.event.action == 'labeled' && github.event.label.name == 'jira'))
-    outputs:
-      issueId: ${{ steps.save-id.outputs.issueId }}
-    steps: 
-      - name: Login
-        uses: atlassian/gajira-login@v2.0.0
-        env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          
-      - name: Create JIRA Ticket
-        id: create
-        uses: atlassian/gajira-create@v2.0.1
-        with:
-          project: CT
-          issuetype: "GitHub Issue"
-          summary: '${{ github.event.issue.title }}'
-          description: '${{ github.event.issue.body }}'
-          fields: '{ "customfield_10049": "${{ github.repository }}", "customfield_10048": "${{ github.event.issue.html_url }}", "customfield_10047": ${{ github.event.issue.number }} }'
- 
-      - name: Update Issue Title
-        run: |
-          curl --request PATCH \
-          --url https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }} \
-          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
-          --header 'content-type: application/json' \
-          --header 'Accept: application/vnd.github.v3+json' \
-          --data '{ "title": "[${{ steps.create.outputs.issue }}] ${{ github.event.issue.title }}" }'
-
-      - name: Save Issue ID
-        id: save-id
-        run: |
-          ID='${{ steps.create.outputs.issue }}'
-          echo ::set-output name=issueId::${ID}
-          
-  find-labels:
-    runs-on: ubuntu-latest
-    needs:
-      - create-issue
-    outputs:
-      labels: ${{ steps.generate-labels.outputs.labels }}
-    steps:
-      - name: Generate Labels
-        id: generate-labels
-        run: |
-          LABELS='${{ toJSON(github.event.issue.labels.*.name) }}'
-          echo ::set-output name=labels::${LABELS}
-          
-  add-labels:
-    runs-on: ubuntu-latest
-    needs:
-      - create-issue
-      - find-labels
-    strategy:
-      matrix:
-        label: ${{ fromJSON(needs.find-labels.outputs.labels) }}
-    steps:
-      - name: Setup Jira
-        uses: atlassian/gajira-cli@v2.0.2
-        
-      - name: Login
-        uses: atlassian/gajira-login@v2.0.0
-        env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-
-      - name: Add label
-        run: jira labels add ${{ needs.create-issue.outputs.issueId }} "${{ matrix.label }}"
-        env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+  call-label-action:
+    uses: dbt-labs/jira-actions/.github/workflows/jira-creation.yml@main
+    secrets:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
