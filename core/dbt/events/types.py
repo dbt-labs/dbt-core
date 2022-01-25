@@ -796,24 +796,6 @@ class MissingProfileTarget(InfoLevel):
 
 
 @dataclass
-class ProfileLoadError(ShowException, DebugLevel):
-    exc: Exception
-    code: str = "A006"
-
-    def message(self) -> str:
-        return f"Profile not loaded due to error: {self.exc}"
-
-
-@dataclass
-class ProfileNotFound(InfoLevel):
-    profile_name: Optional[str]
-    code: str = "A007"
-
-    def message(self) -> str:
-        return f'No profile "{self.profile_name}" found, continuing with no target'
-
-
-@dataclass
 class InvalidVarsYAML(ErrorLevel):
     code: str = "A008"
 
@@ -2528,8 +2510,6 @@ if 1 == 0:
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
     MissingProfileTarget(profile_name='', target_name='')
-    ProfileLoadError(exc=Exception(''))
-    ProfileNotFound(profile_name='')
     InvalidVarsYAML()
     GenericTestFileParse(path='')
     MacroFileParse(path='')
