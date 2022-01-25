@@ -233,8 +233,6 @@ sample_values = [
     TimingInfoCollected(),
     MergedFromState(nbr_merged=0, sample=[]),
     MissingProfileTarget(profile_name='', target_name=''),
-    ProfileLoadError(exc=Exception('')),
-    ProfileNotFound(profile_name=''),
     InvalidVarsYAML(),
     GenericTestFileParse(path=''),
     MacroFileParse(path=''),
