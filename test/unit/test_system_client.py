@@ -3,6 +3,7 @@ import shutil
 import stat
 import unittest
 import tarfile
+import io
 from tempfile import mkdtemp, NamedTemporaryFile
 
 from dbt.exceptions import ExecutableError, WorkingDirectoryError
@@ -193,30 +194,54 @@ class TestUntarPackage(unittest.TestCase):
     def setUp(self):
         self.base_dir = mkdtemp()
         self.tempdir = mkdtemp(dir=self.base_dir)
+        self.tempdest = mkdtemp(dir=self.base_dir)
 
     def test_untar_package_success(self):
         with NamedTemporaryFile(
-            prefix='my-package.2', suffix='.tar.gz', dir=self.tempdir
-        ) as named_file:
-            with tarfile.open(fileobj=f, mode='w:gz') as tar:
-                tar.add("something")
-            dest_path = ""  # TODO: fill
+            prefix='my-package.2', suffix='.tar.gz', dir=self.tempdir, delete=False
+        ) as named_tar_file:
+            with NamedTemporaryFile(
+                prefix='a', suffix='.txt', dir=self.tempdir
+            ) as file_a:
+                relative_path_a = os.path.basename(file_a.name)
+                file_a.write(b'some text in the text file')
+                with NamedTemporaryFile(
+                    prefix='b', suffix='.log', dir=self.tempdir
+                ) as file_b:
+                    relative_path_b = os.path.basename(file_b.name)
+                    file_b.write(b'some text in the log file')
+                    with tarfile.open(fileobj=named_tar_file, mode='w:gz') as tar:
+                        for file in [relative_path_a,relative_path_b]:
+                            tar.add(file)
 
-            dbt.clients.system.untar_package(named_file.name, dest_path)
-            self.assertIsFile(dest_path)
+            # contents = io.StringIO()
+            # breakpoint()
+            # with tarfile.open(fileobj=contents, mode='w') as tar:
+        dbt.clients.system.untar_package(tar.name, self.tempdest)
+        self.assertIsFile(self.tempdest)
+        # todo: remove temp tarfile
 
     
     # def test_untar_package_failure(self):
     #     with NamedTemporaryFile(
-    #         prefix='my-broken-package.2', suffix='.tar.gz', dir=self.tempdir
-    #     ) as named_file:
-    #         dest_path = ""  # TODO: fill
-    #         dbt.clients.system.untar_package(
-    #             named_file.name, dest_path,
-    #         )
-    #         with self.assertRaises(tarfile.ReadError) as exc:
-    #             dbt.clients.system.untar_package(named_file.name, dest_path)
-    #         self.assertEqual("empty file", str(exc.exception))
+    #         prefix='my-package.2', suffix='.tar.gz', dir=self.tempdir
+    #     ) as named_tar_file:
+    #         with NamedTemporaryFile(
+    #             prefix='a', suffix='.txt', dir=self.tempdir
+    #         ) as file_a:
+    #             file_a.write(b'some text in the text file')
+    #             with NamedTemporaryFile(
+    #                 prefix='b', suffix='.log', dir=self.tempdir
+    #             ) as file_b:
+    #                 file_b.write(b'some text in the log file')
+    #                 with tarfile.open(fileobj=named_tar_file, mode='w:gz') as tar:
+    #                     for file in [file_a.name,file_b.name]:
+    #                         tar.add(file)
+    #             dest_path = ""  # TODO: fill
+
+    #             with self.assertRaises(tarfile.ReadError) as exc:
+    #                 dbt.clients.system.untar_package(tar.name, dest_path)
+    #             self.assertEqual("??", str(exc.exception))
 
     
     def test_untar_package_empty(self):
