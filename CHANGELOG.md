@@ -10,6 +10,7 @@
 ### Under the hood
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
 - Clean up test deprecation warnings ([#3988](https://github.com/dbt-labs/dbt-core/issue/3988), [#4556](https://github.com/dbt-labs/dbt-core/pull/4556))
+- Use mashumaro for serialization in event logging ([#4504](https://github.com/dbt-labs/dbt-core/issue/4504), [#4505](https://github.com/dbt-labs/dbt-core/pull/4505))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
@@ -22,9 +23,8 @@ Contributors:
 
 ## dbt-core 1.0.1 (January 03, 2022)
 
-Contributors:
-
 * [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+
 
 ## dbt-core 1.0.1rc1 (December 20, 2021)
 

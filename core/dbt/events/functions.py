@@ -1,12 +1,12 @@
 import colorama
 from colorama import Style
-from datetime import datetime
 import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, NodeInfo, Cache
+from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
 from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
+from datetime import datetime
 import json
 import io
 from io import StringIO, TextIOWrapper
@@ -18,10 +18,11 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 import threading
-from typing import Any, Callable, Dict, List, Optional, Union
-import dataclasses
+from typing import Any, Dict, List, Optional, Union
 from collections import deque
 
+global LOG_VERSION
+LOG_VERSION = 2
 
 # create the global event history buffer with the default max size (10k)
 # python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
@@ -154,41 +155,32 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
 # the message may contain secrets which must be scrubbed at the usage site.
 def event_to_serializable_dict(
     e: T_Event,
-    ts_fn: Callable[[datetime], str]
 ) -> Dict[str, Any]:
-    data = dict()
-    node_info = dict()
+
     log_line = dict()
+    code: str
     try:
-        log_line = dataclasses.asdict(e, dict_factory=type(e).asdict)
-    except AttributeError:
+        log_line = e.to_dict()
+    except AttributeError as exc:
         event_type = type(e).__name__
         raise Exception(  # TODO this may hang async threads
-            f"type {event_type} is not serializable to json."
-            f" First make sure that the call sites for {event_type} match the type hints"
-            f" and if they do, you can override the dataclass method `asdict` in {event_type} in"
-            " types.py to define your own serialization function to a dictionary of valid json"
-            " types"
+            f"type {event_type} is not serializable. {str(exc)}"
         )
 
-    if isinstance(e, NodeInfo):
-        node_info = dataclasses.asdict(e.get_node_info())
-
-    for field, value in log_line.items():  # type: ignore[attr-defined]
-        if field not in ["code", "report_node_data"]:
-            data[field] = value
+    # We get the code from the event object, so we don't need it in the data
+    if 'code' in log_line:
+        del log_line['code']
 
     event_dict = {
         'type': 'log_line',
-        'log_version': e.log_version,
-        'ts': ts_fn(e.get_ts()),
+        'log_version': LOG_VERSION,
+        'ts': get_ts_rfc3339(),
         'pid': e.get_pid(),
         'msg': e.message(),
         'level': e.level_tag(),
-        'data': data,
+        'data': log_line,
         'invocation_id': e.get_invocation_id(),
         'thread_name': e.get_thread_name(),
-        'node_info': node_info,
         'code': e.code
     }
 
@@ -199,7 +191,7 @@ def event_to_serializable_dict(
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
 def create_info_text_log_line(e: T_Event) -> str:
     color_tag: str = '' if this.format_color else Style.RESET_ALL
-    ts: str = e.get_ts().strftime("%H:%M:%S")
+    ts: str = get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"
     return log_line
@@ -210,9 +202,9 @@ def create_debug_text_log_line(e: T_Event) -> str:
     # Create a separator if this is the beginning of an invocation
     if type(e) == MainReportVersion:
         separator = 30 * '='
-        log_line = f'\n\n{separator} {e.get_ts()} | {get_invocation_id()} {separator}\n'
+        log_line = f'\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n'
     color_tag: str = '' if this.format_color else Style.RESET_ALL
-    ts: str = e.get_ts().strftime("%H:%M:%S.%f")
+    ts: str = get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     thread = ''
@@ -230,7 +222,7 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
     if type(e) == EmptyLine:
         return None  # will not be sent to logger
     # using preformatted ts string instead of formatting it here to be extra careful about timezone
-    values = event_to_serializable_dict(e, lambda _: e.get_ts_rfc3339())
+    values = event_to_serializable_dict(e)
     raw_log_line = json.dumps(values, sort_keys=True)
     return scrub_secrets(raw_log_line, env_secrets())
 
@@ -387,3 +379,16 @@ def set_invocation_id() -> None:
     # commands in the dbt servers. It shouldn't be necessary for the CLI.
     global invocation_id
     invocation_id = str(uuid.uuid4())
+
+
+# exactly one time stamp per concrete event
+def get_ts() -> datetime:
+    ts = datetime.utcnow()
+    return ts
+
+
+# preformatted time stamp
+def get_ts_rfc3339() -> str:
+    ts = get_ts()
+    ts_rfc3339 = ts.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    return ts_rfc3339

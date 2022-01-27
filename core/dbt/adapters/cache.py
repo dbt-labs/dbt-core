@@ -291,11 +291,12 @@ class RelationsCache:
         :raises InternalError: If either entry does not exist.
         """
         ref_key = _make_key(referenced)
+        dep_key = _make_key(dependent)
         if (ref_key.database, ref_key.schema) not in self:
             # if we have not cached the referenced schema at all, we must be
             # referring to a table outside our control. There's no need to make
             # a link - we will never drop the referenced relation during a run.
-            fire_event(UncachedRelation(dep_key=dependent, ref_key=ref_key))
+            fire_event(UncachedRelation(dep_key=dep_key, ref_key=ref_key))
             return
         if ref_key not in self.relations:
             # Insert a dummy "external" relation.
@@ -303,8 +304,6 @@ class RelationsCache:
                 type=referenced.External
             )
             self.add(referenced)
-
-        dep_key = _make_key(dependent)
         if dep_key not in self.relations:
             # Insert a dummy "external" relation.
             dependent = dependent.replace(
@@ -342,17 +341,17 @@ class RelationsCache:
         for cached in self.relations.values():
             cached.release_references(keys)
 
-    def _drop_cascade_relation(self, dropped):
+    def _drop_cascade_relation(self, dropped_key):
         """Drop the given relation and cascade it appropriately to all
         dependent relations.
 
         :param _CachedRelation dropped: An existing _CachedRelation to drop.
         """
-        if dropped not in self.relations:
-            fire_event(DropMissingRelation(relation=dropped))
+        if dropped_key not in self.relations:
+            fire_event(DropMissingRelation(relation=dropped_key))
             return
-        consequences = self.relations[dropped].collect_consequences()
-        fire_event(DropCascade(dropped=dropped, consequences=consequences))
+        consequences = self.relations[dropped_key].collect_consequences()
+        fire_event(DropCascade(dropped=dropped_key, consequences=consequences))
         self._remove_refs(consequences)
 
     def drop(self, relation):
@@ -366,10 +365,10 @@ class RelationsCache:
         :param str schema: The schema of the relation to drop.
         :param str identifier: The identifier of the relation to drop.
         """
-        dropped = _make_key(relation)
-        fire_event(DropRelation(dropped=dropped))
+        dropped_key = _make_key(relation)
+        fire_event(DropRelation(dropped=dropped_key))
         with self.lock:
-            self._drop_cascade_relation(dropped)
+            self._drop_cascade_relation(dropped_key)
 
     def _rename_relation(self, old_key, new_relation):
         """Rename a relation named old_key to new_key, updating references.

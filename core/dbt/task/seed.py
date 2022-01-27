@@ -11,7 +11,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SeedHeader, SeedHeaderSeperator, EmptyLine, PrintSeedErrorResultLine,
+    SeedHeader, SeedHeaderSeparator, EmptyLine, PrintSeedErrorResultLine,
     PrintSeedResultLine, PrintStartLine
 )
 from dbt.node_types import NodeType
@@ -28,7 +28,7 @@ class SeedRunner(ModelRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                report_node_data=self.node
+                node_info=self.node.node_info
             )
         )
 
@@ -52,7 +52,7 @@ class SeedRunner(ModelRunner):
                     execution_time=result.execution_time,
                     schema=self.node.schema,
                     relation=model.alias,
-                    report_node_data=model
+                    node_info=model.node_info
                 )
             )
         else:
@@ -64,7 +64,7 @@ class SeedRunner(ModelRunner):
                     execution_time=result.execution_time,
                     schema=self.node.schema,
                     relation=model.alias,
-                    report_node_data=model
+                    node_info=model.node_info
                 )
             )
 
@@ -109,7 +109,7 @@ class SeedTask(RunTask):
         with TextOnly():
             fire_event(EmptyLine())
         fire_event(SeedHeader(header=header))
-        fire_event(SeedHeaderSeperator(len_header=len(header)))
+        fire_event(SeedHeaderSeparator(len_header=len(header)))
 
         rand_table.print_table(max_rows=10, max_columns=None)
         with TextOnly():
