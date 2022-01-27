@@ -297,6 +297,8 @@ class InitTask(BaseTask):
             # just setup the user's profile.
             fire_event(SettingUpProfile())
             profile_name = self.get_profile_name_from_current_project()
+            if not self.check_if_can_write_profile(profile_name=profile_name):
+                return
             # If a profile_template.yml exists in the project root, that effectively
             # overrides the profile_template.yml for the given target.
             profile_template_path = Path("profile_template.yml")
@@ -308,8 +310,6 @@ class InitTask(BaseTask):
                     return
                 except Exception:
                     fire_event(InvalidProfileTemplateYAML())
-            if not self.check_if_can_write_profile(profile_name=profile_name):
-                return
             adapter = self.ask_for_adapter_choice()
             self.create_profile_from_target(
                 adapter, profile_name=profile_name
