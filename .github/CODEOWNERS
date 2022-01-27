@@ -20,7 +20,7 @@
 /core/dbt/parser/     @dbt-labs/core-language
 
 # Execution core modules
-/core/dbt/events/     @dbt-labs/core-execution
+/core/dbt/events/     @dbt-labs/core-execution @dbt-labs/core-language # eventually remove language but they have knowledge here now
 /core/dbt/graph/      @dbt-labs/core-execution
 /core/dbt/task/       @dbt-labs/core-execution
 
