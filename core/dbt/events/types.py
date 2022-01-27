@@ -2418,9 +2418,7 @@ if 1 == 0:
     SystemExecutingCmd(cmd=[""])
     SystemStdOutMsg(bmsg=b"")
     SystemStdErrMsg(bmsg=b"")
-    SelectorReportInvalidSelector(
-        valid_selectors="", spec_method="", raw_spec=""
-    )
+    SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec="")
     MacroEventInfo(msg="")
     MacroEventDebug(msg="")
     NewConnection(conn_type="", conn_name="")
