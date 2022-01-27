@@ -1690,9 +1690,7 @@ class PrintHookStartLine(InfoLevel, NodeInfo):
         msg = f"START hook: {self.statement}"
         return format_fancy_output_line(
             msg=msg, status="RUN", index=self.index, total=self.total, truncate=True
-                                        index=self.index,
-                                        total=self.total,
-                                        truncate=True)
+        )
 
 
 @dataclass
