@@ -88,7 +88,7 @@ class NodeSelector(MethodManager):
         except InvalidSelectorException:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
             fire_event(SelectorReportInvalidSelector(
-                valid_selectors=valid_selectors,
+                SelectorReportInvalidSelector(
                 spec_method=spec.method,
                 raw_spec=spec.raw
             ))

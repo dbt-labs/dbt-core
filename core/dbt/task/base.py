@@ -458,7 +458,7 @@ class BaseRunner(metaclass=ABCMeta):
                         node_name=node_name,
                         index=self.node_index,
                         total=self.num_nodes,
-                        node_info=self.node.node_info
+                        node_info=self.node.node_info,
                     )
                 )
 

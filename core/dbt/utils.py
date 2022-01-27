@@ -650,23 +650,27 @@ def args_to_dict(args):
     dict_args = {}
     # remove args keys that clutter up the dictionary
     for key in var_args:
-        if key == 'cls':
+        if key == "cls":
             continue
         if var_args[key] is None:
             continue
         # TODO: add more default_false_keys
         default_false_keys = (
-            'debug', 'full_refresh', 'fail_fast', 'warn_error',
-            'single_threaded', 'log_cache_events', 'store_failures',
-            'use_experimental_parser',
+            "debug",
+            "full_refresh",
+            "fail_fast",
+            "warn_error",
+            "single_threaded",
+            "log_cache_events",
+            "store_failures",
+            "use_experimental_parser",
         )
         if key in default_false_keys and var_args[key] is False:
             continue
-        if key == 'vars' and var_args[key] == '{}':
+        if key == "vars" and var_args[key] == "{}":
             continue
         # this was required for a test case
-        if (isinstance(var_args[key], PosixPath) or
-                isinstance(var_args[key], WindowsPath)):
+        if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
             var_args[key] = str(var_args[key])
         dict_args[key] = var_args[key]
     return dict_args

@@ -176,20 +176,20 @@ class ParsedNodeMandatory(UnparsedNode, HasUniqueID, HasFqn, HasRelationMetadata
 
 
 @dataclass
-class NodeInfoMixin():
+class NodeInfoMixin:
     _event_status: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def node_info(self):
         node_info = {
-            "node_path": getattr(self, 'path', None),
-            "node_name": getattr(self, 'name', None),
-            "unique_id": getattr(self, 'unique_id', None),
-            "resource_type": str(getattr(self, 'resource_type', '')),
-            "materialized": self.config.get('materialized'),
-            "node_status": str(self._event_status.get('node_status')),
+            "node_path": getattr(self, "path", None),
+            "node_name": getattr(self, "name", None),
+            "unique_id": getattr(self, "unique_id", None),
+            "resource_type": str(getattr(self, "resource_type", "")),
+            "materialized": self.config.get("materialized"),
+            "node_status": str(self._event_status.get("node_status")),
             "node_started_at": self._event_status.get("started_at"),
-            "node_finished_at": self._event_status.get("finished_at")
+            "node_finished_at": self._event_status.get("finished_at"),
         }
         return node_info
 
@@ -628,10 +628,7 @@ class ParsedSourceMandatory(
 
 
 @dataclass
-class ParsedSourceDefinition(
-    NodeInfoMixin,
-    ParsedSourceMandatory
-):
+class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None

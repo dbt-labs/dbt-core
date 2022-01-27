@@ -75,7 +75,7 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         elif result.status == TestStatus.Pass:
@@ -85,7 +85,7 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         elif result.status == TestStatus.Warn:
@@ -96,7 +96,7 @@ class TestRunner(CompileRunner):
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
                     failures=result.failures,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         elif result.status == TestStatus.Fail:
@@ -107,7 +107,7 @@ class TestRunner(CompileRunner):
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
                     failures=result.failures,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         else:
@@ -119,7 +119,7 @@ class TestRunner(CompileRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                node_info=self.node.node_info
+                node_info=self.node.node_info,
             )
         )
 

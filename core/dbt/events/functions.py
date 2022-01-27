@@ -168,17 +168,17 @@ def event_to_serializable_dict(
         )
 
     # We get the code from the event object, so we don't need it in the data
-    if 'code' in log_line:
-        del log_line['code']
+    if "code" in log_line:
+        del log_line["code"]
 
     event_dict = {
         'type': 'log_line',
-        'log_version': LOG_VERSION,
-        'ts': get_ts_rfc3339(),
+        "log_version": LOG_VERSION,
+        "ts": get_ts_rfc3339(),
         'pid': e.get_pid(),
         'msg': e.message(),
         'level': e.level_tag(),
-        'data': log_line,
+        "data": log_line,
         'invocation_id': e.get_invocation_id(),
         'thread_name': e.get_thread_name(),
         'code': e.code
@@ -202,7 +202,7 @@ def create_debug_text_log_line(e: T_Event) -> str:
     # Create a separator if this is the beginning of an invocation
     if type(e) == MainReportVersion:
         separator = 30 * '='
-        log_line = f'\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n'
+        log_line = f"\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n"
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
@@ -390,5 +390,5 @@ def get_ts() -> datetime:
 # preformatted time stamp
 def get_ts_rfc3339() -> str:
     ts = get_ts()
-    ts_rfc3339 = ts.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    ts_rfc3339 = ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return ts_rfc3339

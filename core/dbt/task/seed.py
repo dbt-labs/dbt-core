@@ -11,7 +11,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SeedHeader, SeedHeaderSeparator, EmptyLine, PrintSeedErrorResultLine,
+    SeedHeader,
     PrintSeedResultLine, PrintStartLine
 )
 from dbt.node_types import NodeType
@@ -28,7 +28,7 @@ class SeedRunner(ModelRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                node_info=self.node.node_info
+                node_info=self.node.node_info,
             )
         )
 
@@ -52,7 +52,7 @@ class SeedRunner(ModelRunner):
                     execution_time=result.execution_time,
                     schema=self.node.schema,
                     relation=model.alias,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         else:
@@ -64,7 +64,7 @@ class SeedRunner(ModelRunner):
                     execution_time=result.execution_time,
                     schema=self.node.schema,
                     relation=model.alias,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
 

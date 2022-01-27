@@ -1708,7 +1708,9 @@ class PrintHookEndLine(InfoLevel, NodeInfo):
                                         index=self.index,
                                         total=self.total,
                                         execution_time=self.execution_time,
-                                        truncate=True)
+            execution_time=self.execution_time,
+            truncate=True,
+        )
 
 
 @dataclass
@@ -2355,11 +2357,11 @@ class EventBufferFull(WarnLevel):
 #
 # TODO remove these lines once we run mypy everywhere.
 if 1 == 0:
-    MainReportVersion(v='')
+    MainReportVersion(v="")
     MainKeyboardInterrupt()
-    MainEncounteredError(e=BaseException(''))
-    MainStackTrace(stack_trace='')
-    MainTrackingUserState(user_state='')
+    MainEncounteredError(e=BaseException(""))
+    MainStackTrace(stack_trace="")
+    MainTrackingUserState(user_state="")
     ParsingStart()
     ParsingCompiling()
     ParsingWritingManifest()
@@ -2402,8 +2404,7 @@ if 1 == 0:
     SQLQueryStatus(status="", elapsed=0.1)
     SQLCommit(conn_name="")
     ColTypeChange(
-        orig_type="", new_type="",
-        table=_ReferenceKey(database="", schema="", identifier="")
+        orig_type="", new_type="", table=_ReferenceKey(database="", schema="", identifier="")
     )
     SchemaCreation(relation=_ReferenceKey(database="", schema="", identifier=""))
     SchemaDrop(relation=_ReferenceKey(database="", schema="", identifier=""))
@@ -2457,7 +2458,7 @@ if 1 == 0:
     PartialParsingFailedBecauseProfileChange()
     PartialParsingFailedBecauseNewProjectDependency()
     PartialParsingFailedBecauseHashChanged()
-    PartialParsingDeletedMetric(id='')
+    PartialParsingDeletedMetric(id="")
     ParsedFileLoadFailed(path='', exc=Exception(''))
     PartialParseSaveFileNotFound()
     StaticParserCausedJinjaRendering(path='')
@@ -2493,7 +2494,7 @@ if 1 == 0:
     ProfileHelpMessage()
     CatchableExceptionOnRun(exc=Exception(''))
     InternalExceptionOnRun(build_path='', exc=Exception(''))
-    GenericExceptionOnRun(build_path='', unique_id='', exc=Exception(''))
+    GenericExceptionOnRun(build_path="", unique_id="", exc=Exception(""))
     NodeConnectionReleaseError(node_name='', exc=Exception(''))
     CheckCleanPath(path='')
     ConfirmCleanPath(path='')
@@ -2531,7 +2532,7 @@ if 1 == 0:
     FirstRunResultError(msg='')
     AfterFirstRunResultError(msg='')
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
-    PrintStartLine(description='', index=0, total=0, node_info={})
+    PrintStartLine(description="", index=0, total=0, node_info={})
     PrintHookStartLine(
         statement='',
         index=0,
@@ -2671,12 +2672,12 @@ if 1 == 0:
     )
     PrintCancelLine(conn_name='')
     DefaultSelector(name='')
-    NodeStart(node_info={}, unique_id='')
-    NodeFinished(node_info={}, unique_id='', run_result={})
+    NodeStart(node_info={}, unique_id="")
+    NodeFinished(node_info={}, unique_id="", run_result={})
     QueryCancelationUnsupported(type='')
     ConcurrencyLine(num_threads=0, target_name='')
-    NodeCompiling(node_info={}, unique_id='')
-    NodeExecuting(node_info={}, unique_id='')
+    NodeCompiling(node_info={}, unique_id="")
+    NodeExecuting(node_info={}, unique_id="")
     StarterProjectPath(dir='')
     ConfigFolderDirectory(dir='')
     NoSampleProfileFound(adapter='')

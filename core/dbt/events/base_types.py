@@ -45,7 +45,7 @@ class Event(metaclass=ABCMeta):
     # It should be in all subclasses that are to record actual events.
     @abstractmethod
     def to_dict(self):
-        raise Exception('to_dict not implemented for Event')
+        raise Exception("to_dict not implemented for Event")
 
     # do not define this yourself. inherit it from one of the above level types.
     @abstractmethod
@@ -116,5 +116,5 @@ class NoStdOut():
 # This class represents the node_info which is generated
 # by the NodeInfoMixin class in dbt.contracts.graph.parsed
 @dataclass
-class NodeInfo():
+class NodeInfo:
     node_info: Dict[str, Any]
