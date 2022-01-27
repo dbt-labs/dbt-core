@@ -2,6 +2,10 @@
 # PRs will be automatically assigned for review to the associated 
 # team(s) or person(s) that touches any files that are mapped to them.
 #
+# A statement takes precedence over the statements above it so more general
+# assignments are found at the top with specific assignments being lower in
+# the ordering (i.e. catch all assignment should be the first item)
+#
 # Consult GitHub documentation for formatting guidelines:
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#example-of-a-codeowners-file
 
