@@ -14,6 +14,8 @@ from dbt import flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
+from dbt.contracts.project import Name as ProjectName
+
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     StarterProjectPath, ConfigFolderDirectory, NoSampleProfileFound, ProfileWrittenWithSample,
@@ -269,6 +271,16 @@ class InitTask(BaseTask):
         numeric_choice = click.prompt(prompt_msg, type=click.INT)
         return available_adapters[numeric_choice - 1]
 
+    def get_valid_project_name(self) -> str:
+        """Returns a valid project name, either from CLI arg or user prompt."""
+        name = self.args.project_name
+        while not ProjectName.is_valid(name):
+            if name:
+                click.echo(name + " is not a valid project name.")
+            name = click.prompt("Enter a name for your project (letters, digits, underscore)")
+
+        return name
+
     def run(self):
         """Entry point for the init task."""
         profiles_dir = flags.PROFILES_DIR
@@ -306,11 +318,7 @@ class InitTask(BaseTask):
 
         # When dbt init is run outside of an existing project,
         # create a new project and set up the user's profile.
-        project_name = self.args.project_name
-        if project_name is None:
-            # If project name is not provided,
-            # ask the user which project name they'd like to use.
-            project_name = click.prompt("What is the desired project name?")
+        project_name = self.get_valid_project_name()
         project_path = Path(project_name)
         if project_path.exists():
             fire_event(ProjectNameAlreadyExists(name=project_name))

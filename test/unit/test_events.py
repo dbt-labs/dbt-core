@@ -233,8 +233,6 @@ sample_values = [
     TimingInfoCollected(),
     MergedFromState(nbr_merged=0, sample=[]),
     MissingProfileTarget(profile_name='', target_name=''),
-    ProfileLoadError(exc=Exception('')),
-    ProfileNotFound(profile_name=''),
     InvalidVarsYAML(),
     GenericTestFileParse(path=''),
     MacroFileParse(path=''),
@@ -294,7 +292,7 @@ sample_values = [
     FinishedCleanPaths(),
     OpenCommand(open_cmd='', profiles_dir=''),
     DepsNoPackagesFound(),
-    DepsStartPackageInstall(package=''),
+    DepsStartPackageInstall(package_name=''),
     DepsInstallInfo(version_name=''),
     DepsUpdateAvailable(version_latest=''),
     DepsListSubdirectory(subdirectory=''),
@@ -424,7 +422,7 @@ class TestEventJSONSerialization(TestCase):
 
         # if we have everything we need to test, try to serialize everything
         for event in sample_values:
-            d = event_to_serializable_dict(event, lambda _: event.get_ts_rfc3339(), lambda x: x.message())
+            d = event_to_serializable_dict(event, lambda _: event.get_ts_rfc3339())
             try:
                 json.dumps(d)
             except TypeError as e:

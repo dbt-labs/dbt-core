@@ -246,7 +246,7 @@ class ManifestLoader:
                     project_parser_files = self.partial_parser.get_parsing_files()
                     self.partially_parsing = True
                     self.manifest = self.saved_manifest
-                except Exception:
+                except Exception as exc:
                     # pp_files should still be the full set and manifest is new manifest,
                     # since get_parsing_files failed
                     fire_event(PartialParsingFullReparseBecauseOfError())
@@ -283,6 +283,9 @@ class ManifestLoader:
                     if dbt.tracking.active_user is not None:
                         exc_info['full_reparse_reason'] = ReparseReason.exception
                         dbt.tracking.track_partial_parser(exc_info)
+
+                    if os.environ.get('DBT_PP_TEST'):
+                        raise exc
 
         if self.manifest._parsing_info is None:
             self.manifest._parsing_info = ParsingInfo()

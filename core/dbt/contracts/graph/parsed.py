@@ -431,6 +431,10 @@ class ParsedSingularTestNode(ParsedNode):
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
 
+    @property
+    def test_node_type(self):
+        return 'singular'
+
 
 @dataclass
 class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
@@ -451,6 +455,10 @@ class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
             self.same_fqn(other) and
             True
         )
+
+    @property
+    def test_node_type(self):
+        return 'generic'
 
 
 @dataclass

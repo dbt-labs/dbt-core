@@ -1,5 +1,0 @@
-macros:
-  - name: my_macro
-    config:
-      meta:
-        owner: 'Joe Jones'

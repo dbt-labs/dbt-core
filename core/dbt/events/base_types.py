@@ -11,32 +11,6 @@ from typing import Any, Optional
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-# in preparation for #3977
-class TestLevel():
-    def level_tag(self) -> str:
-        return "test"
-
-
-class DebugLevel():
-    def level_tag(self) -> str:
-        return "debug"
-
-
-class InfoLevel():
-    def level_tag(self) -> str:
-        return "info"
-
-
-class WarnLevel():
-    def level_tag(self) -> str:
-        return "warn"
-
-
-class ErrorLevel():
-    def level_tag(self) -> str:
-        return "error"
-
-
 class Cache():
     # Events with this class will only be logged when the `--log-cache-events` flag is passed
     pass
@@ -141,6 +115,32 @@ class Event(metaclass=ABCMeta):
         return d
 
 
+# in preparation for #3977
+class TestLevel(Event):
+    def level_tag(self) -> str:
+        return "test"
+
+
+class DebugLevel(Event):
+    def level_tag(self) -> str:
+        return "debug"
+
+
+class InfoLevel(Event):
+    def level_tag(self) -> str:
+        return "info"
+
+
+class WarnLevel(Event):
+    def level_tag(self) -> str:
+        return "warn"
+
+
+class ErrorLevel(Event):
+    def level_tag(self) -> str:
+        return "error"
+
+
 @dataclass  # type: ignore
 class NodeInfo(Event, metaclass=ABCMeta):
     report_node_data: Any  # Union[ParsedModelNode, ...] TODO: resolve circular imports
@@ -159,15 +159,11 @@ class NodeInfo(Event, metaclass=ABCMeta):
         return node_info
 
 
-class File(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def file_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
+# prevents an event from going to the file
+class NoFile():
+    pass
 
 
-class Cli(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def cli_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
+# prevents an event from going to stdout
+class NoStdOut():
+    pass

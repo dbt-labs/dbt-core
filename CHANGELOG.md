@@ -1,6 +1,49 @@
-## dbt-core 1.0.1 (Release TBD)
+## dbt-core 1.1.0 (TBD)
+
+### Features
+- New Dockerfile to support specific db adapters and platforms.  See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
+
 ### Fixes
-- Fix a bug where the user wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
+- User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
+- Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+
+### Under the hood
+- Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
+- Clean up test deprecation warnings ([#3988](https://github.com/dbt-labs/dbt-core/issue/3988), [#4556](https://github.com/dbt-labs/dbt-core/pull/4556))
+
+Contributors:
+- [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
+
+## dbt-core 1.0.2 (TBD)
+
+### Fixes
+- Projects created using `dbt init` now have the correct `seeds` directory created (instead of `data`) ([#4588](https://github.com/dbt-labs/dbt-core/issues/4588), [#4599](https://github.com/dbt-labs/dbt-core/pull/4589))
+- Don't require a profile for dbt deps and clean commands ([#4554](https://github.com/dbt-labs/dbt-core/issues/4554), [#4610](https://github.com/dbt-labs/dbt-core/pull/4610))
+
+## dbt-core 1.0.1 (January 03, 2022)
+
+Contributors:
+
+* [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+
+## dbt-core 1.0.1rc1 (December 20, 2021)
+
+### Fixes
+- Fix wrong url in the dbt docs overview homepage ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
+- Fix redefined status param of SQLQueryStatus to typecheck the string which passes on `._message` value of `AdapterResponse` or the `str` value sent by adapter plugin.  ([#4463](https://github.com/dbt-labs/dbt-core/pull/4463#issuecomment-990174166))
+- Fix `DepsStartPackageInstall` event to use package name instead of version number. ([#4482](https://github.com/dbt-labs/dbt-core/pull/4482))
+- Reimplement log message to use adapter name instead of the object method. ([#4501](https://github.com/dbt-labs/dbt-core/pull/4501))
+- Issue better error message for incompatible schemas ([#4470](https://github.com/dbt-labs/dbt-core/pull/4442), [#4497](https://github.com/dbt-labs/dbt-core/pull/4497))
+- Remove secrets from error related to packages. ([#4507](https://github.com/dbt-labs/dbt-core/pull/4507))
+- Prevent coercion of boolean values (`True`, `False`) to numeric values (`0`, `1`) in query results ([#4511](https://github.com/dbt-labs/dbt-core/issues/4511), [#4512](https://github.com/dbt-labs/dbt-core/pull/4512))
+- Fix error with an env_var in a project hook ([#4523](https://github.com/dbt-labs/dbt-core/issues/4523), [#4524](https://github.com/dbt-labs/dbt-core/pull/4524))
+- Add additional windows compat logic for colored log output. ([#4443](https://github.com/dbt-labs/dbt-core/issues/4443))
+
+###  Docs
+- Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
+
+Contributors:
+- [remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
 
 ## dbt-core 1.0.0 (December 3, 2021)
 
@@ -204,7 +247,7 @@ Contributors:
 - [@laxjesse](https://github.com/laxjesse) ([#4019](https://github.com/dbt-labs/dbt-core/pull/4019))
 - [@gitznik](https://github.com/Gitznik) ([#4124](https://github.com/dbt-labs/dbt-core/pull/4124))
 
-## dbt 0.21.1 (Release TBD)
+## dbt 0.21.1 (November 29, 2021)
 
 ### Fixes
 - Add `get_where_subquery` to test macro namespace, fixing custom generic tests that rely on introspecting the `model` arg at parse time ([#4195](https://github.com/dbt-labs/dbt/issues/4195), [#4197](https://github.com/dbt-labs/dbt/pull/4197))
@@ -348,7 +391,7 @@ Contributors:
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt-core/pull/3526))
 - [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt-core/pull/3547))
 
-## dbt 0.20.2 (Release TBD)
+## dbt 0.20.2 (September 07, 2021)
 
 ### Under the hood
 

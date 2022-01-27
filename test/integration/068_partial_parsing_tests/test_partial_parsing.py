@@ -46,6 +46,7 @@ class BasePPTest(DBTIntegrationTest):
         os.mkdir(os.path.join(self.test_root_dir, 'macros'))
         os.mkdir(os.path.join(self.test_root_dir, 'analyses'))
         os.mkdir(os.path.join(self.test_root_dir, 'snapshots'))
+        os.environ['DBT_PP_TEST'] = 'true'
 
 
 
@@ -332,12 +333,18 @@ class TestSources(BasePPTest):
         results = self.run_dbt(["--partial-parse", "run"])
 
         # Add a data test
+        self.copy_file('test-files/test-macro.sql', 'macros/test-macro.sql')
         self.copy_file('test-files/my_test.sql', 'tests/my_test.sql')
         results = self.run_dbt(["--partial-parse", "test"])
         manifest = get_manifest()
         self.assertEqual(len(manifest.nodes), 9)
         test_id = 'test.test.my_test'
         self.assertIn(test_id, manifest.nodes)
+
+        # Change macro that data test depends on
+        self.copy_file('test-files/test-macro2.sql', 'macros/test-macro.sql')
+        results = self.run_dbt(["--partial-parse", "test"])
+        manifest = get_manifest()
 
         # Add an analysis
         self.copy_file('test-files/my_analysis.sql', 'analyses/my_analysis.sql')

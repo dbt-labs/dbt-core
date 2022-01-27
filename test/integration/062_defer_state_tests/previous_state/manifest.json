@@ -1,0 +1,6 @@
+{
+    "metadata": {
+        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v3.json",
+        "dbt_version": "0.21.1"
+    }
+}
