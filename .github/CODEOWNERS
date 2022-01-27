@@ -12,8 +12,25 @@
 # Changes to GitHub configurations including Actions
 /.github/ @leahwicz
 
-# Adapter / plugin code
-/plugins @dbt-labs/core-adapters
+# Language core modules
+/core/dbt/config/     @dbt-labs/core-language
+/core/dbt/context/    @dbt-labs/core-language
+/core/dbt/contracts/  @dbt-labs/core-language
+/core/dbt/deps/       @dbt-labs/core-language
+/core/dbt/parser/     @dbt-labs/core-language
+
+# Execution core modules
+/core/dbt/events/     @dbt-labs/core-execution
+/core/dbt/graph/      @dbt-labs/core-execution
+/core/dbt/task/       @dbt-labs/core-execution
+
+# Adapter interface, scaffold, Postgres plugin
+/core/dbt/adapters    @dbt-labs/core-adapters
+/core/scripts/create_adapter_plugin.py    @dbt-labs/core-adapters
+/plugins/             @dbt-labs/core-adapters
+
+# Global project: default macros, including generic tests + materializations
+/core/dbt/include/global_project    @dbt-labs/core-execution @dbt-labs/core-adapters
 
 # Perf regression testing framework
 # This excludes the test project files itself since those aren't specific 
