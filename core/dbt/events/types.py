@@ -2050,6 +2050,7 @@ class NodeStart(DebugLevel, NodeInfo):
 @dataclass
 class NodeFinished(DebugLevel, NodeInfo):
     unique_id: str
+    # The following isn't a RunResult class because we run into circular imports
     run_result: Dict[str, Any]
     code: str = "Q024"
 

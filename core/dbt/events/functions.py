@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Union
 from collections import deque
 
 global LOG_VERSION
-LOG_VERSION = 1
+LOG_VERSION = 2
 
 # create the global event history buffer with the default max size (10k)
 # python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
@@ -157,7 +157,6 @@ def event_to_serializable_dict(
     e: T_Event,
 ) -> Dict[str, Any]:
 
-    node_info: Dict[str, Any] = dict()
     log_line = dict()
     code: str
     try:
@@ -172,10 +171,6 @@ def event_to_serializable_dict(
     if 'code' in log_line:
         del log_line['code']
 
-    # We could just leave the 'node_info' in the data field instead
-    if 'node_info' in log_line and log_line['node_info']:
-        node_info = log_line['node_info'].pop()
-
     event_dict = {
         'type': 'log_line',
         'log_version': LOG_VERSION,
@@ -186,7 +181,6 @@ def event_to_serializable_dict(
         'data': log_line,
         'invocation_id': e.get_invocation_id(),
         'thread_name': e.get_thread_name(),
-        'node_info': node_info,
         'code': e.code
     }
 

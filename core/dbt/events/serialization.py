@@ -3,10 +3,11 @@ from mashumaro.config import (
     BaseConfig as MashBaseConfig
 )
 from mashumaro.types import SerializationStrategy
-from datetime import datetime
-from dateutil.parser import parse
-from typing import cast
 
+
+# The dbtClassMixin serialization class has a DateTime serialization strategy
+# class. If a datetime ends up in an event class, we could use a similar class
+# here to serialize it in our preferred format.
 
 class ExceptionSerialization(SerializationStrategy):
     def serialize(self, value):
@@ -15,20 +16,6 @@ class ExceptionSerialization(SerializationStrategy):
 
     def deserialize(self, value):
         return (Exception(value))
-
-
-class DateTimeSerialization(SerializationStrategy):
-    def serialize(self, value):
-        out = value.isoformat()
-        # Assume UTC if timezone is missing
-        if value.tzinfo is None:
-            out += "Z"
-        return out
-
-    def deserialize(self, value):
-        return (
-            value if isinstance(value, datetime) else parse(cast(str, value))
-        )
 
 
 class BaseExceptionSerialization(SerializationStrategy):
@@ -47,6 +34,5 @@ class EventSerialization(DataClassDictMixin):
     class Config(MashBaseConfig):
         serialization_strategy = {
             Exception: ExceptionSerialization(),
-            datetime: DateTimeSerialization(),
             BaseException: ExceptionSerialization(),
         }
