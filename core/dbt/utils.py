@@ -601,7 +601,9 @@ class MultiDict(Mapping[str, Any]):
 
 def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
     """Attempts to run a function that makes an external call, if the call fails
-    on a connection error, timeout or other exception, it will be tried up to 5 more times.
+    on a connection error, timeout or decompression issue, it will be tried up to 5 more times.
+    See https://github.com/dbt-labs/dbt-core/issues/4579 for context on this decompression issues
+    specifically.
     """
     try:
         return fn()

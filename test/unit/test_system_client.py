@@ -204,6 +204,7 @@ class TestUntarPackage(unittest.TestCase):
             pass
 
     def test_untar_package_success(self):
+        #  set up a valid tarball to test against
         with NamedTemporaryFile(
             prefix='my-package.2', suffix='.tar.gz', dir=self.tempdir, delete=False
         ) as named_tar_file:
@@ -216,12 +217,14 @@ class TestUntarPackage(unittest.TestCase):
                 with tarfile.open(fileobj=named_tar_file, mode='w:gz') as tar:
                     tar.addfile(tarfile.TarInfo(relative_file_a), open(file_a.name))
 
+        #  now we test can test that we can untar the file successfully
         assert tarfile.is_tarfile(tar.name)
         dbt.clients.system.untar_package(tar_file_full_path, self.tempdest)
         path = Path(os.path.join(self.tempdest, relative_file_a))
         assert path.is_file()
 
     def test_untar_package_failure(self):
+        #  create a text file then rename it as a tar (so it's invalid)
         with NamedTemporaryFile(
                 prefix='a', suffix='.txt', dir=self.tempdir, delete=False
             ) as file_a:
@@ -230,13 +233,18 @@ class TestUntarPackage(unittest.TestCase):
                 file_path= os.path.dirname(txt_file_name)
                 tar_file_path = os.path.join(file_path, 'mypackage.2.tar.gz')
         os.rename(txt_file_name, tar_file_path)
+
+        #  now that we're set up, test that untarring the file fails
         with self.assertRaises(tarfile.ReadError) as exc:
             dbt.clients.system.untar_package(tar_file_path, self.tempdest)
 
     def test_untar_package_empty(self):
+        #  create a tarball with nothing in it
         with NamedTemporaryFile(
             prefix='my-empty-package.2', suffix='.tar.gz', dir=self.tempdir
         ) as named_file:
+
+            #  make sure we throw an error for the empty file
             with self.assertRaises(tarfile.ReadError) as exc:
                 dbt.clients.system.untar_package(named_file.name, self.tempdest)
             self.assertEqual("empty file", str(exc.exception))
