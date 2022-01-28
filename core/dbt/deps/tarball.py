@@ -33,7 +33,7 @@ class TarballPackageMixin:
 
 class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def __init__(
-        self, 
+        self,
         tarball: str,
         sha1: Optional[str] = None,
         subdirectory: Optional[str] = None,
@@ -93,7 +93,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         ''' assumed structure is that tarfile has a root dir (package name)
         but we don't know what it is. will look for lone dir on root and
         use that.
-        optional - use subdirectory arg to manually specify, like used in git 
+        optional - use subdirectory arg to manually specify, like used in git
         package'''
         if not self.subdirectory:
             tar_dir_name = system.resolve_tar_dir_name(self.tarfile)
@@ -152,7 +152,7 @@ class TarballUnpinnedPackage(
     TarballPackageMixin, UnpinnedPackage[TarballPinnedPackage]
 ):
     def __init__(
-        self, 
+        self,
         tarball: str,
         sha1: Optional[str] = None,
         subdirectory: Optional[str] = None,
