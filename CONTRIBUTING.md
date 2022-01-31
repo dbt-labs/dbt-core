@@ -227,3 +227,6 @@ A `dbt-core` maintainer will review your PR. They may suggest code revision for 
 
 
 Once all tests are passing and your PR has been approved, a `dbt-core` maintainer will merge your changes into the active development branch. And that's it! Happy developing :tada:
+
+
+Some change - doesn't really matter, it's for `changie`

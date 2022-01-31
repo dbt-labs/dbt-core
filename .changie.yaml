@@ -7,8 +7,6 @@ versionExt: md
 versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
 changeFormat: '* {{.Body}} ([#{{.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Issue}}))'
-body:
-  minLength: 3
 kinds:
 - label: Fixes
 - label: Features
