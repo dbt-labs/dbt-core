@@ -23,6 +23,7 @@ Contributors:
 - Don't require a profile for dbt deps and clean commands ([#4554](https://github.com/dbt-labs/dbt-core/issues/4554), [#4610](https://github.com/dbt-labs/dbt-core/pull/4610))
 - Select modified.body works correctly when new model added([#4570](https://github.com/dbt-labs/dbt-core/issues/4570), [#4631](https://github.com/dbt-labs/dbt-core/pull/4631))
 - Fix bug in retry logic for bad response from hub and when there is a bad git tarball download. ([#4577](https://github.com/dbt-labs/dbt-core/issues/4577), [#4579](https://github.com/dbt-labs/dbt-core/issues/4579), [#4609](https://github.com/dbt-labs/dbt-core/pull/4609)) 
+- Restore previous log level (DEBUG) when a test depends on a disabled resource. Still WARN if the resource is missing ([#4594](https://github.com/dbt-labs/dbt-core/issues/4594), [#4647](https://github.com/dbt-labs/dbt-core/pull/4647))
 
 ## dbt-core 1.0.1 (January 03, 2022)
 

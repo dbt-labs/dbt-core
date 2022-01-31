@@ -1124,12 +1124,12 @@ class InvalidDisabledSourceInTestNode(WarnLevel):
 
 
 @dataclass
-class InvalidRefInTestNode(WarnLevel):
+class InvalidRefInTestNode(DebugLevel):
     msg: str
     code: str = "I051"
 
     def message(self) -> str:
-        return ui.warning_tag(self.msg)
+        return self.msg
 
 
 @dataclass
