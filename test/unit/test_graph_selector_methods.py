@@ -835,6 +835,8 @@ def test_select_state_added_model(manifest, previous_state):
         manifest, method, 'modified') == {'another_model'}
     assert search_manifest_using_method(
         manifest, method, 'new') == {'another_model'}
+    assert search_manifest_using_method(
+        manifest, method, 'modified.body') == {'another_model'}
 
 
 def test_select_state_changed_model_sql(manifest, previous_state, view_model):
