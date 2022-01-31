@@ -43,7 +43,7 @@ class SemverString(str, SerializableType):
         return SemverString(value)
 
 
-# this supports full semver
+# this supports full semver,
 # but also allows for 2 group version numbers, (allows '1.0').
 register_pattern(
     SemverString,
