@@ -46,6 +46,7 @@ from dbt.exceptions import (
 
 
 # so many code changes!
+# yet another addition to main...
 
 class DBTVersion(argparse.Action):
     """This is very very similar to the builtin argparse._Version action,
