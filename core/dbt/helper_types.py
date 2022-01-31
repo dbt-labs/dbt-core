@@ -100,7 +100,7 @@ dbtClassMixin.register_field_encoders(
 FQNPath = Tuple[str, ...]
 PathSet = AbstractSet[FQNPath]
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # A data type for representing lazily evaluated values.

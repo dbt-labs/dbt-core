@@ -51,5 +51,5 @@ class EventSerialization(DataClassDictMixin):
         serialization_strategy = {
             Exception: ExceptionSerialization(),
             BaseException: ExceptionSerialization(),
-            Lazy[Dict[str, List[str]]]: LazySerialization1()
+            Lazy[Dict[str, List[str]]]: LazySerialization1(),
         }
