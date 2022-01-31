@@ -16,8 +16,7 @@
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
-- [@alswang18](https://github.com/alswang18) ([#4644]
-https://github.com/dbt-labs/dbt-core/pull/4644))
+- [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 
 ## dbt-core 1.0.2 (TBD)
 
