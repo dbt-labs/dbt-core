@@ -469,7 +469,7 @@ def rename(from_path: str, to_path: str, force: bool = False) -> None:
 def untar_package(tar_path: str, dest_dir: str, rename_to: Optional[str] = None) -> None:
     tar_path = convert_path(tar_path)
     tar_dir_name = None
-    with tarfile.open(tar_path, 'r:gz') as tarball:
+    with tarfile.open(tar_path, "r:gz") as tarball:
         tarball.extractall(dest_dir)
         tar_dir_name = os.path.commonprefix(tarball.getnames())
     if rename_to:

@@ -74,11 +74,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         package_name = self.get_project_name(project, renderer)
 
         download_untar_fn = functools.partial(
-            self.download_and_untar,
-            download_url,
-            tar_path,
-            deps_path,
-            package_name
+            self.download_and_untar, download_url, tar_path, deps_path, package_name
         )
         connection_exception_retry(download_untar_fn, 5)
 
