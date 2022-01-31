@@ -1,0 +1,27 @@
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+versionHeaderPath: ""
+changelogPath: CHANGELOG.md
+versionExt: md
+versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
+kindFormat: '### {{.Kind}}'
+changeFormat: '* {{.Body}} ([#{{.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Issue}}))'
+body:
+  minLength: 3
+kinds:
+- label: Fixes
+- label: Features
+- label: Under the Hood
+- label: Docs
+- label: Breaking Changes
+- label: Dependancies
+custom:
+- key: Author
+  label: GitHub Name
+  type: string
+  minLength: 3
+- key: Issue
+  label: GitHub Issue Number
+  type: int
+  minLength: 4
