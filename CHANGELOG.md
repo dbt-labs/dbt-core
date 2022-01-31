@@ -11,7 +11,8 @@
 ### Under the hood
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
 - Clean up test deprecation warnings ([#3988](https://github.com/dbt-labs/dbt-core/issue/3988), [#4556](https://github.com/dbt-labs/dbt-core/pull/4556))
-- Use mashumaro for serialization in event logging ([#4504](https://github.com/dbt-labs/dbt-core/issue/4504), [#4505](https://github.com/dbt-labs/dbt-core/pull/4505))
+- Use mashumaro for serialization in event logging ([#4504](https://github.com/dbt-labs/dbt-core/issues/4504), [#4505](https://github.com/dbt-labs/dbt-core/pull/4505))
+- Drop support for Python 3.7.0 + 3.7.1 ([#4584](https://github.com/dbt-labs/dbt-core/issues/4584), [#4585](https://github.com/dbt-labs/dbt-core/pull/4585), [#4643](https://github.com/dbt-labs/dbt-core/pull/4643))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
@@ -23,6 +24,9 @@ https://github.com/dbt-labs/dbt-core/pull/4644))
 ### Fixes
 - Projects created using `dbt init` now have the correct `seeds` directory created (instead of `data`) ([#4588](https://github.com/dbt-labs/dbt-core/issues/4588), [#4599](https://github.com/dbt-labs/dbt-core/pull/4589))
 - Don't require a profile for dbt deps and clean commands ([#4554](https://github.com/dbt-labs/dbt-core/issues/4554), [#4610](https://github.com/dbt-labs/dbt-core/pull/4610))
+- Select modified.body works correctly when new model added([#4570](https://github.com/dbt-labs/dbt-core/issues/4570), [#4631](https://github.com/dbt-labs/dbt-core/pull/4631))
+- Fix bug in retry logic for bad response from hub and when there is a bad git tarball download. ([#4577](https://github.com/dbt-labs/dbt-core/issues/4577), [#4579](https://github.com/dbt-labs/dbt-core/issues/4579), [#4609](https://github.com/dbt-labs/dbt-core/pull/4609)) 
+- Restore previous log level (DEBUG) when a test depends on a disabled resource. Still WARN if the resource is missing ([#4594](https://github.com/dbt-labs/dbt-core/issues/4594), [#4647](https://github.com/dbt-labs/dbt-core/pull/4647))
 
 ## dbt-core 1.0.1 (January 03, 2022)
 
