@@ -454,7 +454,7 @@ class StateSelectorMethod(SelectorMethod):
 
     @staticmethod
     def check_modified_factory(
-        compare_method: str
+        compare_method: str,
     ) -> Callable[[Optional[SelectorTarget], SelectorTarget], bool]:
         # get a function that compares two selector target based on compare method provided
         def check_modified_things(old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
@@ -463,6 +463,7 @@ class StateSelectorMethod(SelectorMethod):
                 return not old or not getattr(new, compare_method)(old)  # type: ignore
             else:
                 return False
+
         return check_modified_things
 
     def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
@@ -474,21 +475,16 @@ class StateSelectorMethod(SelectorMethod):
 
         state_checks = {
             # it's new if there is no old version
-            'new':
-                lambda old, _: old is None,
+            "new": lambda old, _: old is None,
             # use methods defined above to compare properties of old + new
-            'modified':
-                self.check_modified_content,
-            'modified.body':
-                self.check_modified_factory('same_body'),
-            'modified.configs':
-                self.check_modified_factory('same_config'),
-            'modified.persisted_descriptions':
-                self.check_modified_factory('same_persisted_description'),
-            'modified.relation':
-                self.check_modified_factory('same_database_representation'),
-            'modified.macros':
-                self.check_modified_macros,
+            "modified": self.check_modified_content,
+            "modified.body": self.check_modified_factory("same_body"),
+            "modified.configs": self.check_modified_factory("same_config"),
+            "modified.persisted_descriptions": self.check_modified_factory(
+                "same_persisted_description"
+            ),
+            "modified.relation": self.check_modified_factory("same_database_representation"),
+            "modified.macros": self.check_modified_macros,
         }
         if selector in state_checks:
             checker = state_checks[selector]
