@@ -21,7 +21,7 @@ from dbt.events.types import (
     UpdateReference
 )
 from dbt.utils import lowercase
-from dbt.lazy import Lazy
+from dbt.helper_types import Lazy
 
 
 def dot_separated(key: _ReferenceKey) -> str:

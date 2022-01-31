@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from dbt.adapters.reference_keys import _ReferenceKey
 from dbt import ui
-from dbt.lazy import Lazy
+from dbt.helper_types import Lazy
 from dbt.events.base_types import (
     Event, NoFile, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException,
     NodeInfo, Cache

@@ -10,7 +10,7 @@ from dbt.events.base_types import Event, TestLevel, DebugLevel, WarnLevel, InfoL
 from importlib import reload
 import dbt.events.functions as event_funcs
 import dbt.flags as flags
-from dbt.lazy import Lazy
+from dbt.helper_types import Lazy
 import inspect
 import json
 from unittest import TestCase

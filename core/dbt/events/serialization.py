@@ -1,4 +1,4 @@
-from dbt.lazy import Lazy
+from dbt.helper_types import Lazy
 from mashumaro import DataClassDictMixin
 from mashumaro.config import (
     BaseConfig as MashBaseConfig
