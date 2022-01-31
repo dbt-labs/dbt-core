@@ -21,6 +21,7 @@ from dbt.events.types import (
     UpdateReference
 )
 from dbt.utils import lowercase
+from dbt.helper_types import Lazy
 
 
 def dot_separated(key: _ReferenceKey) -> str:
@@ -322,11 +323,11 @@ class RelationsCache:
         """
         cached = _CachedRelation(relation)
         fire_event(AddRelation(relation=_make_key(cached)))
-        fire_event(DumpBeforeAddGraph(dump=self.dump_graph()))
+        fire_event(DumpBeforeAddGraph(dump=Lazy.defer(lambda: self.dump_graph())))
 
         with self.lock:
             self._setdefault(cached)
-        fire_event(DumpAfterAddGraph(dump=self.dump_graph()))
+        fire_event(DumpAfterAddGraph(dump=Lazy.defer(lambda: self.dump_graph())))
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
@@ -440,7 +441,7 @@ class RelationsCache:
         new_key = _make_key(new)
         fire_event(RenameSchema(old_key=old_key, new_key=new_key))
 
-        fire_event(DumpBeforeRenameSchema(dump=self.dump_graph()))
+        fire_event(DumpBeforeRenameSchema(dump=Lazy.defer(lambda: self.dump_graph())))
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
@@ -448,7 +449,7 @@ class RelationsCache:
             else:
                 self._setdefault(_CachedRelation(new))
 
-        fire_event(DumpAfterRenameSchema(dump=self.dump_graph()))
+        fire_event(DumpAfterRenameSchema(dump=Lazy.defer(lambda: self.dump_graph())))
 
     def get_relations(
         self, database: Optional[str], schema: Optional[str]
