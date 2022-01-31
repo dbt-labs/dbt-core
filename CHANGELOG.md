@@ -20,6 +20,7 @@ Contributors:
 ### Fixes
 - Projects created using `dbt init` now have the correct `seeds` directory created (instead of `data`) ([#4588](https://github.com/dbt-labs/dbt-core/issues/4588), [#4599](https://github.com/dbt-labs/dbt-core/pull/4589))
 - Don't require a profile for dbt deps and clean commands ([#4554](https://github.com/dbt-labs/dbt-core/issues/4554), [#4610](https://github.com/dbt-labs/dbt-core/pull/4610))
+- Select modified.body works correctly when new model added([#4570](https://github.com/dbt-labs/dbt-core/issues/4570), [#4631](https://github.com/dbt-labs/dbt-core/pull/4631))
 
 ## dbt-core 1.0.1 (January 03, 2022)
 
