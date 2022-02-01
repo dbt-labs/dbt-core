@@ -1,6 +1,7 @@
 ## dbt-core 1.1.0 (TBD)
 
 ### Features
+- Added Support for Semantic Versioning ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - New Dockerfile to support specific db adapters and platforms.  See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
 
 ### Fixes
@@ -15,6 +16,7 @@
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
+- [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 
 ## dbt-core 1.0.2 (TBD)
 

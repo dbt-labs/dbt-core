@@ -43,12 +43,11 @@ class SemverString(str, SerializableType):
         return SemverString(value)
 
 
-# this does not support the full semver (does not allow a trailing -fooXYZ) and
-# is not restrictive enough for full semver, (allows '1.0'). But it's like
-# 'semver lite'.
+# this supports full semver,
+# but also allows for 2 group version numbers, (allows '1.0').
 register_pattern(
     SemverString,
-    r'^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(\.(?:0|[1-9]\d*))?$',
+    r'^(0|[1-9]\d*)\.(0|[1-9]\d*)(\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)?$', # noqa
 )
 
 
