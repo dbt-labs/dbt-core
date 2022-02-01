@@ -1,0 +1,20 @@
+name: "Github package 'latest' tag wrangler for containers"
+description: "Determines wether or not a given dbt container should be given a bare 'latest' tag (I.E. dbt-core:latest)"
+inputs:
+  package_name:
+    description: "Package to check (I.E. dbt-core, dbt-redshift, etc)"
+    required: true
+  new_version:
+    description: "Semver of the container being built (I.E. 1.0.4)"
+    required: true
+  gh_token: 
+    description: "Auth token for github (must have view packages scope)"
+    required: true
+outputs:
+  latest:
+    description: "Wether or not built container should be tagged latest (bool)"
+  minor_latest:
+    description: "Wether or not built container should be tagged minor.latest (bool)"
+runs:
+  using: "docker"
+  image: "Dockerfile"
