@@ -1,9 +1,24 @@
 # Events Module
 
-The Events module is the implmentation for structured logging. These events represent both a programatic interface to dbt processes as well as human-readable messaging in one centralized place. The centralization allows for leveraging mypy to enforce interface invariants across all dbt events, and the distinct type layer allows for decoupling events and libraries such as loggers.
+The Events module is responsible for communicating internal dbt structures into a consumable interface. Right now, the events module is exclusively used for structured logging, but in the future could grow to include other user-facing components such as exceptions. These events represent both a programatic interface to dbt processes as well as human-readable messaging in one centralized place. The centralization allows for leveraging mypy to enforce interface invariants across all dbt events, and the distinct type layer allows for decoupling events and libraries such as loggers.
 
 # Using the Events Module
 The event module provides types that represent what is happening in dbt in `events.types`. These types are intended to represent an exhaustive list of all things happening within dbt that will need to be logged, streamed, or printed. To fire an event, `events.functions::fire_event` is the entry point to the module from everywhere in dbt.
+
+# Logging
+When events are processed via `fire_event`, nearly everything is logged. Whether or not the user has enabled the debug flag, all debug messages are still logged to the file. However, some events are particularly time consuming to construct because they return a huge amount of data. Today, the only messages in this category are cache events and are only logged if the `--log-cache-events` flag is on. This is important because these messages should not be created unless they are going to be logged, because they cause a noticable performance degredation. We achieve this by making the event class explicitly use lazy values for the expensive ones so they are not computed until the moment they are required. This is done with the data type `core/dbt/helper_types.py::Lazy` which includes usage documentation.
+
+Example:
+```
+@dataclass
+class DumpBeforeAddGraph(DebugLevel, Cache):
+    dump: Lazy[Dict[str, List[str]]]
+    code: str = "E031"
+
+    def message(self) -> str:
+        return f"before adding : {self.dump.force()}"
+```
+
 
 # Adding a New Event
 In `events.types` add a new class that represents the new event. All events must be a dataclass with, at minimum, a code.  You may also include some other values to construct downstream messaging. Only include the data necessary to construct this message within this class. You must extend all destinations (e.g. - if your log message belongs on the cli, extend `Cli`) as well as the loglevel this event belongs to.  This system has been designed to take full advantage of mypy so running it will catch anything you may miss.
@@ -29,28 +44,10 @@ class PartialParsingDeletedExposure(DebugLevel, Cli, File):
 
 ## Optional (based on your event)
 
-- Events associated with node status changes must have `report_node_data` passed in and be extended with `NodeInfo`
-- define `asdict` if your data is not serializable to json
+- Events associated with node status changes must be extended with `NodeInfo` which contains a node_info attribute
 
-Example
-```
-@dataclass
-class SuperImportantNodeEvent(InfoLevel, File, NodeInfo):
-    node_name: str
-    run_result: RunResult
-    report_node_data: ParsedModelNode  # may vary
-    code: str = "Q036"
 
-    def message(self) -> str:
-        return f"{self.node_name} had overly verbose result of {run_result}"
-
-    @classmethod
-    def asdict(cls, data: list) -> dict:
-        return dict((k, str(v)) for k, v in data)
-
-```
-
-All values other than `code` and `report_node_data` will be included in the `data` node of the json log output.
+All values other than `code` and `node_info` will be included in the `data` node of the json log output.
 
 Once your event has been added, add a dummy call to your new event at the bottom of `types.py` and also add your new Event to the list `sample_values` in `test/unit/test_events.py'.
 

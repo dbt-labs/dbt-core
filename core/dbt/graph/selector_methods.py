@@ -1,7 +1,7 @@
 import abc
 from itertools import chain
 from pathlib import Path
-from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional
+from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
 
 from dbt.dataclass_schema import StrEnum
 
@@ -478,41 +478,27 @@ class StateSelectorMethod(SelectorMethod):
             previous_macros = []
             return self.recursively_check_macros_modified(node, previous_macros)
 
-    def check_modified(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+    # TODO check modifed_content and check_modified macro seems a bit redundent
+    def check_modified_content(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         different_contents = not new.same_contents(old)  # type: ignore
         upstream_macro_change = self.check_macros_modified(new)
         return different_contents or upstream_macro_change
 
-    def check_modified_body(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        if hasattr(new, "same_body"):
-            return not new.same_body(old)  # type: ignore
-        else:
-            return False
-
-    def check_modified_configs(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        if hasattr(new, "same_config"):
-            return not new.same_config(old)  # type: ignore
-        else:
-            return False
-
-    def check_modified_persisted_descriptions(
-        self, old: Optional[SelectorTarget], new: SelectorTarget
-    ) -> bool:
-        if hasattr(new, "same_persisted_description"):
-            return not new.same_persisted_description(old)  # type: ignore
-        else:
-            return False
-
-    def check_modified_relation(
-        self, old: Optional[SelectorTarget], new: SelectorTarget
-    ) -> bool:
-        if hasattr(new, "same_database_representation"):
-            return not new.same_database_representation(old)  # type: ignore
-        else:
-            return False
-
     def check_modified_macros(self, _, new: SelectorTarget) -> bool:
         return self.check_macros_modified(new)
+
+    @staticmethod
+    def check_modified_factory(
+        compare_method: str
+    ) -> Callable[[Optional[SelectorTarget], SelectorTarget], bool]:
+        # get a function that compares two selector target based on compare method provided
+        def check_modified_things(old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+            if hasattr(new, compare_method):
+                # when old body does not exist or old and new are not the same
+                return not old or not getattr(new, compare_method)(old)  # type: ignore
+            else:
+                return False
+        return check_modified_things
 
     def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return old is None
@@ -527,14 +513,21 @@ class StateSelectorMethod(SelectorMethod):
 
         state_checks = {
             # it's new if there is no old version
-            'new': lambda old, _: old is None,
+            'new':
+                lambda old, _: old is None,
             # use methods defined above to compare properties of old + new
-            'modified': self.check_modified,
-            'modified.body': self.check_modified_body,
-            'modified.configs': self.check_modified_configs,
-            'modified.persisted_descriptions': self.check_modified_persisted_descriptions,
-            'modified.relation': self.check_modified_relation,
-            'modified.macros': self.check_modified_macros,
+            'modified':
+                self.check_modified_content,
+            'modified.body':
+                self.check_modified_factory('same_body'),
+            'modified.configs':
+                self.check_modified_factory('same_config'),
+            'modified.persisted_descriptions':
+                self.check_modified_factory('same_persisted_description'),
+            'modified.relation':
+                self.check_modified_factory('same_database_representation'),
+            'modified.macros':
+                self.check_modified_macros,
         }
         if selector in state_checks:
             checker = state_checks[selector]

@@ -178,7 +178,26 @@ class ParsedNodeMandatory(
 
 
 @dataclass
-class ParsedNodeDefaults(ParsedNodeMandatory):
+class NodeInfoMixin():
+    _event_status: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def node_info(self):
+        node_info = {
+            "node_path": getattr(self, 'path', None),
+            "node_name": getattr(self, 'name', None),
+            "unique_id": getattr(self, 'unique_id', None),
+            "resource_type": str(getattr(self, 'resource_type', '')),
+            "materialized": self.config.get('materialized'),
+            "node_status": str(self._event_status.get('node_status')),
+            "node_started_at": self._event_status.get("started_at"),
+            "node_finished_at": self._event_status.get("finished_at")
+        }
+        return node_info
+
+
+@dataclass
+class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     tags: List[str] = field(default_factory=list)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
@@ -194,7 +213,6 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
-    _event_status: Dict[str, Any] = field(default_factory=dict)
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if (os.path.basename(self.path) ==
@@ -610,12 +628,11 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
 
 
 @dataclass
-class ParsedSourceDefinition(
+class ParsedSourceMandatory(
     UnparsedBaseNode,
     HasUniqueID,
     HasRelationMetadata,
     HasFqn,
-
 ):
     name: str
     source_name: str
@@ -623,6 +640,13 @@ class ParsedSourceDefinition(
     loader: str
     identifier: str
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+
+
+@dataclass
+class ParsedSourceDefinition(
+    NodeInfoMixin,
+    ParsedSourceMandatory
+):
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
@@ -637,7 +661,6 @@ class ParsedSourceDefinition(
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
-    _event_status: Dict[str, Any] = field(default_factory=dict)
 
     def __post_serialize__(self, dct):
         if '_event_status' in dct:

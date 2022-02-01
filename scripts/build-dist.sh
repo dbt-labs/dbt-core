@@ -23,7 +23,4 @@ do
     cp -r "$DBT_PATH"/"$SUBPATH"/dist/* "$DBT_PATH"/dist/
 done
 
-cd "$DBT_PATH"
-$PYTHON_BIN setup.py sdist
-
 set +x

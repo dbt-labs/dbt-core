@@ -10,12 +10,15 @@ import jinja2
 import json
 import os
 import requests
+from tarfile import ReadError
 import time
+from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
 from dbt.exceptions import ConnectionException
 from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall
+from dbt import flags
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
@@ -598,7 +601,9 @@ class MultiDict(Mapping[str, Any]):
 
 def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
     """Attempts to run a function that makes an external call, if the call fails
-    on a connection error or timeout, it will be tried up to 5 more times.
+    on a connection error, timeout or decompression issue, it will be tried up to 5 more times.
+    See https://github.com/dbt-labs/dbt-core/issues/4579 for context on this decompression issues
+    specifically.
     """
     try:
         return fn()
@@ -606,6 +611,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         requests.exceptions.ConnectionError,
         requests.exceptions.Timeout,
         requests.exceptions.ContentDecodingError,
+        ReadError,
     ) as exc:
         if attempt <= max_attempts - 1:
             fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
@@ -613,3 +619,40 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
             _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
             raise ConnectionException('External connection exception occurred: ' + str(exc))
+
+
+# This is used to serialize the args in the run_results and in the logs.
+# We do this separately because there are a few fields that don't serialize,
+# i.e. PosixPath, WindowsPath, and types. It also includes args from both
+# cli args and flags, which is more complete than just the cli args.
+# If new args are added that are false by default (particularly in the
+# global options) they should be added to the 'default_false_keys' list.
+def args_to_dict(args):
+    var_args = vars(args).copy()
+    # update the args with the flags, which could also come from environment
+    # variables or user_config
+    flag_dict = flags.get_flag_dict()
+    var_args.update(flag_dict)
+    dict_args = {}
+    # remove args keys that clutter up the dictionary
+    for key in var_args:
+        if key == 'cls':
+            continue
+        if var_args[key] is None:
+            continue
+        # TODO: add more default_false_keys
+        default_false_keys = (
+            'debug', 'full_refresh', 'fail_fast', 'warn_error',
+            'single_threaded', 'log_cache_events', 'store_failures',
+            'use_experimental_parser',
+        )
+        if key in default_false_keys and var_args[key] is False:
+            continue
+        if key == 'vars' and var_args[key] == '{}':
+            continue
+        # this was required for a test case
+        if (isinstance(var_args[key], PosixPath) or
+                isinstance(var_args[key], WindowsPath)):
+            var_args[key] = str(var_args[key])
+        dict_args[key] = var_args[key]
+    return dict_args
