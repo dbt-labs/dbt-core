@@ -4,7 +4,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from dbt.adapters.reference_keys import _make_key, _ReferenceKey
 import dbt.exceptions
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, fire_event_if
 from dbt.events.types import (
     AddLink,
     AddRelation,
@@ -20,6 +20,7 @@ from dbt.events.types import (
     UncachedRelation,
     UpdateReference
 )
+import dbt.flags as flags
 from dbt.utils import lowercase
 
 
@@ -323,11 +324,11 @@ class RelationsCache:
         """
         cached = _CachedRelation(relation)
         fire_event(AddRelation(relation=_make_key(cached)))
-        fire_event(DumpBeforeAddGraph(dump=self.dump_graph()))
+        fire_event_if(flags.LOG_CACHE_EVENTS, lambda: DumpBeforeAddGraph(dump=self.dump_graph()))
 
         with self.lock:
             self._setdefault(cached)
-        fire_event(DumpAfterAddGraph(dump=self.dump_graph()))
+        fire_event_if(flags.LOG_CACHE_EVENTS, lambda: DumpAfterAddGraph(dump=self.dump_graph()))
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
@@ -440,8 +441,10 @@ class RelationsCache:
         old_key = _make_key(old)
         new_key = _make_key(new)
         fire_event(RenameSchema(old_key=old_key, new_key=new_key))
-
-        fire_event(DumpBeforeRenameSchema(dump=self.dump_graph()))
+        fire_event_if(
+            flags.LOG_CACHE_EVENTS,
+            lambda: DumpBeforeRenameSchema(dump=self.dump_graph())
+        )
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
@@ -449,7 +452,10 @@ class RelationsCache:
             else:
                 self._setdefault(_CachedRelation(new))
 
-        fire_event(DumpAfterRenameSchema(dump=self.dump_graph()))
+        fire_event_if(
+            flags.LOG_CACHE_EVENTS,
+            lambda: DumpAfterRenameSchema(dump=self.dump_graph())
+        )
 
     def get_relations(
         self, database: Optional[str], schema: Optional[str]

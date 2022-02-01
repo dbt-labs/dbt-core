@@ -306,6 +306,13 @@ def send_exc_to_logger(
         )
 
 
+# an alternative to fire_event which only creates and logs the event value
+# if the condition is met. Does nothing otherwise.
+def fire_event_if(conditional: bool, lazy_e: Callable[[], Event]) -> None:
+    if conditional:
+        fire_event(lazy_e())
+
+
 # top-level method for accessing the new eventing system
 # this is where all the side effects happen branched by event type
 # (i.e. - mutating the event history, printing to stdout, logging

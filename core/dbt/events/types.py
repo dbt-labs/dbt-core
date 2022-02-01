@@ -699,7 +699,7 @@ class RenameSchema(DebugLevel, Cli, File, Cache):
 
 @dataclass
 class DumpBeforeAddGraph(DebugLevel, Cli, File, Cache):
-    # large value. delay not necessary since every debug level message is logged anyway.
+    # large value. delay creation with fire_event_if.
     dump: Dict[str, List[str]]
     code: str = "E031"
 
@@ -709,7 +709,7 @@ class DumpBeforeAddGraph(DebugLevel, Cli, File, Cache):
 
 @dataclass
 class DumpAfterAddGraph(DebugLevel, Cli, File, Cache):
-    # large value. delay not necessary since every debug level message is logged anyway.
+    # large value. delay creation with fire_event_if.
     dump: Dict[str, List[str]]
     code: str = "E032"
 
@@ -719,7 +719,7 @@ class DumpAfterAddGraph(DebugLevel, Cli, File, Cache):
 
 @dataclass
 class DumpBeforeRenameSchema(DebugLevel, Cli, File, Cache):
-    # large value. delay not necessary since every debug level message is logged anyway.
+    # large value. delay creation with fire_event_if.
     dump: Dict[str, List[str]]
     code: str = "E033"
 
@@ -729,7 +729,7 @@ class DumpBeforeRenameSchema(DebugLevel, Cli, File, Cache):
 
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, Cli, File, Cache):
-    # large value. delay not necessary since every debug level message is logged anyway.
+    # large value. delay creation with fire_event_if.
     dump: Dict[str, List[str]]
     code: str = "E034"
 
