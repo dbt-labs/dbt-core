@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Log info if we don't get a 200
     if package_request.status_code != 200:
         print(f"Call to GH API failed: {package_request.status_code} {package_meta['message']}")
-    
+
     # Make an early exit if there is no matching package in github
     if package_request.status_code == 404:
         if halt_on_missing:
@@ -35,12 +35,11 @@ if __name__ == "__main__":
             sys.exit(0)
 
     # TODO: verify package meta is "correct"
-    # https://github.com/dbt-labs/dbt-core/issues/4640 
+    # https://github.com/dbt-labs/dbt-core/issues/4640
 
     # map versions and tags
     version_tag_map = {
-        version["id"]: version["metadata"]["container"]["tags"]
-        for version in package_meta
+        version["id"]: version["metadata"]["container"]["tags"] for version in package_meta
     }
 
     # is pre-release
@@ -63,9 +62,7 @@ if __name__ == "__main__":
         if f"{new_version.major}.{new_version.minor}.latest" in tags:
             # Similar to above, only now we expect exactly two tags:
             # major.minor.patch and major.minor.latest
-            current_minor_latest = parse(
-                [tag for tag in tags if "latest" not in tag][0]
-            )
+            current_minor_latest = parse([tag for tag in tags if "latest" not in tag][0])
         else:
             current_minor_latest = False
 
@@ -79,7 +76,8 @@ if __name__ == "__main__":
 
         :param pre_rel: Wether or not the version of the new container is a pre-release
         :param new_version: The version of the new container
-        :param remote_latest: The version of the previously identified container that's already tagged latest or False
+        :param remote_latest: The version of the previously identified container that's
+            already tagged latest or False
         """
         # is a pre-release = not latest
         if pre_rel:
@@ -95,4 +93,3 @@ if __name__ == "__main__":
 
     print(f"::set-output name=latest::{latest}")
     print(f"::set-output name=minor_latest::{minor_latest}")
-    
