@@ -300,6 +300,64 @@ class ProjectEnvVarTest(BasePPTest):
         # cleanup
         del os.environ['ENV_VAR_NAME']
 
+
+class ProfileSecretEnvVarTest(BasePPTest):
+
+    @property
+    def profile_config(self):
+        # Need to set these here because the base integration test class
+        # calls 'load_config' before the tests are run.
+        # Note: only the specified profile is rendered, so there's no
+        # point it setting env_vars in non-used profiles.
+        os.environ['NOT_SECRET_USER'] = 'root'
+        os.environ['DBT_ENV_SECRET_PASS'] = 'password'
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'dev': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'host': self.database_host,
+                        'port': 5432,
+                        'user': "root",
+                        'pass': "password",
+                        'user': "{{ env_var('NOT_SECRET_USER') }}",
+                        'pass': "{{ env_var('DBT_ENV_SECRET_PASS') }}",
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                },
+                'target': 'dev'
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_secret_env_vars(self):
+        # Initial run
+        self.setup_directories()
+        self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
+        results = self.run_dbt(["run"])
+        manifest = get_manifest()
+
+        breakpoint()
+        
+        # find the non-secret in the manifest, we expect it to be there.
+        self.assertEqual(manifest.env_vars['NOT_SECRET_USER'], 'root')
+
+        # attempt to find the secret in the manifest. hopefully it's not there
+        try:
+            manifest.env_vars['x']
+            self.assertTrue(False, 'A secret was saved when it shouldn\'t have been')
+        except KeyError:
+            self.AssertTrue(True)
+
+        # cleanup
+        del os.environ['NOT_SECRET_USER']
+        del os.environ['DBT_ENV_SECRET_PASS']
+
 class ProfileEnvVarTest(BasePPTest):
 
     @property
