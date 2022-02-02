@@ -428,3 +428,34 @@ class TestEventJSONSerialization(TestCase):
             except TypeError as e:
                 raise Exception(f"{event} is not serializable to json. Originating exception: {e}")
                 
+
+class TestConditionallyFiringEvents(TestCase):
+
+    # tests that fire_event_if only creates the event if the condition is met
+    def test_fire_event_if(self):
+
+        # this class exists to count how many times the stub is called
+        @dataclass
+        class DumpStub():
+            counter = 0
+
+            def dump_graph(self):
+                self.counter = self.counter + 1
+                return dict()
+
+        # initialize to start the counter at 0
+        dump_stub = DumpStub()
+
+        # becaue the condition is false, the event should never be created,
+        # and the stub function should never be called
+        event_funcs.fire_event_if(False, lambda: DumpAfterAddGraph(dump=dump_stub.dump_graph()))
+
+        # assert the stub function was never called
+        self.assertEqual(0, dump_stub.counter)
+
+        # becuase the condition is true, the event should be created and 
+        # the stub function will be called
+        event_funcs.fire_event_if(True, lambda: DumpAfterAddGraph(dump=dump_stub.dump_graph()))
+        
+        # assert that the stub function was called
+        self.assertEqual(1, dump_stub.counter)
