@@ -2,8 +2,10 @@ The core function of dbt is SQL compilation and execution. Users create projects
 
 ## dbt-core
 
-Most of the python code in the repository is within the `core/dbt` directory. Currently the main subdirectories are:
+Most of the python code in the repository is within the `core/dbt` directory.
+- [`single python files`](core/dbt/README.md): A number of individual files, such as 'compilation.py' and 'exceptions.py'
 
+The main subdirectories of core/dbt:
 - [`adapters`](core/dbt/adapters/README.md): Define base classes for behavior that is likely to differ across databases
 - [`clients`](core/dbt/clients/README.md): Interface with dependencies (agate, jinja) or across operating systems
 - [`config`](core/dbt/config/README.md): Reconcile user-supplied configuration from connection profiles, project files, and Jinja macros
@@ -15,6 +17,10 @@ Most of the python code in the repository is within the `core/dbt` directory. Cu
 - [`include`](core/dbt/include/README.md): The dbt "global project," which defines default implementations of Jinja2 macros
 - [`parser`](core/dbt/parser/README.md): Read project files, validate, construct python objects
 - [`task`](core/dbt/task/README.md): Set forth the actions that dbt can perform when invoked
+
+Legacy tests are found in the 'test' directory:
+- [`unit tests`](core/dbt/test/unit/README.md): Unit tests
+- [`integration tests`](core/dbt/test/integration/README.md): Integration tests
 
 ### Invoking dbt
 
