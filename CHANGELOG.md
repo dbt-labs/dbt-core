@@ -22,11 +22,16 @@
 - User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
 - adapter compability messaging added([#4438](https://github.com/dbt-labs/dbt-core/pull/4438) [#4565](https://github.com/dbt-labs/dbt-core/pull/4565))
+- Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
 - [@nkyuray](https://github.com/nkyuray) ([#4565](https://github.com/dbt-labs/dbt-core/pull/4565))
+=======
+
+## dbt-core 1.0.1 (January 03, 2022)
+
 
 ## dbt-core 1.0.1rc1 (December 20, 2021)
 
