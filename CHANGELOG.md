@@ -25,6 +25,12 @@
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 
+## dbt-core 1.0.2 (TBD)
+### Fixes
+- adapter compability messaging added([#4438](https://github.com/dbt-labs/dbt-core/pull/4438) [#4565](https://github.com/dbt-labs/dbt-core/pull/4565))
+
+Contributors:
+* [@nkyuray](https://github.com/nkyuray) ([#4565](https://github.com/dbt-labs/dbt-core/pull/4565))
 ## dbt-core 1.0.1 (January 03, 2022)
 
 Contributors:
