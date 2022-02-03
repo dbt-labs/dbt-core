@@ -354,12 +354,46 @@ class ProfileEnvVarTest(BasePPTest):
         manifest = get_manifest()
         self.assertNotEqual(env_vars_checksum, manifest.state_check.profile_env_vars_hash.checksum)
 
+
+class ProfileSecretEnvVarTest(BasePPTest):
+
+    @property
+    def profile_config(self):
+        # Need to set these here because the base integration test class
+        # calls 'load_config' before the tests are run.
+        # Note: only the specified profile is rendered, so there's no
+        # point it setting env_vars in non-used profiles.
+        os.environ['ENV_VAR_USER'] = 'root'
+        os.environ[SECRET_ENV_PREFIX + 'PASS'] = 'password'
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'dev': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'host': self.database_host,
+                        'port': 5432,
+                        'user': "root",
+                        'pass': "password",
+                        'user': "{{ env_var('ENV_VAR_USER') }}",
+                        'pass': "{{ env_var('DBT_ENV_SECRET_PASS') }}",
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                },
+                'target': 'dev'
+            }
+        }
+
     @use_profile('postgres')
     def test_postgres_profile_secret_env_vars(self):
 
         # Initial run
         os.environ['ENV_VAR_USER'] = 'root'
-        os.environ[SECRET_ENV_PREFIX + 'ENV_VAR_PASS'] = 'password'
+        os.environ[SECRET_ENV_PREFIX + 'PASS'] = 'password'
         self.setup_directories()
         self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
         results = self.run_dbt(["run"])
@@ -367,8 +401,11 @@ class ProfileEnvVarTest(BasePPTest):
         env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change a secret var, it shouldn't register because we shouldn't save secrets.
-        os.environ[SECRET_ENV_PREFIX + 'ENV_VAR_PASS'] = 'password2'
-        (results, log_output) = self.run_dbt_and_capture(["run"], expect_pass=True)
+        os.environ[SECRET_ENV_PREFIX + 'PASS'] = 'password2'
+        # this dbt run is going to fail because the password isn't actually the right one,
+        # but that doesn't matter because we just want to see if the manifest has included
+        # the secret in the hash of environment variables.
+        (results, log_output) = self.run_dbt_and_capture(["run"], expect_pass=False)
         # I020 is the event code for "env vars used in profiles.yml have changed"
         self.assertFalse('I020' in log_output) 
         manifest = get_manifest()
