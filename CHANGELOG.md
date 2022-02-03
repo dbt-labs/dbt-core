@@ -16,7 +16,7 @@
 - Fix bug in retry logic for bad response from hub and when there is a bad git tarball download. ([#4577](https://github.com/dbt-labs/dbt-core/issues/4577), [#4579](https://github.com/dbt-labs/dbt-core/issues/4579), [#4609](https://github.com/dbt-labs/dbt-core/pull/4609)) 
 - Restore previous log level (DEBUG) when a test depends on a disabled resource. Still WARN if the resource is missing ([#4594](https://github.com/dbt-labs/dbt-core/issues/4594), [#4647](https://github.com/dbt-labs/dbt-core/pull/4647))
 - User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
-- A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) (https://github.com/dbt-labs/dbt-core/pull/4665)
+- A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
