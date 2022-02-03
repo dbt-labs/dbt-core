@@ -8,6 +8,7 @@
 ### Fixes
 - User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+- A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
 
 ### Under the hood
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
