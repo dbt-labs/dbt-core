@@ -28,7 +28,6 @@ Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
 - [@nkyuray](https://github.com/nkyuray) ([#4565](https://github.com/dbt-labs/dbt-core/pull/4565))
-=======
 
 ## dbt-core 1.0.1 (January 03, 2022)
 
