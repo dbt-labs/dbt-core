@@ -4,9 +4,7 @@ from dbt.exceptions import RuntimeException
 from dbt import flags
 from collections import namedtuple
 
-RuntimeArgs = namedtuple(
-    'RuntimeArgs', 'project_dir profiles_dir single_threaded profile target'
-)
+RuntimeArgs = namedtuple("RuntimeArgs", "project_dir profiles_dir single_threaded profile target")
 
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):
