@@ -17,12 +17,12 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     else:
         profiles_dir = os.path.expanduser("~/.dbt")
 
-    profile = args.profile if hasattr(args, 'profile') else None
-    target = args.target if hasattr(args, 'target') else None
+    profile = args.profile if hasattr(args, "profile") else None
+    target = args.target if hasattr(args, "target") else None
 
     # Construct a phony config
     config = RuntimeConfig.from_args(
-        project_dir, profiles_dir, single_threaded, profile, target
+        RuntimeArgs(project_dir, profiles_dir, single_threaded, profile, target)
     )
     # Clear previously registered adapters--
     # this fixes cacheing behavior on the dbt-server
