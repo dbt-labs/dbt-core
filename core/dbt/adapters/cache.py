@@ -21,6 +21,7 @@ from dbt.events.types import (
     UpdateReference
 )
 from dbt.utils import lowercase
+from dbt.helper_types import Lazy
 
 
 def dot_separated(key: _ReferenceKey) -> str:
@@ -291,11 +292,12 @@ class RelationsCache:
         :raises InternalError: If either entry does not exist.
         """
         ref_key = _make_key(referenced)
+        dep_key = _make_key(dependent)
         if (ref_key.database, ref_key.schema) not in self:
             # if we have not cached the referenced schema at all, we must be
             # referring to a table outside our control. There's no need to make
             # a link - we will never drop the referenced relation during a run.
-            fire_event(UncachedRelation(dep_key=dependent, ref_key=ref_key))
+            fire_event(UncachedRelation(dep_key=dep_key, ref_key=ref_key))
             return
         if ref_key not in self.relations:
             # Insert a dummy "external" relation.
@@ -303,8 +305,6 @@ class RelationsCache:
                 type=referenced.External
             )
             self.add(referenced)
-
-        dep_key = _make_key(dependent)
         if dep_key not in self.relations:
             # Insert a dummy "external" relation.
             dependent = dependent.replace(
@@ -323,11 +323,11 @@ class RelationsCache:
         """
         cached = _CachedRelation(relation)
         fire_event(AddRelation(relation=_make_key(cached)))
-        fire_event(DumpBeforeAddGraph(dump=self.dump_graph()))
+        fire_event(DumpBeforeAddGraph(dump=Lazy.defer(lambda: self.dump_graph())))
 
         with self.lock:
             self._setdefault(cached)
-        fire_event(DumpAfterAddGraph(dump=self.dump_graph()))
+        fire_event(DumpAfterAddGraph(dump=Lazy.defer(lambda: self.dump_graph())))
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
@@ -342,17 +342,17 @@ class RelationsCache:
         for cached in self.relations.values():
             cached.release_references(keys)
 
-    def _drop_cascade_relation(self, dropped):
+    def _drop_cascade_relation(self, dropped_key):
         """Drop the given relation and cascade it appropriately to all
         dependent relations.
 
         :param _CachedRelation dropped: An existing _CachedRelation to drop.
         """
-        if dropped not in self.relations:
-            fire_event(DropMissingRelation(relation=dropped))
+        if dropped_key not in self.relations:
+            fire_event(DropMissingRelation(relation=dropped_key))
             return
-        consequences = self.relations[dropped].collect_consequences()
-        fire_event(DropCascade(dropped=dropped, consequences=consequences))
+        consequences = self.relations[dropped_key].collect_consequences()
+        fire_event(DropCascade(dropped=dropped_key, consequences=consequences))
         self._remove_refs(consequences)
 
     def drop(self, relation):
@@ -366,10 +366,10 @@ class RelationsCache:
         :param str schema: The schema of the relation to drop.
         :param str identifier: The identifier of the relation to drop.
         """
-        dropped = _make_key(relation)
-        fire_event(DropRelation(dropped=dropped))
+        dropped_key = _make_key(relation)
+        fire_event(DropRelation(dropped=dropped_key))
         with self.lock:
-            self._drop_cascade_relation(dropped)
+            self._drop_cascade_relation(dropped_key)
 
     def _rename_relation(self, old_key, new_relation):
         """Rename a relation named old_key to new_key, updating references.
@@ -441,7 +441,7 @@ class RelationsCache:
         new_key = _make_key(new)
         fire_event(RenameSchema(old_key=old_key, new_key=new_key))
 
-        fire_event(DumpBeforeRenameSchema(dump=self.dump_graph()))
+        fire_event(DumpBeforeRenameSchema(dump=Lazy.defer(lambda: self.dump_graph())))
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
@@ -449,7 +449,7 @@ class RelationsCache:
             else:
                 self._setdefault(_CachedRelation(new))
 
-        fire_event(DumpAfterRenameSchema(dump=self.dump_graph()))
+        fire_event(DumpAfterRenameSchema(dump=Lazy.defer(lambda: self.dump_graph())))
 
     def get_relations(
         self, database: Optional[str], schema: Optional[str]

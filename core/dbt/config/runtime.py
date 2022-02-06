@@ -1,7 +1,7 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet,
@@ -13,20 +13,17 @@ from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from .utils import parse_cli_vars
 from dbt import flags
-from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
+from dbt.config.profile import read_user_config
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.relation import ComponentName
-from dbt.events.types import ProfileLoadError, ProfileNotFound
-from dbt.events.functions import fire_event
 from dbt.ui import warning_tag
 
 from dbt.contracts.project import Configuration, UserConfig
 from dbt.exceptions import (
     RuntimeException,
-    DbtProfileError,
     DbtProjectError,
     validator_error_message,
     warn_or_error,
@@ -191,6 +188,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         profile_renderer: ProfileRenderer,
         profile_name: Optional[str],
     ) -> Profile:
+
         return Profile.render_from_args(
             args, profile_renderer, profile_name
         )
@@ -412,21 +410,12 @@ class UnsetCredentials(Credentials):
         return ()
 
 
-class UnsetConfig(UserConfig):
-    def __getattribute__(self, name):
-        if name in {f.name for f in fields(UserConfig)}:
-            raise AttributeError(
-                f"'UnsetConfig' object has no attribute {name}"
-            )
-
-    def __post_serialize__(self, dct):
-        return {}
-
-
+# This is used by UnsetProfileConfig, for commands which do
+# not require a profile, i.e. dbt deps and clean
 class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
-        self.user_config = UnsetConfig()
+        self.user_config = UserConfig()  # This will be read in _get_rendered_profile
         self.profile_name = ''
         self.target_name = ''
         self.threads = -1
@@ -443,6 +432,8 @@ class UnsetProfile(Profile):
         return Profile.__getattribute__(self, name)
 
 
+# This class is used by the dbt deps and clean commands, because they don't
+# require a functioning profile.
 @dataclass
 class UnsetProfileConfig(RuntimeConfig):
     """This class acts a lot _like_ a RuntimeConfig, except if your profile is
@@ -525,7 +516,7 @@ class UnsetProfileConfig(RuntimeConfig):
             profile_env_vars=profile.profile_env_vars,
             profile_name='',
             target_name='',
-            user_config=UnsetConfig(),
+            user_config=UserConfig(),
             threads=getattr(args, 'threads', 1),
             credentials=UnsetCredentials(),
             args=args,
@@ -540,21 +531,12 @@ class UnsetProfileConfig(RuntimeConfig):
         profile_renderer: ProfileRenderer,
         profile_name: Optional[str],
     ) -> Profile:
-        try:
-            profile = Profile.render_from_args(
-                args, profile_renderer, profile_name
-            )
-        except (DbtProjectError, DbtProfileError) as exc:
-            selected_profile_name = Profile.pick_profile_name(
-                args_profile_name=getattr(args, 'profile', None),
-                project_profile_name=profile_name
-            )
-            fire_event(ProfileLoadError(exc=exc))
-            fire_event(ProfileNotFound(profile_name=selected_profile_name))
-            # return the poisoned form
-            profile = UnsetProfile()
-            # disable anonymous usage statistics
-            tracking.disable_tracking()
+
+        profile = UnsetProfile()
+        # The profile (for warehouse connection) is not needed, but we want
+        # to get the UserConfig, which is also in profiles.yml
+        user_config = read_user_config(flags.PROFILES_DIR)
+        profile.user_config = user_config
         return profile
 
     @classmethod
@@ -569,9 +551,6 @@ class UnsetProfileConfig(RuntimeConfig):
         :raises ValidationException: If the cli variables are invalid.
         """
         project, profile = cls.collect_parts(args)
-        if not isinstance(profile, UnsetProfile):
-            # if it's a real profile, return a real config
-            cls = RuntimeConfig
 
         return cls.from_parts(
             project=project,

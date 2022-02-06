@@ -69,13 +69,12 @@ struct LogLine {
     invocation_id: String,
     thread_name: String,
     data: serde_json::Value,      // TODO be more specific
-    node_info: serde_json::Value, // TODO be more specific
 }
 
 impl ValueTest for LogLine {
     fn value_test(&self){
         assert_eq!(
-            self.log_version, 1,
+            self.log_version, 2,
             "The log version changed. Be sure this was intentional."
         );
 
@@ -239,7 +238,7 @@ fn test_deserialize_serialize_is_unchanged(lines: &[String]) {
 mod tests {
     use crate::*;
 
-    const LOG_LINE: &str = r#"{"code": "Z023", "data": {"stats": {"error": 0, "pass": 3, "skip": 0, "total": 3, "warn": 0}}, "invocation_id": "f1e1557c-4f9d-4053-bb50-572cbbf2ca64", "level": "info", "log_version": 1, "msg": "Done. PASS=3 WARN=0 ERROR=0 SKIP=0 TOTAL=3", "node_info": {}, "pid": 75854, "thread_name": "MainThread", "ts": "2021-12-03T01:32:38.334601Z", "type": "log_line"}"#;
+    const LOG_LINE: &str = r#"{"code": "Z023", "data": {"stats": {"error": 0, "pass": 3, "skip": 0, "total": 3, "warn": 0}}, "invocation_id": "f1e1557c-4f9d-4053-bb50-572cbbf2ca64", "level": "info", "log_version": 2, "msg": "Done. PASS=3 WARN=0 ERROR=0 SKIP=0 TOTAL=3", "pid": 75854, "thread_name": "MainThread", "ts": "2021-12-03T01:32:38.334601Z", "type": "log_line"}"#;
 
     #[test]
     fn test_basic_loop() {

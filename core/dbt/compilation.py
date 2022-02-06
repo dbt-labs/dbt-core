@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import List, Dict, Any, Tuple, cast, Optional
 
 import networkx as nx  # type: ignore
+import pickle
 import sqlparse
 
 from dbt import flags
@@ -162,7 +163,8 @@ class Linker:
         for node_id in self.graph:
             data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
-        nx.write_gpickle(out_graph, outfile)
+        with open(outfile, 'wb') as outfh:
+            pickle.dump(out_graph, outfh, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 class Compiler:

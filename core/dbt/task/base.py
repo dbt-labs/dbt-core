@@ -290,7 +290,7 @@ class BaseRunner(metaclass=ABCMeta):
             ctx.node._event_status['node_status'] = RunningStatus.Compiling
             fire_event(
                 NodeCompiling(
-                    report_node_data=ctx.node,
+                    node_info=ctx.node.node_info,
                     unique_id=ctx.node.unique_id,
                 )
             )
@@ -306,7 +306,7 @@ class BaseRunner(metaclass=ABCMeta):
                 ctx.node._event_status['node_status'] = RunningStatus.Executing
                 fire_event(
                     NodeExecuting(
-                        report_node_data=ctx.node,
+                        node_info=ctx.node.node_info,
                         unique_id=ctx.node.unique_id,
                     )
                 )
@@ -448,7 +448,7 @@ class BaseRunner(metaclass=ABCMeta):
                         node_name=node_name,
                         index=self.node_index,
                         total=self.num_nodes,
-                        report_node_data=self.node
+                        node_info=self.node.node_info
                     )
                 )
 

@@ -485,7 +485,7 @@ def untar_package(
 ) -> None:
     tar_path = convert_path(tar_path)
     tar_dir_name = None
-    with tarfile.open(tar_path, 'r') as tarball:
+    with tarfile.open(tar_path, 'r:gz') as tarball:
         tarball.extractall(dest_dir)
         tar_dir_name = os.path.commonprefix(tarball.getnames())
     if rename_to:

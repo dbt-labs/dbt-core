@@ -1,0 +1,34 @@
+# **what?**
+# When a PR is merged, if it has the backport label, it will create 
+# a new PR to backport those changes to the given branch. If it can't
+# cleanly do a backport, it will comment on the merged PR of the failure.
+#
+# Label naming convention: "backport <branch name to backport to>"
+# Example: backport 1.0.latest
+#
+# You MUST "Squash and merge" the original PR or this won't work.
+
+# **why?**
+# Changes sometimes need to be backported to release branches.
+# This automates the backporting process
+
+# **when?**
+# Once a PR is "Squash and merge"'d and it has been correctly labeled
+# according to the naming convention.
+
+name: Backport
+on:
+  pull_request:
+    types:
+      - closed
+      - labeled
+
+jobs:
+  backport:
+    runs-on: ubuntu-18.04
+    name: Backport
+    steps:
+      - name: Backport
+        uses: tibdex/backport@v1.1.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}

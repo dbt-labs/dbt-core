@@ -86,8 +86,9 @@ class NodeSelector(MethodManager):
         try:
             collected = self.select_included(nodes, spec)
         except InvalidSelectorException:
+            valid_selectors = ", ".join(self.SELECTOR_METHODS)
             fire_event(SelectorReportInvalidSelector(
-                selector_methods=self.SELECTOR_METHODS,
+                valid_selectors=valid_selectors,
                 spec_method=spec.method,
                 raw_spec=spec.raw
             ))

@@ -1,0 +1,27 @@
+# **what?**
+# Calls mirroring Jira label Action. Includes adding a new label
+# to an existing issue or removing a label as well
+
+# **why?**
+# Jira is our tool for tracking and we need to see these labels in there
+
+# **when?**
+# On labels being added or removed from issues
+
+name: Jira Label Mirroring
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+    
+permissions:
+  issues: read
+
+jobs:
+  call-label-action:
+    uses: dbt-labs/jira-actions/.github/workflows/jira-label.yml@main
+    secrets:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    

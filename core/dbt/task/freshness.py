@@ -41,7 +41,7 @@ class FreshnessRunner(BaseRunner):
                 description=description,
                 index=self.node_index,
                 total=self.num_nodes,
-                report_node_data=self.node
+                node_info=self.node.node_info
             )
         )
 
@@ -60,7 +60,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=self.node
+                    node_info=self.node.node_info
                 )
             )
         elif result.status == FreshnessStatus.Error:
@@ -71,7 +71,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=self.node
+                    node_info=self.node.node_info
                 )
             )
         elif result.status == FreshnessStatus.Warn:
@@ -82,7 +82,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=self.node
+                    node_info=self.node.node_info
                 )
             )
         else:
@@ -93,7 +93,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=self.node
+                    node_info=self.node.node_info
                 )
             )
 

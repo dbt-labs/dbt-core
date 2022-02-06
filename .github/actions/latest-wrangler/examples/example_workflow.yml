@@ -1,0 +1,26 @@
+name: Ship it!
+on: 
+  workflow_dispatch:
+    inputs:
+      package:
+       description: The package to publish
+       required: true
+      version_number:
+       description: The version number
+       required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Wrangle latest tag
+      id: is_latest
+      uses: ./.github/actions/latest-wrangler
+      with:
+        package: ${{ github.event.inputs.package }}
+        new_version: ${{ github.event.inputs.new_version }}
+        gh_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Print the results
+      run: |
+        echo "Is it latest?  Survey says: ${{ steps.is_latest.outputs.latest }} !"

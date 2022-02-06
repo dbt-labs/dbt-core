@@ -24,7 +24,7 @@ class SnapshotRunner(ModelRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=model
+                    node_info=model.node_info
                 )
             )
         else:
@@ -36,7 +36,7 @@ class SnapshotRunner(ModelRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=model
+                    node_info=model.node_info
                 )
             )
 

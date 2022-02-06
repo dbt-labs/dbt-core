@@ -2,9 +2,9 @@
 import os
 import sys
 
-if sys.version_info < (3, 7):
+if sys.version_info < (3, 7, 2):
     print('Error: dbt does not support this version of Python.')
-    print('Please upgrade to Python 3.7 or higher.')
+    print('Please upgrade to Python 3.7.2 or higher.')
     sys.exit(1)
 
 
@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.0.1rc1"
+package_version = "1.0.1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -85,5 +85,5 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.7.2",
 )

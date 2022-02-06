@@ -1,0 +1,6 @@
+{
+    "inputs": {
+      "version_number": "1.0.1",
+      "package": "dbt-redshift"
+    }
+}

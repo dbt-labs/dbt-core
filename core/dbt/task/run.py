@@ -178,7 +178,7 @@ class ModelRunner(CompileRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                report_node_data=self.node
+                node_info=self.node.node_info
             )
         )
 
@@ -192,7 +192,7 @@ class ModelRunner(CompileRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=self.node
+                    node_info=self.node.node_info
                 )
             )
         else:
@@ -203,7 +203,7 @@ class ModelRunner(CompileRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    report_node_data=self.node
+                    node_info=self.node.node_info
                 )
             )
 
@@ -357,8 +357,7 @@ class RunTask(CompileTask):
                             statement=hook_text,
                             index=idx,
                             total=num_hooks,
-                            truncate=True,
-                            report_node_data=hook
+                            node_info=hook.node_info
                         )
                     )
 
@@ -380,8 +379,7 @@ class RunTask(CompileTask):
                             index=idx,
                             total=num_hooks,
                             execution_time=timer.elapsed,
-                            truncate=True,
-                            report_node_data=hook
+                            node_info=hook.node_info
                         )
                     )
             # `_event_status` dict is only used for logging.  Make sure
@@ -401,7 +399,7 @@ class RunTask(CompileTask):
         try:
             self.run_hooks(adapter, hook_type, extra_context)
         except RuntimeException:
-            fire_event(DatabaseErrorRunning(hook_type))
+            fire_event(DatabaseErrorRunning(hook_type=hook_type.value))
             raise
 
     def print_results_line(self, results, execution_time):

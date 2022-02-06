@@ -36,7 +36,7 @@ from dbt.adapters.factory import reset_adapters, cleanup_connections
 
 import dbt.tracking
 
-from dbt.utils import ExitCodes
+from dbt.utils import ExitCodes, args_to_dict
 from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
 from dbt.exceptions import (
     InternalException,
@@ -140,7 +140,7 @@ def main(args=None):
             exit_code = e.code
 
         except BaseException as e:
-            fire_event(MainEncounteredError(e=e))
+            fire_event(MainEncounteredError(e=str(e)))
             fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
             exit_code = ExitCodes.UnhandledError.value
 
@@ -205,7 +205,7 @@ def track_run(task):
         )
     except (NotImplementedException,
             FailedToConnectException) as e:
-        fire_event(MainEncounteredError(e=e))
+        fire_event(MainEncounteredError(e=str(e)))
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )
@@ -235,10 +235,10 @@ def run_from_args(parsed):
     setup_event_logger(log_path or 'logs', level_override)
 
     fire_event(MainReportVersion(v=str(dbt.version.installed)))
-    fire_event(MainReportArgs(args=parsed))
+    fire_event(MainReportArgs(args=args_to_dict(parsed)))
 
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true
-        fire_event(MainTrackingUserState(dbt.tracking.active_user.state()))
+        fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
 
     results = None
 

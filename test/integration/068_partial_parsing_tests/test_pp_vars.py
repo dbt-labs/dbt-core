@@ -2,6 +2,7 @@ from dbt.exceptions import CompilationException, ParsingException
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.logger import SECRET_ENV_PREFIX
 from dbt.parser.partial import special_override_macros
 from test.integration.base import DBTIntegrationTest, use_profile, normalize, get_manifest
 import shutil
@@ -300,6 +301,7 @@ class ProjectEnvVarTest(BasePPTest):
         # cleanup
         del os.environ['ENV_VAR_NAME']
 
+
 class ProfileEnvVarTest(BasePPTest):
 
     @property
@@ -351,4 +353,64 @@ class ProfileEnvVarTest(BasePPTest):
         self.assertTrue('env vars used in profiles.yml have changed' in log_output)
         manifest = get_manifest()
         self.assertNotEqual(env_vars_checksum, manifest.state_check.profile_env_vars_hash.checksum)
+
+
+class ProfileSecretEnvVarTest(BasePPTest):
+
+    @property
+    def profile_config(self):
+        # Need to set these here because the base integration test class
+        # calls 'load_config' before the tests are run.
+        # Note: only the specified profile is rendered, so there's no
+        # point it setting env_vars in non-used profiles.
+
+        # user is secret and password is not. postgres on macos doesn't care if the password
+        # changes so we have to change the user. related: https://github.com/dbt-labs/dbt-core/pull/4250
+        os.environ[SECRET_ENV_PREFIX + 'USER'] = 'root'
+        os.environ['ENV_VAR_PASS'] = 'password'
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'dev': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'host': self.database_host,
+                        'port': 5432,
+                        'user': "root",
+                        'pass': "password",
+                        'user': "{{ env_var('DBT_ENV_SECRET_USER') }}",
+                        'pass': "{{ env_var('ENV_VAR_PASS') }}",
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                },
+                'target': 'dev'
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_profile_secret_env_vars(self):
+
+        # Initial run
+        os.environ[SECRET_ENV_PREFIX + 'USER'] = 'root'
+        os.environ['ENV_VAR_PASS'] = 'password'
+        self.setup_directories()
+        self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
+        results = self.run_dbt(["run"])
+        manifest = get_manifest()
+        env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
+
+        # Change a secret var, it shouldn't register because we shouldn't save secrets.
+        os.environ[SECRET_ENV_PREFIX + 'USER'] = 'boop'
+        # this dbt run is going to fail because the password isn't actually the right one,
+        # but that doesn't matter because we just want to see if the manifest has included
+        # the secret in the hash of environment variables.
+        (results, log_output) = self.run_dbt_and_capture(["run"], expect_pass=False)
+        # I020 is the event code for "env vars used in profiles.yml have changed"
+        self.assertFalse('I020' in log_output) 
+        manifest = get_manifest()
+        self.assertEqual(env_vars_checksum, manifest.state_check.profile_env_vars_hash.checksum)
 

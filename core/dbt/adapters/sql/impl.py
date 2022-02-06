@@ -123,7 +123,7 @@ class SQLAdapter(BaseAdapter):
                     ColTypeChange(
                         orig_type=target_column.data_type,
                         new_type=new_type,
-                        table=current,
+                        table=_make_key(current),
                     )
                 )
 

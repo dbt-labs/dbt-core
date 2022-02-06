@@ -1,3 +1,8 @@
+##
+#  This dockerfile is used for local development and adapter testing only.
+#  See `/docker` for a generic and production-ready docker file
+##
+
 FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND noninteractive

@@ -488,9 +488,9 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
         if info:
-            fire_event(MacroEventInfo(msg))
+            fire_event(MacroEventInfo(msg=msg))
         else:
-            fire_event(MacroEventDebug(msg))
+            fire_event(MacroEventDebug(msg=msg))
         return ''
 
     @contextproperty

@@ -6,7 +6,6 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
-from pathlib import PosixPath, WindowsPath
 
 from .printer import (
     print_run_result_error,
@@ -216,7 +215,7 @@ class GraphRunnableTask(ManifestTask):
             with startctx, extended_metadata:
                 fire_event(
                     NodeStart(
-                        report_node_data=runner.node,
+                        node_info=runner.node.node_info,
                         unique_id=runner.node.unique_id,
                     )
                 )
@@ -231,9 +230,9 @@ class GraphRunnableTask(ManifestTask):
                 with finishctx, DbtModelState(status):
                     fire_event(
                         NodeFinished(
-                            report_node_data=runner.node,
+                            node_info=runner.node.node_info,
                             unique_id=runner.node.unique_id,
-                            run_result=result
+                            run_result=result.to_dict(),
                         )
                     )
             # `_event_status` dict is only used for logging.  Make sure
@@ -591,38 +590,8 @@ class GraphRunnableTask(ManifestTask):
             results=results,
             elapsed_time=elapsed_time,
             generated_at=generated_at,
-            args=self.args_to_dict(),
+            args=dbt.utils.args_to_dict(self.args),
         )
-
-    def args_to_dict(self):
-        var_args = vars(self.args).copy()
-        # update the args with the flags, which could also come from environment
-        # variables or user_config
-        flag_dict = flags.get_flag_dict()
-        var_args.update(flag_dict)
-        dict_args = {}
-        # remove args keys that clutter up the dictionary
-        for key in var_args:
-            if key == 'cls':
-                continue
-            if var_args[key] is None:
-                continue
-            # TODO: add more default_false_keys
-            default_false_keys = (
-                'debug', 'full_refresh', 'fail_fast', 'warn_error',
-                'single_threaded', 'log_cache_events',
-                'use_experimental_parser',
-            )
-            if key in default_false_keys and var_args[key] is False:
-                continue
-            if key == 'vars' and var_args[key] == '{}':
-                continue
-            # this was required for a test case
-            if (isinstance(var_args[key], PosixPath) or
-                    isinstance(var_args[key], WindowsPath)):
-                var_args[key] = str(var_args[key])
-            dict_args[key] = var_args[key]
-        return dict_args
 
     def task_end_messages(self, results):
         print_run_end_messages(results)

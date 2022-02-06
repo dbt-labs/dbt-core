@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 from .base import BaseContext, contextmember
 
 from dbt.exceptions import raise_parsing_error
+from dbt.logger import SECRET_ENV_PREFIX
 
 
 class SecretContext(BaseContext):
@@ -27,7 +28,11 @@ class SecretContext(BaseContext):
             return_value = default
 
         if return_value is not None:
-            self.env_vars[var] = return_value
+            # do not save secret environment variables
+            if not var.startswith(SECRET_ENV_PREFIX):
+                self.env_vars[var] = return_value
+
+            # return the value even if its a secret
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"

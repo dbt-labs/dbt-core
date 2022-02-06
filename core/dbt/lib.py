@@ -5,27 +5,29 @@ from dbt import flags
 from collections import namedtuple
 
 RuntimeArgs = namedtuple(
-    'RuntimeArgs', 'project_dir profiles_dir single_threaded profile_name'
+    'RuntimeArgs', 'project_dir profiles_dir single_threaded profile target'
 )
 
 
-def get_dbt_config(project_dir, single_threaded=False):
+def get_dbt_config(project_dir, args=None, single_threaded=False):
     from dbt.config.runtime import RuntimeConfig
     import dbt.adapters.factory
     import dbt.events.functions
-
     if os.getenv('DBT_PROFILES_DIR'):
         profiles_dir = os.getenv('DBT_PROFILES_DIR')
     else:
         profiles_dir = os.path.expanduser("~/.dbt")
 
+    profile = args.profile if hasattr(args, 'profile') else None
+    target = args.target if hasattr(args, 'target') else None
+
     # Construct a phony config
     config = RuntimeConfig.from_args(RuntimeArgs(
-        project_dir, profiles_dir, single_threaded, 'user'
+        project_dir, profiles_dir, single_threaded, profile, target
     ))
     # Clear previously registered adapters--
     # this fixes cacheing behavior on the dbt-server
-    flags.set_from_args('', config)
+    flags.set_from_args(args, config)
     dbt.adapters.factory.reset_adapters()
     # Load the relevant adapter
     dbt.adapters.factory.register_adapter(config)
