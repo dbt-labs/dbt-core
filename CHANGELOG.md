@@ -33,6 +33,7 @@ Contributors:
 
 Contributors:
 * [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+* [@twilly](https://github.com/twilly) ([#4681](https://github.com/dbt-labs/dbt-core/pull/4681))
 
 ## dbt-core 1.0.2 (TBD)
 ### Fixes
