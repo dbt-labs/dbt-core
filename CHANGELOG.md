@@ -14,7 +14,7 @@ Everything above this line (including this line) can be customized in `.changes/
 * Added line about changie to contributing docs. ([#1234](https://github.com/dbt-labs/dbt-core/issues/1234)) 
 
 Contributors:
-[@not-emmyoop](https://github.com/not-emmyoop) [#5678](https://github.com/dbt-labs/dbt-core/pull/5678)
+* [@not-emmyoop](https://github.com/not-emmyoop) [#5678](https://github.com/dbt-labs/dbt-core/pull/5678)
 
 
 ## 1.0.2 - February 01, 2022

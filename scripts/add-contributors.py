@@ -8,7 +8,7 @@ def format_contributors(version):
     """
     fp = f'../.changes/{version}.md'
     separator = 'ContributorData '
-    change_indicator = "*"
+    bullet = "*"
 
     core_team = [
         'emmyoop',
@@ -53,7 +53,7 @@ def format_contributors(version):
                 issues = ""
                 for i in value:
                     issues += f"[#{i}](https://github.com/dbt-labs/dbt-core/pull/{i})"
-                entry = f"{user} {issues}\n"
+                entry = f"{bullet} {user} {issues}\n"
                 f.write(entry)
 
 
