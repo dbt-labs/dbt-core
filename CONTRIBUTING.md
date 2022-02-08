@@ -218,6 +218,8 @@ python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 ```
 > [Here](https://docs.pytest.org/en/reorganize-docs/new-docs/user/commandlineuseful.html)
 > is a list of useful command-line options for `pytest` to use while developing.
+## Createing Changelog entry
+    -explain it here!
 ## Submitting a Pull Request
 
 dbt Labs provides a CI environment to test changes to specific adapters, and periodic maintenance checks of `dbt-core` through Github Actions. For example, if you submit a pull request to the `dbt-redshift` repo, GitHub will trigger automated code checks and tests against Redshift.
