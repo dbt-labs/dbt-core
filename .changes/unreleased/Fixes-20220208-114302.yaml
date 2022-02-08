@@ -1,0 +1,6 @@
+kind: Fixes
+body: Something broken is now fixed.
+time: 2022-02-08T11:43:02.365338-06:00
+custom:
+  Author: not-emmyoop
+  Issue: "5678"
