@@ -58,7 +58,7 @@ jobs:
           pre-commit --version
 
       - name: Run pre-commit hooks
-        run: pre-commit
+        run: pre-commit run --all-files
 
   unit:
     name: unit test / python ${{ matrix.python-version }}
