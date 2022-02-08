@@ -1,3 +1,4 @@
+black==21.12b0
 bumpversion
 flake8
 flaky
