@@ -10,48 +10,61 @@ def format_contributors(version):
     separator = 'ContributorData '
     change_indicator = "*"
 
-    cont_list = {}
-    core_team = ['core-team']
+    core_team = [
+        'emmyoop',
+        'nathaniel-may',
+        'gshank'
+        'leahwicz',
+        'ChenyuLInx',
+        'stu-k',
+        'iknox-fa',
+        'VersusFacit',
+        'McKnight-42',
+        'jtcohen6'
+    ]
 
+    contributors = {}
     new_file_contents = ""
 
     with open(fp, "r+") as f:
         string_list = f.readlines()
+        #  pull the contributor info off the end of the lines
         for line in string_list:
             if line[0] == change_indicator:
+                # TODO: handle is this data is blank
                 a, b = line.split(separator)
                 user, issue = b.split(" ")
                 if user not in core_team:
-                    if user in cont_list:
-                        cont_list[user].append(issue.strip('\n'))
+                    if user in contributors:
+                        contributors[user].append(issue.strip('\n'))
                     else:
-                        cont_list[user] = [issue.strip('\n')]
+                        contributors[user] = [issue.strip('\n')]
                 line = f"{a}\n"
             new_file_contents += line
 
         f.seek(0)
         f.write(new_file_contents)
-        f.write("\nContributors:\n")
-        for key, value in cont_list.items():
-            user = f"[@{key}](https://github.com/{key})"
-            issues = ""
-            for i in value:
-                issues += f"[#{i}](https://github.com/dbt-labs/dbt-core/pull/{i})"
-            entry = f"{user} {issues}\n"
-            f.write(entry)
 
-
+        # create new section of Contributors at the bottom if there are any
+        if contributors:
+            f.write("\nContributors:\n")
+            for key, value in contributors.items():
+                user = f"[@{key}](https://github.com/{key})"
+                issues = ""
+                for i in value:
+                    issues += f"[#{i}](https://github.com/dbt-labs/dbt-core/pull/{i})"
+                entry = f"{user} {issues}\n"
+                f.write(entry)
 
 
 def main():
     try:
         version = sys.argv[1]
     except IndexError:
-        raise Exception('A version is required in the format 1.0.3')
+        raise Exception('A version is required.')
 
     format_contributors(version)
     print(f"Contributing section added to .changes/{version}.md.")
-
 
 
 if __name__ == '__main__':
