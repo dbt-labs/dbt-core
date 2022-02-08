@@ -4,9 +4,9 @@ select =
     W
     F
 ignore =
-    W503
+    W503 # makes Flake8 work like black
     W504
-    E203
+    E203 # makes Flake8 work like black
     E741
 max-line-length = 99
 exclude = test
