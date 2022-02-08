@@ -6,6 +6,7 @@ from argparse import Namespace
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter
+from dbt.events.functions import setup_event_logger
 
 import yaml
 
@@ -254,6 +255,7 @@ def project(
     project_files,
     data_dir,
 ):
+    setup_event_logger("logs")
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
     # the signatures in the test signature to a minimum.
     return TestProjInfo(

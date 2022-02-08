@@ -7,7 +7,7 @@ from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.factory import get_adapter_by_type
 from dbt.events.test_types import IntegrationTestDebug
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, capture_stdout_logs, stop_capture_stdout_logs
 
 
 # This is used in pytest tests to run dbt
@@ -22,6 +22,18 @@ def run_dbt(args: List[str] = None, expect_pass=True):
     res, success = handle_and_check(args)
     assert success == expect_pass, "dbt exit state did not match expected"
     return res
+
+
+def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
+    try:
+        stringbuf = capture_stdout_logs()
+        res = run_dbt(args, expect_pass=expect_pass)
+        stdout = stringbuf.getvalue()
+
+    finally:
+        stop_capture_stdout_logs()
+
+    return res, stdout
 
 
 # Used in test cases to get the manifest from the partial parsing file

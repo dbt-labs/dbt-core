@@ -33,5 +33,5 @@
 
 
 # Integration test directories that have been converted
+* 001\_simple\_copy\_tests
 * 003\_simple\_reference\_tests
-* 001\_simple\_copy\_tests (except TestQuoteDatabase)
