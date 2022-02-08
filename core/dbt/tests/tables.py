@@ -10,7 +10,7 @@ class TableComparison:
         self.unique_schema = unique_schema
         self.default_database = database
         # We need to get this from somewhere reasonable
-        self.quoting = {'database': True, 'schema': True, 'identifier': True}
+        self.quoting = {"database": True, "schema": True, "identifier": True}
 
     def _assert_tables_equal_sql(self, relation_a, relation_b, columns=None):
         if columns is None:
@@ -46,10 +46,10 @@ class TableComparison:
         self._assert_table_columns_equal(relation_a, relation_b)
 
         sql = self._assert_tables_equal_sql(relation_a, relation_b)
-        result = run_sql(sql, self.unique_schema, fetch='one')
+        result = run_sql(sql, self.unique_schema, fetch="one")
 
-        assert result[0] == 0, 'row_count_difference nonzero: ' + sql
-        assert result[1] == 0, 'num_mismatched nonzero: ' + sql
+        assert result[0] == 0, "row_count_difference nonzero: " + sql
+        assert result[1] == 0, "num_mismatched nonzero: " + sql
 
     def _make_relation(self, identifier, schema=None, database=None):
         if schema is None:
@@ -100,7 +100,7 @@ class TableComparison:
             elif len(relation) == 1:
                 relation = self._make_relation(relation[0], default_schema, default_database)
             else:
-                raise ValueError('relation must be a sequence of 1, 2, or 3 values')
+                raise ValueError("relation must be a sequence of 1, 2, or 3 values")
 
             specs.append(relation)
 
@@ -112,12 +112,12 @@ class TableComparison:
         for relation in specs:
             key = (relation.database, relation.schema, relation.identifier)
             # get a good error here instead of a hard-to-diagnose KeyError
-            assert key in column_specs, f'No columns found for {key}'
+            assert key in column_specs, f"No columns found for {key}"
             columns = column_specs[key]
             if first_columns is None:
                 first_columns = columns
             else:
-                assert first_columns == columns, f'{str(specs[0])} did not match {str(relation)}'
+                assert first_columns == columns, f"{str(specs[0])} did not match {str(relation)}"
 
         # make sure everyone has the same data. if we got here, everyone had
         # the same column specs!
@@ -129,10 +129,10 @@ class TableComparison:
                 sql = self._assert_tables_equal_sql(
                     first_relation, relation, columns=first_columns
                 )
-                result = run_sql(sql, self.unique_schema, fetch='one')
+                result = run_sql(sql, self.unique_schema, fetch="one")
 
-                assert result[0] == 0, 'row_count_difference nonzero: ' + sql
-                assert result[1] == 0, 'num_mismatched nonzero: ' + sql
+                assert result[0] == 0, "row_count_difference nonzero: " + sql
+                assert result[1] == 0, "num_mismatched nonzero: " + sql
 
     def assert_many_tables_equal(self, *args):
         schema = self.unique_schema
@@ -160,10 +160,10 @@ class TableComparison:
                 sql = self._assert_tables_equal_sql(
                     first_relation, other_relation, columns=base_result
                 )
-                result = run_sql(sql, self.unique_schema, fetch='one')
+                result = run_sql(sql, self.unique_schema, fetch="one")
 
-                assert result[0] == 0, 'row_count_difference nonzero: ' + sql
-                assert result[1] == 0, 'num_mismatched nonzero: ' + sql
+                assert result[0] == 0, "row_count_difference nonzero: " + sql
+                assert result[1] == 0, "num_mismatched nonzero: " + sql
 
     def _assert_table_row_counts_equal(self, relation_a, relation_b):
         cmp_query = """
@@ -184,7 +184,7 @@ class TableComparison:
             str(relation_a), str(relation_b)
         )
 
-        res = run_sql(cmp_query, self.unique_schema, fetch='one')
+        res = run_sql(cmp_query, self.unique_schema, fetch="one")
 
         msg = (
             f"Row count of table {relation_a.identifier} doesn't match row count of "
@@ -235,7 +235,7 @@ class TableComparison:
             database=database,
             schema=schema,
             identifier=table,
-            type='table',
+            type="table",
             quote_policy=self.quoting,
         )
         return self.get_relation_columns(relation)
@@ -254,7 +254,7 @@ class TableComparison:
     # override for presto
     @property
     def column_schema(self):
-        return 'table_name, column_name, data_type, character_maximum_length'
+        return "table_name, column_name, data_type, character_maximum_length"
 
     # This should be overridden for Snowflake
     def get_many_table_columns_information_schema(self, tables, schema, database=None):
@@ -267,14 +267,14 @@ class TableComparison:
                   and ({table_filter})
                 order by column_name asc"""
 
-        db_string = ''
+        db_string = ""
         if database:
-            db_string = self.quote_as_configured(database, 'database') + '.'
+            db_string = self.quote_as_configured(database, "database") + "."
 
-        table_filters_s = ' OR '.join(
-            _ilike('table_name', table.replace('"', '')) for table in tables
+        table_filters_s = " OR ".join(
+            _ilike("table_name", table.replace('"', "")) for table in tables
         )
-        schema_filter = _ilike('table_schema', schema)
+        schema_filter = _ilike("table_schema", schema)
 
         sql = sql.format(
             columns=columns,
@@ -283,12 +283,12 @@ class TableComparison:
             db_string=db_string,
         )
 
-        columns = run_sql(sql, self.unique_schema, fetch='all')
+        columns = run_sql(sql, self.unique_schema, fetch="all")
         return list(map(self.filter_many_columns, columns))
 
     def get_many_table_columns(self, tables, schema, database=None):
         result = self.get_many_table_columns_information_schema(tables, schema, database)
-        result.sort(key=lambda x: '{}.{}'.format(x[0], x[1]))
+        result.sort(key=lambda x: "{}.{}".format(x[0], x[1]))
         return result
 
     # Snoflake needs a static char_size
@@ -309,8 +309,8 @@ class TableComparison:
         were not called by handle_and_check (for asserts, etc)
         """
         if name is None:
-            name = '__test'
-        with patch.object(providers, 'get_adapter', return_value=self.adapter):
+            name = "__test"
+        with patch.object(providers, "get_adapter", return_value=self.adapter):
             with self.adapter.connection_named(name):
                 conn = self.adapter.connections.get_thread_connection()
                 yield conn
@@ -333,7 +333,7 @@ def get_tables_in_schema(schema):
             order by table_name
             """
 
-    sql = sql.format(_ilike('table_schema', schema))
-    result = run_sql(sql, schema, fetch='all')
+    sql = sql.format(_ilike("table_schema", schema))
+    result = run_sql(sql, schema, fetch="all")
 
     return {model_name: materialization for (model_name, materialization) in result}

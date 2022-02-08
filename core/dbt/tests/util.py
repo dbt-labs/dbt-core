@@ -18,7 +18,7 @@ def run_dbt(args: List[str] = None, expect_pass=True):
     if args is None:
         args = ["run"]
 
-    print('Invoking dbt with {}'.format(args))
+    print("Invoking dbt with {}".format(args))
     res, success = handle_and_check(args)
     assert success == expect_pass, "dbt exit state did not match expected"
     return res
@@ -26,9 +26,9 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 
 # Used in test cases to get the manifest from the partial parsing file
 def get_manifest(project_root):
-    path = project_root.join('target', 'partial_parse.msgpack')
+    path = project_root.join("target", "partial_parse.msgpack")
     if os.path.exists(path):
-        with open(path, 'rb') as fp:
+        with open(path, "rb") as fp:
             manifest_mp = fp.read()
         manifest: Manifest = Manifest.from_msgpack(manifest_mp)
         return manifest
@@ -41,14 +41,14 @@ def run_sql_file(sql_path, unique_schema):
     # avoid having to use the 'request' fixture.
     # Could we use os.environ['PYTEST_CURRENT_TEST']?
     # Might be more fragile, if we want to reuse this code...
-    with open(sql_path, 'r') as f:
+    with open(sql_path, "r") as f:
         statements = f.read().split(";")
         for statement in statements:
             run_sql(statement, unique_schema)
 
 
 def adapter_type():
-    return 'postgres'
+    return "postgres"
 
 
 def run_sql(sql, unique_schema, fetch=None):
@@ -57,13 +57,13 @@ def run_sql(sql, unique_schema, fetch=None):
     # substitute schema and database in sql
     adapter = get_adapter_by_type(adapter_type())
     kwargs = {
-        'schema': unique_schema,
-        'database': adapter.quote('dbt'),
+        "schema": unique_schema,
+        "database": adapter.quote("dbt"),
     }
     sql = sql.format(**kwargs)
 
     # get adapter and connection
-    with adapter.connection_named('__test'):
+    with adapter.connection_named("__test"):
         conn = adapter.connections.get_thread_connection()
         msg = f'test connection "{conn.name}" executing: {sql}'
         fire_event(IntegrationTestDebug(msg=msg))
@@ -72,14 +72,14 @@ def run_sql(sql, unique_schema, fetch=None):
                 cursor.execute(sql)
                 conn.handle.commit()
                 conn.handle.commit()
-                if fetch == 'one':
+                if fetch == "one":
                     return cursor.fetchone()
-                elif fetch == 'all':
+                elif fetch == "all":
                     return cursor.fetchall()
                 else:
                     return
             except BaseException as e:
-                if conn.handle and not getattr(conn.handle, 'closed', True):
+                if conn.handle and not getattr(conn.handle, "closed", True):
                     conn.handle.rollback()
                 print(sql)
                 print(e)
