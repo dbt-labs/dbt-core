@@ -15,7 +15,7 @@ dev: ## Installs dbt-* packages in develop mode along with development dependenc
 .PHONY: mypy
 mypy: .env ## Runs mypy for static type checking.
 	@\
-	$(DOCKER_CMD) pre-commit run mypy | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run mypy --all-files | grep -v "[INFO]"
 
 .PHONY: flake8
 flake8: .env ## Runs flake8 to enforce style guide.
@@ -28,11 +28,11 @@ black: .env ## Runs black to enforce style guide.
 	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"
 
 .PHONY: lint
-lint: .env ## Runs all code checks in parallel.
+lint: .env ## Runs all code checks.
 	@\
-	$(DOCKER_CMD) \
-	SKIP=check-yaml,check-json,end-of-file-fixer,trailing-whitespace,check-case-conflict \
-	pre-commit run --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"; \
+	$(DOCKER_CMD) pre-commit run flake8 --all-files | grep -v "[INFO]"; \
+	$(DOCKER_CMD) pre-commit run mypy --all-files | grep -v "[INFO]"
 
 .PHONY: unit
 unit: .env ## Runs unit tests with py38.
@@ -40,12 +40,12 @@ unit: .env ## Runs unit tests with py38.
 	$(DOCKER_CMD) tox -e py38
 
 .PHONY: test
-test: .env ## Runs unit tests with py38 and code checks in parallel.
+test: .env ## Runs unit tests with py38 and code checks.
 	@\
 	$(DOCKER_CMD) tox -p -e py38; \
-	$(DOCKER_CMD) \
-	SKIP=check-yaml,check-json,end-of-file-fixer,trailing-whitespace,check-case-conflict \
-	pre-commit run --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"; \
+	$(DOCKER_CMD) pre-commit run flake8 --all-files | grep -v "[INFO]"; \
+	$(DOCKER_CMD) pre-commit run mypy --all-files | grep -v "[INFO]"
 
 .PHONY: integration
 integration: .env integration-postgres ## Alias for integration-postgres.
