@@ -28,15 +28,21 @@ repos:
   rev: v0.782
   hooks:
   - id: mypy
-    args: [--show-error-codes]
-    files: ^core/dbt/
-    entry: mypy core/dbt/
-    pass_filenames: false
-    # N.B.: By using `language: system` we run this hook in the local
+    # N.B.: Mypy is.. a bit fragile.
+    #
+    # We overide the entry point and disable file passing because our project
+    # structure is such that mypy requires a directory for context instead
+    # of a list of files as pre-commit usually prefers to do.
+    # See: https://github.com/pre-commit/mirrors-mypy/issues/5 for details.
+    #
+    # By using `language: system` we run this hook in the local
     # environment instead of a pre-commit isolated one.  This is needed
     # to ensure mypy correctly parses the project.  It may cause trouble
     # in that it adds environmental variables out of our control to the
     # mix.  Unfortunately, there's nothing we can do about per pre-commit's
     # author.
     # See https://github.com/pre-commit/pre-commit/issues/730 for details.
+    args: [--show-error-codes]
+    entry: mypy core/dbt/
+    pass_filenames: false
     language: system
