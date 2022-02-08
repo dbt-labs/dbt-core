@@ -20,19 +20,19 @@ mypy: .env ## Runs mypy for static type checking.
 .PHONY: flake8
 flake8: .env ## Runs flake8 to enforce style guide.
 	@\
-	$(DOCKER_CMD) pre-commit run flake8 | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run flake8 --all-files | grep -v "[INFO]"
 
 .PHONY: black
 black: .env ## Runs black to enforce style guide.
 	@\
-	$(DOCKER_CMD) pre-commit run black | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"
 
 .PHONY: lint
 lint: .env ## Runs all code checks in parallel.
 	@\
-	$(DOCKER_CMD) pre-commit run flake8 | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run mypy | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run black | grep -v "[INFO]" \
+	$(DOCKER_CMD) \
+	SKIP=check-yaml,check-json,end-of-file-fixer,trailing-whitespace,check-case-conflict \
+	pre-commit run --all-files | grep -v "[INFO]"
 
 .PHONY: unit
 unit: .env ## Runs unit tests with py38.
@@ -43,9 +43,9 @@ unit: .env ## Runs unit tests with py38.
 test: .env ## Runs unit tests with py38 and code checks in parallel.
 	@\
 	$(DOCKER_CMD) tox -p -e py38; \
-	$(DOCKER_CMD) pre-commit run flake8 | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run mypy | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run black | grep -v "[INFO]"
+	$(DOCKER_CMD) \
+	SKIP=check-yaml,check-json,end-of-file-fixer,trailing-whitespace,check-case-conflict \
+	pre-commit run --all-files | grep -v "[INFO]"
 
 .PHONY: integration
 integration: .env integration-postgres ## Alias for integration-postgres.

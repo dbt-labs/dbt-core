@@ -4,6 +4,10 @@
 # TODO: remove global exclusion of tests when testing overhaul is complete
 exclude: ^test/
 
+# Force all unspecified python hooks to run python 3.8
+default_language_version:
+  python: python3.8
+
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v3.2.0
@@ -28,7 +32,7 @@ repos:
   rev: v0.782
   hooks:
   - id: mypy
-    # N.B.: Mypy is.. a bit fragile.
+    # N.B.: Mypy is... a bit fragile.
     #
     # We overide the entry point and disable file passing because our project
     # structure is such that mypy requires a directory for context instead
