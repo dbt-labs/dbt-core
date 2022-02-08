@@ -6,7 +6,7 @@ changelogPath: CHANGELOG.md
 versionExt: md
 versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
-changeFormat: '* {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}})) [@{{.Custom.Author}}](https://github.com/{{.Custom.Author}}) ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}))'
+changeFormat: '* {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}})) ContributorData {{.Custom.Author}} {{.Custom.Issue}}'
 kinds:
 - label: Fixes
 - label: Features
