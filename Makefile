@@ -13,26 +13,26 @@ dev: ## Installs dbt-* packages in develop mode along with development dependenc
 	pre-commit install
 
 .PHONY: mypy
-mypy: .env ## Runs mypy for static type checking.
+mypy: .env ## Runs mypy against staged changes for static type checking.
 	@\
-	$(DOCKER_CMD) pre-commit run mypy --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run --hook-stage manual mypy-check | grep -v "INFO"
 
 .PHONY: flake8
-flake8: .env ## Runs flake8 to enforce style guide.
+flake8: .env ## Runs flake8 against staged changes to enforce style guide.
 	@\
-	$(DOCKER_CMD) pre-commit run flake8 --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run --hook-stage manual flake8-check | grep -v "INFO"
 
 .PHONY: black
-black: .env ## Runs black to enforce style guide.
+black: .env ## Runs black  against staged changes to enforce style guide.
 	@\
-	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run --hook-stage manual black-check -v | grep -v "INFO"
 
 .PHONY: lint
-lint: .env ## Runs all code checks.
+lint: .env ## Runs all code checks against staged changes.
 	@\
-	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run flake8 --all-files | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run mypy --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: unit
 unit: .env ## Runs unit tests with py38.
@@ -40,12 +40,12 @@ unit: .env ## Runs unit tests with py38.
 	$(DOCKER_CMD) tox -e py38
 
 .PHONY: test
-test: .env ## Runs unit tests with py38 and code checks.
+test: .env ## Runs unit tests with py38 and code checks against staged changes.
 	@\
 	$(DOCKER_CMD) tox -p -e py38; \
-	$(DOCKER_CMD) pre-commit run black --all-files | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run flake8 --all-files | grep -v "[INFO]"; \
-	$(DOCKER_CMD) pre-commit run mypy --all-files | grep -v "[INFO]"
+	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: integration
 integration: .env integration-postgres ## Alias for integration-postgres.
