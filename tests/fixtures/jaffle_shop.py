@@ -388,7 +388,7 @@ def models():
 
 
 @pytest.fixture
-def seeds(data_dir):
+def seeds():
     # Read seed file and return
     seeds = {}
     dir_path = os.path.dirname(os.path.realpath(__file__))

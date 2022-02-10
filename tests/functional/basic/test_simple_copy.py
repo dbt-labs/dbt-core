@@ -144,9 +144,9 @@ def models():
 
 
 @pytest.fixture
-def seeds(data_dir):
+def seeds(test_data_dir):
     # Read seed file and return
-    path = os.path.join(data_dir, 'seed-initial.csv')
+    path = os.path.join(test_data_dir, 'seed-initial.csv')
     with open(path, 'rb') as fp:
         seed_csv = fp.read()
         return {'seed.csv': seed_csv}
@@ -158,7 +158,7 @@ def project_config_update():
     return {'seeds': {'quote_columns': False}}
 
 
-def test_simple_copy(project):
+def test_simple_copy(project, test_data_dir):
 
     # Load the seed file and check that it worked
     results = run_dbt(["seed"])
@@ -175,7 +175,7 @@ def test_simple_copy(project):
     )
 
     # Change the seed.csv file and see if everything is the same, i.e. everything has been updated
-    copy_file(project.data_dir, 'seed-update.csv', project.project_root, ["seeds", "seed.csv"])
+    copy_file(test_data_dir, 'seed-update.csv', project.project_root, ["seeds", "seed.csv"])
     results = run_dbt(["seed"])
     assert len(results) == 1
     results = run_dbt()

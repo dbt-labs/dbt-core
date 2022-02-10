@@ -138,8 +138,8 @@ def project_config_update():
 
 
 @pytest.fixture
-def create_tables(data_dir, unique_schema):
-    path = os.path.join(data_dir, 'seed.sql')
+def create_tables(test_data_dir, unique_schema):
+    path = os.path.join(test_data_dir, 'seed.sql')
     run_sql_file(path, unique_schema)
 
 
@@ -167,7 +167,7 @@ def test_simple_reference(project, create_tables):
     table_comp.assert_tables_equal("summary_expected", "ephemeral_summary")
     table_comp.assert_tables_equal("summary_expected", "view_using_ref")
 
-    path = os.path.join(project.test_dir, 'update.sql')
+    path = os.path.join(project.test_data_dir, 'update.sql')
     run_sql_file(path, project.test_schema)
 
     results = run_dbt()

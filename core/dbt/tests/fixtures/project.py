@@ -26,19 +26,23 @@ def profiles_root(tmpdir):
     return tmpdir.mkdir("profile")
 
 
-# This used the pytest 'tmpdir' fixture to create a directory for the project,
-# called 'project_dir'
+# This usedsthe pytest 'tmpdir' fixture to create a directory for the project
 @pytest.fixture
 def project_root(tmpdir):
     # tmpdir docs - https://docs.pytest.org/en/6.2.x/tmpdir.html
     return tmpdir.mkdir("project")
 
 
-# Make this a separate fixture so that if we want to change the location
-# of data files (like seed.sql), we can.
+# This is for data used by multiple tests, in the 'tests/data' directory
 @pytest.fixture
-def data_dir(request):
-    return request.fspath.dirname
+def shared_data_dir(request):
+    return os.path.join(request.config.rootdir, 'tests', 'data')
+
+
+# This for data for a specific test directory, i.e. tests/basic/data
+@pytest.fixture
+def test_data_dir(request):
+    return os.path.join(request.fspath.dirname, 'data')
 
 
 @pytest.fixture
@@ -108,7 +112,6 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
         project_config.update(project_config_update)
     runtime_config_file = project_root.join("dbt_project.yml")
     runtime_config_file.write(yaml.safe_dump(project_config))
-    os.chdir(project_root)
 
 
 @pytest.fixture
@@ -247,13 +250,14 @@ def logs_dir(request):
 
 class TestProjInfo:
     def __init__(
-        self, project_root, profiles_dir, adapter, test_dir, data_dir, test_schema, database
+        self, project_root, profiles_dir, adapter, test_dir, shared_data_dir, test_data_dir, test_schema, database
     ):
         self.project_root = project_root
         self.profiles_dir = profiles_dir
         self.adapter = adapter
         self.test_dir = test_dir
-        self.data_dir = data_dir
+        self.shared_data_dir = shared_data_dir
+        self.test_data_dir = test_data_dir
         self.test_schema = test_schema
         self.database = database
 
@@ -270,10 +274,12 @@ def project(
     selectors_yml,
     schema,
     project_files,
-    data_dir,
+    shared_data_dir,
+    test_data_dir,
     logs_dir
 ):
     setup_event_logger(logs_dir)
+    os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
     # the signatures in the test signature to a minimum.
     return TestProjInfo(
@@ -281,7 +287,8 @@ def project(
         profiles_dir=profiles_root,
         adapter=schema,
         test_dir=request.fspath.dirname,
-        data_dir=data_dir,
+        shared_data_dir=shared_data_dir,
+        test_data_dir=test_data_dir,
         test_schema=unique_schema,
         # the following feels kind of fragile. TODO: better way of getting database
         database=profiles_yml["test"]["outputs"]["default"]["dbname"],
