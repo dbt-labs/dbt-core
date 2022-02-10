@@ -351,6 +351,8 @@ def fire_event(e: Event) -> None:
         # log messages are not constructed if debug messages are never shown.
         if e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
+        if e.level_tag() != 'error' and flags.QUIET:
+            return  # eat all non-exception messages in quiet mode
 
         log_line = create_log_line(e)
         if log_line:

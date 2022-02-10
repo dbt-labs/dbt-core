@@ -1084,6 +1084,17 @@ def parse_args(args, cls=DBTArgumentParser):
         '''
     )
 
+    p.add_argument(
+        '-q',
+        '--quiet',
+        action='store_true',
+        default=None,
+        help='''
+        Suppress all non-error logging to stdout. Does not affect
+        {{ print() }} macro calls.
+        '''
+    )
+
     subs = p.add_subparsers(title="Available sub-commands")
 
     base_subparser = _build_base_subparser()

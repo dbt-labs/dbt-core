@@ -49,3 +49,8 @@
     {{ log((node | string), info=True)}}
   {% endfor %}
 {% endmacro %}
+
+
+{% macro print_something() %}
+  {{ print("You're doing awesome!") }}
+{% endmacro %}

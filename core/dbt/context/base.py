@@ -571,6 +571,22 @@ class BaseContext(metaclass=ContextMeta):
         """
         return flags
 
+    @contextmember
+    @staticmethod
+    def print(msg: str) -> str:
+        """Prints a line to stdout.
+
+        :param msg: The message to print
+
+        > macros/my_log_macro.sql
+
+            {% macro some_macro(arg1, arg2) %}
+              {{ print("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
+            {% endmacro %}"
+        """
+        print(msg)
+        return ''
+
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:
     ctx = BaseContext(cli_vars)
