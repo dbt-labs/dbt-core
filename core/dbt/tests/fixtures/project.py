@@ -250,7 +250,15 @@ def logs_dir(request):
 
 class TestProjInfo:
     def __init__(
-        self, project_root, profiles_dir, adapter, test_dir, shared_data_dir, test_data_dir, test_schema, database
+        self,
+        project_root,
+        profiles_dir,
+        adapter,
+        test_dir,
+        shared_data_dir,
+        test_data_dir,
+        test_schema,
+        database
     ):
         self.project_root = project_root
         self.profiles_dir = profiles_dir
