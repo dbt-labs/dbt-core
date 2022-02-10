@@ -3,7 +3,10 @@ import pytest
 import random
 import time
 from argparse import Namespace
+from datetime import datetime
 import dbt.flags as flags
+
+from dbt.logger import log_manager
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.events.functions import setup_event_logger
@@ -11,6 +14,8 @@ from dbt.events.functions import setup_event_logger
 import yaml
 
 # These are the fixtures that are used in dbt core functional tests
+
+INITIAL_ROOT = os.getcwd()
 
 
 @pytest.fixture
@@ -94,12 +99,13 @@ def project_config_update():
 
 
 @pytest.fixture
-def dbt_project_yml(project_root, project_config_update):
+def dbt_project_yml(project_root, project_config_update, logs_dir):
     project_config = {
         "config-version": 2,
         "name": "test",
         "version": "0.1.0",
         "profile": "test",
+        "log-path": logs_dir
     }
     if project_config_update:
         project_config.update(project_config_update)
@@ -228,6 +234,20 @@ def project_files(project_root, models, macros, snapshots, seeds, tests):
     write_project_files(project_root, "tests", tests)
 
 
+@pytest.fixture(scope="session")
+def logs_dir():
+    # create a directory name that will be unique per test session
+    _randint = random.randint(0, 9999)
+    _runtime_timedelta = (datetime.utcnow() - datetime(1970, 1, 1, 0, 0, 0))
+    _runtime = (
+        (int(_runtime_timedelta.total_seconds() * 1e6)) +
+        _runtime_timedelta.microseconds
+    )
+    prefix = f'test{_runtime}{_randint:04}'
+
+    return os.path.join(INITIAL_ROOT, 'logs', prefix)
+
+
 class TestProjInfo:
     def __init__(
         self, project_root, profiles_dir, adapter, test_dir, data_dir, test_schema, database
@@ -254,8 +274,9 @@ def project(
     schema,
     project_files,
     data_dir,
+    logs_dir
 ):
-    setup_event_logger("logs")
+    setup_event_logger(logs_dir)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
     # the signatures in the test signature to a minimum.
     return TestProjInfo(
