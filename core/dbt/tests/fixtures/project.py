@@ -36,13 +36,13 @@ def project_root(tmpdir):
 # This is for data used by multiple tests, in the 'tests/data' directory
 @pytest.fixture
 def shared_data_dir(request):
-    return os.path.join(request.config.rootdir, 'tests', 'data')
+    return os.path.join(request.config.rootdir, "tests", "data")
 
 
 # This for data for a specific test directory, i.e. tests/basic/data
 @pytest.fixture
 def test_data_dir(request):
-    return os.path.join(request.fspath.dirname, 'data')
+    return os.path.join(request.fspath.dirname, "data")
 
 
 @pytest.fixture
@@ -258,7 +258,7 @@ class TestProjInfo:
         shared_data_dir,
         test_data_dir,
         test_schema,
-        database
+        database,
     ):
         self.project_root = project_root
         self.profiles_dir = profiles_dir
@@ -284,7 +284,7 @@ def project(
     project_files,
     shared_data_dir,
     test_data_dir,
-    logs_dir
+    logs_dir,
 ):
     setup_event_logger(logs_dir)
     os.chdir(project_root)
