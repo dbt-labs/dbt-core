@@ -73,7 +73,7 @@ class Table:
         row_names: Optional[Any] = None,
         slug_columns: bool = False,
         slug_rows: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> "Table": ...
 
 class TypeTester:

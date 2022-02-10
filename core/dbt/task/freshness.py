@@ -160,7 +160,7 @@ class FreshnessRunner(BaseRunner):
             message=None,
             adapter_response={},
             failures=None,
-            **freshness
+            **freshness,
         )
 
     def compile(self, manifest):

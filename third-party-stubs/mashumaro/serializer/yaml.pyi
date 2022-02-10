@@ -17,5 +17,5 @@ class DataClassYAMLMixin(DataClassDictMixin):
         data: EncodedData,
         decoder: Decoder = ...,
         dict_params: Mapping = ...,
-        **decoder_kwargs: Any
+        **decoder_kwargs: Any,
     ) -> T: ...

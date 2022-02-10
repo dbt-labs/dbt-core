@@ -107,7 +107,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
         return cls(
             package=contract.package,
             versions=versions,
-            install_prerelease=contract.install_prerelease,
+            install_prerelease=bool(contract.install_prerelease),
         )
 
     def incorporate(self, other: "RegistryUnpinnedPackage") -> "RegistryUnpinnedPackage":

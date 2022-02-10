@@ -92,11 +92,10 @@ class BaseRelation(FakeAPIObject, Hashable):
         for k, v in search.items():
             if not self._is_exactish_match(k, v):
                 exact_match = False
-
-            if self.path.get_lowered_part(k).strip(self.quote_character) != v.lower().strip(
+            if str(self.path.get_lowered_part(k)).strip(self.quote_character) != v.lower().strip(
                 self.quote_character
             ):
-                approximate_match = False
+                approximate_match = False  # type: ignore[union-attr]
 
         if approximate_match and not exact_match:
             target = self.create(database=database, schema=schema, identifier=identifier)

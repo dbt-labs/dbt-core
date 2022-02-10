@@ -276,8 +276,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             from dbt.parser.manifest import ManifestLoader
 
             manifest = ManifestLoader.load_macros(self.config, self.connections.set_query_header)
-            self._macro_manifest_lazy = manifest
-        return self._macro_manifest_lazy
+            # TODO CT-211
+            self._macro_manifest_lazy = manifest  # type: ignore[assignment]
+        # TODO CT-211
+        return self._macro_manifest_lazy  # type: ignore[return-value]
 
     def clear_macro_manifest(self):
         if self._macro_manifest_lazy is not None:
@@ -887,9 +889,12 @@ class BaseAdapter(metaclass=AdapterMeta):
             context_override = {}
 
         if manifest is None:
-            manifest = self._macro_manifest
-
-        macro = manifest.find_macro_by_name(macro_name, self.config.project_name, project)
+            # TODO CT-211
+            manifest = self._macro_manifest  # type: ignore[assignment]
+        # TODO CT-211
+        macro = manifest.find_macro_by_name(  # type: ignore[union-attr]
+            macro_name, self.config.project_name, project
+        )
         if macro is None:
             if project is None:
                 package_name = "any package"
@@ -906,7 +911,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         from dbt.context.providers import generate_runtime_macro_context
 
         macro_context = generate_runtime_macro_context(
-            macro=macro, config=self.config, manifest=manifest, package_name=project
+            # TODO CT-211
+            macro=macro,
+            config=self.config,
+            manifest=manifest,  # type: ignore[arg-type]
+            package_name=project,
         )
         macro_context.update(context_override)
 

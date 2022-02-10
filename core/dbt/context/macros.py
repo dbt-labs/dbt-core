@@ -35,9 +35,11 @@ class MacroNamespace(Mapping):
     def _search_order(self) -> Iterable[Union[FullNamespace, FlatNamespace]]:
         yield self.local_namespace  # local package
         yield self.global_namespace  # root package
-        yield self.packages  # non-internal packages
+        # TODO CT-211
+        yield self.packages  # type: ignore[misc] # non-internal packages
         yield {
-            GLOBAL_PROJECT_NAME: self.global_project_namespace,  # dbt
+            # TODO CT-211
+            GLOBAL_PROJECT_NAME: self.global_project_namespace,  # type: ignore[misc] # dbt
         }
         yield self.global_project_namespace  # other internal project besides dbt
 

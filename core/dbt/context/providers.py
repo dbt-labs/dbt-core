@@ -1136,7 +1136,8 @@ class ProviderContext(ManifestContext):
                     source_file = self.manifest.files[self.model.file_id]
                     # Schema files should never get here
                     if source_file.parse_file_type != "schema":
-                        source_file.env_vars.append(var)
+                        # TODO CT-211
+                        source_file.env_vars.append(var)  # type: ignore[union-attr]
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
@@ -1176,18 +1177,25 @@ class ModelContext(ProviderContext):
     def pre_hooks(self) -> List[Dict[str, Any]]:
         if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
-        return [h.to_dict(omit_none=True) for h in self.model.config.pre_hook]
+        # TODO CT-211
+        return [
+            h.to_dict(omit_none=True) for h in self.model.config.pre_hook  # type: ignore[union-attr] # noqa
+        ]
 
     @contextproperty
     def post_hooks(self) -> List[Dict[str, Any]]:
         if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
-        return [h.to_dict(omit_none=True) for h in self.model.config.post_hook]
+        # TODO CT-211
+        return [
+            h.to_dict(omit_none=True) for h in self.model.config.post_hook  # type: ignore[union-attr] # noqa
+        ]
 
     @contextproperty
     def sql(self) -> Optional[str]:
         if getattr(self.model, "extra_ctes_injected", None):
-            return self.model.compiled_sql
+            # TODO CT-211
+            return self.model.compiled_sql  # type: ignore[union-attr]
         return None
 
     @contextproperty
@@ -1422,10 +1430,13 @@ class TestContext(ProviderContext):
             if self.model:
                 self.manifest.env_vars[var] = return_value
                 # the "model" should only be test nodes, but just in case, check
-                if self.model.resource_type == NodeType.Test and self.model.file_key_name:
+                # TODO CT-211
+                if self.model.resource_type == NodeType.Test and self.model.file_key_name:  # type: ignore[union-attr] # noqa
                     source_file = self.manifest.files[self.model.file_id]
-                    (yaml_key, name) = self.model.file_key_name.split(".")
-                    source_file.add_env_var(var, yaml_key, name)
+                    # TODO CT-211
+                    (yaml_key, name) = self.model.file_key_name.split(".")  # type: ignore[union-attr] # noqa
+                    # TODO CT-211
+                    source_file.add_env_var(var, yaml_key, name)  # type: ignore[union-attr]
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"

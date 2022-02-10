@@ -77,7 +77,8 @@ Column_T = TypeVar("Column_T", bound=ColumnProtocol)
 Compiler_T = TypeVar("Compiler_T", bound=CompilerProtocol)
 
 
-class AdapterProtocol(
+# TODO CT-211
+class AdapterProtocol(  # type: ignore[misc]
     Protocol,
     Generic[
         AdapterConfig_T,
