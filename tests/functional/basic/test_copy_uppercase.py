@@ -3,7 +3,7 @@ import os
 from dbt.tests.tables import TableComparison
 from dbt.tests.util import run_dbt
 
-from tests.functional.simple_copy.test_simple_copy import (
+from tests.functional.basic.test_simple_copy import (
     advanced_incremental_sql,
     compound_sort_sql,
     disabled_sql,
@@ -39,9 +39,9 @@ def models():
 
 
 @pytest.fixture
-def seeds(data_dir):
+def seeds(test_data_dir):
     # Read seed file and return
-    path = os.path.join(data_dir, 'seed-initial.csv')
+    path = os.path.join(test_data_dir, 'seed-initial.csv')
     with open(path, 'rb') as fp:
         seed_csv = fp.read()
         return {'seed.csv': seed_csv}
