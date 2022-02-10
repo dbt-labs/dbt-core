@@ -192,19 +192,18 @@ make test
 # Runs postgres integration tests with py38 in "fail fast" mode.
 make integration
 ```
-> These make targets assume you have a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) installed locally,
+> These make targets assume you have a local install of a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and pre-commit for code quality checks,
 > unless you use choose a Docker container to run tests. Run `make help` for more info.
 
 Check out the other targets in the Makefile to see other commonly used test
 suites.
 
+#### `pre-commit`
+[`pre-commit`](https.pre-commit.com) takes care of running all code-checks for formatting and linting. Run `make dev` to install `pre-commit` in your local environment.  Once this is done you can use any of the linter-based make targets as well as a git pre-commit hook that will ensure proper formatting and linting.
+
 #### `tox`
 
-[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run
-tests. You can also run tests in parallel, for example, you can run unit tests
-for Python 3.7, Python 3.8, Python 3.9, `flake8` checks, and `mypy` checks in
-parallel with `tox -p`. Also, you can run unit tests for specific python versions
-with `tox -e py37`. The configuration for these tests in located in `tox.ini`.
+[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.7, Python 3.8, and Python 3.9 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py37`. The configuration for these tests in located in `tox.ini`.
 
 #### `pytest`
 
