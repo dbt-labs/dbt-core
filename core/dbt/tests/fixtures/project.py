@@ -14,8 +14,6 @@ import yaml
 
 # These are the fixtures that are used in dbt core functional tests
 
-INITIAL_ROOT = os.getcwd()
-
 
 @pytest.fixture
 def unique_schema() -> str:
@@ -234,7 +232,7 @@ def project_files(project_root, models, macros, snapshots, seeds, tests):
 
 
 @pytest.fixture(scope="session")
-def logs_dir():
+def logs_dir(request):
     # create a directory name that will be unique per test session
     _randint = random.randint(0, 9999)
     _runtime_timedelta = (datetime.utcnow() - datetime(1970, 1, 1, 0, 0, 0))
@@ -244,7 +242,7 @@ def logs_dir():
     )
     prefix = f'test{_runtime}{_randint:04}'
 
-    return os.path.join(INITIAL_ROOT, 'logs', prefix)
+    return os.path.join(request.config.rootdir, 'logs', prefix)
 
 
 class TestProjInfo:
