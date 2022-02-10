@@ -6,7 +6,6 @@ from argparse import Namespace
 from datetime import datetime
 import dbt.flags as flags
 
-from dbt.logger import log_manager
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.events.functions import setup_event_logger
