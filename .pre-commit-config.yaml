@@ -39,6 +39,7 @@ repos:
   - id: flake8
   - id: flake8
     alias: flake8-check
+    stages: [manual]
 - repo: https://github.com/pre-commit/mirrors-mypy
   rev: v0.782
   hooks:
@@ -59,6 +60,7 @@ repos:
     language: system
   - id: mypy
     alias: mypy-check
+    stages: [manual]
     args: [--show-error-codes, --pretty]
     files: ^core/dbt/
     language: system
