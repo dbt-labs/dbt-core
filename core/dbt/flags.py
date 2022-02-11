@@ -34,6 +34,7 @@ WHICH = None
 INDIRECT_SELECTION = None
 LOG_CACHE_EVENTS = None
 EVENT_BUFFER_SIZE = 100000
+QUIET = None
 
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
@@ -55,6 +56,7 @@ flag_defaults = {
     "INDIRECT_SELECTION": "eager",
     "LOG_CACHE_EVENTS": False,
     "EVENT_BUFFER_SIZE": 100000,
+    "QUIET": False,
 }
 
 
@@ -104,7 +106,7 @@ def set_from_args(args, user_config):
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
     global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
-    global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE
+    global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE, QUIET
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
@@ -113,7 +115,9 @@ def set_from_args(args, user_config):
     WHICH = getattr(args, "which", WHICH)
 
     # global cli flags with env var and user_config alternatives
-    USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
+    USE_EXPERIMENTAL_PARSER = get_flag_value(
+        "USE_EXPERIMENTAL_PARSER", args, user_config
+    )
     STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
     WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
@@ -124,11 +128,14 @@ def set_from_args(args, user_config):
     LOG_FORMAT = get_flag_value("LOG_FORMAT", args, user_config)
     VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
     FAIL_FAST = get_flag_value("FAIL_FAST", args, user_config)
-    SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
+    SEND_ANONYMOUS_USAGE_STATS = get_flag_value(
+        "SEND_ANONYMOUS_USAGE_STATS", args, user_config
+    )
     PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value("INDIRECT_SELECTION", args, user_config)
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
     EVENT_BUFFER_SIZE = get_flag_value("EVENT_BUFFER_SIZE", args, user_config)
+    QUIET = get_flag_value("QUIET", args, user_config)
 
 
 def get_flag_value(flag, args, user_config):
@@ -151,7 +158,9 @@ def get_flag_value(flag, args, user_config):
                 flag_value = env_value
             else:
                 flag_value = env_set_bool(env_value)
-        elif user_config is not None and getattr(user_config, lc_flag, None) is not None:
+        elif (
+            user_config is not None and getattr(user_config, lc_flag, None) is not None
+        ):
             flag_value = getattr(user_config, lc_flag)
         else:
             flag_value = flag_defaults[flag]
@@ -181,4 +190,5 @@ def get_flag_dict():
         "indirect_selection": INDIRECT_SELECTION,
         "log_cache_events": LOG_CACHE_EVENTS,
         "event_buffer_size": EVENT_BUFFER_SIZE,
+        "quiet": QUIET,
     }
