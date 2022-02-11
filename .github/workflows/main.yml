@@ -55,9 +55,11 @@ jobs:
           pip install --user --upgrade pip
           pip install pre-commit
           pip install mypy==0.782
+          pip install -r editable-requirements.txt
           pip --version
           pre-commit --version
           mypy --version
+          dbt --version
 
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
