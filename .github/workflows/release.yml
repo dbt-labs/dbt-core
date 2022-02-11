@@ -142,7 +142,6 @@ jobs:
         run: |
           dbt --version
 
-
   github-release:
     name: GitHub Release
 

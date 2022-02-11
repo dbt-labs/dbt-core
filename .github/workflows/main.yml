@@ -37,18 +37,9 @@ defaults:
 
 jobs:
   code-quality:
-    name: ${{ matrix.toxenv }}
+    name: code-quality
 
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        toxenv: [flake8, mypy]
-
-    env:
-      TOXENV: ${{ matrix.toxenv }}
-      PYTEST_ADDOPTS: "-v --color=yes"
 
     steps:
       - name: Check out the repository
@@ -62,12 +53,16 @@ jobs:
       - name: Install python dependencies
         run: |
           pip install --user --upgrade pip
-          pip install tox
+          pip install pre-commit
+          pip install mypy==0.782
+          pip install -r editable-requirements.txt
           pip --version
-          tox --version
+          pre-commit --version
+          mypy --version
+          dbt --version
 
-      - name: Run tox
-        run: tox
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure
 
   unit:
     name: unit test / python ${{ matrix.python-version }}

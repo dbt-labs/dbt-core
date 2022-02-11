@@ -8,27 +8,43 @@ endif
 
 .PHONY: dev
 dev: ## Installs dbt-* packages in develop mode along with development dependencies.
-	pip install -r dev-requirements.txt -r editable-requirements.txt
+	@\
+	pip install -r dev-requirements.txt -r editable-requirements.txt && \
+	pre-commit install
 
 .PHONY: mypy
-mypy: .env ## Runs mypy for static type checking.
-	$(DOCKER_CMD) tox -e mypy
+mypy: .env ## Runs mypy against staged changes for static type checking.
+	@\
+	$(DOCKER_CMD) pre-commit run --hook-stage manual mypy-check | grep -v "INFO"
 
 .PHONY: flake8
-flake8: .env ## Runs flake8 to enforce style guide.
-	$(DOCKER_CMD) tox -e flake8
+flake8: .env ## Runs flake8 against staged changes to enforce style guide.
+	@\
+	$(DOCKER_CMD) pre-commit run --hook-stage manual flake8-check | grep -v "INFO"
+
+.PHONY: black
+black: .env ## Runs black  against staged changes to enforce style guide.
+	@\
+	$(DOCKER_CMD) pre-commit run --hook-stage manual black-check -v | grep -v "INFO"
 
 .PHONY: lint
-lint: .env ## Runs all code checks in parallel.
-	$(DOCKER_CMD) tox -p -e flake8,mypy
+lint: .env ## Runs flake8 and mypy code checks against staged changes.
+	@\
+	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: unit
 unit: .env ## Runs unit tests with py38.
+	@\
 	$(DOCKER_CMD) tox -e py38
 
 .PHONY: test
-test: .env ## Runs unit tests with py38 and code checks in parallel.
-	$(DOCKER_CMD) tox -p -e py38,flake8,mypy
+test: .env ## Runs unit tests with py38 and code checks against staged changes.
+	@\
+	$(DOCKER_CMD) tox -p -e py38; \
+	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
+	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: integration
 integration: .env integration-postgres ## Alias for integration-postgres.
@@ -38,15 +54,18 @@ integration-fail-fast: .env integration-postgres-fail-fast ## Alias for integrat
 
 .PHONY: integration-postgres
 integration-postgres: .env ## Runs postgres integration tests with py38.
+	@\
 	$(DOCKER_CMD) tox -e py38-postgres -- -nauto
 
 .PHONY: integration-postgres-fail-fast
 integration-postgres-fail-fast: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
+	@\
 	$(DOCKER_CMD) tox -e py38-postgres -- -x -nauto
 
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
-	docker-compose up -d database
+	@\
+	docker-compose up -d database && \
 	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
 
 # This rule creates a file named .env that is used by docker-compose for passing
@@ -62,26 +81,29 @@ endif
 
 .PHONY: clean
 clean: ## Resets development environment.
-	rm -f .coverage
-	rm -rf .eggs/
-	rm -f .env
-	rm -rf .tox/
-	rm -rf build/
-	rm -rf dbt.egg-info/
-	rm -f dbt_project.yml
-	rm -rf dist/
-	rm -f htmlcov/*.{css,html,js,json,png}
-	rm -rf logs/
-	rm -rf target/
-	find . -type f -name '*.pyc' -delete
-	find . -type d -name '__pycache__' -depth -delete
+	@echo 'cleaning repo...'
+	@rm -f .coverage
+	@rm -rf .eggs/
+	@rm -f .env
+	@rm -rf .tox/
+	@rm -rf build/
+	@rm -rf dbt.egg-info/
+	@rm -f dbt_project.yml
+	@rm -rf dist/
+	@rm -f htmlcov/*.{css,html,js,json,png}
+	@rm -rf logs/
+	@rm -rf target/
+	@find . -type f -name '*.pyc' -delete
+	@find . -type d -name '__pycache__' -depth -delete
+	@echo 'done.'
+
 
 .PHONY: help
 help: ## Show this help message.
 	@echo 'usage: make [target] [USE_DOCKER=true]'
 	@echo
 	@echo 'targets:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[8+a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo 'options:'
 	@echo 'use USE_DOCKER=true to run target in a docker container'
