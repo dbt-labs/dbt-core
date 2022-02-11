@@ -1074,14 +1074,14 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '-q',
-        '--quiet',
-        action='store_true',
+        "-q",
+        "--quiet",
+        action="store_true",
         default=None,
-        help='''
+        help="""
         Suppress all non-error logging to stdout. Does not affect
         {{ print() }} macro calls.
-        '''
+        """,
     )
 
     subs = p.add_subparsers(title="Available sub-commands")

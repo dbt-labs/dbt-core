@@ -570,7 +570,7 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
         print(msg)
-        return ''
+        return ""
 
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:

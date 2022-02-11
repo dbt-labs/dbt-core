@@ -115,9 +115,7 @@ def set_from_args(args, user_config):
     WHICH = getattr(args, "which", WHICH)
 
     # global cli flags with env var and user_config alternatives
-    USE_EXPERIMENTAL_PARSER = get_flag_value(
-        "USE_EXPERIMENTAL_PARSER", args, user_config
-    )
+    USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
     STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
     WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
@@ -128,9 +126,7 @@ def set_from_args(args, user_config):
     LOG_FORMAT = get_flag_value("LOG_FORMAT", args, user_config)
     VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
     FAIL_FAST = get_flag_value("FAIL_FAST", args, user_config)
-    SEND_ANONYMOUS_USAGE_STATS = get_flag_value(
-        "SEND_ANONYMOUS_USAGE_STATS", args, user_config
-    )
+    SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
     PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value("INDIRECT_SELECTION", args, user_config)
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
@@ -158,9 +154,7 @@ def get_flag_value(flag, args, user_config):
                 flag_value = env_value
             else:
                 flag_value = env_set_bool(env_value)
-        elif (
-            user_config is not None and getattr(user_config, lc_flag, None) is not None
-        ):
+        elif user_config is not None and getattr(user_config, lc_flag, None) is not None:
             flag_value = getattr(user_config, lc_flag)
         else:
             flag_value = flag_defaults[flag]
