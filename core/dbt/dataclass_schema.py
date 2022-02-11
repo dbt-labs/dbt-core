@@ -1,5 +1,7 @@
 from typing import (
-    Type, ClassVar, cast,
+    Type,
+    ClassVar,
+    cast,
 )
 import re
 from dataclasses import fields
@@ -11,9 +13,7 @@ from hologram import JsonSchemaMixin, FieldEncoder, ValidationError
 
 # type: ignore
 from mashumaro import DataClassDictMixin
-from mashumaro.config import (
-    TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseConfig
-)
+from mashumaro.config import TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseConfig
 from mashumaro.types import SerializableType, SerializationStrategy
 
 
@@ -26,9 +26,7 @@ class DateTimeSerialization(SerializationStrategy):
         return out
 
     def deserialize(self, value):
-        return (
-            value if isinstance(value, datetime) else parse(cast(str, value))
-        )
+        return value if isinstance(value, datetime) else parse(cast(str, value))
 
 
 # This class pulls in both JsonSchemaMixin from Hologram and
@@ -38,8 +36,8 @@ class DateTimeSerialization(SerializationStrategy):
 # come from Hologram.
 class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
     """Mixin which adds methods to generate a JSON schema and
-       convert to and from JSON encodable dicts with validation
-       against the schema
+    convert to and from JSON encodable dicts with validation
+    against the schema
     """
 
     class Config(MashBaseConfig):
@@ -60,8 +58,8 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
         if self._hyphenated:
             new_dict = {}
             for key in dct:
-                if '_' in key:
-                    new_key = key.replace('_', '-')
+                if "_" in key:
+                    new_key = key.replace("_", "-")
                     new_dict[new_key] = dct[key]
                 else:
                     new_dict[key] = dct[key]
@@ -78,8 +76,8 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
         if cls._hyphenated and isinstance(data, dict):
             new_dict = {}
             for key in data:
-                if '-' in key:
-                    new_key = key.replace('-', '_')
+                if "-" in key:
+                    new_key = key.replace("-", "_")
                     new_dict[new_key] = data[key]
                 else:
                     new_dict[key] = data[key]
@@ -91,16 +89,16 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
     # hologram and in mashumaro.
     def _local_to_dict(self, **kwargs):
         args = {}
-        if 'omit_none' in kwargs:
-            args['omit_none'] = kwargs['omit_none']
+        if "omit_none" in kwargs:
+            args["omit_none"] = kwargs["omit_none"]
         return self.to_dict(**args)
 
 
 class ValidatedStringMixin(str, SerializableType):
-    ValidationRegex = ''
+    ValidationRegex = ""
 
     @classmethod
-    def _deserialize(cls, value: str) -> 'ValidatedStringMixin':
+    def _deserialize(cls, value: str) -> "ValidatedStringMixin":
         cls.validate(value)
         return ValidatedStringMixin(value)
 

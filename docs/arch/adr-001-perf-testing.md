@@ -31,5 +31,5 @@ We decided to start with variance-aware testing with the ability to add stateful
 ## Status
 Completed
 
-## Consequences 
+## Consequences
 We now have the ability to more rigorously detect performance regressions, but we do not have a solid way to identify where that regression is coming from. Adding Performance Profiling cababilities will help with this, but for now just running it nightly should help us narrow it down to specific commits. As we add more performance tests, the testing matrix may take hours to run which consumes resources on GitHub Actions. Because performance testing is asynchronous, failures are easier to miss or ignore, and because it is non-deterministic it adds a non-trivial amount of complexity to our development process.

@@ -18,7 +18,7 @@ from dbt.events.types import (
     RenameSchema,
     TemporaryRelation,
     UncachedRelation,
-    UpdateReference
+    UpdateReference,
 )
 from dbt.utils import lowercase
 from dbt.helper_types import Lazy
@@ -29,7 +29,7 @@ def dot_separated(key: _ReferenceKey) -> str:
 
     :param _ReferenceKey key: The key to stringify.
     """
-    return '.'.join(map(str, key))
+    return ".".join(map(str, key))
 
 
 class _CachedRelation:
@@ -41,14 +41,15 @@ class _CachedRelation:
         that refer to this relation.
     :attr BaseRelation inner: The underlying dbt relation.
     """
+
     def __init__(self, inner):
         self.referenced_by = {}
         self.inner = inner
 
     def __str__(self) -> str:
-        return (
-            '_CachedRelation(database={}, schema={}, identifier={}, inner={})'
-        ).format(self.database, self.schema, self.identifier, self.inner)
+        return ("_CachedRelation(database={}, schema={}, identifier={}, inner={})").format(
+            self.database, self.schema, self.identifier, self.inner
+        )
 
     @property
     def database(self) -> Optional[str]:
@@ -82,7 +83,7 @@ class _CachedRelation:
         """
         return _make_key(self)
 
-    def add_reference(self, referrer: '_CachedRelation'):
+    def add_reference(self, referrer: "_CachedRelation"):
         """Add a reference from referrer to self, indicating that if this node
         were drop...cascaded, the referrer would be dropped as well.
 
@@ -126,9 +127,9 @@ class _CachedRelation:
         # table_name is ever anything but the identifier (via .create())
         self.inner = self.inner.incorporate(
             path={
-                'database': new_relation.inner.database,
-                'schema': new_relation.inner.schema,
-                'identifier': new_relation.inner.identifier
+                "database": new_relation.inner.database,
+                "schema": new_relation.inner.schema,
+                "identifier": new_relation.inner.identifier,
             },
         )
 
@@ -144,8 +145,9 @@ class _CachedRelation:
         """
         if new_key in self.referenced_by:
             dbt.exceptions.raise_cache_inconsistent(
-                'in rename of "{}" -> "{}", new name is in the cache already'
-                .format(old_key, new_key)
+                'in rename of "{}" -> "{}", new name is in the cache already'.format(
+                    old_key, new_key
+                )
             )
 
         if old_key not in self.referenced_by:
@@ -170,13 +172,16 @@ class RelationsCache:
         The adapters also hold this lock while filling the cache.
     :attr Set[str] schemas: The set of known/cached schemas, all lowercased.
     """
+
     def __init__(self) -> None:
         self.relations: Dict[_ReferenceKey, _CachedRelation] = {}
         self.lock = threading.RLock()
         self.schemas: Set[Tuple[Optional[str], Optional[str]]] = set()
 
     def add_schema(
-        self, database: Optional[str], schema: Optional[str],
+        self,
+        database: Optional[str],
+        schema: Optional[str],
     ) -> None:
         """Add a schema to the set of known schemas (case-insensitive)
 
@@ -186,7 +191,9 @@ class RelationsCache:
         self.schemas.add((lowercase(database), lowercase(schema)))
 
     def drop_schema(
-        self, database: Optional[str], schema: Optional[str],
+        self,
+        database: Optional[str],
+        schema: Optional[str],
     ) -> None:
         """Drop the given schema and remove it from the set of known schemas.
 
@@ -230,10 +237,7 @@ class RelationsCache:
         # self.relations or any cache entry's referenced_by during iteration
         # it's a runtime error!
         with self.lock:
-            return {
-                dot_separated(k): v.dump_graph_entry()
-                for k, v in self.relations.items()
-            }
+            return {dot_separated(k): v.dump_graph_entry() for k, v in self.relations.items()}
 
     def _setdefault(self, relation: _CachedRelation):
         """Add a relation to the cache, or return it if it already exists.
@@ -261,15 +265,13 @@ class RelationsCache:
             return
         if referenced is None:
             dbt.exceptions.raise_cache_inconsistent(
-                'in add_link, referenced link key {} not in cache!'
-                .format(referenced_key)
+                "in add_link, referenced link key {} not in cache!".format(referenced_key)
             )
 
         dependent = self.relations.get(dependent_key)
         if dependent is None:
             dbt.exceptions.raise_cache_inconsistent(
-                'in add_link, dependent link key {} not in cache!'
-                .format(dependent_key)
+                "in add_link, dependent link key {} not in cache!".format(dependent_key)
             )
 
         assert dependent is not None  # we just raised!
@@ -301,15 +303,11 @@ class RelationsCache:
             return
         if ref_key not in self.relations:
             # Insert a dummy "external" relation.
-            referenced = referenced.replace(
-                type=referenced.External
-            )
+            referenced = referenced.replace(type=referenced.External)
             self.add(referenced)
         if dep_key not in self.relations:
             # Insert a dummy "external" relation.
-            dependent = dependent.replace(
-                type=referenced.External
-            )
+            dependent = dependent.replace(type=referenced.External)
             self.add(dependent)
         fire_event(AddLink(dep_key=dep_key, ref_key=ref_key))
         with self.lock:
@@ -416,8 +414,9 @@ class RelationsCache:
         """
         if new_key in self.relations:
             dbt.exceptions.raise_cache_inconsistent(
-                'in rename, new key {} already in cache: {}'
-                .format(new_key, list(self.relations.keys()))
+                "in rename, new key {} already in cache: {}".format(
+                    new_key, list(self.relations.keys())
+                )
             )
 
         if old_key not in self.relations:
@@ -451,9 +450,7 @@ class RelationsCache:
 
         fire_event(DumpAfterRenameSchema(dump=Lazy.defer(lambda: self.dump_graph())))
 
-    def get_relations(
-        self, database: Optional[str], schema: Optional[str]
-    ) -> List[Any]:
+    def get_relations(self, database: Optional[str], schema: Optional[str]) -> List[Any]:
         """Case-insensitively yield all relations matching the given schema.
 
         :param str schema: The case-insensitive schema name to list from.
@@ -464,14 +461,14 @@ class RelationsCache:
         schema = lowercase(schema)
         with self.lock:
             results = [
-                r.inner for r in self.relations.values()
-                if (lowercase(r.schema) == schema and
-                    lowercase(r.database) == database)
+                r.inner
+                for r in self.relations.values()
+                if (lowercase(r.schema) == schema and lowercase(r.database) == database)
             ]
 
         if None in results:
             dbt.exceptions.raise_cache_inconsistent(
-                'in get_relations, a None relation was found in the cache!'
+                "in get_relations, a None relation was found in the cache!"
             )
         return results
 

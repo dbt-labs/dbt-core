@@ -49,9 +49,7 @@ class AdapterContainer:
         adapter = self.get_adapter_class_by_name(name)
         return adapter.Relation
 
-    def get_config_class_by_name(
-        self, name: str
-    ) -> Type[AdapterConfig]:
+    def get_config_class_by_name(self, name: str) -> Type[AdapterConfig]:
         adapter = self.get_adapter_class_by_name(name)
         return adapter.AdapterSpecificConfigs
 
@@ -61,13 +59,13 @@ class AdapterContainer:
         # singletons
         try:
             # mypy doesn't think modules have any attributes.
-            mod: Any = import_module('.' + name, 'dbt.adapters')
+            mod: Any = import_module("." + name, "dbt.adapters")
         except ModuleNotFoundError as exc:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtime error
-            if exc.name == 'dbt.adapters.' + name:
+            if exc.name == "dbt.adapters." + name:
                 fire_event(AdapterImportError(exc=exc))
-                raise RuntimeException(f'Could not find adapter type {name}!')
+                raise RuntimeException(f"Could not find adapter type {name}!")
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
 
@@ -78,8 +76,8 @@ class AdapterContainer:
 
         if plugin_type != name:
             raise RuntimeException(
-                f'Expected to find adapter with type named {name}, got '
-                f'adapter with type {plugin_type}'
+                f"Expected to find adapter with type named {name}, got "
+                f"adapter with type {plugin_type}"
             )
 
         with self.lock:
@@ -109,8 +107,7 @@ class AdapterContainer:
         return self.adapters[adapter_name]
 
     def reset_adapters(self):
-        """Clear the adapters. This is useful for tests, which change configs.
-        """
+        """Clear the adapters. This is useful for tests, which change configs."""
         with self.lock:
             for adapter in self.adapters.values():
                 adapter.cleanup_connections()
@@ -140,9 +137,7 @@ class AdapterContainer:
             try:
                 plugin = self.plugins[plugin_name]
             except KeyError:
-                raise InternalException(
-                    f'No plugin found for {plugin_name}'
-                ) from None
+                raise InternalException(f"No plugin found for {plugin_name}") from None
             plugins.append(plugin)
             seen.add(plugin_name)
             if plugin.dependencies is None:
@@ -153,9 +148,7 @@ class AdapterContainer:
         return plugins
 
     def get_adapter_package_names(self, name: Optional[str]) -> List[str]:
-        package_names: List[str] = [
-            p.project_name for p in self.get_adapter_plugins(name)
-        ]
+        package_names: List[str] = [p.project_name for p in self.get_adapter_plugins(name)]
         package_names.append(GLOBAL_PROJECT_NAME)
         return package_names
 
@@ -165,9 +158,7 @@ class AdapterContainer:
             try:
                 path = self.packages[package_name]
             except KeyError:
-                raise InternalException(
-                    f'No internal package listing found for {package_name}'
-                )
+                raise InternalException(f"No internal package listing found for {package_name}")
             paths.append(path)
         return paths
 
@@ -187,8 +178,7 @@ def get_adapter(config: AdapterRequiredConfig):
 
 
 def reset_adapters():
-    """Clear the adapters. This is useful for tests, which change configs.
-    """
+    """Clear the adapters. This is useful for tests, which change configs."""
     FACTORY.reset_adapters()
 
 

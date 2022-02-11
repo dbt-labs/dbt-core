@@ -9,8 +9,14 @@ from dbt.deps.resolver import resolve_packages
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    DepsNoPackagesFound, DepsStartPackageInstall, DepsUpdateAvailable, DepsUTD,
-    DepsInstallInfo, DepsListSubdirectory, DepsNotifyUpdatesAvailable, EmptyLine
+    DepsNoPackagesFound,
+    DepsStartPackageInstall,
+    DepsUpdateAvailable,
+    DepsUTD,
+    DepsInstallInfo,
+    DepsListSubdirectory,
+    DepsNotifyUpdatesAvailable,
+    EmptyLine,
 )
 from dbt.clients import system
 
@@ -23,26 +29,20 @@ class DepsTask(BaseTask):
     def __init__(self, args, config: UnsetProfileConfig):
         super().__init__(args=args, config=config)
 
-    def track_package_install(
-        self, package_name: str, source_type: str, version: str
-    ) -> None:
+    def track_package_install(self, package_name: str, source_type: str, version: str) -> None:
         # Hub packages do not need to be hashed, as they are public
         # Use the string 'local' for local package versions
-        if source_type == 'local':
+        if source_type == "local":
             package_name = dbt.utils.md5(package_name)
-            version = 'local'
-        elif source_type != 'hub':
+            version = "local"
+        elif source_type != "hub":
             package_name = dbt.utils.md5(package_name)
             version = dbt.utils.md5(version)
 
         dbt.tracking.track_package_install(
             self.config,
             self.config.args,
-            {
-                "name": package_name,
-                "source": source_type,
-                "version": version
-            }
+            {"name": package_name, "source": source_type, "version": version},
         )
 
     def run(self):
@@ -66,7 +66,7 @@ class DepsTask(BaseTask):
                 fire_event(DepsStartPackageInstall(package_name=package_name))
                 package.install(self.config, renderer)
                 fire_event(DepsInstallInfo(version_name=package.nice_version_name()))
-                if source_type == 'hub':
+                if source_type == "hub":
                     version_latest = package.get_version_latest()
                     if version_latest != version:
                         packages_to_upgrade.append(package_name)
@@ -77,9 +77,8 @@ class DepsTask(BaseTask):
                     fire_event(DepsListSubdirectory(subdirectory=package.get_subdirectory()))
 
                 self.track_package_install(
-                    package_name=package_name,
-                    source_type=source_type,
-                    version=version)
+                    package_name=package_name, source_type=source_type, version=version
+                )
             if packages_to_upgrade:
                 fire_event(EmptyLine())
                 fire_event(DepsNotifyUpdatesAvailable(packages=packages_to_upgrade))

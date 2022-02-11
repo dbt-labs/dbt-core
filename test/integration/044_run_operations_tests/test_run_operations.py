@@ -69,3 +69,8 @@ class TestOperations(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres_access_graph(self):
         self.run_operation('log_graph')
+
+    @use_profile('postgres')
+    def test__postgres_print(self):
+        # Tests that calling the `print()` macro does not cause an exception
+        self.run_operation('print_something')

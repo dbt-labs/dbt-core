@@ -22,7 +22,7 @@ class MacroParser(BaseParser[ParsedMacro]):
         return filesystem_search(
             project=self.project,
             relative_dirs=self.project.macro_paths,
-            extension='.sql',
+            extension=".sql",
         )
 
     @property
@@ -49,15 +49,13 @@ class MacroParser(BaseParser[ParsedMacro]):
             unique_id=unique_id,
         )
 
-    def parse_unparsed_macros(
-        self, base_node: UnparsedMacro
-    ) -> Iterable[ParsedMacro]:
+    def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[ParsedMacro]:
         try:
             blocks: List[jinja.BlockTag] = [
-                t for t in
-                jinja.extract_toplevel_blocks(
+                t
+                for t in jinja.extract_toplevel_blocks(
                     base_node.raw_sql,
-                    allowed_blocks={'macro', 'materialization', 'test'},
+                    allowed_blocks={"macro", "materialization", "test"},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)
@@ -79,8 +77,7 @@ class MacroParser(BaseParser[ParsedMacro]):
                 # things have gone disastrously wrong, we thought we only
                 # parsed one block!
                 raise ParsingException(
-                    f'Found multiple macros in {block.full_block}, expected 1',
-                    node=base_node
+                    f"Found multiple macros in {block.full_block}, expected 1", node=base_node
                 )
 
             macro_name = macro_nodes[0].name
@@ -88,7 +85,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             if not macro_name.startswith(MACRO_PREFIX):
                 continue
 
-            name: str = macro_name.replace(MACRO_PREFIX, '')
+            name: str = macro_name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
             yield node
 

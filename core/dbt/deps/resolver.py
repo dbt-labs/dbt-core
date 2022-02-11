@@ -48,12 +48,10 @@ class PackageListing:
         key_str: str = self._pick_key(key)
         self.packages[key_str] = value
 
-    def _mismatched_types(
-        self, old: UnpinnedPackage, new: UnpinnedPackage
-    ) -> NoReturn:
+    def _mismatched_types(self, old: UnpinnedPackage, new: UnpinnedPackage) -> NoReturn:
         raise_dependency_error(
-            f'Cannot incorporate {new} ({new.__class__.__name__}) in {old} '
-            f'({old.__class__.__name__}): mismatched types'
+            f"Cannot incorporate {new} ({new.__class__.__name__}) in {old} "
+            f"({old.__class__.__name__}): mismatched types"
         )
 
     def incorporate(self, package: UnpinnedPackage):
@@ -76,15 +74,13 @@ class PackageListing:
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise InternalException(
-                    'Invalid package type {}'.format(type(contract))
-                )
+                raise InternalException("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod
     def from_contracts(
-        cls: Type['PackageListing'], src: List[PackageContract]
-    ) -> 'PackageListing':
+        cls: Type["PackageListing"], src: List[PackageContract]
+    ) -> "PackageListing":
         self = cls({})
         self.update_from(src)
         return self
@@ -107,14 +103,14 @@ def _check_for_duplicate_project_names(
         if project_name in seen:
             raise_dependency_error(
                 f'Found duplicate project "{project_name}". This occurs when '
-                'a dependency has the same project name as some other '
-                'dependency.'
+                "a dependency has the same project name as some other "
+                "dependency."
             )
         elif project_name == config.project_name:
             raise_dependency_error(
-                'Found a dependency with the same name as the root project '
+                "Found a dependency with the same name as the root project "
                 f'"{project_name}". Package names must be unique in a project.'
-                ' Please rename one of these packages.'
+                " Please rename one of these packages."
             )
         seen.add(project_name)
 

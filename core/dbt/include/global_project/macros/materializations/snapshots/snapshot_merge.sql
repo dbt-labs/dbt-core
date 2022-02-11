@@ -23,4 +23,3 @@
         values ({{ insert_cols_csv }})
 
 {% endmacro %}
-

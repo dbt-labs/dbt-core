@@ -94,9 +94,7 @@ class GraphQueue:
             A dictionary consisting of `node name`:`score` pairs.
         """
         # split graph by connected subgraphs
-        subgraphs = (
-            graph.subgraph(x) for x in nx.connected_components(nx.Graph(graph))
-        )
+        subgraphs = (graph.subgraph(x) for x in nx.connected_components(nx.Graph(graph)))
 
         # score all nodes in all subgraphs
         scores = {}
@@ -108,9 +106,7 @@ class GraphQueue:
 
         return scores
 
-    def get(
-        self, block: bool = True, timeout: Optional[float] = None
-    ) -> GraphMemberNode:
+    def get(self, block: bool = True, timeout: Optional[float] = None) -> GraphMemberNode:
         """Get a node off the inner priority queue. By default, this blocks.
 
         This takes the lock, but only for part of it.

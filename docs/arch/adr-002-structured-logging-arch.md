@@ -28,7 +28,7 @@ We decided to use the std lib logger because it was far more difficult than we e
 ## Status
 Completed
 
-## Consequences 
+## Consequences
 Adding a new log event is more cumbersome than it was previously: instead of writing the message at the log callsite, you must create a new concrete class in the event types. This is more opaque for new contributors. The json serialization approach we are using via `asdict` is fragile and unoptimized and should be replaced.
 
 All user-facing log messages now live in one file which makes the job of conforming them much simpler. Because they are all nominally typed separately, it opens up the possibility to have log documentation generated from the type hints as well as outputting our logs in multiple human languages if we want to translate our messages.

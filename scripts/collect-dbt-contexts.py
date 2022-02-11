@@ -1,4 +1,4 @@
-7#!/usr/bin/env python
+#!/usr/bin/env python
 
 import inspect
 import json
@@ -13,10 +13,10 @@ from dbt.context.providers import ModelContext, MacroContext
 
 
 CONTEXTS_MAP = {
-    'base': BaseContext,
-    'target': TargetContext,
-    'model': ModelContext,
-    'macro': MacroContext,
+    "base": BaseContext,
+    "target": TargetContext,
+    "model": ModelContext,
+    "macro": MacroContext,
 }
 
 
@@ -54,7 +54,7 @@ ContextMember = Union[ContextValue, ContextMethod, Unknown]
 def _get_args(func: inspect.Signature) -> Iterable[MethodArgument]:
     found_first = False
     for argname, arg in func.parameters.items():
-        if found_first is False and argname in {'self', 'cls'}:
+        if found_first is False and argname in {"self", "cls"}:
             continue
         if found_first is False:
             found_first = True
@@ -70,7 +70,7 @@ def collect(cls):
     for name, v in cls._context_members_.items():
         attrname = cls._context_attrs_[name]
         attrdef = getattr(cls, attrname)
-        doc = getattr(attrdef, '__doc__')
+        doc = getattr(attrdef, "__doc__")
         if inspect.isfunction(attrdef):
             sig = inspect.signature(attrdef)
             result = inspect.formatannotation(sig.return_annotation)
@@ -83,13 +83,9 @@ def collect(cls):
         elif isinstance(attrdef, property):
             sig = inspect.signature(attrdef.fget)
             sig_txt = inspect.formatannotation(sig.return_annotation)
-            sig_good_part = ContextValue(
-                name=name, value=sig_txt, doc=doc
-            )
+            sig_good_part = ContextValue(name=name, value=sig_txt, doc=doc)
         else:
-            sig_good_part = Unknown(
-                name=name, value=repr(attrdef), doc=doc
-            )
+            sig_good_part = Unknown(name=name, value=repr(attrdef), doc=doc)
         values.append(sig_good_part)
 
     return values
@@ -115,6 +111,5 @@ def main():
     print(json.dumps(catalog.to_dict()))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

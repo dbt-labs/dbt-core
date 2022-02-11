@@ -11,6 +11,14 @@ from .seeds import SeedParser  # noqa
 from .snapshots import SnapshotParser  # noqa
 
 from . import (  # noqa
-    analysis, base, generic_test, singular_test, docs, hooks, macros, models, schemas,
-    snapshots
+    analysis,
+    base,
+    generic_test,
+    singular_test,
+    docs,
+    hooks,
+    macros,
+    models,
+    schemas,
+    snapshots,
 )

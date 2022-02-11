@@ -20,7 +20,7 @@ class LocalPackageMixin:
         return self.local
 
     def source_type(self):
-        return 'local'
+        return "local"
 
 
 class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
@@ -31,7 +31,7 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
         return None
 
     def nice_version_name(self):
-        return '<local @ {}>'.format(self.local)
+        return "<local @ {}>".format(self.local)
 
     def resolve_path(self, project):
         return system.resolve_path_from_base(
@@ -40,9 +40,7 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
         )
 
     def _fetch_metadata(self, project, renderer):
-        loaded = project.from_project_root(
-            self.resolve_path(project), renderer
-        )
+        loaded = project.from_project_root(self.resolve_path(project), renderer)
         return ProjectPackageMetadata.from_project(loaded)
 
     def install(self, project, renderer):
@@ -66,18 +64,12 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
             shutil.copytree(src_path, dest_path)
 
 
-class LocalUnpinnedPackage(
-    LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]
-):
+class LocalUnpinnedPackage(LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]):
     @classmethod
-    def from_contract(
-        cls, contract: LocalPackage
-    ) -> 'LocalUnpinnedPackage':
+    def from_contract(cls, contract: LocalPackage) -> "LocalUnpinnedPackage":
         return cls(local=contract.local)
 
-    def incorporate(
-        self, other: 'LocalUnpinnedPackage'
-    ) -> 'LocalUnpinnedPackage':
+    def incorporate(self, other: "LocalUnpinnedPackage") -> "LocalUnpinnedPackage":
         return LocalUnpinnedPackage(local=self.local)
 
     def resolved(self) -> LocalPinnedPackage:

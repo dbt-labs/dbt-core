@@ -28,14 +28,11 @@ class RegistryPackageMixin:
         return self.package
 
     def source_type(self) -> str:
-        return 'hub'
+        return "hub"
 
 
 class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
-    def __init__(self,
-                 package: str,
-                 version: str,
-                 version_latest: str) -> None:
+    def __init__(self, package: str, version: str, version_latest: str) -> None:
         super().__init__(package)
         self.version = version
         self.version_latest = version_latest
@@ -45,7 +42,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         return self.package
 
     def source_type(self):
-        return 'hub'
+        return "hub"
 
     def get_version(self):
         return self.version
@@ -54,7 +51,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         return self.version_latest
 
     def nice_version_name(self):
-        return 'version {}'.format(self.version)
+        return "version {}".format(self.version)
 
     def _fetch_metadata(self, project, renderer) -> RegistryPackageMetadata:
         dct = registry.package_version(self.package, self.version)
@@ -63,10 +60,8 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
     def install(self, project, renderer):
         metadata = self.fetch_metadata(project, renderer)
 
-        tar_name = '{}.{}.tar.gz'.format(self.package, self.version)
-        tar_path = os.path.realpath(
-            os.path.join(get_downloads_path(), tar_name)
-        )
+        tar_name = "{}.{}.tar.gz".format(self.package, self.version)
+        tar_path = os.path.realpath(os.path.join(get_downloads_path(), tar_name))
         system.make_directory(os.path.dirname(tar_path))
 
         download_url = metadata.downloads.tarball
@@ -74,11 +69,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         package_name = self.get_project_name(project, renderer)
 
         download_untar_fn = functools.partial(
-            self.download_and_untar,
-            download_url,
-            tar_path,
-            deps_path,
-            package_name
+            self.download_and_untar, download_url, tar_path, deps_path, package_name
         )
         connection_exception_retry(download_untar_fn, 5)
 
@@ -95,14 +86,9 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         system.untar_package(tar_path, deps_path, package_name)
 
 
-class RegistryUnpinnedPackage(
-    RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]
-):
+class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]):
     def __init__(
-        self,
-        package: str,
-        versions: List[semver.VersionSpecifier],
-        install_prerelease: bool
+        self, package: str, versions: List[semver.VersionSpecifier], install_prerelease: bool
     ) -> None:
         super().__init__(package)
         self.versions = versions
@@ -114,24 +100,17 @@ class RegistryUnpinnedPackage(
             package_not_found(self.package)
 
     @classmethod
-    def from_contract(
-        cls, contract: RegistryPackage
-    ) -> 'RegistryUnpinnedPackage':
+    def from_contract(cls, contract: RegistryPackage) -> "RegistryUnpinnedPackage":
         raw_version = contract.get_versions()
 
-        versions = [
-            semver.VersionSpecifier.from_version_string(v)
-            for v in raw_version
-        ]
+        versions = [semver.VersionSpecifier.from_version_string(v) for v in raw_version]
         return cls(
             package=contract.package,
             versions=versions,
-            install_prerelease=contract.install_prerelease
+            install_prerelease=bool(contract.install_prerelease),
         )
 
-    def incorporate(
-        self, other: 'RegistryUnpinnedPackage'
-    ) -> 'RegistryUnpinnedPackage':
+    def incorporate(self, other: "RegistryUnpinnedPackage") -> "RegistryUnpinnedPackage":
         return RegistryUnpinnedPackage(
             package=self.package,
             install_prerelease=self.install_prerelease,
@@ -143,17 +122,13 @@ class RegistryUnpinnedPackage(
         try:
             range_ = semver.reduce_versions(*self.versions)
         except VersionsNotCompatibleException as e:
-            new_msg = ('Version error for package {}: {}'
-                       .format(self.name, e))
+            new_msg = "Version error for package {}: {}".format(self.name, e)
             raise DependencyException(new_msg) from e
 
         available = registry.get_available_versions(self.package)
-        prerelease_version_specified = any(
-            bool(version.prerelease) for version in self.versions
-        )
+        prerelease_version_specified = any(bool(version.prerelease) for version in self.versions)
         installable = semver.filter_installable(
-            available,
-            self.install_prerelease or prerelease_version_specified
+            available, self.install_prerelease or prerelease_version_specified
         )
         available_latest = installable[-1]
 
@@ -164,5 +139,6 @@ class RegistryUnpinnedPackage(
         target = semver.resolve_to_specific_version(range_, installable)
         if not target:
             package_version_not_found(self.package, range_, installable)
-        return RegistryPinnedPackage(package=self.package, version=target,
-                                     version_latest=available_latest)
+        return RegistryPinnedPackage(
+            package=self.package, version=target, version_latest=available_latest
+        )

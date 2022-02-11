@@ -7,7 +7,9 @@ from dbt.dataclass_schema import dbtClassMixin
 
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.results import (
-    RunResult, RunResultsArtifact, TimingInfo,
+    RunResult,
+    RunResultsArtifact,
+    TimingInfo,
     ExecutionResult,
     RunExecutionResult,
 )
@@ -35,7 +37,7 @@ class RemoteCompileResultMixin(RemoteResult):
 
 
 @dataclass
-@schema_version('remote-compile-result', 1)
+@schema_version("remote-compile-result", 1)
 class RemoteCompileResult(RemoteCompileResultMixin):
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -45,7 +47,7 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 
 
 @dataclass
-@schema_version('remote-execution-result', 1)
+@schema_version("remote-execution-result", 1)
 class RemoteExecutionResult(ExecutionResult, RemoteResult):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -65,7 +67,7 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
         cls,
         base: RunExecutionResult,
         logs: List[LogMessage],
-    ) -> 'RemoteExecutionResult':
+    ) -> "RemoteExecutionResult":
         return cls(
             generated_at=base.generated_at,
             results=base.results,
@@ -82,7 +84,7 @@ class ResultTable(dbtClassMixin):
 
 
 @dataclass
-@schema_version('remote-run-result', 1)
+@schema_version("remote-run-result", 1)
 class RemoteRunResult(RemoteCompileResultMixin):
     table: ResultTable
     generated_at: datetime = field(default_factory=datetime.utcnow)

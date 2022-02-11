@@ -1,16 +1,10 @@
 from dataclasses import dataclass
-from .types import (
-    InfoLevel,
-    DebugLevel,
-    WarnLevel,
-    ErrorLevel,
-    ShowException,
-    NoFile
-)
+from .types import InfoLevel, DebugLevel, WarnLevel, ErrorLevel, ShowException, NoFile
 
 
 # Keeping log messages for testing separate since they are used for debugging.
 # Reuse the existing messages when adding logs to tests.
+
 
 @dataclass
 class IntegrationTestInfo(InfoLevel, NoFile):
@@ -73,9 +67,9 @@ class UnitTestInfo(InfoLevel, NoFile):
 #
 # TODO remove these lines once we run mypy everywhere.
 if 1 == 0:
-    IntegrationTestInfo(msg='')
-    IntegrationTestDebug(msg='')
-    IntegrationTestWarn(msg='')
-    IntegrationTestError(msg='')
-    IntegrationTestException(msg='')
-    UnitTestInfo(msg='')
+    IntegrationTestInfo(msg="")
+    IntegrationTestDebug(msg="")
+    IntegrationTestWarn(msg="")
+    IntegrationTestError(msg="")
+    IntegrationTestException(msg="")
+    UnitTestInfo(msg="")
