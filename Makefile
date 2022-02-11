@@ -28,9 +28,8 @@ black: .env ## Runs black  against staged changes to enforce style guide.
 	$(DOCKER_CMD) pre-commit run --hook-stage manual black-check -v | grep -v "INFO"
 
 .PHONY: lint
-lint: .env ## Runs all code checks against staged changes.
+lint: .env ## Runs flake8 and mypy code checks against staged changes.
 	@\
-	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
