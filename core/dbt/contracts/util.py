@@ -1,16 +1,10 @@
 import dataclasses
 import os
 from datetime import datetime
-from typing import (
-    List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
-)
+from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
-from dbt.exceptions import (
-    InternalException,
-    RuntimeException,
-    IncompatibleSchemaException
-)
+from dbt.exceptions import InternalException, RuntimeException, IncompatibleSchemaException
 from dbt.version import __version__
 from dbt.events.functions import get_invocation_id
 from dbt.dataclass_schema import dbtClassMixin
@@ -57,9 +51,7 @@ class Mergeable(Replaceable):
 
 class Writable:
     def write(self, path: str):
-        write_json(
-            path, self.to_dict(omit_none=False)  # type: ignore
-        )
+        write_json(path, self.to_dict(omit_none=False))  # type: ignore
 
 
 class AdditionalPropertiesMixin:
@@ -68,6 +60,7 @@ class AdditionalPropertiesMixin:
     The underlying class definition must include a type definition for a field
     named '_extra' that is of type `Dict[str, Any]`.
     """
+
     ADDITIONAL_PROPERTIES = True
 
     # This takes attributes in the dictionary that are
@@ -86,10 +79,10 @@ class AdditionalPropertiesMixin:
         cls_keys = cls._get_field_names()
         new_dict = {}
         for key, value in data.items():
-            if key not in cls_keys and key != '_extra':
-                if '_extra' not in new_dict:
-                    new_dict['_extra'] = {}
-                new_dict['_extra'][key] = value
+            if key not in cls_keys and key != "_extra":
+                if "_extra" not in new_dict:
+                    new_dict["_extra"] = {}
+                new_dict["_extra"][key] = value
             else:
                 new_dict[key] = value
         data = new_dict
@@ -99,8 +92,8 @@ class AdditionalPropertiesMixin:
     def __post_serialize__(self, dct):
         data = super().__post_serialize__(dct)
         data.update(self.extra)
-        if '_extra' in data:
-            del data['_extra']
+        if "_extra" in data:
+            del data["_extra"]
         return data
 
     def replace(self, **kwargs):
@@ -126,8 +119,8 @@ class Readable:
         return cls.from_dict(data)  # type: ignore
 
 
-BASE_SCHEMAS_URL = 'https://schemas.getdbt.com/'
-SCHEMA_PATH = 'dbt/{name}/v{version}.json'
+BASE_SCHEMAS_URL = "https://schemas.getdbt.com/"
+SCHEMA_PATH = "dbt/{name}/v{version}.json"
 
 
 @dataclasses.dataclass
@@ -137,24 +130,22 @@ class SchemaVersion:
 
     @property
     def path(self) -> str:
-        return SCHEMA_PATH.format(
-            name=self.name,
-            version=self.version
-        )
+        return SCHEMA_PATH.format(name=self.name, version=self.version)
 
     def __str__(self) -> str:
         return BASE_SCHEMAS_URL + self.path
 
 
-SCHEMA_VERSION_KEY = 'dbt_schema_version'
+SCHEMA_VERSION_KEY = "dbt_schema_version"
 
 
-METADATA_ENV_PREFIX = 'DBT_ENV_CUSTOM_ENV_'
+METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
 
 
 def get_metadata_env() -> Dict[str, str]:
     return {
-        k[len(METADATA_ENV_PREFIX):]: v for k, v in os.environ.items()
+        k[len(METADATA_ENV_PREFIX) :]: v
+        for k, v in os.environ.items()
         if k.startswith(METADATA_ENV_PREFIX)
     }
 
@@ -165,18 +156,14 @@ def get_metadata_env() -> Dict[str, str]:
 class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
-    generated_at: datetime = dataclasses.field(
-        default_factory=datetime.utcnow
-    )
-    invocation_id: Optional[str] = dataclasses.field(
-        default_factory=get_invocation_id
-    )
+    generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
+    invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_env)
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if dct['generated_at'] and dct['generated_at'].endswith('+00:00'):
-            dct['generated_at'] = dct['generated_at'].replace('+00:00', '') + "Z"
+        if dct["generated_at"] and dct["generated_at"].endswith("+00:00"):
+            dct["generated_at"] = dct["generated_at"].replace("+00:00", "") + "Z"
         return dct
 
 
@@ -198,6 +185,7 @@ def schema_version(name: str, version: int):
             version=version,
         )
         return cls
+
     return inner
 
 
@@ -210,7 +198,7 @@ class VersionedSchema(dbtClassMixin):
     def json_schema(cls, embeddable: bool = False) -> Dict[str, Any]:
         result = super().json_schema(embeddable=embeddable)
         if not embeddable:
-            result['$id'] = str(cls.dbt_schema_version)
+            result["$id"] = str(cls.dbt_schema_version)
         return result
 
     @classmethod
@@ -225,20 +213,19 @@ class VersionedSchema(dbtClassMixin):
         # Check metadata version. There is a class variable 'dbt_schema_version', but
         # that doesn't show up in artifacts, where it only exists in the 'metadata'
         # dictionary.
-        if hasattr(cls, 'dbt_schema_version'):
-            if 'metadata' in data and 'dbt_schema_version' in data['metadata']:
-                previous_schema_version = data['metadata']['dbt_schema_version']
+        if hasattr(cls, "dbt_schema_version"):
+            if "metadata" in data and "dbt_schema_version" in data["metadata"]:
+                previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
                 if str(cls.dbt_schema_version) != previous_schema_version:
                     raise IncompatibleSchemaException(
-                        expected=str(cls.dbt_schema_version),
-                        found=previous_schema_version
+                        expected=str(cls.dbt_schema_version), found=previous_schema_version
                     )
 
         return cls.from_dict(data)  # type: ignore
 
 
-T = TypeVar('T', bound='ArtifactMixin')
+T = TypeVar("T", bound="ArtifactMixin")
 
 
 # metadata should really be a Generic[T_M] where T_M is a TypeVar bound to
@@ -254,6 +241,4 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
     def validate(cls, data):
         super().validate(data)
         if cls.dbt_schema_version is None:
-            raise InternalException(
-                'Cannot call from_dict with no schema version!'
-            )
+            raise InternalException("Cannot call from_dict with no schema version!")

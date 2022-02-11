@@ -12,14 +12,16 @@ from dbt.contracts.results import RunOperationResultsArtifact
 from dbt.exceptions import InternalException
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    RunningOperationCaughtError, RunningOperationUncaughtError, PrintDebugStackTrace
+    RunningOperationCaughtError,
+    RunningOperationUncaughtError,
+    PrintDebugStackTrace,
 )
 
 
 class RunOperationTask(ManifestTask):
     def _get_macro_parts(self):
         macro_name = self.args.macro
-        if '.' in macro_name:
+        if "." in macro_name:
             package_name, macro_name = macro_name.split(".", 1)
         else:
             package_name = None
@@ -31,7 +33,7 @@ class RunOperationTask(ManifestTask):
 
     def compile_manifest(self) -> None:
         if self.manifest is None:
-            raise InternalException('manifest was None in compile_manifest')
+            raise InternalException("manifest was None in compile_manifest")
 
     def _run_unsafe(self) -> agate.Table:
         adapter = get_adapter(self.config)
@@ -39,13 +41,10 @@ class RunOperationTask(ManifestTask):
         package_name, macro_name = self._get_macro_parts()
         macro_kwargs = self._get_kwargs()
 
-        with adapter.connection_named('macro_{}'.format(macro_name)):
+        with adapter.connection_named("macro_{}".format(macro_name)):
             adapter.clear_transaction()
             res = adapter.execute_macro(
-                macro_name,
-                project=package_name,
-                kwargs=macro_kwargs,
-                manifest=self.manifest
+                macro_name, project=package_name, kwargs=macro_kwargs, manifest=self.manifest
             )
 
         return res

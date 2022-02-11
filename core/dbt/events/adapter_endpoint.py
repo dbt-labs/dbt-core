@@ -1,12 +1,15 @@
 from dataclasses import dataclass
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    AdapterEventDebug, AdapterEventInfo, AdapterEventWarning, AdapterEventError
+    AdapterEventDebug,
+    AdapterEventInfo,
+    AdapterEventWarning,
+    AdapterEventError,
 )
 
 
 @dataclass
-class AdapterLogger():
+class AdapterLogger:
     name: str
 
     def debug(self, msg, *args, exc_info=None, extra=None, stack_info=False):

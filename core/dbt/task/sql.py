@@ -14,14 +14,12 @@ from dbt.events.types import SQlRunnerException
 from dbt.task.compile import CompileRunner
 
 
-SQLResult = TypeVar('SQLResult', bound=RemoteCompileResultMixin)
+SQLResult = TypeVar("SQLResult", bound=RemoteCompileResultMixin)
 
 
 class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
     def __init__(self, config, adapter, node, node_index, num_nodes):
-        CompileRunner.__init__(
-            self, config, adapter, node, node_index, num_nodes
-        )
+        CompileRunner.__init__(self, config, adapter, node, node_index, num_nodes)
 
     def handle_exception(self, e, ctx):
         fire_event(SQlRunnerException(exc=e))
@@ -52,9 +50,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
         raise error
 
     def ephemeral_result(self, node, start_time, timing_info):
-        raise dbt.exceptions.NotImplementedException(
-            'cannot execute ephemeral nodes remotely!'
-        )
+        raise dbt.exceptions.NotImplementedException("cannot execute ephemeral nodes remotely!")
 
 
 class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
@@ -68,9 +64,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             generated_at=datetime.utcnow(),
         )
 
-    def from_run_result(
-        self, result, start_time, timing_info
-    ) -> RemoteCompileResult:
+    def from_run_result(self, result, start_time, timing_info) -> RemoteCompileResult:
         return RemoteCompileResult(
             raw_sql=result.raw_sql,
             compiled_sql=result.compiled_sql,
@@ -83,9 +77,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
 
 class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
     def execute(self, compiled_node, manifest) -> RemoteRunResult:
-        _, execute_result = self.adapter.execute(
-            compiled_node.compiled_sql, fetch=True
-        )
+        _, execute_result = self.adapter.execute(compiled_node.compiled_sql, fetch=True)
 
         table = ResultTable(
             column_names=list(execute_result.column_names),
@@ -102,9 +94,7 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             generated_at=datetime.utcnow(),
         )
 
-    def from_run_result(
-        self, result, start_time, timing_info
-    ) -> RemoteRunResult:
+    def from_run_result(self, result, start_time, timing_info) -> RemoteRunResult:
         return RemoteRunResult(
             raw_sql=result.raw_sql,
             compiled_sql=result.compiled_sql,

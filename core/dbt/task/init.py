@@ -18,17 +18,24 @@ from dbt.contracts.project import Name as ProjectName
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    StarterProjectPath, ConfigFolderDirectory, NoSampleProfileFound, ProfileWrittenWithSample,
-    ProfileWrittenWithTargetTemplateYAML, ProfileWrittenWithProjectTemplateYAML, SettingUpProfile,
-    InvalidProfileTemplateYAML, ProjectNameAlreadyExists, GetAddendum
+    StarterProjectPath,
+    ConfigFolderDirectory,
+    NoSampleProfileFound,
+    ProfileWrittenWithSample,
+    ProfileWrittenWithTargetTemplateYAML,
+    ProfileWrittenWithProjectTemplateYAML,
+    SettingUpProfile,
+    InvalidProfileTemplateYAML,
+    ProjectNameAlreadyExists,
+    GetAddendum,
 )
 
 from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
-DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'
-SLACK_URL = 'https://community.getdbt.com/'
+DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
+SLACK_URL = "https://community.getdbt.com/"
 
 # This file is not needed for the starter project but exists for finding the resource path
 IGNORE_FILES = ["__init__.py", "__pycache__"]
@@ -57,15 +64,16 @@ click_type_mapping = {
     "int": click.INT,
     "float": click.FLOAT,
     "bool": click.BOOL,
-    None: None
+    None: None,
 }
 
 
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
         fire_event(StarterProjectPath(dir=starter_project_directory))
-        shutil.copytree(starter_project_directory, project_name,
-                        ignore=shutil.ignore_patterns(*IGNORE_FILES))
+        shutil.copytree(
+            starter_project_directory, project_name, ignore=shutil.ignore_patterns(*IGNORE_FILES)
+        )
 
     def create_profiles_dir(self, profiles_dir: str) -> bool:
         """Create the user's profiles directory if it doesn't already exist."""
@@ -93,11 +101,7 @@ class InitTask(BaseTask):
             sample_profile_name = list(yaml.safe_load(sample_profile).keys())[0]
             # Use a regex to replace the name of the sample_profile with
             # that of the project without losing any comments from the sample
-            sample_profile = re.sub(
-                f"^{sample_profile_name}:",
-                f"{profile_name}:",
-                sample_profile
-            )
+            sample_profile = re.sub(f"^{sample_profile_name}:", f"{profile_name}:", sample_profile)
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
             if profiles_filepath.exists():
                 with open(profiles_filepath, "a") as f:
@@ -106,10 +110,7 @@ class InitTask(BaseTask):
                 with open(profiles_filepath, "w") as f:
                     f.write(sample_profile)
                 fire_event(
-                    ProfileWrittenWithSample(
-                        name=profile_name,
-                        path=str(profiles_filepath)
-                    )
+                    ProfileWrittenWithSample(name=profile_name, path=str(profiles_filepath))
                 )
 
     def get_addendum(self, project_name: str, profiles_path: str) -> str:
@@ -120,24 +121,20 @@ class InitTask(BaseTask):
             project_name=project_name,
             profiles_path=profiles_path,
             docs_url=DOCS_URL,
-            slack_url=SLACK_URL
+            slack_url=SLACK_URL,
         )
 
-    def generate_target_from_input(
-        self,
-        profile_template: dict,
-        target: dict = {}
-    ) -> dict:
-        """Generate a target configuration from profile_template and user input.
-        """
+    def generate_target_from_input(self, profile_template: dict, target: dict = {}) -> dict:
+        """Generate a target configuration from profile_template and user input."""
         profile_template_local = copy.deepcopy(profile_template)
         for key, value in profile_template_local.items():
             if key.startswith("_choose"):
                 choice_type = key[8:].replace("_", " ")
                 option_list = list(value.keys())
-                prompt_msg = "\n".join([
-                    f"[{n+1}] {v}" for n, v in enumerate(option_list)
-                ]) + f"\nDesired {choice_type} option (enter a number)"
+                prompt_msg = (
+                    "\n".join([f"[{n+1}] {v}" for n, v in enumerate(option_list)])
+                    + f"\nDesired {choice_type} option (enter a number)"
+                )
                 numeric_choice = click.prompt(prompt_msg, type=click.INT)
                 choice = option_list[numeric_choice - 1]
                 # Complete the chosen option's values in a recursive call
@@ -155,10 +152,7 @@ class InitTask(BaseTask):
                     type = click_type_mapping[value.get("type", None)]
                     text = key + (f" ({hint})" if hint else "")
                     target[key] = click.prompt(
-                        text,
-                        default=default,
-                        hide_input=hide_input,
-                        type=type
+                        text, default=default, hide_input=hide_input, type=type
                     )
         return target
 
@@ -170,9 +164,7 @@ class InitTask(BaseTask):
             dbt_project = yaml.safe_load(f)
         return dbt_project["profile"]
 
-    def write_profile(
-        self, profile: dict, profile_name: str
-    ):
+    def write_profile(self, profile: dict, profile_name: str):
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
         # Create the profile directory if it doesn't exist
@@ -191,15 +183,10 @@ class InitTask(BaseTask):
 
     def create_profile_from_profile_template(self, profile_template: dict, profile_name: str):
         """Create and write a profile using the supplied profile_template."""
-        initial_target = profile_template.get('fixed', {})
-        prompts = profile_template.get('prompts', {})
+        initial_target = profile_template.get("fixed", {})
+        prompts = profile_template.get("prompts", {})
         target = self.generate_target_from_input(prompts, initial_target)
-        profile = {
-            "outputs": {
-                "dev": target
-            },
-            "target": "dev"
-        }
+        profile = {"outputs": {"dev": target}, "target": "dev"}
         self.write_profile(profile, profile_name)
 
     def create_profile_from_target(self, adapter: str, profile_name: str):
@@ -217,8 +204,7 @@ class InitTask(BaseTask):
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
             fire_event(
                 ProfileWrittenWithTargetTemplateYAML(
-                    name=profile_name,
-                    path=str(profiles_filepath)
+                    name=profile_name, path=str(profiles_filepath)
                 )
             )
         else:
@@ -233,9 +219,7 @@ class InitTask(BaseTask):
         profiles_file = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         if not profiles_file.exists():
             return True
-        profile_name = (
-            profile_name or self.get_profile_name_from_current_project()
-        )
+        profile_name = profile_name or self.get_profile_name_from_current_project()
         with open(profiles_file, "r") as f:
             profiles = yaml.safe_load(f) or {}
         if profile_name in profiles.keys():
@@ -254,20 +238,17 @@ class InitTask(BaseTask):
         self.create_profile_from_profile_template(profile_template, profile_name)
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         fire_event(
-            ProfileWrittenWithProjectTemplateYAML(
-                name=profile_name,
-                path=str(profiles_filepath)
-            )
+            ProfileWrittenWithProjectTemplateYAML(name=profile_name, path=str(profiles_filepath))
         )
 
     def ask_for_adapter_choice(self) -> str:
         """Ask the user which adapter (database) they'd like to use."""
         available_adapters = list(_get_adapter_plugin_names())
         prompt_msg = (
-            "Which database would you like to use?\n" +
-            "\n".join([f"[{n+1}] {v}" for n, v in enumerate(available_adapters)]) +
-            "\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)" +
-            "\n\nEnter a number"
+            "Which database would you like to use?\n"
+            + "\n".join([f"[{n+1}] {v}" for n, v in enumerate(available_adapters)])
+            + "\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)"
+            + "\n\nEnter a number"
         )
         numeric_choice = click.prompt(prompt_msg, type=click.INT)
         return available_adapters[numeric_choice - 1]
@@ -312,9 +293,7 @@ class InitTask(BaseTask):
                 except Exception:
                     fire_event(InvalidProfileTemplateYAML())
             adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_target(
-                adapter, profile_name=profile_name
-            )
+            self.create_profile_from_target(adapter, profile_name=profile_name)
             return
 
         # When dbt init is run outside of an existing project,
@@ -328,10 +307,7 @@ class InitTask(BaseTask):
         self.copy_starter_repo(project_name)
         os.chdir(project_name)
         with open("dbt_project.yml", "r+") as f:
-            content = f"{f.read()}".format(
-                project_name=project_name,
-                profile_name=project_name
-            )
+            content = f"{f.read()}".format(project_name=project_name, profile_name=project_name)
             f.seek(0)
             f.write(content)
             f.truncate()
@@ -341,8 +317,6 @@ class InitTask(BaseTask):
             if not self.check_if_can_write_profile(profile_name=project_name):
                 return
             adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_target(
-                adapter, profile_name=project_name
-            )
+            self.create_profile_from_target(adapter, profile_name=project_name)
             msg = self.get_addendum(project_name, profiles_dir)
             fire_event(GetAddendum(msg=msg))

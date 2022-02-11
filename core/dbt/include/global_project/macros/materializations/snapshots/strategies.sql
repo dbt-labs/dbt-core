@@ -132,7 +132,7 @@
     {% set check_cols_config = config['check_cols'] %}
     {% set primary_key = config['unique_key'] %}
     {% set invalidate_hard_deletes = config.get('invalidate_hard_deletes', false) %}
-    
+
     {% set select_current_time -%}
         select {{ snapshot_get_time() }} as snapshot_start
     {%- endset %}

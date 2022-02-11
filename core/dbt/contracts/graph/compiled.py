@@ -60,49 +60,47 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if '_pre_injected_sql' in dct:
-            del dct['_pre_injected_sql']
+        if "_pre_injected_sql" in dct:
+            del dct["_pre_injected_sql"]
         return dct
 
 
 @dataclass
 class CompiledAnalysisNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
 class CompiledHookNode(CompiledNode):
-    resource_type: NodeType = field(
-        metadata={'restrict': [NodeType.Operation]}
-    )
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
 class CompiledModelNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
 class CompiledRPCNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
 class CompiledSqlNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.SqlOperation]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
 @dataclass
 class CompiledSeedNode(CompiledNode):
     # keep this in sync with ParsedSeedNode!
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
 
     @property
     def empty(self):
-        """ Seeds are never empty"""
+        """Seeds are never empty"""
         return False
 
     def same_body(self, other) -> bool:
@@ -111,12 +109,12 @@ class CompiledSeedNode(CompiledNode):
 
 @dataclass
 class CompiledSnapshotNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
 
 
 @dataclass
 class CompiledSingularTestNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type:ignore
@@ -125,7 +123,7 @@ class CompiledSingularTestNode(CompiledNode):
 @dataclass
 class CompiledGenericTestNode(CompiledNode, HasTestMetadata):
     # keep this in sync with ParsedGenericTestNode!
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
@@ -136,11 +134,7 @@ class CompiledGenericTestNode(CompiledNode, HasTestMetadata):
         if other is None:
             return False
 
-        return (
-            self.same_config(other) and
-            self.same_fqn(other) and
-            True
-        )
+        return self.same_config(other) and self.same_fqn(other) and True
 
 
 CompiledTestNode = Union[CompiledSingularTestNode, CompiledGenericTestNode]
@@ -188,8 +182,7 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
     cls = PARSED_TYPES.get(type(compiled))
     if cls is None:
         # how???
-        raise ValueError('invalid resource_type: {}'
-                         .format(compiled.resource_type))
+        raise ValueError("invalid resource_type: {}".format(compiled.resource_type))
 
     return cls.from_dict(compiled.to_dict(omit_none=True))
 

@@ -11,19 +11,21 @@ import sys
 import tarfile
 import requests
 import stat
-from typing import (
-    Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
-)
+from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd, SystemStdOutMsg,
-    SystemStdErrMsg, SystemReportReturnCode
+    SystemErrorRetrievingModTime,
+    SystemCouldNotWrite,
+    SystemExecutingCmd,
+    SystemStdOutMsg,
+    SystemStdErrMsg,
+    SystemReportReturnCode,
 )
 import dbt.exceptions
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
-if sys.platform == 'win32':
+if sys.platform == "win32":
     from ctypes import WinDLL, c_bool
 else:
     WinDLL = None
@@ -55,36 +57,35 @@ def find_matching(
     reobj = re.compile(regex, re.IGNORECASE)
 
     for relative_path_to_search in relative_paths_to_search:
-        absolute_path_to_search = os.path.join(
-            root_path, relative_path_to_search)
+        absolute_path_to_search = os.path.join(root_path, relative_path_to_search)
         walk_results = os.walk(absolute_path_to_search)
 
         for current_path, subdirectories, local_files in walk_results:
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
-                relative_path = os.path.relpath(
-                    absolute_path, absolute_path_to_search
-                )
+                relative_path = os.path.relpath(absolute_path, absolute_path_to_search)
                 modification_time = 0.0
                 try:
                     modification_time = os.path.getmtime(absolute_path)
                 except OSError:
                     fire_event(SystemErrorRetrievingModTime(path=absolute_path))
                 if reobj.match(local_file):
-                    matching.append({
-                        'searched_path': relative_path_to_search,
-                        'absolute_path': absolute_path,
-                        'relative_path': relative_path,
-                        'modification_time': modification_time,
-                    })
+                    matching.append(
+                        {
+                            "searched_path": relative_path_to_search,
+                            "absolute_path": absolute_path,
+                            "relative_path": relative_path,
+                            "modification_time": modification_time,
+                        }
+                    )
 
     return matching
 
 
 def load_file_contents(path: str, strip: bool = True) -> str:
     path = convert_path(path)
-    with open(path, 'rb') as handle:
-        to_return = handle.read().decode('utf-8')
+    with open(path, "rb") as handle:
+        to_return = handle.read().decode("utf-8")
 
     if strip:
         to_return = to_return.strip()
@@ -111,14 +112,14 @@ def make_directory(path: str) -> None:
                 raise e
 
 
-def make_file(path: str, contents: str = '', overwrite: bool = False) -> bool:
+def make_file(path: str, contents: str = "", overwrite: bool = False) -> bool:
     """
     Make a file at `path` assuming that the directory it resides in already
     exists. The file is saved with contents `contents`
     """
     if overwrite or not os.path.exists(path):
         path = convert_path(path)
-        with open(path, 'w') as fh:
+        with open(path, "w") as fh:
             fh.write(contents)
         return True
 
@@ -130,7 +131,7 @@ def make_symlink(source: str, link_path: str) -> None:
     Create a symlink at `link_path` referring to `source`.
     """
     if not supports_symlinks():
-        dbt.exceptions.system_error('create a symbolic link')
+        dbt.exceptions.system_error("create a symbolic link")
 
     os.symlink(source, link_path)
 
@@ -139,11 +140,11 @@ def supports_symlinks() -> bool:
     return getattr(os, "symlink", None) is not None
 
 
-def write_file(path: str, contents: str = '') -> bool:
+def write_file(path: str, contents: str = "") -> bool:
     path = convert_path(path)
     try:
         make_directory(os.path.dirname(path))
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(str(contents))
     except Exception as exc:
         # note that you can't just catch FileNotFound, because sometimes
@@ -152,15 +153,15 @@ def write_file(path: str, contents: str = '') -> bool:
         # sometimes windows fails to write paths that are less than the length
         # limit. So on windows, suppress all errors that happen from writing
         # to disk.
-        if os.name == 'nt':
+        if os.name == "nt":
             # sometimes we get a winerror of 3 which means the path was
             # definitely too long, but other times we don't and it means the
             # path was just probably too long. This is probably based on the
             # windows/python version.
-            if getattr(exc, 'winerror', 0) == 3:
-                reason = 'Path was too long'
+            if getattr(exc, "winerror", 0) == 3:
+                reason = "Path was too long"
             else:
-                reason = 'Path was possibly too long'
+                reason = "Path was possibly too long"
             # all our hard work and the path was still too long. Log and
             # continue.
             fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=exc))
@@ -177,9 +178,7 @@ def write_json(path: str, data: Dict[str, Any]) -> bool:
     return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
 
 
-def _windows_rmdir_readonly(
-    func: Callable[[str], Any], path: str, exc: Tuple[Any, OSError, Any]
-):
+def _windows_rmdir_readonly(func: Callable[[str], Any], path: str, exc: Tuple[Any, OSError, Any]):
     exception_val = exc[1]
     if exception_val.errno == errno.EACCES:
         os.chmod(path, stat.S_IWUSR)
@@ -196,10 +195,7 @@ def resolve_path_from_base(path_to_resolve: str, base_path: str) -> str:
     If path_to_resolve is an absolute path or a user path (~), just
     resolve it to an absolute path and return.
     """
-    return os.path.abspath(
-        os.path.join(
-            base_path,
-            os.path.expanduser(path_to_resolve)))
+    return os.path.abspath(os.path.join(base_path, os.path.expanduser(path_to_resolve)))
 
 
 def rmdir(path: str) -> None:
@@ -209,7 +205,7 @@ def rmdir(path: str) -> None:
     cloned via git) can cause rmtree to throw a PermissionError exception
     """
     path = convert_path(path)
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         onerror = _windows_rmdir_readonly
     else:
         onerror = None
@@ -228,7 +224,7 @@ def _win_prepare_path(path: str) -> str:
     # letter back in.
     # Unless it starts with '\\'. In that case, the path is a UNC mount point
     # and splitdrive will be fine.
-    if not path.startswith('\\\\') and path.startswith('\\'):
+    if not path.startswith("\\\\") and path.startswith("\\"):
         curdrive = os.path.splitdrive(os.getcwd())[0]
         path = curdrive + path
 
@@ -243,7 +239,7 @@ def _win_prepare_path(path: str) -> str:
 
 
 def _supports_long_paths() -> bool:
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         return True
     # Eryk Sun says to use `WinDLL('ntdll')` instead of `windll.ntdll` because
     # of pointer caching in a comment here:
@@ -251,11 +247,11 @@ def _supports_long_paths() -> bool:
     # I don't know exaclty what he means, but I am inclined to believe him as
     # he's pretty active on Python windows bugs!
     try:
-        dll = WinDLL('ntdll')
+        dll = WinDLL("ntdll")
     except OSError:  # I don't think this happens? you need ntdll to run python
         return False
     # not all windows versions have it at all
-    if not hasattr(dll, 'RtlAreLongPathsEnabled'):
+    if not hasattr(dll, "RtlAreLongPathsEnabled"):
         return False
     # tell windows we want to get back a single unsigned byte (a bool).
     dll.RtlAreLongPathsEnabled.restype = c_bool
@@ -275,7 +271,7 @@ def convert_path(path: str) -> str:
     if _supports_long_paths():
         return path
 
-    prefix = '\\\\?\\'
+    prefix = "\\\\?\\"
     # Nothing to do
     if path.startswith(prefix):
         return path
@@ -306,39 +302,35 @@ def path_is_symlink(path: str) -> bool:
 
 def open_dir_cmd() -> str:
     # https://docs.python.org/2/library/sys.html#sys.platform
-    if sys.platform == 'win32':
-        return 'start'
+    if sys.platform == "win32":
+        return "start"
 
-    elif sys.platform == 'darwin':
-        return 'open'
+    elif sys.platform == "darwin":
+        return "open"
 
     else:
-        return 'xdg-open'
+        return "xdg-open"
 
 
-def _handle_posix_cwd_error(
-    exc: OSError, cwd: str, cmd: List[str]
-) -> NoReturn:
+def _handle_posix_cwd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
-        message = 'Directory does not exist'
+        message = "Directory does not exist"
     elif exc.errno == errno.EACCES:
-        message = 'Current user cannot access directory, check permissions'
+        message = "Current user cannot access directory, check permissions"
     elif exc.errno == errno.ENOTDIR:
-        message = 'Not a directory'
+        message = "Not a directory"
     else:
-        message = 'Unknown OSError: {} - cwd'.format(str(exc))
+        message = "Unknown OSError: {} - cwd".format(str(exc))
     raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
 
 
-def _handle_posix_cmd_error(
-    exc: OSError, cwd: str, cmd: List[str]
-) -> NoReturn:
+def _handle_posix_cmd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = "Could not find command, ensure it is in the user's PATH"
     elif exc.errno == errno.EACCES:
-        message = 'User does not have permissions for this command'
+        message = "User does not have permissions for this command"
     else:
-        message = 'Unknown OSError: {} - cmd'.format(str(exc))
+        message = "Unknown OSError: {} - cmd".format(str(exc))
     raise dbt.exceptions.ExecutableError(cwd, cmd, message)
 
 
@@ -363,7 +355,7 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
             - exc.errno == EACCES
             - exc.filename == None(?)
     """
-    if getattr(exc, 'filename', None) == cwd:
+    if getattr(exc, "filename", None) == cwd:
         _handle_posix_cwd_error(exc, cwd, cmd)
     else:
         _handle_posix_cmd_error(exc, cwd, cmd)
@@ -372,45 +364,45 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     cls: Type[dbt.exceptions.Exception] = dbt.exceptions.CommandError
     if exc.errno == errno.ENOENT:
-        message = ("Could not find command, ensure it is in the user's PATH "
-                   "and that the user has permissions to run it")
+        message = (
+            "Could not find command, ensure it is in the user's PATH "
+            "and that the user has permissions to run it"
+        )
         cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOEXEC:
-        message = ('Command was not executable, ensure it is valid')
+        message = "Command was not executable, ensure it is valid"
         cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOTDIR:
-        message = ('Unable to cd: path does not exist, user does not have'
-                   ' permissions, or not a directory')
+        message = (
+            "Unable to cd: path does not exist, user does not have"
+            " permissions, or not a directory"
+        )
         cls = dbt.exceptions.WorkingDirectoryError
     else:
         message = 'Unknown error: {} (errno={}: "{}")'.format(
-            str(exc), exc.errno, errno.errorcode.get(exc.errno, '<Unknown!>')
+            str(exc), exc.errno, errno.errorcode.get(exc.errno, "<Unknown!>")
         )
     raise cls(cwd, cmd, message)
 
 
 def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    """Interpret an OSError exc and raise the appropriate dbt exception.
-
-    """
+    """Interpret an OSError exc and raise the appropriate dbt exception."""
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
     # all of these functions raise unconditionally
-    if os.name == 'nt':
+    if os.name == "nt":
         _handle_windows_error(exc, cwd, cmd)
     else:
         _handle_posix_error(exc, cwd, cmd)
 
     # this should not be reachable, raise _something_ at least!
     raise dbt.exceptions.InternalException(
-        'Unhandled exception in _interpret_oserror: {}'.format(exc)
+        "Unhandled exception in _interpret_oserror: {}".format(exc)
     )
 
 
-def run_cmd(
-    cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None
-) -> Tuple[bytes, bytes]:
+def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> Tuple[bytes, bytes]:
     fire_event(SystemExecutingCmd(cmd=cmd))
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
@@ -427,11 +419,8 @@ def run_cmd(
         if exe_pth:
             cmd = [os.path.abspath(exe_pth)] + list(cmd[1:])
         proc = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=full_env)
+            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=full_env
+        )
 
         out, err = proc.communicate()
     except OSError as exc:
@@ -442,8 +431,7 @@ def run_cmd(
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))
-        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode,
-                                                out, err)
+        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode, out, err)
 
     return out, err
 
@@ -455,13 +443,11 @@ def download_with_retries(
     connection_exception_retry(download_fn, 5)
 
 
-def download(
-    url: str, path: str, timeout: Optional[Union[float, tuple]] = None
-) -> None:
+def download(url: str, path: str, timeout: Optional[Union[float, tuple]] = None) -> None:
     path = convert_path(path)
-    connection_timeout = timeout or float(os.getenv('DBT_HTTP_TIMEOUT', 10))
+    connection_timeout = timeout or float(os.getenv("DBT_HTTP_TIMEOUT", 10))
     response = requests.get(url, timeout=connection_timeout)
-    with open(path, 'wb') as handle:
+    with open(path, "wb") as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)
 
@@ -480,12 +466,10 @@ def rename(from_path: str, to_path: str, force: bool = False) -> None:
     shutil.move(from_path, to_path)
 
 
-def untar_package(
-    tar_path: str, dest_dir: str, rename_to: Optional[str] = None
-) -> None:
+def untar_package(tar_path: str, dest_dir: str, rename_to: Optional[str] = None) -> None:
     tar_path = convert_path(tar_path)
     tar_dir_name = None
-    with tarfile.open(tar_path, 'r:gz') as tarball:
+    with tarfile.open(tar_path, "r:gz") as tarball:
         tarball.extractall(dest_dir)
         tar_dir_name = os.path.commonprefix(tarball.getnames())
     if rename_to:
@@ -501,7 +485,7 @@ def chmod_and_retry(func, path, exc_info):
     We want to retry most operations here, but listdir is one that we know will
     be useless.
     """
-    if func is os.listdir or os.name != 'nt':
+    if func is os.listdir or os.name != "nt":
         raise
     os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
     # on error,this will raise.
@@ -522,7 +506,7 @@ def move(src, dst):
     """
     src = convert_path(src)
     dst = convert_path(dst)
-    if os.name != 'nt':
+    if os.name != "nt":
         return shutil.move(src, dst)
 
     if os.path.isdir(dst):
@@ -530,7 +514,7 @@ def move(src, dst):
             os.rename(src, dst)
             return
 
-        dst = os.path.join(dst, os.path.basename(src.rstrip('/\\')))
+        dst = os.path.join(dst, os.path.basename(src.rstrip("/\\")))
         if os.path.exists(dst):
             raise EnvironmentError("Path '{}' already exists".format(dst))
 
@@ -539,11 +523,10 @@ def move(src, dst):
     except OSError:
         # probably different drives
         if os.path.isdir(src):
-            if _absnorm(dst + '\\').startswith(_absnorm(src + '\\')):
+            if _absnorm(dst + "\\").startswith(_absnorm(src + "\\")):
                 # dst is inside src
                 raise EnvironmentError(
-                    "Cannot move a directory '{}' into itself '{}'"
-                    .format(src, dst)
+                    "Cannot move a directory '{}' into itself '{}'".format(src, dst)
                 )
             shutil.copytree(src, dst, symlinks=True)
             rmtree(src)

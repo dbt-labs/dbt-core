@@ -30,28 +30,33 @@ class PostgresCredentials(Credentials):
     sslcert: Optional[str] = None
     sslkey: Optional[str] = None
     sslrootcert: Optional[str] = None
-    application_name: Optional[str] = 'dbt'
+    application_name: Optional[str] = "dbt"
 
-    _ALIASES = {
-        'dbname': 'database',
-        'pass': 'password'
-    }
+    _ALIASES = {"dbname": "database", "pass": "password"}
 
     @property
     def type(self):
-        return 'postgres'
+        return "postgres"
 
     @property
     def unique_field(self):
         return self.host
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'search_path',
-                'keepalives_idle', 'sslmode')
+        return (
+            "host",
+            "port",
+            "user",
+            "database",
+            "schema",
+            "search_path",
+            "keepalives_idle",
+            "sslmode",
+        )
 
 
 class PostgresConnectionManager(SQLConnectionManager):
-    TYPE = 'postgres'
+    TYPE = "postgres"
 
     @contextmanager
     def exception_handler(self, sql):
@@ -59,7 +64,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             yield
 
         except psycopg2.DatabaseError as e:
-            logger.debug('Postgres error: {}'.format(str(e)))
+            logger.debug("Postgres error: {}".format(str(e)))
 
             try:
                 self.rollback_if_open()
@@ -83,8 +88,8 @@ class PostgresConnectionManager(SQLConnectionManager):
 
     @classmethod
     def open(cls, connection):
-        if connection.state == 'open':
-            logger.debug('Connection is already open, skipping open.')
+        if connection.state == "open":
+            logger.debug("Connection is already open, skipping open.")
             return connection
 
         credentials = cls.get_credentials(connection.credentials)
@@ -92,18 +97,17 @@ class PostgresConnectionManager(SQLConnectionManager):
         # we don't want to pass 0 along to connect() as postgres will try to
         # call an invalid setsockopt() call (contrary to the docs).
         if credentials.keepalives_idle:
-            kwargs['keepalives_idle'] = credentials.keepalives_idle
+            kwargs["keepalives_idle"] = credentials.keepalives_idle
 
         # psycopg2 doesn't support search_path officially,
         # see https://github.com/psycopg/psycopg2/issues/465
         search_path = credentials.search_path
-        if search_path is not None and search_path != '':
+        if search_path is not None and search_path != "":
             # see https://postgresql.org/docs/9.5/libpq-connect.html
-            kwargs['options'] = '-c search_path={}'.format(
-                search_path.replace(' ', '\\ '))
+            kwargs["options"] = "-c search_path={}".format(search_path.replace(" ", "\\ "))
 
         if credentials.sslmode:
-            kwargs['sslmode'] = credentials.sslmode
+            kwargs["sslmode"] = credentials.sslmode
 
         if credentials.sslcert is not None:
             kwargs["sslcert"] = credentials.sslcert
@@ -115,7 +119,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             kwargs["sslrootcert"] = credentials.sslrootcert
 
         if credentials.application_name:
-            kwargs['application_name'] = credentials.application_name
+            kwargs["application_name"] = credentials.application_name
 
         try:
             handle = psycopg2.connect(
@@ -125,20 +129,21 @@ class PostgresConnectionManager(SQLConnectionManager):
                 password=credentials.password,
                 port=credentials.port,
                 connect_timeout=credentials.connect_timeout,
-                **kwargs)
+                **kwargs,
+            )
 
             if credentials.role:
-                handle.cursor().execute('set role {}'.format(credentials.role))
+                handle.cursor().execute("set role {}".format(credentials.role))
 
             connection.handle = handle
-            connection.state = 'open'
+            connection.state = "open"
         except psycopg2.Error as e:
-            logger.debug("Got an error when attempting to open a postgres "
-                         "connection: '{}'"
-                         .format(e))
+            logger.debug(
+                "Got an error when attempting to open a postgres " "connection: '{}'".format(e)
+            )
 
             connection.handle = None
-            connection.state = 'fail'
+            connection.state = "fail"
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
@@ -150,10 +155,8 @@ class PostgresConnectionManager(SQLConnectionManager):
             pid = connection.handle.get_backend_pid()
         except psycopg2.InterfaceError as exc:
             # if the connection is already closed, not much to cancel!
-            if 'already closed' in str(exc):
-                logger.debug(
-                    f'Connection {connection_name} was already closed'
-                )
+            if "already closed" in str(exc):
+                logger.debug(f"Connection {connection_name} was already closed")
                 return
             # probably bad, re-raise it
             raise
@@ -176,14 +179,6 @@ class PostgresConnectionManager(SQLConnectionManager):
         message = str(cursor.statusmessage)
         rows = cursor.rowcount
         status_message_parts = message.split() if message is not None else []
-        status_messsage_strings = [
-            part
-            for part in status_message_parts
-            if not part.isdigit()
-        ]
-        code = ' '.join(status_messsage_strings)
-        return AdapterResponse(
-            _message=message,
-            code=code,
-            rows_affected=rows
-        )
+        status_messsage_strings = [part for part in status_message_parts if not part.isdigit()]
+        code = " ".join(status_messsage_strings)
+        return AdapterResponse(_message=message, code=code, rows_affected=rows)

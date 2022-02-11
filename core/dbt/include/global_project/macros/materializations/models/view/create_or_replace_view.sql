@@ -1,4 +1,4 @@
-/* {# 
+/* {#
        Core materialization implementation. BigQuery and Snowflake are similar
        because both can use `create or replace view` where the resulting view schema
        is not necessarily the same as the existing view. On Redshift, this would

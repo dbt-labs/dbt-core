@@ -4,29 +4,49 @@ from itertools import chain, islice
 from mashumaro import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
-    Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
-    TypeVar, Callable, Generic, cast, AbstractSet, ClassVar
+    Dict,
+    List,
+    Optional,
+    Union,
+    Mapping,
+    MutableMapping,
+    Any,
+    Set,
+    Tuple,
+    TypeVar,
+    Callable,
+    Generic,
+    cast,
+    AbstractSet,
+    ClassVar,
 )
 from typing_extensions import Protocol
 from uuid import UUID
 
 from dbt.contracts.graph.compiled import (
-    CompileResultNode, ManifestNode, NonSourceCompiledNode, GraphMemberNode
+    CompileResultNode,
+    ManifestNode,
+    NonSourceCompiledNode,
+    GraphMemberNode,
 )
 from dbt.contracts.graph.parsed import (
-    ParsedMacro, ParsedDocumentation,
-    ParsedSourceDefinition, ParsedExposure, ParsedMetric,
-    HasUniqueID, UnpatchedSourceDefinition, ManifestNodes
+    ParsedMacro,
+    ParsedDocumentation,
+    ParsedSourceDefinition,
+    ParsedExposure,
+    ParsedMetric,
+    HasUniqueID,
+    UnpatchedSourceDefinition,
+    ManifestNodes,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
-from dbt.contracts.util import (
-    BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
-)
+from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationException,
-    raise_duplicate_resource_name, raise_compiler_error,
+    raise_duplicate_resource_name,
+    raise_compiler_error,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
@@ -62,14 +82,14 @@ def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
 
 
 class DocLookup(dbtClassMixin):
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
     def get_unique_id(self, key, package: Optional[PackageName]):
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
         unique_id = self.get_unique_id(key, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
@@ -84,25 +104,23 @@ class DocLookup(dbtClassMixin):
         for doc in manifest.docs.values():
             self.add_doc(doc)
 
-    def perform_lookup(
-        self, unique_id: UniqueID, manifest
-    ) -> ParsedDocumentation:
+    def perform_lookup(self, unique_id: UniqueID, manifest) -> ParsedDocumentation:
         if unique_id not in manifest.docs:
             raise dbt.exceptions.InternalException(
-                f'Doc {unique_id} found in cache but not found in manifest'
+                f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
 
 
 class SourceLookup(dbtClassMixin):
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
     def get_unique_id(self, search_name, package: Optional[PackageName]):
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: 'Manifest'):
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
@@ -116,15 +134,13 @@ class SourceLookup(dbtClassMixin):
 
     def populate(self, manifest):
         for source in manifest.sources.values():
-            if hasattr(source, 'source_name'):
+            if hasattr(source, "source_name"):
                 self.add_source(source)
 
-    def perform_lookup(
-        self, unique_id: UniqueID, manifest: 'Manifest'
-    ) -> ParsedSourceDefinition:
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ParsedSourceDefinition:
         if unique_id not in manifest.sources:
             raise dbt.exceptions.InternalException(
-                f'Source {unique_id} found in cache but not found in manifest'
+                f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
 
@@ -136,14 +152,14 @@ class RefableLookup(dbtClassMixin):
     # refables are actually unique, so the Dict[PackageName, UniqueID] will
     # only ever have exactly one value, but doing 3 dict lookups instead of 1
     # is not a big deal at all and retains consistency
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
     def get_unique_id(self, key, package: Optional[PackageName]):
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
         unique_id = self.get_unique_id(key, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
@@ -159,20 +175,17 @@ class RefableLookup(dbtClassMixin):
         for node in manifest.nodes.values():
             self.add_node(node)
 
-    def perform_lookup(
-        self, unique_id: UniqueID, manifest
-    ) -> ManifestNode:
+    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
         if unique_id not in manifest.nodes:
             raise dbt.exceptions.InternalException(
-                f'Node {unique_id} found in cache but not found in manifest'
+                f"Node {unique_id} found in cache but not found in manifest"
             )
         return manifest.nodes[unique_id]
 
 
 # This handles both models/seeds/snapshots and sources
 class DisabledLookup(dbtClassMixin):
-
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
@@ -226,30 +239,31 @@ def _search_packages(
 @dataclass
 class ManifestMetadata(BaseArtifactMetadata):
     """Metadata for the manifest."""
+
     dbt_schema_version: str = field(
         default_factory=lambda: str(WritableManifest.dbt_schema_version)
     )
     project_id: Optional[str] = field(
         default=None,
         metadata={
-            'description': 'A unique identifier for the project',
+            "description": "A unique identifier for the project",
         },
     )
     user_id: Optional[UUID] = field(
         default=None,
         metadata={
-            'description': 'A unique identifier for the user',
+            "description": "A unique identifier for the user",
         },
     )
     send_anonymous_usage_stats: Optional[bool] = field(
         default=None,
-        metadata=dict(description=(
-            'Whether dbt is configured to send anonymous usage statistics'
-        )),
+        metadata=dict(
+            description=("Whether dbt is configured to send anonymous usage statistics")
+        ),
     )
     adapter_type: Optional[str] = field(
         default=None,
-        metadata=dict(description='The type name of the adapter'),
+        metadata=dict(description="The type name of the adapter"),
     )
 
     def __post_init__(self):
@@ -295,7 +309,7 @@ def build_node_edges(nodes: List[ManifestNode]):
 # Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
     forward_edges: Dict[str, List[str]] = {
-        n.unique_id: [] for n in nodes if n.unique_id.startswith('macro') or n.depends_on.macros
+        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on.macros
     }
     for node in nodes:
         for unique_id in node.depends_on.macros:
@@ -346,7 +360,7 @@ class MaterializationCandidate(MacroCandidate):
     @classmethod
     def from_macro(
         cls, candidate: MacroCandidate, specificity: Specificity
-    ) -> 'MaterializationCandidate':
+    ) -> "MaterializationCandidate":
         return cls(
             locality=candidate.locality,
             macro=candidate.macro,
@@ -356,16 +370,13 @@ class MaterializationCandidate(MacroCandidate):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, MaterializationCandidate):
             return NotImplemented
-        equal = (
-            self.specificity == other.specificity and
-            self.locality == other.locality
-        )
+        equal = self.specificity == other.specificity and self.locality == other.locality
         if equal:
             raise_compiler_error(
-                'Found two materializations with the name {} (packages {} and '
-                '{}). dbt cannot resolve this ambiguity'
-                .format(self.macro.name, self.macro.package_name,
-                        other.macro.package_name)
+                "Found two materializations with the name {} (packages {} and "
+                "{}). dbt cannot resolve this ambiguity".format(
+                    self.macro.name, self.macro.package_name, other.macro.package_name
+                )
             )
 
         return equal
@@ -384,7 +395,7 @@ class MaterializationCandidate(MacroCandidate):
         return False
 
 
-M = TypeVar('M', bound=MacroCandidate)
+M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
@@ -412,10 +423,10 @@ class Searchable(Protocol):
 
     @property
     def search_name(self) -> str:
-        raise NotImplementedError('search_name not implemented')
+        raise NotImplementedError("search_name not implemented")
 
 
-D = TypeVar('D')
+D = TypeVar("D")
 
 
 @dataclass
@@ -426,19 +437,18 @@ class Disabled(Generic[D]):
 MaybeDocumentation = Optional[ParsedDocumentation]
 
 
-MaybeParsedSource = Optional[Union[
-    ParsedSourceDefinition,
-    Disabled[ParsedSourceDefinition],
-]]
+MaybeParsedSource = Optional[
+    Union[
+        ParsedSourceDefinition,
+        Disabled[ParsedSourceDefinition],
+    ]
+]
 
 
-MaybeNonSource = Optional[Union[
-    ManifestNode,
-    Disabled[ManifestNode]
-]]
+MaybeNonSource = Optional[Union[ManifestNode, Disabled[ManifestNode]]]
 
 
-T = TypeVar('T', bound=GraphMemberNode)
+T = TypeVar("T", bound=GraphMemberNode)
 
 
 def _update_into(dest: MutableMapping[str, T], new_item: T):
@@ -449,14 +459,13 @@ def _update_into(dest: MutableMapping[str, T], new_item: T):
     unique_id = new_item.unique_id
     if unique_id not in dest:
         raise dbt.exceptions.RuntimeException(
-            f'got an update_{new_item.resource_type} call with an '
-            f'unrecognized {new_item.resource_type}: {new_item.unique_id}'
+            f"got an update_{new_item.resource_type} call with an "
+            f"unrecognized {new_item.resource_type}: {new_item.unique_id}"
         )
     existing = dest[unique_id]
     if new_item.original_file_path != existing.original_file_path:
         raise dbt.exceptions.RuntimeException(
-            f'cannot update a {new_item.resource_type} to have a new file '
-            f'path!'
+            f"cannot update a {new_item.resource_type} to have a new file " f"path!"
         )
     dest[unique_id] = new_item
 
@@ -480,6 +489,7 @@ class MacroMethods:
         """
         filter: Optional[Callable[[MacroCandidate], bool]] = None
         if package is not None:
+
             def filter(candidate: MacroCandidate) -> bool:
                 return package == candidate.macro.package_name
 
@@ -502,11 +512,12 @@ class MacroMethods:
             - return the `generate_{component}_name` macro from the 'dbt'
               internal project
         """
+
         def filter(candidate: MacroCandidate) -> bool:
             return candidate.locality != Locality.Imported
 
         candidates: CandidateList = self._find_macros_by_name(
-            name=f'generate_{component}_name',
+            name=f"generate_{component}_name",
             root_project_name=root_project_name,
             # filter out imported packages
             filter=filter,
@@ -517,12 +528,12 @@ class MacroMethods:
         self,
         name: str,
         root_project_name: str,
-        filter: Optional[Callable[[MacroCandidate], bool]] = None
+        filter: Optional[Callable[[MacroCandidate], bool]] = None,
     ) -> CandidateList:
-        """Find macros by their name.
-        """
+        """Find macros by their name."""
         # avoid an import cycle
         from dbt.adapters.factory import get_adapter_package_names
+
         candidates: CandidateList = CandidateList()
         packages = set(get_adapter_package_names(self.metadata.adapter_type))
         for unique_id, macro in self.macros.items():
@@ -555,8 +566,8 @@ class ManifestStateCheck(dbtClassMixin):
 
 @dataclass
 class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
-    """The manifest for the full graph, after parsing and during compilation.
-    """
+    """The manifest for the full graph, after parsing and during compilation."""
+
     # These attributes are both positional and by keyword. If an attribute
     # is added it must all be added in the __reduce_ex__ method in the
     # args tuple in the right position.
@@ -576,27 +587,27 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _source_lookup: Optional[SourceLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _ref_lookup: Optional[RefableLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _disabled_lookup: Optional[DisabledLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _analysis_lookup: Optional[AnalysisLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
-        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
     _lock: Lock = field(
         default_factory=flags.MP_CONTEXT.Lock,
-        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
     def __pre_serialize__(self):
@@ -610,9 +621,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         obj._lock = flags.MP_CONTEXT.Lock()
         return obj
 
-    def sync_update_node(
-        self, new_node: NonSourceCompiledNode
-    ) -> NonSourceCompiledNode:
+    def sync_update_node(self, new_node: NonSourceCompiledNode) -> NonSourceCompiledNode:
         """update the node with a lock. The only time we should want to lock is
         when compiling an ephemeral ancestor of a node at runtime, because
         multiple threads could be just-in-time compiling the same ephemeral
@@ -624,7 +633,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         """
         with self._lock:
             existing = self.nodes[new_node.unique_id]
-            if getattr(existing, 'compiled', False):
+            if getattr(existing, "compiled", False):
                 # already compiled -> must be a NonSourceCompiledNode
                 return cast(NonSourceCompiledNode, existing)
             _update_into(self.nodes, new_node)
@@ -649,22 +658,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         manifest!
         """
         self.flat_graph = {
-            'exposures': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.exposures.items()
-            },
-            'metrics': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.metrics.items()
-            },
-            'nodes': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.nodes.items()
-            },
-            'sources': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.sources.items()
-            }
+            "exposures": {k: v.to_dict(omit_none=False) for k, v in self.exposures.items()},
+            "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
+            "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
+            "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
         }
 
     def build_disabled_by_file_id(self):
@@ -675,7 +672,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return disabled_by_file_id
 
     def _materialization_candidates_for(
-        self, project_name: str,
+        self,
+        project_name: str,
         materialization_name: str,
         adapter_type: Optional[str],
     ) -> CandidateList:
@@ -698,13 +696,16 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def find_materialization_macro_by_name(
         self, project_name: str, materialization_name: str, adapter_type: str
     ) -> Optional[ParsedMacro]:
-        candidates: CandidateList = CandidateList(chain.from_iterable(
-            self._materialization_candidates_for(
-                project_name=project_name,
-                materialization_name=materialization_name,
-                adapter_type=atype,
-            ) for atype in (adapter_type, None)
-        ))
+        candidates: CandidateList = CandidateList(
+            chain.from_iterable(
+                self._materialization_candidates_for(
+                    project_name=project_name,
+                    materialization_name=materialization_name,
+                    adapter_type=atype,
+                )
+                for atype in (adapter_type, None)
+            )
+        )
         return candidates.last()
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
@@ -713,7 +714,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.exposures.values(),
             self.nodes.values(),
             self.sources.values(),
-            self.metrics.values()
+            self.metrics.values(),
         )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
@@ -723,17 +724,16 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return resource_fqns
 
     def get_used_schemas(self, resource_types=None):
-        return frozenset({
-            (node.database, node.schema) for node in
-            chain(self.nodes.values(), self.sources.values())
-            if not resource_types or node.resource_type in resource_types
-        })
+        return frozenset(
+            {
+                (node.database, node.schema)
+                for node in chain(self.nodes.values(), self.sources.values())
+                if not resource_types or node.resource_type in resource_types
+            }
+        )
 
     def get_used_databases(self):
-        return frozenset(
-            x.database for x in
-            chain(self.nodes.values(), self.sources.values())
-        )
+        return frozenset(x.database for x in chain(self.nodes.values(), self.sources.values()))
 
     def deepcopy(self):
         return Manifest(
@@ -751,21 +751,25 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
 
     def build_parent_and_child_maps(self):
-        edge_members = list(chain(
-            self.nodes.values(),
-            self.sources.values(),
-            self.exposures.values(),
-            self.metrics.values(),
-        ))
+        edge_members = list(
+            chain(
+                self.nodes.values(),
+                self.sources.values(),
+                self.exposures.values(),
+                self.metrics.values(),
+            )
+        )
         forward_edges, backward_edges = build_node_edges(edge_members)
         self.child_map = forward_edges
         self.parent_map = backward_edges
 
     def build_macro_child_map(self):
-        edge_members = list(chain(
-            self.nodes.values(),
-            self.macros.values(),
-        ))
+        edge_members = list(
+            chain(
+                self.nodes.values(),
+                self.macros.values(),
+            )
+        )
         forward_edges = build_macro_edges(edge_members)
         return forward_edges
 
@@ -802,7 +806,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         else:
             # something terrible has happened
             raise dbt.exceptions.InternalException(
-                'Expected node {} not found in manifest'.format(unique_id)
+                "Expected node {} not found in manifest".format(unique_id)
             )
 
     @property
@@ -860,9 +864,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         node: Optional[ManifestNode] = None
         disabled: Optional[List[ManifestNode]] = None
 
-        candidates = _search_packages(
-            current_project, node_package, target_model_package
-        )
+        candidates = _search_packages(current_project, node_package, target_model_package)
         for pkg in candidates:
             node = self.ref_lookup.find(target_model_name, pkg, self)
 
@@ -871,9 +873,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(
-                    target_model_name, pkg
-                )
+                disabled = self.disabled_lookup.find(target_model_name, pkg)
 
         if disabled:
             return Disabled(disabled[0])
@@ -886,9 +886,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         target_source_name: str,
         target_table_name: str,
         current_project: str,
-        node_package: str
+        node_package: str,
     ) -> MaybeParsedSource:
-        search_name = f'{target_source_name}.{target_table_name}'
+        search_name = f"{target_source_name}.{target_table_name}"
         candidates = _search_packages(current_project, node_package)
 
         source: Optional[ParsedSourceDefinition] = None
@@ -901,7 +901,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             if disabled is None:
                 disabled = self.disabled_lookup.find(
-                    f'{target_source_name}.{target_table_name}', pkg
+                    f"{target_source_name}.{target_table_name}", pkg
                 )
 
         if disabled:
@@ -920,9 +920,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         resolve_ref except the is_enabled checks are unnecessary as docs are
         always enabled.
         """
-        candidates = _search_packages(
-            current_project, node_package, package
-        )
+        candidates = _search_packages(current_project, node_package, package)
 
         for pkg in candidates:
             result = self.doc_lookup.find(name, pkg, self)
@@ -934,7 +932,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def merge_from_artifact(
         self,
         adapter,
-        other: 'WritableManifest',
+        other: "WritableManifest",
         selected: AbstractSet[UniqueID],
     ) -> None:
         """Given the selected unique IDs and a writable manifest, update this
@@ -947,12 +945,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
             if current and (
-                node.resource_type in refables and
-                not node.is_ephemeral and
-                unique_id not in selected and
-                not adapter.get_relation(
-                    current.database, current.schema, current.identifier
-                )
+                node.resource_type in refables
+                and not node.is_ephemeral
+                and unique_id not in selected
+                and not adapter.get_relation(current.database, current.schema, current.identifier)
             ):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
@@ -971,7 +967,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             # note that the line wrap eats newlines, so if you want newlines,
             # this is the result :(
             msg = line_wrap_message(
-                f'''\
+                f"""\
                 dbt found two macros named "{macro.name}" in the project
                 "{macro.package_name}".
 
@@ -982,8 +978,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     - {macro.original_file_path}
 
                     - {other_path}
-                ''',
-                subtract=2
+                """,
+                subtract=2,
             )
             raise_compiler_error(msg)
 
@@ -999,9 +995,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         my_checksum = self.files[key].checksum
         return my_checksum == source_file.checksum
 
-    def add_source(
-        self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition
-    ):
+    def add_source(self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition):
         # sources can't be overwritten!
         _check_duplicates(source, self.sources)
         self.sources[source.unique_id] = source  # type: ignore
@@ -1097,75 +1091,64 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version('manifest', 4)
+@schema_version("manifest", 4)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
-        metadata=dict(description=(
-            'The nodes defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
     )
     sources: Mapping[UniqueID, ParsedSourceDefinition] = field(
-        metadata=dict(description=(
-            'The sources defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The sources defined in the dbt project and its dependencies"))
     )
     macros: Mapping[UniqueID, ParsedMacro] = field(
-        metadata=dict(description=(
-            'The macros defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The macros defined in the dbt project and its dependencies"))
     )
     docs: Mapping[UniqueID, ParsedDocumentation] = field(
-        metadata=dict(description=(
-            'The docs defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The docs defined in the dbt project and its dependencies"))
     )
     exposures: Mapping[UniqueID, ParsedExposure] = field(
-        metadata=dict(description=(
-            'The exposures defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(
+            description=("The exposures defined in the dbt project and its dependencies")
+        )
     )
     metrics: Mapping[UniqueID, ParsedMetric] = field(
-        metadata=dict(description=(
-            'The metrics defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
     )
     selectors: Mapping[UniqueID, Any] = field(
-        metadata=dict(description=(
-            'The selectors defined in selectors.yml'
-        ))
+        metadata=dict(description=("The selectors defined in selectors.yml"))
     )
-    disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(metadata=dict(
-        description='A mapping of the disabled nodes in the target'
-    ))
-    parent_map: Optional[NodeEdgeMap] = field(metadata=dict(
-        description='A mapping from child nodes to their dependencies',
-    ))
-    child_map: Optional[NodeEdgeMap] = field(metadata=dict(
-        description='A mapping from parent nodes to their dependents',
-    ))
-    metadata: ManifestMetadata = field(metadata=dict(
-        description='Metadata about the manifest',
-    ))
+    disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(
+        metadata=dict(description="A mapping of the disabled nodes in the target")
+    )
+    parent_map: Optional[NodeEdgeMap] = field(
+        metadata=dict(
+            description="A mapping from child nodes to their dependencies",
+        )
+    )
+    child_map: Optional[NodeEdgeMap] = field(
+        metadata=dict(
+            description="A mapping from parent nodes to their dependents",
+        )
+    )
+    metadata: ManifestMetadata = field(
+        metadata=dict(
+            description="Metadata about the manifest",
+        )
+    )
 
 
-def _check_duplicates(
-    value: HasUniqueID, src: Mapping[str, HasUniqueID]
-):
+def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])
 
 
-K_T = TypeVar('K_T')
-V_T = TypeVar('V_T')
+K_T = TypeVar("K_T")
+V_T = TypeVar("V_T")
 
 
-def _expect_value(
-    key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str
-) -> V_T:
+def _expect_value(key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str) -> V_T:
     if key not in src:
         raise CompilationException(
             'Expected to find "{}" in cached "result.{}" based '
-            'on cached file information: {}!'
-            .format(key, name, old_file)
+            "on cached file information: {}!".format(key, name, old_file)
         )
     return src[key]

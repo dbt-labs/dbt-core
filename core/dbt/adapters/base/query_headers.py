@@ -15,7 +15,7 @@ class NodeWrapper:
         self._inner_node = node
 
     def __getattr__(self, name):
-        return getattr(self._inner_node, name, '')
+        return getattr(self._inner_node, name, "")
 
 
 class _QueryComment(local):
@@ -24,6 +24,7 @@ class _QueryComment(local):
         - the current thread's query comment.
         - a source_name indicating what set the current thread's query comment
     """
+
     def __init__(self, initial):
         self.query_comment: Optional[str] = initial
         self.append = False
@@ -35,21 +36,19 @@ class _QueryComment(local):
         if self.append:
             # replace last ';' with '<comment>;'
             sql = sql.rstrip()
-            if sql[-1] == ';':
+            if sql[-1] == ";":
                 sql = sql[:-1]
-                return '{}\n/* {} */;'.format(sql, self.query_comment.strip())
+                return "{}\n/* {} */;".format(sql, self.query_comment.strip())
 
-            return '{}\n/* {} */'.format(sql, self.query_comment.strip())
+            return "{}\n/* {} */".format(sql, self.query_comment.strip())
 
-        return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
+        return "/* {} */\n{}".format(self.query_comment.strip(), sql)
 
     def set(self, comment: Optional[str], append: bool):
-        if isinstance(comment, str) and '*/' in comment:
+        if isinstance(comment, str) and "*/" in comment:
             # tell the user "no" so they don't hurt themselves by writing
             # garbage
-            raise RuntimeException(
-                f'query comment contains illegal value "*/": {comment}'
-            )
+            raise RuntimeException(f'query comment contains illegal value "*/": {comment}')
         self.query_comment = comment
         self.append = append
 
@@ -63,15 +62,17 @@ class MacroQueryStringSetter:
         self.config = config
 
         comment_macro = self._get_comment_macro()
-        self.generator: QueryStringFunc = lambda name, model: ''
+        self.generator: QueryStringFunc = lambda name, model: ""
         # if the comment value was None or the empty string, just skip it
         if comment_macro:
             assert isinstance(comment_macro, str)
-            macro = '\n'.join((
-                '{%- macro query_comment_macro(connection_name, node) -%}',
-                comment_macro,
-                '{% endmacro %}'
-            ))
+            macro = "\n".join(
+                (
+                    "{%- macro query_comment_macro(connection_name, node) -%}",
+                    comment_macro,
+                    "{% endmacro %}",
+                )
+            )
             ctx = self._get_context()
             self.generator = QueryStringGenerator(macro, ctx)
         self.comment = _QueryComment(None)
@@ -87,7 +88,7 @@ class MacroQueryStringSetter:
         return self.comment.add(sql)
 
     def reset(self):
-        self.set('master', None)
+        self.set("master", None)
 
     def set(self, name: str, node: Optional[CompileResultNode]):
         wrapped: Optional[NodeWrapper] = None

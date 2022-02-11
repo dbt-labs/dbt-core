@@ -10,14 +10,20 @@ from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
-    FreshnessResult, PartialSourceFreshnessResult,
-    SourceFreshnessResult, FreshnessStatus
+    FreshnessResult,
+    PartialSourceFreshnessResult,
+    SourceFreshnessResult,
+    FreshnessStatus,
 )
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    FreshnessCheckComplete, PrintStartLine, PrintHookEndErrorLine,
-    PrintHookEndErrorStaleLine, PrintHookEndWarnLine, PrintHookEndPassLine
+    FreshnessCheckComplete,
+    PrintStartLine,
+    PrintHookEndErrorLine,
+    PrintHookEndErrorStaleLine,
+    PrintHookEndWarnLine,
+    PrintHookEndPassLine,
 )
 from dbt.node_types import NodeType
 
@@ -25,28 +31,26 @@ from dbt.graph import ResourceTypeSelector
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 
 
-RESULT_FILE_NAME = 'sources.json'
+RESULT_FILE_NAME = "sources.json"
 
 
 class FreshnessRunner(BaseRunner):
     def on_skip(self):
-        raise RuntimeException(
-            'Freshness: nodes cannot be skipped!'
-        )
+        raise RuntimeException("Freshness: nodes cannot be skipped!")
 
     def before_execute(self):
-        description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
+        description = "freshness of {0.source_name}.{0.name}".format(self.node)
         fire_event(
             PrintStartLine(
                 description=description,
                 index=self.node_index,
                 total=self.num_nodes,
-                node_info=self.node.node_info
+                node_info=self.node.node_info,
             )
         )
 
     def after_execute(self, result):
-        if hasattr(result, 'node'):
+        if hasattr(result, "node"):
             source_name = result.node.source_name
             table_name = result.node.name
         else:
@@ -60,7 +64,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=self.node.node_info
+                    node_info=self.node.node_info,
                 )
             )
         elif result.status == FreshnessStatus.Error:
@@ -71,7 +75,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=self.node.node_info
+                    node_info=self.node.node_info,
                 )
             )
         elif result.status == FreshnessStatus.Warn:
@@ -82,7 +86,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=self.node.node_info
+                    node_info=self.node.node_info,
                 )
             )
         else:
@@ -93,7 +97,7 @@ class FreshnessRunner(BaseRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=self.node.node_info
+                    node_info=self.node.node_info,
                 )
             )
 
@@ -106,14 +110,7 @@ class FreshnessRunner(BaseRunner):
             message=message,
         )
 
-    def _build_run_result(
-        self,
-        node,
-        start_time,
-        status,
-        timing_info,
-        message
-    ):
+    def _build_run_result(self, node, start_time, status, timing_info, message):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         return PartialSourceFreshnessResult(
@@ -128,7 +125,7 @@ class FreshnessRunner(BaseRunner):
         )
 
     def from_run_result(self, result, start_time, timing_info):
-        result.execution_time = (time.time() - start_time)
+        result.execution_time = time.time() - start_time
         result.timing.extend(timing_info)
         return result
 
@@ -138,8 +135,7 @@ class FreshnessRunner(BaseRunner):
         # broken, raise!
         if compiled_node.loaded_at_field is None:
             raise InternalException(
-                'Got to execute for source freshness of a source that has no '
-                'loaded_at_field!'
+                "Got to execute for source freshness of a source that has no " "loaded_at_field!"
             )
 
         relation = self.adapter.Relation.create_from_source(compiled_node)
@@ -150,10 +146,10 @@ class FreshnessRunner(BaseRunner):
                 relation,
                 compiled_node.loaded_at_field,
                 compiled_node.freshness.filter,
-                manifest=manifest
+                manifest=manifest,
             )
 
-        status = compiled_node.freshness.status(freshness['age'])
+        status = compiled_node.freshness.status(freshness["age"])
 
         return SourceFreshnessResult(
             node=compiled_node,
@@ -164,13 +160,13 @@ class FreshnessRunner(BaseRunner):
             message=None,
             adapter_response={},
             failures=None,
-            **freshness
+            **freshness,
         )
 
     def compile(self, manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
-            raise RuntimeException('fresnhess runner: got a non-Source')
+            raise RuntimeException("fresnhess runner: got a non-Source")
         # we don't do anything interesting when we compile a source node
         return self.node
 
@@ -196,14 +192,12 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get perform node selection'
-            )
+            raise InternalException("manifest and graph must be set to get perform node selection")
         return FreshnessSelector(
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
-            resource_types=[NodeType.Source]
+            resource_types=[NodeType.Source],
         )
 
     def get_runner_type(self, _):
@@ -215,17 +209,12 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_result(self, results, elapsed_time, generated_at):
         return FreshnessResult.from_node_results(
-            elapsed_time=elapsed_time,
-            generated_at=generated_at,
-            results=results
+            elapsed_time=elapsed_time, generated_at=generated_at, results=results
         )
 
     def task_end_messages(self, results):
         for result in results:
-            if result.status in (
-                FreshnessStatus.Error,
-                FreshnessStatus.RuntimeErr
-            ):
+            if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
                 print_run_result_error(result)
 
         fire_event(FreshnessCheckComplete())
