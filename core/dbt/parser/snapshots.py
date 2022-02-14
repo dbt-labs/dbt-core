@@ -63,8 +63,14 @@ class SnapshotParser(
 
     def transform(self, node: IntermediateSnapshotNode) -> ParsedSnapshotNode:
         try:
+            # The config_call_dict is not serialized, because normally
+            # it is not needed after parsing. But since the snapshot node
+            # does this extra to_dict, save and restore it, to keep
+            # the model config when there is also schema config.
+            config_call_dict = node.config_call_dict
             dct = node.to_dict(omit_none=True)
             parsed_node = ParsedSnapshotNode.from_dict(dct)
+            parsed_node.config_call_dict = config_call_dict
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
         except ValidationError as exc:
