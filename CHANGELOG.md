@@ -9,6 +9,7 @@
 ### Fixes
 - User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+- Allow override of string and numeric types for adapters. ([#4603](https://github.com/dbt-labs/dbt-core/issues/4603))
 - A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
 
 ### Under the hood
@@ -22,6 +23,7 @@ Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - [@emartens](https://github.com/ehmartens) ([#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
+- [@mdesmet](https://github.com/mdesmet) ([#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
 
 ## dbt-core 1.0.2 (TBD)
 
