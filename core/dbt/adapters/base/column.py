@@ -41,8 +41,7 @@ class Column:
         if self.is_string():
             return self.string_type(self.string_size())
         elif self.is_numeric():
-            return self.numeric_type(self.dtype, self.numeric_precision,
-                                     self.numeric_scale)
+            return self.numeric_type(self.dtype, self.numeric_precision, self.numeric_scale)
         else:
             return self.dtype
 
