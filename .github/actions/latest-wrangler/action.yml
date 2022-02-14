@@ -7,7 +7,7 @@ inputs:
   new_version:
     description: "Semver of the container being built (I.E. 1.0.4)"
     required: true
-  gh_token: 
+  gh_token:
     description: "Auth token for github (must have view packages scope)"
     required: true
 outputs:

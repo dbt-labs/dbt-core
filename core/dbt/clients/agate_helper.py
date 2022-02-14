@@ -10,7 +10,7 @@ from typing import Iterable, List, Dict, Union, Optional, Any
 from dbt.exceptions import RuntimeException
 
 
-BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
+BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
 
 
 class Number(agate.data_types.Number):
@@ -18,9 +18,7 @@ class Number(agate.data_types.Number):
     # i.e. do not cast True and False to numeric 1 and 0
     def cast(self, d):
         if type(d) == bool:
-            raise agate.exceptions.CastError(
-                'Do not cast True to 1 or False to 0.'
-            )
+            raise agate.exceptions.CastError("Do not cast True to 1 or False to 0.")
         else:
             return super().cast(d)
 
@@ -42,32 +40,24 @@ class ISODateTime(agate.data_types.DateTime):
         except:  # noqa
             pass
 
-        raise agate.exceptions.CastError(
-            'Can not parse value "%s" as datetime.' % d
-        )
+        raise agate.exceptions.CastError('Can not parse value "%s" as datetime.' % d)
 
 
 def build_type_tester(
-    text_columns: Iterable[str],
-    string_null_values: Optional[Iterable[str]] = ('null', '')
+    text_columns: Iterable[str], string_null_values: Optional[Iterable[str]] = ("null", "")
 ) -> agate.TypeTester:
 
     types = [
-        Number(null_values=('null', '')),
-        agate.data_types.Date(null_values=('null', ''),
-                              date_format='%Y-%m-%d'),
-        agate.data_types.DateTime(null_values=('null', ''),
-                                  datetime_format='%Y-%m-%d %H:%M:%S'),
-        ISODateTime(null_values=('null', '')),
-        agate.data_types.Boolean(true_values=('true',),
-                                 false_values=('false',),
-                                 null_values=('null', '')),
-        agate.data_types.Text(null_values=string_null_values)
+        Number(null_values=("null", "")),
+        agate.data_types.Date(null_values=("null", ""), date_format="%Y-%m-%d"),
+        agate.data_types.DateTime(null_values=("null", ""), datetime_format="%Y-%m-%d %H:%M:%S"),
+        ISODateTime(null_values=("null", "")),
+        agate.data_types.Boolean(
+            true_values=("true",), false_values=("false",), null_values=("null", "")
+        ),
+        agate.data_types.Text(null_values=string_null_values),
     ]
-    force = {
-        k: agate.data_types.Text(null_values=string_null_values)
-        for k in text_columns
-    }
+    force = {k: agate.data_types.Text(null_values=string_null_values) for k in text_columns}
     return agate.TypeTester(force=force, types=types)
 
 
@@ -84,10 +74,7 @@ def table_from_rows(
     else:
         # If text_only_columns are present, prevent coercing empty string or
         # literal 'null' strings to a None representation.
-        column_types = build_type_tester(
-            text_only_columns,
-            string_null_values=()
-        )
+        column_types = build_type_tester(text_only_columns, string_null_values=())
 
     return agate.Table(rows, column_names, column_types=column_types)
 
@@ -132,9 +119,7 @@ def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
         rows.append(row)
 
     return table_from_rows(
-        rows=rows,
-        column_names=column_names,
-        text_only_columns=text_only_columns
+        rows=rows, column_names=column_names, text_only_columns=text_only_columns
     )
 
 
@@ -152,7 +137,7 @@ def as_matrix(table):
 
 def from_csv(abspath, text_columns):
     type_tester = build_type_tester(text_columns=text_columns)
-    with open(abspath, encoding='utf-8') as fp:
+    with open(abspath, encoding="utf-8") as fp:
         if fp.read(1) != BOM:
             fp.seek(0)
         return agate.Table.from_csv(fp, column_types=type_tester)
@@ -184,8 +169,8 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         elif not isinstance(value, type(existing_type)):
             # actual type mismatch!
             raise RuntimeException(
-                f'Tables contain columns with the same names ({key}), '
-                f'but different types ({value} vs {existing_type})'
+                f"Tables contain columns with the same names ({key}), "
+                f"but different types ({value} vs {existing_type})"
             )
 
     def finalize(self) -> Dict[str, agate.data_types.DataType]:
@@ -199,9 +184,7 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         return result
 
 
-def _merged_column_types(
-    tables: List[agate.Table]
-) -> Dict[str, agate.data_types.DataType]:
+def _merged_column_types(tables: List[agate.Table]) -> Dict[str, agate.data_types.DataType]:
     # this is a lot like agate.Table.merge, but with handling for all-null
     # rows being "any type".
     new_columns: ColumnTypeBuilder = ColumnTypeBuilder()
@@ -227,10 +210,7 @@ def merge_tables(tables: List[agate.Table]) -> agate.Table:
 
     rows: List[agate.Row] = []
     for table in tables:
-        if (
-            table.column_names == column_names and
-            table.column_types == column_types
-        ):
+        if table.column_names == column_names and table.column_types == column_types:
             rows.extend(table.rows)
         else:
             for row in table.rows:

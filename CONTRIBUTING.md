@@ -47,6 +47,7 @@ Here's a good workflow:
 - Outline your planned implementation. If you want help getting started, ask!
 - Follow the steps outlined below to develop locally. Once you have opened a PR, one of the `dbt-core` maintainers will work with you to review your code.
 - Add a test! Tests are crucial for both fixes and new features alike. We want to make sure that code works as intended, and that it avoids any bugs  previously encountered. Currently, the best resource for understanding `dbt-core`'s [unit](test/unit) and [integration](test/integration) tests is the tests themselves. One of the maintainers can help by pointing out relevant examples.
+- Check your formatting and linting with [Flake8](https://flake8.pycqa.org/en/latest/#), [Black](https://github.com/psf/black), and the rest of the hooks we have in our [pre-commit](https://pre-commit.com/) [config](https://github.com/dbt-labs/dbt-core/blob/75201be9db1cb2c6c01fa7e71a314f5e5beb060a/.pre-commit-config.yaml).
 
 In some cases, the right resolution to an open issue might be tangential to the `dbt-core` codebase. The right path forward might be a documentation update or a change that can be made in user-space. In other cases, the issue might describe functionality that the `dbt-core` maintainers are unwilling or unable to incorporate into the `dbt-core` codebase. When it is determined that an open issue describes functionality that will not translate to a code change in the `dbt-core` repository, the issue will be tagged with the `wontfix` label (see below) and closed.
 
@@ -106,6 +107,7 @@ A short list of tools used in `dbt-core` testing that will be helpful to your un
 - [`pytest`](https://docs.pytest.org/en/latest/) to discover/run tests
 - [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) - but don't worry too much, nobody _really_ understands how make works and our Makefile is super simple
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
+- [`black`](https://github.com/psf/black) for code formatting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
 - [Github Actions](https://github.com/features/actions)
 
@@ -190,19 +192,18 @@ make test
 # Runs postgres integration tests with py38 in "fail fast" mode.
 make integration
 ```
-> These make targets assume you have a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) installed locally,
+> These make targets assume you have a local install of a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and pre-commit for code quality checks,
 > unless you use choose a Docker container to run tests. Run `make help` for more info.
 
 Check out the other targets in the Makefile to see other commonly used test
 suites.
 
+#### `pre-commit`
+[`pre-commit`](https.pre-commit.com) takes care of running all code-checks for formatting and linting. Run `make dev` to install `pre-commit` in your local environment.  Once this is done you can use any of the linter-based make targets as well as a git pre-commit hook that will ensure proper formatting and linting.
+
 #### `tox`
 
-[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run
-tests. You can also run tests in parallel, for example, you can run unit tests
-for Python 3.7, Python 3.8, Python 3.9, `flake8` checks, and `mypy` checks in
-parallel with `tox -p`. Also, you can run unit tests for specific python versions
-with `tox -e py37`. The configuration for these tests in located in `tox.ini`.
+[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.7, Python 3.8, and Python 3.9 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py37`. The configuration for these tests in located in `tox.ini`.
 
 #### `pytest`
 

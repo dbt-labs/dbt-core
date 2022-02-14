@@ -17,9 +17,9 @@
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation. This has to happen before
   -- BEGIN, in a separate transaction
-  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier, 
+  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier,
                                                                   schema=schema,
-                                                                  database=database) %}                                               
+                                                                  database=database) %}
   {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier,
                                                             schema=schema,
                                                             database=database) %}
@@ -59,16 +59,16 @@
       {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
     {% endif %}
     {% set build_sql = get_delete_insert_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) %}
-  
+
   {% endif %}
 
   {% call statement("main") %}
       {{ build_sql }}
   {% endcall %}
 
-  {% if need_swap %} 
-      {% do adapter.rename_relation(target_relation, backup_relation) %} 
-      {% do adapter.rename_relation(intermediate_relation, target_relation) %} 
+  {% if need_swap %}
+      {% do adapter.rename_relation(target_relation, backup_relation) %}
+      {% do adapter.rename_relation(intermediate_relation, target_relation) %}
   {% endif %}
 
   {% do persist_docs(target_relation, model) %}

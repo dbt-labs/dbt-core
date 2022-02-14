@@ -13,7 +13,7 @@ name: Jira Issue Creation
 on:
   issues:
     types: [opened, labeled]
-    
+
 permissions:
   issues: write
 

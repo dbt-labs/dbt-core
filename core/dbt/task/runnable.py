@@ -27,8 +27,13 @@ from dbt.logger import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    EmptyLine, PrintCancelLine, DefaultSelector, NodeStart, NodeFinished,
-    QueryCancelationUnsupported, ConcurrencyLine
+    EmptyLine,
+    PrintCancelLine,
+    DefaultSelector,
+    NodeStart,
+    NodeFinished,
+    QueryCancelationUnsupported,
+    ConcurrencyLine,
 )
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
@@ -43,13 +48,7 @@ from dbt.exceptions import (
     warn_or_error,
 )
 
-from dbt.graph import (
-    GraphQueue,
-    NodeSelector,
-    SelectionSpec,
-    parse_difference,
-    Graph
-)
+from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph
 from dbt.parser.manifest import ManifestLoader
 
 import dbt.exceptions
@@ -57,9 +56,9 @@ from dbt import flags
 import dbt.utils
 from dbt.ui import warning_tag
 
-RESULT_FILE_NAME = 'run_results.json'
-MANIFEST_FILE_NAME = 'manifest.json'
-RUNNING_STATE = DbtProcessState('running')
+RESULT_FILE_NAME = "run_results.json"
+MANIFEST_FILE_NAME = "manifest.json"
+RUNNING_STATE = DbtProcessState("running")
 
 
 class ManifestTask(ConfiguredTask):
@@ -72,8 +71,8 @@ class ManifestTask(ConfiguredTask):
         if flags.WRITE_JSON:
             path = os.path.join(self.config.target_path, MANIFEST_FILE_NAME)
             self.manifest.write(path)
-        if os.getenv('DBT_WRITE_FILES'):
-            path = os.path.join(self.config.target_path, 'files.json')
+        if os.getenv("DBT_WRITE_FILES"):
+            path = os.path.join(self.config.target_path, "files.json")
             write_file(path, json.dumps(self.manifest.files, cls=dbt.utils.JSONEncoder, indent=4))
 
     def load_manifest(self):
@@ -82,9 +81,7 @@ class ManifestTask(ConfiguredTask):
 
     def compile_manifest(self):
         if self.manifest is None:
-            raise InternalException(
-                'compile_manifest called before manifest was loaded'
-            )
+            raise InternalException("compile_manifest called before manifest was loaded")
         adapter = get_adapter(self.config)
         compiler = adapter.get_compiler()
         self.graph = compiler.compile(self.manifest)
@@ -142,9 +139,7 @@ class GraphRunnableTask(ManifestTask):
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
-        raise NotImplementedException(
-            f'get_node_selector not implemented for task {type(self)}'
-        )
+        raise NotImplementedException(f"get_node_selector not implemented for task {type(self)}")
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
@@ -154,9 +149,7 @@ class GraphRunnableTask(ManifestTask):
     def _runtime_initialize(self):
         super()._runtime_initialize()
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                '_runtime_initialize never loaded the manifest and graph!'
-            )
+            raise InternalException("_runtime_initialize never loaded the manifest and graph!")
 
         self.job_queue = self.get_graph_queue()
 
@@ -169,20 +162,16 @@ class GraphRunnableTask(ManifestTask):
                 self._flattened_nodes.append(self.manifest.sources[uid])
             else:
                 raise InternalException(
-                    f'Node selection returned {uid}, expected a node or a '
-                    f'source'
+                    f"Node selection returned {uid}, expected a node or a " f"source"
                 )
 
-        self.num_nodes = len([
-            n for n in self._flattened_nodes
-            if not n.is_ephemeral_model
-        ])
+        self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
 
     def raise_on_first_error(self):
         return False
 
     def get_runner_type(self, node):
-        raise NotImplementedException('Not Implemented')
+        raise NotImplementedException("Not Implemented")
 
     def result_path(self):
         return os.path.join(self.config.target_path, RESULT_FILE_NAME)
@@ -206,10 +195,10 @@ class GraphRunnableTask(ManifestTask):
     def call_runner(self, runner):
         uid_context = UniqueID(runner.node.unique_id)
         with RUNNING_STATE, uid_context:
-            startctx = TimestampNamed('node_started_at')
+            startctx = TimestampNamed("node_started_at")
             index = self.index_offset(runner.node_index)
-            runner.node._event_status['started_at'] = datetime.utcnow().isoformat()
-            runner.node._event_status['node_status'] = RunningStatus.Started
+            runner.node._event_status["started_at"] = datetime.utcnow().isoformat()
+            runner.node._event_status["node_status"] = RunningStatus.Started
             extended_metadata = ModelMetadata(runner.node, index)
 
             with startctx, extended_metadata:
@@ -223,10 +212,10 @@ class GraphRunnableTask(ManifestTask):
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
-                runner.node._event_status['node_status'] = result.status
-                runner.node._event_status['finished_at'] = datetime.utcnow().isoformat()
+                runner.node._event_status["node_status"] = result.status
+                runner.node._event_status["finished_at"] = datetime.utcnow().isoformat()
             finally:
-                finishctx = TimestampNamed('finished_at')
+                finishctx = TimestampNamed("finished_at")
                 with finishctx, DbtModelState(status):
                     fire_event(
                         NodeFinished(
@@ -245,9 +234,9 @@ class GraphRunnableTask(ManifestTask):
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastException(
-                message='Failing early due to test failure or runtime error',
+                message="Failing early due to test failure or runtime error",
                 result=result,
-                node=getattr(result, 'node', None)
+                node=getattr(result, "node", None),
             )
         elif result.status == NodeStatus.Error and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
@@ -276,12 +265,9 @@ class GraphRunnableTask(ManifestTask):
             raise self._raise_next_tick
 
     def run_queue(self, pool):
-        """Given a pool, submit jobs from the queue to the pool.
-        """
+        """Given a pool, submit jobs from the queue to the pool."""
         if self.job_queue is None:
-            raise InternalException(
-                'Got to run_queue with no job queue set'
-            )
+            raise InternalException("Got to run_queue with no job queue set")
 
         def callback(result):
             """Note: mark_done, at a minimum, must happen here or dbt will
@@ -290,9 +276,7 @@ class GraphRunnableTask(ManifestTask):
             self._handle_result(result)
 
             if self.job_queue is None:
-                raise InternalException(
-                    'Got to run_queue callback with no job queue set'
-                )
+                raise InternalException("Got to run_queue callback with no job queue set")
             self.job_queue.mark_done(result.node.unique_id)
 
         while not self.job_queue.empty():
@@ -334,7 +318,7 @@ class GraphRunnableTask(ManifestTask):
         node = result.node
 
         if self.manifest is None:
-            raise InternalException('manifest was None in _handle_result')
+            raise InternalException("manifest was None in _handle_result")
 
         if isinstance(node, ParsedSourceDefinition):
             self.manifest.update_source(node)
@@ -360,7 +344,7 @@ class GraphRunnableTask(ManifestTask):
         if not adapter.is_cancelable():
             fire_event(QueryCancelationUnsupported(type=adapter.type()))
         else:
-            with adapter.connection_named('master'):
+            with adapter.connection_named("master"):
                 for conn_name in adapter.cancel_open_connections():
                     if self.manifest is not None:
                         node = self.manifest.nodes.get(conn_name)
@@ -402,7 +386,7 @@ class GraphRunnableTask(ManifestTask):
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
-            raise InternalException('graph is None in _mark_dependent_errors')
+            raise InternalException("graph is None in _mark_dependent_errors")
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
@@ -413,7 +397,7 @@ class GraphRunnableTask(ManifestTask):
         pass
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        with adapter.connection_named('master'):
+        with adapter.connection_named("master"):
             self.populate_adapter_cache(adapter)
 
     def after_run(self, adapter, results):
@@ -436,11 +420,7 @@ class GraphRunnableTask(ManifestTask):
         finally:
             adapter.cleanup_connections()
 
-        result = self.get_result(
-            results=res,
-            elapsed_time=elapsed,
-            generated_at=datetime.utcnow()
-        )
+        result = self.get_result(results=res, elapsed_time=elapsed, generated_at=datetime.utcnow())
         return result
 
     def write_result(self, result):
@@ -453,16 +433,13 @@ class GraphRunnableTask(ManifestTask):
         self._runtime_initialize()
 
         if self._flattened_nodes is None:
-            raise InternalException(
-                'after _runtime_initialize, _flattened_nodes was still None'
-            )
+            raise InternalException("after _runtime_initialize, _flattened_nodes was still None")
 
         if len(self._flattened_nodes) == 0:
             with TextOnly():
                 fire_event(EmptyLine())
-            msg = "Nothing to do. Try checking your model " \
-                  "configs and model specification args"
-            warn_or_error(msg, log_fmt=warning_tag('{}'))
+            msg = "Nothing to do. Try checking your model " "configs and model specification args"
+            warn_or_error(msg, log_fmt=warning_tag("{}"))
             result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),
@@ -486,20 +463,21 @@ class GraphRunnableTask(ManifestTask):
             return False
 
         failures = [
-            r for r in results if r.status in (
+            r
+            for r in results
+            if r.status
+            in (
                 NodeStatus.RuntimeErr,
                 NodeStatus.Error,
                 NodeStatus.Fail,
-                NodeStatus.Skipped  # propogate error message causing skip
+                NodeStatus.Skipped,  # propogate error message causing skip
             )
         ]
         return len(failures) == 0
 
-    def get_model_schemas(
-        self, adapter, selected_uids: Iterable[str]
-    ) -> Set[BaseRelation]:
+    def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
-            raise InternalException('manifest was None in get_model_schemas')
+            raise InternalException("manifest was None in get_model_schemas")
         result: Set[BaseRelation] = set()
 
         for node in self.manifest.nodes.values():
@@ -516,17 +494,13 @@ class GraphRunnableTask(ManifestTask):
         # we want the string form of the information schema database
         required_databases: Set[BaseRelation] = set()
         for required in required_schemas:
-            db_only = required.include(
-                database=True, schema=False, identifier=False
-            )
+            db_only = required.include(database=True, schema=False, identifier=False)
             required_databases.add(db_only)
 
         existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]]
         existing_schemas_lowered = set()
 
-        def list_schemas(
-            db_only: BaseRelation
-        ) -> List[Tuple[Optional[str], str]]:
+        def list_schemas(db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
             # the database can be None on some warehouses that don't support it
             database_quoted: Optional[str]
             db_lowercase = dbt.utils.lowercase(db_only.database)
@@ -543,9 +517,9 @@ class GraphRunnableTask(ManifestTask):
             ]
 
         def create_schema(relation: BaseRelation) -> None:
-            db = relation.database or ''
+            db = relation.database or ""
             schema = relation.schema
-            with adapter.connection_named(f'create_{db}_{schema}'):
+            with adapter.connection_named(f"create_{db}_{schema}"):
                 adapter.create_schema(relation)
 
         list_futures = []
@@ -554,9 +528,9 @@ class GraphRunnableTask(ManifestTask):
         with dbt.utils.executor(self.config) as tpe:
             for req in required_databases:
                 if req.database is None:
-                    name = 'list_schemas'
+                    name = "list_schemas"
                 else:
-                    name = f'list_{req.database}'
+                    name = f"list_{req.database}"
                 fut = tpe.submit_connected(adapter, name, list_schemas, req)
                 list_futures.append(fut)
 
@@ -576,8 +550,7 @@ class GraphRunnableTask(ManifestTask):
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
                     fut = tpe.submit_connected(
-                        adapter, f'create_{info.database or ""}_{info.schema}',
-                        create_schema, info
+                        adapter, f'create_{info.database or ""}_{info.schema}', create_schema, info
                     )
                     create_futures.append(fut)
 

@@ -1,5 +1,5 @@
 # This file contains the code owners for the dbt-core repo.
-# PRs will be automatically assigned for review to the associated 
+# PRs will be automatically assigned for review to the associated
 # team(s) or person(s) that touches any files that are mapped to them.
 #
 # A statement takes precedence over the statements above it so more general
@@ -9,7 +9,7 @@
 # Consult GitHub documentation for formatting guidelines:
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#example-of-a-codeowners-file
 
-# As a default for areas with no assignment, 
+# As a default for areas with no assignment,
 # the core team as a whole will be assigned
 *       @dbt-labs/core
 
@@ -37,7 +37,7 @@
 /core/dbt/include/global_project    @dbt-labs/core-execution @dbt-labs/core-adapters
 
 # Perf regression testing framework
-# This excludes the test project files itself since those aren't specific 
+# This excludes the test project files itself since those aren't specific
 # framework changes (excluded by not setting an owner next to it- no owner)
 /performance @nathaniel-may
 /performance/projects

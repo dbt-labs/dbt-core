@@ -37,8 +37,8 @@ valid arg names for versioning are:
 If you wish to build an image with a third-party adapter you can use the `dbt-third-party` target.  This target requires you provide a path to the adapter that can be processed by `pip` by using the `dbt_third_party` build arg:
 ```
 docker build --tag <your_image_name> \
-  --target dbt-third-party \ 
-  --build-arg dbt_third_party=<pip_parsable_install_string> \ 
+  --target dbt-third-party \
+  --build-arg dbt_third_party=<pip_parsable_install_string> \
   <path/to/dockerfile>
 ```
 
@@ -74,7 +74,7 @@ docker build --tag my-third-party-dbt \
 There are a few special cases worth noting:
 * The `dbt-spark` database adapter comes in three different versions named `PyHive`, `ODBC`, and the default `all`.  If you wish to overide this you can use the `--build-arg` flag with the value of `dbt_spark_version=<version_name>`.  See the [docs](https://docs.getdbt.com/reference/warehouse-profiles/spark-profile) for more information.
 
-* The `dbt-postgres` database adapter is released as part of the `dbt-core` codebase.  If you wish to overide the version used, make sure you use the gitref for `dbt-core`: 
+* The `dbt-postgres` database adapter is released as part of the `dbt-core` codebase.  If you wish to overide the version used, make sure you use the gitref for `dbt-core`:
 ```
 docker build --tag my_dbt \
   --target dbt-postgres \
@@ -101,6 +101,6 @@ docker run \
 my-dbt \
 ls
 ```
-> Notes: 
+> Notes:
 > * Bind-mount sources _must_ be an absolute path
 > * You may need to make adjustments to the docker networking setting depending on the specifics of your data warehouse/database host.

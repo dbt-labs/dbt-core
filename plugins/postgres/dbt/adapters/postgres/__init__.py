@@ -9,6 +9,5 @@ from dbt.adapters.base import AdapterPlugin
 from dbt.include import postgres
 
 Plugin = AdapterPlugin(
-    adapter=PostgresAdapter,
-    credentials=PostgresCredentials,
-    include_path=postgres.PACKAGE_PATH)
+    adapter=PostgresAdapter, credentials=PostgresCredentials, include_path=postgres.PACKAGE_PATH
+)

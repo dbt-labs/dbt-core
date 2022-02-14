@@ -5,8 +5,8 @@ from typing import Union, Dict, Any
 
 
 class ModelHookType(StrEnum):
-    PreHook = 'pre-hook'
-    PostHook = 'post-hook'
+    PreHook = "pre-hook"
+    PostHook = "post-hook"
 
 
 def get_hook_dict(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -18,4 +18,4 @@ def get_hook_dict(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
     try:
         return json.loads(source)
     except ValueError:
-        return {'sql': source}
+        return {"sql": source}

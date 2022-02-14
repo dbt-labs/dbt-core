@@ -1,18 +1,17 @@
-from typing import (
-    Set, Iterable, Iterator, Optional, NewType
-)
+from typing import Set, Iterable, Iterator, Optional, NewType
 from itertools import product
 import networkx as nx  # type: ignore
 
 from dbt.exceptions import InternalException
 
-UniqueId = NewType('UniqueId', str)
+UniqueId = NewType("UniqueId", str)
 
 
 class Graph:
     """A wrapper around the networkx graph that understands SelectionCriteria
     and how they interact with the graph.
     """
+
     def __init__(self, graph):
         self.graph = graph
 
@@ -25,36 +24,26 @@ class Graph:
     def __iter__(self) -> Iterator[UniqueId]:
         return iter(self.graph.nodes())
 
-    def ancestors(
-        self, node: UniqueId, max_depth: Optional[int] = None
-    ) -> Set[UniqueId]:
+    def ancestors(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes having a path to `node` in `graph`"""
         if not self.graph.has_node(node):
-            raise InternalException(f'Node {node} not found in the graph!')
+            raise InternalException(f"Node {node} not found in the graph!")
         # This used to use nx.utils.reversed(self.graph), but that is deprecated,
         # so changing to use self.graph.reverse(copy=False) as recommeneded
         G = self.graph.reverse(copy=False) if self.graph.is_directed() else self.graph
-        anc = nx.single_source_shortest_path_length(G=G,
-                                                    source=node,
-                                                    cutoff=max_depth)\
-            .keys()
+        anc = nx.single_source_shortest_path_length(G=G, source=node, cutoff=max_depth).keys()
         return anc - {node}
 
-    def descendants(
-        self, node: UniqueId, max_depth: Optional[int] = None
-    ) -> Set[UniqueId]:
+    def descendants(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
-            raise InternalException(f'Node {node} not found in the graph!')
-        des = nx.single_source_shortest_path_length(G=self.graph,
-                                                    source=node,
-                                                    cutoff=max_depth)\
-            .keys()
+            raise InternalException(f"Node {node} not found in the graph!")
+        des = nx.single_source_shortest_path_length(
+            G=self.graph, source=node, cutoff=max_depth
+        ).keys()
         return des - {node}
 
-    def select_childrens_parents(
-        self, selected: Set[UniqueId]
-    ) -> Set[UniqueId]:
+    def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
         return self.select_parents(ancestors_for) | ancestors_for
 
@@ -105,13 +94,12 @@ class Graph:
         for node in include_nodes:
             if node not in new_graph:
                 raise ValueError(
-                    "Couldn't find model '{}' -- does it exist or is "
-                    "it disabled?".format(node)
+                    "Couldn't find model '{}' -- does it exist or is " "it disabled?".format(node)
                 )
 
         return Graph(new_graph)
 
-    def subgraph(self, nodes: Iterable[UniqueId]) -> 'Graph':
+    def subgraph(self, nodes: Iterable[UniqueId]) -> "Graph":
         return Graph(self.graph.subgraph(nodes))
 
     def get_dependent_nodes(self, node: UniqueId):

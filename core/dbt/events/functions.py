@@ -4,6 +4,7 @@ import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
 from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
 import dbt.flags as flags
+
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
@@ -32,14 +33,14 @@ EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
 # create the global file logger with no configuration
 global FILE_LOG
-FILE_LOG = logging.getLogger('default_file')
+FILE_LOG = logging.getLogger("default_file")
 null_handler = logging.NullHandler()
 FILE_LOG.addHandler(null_handler)
 
 # set up logger to go to stdout with defaults
 # setup_event_logger will be called once args have been parsed
 global STDOUT_LOG
-STDOUT_LOG = logging.getLogger('default_stdout')
+STDOUT_LOG = logging.getLogger("default_stdout")
 STDOUT_LOG.setLevel(logging.INFO)
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setLevel(logging.INFO)
@@ -59,11 +60,11 @@ colorama_wrap = True
 
 colorama.init(wrap=colorama_wrap)
 
-if sys.platform == 'win32' and not os.getenv('TERM'):
+if sys.platform == "win32" and not os.getenv("TERM"):
     colorama_wrap = False
     colorama_stdout = colorama.AnsiToWin32(sys.stdout).stream
 
-elif sys.platform == 'win32':
+elif sys.platform == "win32":
     colorama_wrap = False
 
 colorama.init(wrap=colorama_wrap)
@@ -75,16 +76,16 @@ def setup_event_logger(log_path, level_override=None):
     EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
     make_log_dir_if_missing(log_path)
-    this.format_json = flags.LOG_FORMAT == 'json'
+    this.format_json = flags.LOG_FORMAT == "json"
     # USE_COLORS can be None if the app just started and the cli flags
     # havent been applied yet
     this.format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
-    log_dest = os.path.join(log_path, 'dbt.log')
+    log_dest = os.path.join(log_path, "dbt.log")
     level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
     # overwrite the STDOUT_LOG logger with the configured one
-    this.STDOUT_LOG = logging.getLogger('configured_std_out')
+    this.STDOUT_LOG = logging.getLogger("configured_std_out")
     this.STDOUT_LOG.setLevel(level)
 
     FORMAT = "%(message)s"
@@ -95,22 +96,20 @@ def setup_event_logger(log_path, level_override=None):
     stdout_handler.setLevel(level)
     # clear existing stdout TextIOWrapper stream handlers
     this.STDOUT_LOG.handlers = [
-        h for h in this.STDOUT_LOG.handlers
-        if not (hasattr(h, 'stream') and isinstance(h.stream, TextIOWrapper))  # type: ignore
+        h
+        for h in this.STDOUT_LOG.handlers
+        if not (hasattr(h, "stream") and isinstance(h.stream, TextIOWrapper))  # type: ignore
     ]
     this.STDOUT_LOG.addHandler(stdout_handler)
 
     # overwrite the FILE_LOG logger with the configured one
-    this.FILE_LOG = logging.getLogger('configured_file')
+    this.FILE_LOG = logging.getLogger("configured_file")
     this.FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
     file_handler = RotatingFileHandler(
-        filename=log_dest,
-        encoding='utf8',
-        maxBytes=10 * 1024 * 1024,  # 10 mb
-        backupCount=5
+        filename=log_dest, encoding="utf8", maxBytes=10 * 1024 * 1024, backupCount=5  # 10 mb
     )
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
@@ -130,16 +129,14 @@ def capture_stdout_logs() -> StringIO:
 # used for integration tests
 def stop_capture_stdout_logs() -> None:
     this.STDOUT_LOG.handlers = [
-        h for h in this.STDOUT_LOG.handlers
-        if not (hasattr(h, 'stream') and isinstance(h.stream, StringIO))  # type: ignore
+        h
+        for h in this.STDOUT_LOG.handlers
+        if not (hasattr(h, "stream") and isinstance(h.stream, StringIO))  # type: ignore
     ]
 
 
 def env_secrets() -> List[str]:
-    return [
-        v for k, v in os.environ.items()
-        if k.startswith(SECRET_ENV_PREFIX)
-    ]
+    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX)]
 
 
 def scrub_secrets(msg: str, secrets: List[str]) -> str:
@@ -168,20 +165,20 @@ def event_to_serializable_dict(
         )
 
     # We get the code from the event object, so we don't need it in the data
-    if 'code' in log_line:
-        del log_line['code']
+    if "code" in log_line:
+        del log_line["code"]
 
     event_dict = {
-        'type': 'log_line',
-        'log_version': LOG_VERSION,
-        'ts': get_ts_rfc3339(),
-        'pid': e.get_pid(),
-        'msg': e.message(),
-        'level': e.level_tag(),
-        'data': log_line,
-        'invocation_id': e.get_invocation_id(),
-        'thread_name': e.get_thread_name(),
-        'code': e.code
+        "type": "log_line",
+        "log_version": LOG_VERSION,
+        "ts": get_ts_rfc3339(),
+        "pid": e.get_pid(),
+        "msg": e.message(),
+        "level": e.level_tag(),
+        "data": log_line,
+        "invocation_id": e.get_invocation_id(),
+        "thread_name": e.get_thread_name(),
+        "code": e.code,
     }
 
     return event_dict
@@ -190,7 +187,7 @@ def event_to_serializable_dict(
 # translates an Event to a completely formatted text-based log line
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
 def create_info_text_log_line(e: T_Event) -> str:
-    color_tag: str = '' if this.format_color else Style.RESET_ALL
+    color_tag: str = "" if this.format_color else Style.RESET_ALL
     ts: str = get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"
@@ -198,21 +195,21 @@ def create_info_text_log_line(e: T_Event) -> str:
 
 
 def create_debug_text_log_line(e: T_Event) -> str:
-    log_line: str = ''
+    log_line: str = ""
     # Create a separator if this is the beginning of an invocation
     if type(e) == MainReportVersion:
-        separator = 30 * '='
-        log_line = f'\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n'
-    color_tag: str = '' if this.format_color else Style.RESET_ALL
+        separator = 30 * "="
+        log_line = f"\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n"
+    color_tag: str = "" if this.format_color else Style.RESET_ALL
     ts: str = get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
-    thread = ''
+    thread = ""
     if threading.current_thread().getName():
         thread_name = threading.current_thread().getName()
         thread_name = thread_name[:10]
-        thread_name = thread_name.ljust(10, ' ')
-        thread = f' [{thread_name}]:'
+        thread_name = thread_name.ljust(10, " ")
+        thread = f" [{thread_name}]:"
     log_line = log_line + f"{color_tag}{ts} [{level}]{thread} {scrubbed_msg}"
     return log_line
 
@@ -228,10 +225,7 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
 
 
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
-def create_log_line(
-    e: T_Event,
-    file_output=False
-) -> Optional[str]:
+def create_log_line(e: T_Event, file_output=False) -> Optional[str]:
     if this.format_json:
         return create_json_log_line(e)  # json output, both console and file
     elif file_output is True or flags.DEBUG:
@@ -245,16 +239,16 @@ def create_log_line(
 def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
     if not log_line:
         return
-    if level_tag == 'test':
+    if level_tag == "test":
         # TODO after implmenting #3977 send to new test level
         l.debug(log_line)
-    elif level_tag == 'debug':
+    elif level_tag == "debug":
         l.debug(log_line)
-    elif level_tag == 'info':
+    elif level_tag == "info":
         l.info(log_line)
-    elif level_tag == 'warn':
+    elif level_tag == "warn":
         l.warning(log_line)
-    elif level_tag == 'error':
+    elif level_tag == "error":
         l.error(log_line)
     else:
         raise AssertionError(
@@ -263,49 +257,19 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
 
 
 def send_exc_to_logger(
-    l: Logger,
-    level_tag: str,
-    log_line: str,
-    exc_info=True,
-    stack_info=False,
-    extra=False
+    l: Logger, level_tag: str, log_line: str, exc_info=True, stack_info=False, extra=False
 ):
-    if level_tag == 'test':
+    if level_tag == "test":
         # TODO after implmenting #3977 send to new test level
-        l.debug(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'debug':
-        l.debug(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'info':
-        l.info(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'warn':
-        l.warning(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'error':
-        l.error(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
+        l.debug(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "debug":
+        l.debug(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "info":
+        l.info(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "warn":
+        l.warning(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "error":
+        l.error(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
     else:
         raise AssertionError(
             f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
@@ -349,9 +313,9 @@ def fire_event(e: Event) -> None:
     if not isinstance(e, NoStdOut):
         # explicitly checking the debug flag here so that potentially expensive-to-construct
         # log messages are not constructed if debug messages are never shown.
-        if e.level_tag() == 'debug' and not flags.DEBUG:
+        if e.level_tag() == "debug" and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
-        if e.level_tag() != 'error' and flags.QUIET:
+        if e.level_tag() != "error" and flags.QUIET:
             return  # eat all non-exception messages in quiet mode
 
         log_line = create_log_line(e)
@@ -365,7 +329,7 @@ def fire_event(e: Event) -> None:
                     log_line=log_line,
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
-                    extra=e.extra
+                    extra=e.extra,
                 )
 
 
@@ -392,5 +356,5 @@ def get_ts() -> datetime:
 # preformatted time stamp
 def get_ts_rfc3339() -> str:
     ts = get_ts()
-    ts_rfc3339 = ts.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    ts_rfc3339 = ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return ts_rfc3339

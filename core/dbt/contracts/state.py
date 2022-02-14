@@ -11,7 +11,7 @@ class PreviousState:
         self.manifest: Optional[WritableManifest] = None
         self.results: Optional[RunResultsArtifact] = None
 
-        manifest_path = self.path / 'manifest.json'
+        manifest_path = self.path / "manifest.json"
         if manifest_path.exists() and manifest_path.is_file():
             try:
                 # we want to bail with an error if schema versions don't match
@@ -20,7 +20,7 @@ class PreviousState:
                 exc.add_filename(str(manifest_path))
                 raise
 
-        results_path = self.path / 'run_results.json'
+        results_path = self.path / "run_results.json"
         if results_path.exists() and results_path.is_file():
             try:
                 # we want to bail with an error if schema versions don't match

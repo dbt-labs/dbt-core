@@ -1,9 +1,17 @@
 from mashumaro.meta.helpers import *
 from mashumaro.serializer.base.helpers import *
 from base64 import decodebytes as decodebytes, encodebytes as encodebytes
-from mashumaro.exceptions import InvalidFieldValue as InvalidFieldValue, MissingField as MissingField, UnserializableDataError as UnserializableDataError, UnserializableField as UnserializableField
+from mashumaro.exceptions import (
+    InvalidFieldValue as InvalidFieldValue,
+    MissingField as MissingField,
+    UnserializableDataError as UnserializableDataError,
+    UnserializableField as UnserializableField,
+)
 from mashumaro.meta.patch import patch_fromisoformat as patch_fromisoformat
-from mashumaro.types import SerializableType as SerializableType, SerializationStrategy as SerializationStrategy
+from mashumaro.types import (
+    SerializableType as SerializableType,
+    SerializationStrategy as SerializationStrategy,
+)
 from typing import Any
 
 NoneType: Any
@@ -29,5 +37,9 @@ class CodeBuilder:
     def compile(self) -> None: ...
     def add_from_dict(self) -> None: ...
     def add_to_dict(self) -> None: ...
-    def add_pack_union(self, fname: Any, ftype: Any, parent: Any, variant_types: Any, value_name: Any): ...
-    def add_unpack_union(self, fname: Any, ftype: Any, parent: Any, variant_types: Any, value_name: Any): ...
+    def add_pack_union(
+        self, fname: Any, ftype: Any, parent: Any, variant_types: Any, value_name: Any
+    ): ...
+    def add_unpack_union(
+        self, fname: Any, ftype: Any, parent: Any, variant_types: Any, value_name: Any
+    ): ...

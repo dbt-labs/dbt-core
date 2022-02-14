@@ -1,5 +1,5 @@
 # **what?**
-# When a PR is merged, if it has the backport label, it will create 
+# When a PR is merged, if it has the backport label, it will create
 # a new PR to backport those changes to the given branch. If it can't
 # cleanly do a backport, it will comment on the merged PR of the failure.
 #

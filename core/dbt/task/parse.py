@@ -8,15 +8,20 @@
 # snakeviz dbt.cprof
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
-from dbt.parser.manifest import (
-    Manifest, ManifestLoader, _check_manifest
-)
+from dbt.parser.manifest import Manifest, ManifestLoader, _check_manifest
 from dbt.logger import DbtProcessState
 from dbt.clients.system import write_file
 from dbt.events.types import (
-    ManifestDependenciesLoaded, ManifestLoaderCreated, ManifestLoaded, ManifestChecked,
-    ManifestFlatGraphBuilt, ParsingStart, ParsingCompiling, ParsingWritingManifest, ParsingDone,
-    ReportPerformancePath
+    ManifestDependenciesLoaded,
+    ManifestLoaderCreated,
+    ManifestLoaded,
+    ManifestChecked,
+    ManifestFlatGraphBuilt,
+    ParsingStart,
+    ParsingCompiling,
+    ParsingWritingManifest,
+    ParsingDone,
+    ReportPerformancePath,
 )
 from dbt.events.functions import fire_event
 from dbt.graph import Graph
@@ -26,9 +31,9 @@ import os
 import json
 import dbt.utils
 
-MANIFEST_FILE_NAME = 'manifest.json'
-PERF_INFO_FILE_NAME = 'perf_info.json'
-PARSING_STATE = DbtProcessState('parsing')
+MANIFEST_FILE_NAME = "manifest.json"
+PERF_INFO_FILE_NAME = "perf_info.json"
+PARSING_STATE = DbtProcessState("parsing")
 
 
 class ParseTask(ConfiguredTask):
@@ -44,8 +49,7 @@ class ParseTask(ConfiguredTask):
 
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
-        write_file(path, json.dumps(self.loader._perf_info,
-                                    cls=dbt.utils.JSONEncoder, indent=4))
+        write_file(path, json.dumps(self.loader._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
         fire_event(ReportPerformancePath(path=path))
 
     # This method takes code that normally exists in other files
@@ -73,9 +77,7 @@ class ParseTask(ConfiguredTask):
             fire_event(ManifestChecked())
             manifest.build_flat_graph()
             fire_event(ManifestFlatGraphBuilt())
-            loader._perf_info.load_all_elapsed = (
-                time.perf_counter() - start_load_all
-            )
+            loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
 
         self.loader = loader
         self.manifest = manifest

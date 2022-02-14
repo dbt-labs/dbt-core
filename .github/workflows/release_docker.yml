@@ -5,7 +5,7 @@
 # Docker images for dbt are used in a number of important places throughout the dbt ecosystem.  This is how we keep those images up-to-date.
 
 # **when?**
-# This is triggered manually 
+# This is triggered manually
 
 # **next steps**
 # - build this into the release workflow (or conversly, break out the different release methods into their own workflow files)
@@ -55,7 +55,7 @@ jobs:
     name: Set up docker image builder
     runs-on: ubuntu-latest
     needs: [get_version_meta]
-    steps:      
+    steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 

@@ -4,10 +4,15 @@ from dbt.contracts.graph.parsed import ParsedModelNode
 import dbt.flags as flags
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    StaticParserCausedJinjaRendering, UsingExperimentalParser,
-    SampleFullJinjaRendering, StaticParserFallbackJinjaRendering,
-    StaticParsingMacroOverrideDetected, StaticParserSuccess, StaticParserFailure,
-    ExperimentalParserSuccess, ExperimentalParserFailure
+    StaticParserCausedJinjaRendering,
+    UsingExperimentalParser,
+    SampleFullJinjaRendering,
+    StaticParserFallbackJinjaRendering,
+    StaticParsingMacroOverrideDetected,
+    StaticParserSuccess,
+    StaticParserFailure,
+    ExperimentalParserSuccess,
+    ExperimentalParserFailure,
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
@@ -35,9 +40,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def render_update(
-        self, node: ParsedModelNode, config: ContextConfig
-    ) -> None:
+    def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
         if not flags.STATIC_PARSER:
@@ -90,11 +93,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 model_parser_copy = self.partial_deepcopy()
                 exp_sample_node = deepcopy(node)
                 exp_sample_config = deepcopy(config)
-                model_parser_copy.populate(
-                    exp_sample_node,
-                    exp_sample_config,
-                    experimental_sample
-                )
+                model_parser_copy.populate(exp_sample_node, exp_sample_config, experimental_sample)
         # use the experimental parser exclusively if the flag is on
         if flags.USE_EXPERIMENTAL_PARSER:
             statically_parsed = self.run_experimental_parser(node)
@@ -118,24 +117,18 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 jinja_sample_node = deepcopy(node)
                 jinja_sample_config = deepcopy(config)
                 # rendering mutates the node and the config
-                super(ModelParser, model_parser_copy) \
-                    .render_update(jinja_sample_node, jinja_sample_config)
+                super(ModelParser, model_parser_copy).render_update(
+                    jinja_sample_node, jinja_sample_config
+                )
 
             # update the unrendered config with values from the static parser.
             # values from yaml files are in there already
-            self.populate(
-                node,
-                config,
-                statically_parsed
-            )
+            self.populate(node, config, statically_parsed)
 
             # if we took a jinja sample, compare now that the base node has been populated
             if jinja_sample_node is not None and jinja_sample_config is not None:
                 result = _get_stable_sample_result(
-                    jinja_sample_node,
-                    jinja_sample_config,
-                    node,
-                    config
+                    jinja_sample_node, jinja_sample_config, node, config
                 )
 
             # if we took an experimental sample, compare now that the base node has been populated
@@ -174,11 +167,13 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # files parseable by the experimental parser to match our internal
             # testing.
             if tracking.active_user is not None:  # None in some tests
-                tracking.track_experimental_parser_sample({
-                    "project_id": self.root_project.hashed_name(),
-                    "file_id": utils.get_hash(node),
-                    "status": result
-                })
+                tracking.track_experimental_parser_sample(
+                    {
+                        "project_id": self.root_project.hashed_name(),
+                        "file_id": utils.get_hash(node),
+                        "status": result,
+                    }
+                )
 
     def run_static_parser(
         self, node: ParsedModelNode
@@ -193,9 +188,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # run the stable static parser and return the results
         try:
-            statically_parsed = py_extract_from_source(
-                node.raw_sql
-            )
+            statically_parsed = py_extract_from_source(node.raw_sql)
             fire_event(StaticParserSuccess(path=node.path))
             return _shift_sources(statically_parsed)
         # if we want information on what features are barring the static
@@ -221,9 +214,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # for now, this line calls the stable static parser since there are no
             # experimental features. Change `py_extract_from_source` to the new
             # experimental call when we add additional features.
-            experimentally_parsed = py_extract_from_source(
-                node.raw_sql
-            )
+            experimentally_parsed = py_extract_from_source(node.raw_sql)
             fire_event(ExperimentalParserSuccess(path=node.path))
             return _shift_sources(experimentally_parsed)
         # if we want information on what features are barring the experimental
@@ -234,38 +225,28 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             return "cannot_parse"
 
     # checks for banned macros
-    def _has_banned_macro(
-        self, node: ParsedModelNode
-    ) -> bool:
+    def _has_banned_macro(self, node: ParsedModelNode) -> bool:
         # first check if there is a banned macro defined in scope for this model file
         root_project_name = self.root_project.project_name
         project_name = node.package_name
-        banned_macros = ['ref', 'source', 'config']
+        banned_macros = ["ref", "source", "config"]
 
         all_banned_macro_keys: Iterator[str] = chain.from_iterable(
             map(
-                lambda name: [
-                    f"macro.{project_name}.{name}",
-                    f"macro.{root_project_name}.{name}"
-                ],
-                banned_macros
+                lambda name: [f"macro.{project_name}.{name}", f"macro.{root_project_name}.{name}"],
+                banned_macros,
             )
         )
 
         return reduce(
-            lambda z, key: z or (key in self.manifest.macros),
-            all_banned_macro_keys,
-            False
+            lambda z, key: z or (key in self.manifest.macros), all_banned_macro_keys, False
         )
 
     # this method updates the model node rendered and unrendered config as well
     # as the node object. Used to populate these values when circumventing jinja
     # rendering like the static parser.
     def populate(
-        self,
-        node: ParsedModelNode,
-        config: ContextConfig,
-        statically_parsed: Dict[str, Any]
+        self, node: ParsedModelNode, config: ContextConfig, statically_parsed: Dict[str, Any]
     ):
         # manually fit configs in
         config._config_call_dict = _get_config_call_dict(statically_parsed)
@@ -276,46 +257,38 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already
-        node.unrendered_config.update(dict(statically_parsed['configs']))
+        node.unrendered_config.update(dict(statically_parsed["configs"]))
 
         # set refs and sources on the node object
-        node.refs += statically_parsed['refs']
-        node.sources += statically_parsed['sources']
+        node.refs += statically_parsed["refs"]
+        node.sources += statically_parsed["sources"]
 
         # configs don't need to be merged into the node because they
         # are read from config._config_call_dict
 
     # the manifest is often huge so this method avoids deepcopying it
     def partial_deepcopy(self):
-        return ModelParser(
-            deepcopy(self.project),
-            self.manifest,
-            deepcopy(self.root_project)
-        )
+        return ModelParser(deepcopy(self.project), self.manifest, deepcopy(self.root_project))
 
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
-def _get_config_call_dict(
-    static_parser_result: Dict[str, Any]
-) -> Dict[str, Any]:
+def _get_config_call_dict(static_parser_result: Dict[str, Any]) -> Dict[str, Any]:
     config_call_dict: Dict[str, Any] = {}
 
-    for c in static_parser_result['configs']:
+    for c in static_parser_result["configs"]:
         ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
 
     return config_call_dict
 
 
 # TODO if we format sources in the extractor to match this type, we won't need this function.
-def _shift_sources(
-    static_parser_result: Dict[str, List[Any]]
-) -> Dict[str, List[Any]]:
+def _shift_sources(static_parser_result: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
     shifted_result = deepcopy(static_parser_result)
     source_calls = []
 
-    for s in static_parser_result['sources']:
+    for s in static_parser_result["sources"]:
         source_calls.append([s[0], s[1]])
-    shifted_result['sources'] = source_calls
+    shifted_result["sources"] = source_calls
 
     return shifted_result
 
@@ -325,7 +298,7 @@ def _get_exp_sample_result(
     sample_node: ParsedModelNode,
     sample_config: ContextConfig,
     node: ParsedModelNode,
-    config: ContextConfig
+    config: ContextConfig,
 ) -> List[str]:
     result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
 
@@ -341,7 +314,7 @@ def _get_stable_sample_result(
     sample_node: ParsedModelNode,
     sample_config: ContextConfig,
     node: ParsedModelNode,
-    config: ContextConfig
+    config: ContextConfig,
 ) -> List[str]:
     result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
 
@@ -358,7 +331,7 @@ def _get_sample_result(
     sample_node: ParsedModelNode,
     sample_config: ContextConfig,
     node: ParsedModelNode,
-    config: ContextConfig
+    config: ContextConfig,
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     # look for false positive configs

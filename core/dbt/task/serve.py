@@ -16,9 +16,9 @@ class ServeTask(ConfiguredTask):
         os.chdir(self.config.target_path)
 
         port = self.args.port
-        address = '0.0.0.0'
+        address = "0.0.0.0"
 
-        shutil.copyfile(DOCS_INDEX_FILE_PATH, 'index.html')
+        shutil.copyfile(DOCS_INDEX_FILE_PATH, "index.html")
 
         fire_event(ServingDocsPort(address=address, port=port))
         fire_event(ServingDocsAccessInfo(port=port))
@@ -28,13 +28,12 @@ class ServeTask(ConfiguredTask):
 
         # mypy doesn't think SimpleHTTPRequestHandler is ok here, but it is
         httpd = TCPServer(  # type: ignore
-            (address, port),
-            SimpleHTTPRequestHandler  # type: ignore
+            (address, port), SimpleHTTPRequestHandler  # type: ignore
         )  # type: ignore
 
         if self.args.open_browser:
             try:
-                webbrowser.open_new_tab(f'http://127.0.0.1:{port}')
+                webbrowser.open_new_tab(f"http://127.0.0.1:{port}")
             except webbrowser.Error:
                 pass
 
