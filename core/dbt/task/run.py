@@ -30,9 +30,15 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
-    DatabaseErrorRunning, EmptyLine, HooksRunning, HookFinished,
-    PrintModelErrorResultLine, PrintModelResultLine, PrintStartLine,
-    PrintHookEndLine, PrintHookStartLine
+    DatabaseErrorRunning,
+    EmptyLine,
+    HooksRunning,
+    HookFinished,
+    PrintModelErrorResultLine,
+    PrintModelResultLine,
+    PrintStartLine,
+    PrintHookEndLine,
+    PrintHookStartLine,
 )
 from dbt.logger import (
     TextOnly,
@@ -94,49 +100,47 @@ def get_hooks_by_tags(
 
 def get_hook(source, index):
     hook_dict = get_hook_dict(source)
-    hook_dict.setdefault('index', index)
+    hook_dict.setdefault("index", index)
     Hook.validate(hook_dict)
     return Hook.from_dict(hook_dict)
 
 
 def track_model_run(index, num_nodes, run_model_result):
     if tracking.active_user is None:
-        raise InternalException('cannot track model run with no active user')
+        raise InternalException("cannot track model run with no active user")
     invocation_id = get_invocation_id()
-    tracking.track_model_run({
-        "invocation_id": invocation_id,
-        "index": index,
-        "total": num_nodes,
-        "execution_time": run_model_result.execution_time,
-        "run_status": str(run_model_result.status).upper(),
-        "run_skipped": run_model_result.status == NodeStatus.Skipped,
-        "run_error": run_model_result.status == NodeStatus.Error,
-        "model_materialization": run_model_result.node.get_materialization(),
-        "model_id": utils.get_hash(run_model_result.node),
-        "hashed_contents": utils.get_hashed_contents(
-            run_model_result.node
-        ),
-        "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
-    })
+    tracking.track_model_run(
+        {
+            "invocation_id": invocation_id,
+            "index": index,
+            "total": num_nodes,
+            "execution_time": run_model_result.execution_time,
+            "run_status": str(run_model_result.status).upper(),
+            "run_skipped": run_model_result.status == NodeStatus.Skipped,
+            "run_error": run_model_result.status == NodeStatus.Error,
+            "model_materialization": run_model_result.node.get_materialization(),
+            "model_id": utils.get_hash(run_model_result.node),
+            "hashed_contents": utils.get_hashed_contents(run_model_result.node),
+            "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
+        }
+    )
 
 
 # make sure that we got an ok result back from a materialization
-def _validate_materialization_relations_dict(
-    inp: Dict[Any, Any], model
-) -> List[BaseRelation]:
+def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List[BaseRelation]:
     try:
-        relations_value = inp['relations']
+        relations_value = inp["relations"]
     except KeyError:
         msg = (
             'Invalid return value from materialization, "relations" '
-            'not found, got keys: {}'.format(list(inp))
+            "not found, got keys: {}".format(list(inp))
         )
         raise CompilationException(msg, node=model) from None
 
     if not isinstance(relations_value, list):
         msg = (
             'Invalid return value from materialization, "relations" '
-            'not a list, got: {}'.format(relations_value)
+            "not a list, got: {}".format(relations_value)
         )
         raise CompilationException(msg, node=model) from None
 
@@ -144,9 +148,8 @@ def _validate_materialization_relations_dict(
     for relation in relations_value:
         if not isinstance(relation, BaseRelation):
             msg = (
-                'Invalid return value from materialization, '
-                '"relations" contains non-Relation: {}'
-                .format(relation)
+                "Invalid return value from materialization, "
+                '"relations" contains non-Relation: {}'.format(relation)
             )
             raise CompilationException(msg, node=model)
 
@@ -157,9 +160,7 @@ def _validate_materialization_relations_dict(
 
 class ModelRunner(CompileRunner):
     def get_node_representation(self):
-        display_quote_policy = {
-            'database': False, 'schema': False, 'identifier': False
-        }
+        display_quote_policy = {"database": False, "schema": False, "identifier": False}
         relation = self.adapter.Relation.create_from(
             self.config, self.node, quote_policy=display_quote_policy
         )
@@ -169,8 +170,9 @@ class ModelRunner(CompileRunner):
         return str(relation)
 
     def describe_node(self):
-        return "{} model {}".format(self.node.get_materialization(),
-                                    self.get_node_representation())
+        return "{} model {}".format(
+            self.node.get_materialization(), self.get_node_representation()
+        )
 
     def print_start_line(self):
         fire_event(
@@ -178,7 +180,7 @@ class ModelRunner(CompileRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                node_info=self.node.node_info
+                node_info=self.node.node_info,
             )
         )
 
@@ -192,7 +194,7 @@ class ModelRunner(CompileRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=self.node.node_info
+                    node_info=self.node.node_info,
                 )
             )
         else:
@@ -203,7 +205,7 @@ class ModelRunner(CompileRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=self.node.node_info
+                    node_info=self.node.node_info,
                 )
             )
 
@@ -215,7 +217,7 @@ class ModelRunner(CompileRunner):
         self.print_result_line(result)
 
     def _build_run_model_result(self, model, context):
-        result = context['load_result']('main')
+        result = context["load_result"]("main")
         adapter_response = {}
         if isinstance(result.response, dbtClassMixin):
             adapter_response = result.response.to_dict(omit_none=True)
@@ -227,17 +229,14 @@ class ModelRunner(CompileRunner):
             execution_time=0,
             message=str(result.response),
             adapter_response=adapter_response,
-            failures=result.get('failures')
+            failures=result.get("failures"),
         )
 
-    def _materialization_relations(
-        self, result: Any, model
-    ) -> List[BaseRelation]:
+    def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
         if isinstance(result, str):
             msg = (
                 'The materialization ("{}") did not explicitly return a '
-                'list of relations to add to the cache.'
-                .format(str(model.get_materialization()))
+                "list of relations to add to the cache.".format(str(model.get_materialization()))
             )
             raise CompilationException(msg, node=model)
 
@@ -245,30 +244,26 @@ class ModelRunner(CompileRunner):
             return _validate_materialization_relations_dict(result, model)
 
         msg = (
-            'Invalid return value from materialization, expected a dict '
+            "Invalid return value from materialization, expected a dict "
             'with key "relations", got: {}'.format(str(result))
         )
         raise CompilationException(msg, node=model)
 
     def execute(self, model, manifest):
-        context = generate_runtime_model_context(
-            model, self.config, manifest
-        )
+        context = generate_runtime_model_context(model, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name,
-            model.get_materialization(),
-            self.adapter.type())
+            self.config.project_name, model.get_materialization(), self.adapter.type()
+        )
 
         if materialization_macro is None:
             missing_materialization(model, self.adapter.type())
 
-        if 'config' not in context:
+        if "config" not in context:
             raise InternalException(
-                'Invalid materialization context generated, missing config: {}'
-                .format(context)
+                "Invalid materialization context generated, missing config: {}".format(context)
             )
-        context_config = context['config']
+        context_config = context["config"]
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
         try:
@@ -300,22 +295,18 @@ class RunTask(CompileTask):
         statement = compiled.compiled_sql
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)
-        return hook_obj.sql or ''
+        return hook_obj.sql or ""
 
     def _hook_keyfunc(self, hook: ParsedHookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
         if package_name == self.config.project_name:
-            package_name = BiggestName('')
+            package_name = BiggestName("")
         return package_name, hook.index
 
-    def get_hooks_by_type(
-        self, hook_type: RunHookType
-    ) -> List[ParsedHookNode]:
+    def get_hooks_by_type(self, hook_type: RunHookType) -> List[ParsedHookNode]:
 
         if self.manifest is None:
-            raise InternalException(
-                'self.manifest was None in get_hooks_by_type'
-            )
+            raise InternalException("self.manifest was None in get_hooks_by_type")
 
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)
@@ -338,17 +329,15 @@ class RunTask(CompileTask):
             fire_event(EmptyLine())
         fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
 
-        startctx = TimestampNamed('node_started_at')
-        finishctx = TimestampNamed('node_finished_at')
+        startctx = TimestampNamed("node_started_at")
+        finishctx = TimestampNamed("node_finished_at")
 
         for idx, hook in enumerate(ordered_hooks, start=1):
-            hook._event_status['started_at'] = datetime.utcnow().isoformat()
-            hook._event_status['node_status'] = RunningStatus.Started
-            sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
-                                    extra_context)
+            hook._event_status["started_at"] = datetime.utcnow().isoformat()
+            hook._event_status["node_status"] = RunningStatus.Started
+            sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
 
-            hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
-                                          hook.index)
+            hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
             hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
             with UniqueID(hook.unique_id):
                 with hook_meta_ctx, startctx:
@@ -357,7 +346,7 @@ class RunTask(CompileTask):
                             statement=hook_text,
                             index=idx,
                             total=num_hooks,
-                            node_info=hook.node_info
+                            node_info=hook.node_info,
                         )
                     )
 
@@ -366,12 +355,12 @@ class RunTask(CompileTask):
                         response, _ = adapter.execute(sql, auto_begin=False, fetch=False)
                         status = response._message
                     else:
-                        status = 'OK'
+                        status = "OK"
 
                 self.ran_hooks.append(hook)
-                hook._event_status['finished_at'] = datetime.utcnow().isoformat()
-                with finishctx, DbtModelState({'node_status': 'passed'}):
-                    hook._event_status['node_status'] = RunStatus.Success
+                hook._event_status["finished_at"] = datetime.utcnow().isoformat()
+                with finishctx, DbtModelState({"node_status": "passed"}):
+                    hook._event_status["node_status"] = RunStatus.Success
                     fire_event(
                         PrintHookEndLine(
                             statement=hook_text,
@@ -379,7 +368,7 @@ class RunTask(CompileTask):
                             index=idx,
                             total=num_hooks,
                             execution_time=timer.elapsed,
-                            node_info=hook.node_info
+                            node_info=hook.node_info,
                         )
                     )
             # `_event_status` dict is only used for logging.  Make sure
@@ -409,8 +398,7 @@ class RunTask(CompileTask):
         execution = ""
 
         if execution_time is not None:
-            execution = " in {execution_time:0.2f}s".format(
-                execution_time=execution_time)
+            execution = " in {execution_time:0.2f}s".format(execution_time=execution_time)
 
         with TextOnly():
             fire_event(EmptyLine())
@@ -423,14 +411,11 @@ class RunTask(CompileTask):
         state = self.previous_state
         if state is None:
             raise RuntimeException(
-                'Received a --defer argument, but no value was provided '
-                'to --state'
+                "Received a --defer argument, but no value was provided " "to --state"
             )
 
         if state.manifest is None:
-            raise RuntimeException(
-                f'Could not find manifest in --state path: "{self.args.state}"'
-            )
+            raise RuntimeException(f'Could not find manifest in --state path: "{self.args.state}"')
         return state.manifest
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
@@ -439,8 +424,7 @@ class RunTask(CompileTask):
             return
         if self.manifest is None:
             raise InternalException(
-                'Expected to defer to manifest, but there is no runtime '
-                'manifest to defer from!'
+                "Expected to defer to manifest, but there is no runtime " "manifest to defer from!"
             )
         self.manifest.merge_from_artifact(
             adapter=adapter,
@@ -451,7 +435,7 @@ class RunTask(CompileTask):
         self.write_manifest()
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        with adapter.connection_named('master'):
+        with adapter.connection_named("master"):
             self.create_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter)
             self.defer_to_manifest(adapter, selected_uids)
@@ -464,22 +448,20 @@ class RunTask(CompileTask):
         # 'schemas', which did not include database information.
 
         database_schema_set: Set[Tuple[Optional[str], str]] = {
-            (r.node.database, r.node.schema) for r in results
-            if r.node.is_relational and r.status not in (
-                NodeStatus.Error,
-                NodeStatus.Fail,
-                NodeStatus.Skipped
-            )
+            (r.node.database, r.node.schema)
+            for r in results
+            if r.node.is_relational
+            and r.status not in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped)
         }
 
         self._total_executed += len(results)
 
         extras = {
-            'schemas': list({s for _, s in database_schema_set}),
-            'results': results,
-            'database_schemas': list(database_schema_set),
+            "schemas": list({s for _, s in database_schema_set}),
+            "results": results,
+            "database_schemas": list(database_schema_set),
         }
-        with adapter.connection_named('master'):
+        with adapter.connection_named("master"):
             self.safe_run_hooks(adapter, RunHookType.End, extras)
 
     def after_hooks(self, adapter, results, elapsed):
@@ -487,9 +469,7 @@ class RunTask(CompileTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get perform node selection'
-            )
+            raise InternalException("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

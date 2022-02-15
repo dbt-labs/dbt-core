@@ -5,17 +5,23 @@ from dbt.logger import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    EmptyLine, RunResultWarning, RunResultFailure, StatsLine, RunResultError,
-    RunResultErrorNoMessage, SQLCompiledPath, CheckNodeTestFailure, FirstRunResultError,
-    AfterFirstRunResultError, EndOfRunSummary
+    EmptyLine,
+    RunResultWarning,
+    RunResultFailure,
+    StatsLine,
+    RunResultError,
+    RunResultErrorNoMessage,
+    SQLCompiledPath,
+    CheckNodeTestFailure,
+    FirstRunResultError,
+    AfterFirstRunResultError,
+    EndOfRunSummary,
 )
 
 from dbt.tracking import InvocationProcessor
 from dbt.events.format import pluralize
 
-from dbt.contracts.results import (
-    NodeStatus
-)
+from dbt.contracts.results import NodeStatus
 from dbt.node_types import NodeType
 
 
@@ -26,66 +32,61 @@ def get_counts(flat_nodes) -> str:
         t = node.resource_type
 
         if node.resource_type == NodeType.Model:
-            t = '{} {}'.format(node.get_materialization(), t)
+            t = "{} {}".format(node.get_materialization(), t)
         elif node.resource_type == NodeType.Operation:
-            t = 'hook'
+            t = "hook"
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join(
-        [pluralize(v, k) for k, v in counts.items()])
+    stat_line = ", ".join([pluralize(v, k) for k, v in counts.items()])
 
     return stat_line
 
 
 def interpret_run_result(result) -> str:
     if result.status in (NodeStatus.Error, NodeStatus.Fail):
-        return 'error'
+        return "error"
     elif result.status == NodeStatus.Skipped:
-        return 'skip'
+        return "skip"
     elif result.status == NodeStatus.Warn:
-        return 'warn'
+        return "warn"
     elif result.status in (NodeStatus.Pass, NodeStatus.Success):
-        return 'pass'
+        return "pass"
     else:
         raise RuntimeError(f"unhandled result {result}")
 
 
 def print_run_status_line(results) -> None:
     stats = {
-        'error': 0,
-        'skip': 0,
-        'pass': 0,
-        'warn': 0,
-        'total': 0,
+        "error": 0,
+        "skip": 0,
+        "pass": 0,
+        "warn": 0,
+        "total": 0,
     }
 
     for r in results:
         result_type = interpret_run_result(r)
         stats[result_type] += 1
-        stats['total'] += 1
+        stats["total"] += 1
 
     with TextOnly():
         fire_event(EmptyLine())
     fire_event(StatsLine(stats=stats))
 
 
-def print_run_result_error(
-    result, newline: bool = True, is_warning: bool = False
-) -> None:
+def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
     if newline:
         with TextOnly():
             fire_event(EmptyLine())
 
-    if result.status == NodeStatus.Fail or (
-        is_warning and result.status == NodeStatus.Warn
-    ):
+    if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
         if is_warning:
             fire_event(
                 RunResultWarning(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
-                    path=result.node.original_file_path
+                    path=result.node.original_file_path,
                 )
             )
         else:
@@ -93,7 +94,7 @@ def print_run_result_error(
                 RunResultFailure(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
-                    path=result.node.original_file_path
+                    path=result.node.original_file_path,
                 )
             )
 
@@ -125,11 +126,7 @@ def print_run_result_error(
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     errors, warnings = [], []
     for r in results:
-        if r.status in (
-            NodeStatus.RuntimeErr,
-            NodeStatus.Error,
-            NodeStatus.Fail
-        ):
+        if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
             errors.append(r)
         elif r.status == NodeStatus.Skipped and r.message is not None:
             # this means we skipped a node because of an issue upstream,
@@ -145,7 +142,7 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
             EndOfRunSummary(
                 num_errors=len(errors),
                 num_warnings=len(warnings),
-                keyboard_interrupt=keyboard_interrupt
+                keyboard_interrupt=keyboard_interrupt,
             )
         )
 

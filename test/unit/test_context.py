@@ -186,6 +186,7 @@ REQUIRED_BASE_KEYS = frozenset({
     'invocation_id',
     'modules',
     'flags',
+    'print',
 })
 
 REQUIRED_TARGET_KEYS = REQUIRED_BASE_KEYS | {'target'}

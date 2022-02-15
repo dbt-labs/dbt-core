@@ -115,7 +115,7 @@ class TestFlags(TestCase):
         os.environ['DBT_DEBUG'] = 'True'
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.DEBUG, True)
-        os.environ['DBT_DEUBG'] = 'False'
+        os.environ['DBT_DEBUG'] = 'False'
         setattr(self.args, 'debug', True)
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.DEBUG, True)
@@ -217,3 +217,10 @@ class TestFlags(TestCase):
         os.environ.pop('DBT_INDIRECT_SELECTION')
         delattr(self.args, 'indirect_selection')
         self.user_config.indirect_selection = None
+
+        # quiet
+        self.user_config.quiet = True
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.QUIET, True)
+        # cleanup
+        self.user_config.quiet = None

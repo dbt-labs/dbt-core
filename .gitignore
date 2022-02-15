@@ -49,9 +49,8 @@ coverage.xml
 *,cover
 .hypothesis/
 test.env
+*.pytest_cache/
 
-# Mypy
-.mypy_cache/
 
 # Translations
 *.mo
@@ -66,10 +65,10 @@ docs/_build/
 # PyBuilder
 target/
 
-#Ipython Notebook
+# Ipython Notebook
 .ipynb_checkpoints
 
-#Emacs
+# Emacs
 *~
 
 # Sublime Text
@@ -78,6 +77,7 @@ target/
 # Vim
 *.sw*
 
+# Pyenv
 .python-version
 
 # Vim
@@ -90,6 +90,7 @@ venv/
 # AWS credentials
 .aws/
 
+# MacOS
 .DS_Store
 
 # vscode

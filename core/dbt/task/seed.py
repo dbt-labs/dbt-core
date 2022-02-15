@@ -11,8 +11,12 @@ from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SeedHeader, SeedHeaderSeparator, EmptyLine, PrintSeedErrorResultLine,
-    PrintSeedResultLine, PrintStartLine
+    SeedHeader,
+    SeedHeaderSeparator,
+    EmptyLine,
+    PrintSeedErrorResultLine,
+    PrintSeedResultLine,
+    PrintStartLine,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus
@@ -28,13 +32,13 @@ class SeedRunner(ModelRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                node_info=self.node.node_info
+                node_info=self.node.node_info,
             )
         )
 
     def _build_run_model_result(self, model, context):
         result = super()._build_run_model_result(model, context)
-        agate_result = context['load_result']('agate_table')
+        agate_result = context["load_result"]("agate_table")
         result.agate_table = agate_result.table
         return result
 
@@ -52,7 +56,7 @@ class SeedRunner(ModelRunner):
                     execution_time=result.execution_time,
                     schema=self.node.schema,
                     relation=model.alias,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         else:
@@ -64,7 +68,7 @@ class SeedRunner(ModelRunner):
                     execution_time=result.execution_time,
                     schema=self.node.schema,
                     relation=model.alias,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
 
@@ -79,9 +83,7 @@ class SeedTask(RunTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get perform node selection'
-            )
+            raise InternalException("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

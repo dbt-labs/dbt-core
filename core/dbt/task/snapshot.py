@@ -24,7 +24,7 @@ class SnapshotRunner(ModelRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         else:
@@ -36,7 +36,7 @@ class SnapshotRunner(ModelRunner):
                     index=self.node_index,
                     total=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
 
@@ -47,9 +47,7 @@ class SnapshotTask(RunTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get perform node selection'
-            )
+            raise InternalException("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

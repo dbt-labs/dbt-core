@@ -2,9 +2,7 @@ from typing import Any, Dict
 
 from dbt.contracts.connection import HasCredentials
 
-from dbt.context.base import (
-    BaseContext, contextproperty
-)
+from dbt.context.base import BaseContext, contextproperty
 
 
 class TargetContext(BaseContext):
@@ -78,8 +76,6 @@ class TargetContext(BaseContext):
         return self.config.to_target_dict()
 
 
-def generate_target_context(
-    config: HasCredentials, cli_vars: Dict[str, Any]
-) -> Dict[str, Any]:
+def generate_target_context(config: HasCredentials, cli_vars: Dict[str, Any]) -> Dict[str, Any]:
     ctx = TargetContext(config, cli_vars)
     return ctx.to_dict()

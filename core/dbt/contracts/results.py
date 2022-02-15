@@ -1,7 +1,5 @@
 from dbt.contracts.graph.manifest import CompileResultNode
-from dbt.contracts.graph.unparsed import (
-    FreshnessThreshold
-)
+from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import (
     BaseArtifactMetadata,
@@ -25,7 +23,13 @@ import agate
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
-    Union, Dict, List, Optional, Any, NamedTuple, Sequence,
+    Union,
+    Dict,
+    List,
+    Optional,
+    Any,
+    NamedTuple,
+    Sequence,
 )
 
 from dbt.clients.system import write_json
@@ -59,9 +63,9 @@ class collect_timing_info:
 
 
 class RunningStatus(StrEnum):
-    Started = 'started'
-    Compiling = 'compiling'
-    Executing = 'executing'
+    Started = "started"
+    Compiling = "compiling"
+    Executing = "executing"
 
 
 class NodeStatus(StrEnum):
@@ -108,10 +112,10 @@ class BaseResult(dbtClassMixin):
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
-        if 'message' not in data:
-            data['message'] = None
-        if 'failures' not in data:
-            data['failures'] = None
+        if "message" not in data:
+            data["message"] = None
+        if "failures" not in data:
+            data["failures"] = None
         return data
 
 
@@ -123,9 +127,7 @@ class NodeResult(BaseResult):
 @dataclass
 class RunResult(NodeResult):
     agate_table: Optional[agate.Table] = field(
-        default=None, metadata={
-            'serialize': lambda x: None, 'deserialize': lambda x: None
-        }
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
 
     @property
@@ -169,7 +171,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         execution_time=result.execution_time,
         message=result.message,
         adapter_response=result.adapter_response,
-        failures=result.failures
+        failures=result.failures,
     )
 
 
@@ -192,7 +194,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version('run-results', 4)
+@schema_version("run-results", 4)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -210,12 +212,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
-        return cls(
-            metadata=meta,
-            results=processed_results,
-            elapsed_time=elapsed_time,
-            args=args
-        )
+        return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
 
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))
@@ -228,15 +225,14 @@ class RunOperationResult(ExecutionResult):
 
 @dataclass
 class RunOperationResultMetadata(BaseArtifactMetadata):
-    dbt_schema_version: str = field(default_factory=lambda: str(
-        RunOperationResultsArtifact.dbt_schema_version
-    ))
+    dbt_schema_version: str = field(
+        default_factory=lambda: str(RunOperationResultsArtifact.dbt_schema_version)
+    )
 
 
 @dataclass
-@schema_version('run-operation-result', 1)
+@schema_version("run-operation-result", 1)
 class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
-
     @classmethod
     def from_success(
         cls,
@@ -254,6 +250,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
             elapsed_time=elapsed_time,
             success=success,
         )
+
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
@@ -273,7 +270,7 @@ class SourceFreshnessResult(NodeResult):
 
 
 class FreshnessErrorEnum(StrEnum):
-    runtime_error = 'runtime error'
+    runtime_error = "runtime error"
 
 
 @dataclass
@@ -306,14 +303,11 @@ class PartialSourceFreshnessResult(NodeResult):
         return False
 
 
-FreshnessNodeResult = Union[PartialSourceFreshnessResult,
-                            SourceFreshnessResult]
+FreshnessNodeResult = Union[PartialSourceFreshnessResult, SourceFreshnessResult]
 FreshnessNodeOutput = Union[SourceFreshnessRuntimeError, SourceFreshnessOutput]
 
 
-def process_freshness_result(
-    result: FreshnessNodeResult
-) -> FreshnessNodeOutput:
+def process_freshness_result(result: FreshnessNodeResult) -> FreshnessNodeOutput:
     unique_id = result.node.unique_id
     if result.status == FreshnessStatus.RuntimeErr:
         return SourceFreshnessRuntimeError(
@@ -325,16 +319,14 @@ def process_freshness_result(
     # we know that this must be a SourceFreshnessResult
     if not isinstance(result, SourceFreshnessResult):
         raise InternalException(
-            'Got {} instead of a SourceFreshnessResult for a '
-            'non-error result in freshness execution!'
-            .format(type(result))
+            "Got {} instead of a SourceFreshnessResult for a "
+            "non-error result in freshness execution!".format(type(result))
         )
     # if we're here, we must have a non-None freshness threshold
     criteria = result.node.freshness
     if criteria is None:
         raise InternalException(
-            'Somehow evaluated a freshness result for a source '
-            'that has no freshness criteria!'
+            "Somehow evaluated a freshness result for a source " "that has no freshness criteria!"
         )
     return SourceFreshnessOutput(
         unique_id=unique_id,
@@ -353,9 +345,7 @@ def process_freshness_result(
 @dataclass
 class FreshnessMetadata(BaseArtifactMetadata):
     dbt_schema_version: str = field(
-        default_factory=lambda: str(
-            FreshnessExecutionResultArtifact.dbt_schema_version
-        )
+        default_factory=lambda: str(FreshnessExecutionResultArtifact.dbt_schema_version)
     )
 
 
@@ -376,7 +366,7 @@ class FreshnessResult(ExecutionResult):
 
 
 @dataclass
-@schema_version('sources', 3)
+@schema_version("sources", 3)
 class FreshnessExecutionResultArtifact(
     ArtifactMixin,
     VersionedSchema,
@@ -399,8 +389,7 @@ Primitive = Union[bool, str, float, None]
 PrimitiveDict = Dict[str, Primitive]
 
 CatalogKey = NamedTuple(
-    'CatalogKey',
-    [('database', Optional[str]), ('schema', str), ('name', str)]
+    "CatalogKey", [("database", Optional[str]), ("schema", str), ("name", str)]
 )
 
 
@@ -469,13 +458,13 @@ class CatalogResults(dbtClassMixin):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if '_compile_results' in dct:
-            del dct['_compile_results']
+        if "_compile_results" in dct:
+            del dct["_compile_results"]
         return dct
 
 
 @dataclass
-@schema_version('catalog', 1)
+@schema_version("catalog", 1)
 class CatalogArtifact(CatalogResults, ArtifactMixin):
     metadata: CatalogMetadata
 
@@ -486,8 +475,8 @@ class CatalogArtifact(CatalogResults, ArtifactMixin):
         nodes: Dict[str, CatalogTable],
         sources: Dict[str, CatalogTable],
         compile_results: Optional[Any],
-        errors: Optional[List[str]]
-    ) -> 'CatalogArtifact':
+        errors: Optional[List[str]],
+    ) -> "CatalogArtifact":
         meta = CatalogMetadata(generated_at=generated_at)
         return cls(
             metadata=meta,

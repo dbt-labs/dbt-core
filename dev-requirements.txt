@@ -1,3 +1,4 @@
+black==21.12b0
 bumpversion
 flake8
 flaky
@@ -5,6 +6,7 @@ freezegun==0.3.12
 ipdb
 mypy==0.782
 pip-tools
+pre-commit
 pytest
 pytest-dotenv
 pytest-logbook

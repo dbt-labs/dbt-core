@@ -15,7 +15,7 @@
   -- the intermediate_relation should not already exist in the database; get_relation
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation
-  {%- set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier, 
+  {%- set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier,
                                                                    schema=schema,
                                                                    database=database) -%}
   /*

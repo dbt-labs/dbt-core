@@ -1,5 +1,5 @@
 ##
-#  Generic dockerfile for dbt image building.  
+#  Generic dockerfile for dbt image building.
 #  See README for operational details
 ##
 
