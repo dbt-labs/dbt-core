@@ -1,6 +1,6 @@
 # Deps README
 
-The deps module is responsible for installing dbt packages into dbt projects.  A dbt pakage is a standalone dbt project with models and macros that solve a specific problem area.  More specific information on dbt packages is available on the [docs site](https://docs.getdbt.com/docs/building-a-dbt-project/package-management).
+The deps module is responsible for installing dbt packages into dbt projects.  A dbt package is a standalone dbt project with models and macros that solve a specific problem area.  More specific information on dbt packages is available on the [docs site](https://docs.getdbt.com/docs/building-a-dbt-project/package-management).
 
 
 # What's a package?
