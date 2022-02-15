@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Union
 class SelectorDefinition(dbtClassMixin):
     name: str
     definition: Union[str, Dict[str, Any]]
-    description: str = ''
+    description: str = ""
     default: bool = False
 
 

@@ -24,7 +24,7 @@ class HookBlock(FileBlock):
 
     @property
     def name(self):
-        return '{}-{!s}-{!s}'.format(self.project, self.hook_type, self.index)
+        return "{}-{!s}-{!s}".format(self.project, self.hook_type, self.index)
 
 
 class HookSearcher(Iterable[HookBlock]):
@@ -33,9 +33,7 @@ class HookSearcher(Iterable[HookBlock]):
         self.source_file = source_file
         self.hook_type = hook_type
 
-    def _hook_list(
-        self, hooks: Union[str, List[str], Tuple[str, ...]]
-    ) -> List[str]:
+    def _hook_list(self, hooks: Union[str, List[str], Tuple[str, ...]]) -> List[str]:
         if isinstance(hooks, tuple):
             hooks = list(hooks)
         elif not isinstance(hooks, list):
@@ -49,8 +47,9 @@ class HookSearcher(Iterable[HookBlock]):
             hooks = self.project.on_run_end
         else:
             raise InternalException(
-                'hook_type must be one of "{}" or "{}" (got {})'
-                .format(RunHookType.Start, RunHookType.End, self.hook_type)
+                'hook_type must be one of "{}" or "{}" (got {})'.format(
+                    RunHookType.Start, RunHookType.End, self.hook_type
+                )
             )
         return self._hook_list(hooks)
 
@@ -76,8 +75,8 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         # until that is implemented use a dummy modification time
         path = FilePath(
             project_root=self.project.project_root,
-            searched_path='.',
-            relative_path='dbt_project.yml',
+            searched_path=".",
+            relative_path="dbt_project.yml",
             modification_time=0.0,
         )
         return path
@@ -102,9 +101,13 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
     ) -> ParsedHookNode:
 
         return super()._create_parsetime_node(
-            block=block, path=path, config=config, fqn=fqn,
-            index=block.index, name=name,
-            tags=[str(block.hook_type)]
+            block=block,
+            path=path,
+            config=config,
+            fqn=fqn,
+            index=block.index,
+            name=name,
+            tags=[str(block.hook_type)],
         )
 
     @property

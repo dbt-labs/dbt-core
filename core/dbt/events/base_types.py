@@ -12,13 +12,13 @@ from typing import Any, Dict
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-class Cache():
+class Cache:
     # Events with this class will only be logged when the `--log-cache-events` flag is passed
     pass
 
 
 @dataclass
-class ShowException():
+class ShowException:
     # N.B.:
     # As long as we stick with the current convention of setting the member vars in the
     # `message` method of subclasses, this is a safe operation.
@@ -45,7 +45,7 @@ class Event(metaclass=ABCMeta):
     # It should be in all subclasses that are to record actual events.
     @abstractmethod
     def to_dict(self):
-        raise Exception('to_dict not implemented for Event')
+        raise Exception("to_dict not implemented for Event")
 
     # do not define this yourself. inherit it from one of the above level types.
     @abstractmethod
@@ -69,6 +69,7 @@ class Event(metaclass=ABCMeta):
     @classmethod
     def get_invocation_id(cls) -> str:
         from dbt.events.functions import get_invocation_id
+
         return get_invocation_id()
 
 
@@ -104,17 +105,17 @@ class ErrorLevel(EventSerialization, Event):
 
 
 # prevents an event from going to the file
-class NoFile():
+class NoFile:
     pass
 
 
 # prevents an event from going to stdout
-class NoStdOut():
+class NoStdOut:
     pass
 
 
 # This class represents the node_info which is generated
 # by the NodeInfoMixin class in dbt.contracts.graph.parsed
 @dataclass
-class NodeInfo():
+class NodeInfo:
     node_info: Dict[str, Any]

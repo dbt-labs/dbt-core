@@ -4,10 +4,12 @@
 - Added Support for Semantic Versioning ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - New Dockerfile to support specific db adapters and platforms.  See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
 - Allow unique_key to take a list ([#2479](https://github.com/dbt-labs/dbt-core/issues/2479), [#4618](https://github.com/dbt-labs/dbt-core/pull/4618))
+- Add `--quiet` global flag and `print` Jinja function ([#3451](https://github.com/dbt-labs/dbt-core/issues/3451), [#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
 
 ### Fixes
 - User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+- Allow override of string and numeric types for adapters. ([#4603](https://github.com/dbt-labs/dbt-core/issues/4603))
 - A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
 
 ### Under the hood
@@ -15,10 +17,13 @@
 - Clean up test deprecation warnings ([#3988](https://github.com/dbt-labs/dbt-core/issue/3988), [#4556](https://github.com/dbt-labs/dbt-core/pull/4556))
 - Use mashumaro for serialization in event logging ([#4504](https://github.com/dbt-labs/dbt-core/issues/4504), [#4505](https://github.com/dbt-labs/dbt-core/pull/4505))
 - Drop support for Python 3.7.0 + 3.7.1 ([#4584](https://github.com/dbt-labs/dbt-core/issues/4584), [#4585](https://github.com/dbt-labs/dbt-core/pull/4585), [#4643](https://github.com/dbt-labs/dbt-core/pull/4643))
+- Re-format codebase (except tests) using pre-commit hooks ([#3195](https://github.com/dbt-labs/dbt-core/issues/3195), [#4697](https://github.com/dbt-labs/dbt-core/pull/4697))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
+- [@emartens](https://github.com/ehmartens) ([#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
+- [@mdesmet](https://github.com/mdesmet) ([#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
 
 ## dbt-core 1.0.2 (TBD)
 
@@ -26,12 +31,14 @@ Contributors:
 - Projects created using `dbt init` now have the correct `seeds` directory created (instead of `data`) ([#4588](https://github.com/dbt-labs/dbt-core/issues/4588), [#4599](https://github.com/dbt-labs/dbt-core/pull/4589))
 - Don't require a profile for dbt deps and clean commands ([#4554](https://github.com/dbt-labs/dbt-core/issues/4554), [#4610](https://github.com/dbt-labs/dbt-core/pull/4610))
 - Select modified.body works correctly when new model added([#4570](https://github.com/dbt-labs/dbt-core/issues/4570), [#4631](https://github.com/dbt-labs/dbt-core/pull/4631))
-- Fix bug in retry logic for bad response from hub and when there is a bad git tarball download. ([#4577](https://github.com/dbt-labs/dbt-core/issues/4577), [#4579](https://github.com/dbt-labs/dbt-core/issues/4579), [#4609](https://github.com/dbt-labs/dbt-core/pull/4609)) 
+- Fix bug in retry logic for bad response from hub and when there is a bad git tarball download. ([#4577](https://github.com/dbt-labs/dbt-core/issues/4577), [#4579](https://github.com/dbt-labs/dbt-core/issues/4579), [#4609](https://github.com/dbt-labs/dbt-core/pull/4609))
 - Restore previous log level (DEBUG) when a test depends on a disabled resource. Still WARN if the resource is missing ([#4594](https://github.com/dbt-labs/dbt-core/issues/4594), [#4647](https://github.com/dbt-labs/dbt-core/pull/4647))
 - Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+- Support click versions in the v7.x series ([#4681](https://github.com/dbt-labs/dbt-core/pull/4681))
 
 Contributors:
 * [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+* [@twilly](https://github.com/twilly) ([#4681](https://github.com/dbt-labs/dbt-core/pull/4681))
 
 ## dbt-core 1.0.2 (TBD)
 ### Fixes

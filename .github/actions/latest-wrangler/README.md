@@ -9,7 +9,7 @@ Plug in the necessary inputs to determine if the container being built should be
 | `package` | Name of the GH package to check against |
 | `new_version` | Semver of new container |
 | `gh_token` | GH token with package read scope|
-| `halt_on_missing` | Return non-zero exit code if requested package does not exist. (defaults to false)| 
+| `halt_on_missing` | Return non-zero exit code if requested package does not exist. (defaults to false)|
 
 
 ## Outputs
@@ -21,7 +21,7 @@ Plug in the necessary inputs to determine if the container being built should be
 ## Example workflow
 ```yaml
 name: Ship it!
-on: 
+on:
   workflow_dispatch:
     inputs:
       package:

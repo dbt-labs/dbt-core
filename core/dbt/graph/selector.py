@@ -24,10 +24,7 @@ def get_package_names(nodes):
 
 def alert_non_existence(raw_spec, nodes):
     if len(nodes) == 0:
-        warn_or_error(
-            f"The selection criterion '{str(raw_spec)}' does not match"
-            f" any nodes"
-        )
+        warn_or_error(f"The selection criterion '{str(raw_spec)}' does not match" f" any nodes")
 
 
 def can_select_indirectly(node):
@@ -43,8 +40,8 @@ def can_select_indirectly(node):
 
 
 class NodeSelector(MethodManager):
-    """The node selector is aware of the graph and manifest,
-    """
+    """The node selector is aware of the graph and manifest,"""
+
     def __init__(
         self,
         graph: Graph,
@@ -57,13 +54,14 @@ class NodeSelector(MethodManager):
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
         graph_members = {
-            unique_id for unique_id in self.full_graph.nodes()
-            if self._is_graph_member(unique_id)
+            unique_id for unique_id in self.full_graph.nodes() if self._is_graph_member(unique_id)
         }
         self.graph = self.full_graph.subgraph(graph_members)
 
     def select_included(
-        self, included_nodes: Set[UniqueId], spec: SelectionCriteria,
+        self,
+        included_nodes: Set[UniqueId],
+        spec: SelectionCriteria,
     ) -> Set[UniqueId]:
         """Select the explicitly included nodes, using the given spec. Return
         the selected set of unique IDs.
@@ -72,8 +70,7 @@ class NodeSelector(MethodManager):
         return set(method.search(included_nodes, spec.value))
 
     def get_nodes_from_criteria(
-        self,
-        spec: SelectionCriteria
+        self, spec: SelectionCriteria
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         """Get all nodes specified by the single selection criteria.
 
@@ -87,17 +84,16 @@ class NodeSelector(MethodManager):
             collected = self.select_included(nodes, spec)
         except InvalidSelectorException:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
-            fire_event(SelectorReportInvalidSelector(
-                valid_selectors=valid_selectors,
-                spec_method=spec.method,
-                raw_spec=spec.raw
-            ))
+            fire_event(
+                SelectorReportInvalidSelector(
+                    valid_selectors=valid_selectors, spec_method=spec.method, raw_spec=spec.raw
+                )
+            )
             return set(), set()
 
         neighbors = self.collect_specified_neighbors(spec, collected)
         direct_nodes, indirect_nodes = self.expand_selection(
-            selected=(collected | neighbors),
-            indirect_selection=spec.indirect_selection
+            selected=(collected | neighbors), indirect_selection=spec.indirect_selection
         )
         return direct_nodes, indirect_nodes
 
@@ -130,10 +126,7 @@ class NodeSelector(MethodManager):
         if isinstance(spec, SelectionCriteria):
             direct_nodes, indirect_nodes = self.get_nodes_from_criteria(spec)
         else:
-            bundles = [
-                self.select_nodes_recursively(component)
-                for component in spec
-            ]
+            bundles = [self.select_nodes_recursively(component) for component in spec]
 
             direct_sets = []
             indirect_sets = []
@@ -191,22 +184,19 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.metrics:
             node = self.manifest.metrics[unique_id]
         else:
-            raise InternalException(
-                f'Node {unique_id} not found in the manifest!'
-            )
+            raise InternalException(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
 
     def filter_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         """Return the subset of selected nodes that is a match for this
         selector.
         """
-        return {
-            unique_id for unique_id in selected if self._is_match(unique_id)
-        }
+        return {unique_id for unique_id in selected if self._is_match(unique_id)}
 
     def expand_selection(
-        self, selected: Set[UniqueId],
-        indirect_selection: IndirectSelection = IndirectSelection.Eager
+        self,
+        selected: Set[UniqueId],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         # Test selection by default expands to include an implicitly/indirectly selected tests.
         # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
@@ -229,10 +219,9 @@ class NodeSelector(MethodManager):
                 node = self.manifest.nodes[unique_id]
                 if can_select_indirectly(node):
                     # should we add it in directly?
-                    if (
-                        indirect_selection == IndirectSelection.Eager or
-                        set(node.depends_on.nodes) <= set(selected)
-                    ):
+                    if indirect_selection == IndirectSelection.Eager or set(
+                        node.depends_on.nodes
+                    ) <= set(selected):
                         direct_nodes.add(unique_id)
                     # if not:
                     else:
@@ -263,12 +252,12 @@ class NodeSelector(MethodManager):
     def get_selected(self, spec: SelectionSpec) -> Set[UniqueId]:
         """get_selected runs through the node selection process:
 
-            - node selection. Based on the include/exclude sets, the set
-                of matched unique IDs is returned
-                - includes direct + indirect selection (for tests)
-            - filtering:
-                - selectors can filter the nodes after all of them have been
-                  selected
+        - node selection. Based on the include/exclude sets, the set
+            of matched unique IDs is returned
+            - includes direct + indirect selection (for tests)
+        - filtering:
+            - selectors can filter the nodes after all of them have been
+              selected
         """
         selected_nodes, indirect_only = self.select_nodes(spec)
         filtered_nodes = self.filter_selection(selected_nodes)

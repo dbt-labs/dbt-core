@@ -15,5 +15,5 @@ def profiler(enable, outfile):
         if enable:
             profiler.disable()
             stats = Stats(profiler)
-            stats.sort_stats('tottime')
+            stats.sort_stats("tottime")
             stats.dump_stats(outfile)

@@ -1,12 +1,19 @@
 from typing import Optional
 
 from dbt.clients.yaml_helper import (  # noqa:F401
-    yaml, safe_load, Loader, Dumper,
+    yaml,
+    safe_load,
+    Loader,
+    Dumper,
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
-    DisableTracking, SendingEvent, SendEventFailure, FlushEvents,
-    FlushEventsFailure, TrackingInitializeFailure
+    DisableTracking,
+    SendingEvent,
+    SendEventFailure,
+    FlushEvents,
+    FlushEventsFailure,
+    TrackingInitializeFailure,
 )
 from dbt import version as dbt_version
 from dbt import flags
@@ -26,26 +33,28 @@ sp_logger.setLevel(100)
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-2'
-PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
-RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-1'
-INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
-PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
-RPC_REQUEST_SPEC = 'iglu:com.dbt/rpc_request/jsonschema/1-0-1'
-DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
-LOAD_ALL_TIMING_SPEC = 'iglu:com.dbt/load_all_timing/jsonschema/1-0-3'
-RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
-EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
-PARTIAL_PARSER = 'iglu:com.dbt/partial_parser/jsonschema/1-0-1'
-DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
+INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
+PLATFORM_SPEC = "iglu:com.dbt/platform/jsonschema/1-0-0"
+RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-1"
+INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
+PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
+RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
+DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
+RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
+EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
+PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
+DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
 
 class TimeoutEmitter(Emitter):
     def __init__(self):
         super().__init__(
-            COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL,
-            buffer_size=30, on_failure=self.handle_failure,
-            method='post',
+            COLLECTOR_URL,
+            protocol=COLLECTOR_PROTOCOL,
+            buffer_size=30,
+            on_failure=self.handle_failure,
+            method="post",
             # don't set this.
             byte_limit=None,
         )
@@ -69,35 +78,36 @@ class TimeoutEmitter(Emitter):
             sp_logger.warning(msg)
 
     def http_post(self, payload):
-        self._log_request('POST', payload)
+        self._log_request("POST", payload)
 
         r = requests.post(
             self.endpoint,
             data=payload,
-            headers={'content-type': 'application/json; charset=utf-8'},
-            timeout=5.0
+            headers={"content-type": "application/json; charset=utf-8"},
+            timeout=5.0,
         )
 
-        self._log_result('GET', r.status_code)
+        self._log_result("GET", r.status_code)
         return r
 
     def http_get(self, payload):
-        self._log_request('GET', payload)
+        self._log_request("GET", payload)
 
         r = requests.get(self.endpoint, params=payload, timeout=5.0)
 
-        self._log_result('GET', r.status_code)
+        self._log_result("GET", r.status_code)
         return r
 
 
 emitter = TimeoutEmitter()
 tracker = Tracker(
-    emitter, namespace="cf", app_id="dbt",
+    emitter,
+    namespace="cf",
+    app_id="dbt",
 )
 
 
 class User:
-
     def __init__(self, cookie_dir):
         self.do_not_track = True
         self.cookie_dir = cookie_dir
@@ -111,13 +121,13 @@ class User:
 
     @property
     def cookie_path(self):
-        return os.path.join(self.cookie_dir, '.user.yml')
+        return os.path.join(self.cookie_dir, ".user.yml")
 
     def initialize(self):
         self.do_not_track = False
 
         cookie = self.get_cookie()
-        self.id = cookie.get('id')
+        self.id = cookie.get("id")
 
         subject = Subject()
         subject.set_user_id(self.id)
@@ -142,7 +152,7 @@ class User:
         user = {"id": str(uuid.uuid4())}
 
         cookie_path = os.path.abspath(self.cookie_dir)
-        profiles_file = os.path.join(cookie_path, 'profiles.yml')
+        profiles_file = os.path.join(cookie_path, "profiles.yml")
         if os.path.exists(cookie_path) and os.path.exists(profiles_file):
             with open(self.cookie_path, "w") as fh:
                 yaml.dump(user, fh)
@@ -167,7 +177,7 @@ active_user: Optional[User] = None
 
 
 def get_run_type(args):
-    return 'regular'
+    return "regular"
 
 
 def get_invocation_context(user, config, args):
@@ -185,7 +195,6 @@ def get_invocation_context(user, config, args):
         "project_id": None if config is None else config.hashed_name(),
         "user_id": user.id,
         "invocation_id": get_invocation_id(),
-
         "command": args.which,
         "options": None,
         "version": str(dbt_version.installed),
@@ -198,11 +207,7 @@ def get_invocation_context(user, config, args):
 def get_invocation_start_context(user, config, args):
     data = get_invocation_context(user, config, args)
 
-    start_data = {
-        "progress": "start",
-        "result_type": None,
-        "result": None
-    }
+    start_data = {"progress": "start", "result_type": None, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
@@ -211,11 +216,7 @@ def get_invocation_start_context(user, config, args):
 def get_invocation_end_context(user, config, args, result_type):
     data = get_invocation_context(user, config, args)
 
-    start_data = {
-        "progress": "end",
-        "result_type": result_type,
-        "result": None
-    }
+    start_data = {"progress": "end", "result_type": result_type, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
@@ -224,11 +225,7 @@ def get_invocation_end_context(user, config, args, result_type):
 def get_invocation_invalid_context(user, config, args, result_type):
     data = get_invocation_context(user, config, args)
 
-    start_data = {
-        "progress": "invalid",
-        "result_type": result_type,
-        "result": None
-    }
+    start_data = {"progress": "invalid", "result_type": result_type, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
@@ -245,10 +242,10 @@ def get_platform_context():
 
 
 def get_dbt_env_context():
-    default = 'manual'
+    default = "manual"
 
     dbt_invocation_env = os.getenv(DBT_INVOCATION_ENV, default)
-    if dbt_invocation_env == '':
+    if dbt_invocation_env == "":
         dbt_invocation_env = default
 
     data = {
@@ -273,190 +270,145 @@ def track_invocation_start(config=None, args=None):
     context = [
         get_invocation_start_context(active_user, config, args),
         get_platform_context(),
-        get_dbt_env_context()
+        get_dbt_env_context(),
     ]
 
-    track(
-        active_user,
-        category="dbt",
-        action='invocation',
-        label='start',
-        context=context
-    )
+    track(active_user, category="dbt", action="invocation", label="start", context=context)
 
 
 def track_project_load(options):
     context = [SelfDescribingJson(LOAD_ALL_TIMING_SPEC, options)]
-    assert active_user is not None, \
-        'Cannot track project loading time when active user is None'
+    assert active_user is not None, "Cannot track project loading time when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='load_project',
+        category="dbt",
+        action="load_project",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
 def track_resource_counts(resource_counts):
     context = [SelfDescribingJson(RESOURCE_COUNTS, resource_counts)]
-    assert active_user is not None, \
-        'Cannot track resource counts when active user is None'
+    assert active_user is not None, "Cannot track resource counts when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='resource_counts',
+        category="dbt",
+        action="resource_counts",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
 def track_model_run(options):
     context = [SelfDescribingJson(RUN_MODEL_SPEC, options)]
-    assert active_user is not None, \
-        'Cannot track model runs when active user is None'
+    assert active_user is not None, "Cannot track model runs when active user is None"
 
     track(
-        active_user,
-        category="dbt",
-        action='run_model',
-        label=get_invocation_id(),
-        context=context
+        active_user, category="dbt", action="run_model", label=get_invocation_id(), context=context
     )
 
 
 def track_rpc_request(options):
     context = [SelfDescribingJson(RPC_REQUEST_SPEC, options)]
-    assert active_user is not None, \
-        'Cannot track rpc requests when active user is None'
+    assert active_user is not None, "Cannot track rpc requests when active user is None"
 
     track(
         active_user,
         category="dbt",
-        action='rpc_request',
+        action="rpc_request",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
 def track_package_install(config, args, options):
-    assert active_user is not None, \
-        'Cannot track package installs when active user is None'
+    assert active_user is not None, "Cannot track package installs when active user is None"
 
     invocation_data = get_invocation_context(active_user, config, args)
 
     context = [
         SelfDescribingJson(INVOCATION_SPEC, invocation_data),
-        SelfDescribingJson(PACKAGE_INSTALL_SPEC, options)
+        SelfDescribingJson(PACKAGE_INSTALL_SPEC, options),
     ]
 
     track(
         active_user,
         category="dbt",
-        action='package',
+        action="package",
         label=get_invocation_id(),
-        property_='install',
-        context=context
+        property_="install",
+        context=context,
     )
 
 
 def track_deprecation_warn(options):
 
-    assert active_user is not None, \
-        'Cannot track deprecation warnings when active user is None'
+    assert active_user is not None, "Cannot track deprecation warnings when active user is None"
 
-    context = [
-        SelfDescribingJson(DEPRECATION_WARN_SPEC, options)
-    ]
+    context = [SelfDescribingJson(DEPRECATION_WARN_SPEC, options)]
 
     track(
         active_user,
         category="dbt",
-        action='deprecation',
+        action="deprecation",
         label=get_invocation_id(),
-        property_='warn',
-        context=context
+        property_="warn",
+        context=context,
     )
 
 
-def track_invocation_end(
-        config=None, args=None, result_type=None
-):
+def track_invocation_end(config=None, args=None, result_type=None):
     user = active_user
     context = [
         get_invocation_end_context(user, config, args, result_type),
         get_platform_context(),
-        get_dbt_env_context()
+        get_dbt_env_context(),
     ]
 
-    assert active_user is not None, \
-        'Cannot track invocation end when active user is None'
+    assert active_user is not None, "Cannot track invocation end when active user is None"
 
-    track(
-        active_user,
-        category="dbt",
-        action='invocation',
-        label='end',
-        context=context
-    )
+    track(active_user, category="dbt", action="invocation", label="end", context=context)
 
 
-def track_invalid_invocation(
-        config=None, args=None, result_type=None
-):
-    assert active_user is not None, \
-        'Cannot track invalid invocations when active user is None'
+def track_invalid_invocation(config=None, args=None, result_type=None):
+    assert active_user is not None, "Cannot track invalid invocations when active user is None"
 
     user = active_user
-    invocation_context = get_invocation_invalid_context(
-        user,
-        config,
-        args,
-        result_type
-    )
+    invocation_context = get_invocation_invalid_context(user, config, args, result_type)
 
-    context = [
-        invocation_context,
-        get_platform_context(),
-        get_dbt_env_context()
-    ]
+    context = [invocation_context, get_platform_context(), get_dbt_env_context()]
 
-    track(
-        active_user,
-        category="dbt",
-        action='invocation',
-        label='invalid',
-        context=context
-    )
+    track(active_user, category="dbt", action="invocation", label="invalid", context=context)
 
 
 def track_experimental_parser_sample(options):
     context = [SelfDescribingJson(EXPERIMENTAL_PARSER, options)]
-    assert active_user is not None, \
-        'Cannot track experimental parser info when active user is None'
+    assert (
+        active_user is not None
+    ), "Cannot track experimental parser info when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='experimental_parser',
+        category="dbt",
+        action="experimental_parser",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
 def track_partial_parser(options):
     context = [SelfDescribingJson(PARTIAL_PARSER, options)]
-    assert active_user is not None, \
-        'Cannot track partial parser info when active user is None'
+    assert active_user is not None, "Cannot track partial parser info when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='partial_parser',
+        category="dbt",
+        action="partial_parser",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
@@ -497,10 +449,12 @@ class InvocationProcessor(logbook.Processor):
 
     def process(self, record):
         if active_user is not None:
-            record.extra.update({
-                "run_started_at": active_user.run_started_at.isoformat(),
-                "invocation_id": get_invocation_id(),
-            })
+            record.extra.update(
+                {
+                    "run_started_at": active_user.run_started_at.isoformat(),
+                    "invocation_id": get_invocation_id(),
+                }
+            )
 
 
 def initialize_from_flags():

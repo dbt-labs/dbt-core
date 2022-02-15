@@ -30,9 +30,11 @@ class _Available:
             x.update(big_expensive_db_query())
             return x
         """
+
         def inner(func):
             func._parse_replacement_ = parse_replacement
             return self(func)
+
         return inner
 
     def deprecated(
@@ -57,13 +59,14 @@ class _Available:
         The optional parse_replacement, if provided, will provide a parse-time
         replacement for the actual method (see `available.parse`).
         """
+
         def wrapper(func):
             func_name = func.__name__
             renamed_method(func_name, supported_name)
 
             @wraps(func)
             def inner(*args, **kwargs):
-                warn('adapter:{}'.format(func_name))
+                warn("adapter:{}".format(func_name))
                 return func(*args, **kwargs)
 
             if parse_replacement:
@@ -71,6 +74,7 @@ class _Available:
             else:
                 available_function = self
             return available_function(inner)
+
         return wrapper
 
     def parse_none(self, func: Callable) -> Callable:
@@ -95,9 +99,7 @@ class AdapterMeta(abc.ABCMeta):
         # I'm not sure there is any benefit to it after poking around a bit,
         # but having it doesn't hurt on the python side (and omitting it could
         # hurt for obscure metaclass reasons, for all I know)
-        cls = abc.ABCMeta.__new__(  # type: ignore
-            mcls, name, bases, namespace, **kwargs
-        )
+        cls = abc.ABCMeta.__new__(mcls, name, bases, namespace, **kwargs)  # type: ignore
 
         # this is very much inspired by ABCMeta's own implementation
 
@@ -109,14 +111,14 @@ class AdapterMeta(abc.ABCMeta):
 
         # collect base class data first
         for base in bases:
-            available.update(getattr(base, '_available_', set()))
-            replacements.update(getattr(base, '_parse_replacements_', set()))
+            available.update(getattr(base, "_available_", set()))
+            replacements.update(getattr(base, "_parse_replacements_", set()))
 
         # override with local data if it exists
         for name, value in namespace.items():
-            if getattr(value, '_is_available_', False):
+            if getattr(value, "_is_available_", False):
                 available.add(name)
-            parse_replacement = getattr(value, '_parse_replacement_', None)
+            parse_replacement = getattr(value, "_parse_replacement_", None)
             if parse_replacement is not None:
                 replacements[name] = parse_replacement
 

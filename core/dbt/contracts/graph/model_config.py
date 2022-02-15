@@ -1,11 +1,11 @@
 from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
-from typing import (
-    Any, List, Optional, Dict, Union, Type, TypeVar, Callable
-)
+from typing import Any, List, Optional, Dict, Union, Type, TypeVar, Callable
 from dbt.dataclass_schema import (
-    dbtClassMixin, ValidationError, register_pattern,
+    dbtClassMixin,
+    ValidationError,
+    register_pattern,
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
 from dbt.exceptions import InternalException, CompilationException
@@ -14,7 +14,7 @@ from dbt import hooks
 from dbt.node_types import NodeType
 
 
-M = TypeVar('M', bound='Metadata')
+M = TypeVar("M", bound="Metadata")
 
 
 def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
@@ -29,14 +29,10 @@ def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
     try:
         return cls(value)
     except ValueError as exc:
-        raise InternalException(
-            f'Invalid {cls} value: {value}'
-        ) from exc
+        raise InternalException(f"Invalid {cls} value: {value}") from exc
 
 
-def _set_meta_value(
-    obj: M, key: str, existing: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+def _set_meta_value(obj: M, key: str, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if existing is None:
         result = {}
     else:
@@ -53,19 +49,17 @@ class Metadata(Enum):
 
         return _get_meta_value(cls, fld, key, default)
 
-    def meta(
-        self, existing: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def meta(self, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         key = self.metadata_key()
         return _set_meta_value(self, key, existing)
 
     @classmethod
-    def default_field(cls) -> 'Metadata':
-        raise NotImplementedError('Not implemented')
+    def default_field(cls) -> "Metadata":
+        raise NotImplementedError("Not implemented")
 
     @classmethod
     def metadata_key(cls) -> str:
-        raise NotImplementedError('Not implemented')
+        raise NotImplementedError("Not implemented")
 
 
 class MergeBehavior(Metadata):
@@ -74,12 +68,12 @@ class MergeBehavior(Metadata):
     Clobber = 3
 
     @classmethod
-    def default_field(cls) -> 'MergeBehavior':
+    def default_field(cls) -> "MergeBehavior":
         return cls.Clobber
 
     @classmethod
     def metadata_key(cls) -> str:
-        return 'merge'
+        return "merge"
 
 
 class ShowBehavior(Metadata):
@@ -87,12 +81,12 @@ class ShowBehavior(Metadata):
     Hide = 2
 
     @classmethod
-    def default_field(cls) -> 'ShowBehavior':
+    def default_field(cls) -> "ShowBehavior":
         return cls.Show
 
     @classmethod
     def metadata_key(cls) -> str:
-        return 'show_hide'
+        return "show_hide"
 
     @classmethod
     def should_show(cls, fld: Field) -> bool:
@@ -104,12 +98,12 @@ class CompareBehavior(Metadata):
     Exclude = 2
 
     @classmethod
-    def default_field(cls) -> 'CompareBehavior':
+    def default_field(cls) -> "CompareBehavior":
         return cls.Include
 
     @classmethod
     def metadata_key(cls) -> str:
-        return 'compare'
+        return "compare"
 
     @classmethod
     def should_include(cls, fld: Field) -> bool:
@@ -141,32 +135,28 @@ def _merge_field_value(
         return _listify(self_value) + _listify(other_value)
     elif merge_behavior == MergeBehavior.Update:
         if not isinstance(self_value, dict):
-            raise InternalException(f'expected dict, got {self_value}')
+            raise InternalException(f"expected dict, got {self_value}")
         if not isinstance(other_value, dict):
-            raise InternalException(f'expected dict, got {other_value}')
+            raise InternalException(f"expected dict, got {other_value}")
         value = self_value.copy()
         value.update(other_value)
         return value
     else:
-        raise InternalException(
-            f'Got an invalid merge_behavior: {merge_behavior}'
-        )
+        raise InternalException(f"Got an invalid merge_behavior: {merge_behavior}")
 
 
 def insensitive_patterns(*patterns: str):
     lowercased = []
     for pattern in patterns:
-        lowercased.append(
-            ''.join('[{}{}]'.format(s.upper(), s.lower()) for s in pattern)
-        )
-    return '^({})$'.format('|'.join(lowercased))
+        lowercased.append("".join("[{}{}]".format(s.upper(), s.lower()) for s in pattern))
+    return "^({})$".format("|".join(lowercased))
 
 
 class Severity(str):
     pass
 
 
-register_pattern(Severity, insensitive_patterns('warn', 'error'))
+register_pattern(Severity, insensitive_patterns("warn", "error"))
 
 
 @dataclass
@@ -176,13 +166,11 @@ class Hook(dbtClassMixin, Replaceable):
     index: Optional[int] = None
 
 
-T = TypeVar('T', bound='BaseConfig')
+T = TypeVar("T", bound="BaseConfig")
 
 
 @dataclass
-class BaseConfig(
-    AdditionalPropertiesAllowed, Replaceable
-):
+class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 
     # enable syntax like: config['key']
     def __getitem__(self, key):
@@ -207,8 +195,7 @@ class BaseConfig(
     def __delitem__(self, key):
         if hasattr(self, key):
             msg = (
-                'Error, tried to delete config key "{}": Cannot delete '
-                'built-in keys'
+                'Error, tried to delete config key "{}": Cannot delete ' "built-in keys"
             ).format(key)
             raise CompilationException(msg)
         else:
@@ -248,9 +235,7 @@ class BaseConfig(
             return unrendered[key] == other[key]
 
     @classmethod
-    def same_contents(
-        cls, unrendered: Dict[str, Any], other: Dict[str, Any]
-    ) -> bool:
+    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
         """This is like __eq__, except it ignores some fields."""
         seen = set()
         for fld, target_name in cls._get_fields():
@@ -270,14 +255,12 @@ class BaseConfig(
     # This is used in 'add_config_call' to created the combined config_call_dict.
     # 'meta' moved here from node
     mergebehavior = {
-        "append": ['pre-hook', 'pre_hook', 'post-hook', 'post_hook', 'tags'],
-        "update": ['quoting', 'column_types', 'meta'],
+        "append": ["pre-hook", "pre_hook", "post-hook", "post_hook", "tags"],
+        "update": ["quoting", "column_types", "meta"],
     }
 
     @classmethod
-    def _merge_dicts(
-        cls, src: Dict[str, Any], data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _merge_dicts(cls, src: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
         """Find all the items in data that match a target_field on this class,
         and merge them with the data found in `src` for target_field, using the
         field's specified merge behavior. Matching items will be removed from
@@ -309,14 +292,13 @@ class BaseConfig(
             )
         return result
 
-    def update_from(
-        self: T, data: Dict[str, Any], adapter_type: str, validate: bool = True
-    ) -> T:
+    def update_from(self: T, data: Dict[str, Any], adapter_type: str, validate: bool = True) -> T:
         """Given a dict of keys, update the current config from them, validate
         it, and return a new config with the updated values
         """
         # sadly, this is a circular import
         from dbt.adapters.factory import get_config_class_by_name
+
         dct = self.to_dict(omit_none=False)
 
         adapter_config_cls = get_config_class_by_name(adapter_type)
@@ -374,9 +356,7 @@ class NodeAndTestConfig(BaseConfig):
     )
     tags: Union[List[str], str] = field(
         default_factory=list_str,
-        metadata=metas(ShowBehavior.Hide,
-                       MergeBehavior.Append,
-                       CompareBehavior.Exclude),
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
     )
     meta: Dict[str, Any] = field(
         default_factory=dict,
@@ -388,7 +368,7 @@ class NodeAndTestConfig(BaseConfig):
 class NodeConfig(NodeAndTestConfig):
     # Note: if any new fields are added with MergeBehavior, also update the
     # 'mergebehavior' dictionary
-    materialized: str = 'view'
+    materialized: str = "view"
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,
@@ -410,12 +390,12 @@ class NodeConfig(NodeAndTestConfig):
     )
     full_refresh: Optional[bool] = None
     unique_key: Optional[Union[str, List[str]]] = None
-    on_schema_change: Optional[str] = 'ignore'
+    on_schema_change: Optional[str] = "ignore"
 
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
-        field_map = {'post-hook': 'post_hook', 'pre-hook': 'pre_hook'}
+        field_map = {"post-hook": "post_hook", "pre-hook": "pre_hook"}
         # create a new dict because otherwise it gets overwritten in
         # tests
         new_dict = {}
@@ -433,7 +413,7 @@ class NodeConfig(NodeAndTestConfig):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        field_map = {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
+        field_map = {"post_hook": "post-hook", "pre_hook": "pre-hook"}
         for field_name in field_map:
             if field_name in dct:
                 dct[field_map[field_name]] = dct.pop(field_name)
@@ -442,12 +422,12 @@ class NodeConfig(NodeAndTestConfig):
     # this is still used by jsonschema validation
     @classmethod
     def field_mapping(cls):
-        return {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
+        return {"post_hook": "post-hook", "pre_hook": "pre-hook"}
 
 
 @dataclass
 class SeedConfig(NodeConfig):
-    materialized: str = 'seed'
+    materialized: str = "seed"
     quote_columns: Optional[bool] = None
 
 
@@ -455,31 +435,29 @@ class SeedConfig(NodeConfig):
 class TestConfig(NodeAndTestConfig):
     # this is repeated because of a different default
     schema: Optional[str] = field(
-        default='dbt_test__audit',
+        default="dbt_test__audit",
         metadata=CompareBehavior.Exclude.meta(),
     )
-    materialized: str = 'test'
-    severity: Severity = Severity('ERROR')
+    materialized: str = "test"
+    severity: Severity = Severity("ERROR")
     store_failures: Optional[bool] = None
     where: Optional[str] = None
     limit: Optional[int] = None
-    fail_calc: str = 'count(*)'
-    warn_if: str = '!= 0'
-    error_if: str = '!= 0'
+    fail_calc: str = "count(*)"
+    warn_if: str = "!= 0"
+    error_if: str = "!= 0"
 
     @classmethod
-    def same_contents(
-        cls, unrendered: Dict[str, Any], other: Dict[str, Any]
-    ) -> bool:
+    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
         """This is like __eq__, except it explicitly checks certain fields."""
         modifiers = [
-            'severity',
-            'where',
-            'limit',
-            'fail_calc',
-            'warn_if',
-            'error_if',
-            'store_failures'
+            "severity",
+            "where",
+            "limit",
+            "fail_calc",
+            "warn_if",
+            "error_if",
+            "store_failures",
         ]
 
         seen = set()
@@ -494,7 +472,7 @@ class TestConfig(NodeAndTestConfig):
 
 @dataclass
 class EmptySnapshotConfig(NodeConfig):
-    materialized: str = 'snapshot'
+    materialized: str = "snapshot"
     unique_key: Optional[str] = None  # override NodeConfig unique_key definition
 
 
@@ -510,30 +488,31 @@ class SnapshotConfig(EmptySnapshotConfig):
     @classmethod
     def validate(cls, data):
         super().validate(data)
-        if not data.get('strategy') or not data.get('unique_key') or not \
-                data.get('target_schema'):
+        if not data.get("strategy") or not data.get("unique_key") or not data.get("target_schema"):
             raise ValidationError(
                 "Snapshots must be configured with a 'strategy', 'unique_key', "
-                "and 'target_schema'.")
-        if data.get('strategy') == 'check':
-            if not data.get('check_cols'):
+                "and 'target_schema'."
+            )
+        if data.get("strategy") == "check":
+            if not data.get("check_cols"):
                 raise ValidationError(
                     "A snapshot configured with the check strategy must "
-                    "specify a check_cols configuration.")
-            if (isinstance(data['check_cols'], str) and
-                    data['check_cols'] != 'all'):
+                    "specify a check_cols configuration."
+                )
+            if isinstance(data["check_cols"], str) and data["check_cols"] != "all":
                 raise ValidationError(
                     f"Invalid value for 'check_cols': {data['check_cols']}. "
-                    "Expected 'all' or a list of strings.")
+                    "Expected 'all' or a list of strings."
+                )
 
-        elif data.get('strategy') == 'timestamp':
-            if not data.get('updated_at'):
+        elif data.get("strategy") == "timestamp":
+            if not data.get("updated_at"):
                 raise ValidationError(
                     "A snapshot configured with the timestamp strategy "
-                    "must specify an updated_at configuration.")
-            if data.get('check_cols'):
-                raise ValidationError(
-                    "A 'timestamp' snapshot should not have 'check_cols'")
+                    "must specify an updated_at configuration."
+                )
+            if data.get("check_cols"):
+                raise ValidationError("A 'timestamp' snapshot should not have 'check_cols'")
         # If the strategy is not 'check' or 'timestamp' it's a custom strategy,
         # formerly supported with GenericSnapshotConfig
 
@@ -555,9 +534,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
 # base resource types are like resource types, except nothing has mandatory
 # configs.
 BASE_RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = RESOURCE_TYPES.copy()
-BASE_RESOURCE_TYPES.update({
-    NodeType.Snapshot: EmptySnapshotConfig
-})
+BASE_RESOURCE_TYPES.update({NodeType.Snapshot: EmptySnapshotConfig})
 
 
 def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:

@@ -1,7 +1,8 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import (
-    Optional, Dict,
+    Optional,
+    Dict,
 )
 from typing_extensions import Protocol
 
@@ -13,17 +14,17 @@ from dbt.utils import deep_merge
 
 
 class RelationType(StrEnum):
-    Table = 'table'
-    View = 'view'
-    CTE = 'cte'
-    MaterializedView = 'materializedview'
-    External = 'external'
+    Table = "table"
+    View = "view"
+    CTE = "cte"
+    MaterializedView = "materializedview"
+    External = "external"
 
 
 class ComponentName(StrEnum):
-    Database = 'database'
-    Schema = 'schema'
-    Identifier = 'identifier'
+    Database = "database"
+    Schema = "schema"
+    Identifier = "identifier"
 
 
 class HasQuoting(Protocol):
@@ -68,8 +69,7 @@ class Policy(FakeAPIObject):
             return self.identifier
         else:
             raise ValueError(
-                'Got a key of {}, expected one of {}'
-                .format(key, list(ComponentName))
+                "Got a key of {}, expected one of {}".format(key, list(ComponentName))
             )
 
     def replace_dict(self, dct: Dict[ComponentName, bool]):
@@ -88,16 +88,12 @@ class Path(FakeAPIObject):
     def __post_init__(self):
         # handle pesky jinja2.Undefined sneaking in here and messing up rende
         if not isinstance(self.database, (type(None), str)):
-            raise CompilationException(
-                'Got an invalid path database: {}'.format(self.database)
-            )
+            raise CompilationException("Got an invalid path database: {}".format(self.database))
         if not isinstance(self.schema, (type(None), str)):
-            raise CompilationException(
-                'Got an invalid path schema: {}'.format(self.schema)
-            )
+            raise CompilationException("Got an invalid path schema: {}".format(self.schema))
         if not isinstance(self.identifier, (type(None), str)):
             raise CompilationException(
-                'Got an invalid path identifier: {}'.format(self.identifier)
+                "Got an invalid path identifier: {}".format(self.identifier)
             )
 
     def get_lowered_part(self, key: ComponentName) -> Optional[str]:
@@ -115,8 +111,7 @@ class Path(FakeAPIObject):
             return self.identifier
         else:
             raise ValueError(
-                'Got a key of {}, expected one of {}'
-                .format(key, list(ComponentName))
+                "Got a key of {}, expected one of {}".format(key, list(ComponentName))
             )
 
     def replace_dict(self, dct: Dict[ComponentName, str]):

@@ -17,7 +17,6 @@ from dbt.utils import MACRO_PREFIX
 
 
 class GenericTestParser(BaseParser[ParsedGenericTestNode]):
-
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Macro
@@ -42,15 +41,13 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             unique_id=unique_id,
         )
 
-    def parse_unparsed_generic_test(
-        self, base_node: UnparsedMacro
-    ) -> Iterable[ParsedMacro]:
+    def parse_unparsed_generic_test(self, base_node: UnparsedMacro) -> Iterable[ParsedMacro]:
         try:
             blocks: List[jinja.BlockTag] = [
-                t for t in
-                jinja.extract_toplevel_blocks(
+                t
+                for t in jinja.extract_toplevel_blocks(
                     base_node.raw_sql,
-                    allowed_blocks={'test'},
+                    allowed_blocks={"test"},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)
@@ -73,8 +70,8 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
                 # things have gone disastrously wrong, we thought we only
                 # parsed one block!
                 raise ParsingException(
-                    f'Found multiple generic tests in {block.full_block}, expected 1',
-                    node=base_node
+                    f"Found multiple generic tests in {block.full_block}, expected 1",
+                    node=base_node,
                 )
 
             generic_test_name = generic_test_nodes[0].name
@@ -82,7 +79,7 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             if not generic_test_name.startswith(MACRO_PREFIX):
                 continue
 
-            name: str = generic_test_name.replace(MACRO_PREFIX, '')
+            name: str = generic_test_name.replace(MACRO_PREFIX, "")
             node = self.parse_generic_test(block, base_node, name)
             yield node
 

@@ -1,5 +1,5 @@
 name: Ship it!
-on: 
+on:
   workflow_dispatch:
     inputs:
       package:

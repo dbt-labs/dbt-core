@@ -363,8 +363,11 @@ class ProfileSecretEnvVarTest(BasePPTest):
         # calls 'load_config' before the tests are run.
         # Note: only the specified profile is rendered, so there's no
         # point it setting env_vars in non-used profiles.
-        os.environ['ENV_VAR_USER'] = 'root'
-        os.environ[SECRET_ENV_PREFIX + 'PASS'] = 'password'
+
+        # user is secret and password is not. postgres on macos doesn't care if the password
+        # changes so we have to change the user. related: https://github.com/dbt-labs/dbt-core/pull/4250
+        os.environ[SECRET_ENV_PREFIX + 'USER'] = 'root'
+        os.environ['ENV_VAR_PASS'] = 'password'
         return {
             'config': {
                 'send_anonymous_usage_stats': False
@@ -378,8 +381,8 @@ class ProfileSecretEnvVarTest(BasePPTest):
                         'port': 5432,
                         'user': "root",
                         'pass': "password",
-                        'user': "{{ env_var('ENV_VAR_USER') }}",
-                        'pass': "{{ env_var('DBT_ENV_SECRET_PASS') }}",
+                        'user': "{{ env_var('DBT_ENV_SECRET_USER') }}",
+                        'pass': "{{ env_var('ENV_VAR_PASS') }}",
                         'dbname': 'dbt',
                         'schema': self.unique_schema()
                     },
@@ -392,8 +395,8 @@ class ProfileSecretEnvVarTest(BasePPTest):
     def test_postgres_profile_secret_env_vars(self):
 
         # Initial run
-        os.environ['ENV_VAR_USER'] = 'root'
-        os.environ[SECRET_ENV_PREFIX + 'PASS'] = 'password'
+        os.environ[SECRET_ENV_PREFIX + 'USER'] = 'root'
+        os.environ['ENV_VAR_PASS'] = 'password'
         self.setup_directories()
         self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
         results = self.run_dbt(["run"])
@@ -401,7 +404,7 @@ class ProfileSecretEnvVarTest(BasePPTest):
         env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change a secret var, it shouldn't register because we shouldn't save secrets.
-        os.environ[SECRET_ENV_PREFIX + 'PASS'] = 'password2'
+        os.environ[SECRET_ENV_PREFIX + 'USER'] = 'boop'
         # this dbt run is going to fail because the password isn't actually the right one,
         # but that doesn't matter because we just want to see if the manifest has included
         # the secret in the hash of environment variables.

@@ -1,18 +1,21 @@
 import abc
 import os
+
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
 from threading import get_ident
-from typing import (
-    Dict, Tuple, Hashable, Optional, ContextManager, List, Union
-)
+from typing import Dict, Tuple, Hashable, Optional, ContextManager, List, Union
 
 import agate
 
 import dbt.exceptions
 from dbt.contracts.connection import (
-    Connection, Identifier, ConnectionState,
-    AdapterRequiredConfig, LazyHandle, AdapterResponse
+    Connection,
+    Identifier,
+    ConnectionState,
+    AdapterRequiredConfig,
+    LazyHandle,
+    AdapterResponse,
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
@@ -27,7 +30,7 @@ from dbt.events.types import (
     ConnectionClosed,
     ConnectionClosed2,
     Rollback,
-    RollbackFailed
+    RollbackFailed,
 )
 from dbt import flags
 
@@ -45,6 +48,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     You must also set the 'TYPE' class attribute with a class-unique constant
     string.
     """
+
     TYPE: str = NotImplemented
 
     def __init__(self, profile: AdapterRequiredConfig):
@@ -66,16 +70,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         with self.lock:
             if key not in self.thread_connections:
-                raise dbt.exceptions.InvalidConnectionException(
-                    key, list(self.thread_connections)
-                )
+                raise dbt.exceptions.InvalidConnectionException(key, list(self.thread_connections))
             return self.thread_connections[key]
 
     def set_thread_connection(self, conn: Connection) -> None:
         key = self.get_thread_identifier()
         if key in self.thread_connections:
             raise dbt.exceptions.InternalException(
-                'In set_thread_connection, existing connection exists for {}'
+                "In set_thread_connection, existing connection exists for {}"
             )
         self.thread_connections[key] = conn
 
@@ -115,18 +117,19 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             underlying database.
         """
         raise dbt.exceptions.NotImplementedException(
-            '`exception_handler` is not implemented for this adapter!')
+            "`exception_handler` is not implemented for this adapter!"
+        )
 
     def set_connection_name(self, name: Optional[str] = None) -> Connection:
         conn_name: str
         if name is None:
             # if a name isn't specified, we'll re-use a single handle
             # named 'master'
-            conn_name = 'master'
+            conn_name = "master"
         else:
             if not isinstance(name, str):
                 raise dbt.exceptions.CompilerException(
-                    f'For connection name, got {name} - not a string!'
+                    f"For connection name, got {name} - not a string!"
                 )
             assert isinstance(name, str)
             conn_name = name
@@ -139,16 +142,16 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 state=ConnectionState.INIT,
                 transaction_open=False,
                 handle=None,
-                credentials=self.profile.credentials
+                credentials=self.profile.credentials,
             )
             self.set_thread_connection(conn)
 
-        if conn.name == conn_name and conn.state == 'open':
+        if conn.name == conn_name and conn.state == "open":
             return conn
 
         fire_event(NewConnection(conn_name=conn_name, conn_type=self.TYPE))
 
-        if conn.state == 'open':
+        if conn.state == "open":
             fire_event(ConnectionReused(conn_name=conn_name))
         else:
             conn.handle = LazyHandle(self.open)
@@ -160,7 +163,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def cancel_open(self) -> Optional[List[str]]:
         """Cancel all open connections on the adapter. (passable)"""
         raise dbt.exceptions.NotImplementedException(
-            '`cancel_open` is not implemented for this adapter!'
+            "`cancel_open` is not implemented for this adapter!"
         )
 
     @abc.abstractclassmethod
@@ -173,9 +176,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        raise dbt.exceptions.NotImplementedException(
-            '`open` is not implemented for this adapter!'
-        )
+        raise dbt.exceptions.NotImplementedException("`open` is not implemented for this adapter!")
 
     def release(self) -> None:
         with self.lock:
@@ -195,7 +196,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def cleanup_all(self) -> None:
         with self.lock:
             for connection in self.thread_connections.values():
-                if connection.state not in {'closed', 'init'}:
+                if connection.state not in {"closed", "init"}:
                     fire_event(ConnectionLeftOpen(conn_name=connection.name))
                 else:
                     fire_event(ConnectionClosed(conn_name=connection.name))
@@ -208,14 +209,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def begin(self) -> None:
         """Begin a transaction. (passable)"""
         raise dbt.exceptions.NotImplementedException(
-            '`begin` is not implemented for this adapter!'
+            "`begin` is not implemented for this adapter!"
         )
 
     @abc.abstractmethod
     def commit(self) -> None:
         """Commit a transaction. (passable)"""
         raise dbt.exceptions.NotImplementedException(
-            '`commit` is not implemented for this adapter!'
+            "`commit` is not implemented for this adapter!"
         )
 
     @classmethod
@@ -230,7 +231,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _close_handle(cls, connection: Connection) -> None:
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
-        if hasattr(connection.handle, 'close'):
+        if hasattr(connection.handle, "close"):
             fire_event(ConnectionClosed2(conn_name=connection.name))
             connection.handle.close()
         else:
@@ -241,7 +242,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """Roll back the given connection."""
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
-                f'Tried to rollback transaction on connection '
+                f"Tried to rollback transaction on connection "
                 f'"{connection.name}", but it does not have one open!'
             )
 
@@ -291,5 +292,5 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :rtype: Tuple[Union[str, AdapterResponse], agate.Table]
         """
         raise dbt.exceptions.NotImplementedException(
-            '`execute` is not implemented for this adapter!'
+            "`execute` is not implemented for this adapter!"
         )

@@ -4,11 +4,11 @@
 
 ### deprecations.py
 
-### flags.py		
+### flags.py
 
-### main.py			
+### main.py
 
-### tracking.py		
+### tracking.py
 
 ### version.py
 
@@ -16,25 +16,25 @@
 
 ### node_types.py
 
-### helper_types.py		
+### helper_types.py
 
-### links.py		
+### links.py
 
-### semver.py		
+### semver.py
 
 ### ui.py
 
-### compilation.py		
+### compilation.py
 
-### dataclass_schema.py	
+### dataclass_schema.py
 
-### exceptions.py		
+### exceptions.py
 
-### hooks.py		
+### hooks.py
 
-### logger.py		
+### logger.py
 
-### profiler.py		
+### profiler.py
 
 ### utils.py
 
@@ -49,4 +49,3 @@
 * task
 * clients
 * events
-

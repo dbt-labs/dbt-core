@@ -9,18 +9,18 @@ from dbt.contracts.project import (
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import (
-    ExecutableError, warn_or_error, raise_dependency_error
-)
+from dbt.exceptions import ExecutableError, warn_or_error, raise_dependency_error
 from dbt.events.functions import fire_event
 from dbt.events.types import EnsureGitInstalled
 from dbt import ui
 
-PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
+PIN_PACKAGE_URL = (
+    "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
+)
 
 
 def md5sum(s: str):
-    return hashlib.md5(s.encode('latin-1')).hexdigest()
+    return hashlib.md5(s.encode("latin-1")).hexdigest()
 
 
 class GitPackageMixin:
@@ -33,7 +33,7 @@ class GitPackageMixin:
         return self.git
 
     def source_type(self) -> str:
-        return 'git'
+        return "git"
 
 
 class GitPinnedPackage(GitPackageMixin, PinnedPackage):
@@ -57,15 +57,15 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         return self.subdirectory
 
     def nice_version_name(self):
-        if self.revision == 'HEAD':
-            return 'HEAD (default revision)'
+        if self.revision == "HEAD":
+            return "HEAD (default revision)"
         else:
-            return 'revision {}'.format(self.revision)
+            return "revision {}".format(self.revision)
 
     def unpinned_msg(self):
-        if self.revision == 'HEAD':
-            return 'not pinned, using HEAD (default branch)'
-        elif self.revision in ('main', 'master'):
+        if self.revision == "HEAD":
+            return "not pinned, using HEAD (default branch)"
+        elif self.revision in ("main", "master"):
             return f'pinned to the "{self.revision}" branch'
         else:
             return None
@@ -77,11 +77,14 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         the path to the checked out directory."""
         try:
             dir_ = git.clone_and_checkout(
-                self.git, get_downloads_path(), revision=self.revision,
-                dirname=self._checkout_name, subdirectory=self.subdirectory
+                self.git,
+                get_downloads_path(),
+                revision=self.revision,
+                dirname=self._checkout_name,
+                subdirectory=self.subdirectory,
             )
         except ExecutableError as exc:
-            if exc.cmd and exc.cmd[0] == 'git':
+            if exc.cmd and exc.cmd[0] == "git":
                 fire_event(EnsureGitInstalled())
             raise
         return os.path.join(get_downloads_path(), dir_)
@@ -92,9 +95,10 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         if self.unpinned_msg() and self.warn_unpinned:
             warn_or_error(
                 'The git package "{}" \n\tis {}.\n\tThis can introduce '
-                'breaking changes into your project without warning!\n\nSee {}'
-                .format(self.git, self.unpinned_msg(), PIN_PACKAGE_URL),
-                log_fmt=ui.yellow('WARNING: {}')
+                "breaking changes into your project without warning!\n\nSee {}".format(
+                    self.git, self.unpinned_msg(), PIN_PACKAGE_URL
+                ),
+                log_fmt=ui.yellow("WARNING: {}"),
             )
         loaded = Project.from_project_root(path, renderer)
         return ProjectPackageMetadata.from_project(loaded)
@@ -124,26 +128,26 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         self.subdirectory = subdirectory
 
     @classmethod
-    def from_contract(
-        cls, contract: GitPackage
-    ) -> 'GitUnpinnedPackage':
+    def from_contract(cls, contract: GitPackage) -> "GitUnpinnedPackage":
         revisions = contract.get_revisions()
 
         # we want to map None -> True
         warn_unpinned = contract.warn_unpinned is not False
-        return cls(git=contract.git, revisions=revisions,
-                   warn_unpinned=warn_unpinned, subdirectory=contract.subdirectory)
+        return cls(
+            git=contract.git,
+            revisions=revisions,
+            warn_unpinned=warn_unpinned,
+            subdirectory=contract.subdirectory,
+        )
 
     def all_names(self) -> List[str]:
-        if self.git.endswith('.git'):
+        if self.git.endswith(".git"):
             other = self.git[:-4]
         else:
-            other = self.git + '.git'
+            other = self.git + ".git"
         return [self.git, other]
 
-    def incorporate(
-        self, other: 'GitUnpinnedPackage'
-    ) -> 'GitUnpinnedPackage':
+    def incorporate(self, other: "GitUnpinnedPackage") -> "GitUnpinnedPackage":
         warn_unpinned = self.warn_unpinned and other.warn_unpinned
 
         return GitUnpinnedPackage(
@@ -156,13 +160,16 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def resolved(self) -> GitPinnedPackage:
         requested = set(self.revisions)
         if len(requested) == 0:
-            requested = {'HEAD'}
+            requested = {"HEAD"}
         elif len(requested) > 1:
             raise_dependency_error(
-                'git dependencies should contain exactly one version. '
-                '{} contains: {}'.format(self.git, requested))
+                "git dependencies should contain exactly one version. "
+                "{} contains: {}".format(self.git, requested)
+            )
 
         return GitPinnedPackage(
-            git=self.git, revision=requested.pop(),
-            warn_unpinned=self.warn_unpinned, subdirectory=self.subdirectory
+            git=self.git,
+            revision=requested.pop(),
+            warn_unpinned=self.warn_unpinned,
+            subdirectory=self.subdirectory,
         )

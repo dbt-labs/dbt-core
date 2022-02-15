@@ -1,5 +1,5 @@
 # **what?**
-# Take the given commit, run unit tests specifically on that sha, build and 
+# Take the given commit, run unit tests specifically on that sha, build and
 # package it, and then release to GitHub and PyPi with that specific build
 
 # **why?**
@@ -142,9 +142,8 @@ jobs:
         run: |
           dbt --version
 
-
   github-release:
-    name: GitHub Release 
+    name: GitHub Release
 
     needs: test-build
 
@@ -155,7 +154,7 @@ jobs:
         with:
           name: dist
           path: '.'
-          
+
       # Need to set an output variable because env variables can't be taken as input
       # This is needed for the next step with releasing to GitHub
       - name: Find release type
@@ -179,7 +178,7 @@ jobs:
             dbt_core-${{github.event.inputs.version_number}}-py3-none-any.whl
             dbt-postgres-${{github.event.inputs.version_number}}.tar.gz
             dbt-core-${{github.event.inputs.version_number}}.tar.gz
-          
+
   pypi-release:
     name: Pypi release
 
@@ -188,12 +187,12 @@ jobs:
     needs: github-release
 
     environment: PypiProd
-    steps:    
+    steps:
       - uses: actions/download-artifact@v2
         with:
           name: dist
           path: 'dist'
-      
+
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@v1.4.2
         with:

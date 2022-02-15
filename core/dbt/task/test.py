@@ -21,14 +21,13 @@ from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    PrintErrorTestResult, PrintPassTestResult, PrintWarnTestResult,
-    PrintFailureTestResult, PrintStartLine
+    PrintErrorTestResult,
+    PrintPassTestResult,
+    PrintWarnTestResult,
+    PrintFailureTestResult,
+    PrintStartLine,
 )
-from dbt.exceptions import (
-    InternalException,
-    invalid_bool_error,
-    missing_materialization
-)
+from dbt.exceptions import InternalException, invalid_bool_error, missing_materialization
 from dbt.graph import (
     ResourceTypeSelector,
 )
@@ -44,8 +43,8 @@ class TestResultData(dbtClassMixin):
 
     @classmethod
     def validate(cls, data):
-        data['should_warn'] = cls.convert_bool_type(data['should_warn'])
-        data['should_error'] = cls.convert_bool_type(data['should_error'])
+        data["should_warn"] = cls.convert_bool_type(data["should_warn"])
+        data["should_error"] = cls.convert_bool_type(data["should_error"])
         super().validate(data)
 
     def convert_bool_type(field) -> bool:
@@ -54,7 +53,7 @@ class TestResultData(dbtClassMixin):
             try:
                 return bool(strtobool(field))  # type: ignore
             except ValueError:
-                raise invalid_bool_error(field, 'get_test_sql')
+                raise invalid_bool_error(field, "get_test_sql")
 
         # need this so we catch both true bools and 0/1
         return bool(field)
@@ -75,7 +74,7 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         elif result.status == TestStatus.Pass:
@@ -85,7 +84,7 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         elif result.status == TestStatus.Warn:
@@ -96,7 +95,7 @@ class TestRunner(CompileRunner):
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
                     failures=result.failures,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         elif result.status == TestStatus.Fail:
@@ -107,7 +106,7 @@ class TestRunner(CompileRunner):
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
                     failures=result.failures,
-                    node_info=model.node_info
+                    node_info=model.node_info,
                 )
             )
         else:
@@ -119,7 +118,7 @@ class TestRunner(CompileRunner):
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
-                node_info=self.node.node_info
+                node_info=self.node.node_info,
             )
         )
 
@@ -127,27 +126,20 @@ class TestRunner(CompileRunner):
         self.print_start_line()
 
     def execute_test(
-        self,
-        test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
-        manifest: Manifest
+        self, test: Union[CompiledSingularTestNode, CompiledGenericTestNode], manifest: Manifest
     ) -> TestResultData:
-        context = generate_runtime_model_context(
-            test, self.config, manifest
-        )
+        context = generate_runtime_model_context(test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name,
-            test.get_materialization(),
-            self.adapter.type()
+            self.config.project_name, test.get_materialization(), self.adapter.type()
         )
 
         if materialization_macro is None:
             missing_materialization(test, self.adapter.type())
 
-        if 'config' not in context:
+        if "config" not in context:
             raise InternalException(
-                'Invalid materialization context generated, missing config: {}'
-                .format(context)
+                "Invalid materialization context generated, missing config: {}".format(context)
             )
 
         # generate materialization macro
@@ -156,8 +148,8 @@ class TestRunner(CompileRunner):
         macro_func()
         # load results from context
         # could eventually be returned directly by materialization
-        result = context['load_result']('main')
-        table = result['table']
+        result = context["load_result"]("main")
+        table = result["table"]
         num_rows = len(table.rows)
         if num_rows != 1:
             raise InternalException(
@@ -176,7 +168,7 @@ class TestRunner(CompileRunner):
         test_result_dct: PrimitiveDict = dict(
             zip(
                 [column_name.lower() for column_name in table.column_names],
-                map(_coerce_decimal, table.rows[0])
+                map(_coerce_decimal, table.rows[0]),
             )
         )
         TestResultData.validate(test_result_dct)
@@ -187,21 +179,21 @@ class TestRunner(CompileRunner):
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
-        num_errors = pluralize(result.failures, 'result')
+        num_errors = pluralize(result.failures, "result")
         status = None
         message = None
         failures = 0
         if severity == "ERROR" and result.should_error:
             status = TestStatus.Fail
-            message = f'Got {num_errors}, configured to fail if {test.config.error_if}'
+            message = f"Got {num_errors}, configured to fail if {test.config.error_if}"
             failures = result.failures
         elif result.should_warn:
             if flags.WARN_ERROR:
                 status = TestStatus.Fail
-                message = f'Got {num_errors}, configured to fail if {test.config.warn_if}'
+                message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
             else:
                 status = TestStatus.Warn
-                message = f'Got {num_errors}, configured to warn if {test.config.warn_if}'
+                message = f"Got {num_errors}, configured to warn if {test.config.warn_if}"
             failures = result.failures
         else:
             status = TestStatus.Pass
@@ -243,9 +235,7 @@ class TestTask(RunTask):
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get perform node selection'
-            )
+            raise InternalException("manifest and graph must be set to get perform node selection")
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,

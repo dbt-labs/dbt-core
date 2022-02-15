@@ -1,6 +1,6 @@
 # This Action checks makes a dbt run to sample json structured logs
 # and checks that they conform to the currently documented schema.
-# 
+#
 # If this action fails it either means we have unintentionally deviated
 # from our documented structured logging schema, or we need to bump the
 # version of our structured logging and add new documentation to

@@ -7,9 +7,7 @@ import agate
 import dbt.clients.agate_helper
 import dbt.exceptions
 from dbt.adapters.base import BaseConnectionManager
-from dbt.contracts.connection import (
-    Connection, ConnectionState, AdapterResponse
-)
+from dbt.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.events.functions import fire_event
 from dbt.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
 
@@ -23,11 +21,12 @@ class SQLConnectionManager(BaseConnectionManager):
         - get_response
         - open
     """
+
     @abc.abstractmethod
     def cancel(self, connection: Connection):
         """Cancel the given connection."""
         raise dbt.exceptions.NotImplementedException(
-            '`cancel` is not implemented for this adapter!'
+            "`cancel` is not implemented for this adapter!"
         )
 
     def cancel_open(self) -> List[str]:
@@ -40,10 +39,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
                 # if the connection failed, the handle will be None so we have
                 # nothing to cancel.
-                if (
-                    connection.handle is not None and
-                    connection.state == ConnectionState.OPEN
-                ):
+                if connection.handle is not None and connection.state == ConnectionState.OPEN:
                     self.cancel(connection)
                 if connection.name is not None:
                     names.append(connection.name)
@@ -54,7 +50,7 @@ class SQLConnectionManager(BaseConnectionManager):
         sql: str,
         auto_begin: bool = True,
         bindings: Optional[Any] = None,
-        abridge_sql_log: bool = False
+        abridge_sql_log: bool = False,
     ) -> Tuple[Connection, Any]:
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
@@ -63,7 +59,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
         with self.exception_handler(sql):
             if abridge_sql_log:
-                log_sql = '{}...'.format(sql[:512])
+                log_sql = "{}...".format(sql[:512])
             else:
                 log_sql = sql
 
@@ -75,8 +71,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
             fire_event(
                 SQLQueryStatus(
-                    status=str(self.get_response(cursor)),
-                    elapsed=round((time.time() - pre), 2)
+                    status=str(self.get_response(cursor)), elapsed=round((time.time() - pre), 2)
                 )
             )
 
@@ -86,23 +81,26 @@ class SQLConnectionManager(BaseConnectionManager):
     def get_response(cls, cursor: Any) -> Union[AdapterResponse, str]:
         """Get the status of the cursor."""
         raise dbt.exceptions.NotImplementedException(
-            '`get_response` is not implemented for this adapter!'
+            "`get_response` is not implemented for this adapter!"
         )
 
     @classmethod
     def process_results(
-        cls,
-        column_names: Iterable[str],
-        rows: Iterable[Any]
+        cls, column_names: Iterable[str], rows: Iterable[Any]
     ) -> List[Dict[str, Any]]:
-        unique_col_names = dict()
-        for idx in range(len(column_names)):
-            col_name = column_names[idx]
+        # TODO CT-211
+        unique_col_names = dict()  # type: ignore[var-annotated]
+        # TODO CT-211
+        for idx in range(len(column_names)):  # type: ignore[arg-type]
+            # TODO CT-211
+            col_name = column_names[idx]  # type: ignore[index]
             if col_name in unique_col_names:
                 unique_col_names[col_name] += 1
-                column_names[idx] = f'{col_name}_{unique_col_names[col_name]}'
+                # TODO CT-211
+                column_names[idx] = f"{col_name}_{unique_col_names[col_name]}"  # type: ignore[index] # noqa
             else:
-                unique_col_names[column_names[idx]] = 1
+                # TODO CT-211
+                unique_col_names[column_names[idx]] = 1  # type: ignore[index]
         return [dict(zip(column_names, row)) for row in rows]
 
     @classmethod
@@ -115,10 +113,7 @@ class SQLConnectionManager(BaseConnectionManager):
             rows = cursor.fetchall()
             data = cls.process_results(column_names, rows)
 
-        return dbt.clients.agate_helper.table_from_data_flat(
-            data,
-            column_names
-        )
+        return dbt.clients.agate_helper.table_from_data_flat(data, column_names)
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -133,17 +128,18 @@ class SQLConnectionManager(BaseConnectionManager):
         return response, table
 
     def add_begin_query(self):
-        return self.add_query('BEGIN', auto_begin=False)
+        return self.add_query("BEGIN", auto_begin=False)
 
     def add_commit_query(self):
-        return self.add_query('COMMIT', auto_begin=False)
+        return self.add_query("COMMIT", auto_begin=False)
 
     def begin(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is True:
             raise dbt.exceptions.InternalException(
                 'Tried to begin a new transaction on connection "{}", but '
-                'it already had one open!'.format(connection.name))
+                "it already had one open!".format(connection.name)
+            )
 
         self.add_begin_query()
 
@@ -155,7 +151,8 @@ class SQLConnectionManager(BaseConnectionManager):
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
                 'Tried to commit transaction on connection "{}", but '
-                'it does not have one open!'.format(connection.name))
+                "it does not have one open!".format(connection.name)
+            )
 
         fire_event(SQLCommit(conn_name=connection.name))
         self.add_commit_query()

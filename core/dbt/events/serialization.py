@@ -1,8 +1,6 @@
 from dbt.helper_types import Lazy
 from mashumaro import DataClassDictMixin
-from mashumaro.config import (
-    BaseConfig as MashBaseConfig
-)
+from mashumaro.config import BaseConfig as MashBaseConfig
 from mashumaro.types import SerializationStrategy
 from typing import Dict, List
 
@@ -11,13 +9,14 @@ from typing import Dict, List
 # class. If a datetime ends up in an event class, we could use a similar class
 # here to serialize it in our preferred format.
 
+
 class ExceptionSerialization(SerializationStrategy):
     def serialize(self, value):
         out = str(value)
         return out
 
     def deserialize(self, value):
-        return (Exception(value))
+        return Exception(value)
 
 
 class BaseExceptionSerialization(SerializationStrategy):
@@ -25,7 +24,7 @@ class BaseExceptionSerialization(SerializationStrategy):
         return str(value)
 
     def deserialize(self, value):
-        return (BaseException(value))
+        return BaseException(value)
 
 
 # This is an explicit deserializer for the type Lazy[Dict[str, List[str]]]
@@ -52,5 +51,5 @@ class EventSerialization(DataClassDictMixin):
         serialization_strategy = {
             Exception: ExceptionSerialization(),
             BaseException: ExceptionSerialization(),
-            Lazy[Dict[str, List[str]]]: LazySerialization1()
+            Lazy[Dict[str, List[str]]]: LazySerialization1(),
         }
