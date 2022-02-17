@@ -13,7 +13,7 @@
 # **when?**
 # This will run for all PRs going into main and *.latest.
 
-name: Tests and Code Checks
+name: Check Changelog Entry
 
 on:
   push:
