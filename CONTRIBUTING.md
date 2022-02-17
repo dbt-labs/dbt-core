@@ -220,7 +220,7 @@ python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 > [Here](https://docs.pytest.org/en/reorganize-docs/new-docs/user/commandlineuseful.html)
 > is a list of useful command-line options for `pytest` to use while developing.
 
-## `CHANGELOG`
+## Adding CHANGELOG Entry
 
 We use [changie](https://changie.dev) to generate `CHANGELOG` entries.  Follow the steps to [install `changie`](https://changie.dev/guide/installation/) for your system.
 
