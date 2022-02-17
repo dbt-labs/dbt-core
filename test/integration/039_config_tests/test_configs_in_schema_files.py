@@ -65,6 +65,9 @@ class TestSchemaFileConfigs(DBTIntegrationTest):
         manifest = get_manifest()
         model_id = 'model.test.model'
         model_node = manifest.nodes[model_id]
+        meta_expected = {'company': 'NuMade', 'project': 'test', 'team': 'Core Team', 'owner': 'Julie Smith', 'my_attr': 'TESTING'}
+        self.assertEqual(model_node.meta, meta_expected)
+        self.assertEqual(model_node.config.meta, meta_expected)
         model_tags = ['tag_1_in_model', 'tag_2_in_model', 'tag_in_project', 'tag_in_schema']
         model_node_tags = model_node.tags.copy()
         model_node_tags.sort()

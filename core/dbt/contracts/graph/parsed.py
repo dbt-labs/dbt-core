@@ -157,7 +157,6 @@ class ParsedNodeMixins(dbtClassMixin):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
-        self.meta = patch.meta
         self.docs = patch.docs
 
     def get_materialization(self):
