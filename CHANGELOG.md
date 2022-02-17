@@ -9,6 +9,7 @@
 ### Fixes
 - User wasn't asked for permission to overwite a profile entry when running init inside an existing project ([#4375](https://github.com/dbt-labs/dbt-core/issues/4375), [#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
+- Allow override of string and numeric types for adapters. ([#4603](https://github.com/dbt-labs/dbt-core/issues/4603))
 - A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
 
 ### Under the hood
@@ -17,11 +18,13 @@
 - Use mashumaro for serialization in event logging ([#4504](https://github.com/dbt-labs/dbt-core/issues/4504), [#4505](https://github.com/dbt-labs/dbt-core/pull/4505))
 - Drop support for Python 3.7.0 + 3.7.1 ([#4584](https://github.com/dbt-labs/dbt-core/issues/4584), [#4585](https://github.com/dbt-labs/dbt-core/pull/4585), [#4643](https://github.com/dbt-labs/dbt-core/pull/4643))
 - Re-format codebase (except tests) using pre-commit hooks ([#3195](https://github.com/dbt-labs/dbt-core/issues/3195), [#4697](https://github.com/dbt-labs/dbt-core/pull/4697))
+- Add deps module README ([#4686](https://github.com/dbt-labs/dbt-core/pull/4686/))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
 - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - [@emartens](https://github.com/ehmartens) ([#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
+- [@mdesmet](https://github.com/mdesmet) ([#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
 
 ## dbt-core 1.0.2 (TBD)
 
