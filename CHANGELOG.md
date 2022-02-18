@@ -11,7 +11,7 @@
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
 - Clean up test deprecation warnings ([#3988](https://github.com/dbt-labs/dbt-core/issue/3988), [#4556](https://github.com/dbt-labs/dbt-core/pull/4556))
 
-## dbt-core 1.0.2 (Release TBD)
+## dbt-core 1.0.2 (February 18, 2022)
 
 ### Dependencies
 - Pin `MarkupSafe==2.0.1`. Deprecation of `soft_unicode` in `MarkupSafe==2.1.0` is not supported by `Jinja2==2.11`
