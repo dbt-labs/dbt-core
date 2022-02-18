@@ -7,9 +7,7 @@ if [ "$final" == "N" ] || [ "$final" == "n" ]; then
     read -p "Enter pre-release (rc, etc): " prerelease
     full_version="$version-$prerelease"
     changie batch $full_version --keep
-    if [ ! -d /.changes/$version ]; then
-        mkdir ./.changes/$version
-    fi
+    mkdir -p ./.changes/$version
 
     mv ./.changes/unreleased/* ./.changes/$version/
 

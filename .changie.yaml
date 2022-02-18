@@ -13,7 +13,7 @@ kinds:
 - label: Under the Hood
 - label: Breaking Changes
 - label: Docs
-- label: Dependancies
+- label: Dependencies
 custom:
 - key: Author
   label: GitHub Name
