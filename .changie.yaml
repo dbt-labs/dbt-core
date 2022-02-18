@@ -30,7 +30,6 @@ custom:
 footerFormat: |
   Contributors:
   {{- $contributorDict := dict }}
-  {{- $prList := list }}
   {{- range $change := .Changes }}
     {{- $author := $change.Custom.Author }}
     {{- $pr := $change.Custom.PR }}
