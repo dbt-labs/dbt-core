@@ -27,3 +27,22 @@ custom:
   label: GitHub Pull Request Number
   type: int
   minLength: 4
+footerFormat: |
+  Contributors:
+  {{- $contributorDict := dict }}
+  {{- $prList := list }}
+  {{- range $change := .Changes }}
+    {{- $author := $change.Custom.Author }}
+    {{- $pr := $change.Custom.PR }}
+    {{- if hasKey $contributorDict $author }}
+      {{- $prList := get $contributorDict $author }}
+      {{- $prList = append $prList $pr  }}
+      {{- $contributorDict := set $contributorDict $author $prList }}
+    {{- else }}
+      {{- $prList := list $change.Custom.PR }}
+      {{- $contributorDict := set $contributorDict $author $prList }}
+    {{- end }}
+  {{- end }}
+  {{- range $k,$v := $contributorDict }}
+    - [{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}[#{{$element}}](https://github.com/dbt-labs/dbt-core/pull/{{$element}}){{end}})
+  {{- end }}
