@@ -1,10 +1,5 @@
 ## dbt-core 1.1.0 (TBD)
 
-## dbt-core 1.0.3 (TBD)
-
-### Fixes
-- Fix bug causing empty node level meta, snapshot config errors ([#4459](https://github.com/dbt-labs/dbt-core/issues/4459), [#4726](https://github.com/dbt-labs/dbt-core/pull/4726))
-
 ### Features
 - Added Support for Semantic Versioning ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - New Dockerfile to support specific db adapters and platforms.  See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
@@ -30,6 +25,17 @@ Contributors:
 - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - [@emartens](https://github.com/ehmartens) ([#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
 - [@mdesmet](https://github.com/mdesmet) ([#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
+
+
+## dbt-core 1.0.4 (TBD)
+
+### Fixes
+- Fix bug causing empty node level meta, snapshot config errors ([#4459](https://github.com/dbt-labs/dbt-core/issues/4459), [#4726](https://github.com/dbt-labs/dbt-core/pull/4726))
+
+## dbt-core 1.0.3 (TBD)
+
+### Fixes
+- Fix bug accessing target fields in deps and clean commands ([#4752](https://github.com/dbt-labs/dbt-core/issues/4752), [#4758](https://github.com/dbt-labs/dbt-core/issues/4758))
 
 ## dbt-core 1.0.2 (TBD)
 
