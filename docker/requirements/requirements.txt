@@ -4,11 +4,11 @@ Babel==2.9.1
 certifi==2021.10.8
 cffi==1.15.0
 charset-normalizer==2.0.12
-click==8.0.3
+click==8.0.4
 colorama==0.4.4
-dbt-core==1.0.2
+dbt-core==1.0.3
 dbt-extractor==0.4.0
-dbt-postgres==1.0.2
+dbt-postgres==1.0.3
 future==0.18.2
 hologram==0.0.14
 idna==3.3
@@ -18,7 +18,7 @@ Jinja2==2.11.3
 jsonschema==3.1.1
 leather==0.3.4
 Logbook==1.5.3
-MarkupSafe==2.1.0
+MarkupSafe==2.0.1
 mashumaro==2.9
 minimal-snowplow-tracker==0.0.2
 msgpack==1.0.3
