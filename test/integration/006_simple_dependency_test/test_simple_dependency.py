@@ -263,6 +263,7 @@ class TestSimpleDependencyBadProfile(DBTIntegrationTest):
             'config-version': 2,
             'models': {
                 '+any_config': "{{ target.name }}",
+                '+enabled': "{{ target.name in ['redshift', 'postgres'] | as_bool }}"
             }
         }
 
