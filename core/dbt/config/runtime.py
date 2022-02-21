@@ -11,7 +11,7 @@ from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from .utils import parse_cli_vars
 from dbt import flags
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
-from dbt.helper_types import FQNPath, PathSet
+from dbt.helper_types import FQNPath, PathSet, DictDefaultEmptyStr
 from dbt.config.profile import read_user_config
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
@@ -396,7 +396,7 @@ class UnsetProfile(Profile):
         self.threads = -1
 
     def to_target_dict(self):
-        return {}
+        return DictDefaultEmptyStr({})
 
     def __getattribute__(self, name):
         if name in {"profile_name", "target_name", "threads"}:
@@ -431,7 +431,7 @@ class UnsetProfileConfig(RuntimeConfig):
 
     def to_target_dict(self):
         # re-override the poisoned profile behavior
-        return {}
+        return DictDefaultEmptyStr({})
 
     @classmethod
     def from_parts(
