@@ -134,7 +134,7 @@ class Lazy(Generic[T]):
 
 
 # This class is used in to_target_dict, so that accesses to missing keys
-# will return None instead of Undefined
-class DictDefaultNone(dict):
+# will return an empty string instead of Undefined
+class DictDefaultEmptyStr(dict):
     def __getitem__(self, key):
-        return dict.get(self, key)
+        return dict.get(self, key, "")
