@@ -257,6 +257,16 @@ class TestSimpleDependencyBadProfile(DBTIntegrationTest):
     def models(self):
         return "models"
 
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'models': {
+                '+any_config': "{{ target.name }}",
+                '+enabled': "{{ target.name in ['redshift', 'postgres'] | as_bool }}"
+            }
+        }
+
     def postgres_profile(self):
         # Need to set the environment variable here initially because
         # the unittest setup does a load_config.

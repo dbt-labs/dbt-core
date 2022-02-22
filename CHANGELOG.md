@@ -28,10 +28,16 @@ Contributors:
 - [@mdesmet](https://github.com/mdesmet) ([#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
 
 
-## dbt-core 1.0.3 (TBD)
+## dbt-core 1.0.4 (TBD)
 
 ### Fixes
 - Fix bug causing empty node level meta, snapshot config errors ([#4459](https://github.com/dbt-labs/dbt-core/issues/4459), [#4726](https://github.com/dbt-labs/dbt-core/pull/4726))
+- Fix slow `dbt run` when using Postgres adapter, by deduplicating relations in `postgres_get_relations` ([#3058](https://github.com/dbt-labs/dbt-core/issues/3058), [#4521](https://github.com/dbt-labs/dbt-core/pull/4521))
+
+## dbt-core 1.0.3 (TBD)
+
+### Fixes
+- Fix bug accessing target fields in deps and clean commands ([#4752](https://github.com/dbt-labs/dbt-core/issues/4752), [#4758](https://github.com/dbt-labs/dbt-core/issues/4758))
 
 ## dbt-core 1.0.2 (TBD)
 
