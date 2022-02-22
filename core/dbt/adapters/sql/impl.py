@@ -27,7 +27,7 @@ ALTER_COLUMN_TYPE_MACRO_NAME = "alter_column_type"
 
 class SQLAdapter(BaseAdapter):
     """The default adapter with the common agate conversions and some SQL
-    methods implemented. This adapter has a different much shorter list of
+    methods was implemented. This adapter has a different much shorter list of
     methods to implement, but some more macros that must be implemented.
 
     To implement a macro, implement "${adapter_type}__${macro_name}". in the

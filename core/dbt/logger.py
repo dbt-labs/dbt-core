@@ -632,7 +632,7 @@ def list_handler(
     lst: Optional[List[LogMessage]],
     level=logbook.NOTSET,
 ) -> ContextManager:
-    """Return a context manager that temporarly attaches a list to the logger."""
+    """Return a context manager that temporarily attaches a list to the logger."""
     return ListLogHandler(lst=lst, level=level, bubble=True)
 
 

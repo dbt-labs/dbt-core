@@ -61,7 +61,7 @@ flag_defaults = {
 
 
 def env_set_truthy(key: str) -> Optional[str]:
-    """Return the value if it was set to a "truthy" string value, or None
+    """Return the value if it was set to a "truthy" string value or None
     otherwise.
     """
     value = os.getenv(key)

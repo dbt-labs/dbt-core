@@ -41,7 +41,7 @@ CATALOG_FILENAME = "catalog.json"
 
 
 def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-    """Go through source, extracting every key/value pair where the key starts
+    """Go through the source, extracting every key/value pair where the key starts
     with the given prefix.
     """
     cut = len(prefix)

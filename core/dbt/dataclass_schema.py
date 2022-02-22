@@ -35,7 +35,7 @@ class DateTimeSerialization(SerializationStrategy):
 # jsonschemas for every class and the 'validate' method
 # come from Hologram.
 class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
-    """Mixin which adds methods to generate a JSON schema and
+    """The Mixin adds methods to generate a JSON schema and
     convert to and from JSON encodable dicts with validation
     against the schema
     """

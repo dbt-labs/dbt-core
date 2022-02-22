@@ -3,7 +3,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestDefaultSelectors(DBTIntegrationTest):
-    '''Test the selectors default argument'''
+    """Test the selectors' default argument"""
     @property
     def schema(self):
         return 'test_default_selectors_101'

@@ -211,7 +211,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
 
     It maps the function func() onto each non-container value in 'value'
     recursively, returning a new value. As long as func does not manipulate
-    value, then deep_map_render will also not manipulate it.
+    the value, then deep_map_render will also not manipulate it.
 
     value should be a value returned by `yaml.safe_load` or `json.load` - the
     only expected types are list, dict, native python number, str, NoneType,
@@ -319,7 +319,7 @@ def timestring() -> str:
 
 class JSONEncoder(json.JSONEncoder):
     """A 'custom' json encoder that does normal json encoder things, but also
-    handles `Decimal`s. and `Undefined`s. Decimals can lose precision because
+    handles `Decimal`s and `Undefined`s. Decimals can lose precision because
     they get converted to floats. Undefined's are serialized to an empty string
     """
 
@@ -394,7 +394,7 @@ def translate_aliases(
 
     If recurse is True, perform this operation recursively.
 
-    :return: A dict containing all the values in kwargs referenced by their
+    :returns: A dict containing all the values in kwargs referenced by their
         canonical key.
     :raises: `AliasException`, if a canonical key is defined more than once.
     """

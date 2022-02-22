@@ -453,7 +453,7 @@ T = TypeVar("T", bound=GraphMemberNode)
 
 def _update_into(dest: MutableMapping[str, T], new_item: T):
     """Update dest to overwrite whatever is at dest[new_item.unique_id] with
-    new_itme. There must be an existing value to overwrite, and they two nodes
+    new_itme. There must be an existing value to overwrite, and the two nodes
     must have the same original file path.
     """
     unique_id = new_item.unique_id

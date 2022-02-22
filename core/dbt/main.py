@@ -46,7 +46,7 @@ from dbt.exceptions import InternalException, NotImplementedException, FailedToC
 
 
 class DBTVersion(argparse.Action):
-    """This is very very similar to the builtin argparse._Version action,
+    """This is very similar to the built-in argparse._Version action,
     except it just calls dbt.version.get_version_information().
     """
 

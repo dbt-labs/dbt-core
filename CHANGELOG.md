@@ -11,6 +11,7 @@
 - Add project name validation to `dbt init` ([#4490](https://github.com/dbt-labs/dbt-core/issues/4490),[#4536](https://github.com/dbt-labs/dbt-core/pull/4536))
 - Allow override of string and numeric types for adapters. ([#4603](https://github.com/dbt-labs/dbt-core/issues/4603))
 - A change in secret environment variables won't trigger a full reparse [#4650](https://github.com/dbt-labs/dbt-core/issues/4650) [4665](https://github.com/dbt-labs/dbt-core/pull/4665)
+- Fix misspellings and typos in docstrings ([#4545](https://github.com/dbt-labs/dbt-core/pull/4545))
 
 ### Under the hood
 - Testing cleanup ([#4496](https://github.com/dbt-labs/dbt-core/pull/4496), [#4509](https://github.com/dbt-labs/dbt-core/pull/4509))
@@ -26,6 +27,7 @@ Contributors:
 - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
 - [@emartens](https://github.com/ehmartens) ([#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
 - [@mdesmet](https://github.com/mdesmet) ([#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
+- [@kazanzhy](https://github.com/kazanzhy) ([#4545](https://github.com/dbt-labs/dbt-core/pull/4545))
 
 
 ## dbt-core 1.0.4 (TBD)
@@ -80,7 +82,7 @@ Contributors:
 - Fix missing data on exposures in docs ([#4467](https://github.com/dbt-labs/dbt-core/issues/4467))
 
 Contributors:
-- [remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
+- [@remoyson](https://github.com/remoyson) ([#4442](https://github.com/dbt-labs/dbt-core/pull/4442))
 
 ## dbt-core 1.0.0 (December 3, 2021)
 
