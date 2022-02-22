@@ -85,6 +85,7 @@ class RunStatus(StrEnum):
 
 
 class TestStatus(StrEnum):
+    __test__ = False
     Pass = NodeStatus.Pass
     Error = NodeStatus.Error
     Fail = NodeStatus.Fail

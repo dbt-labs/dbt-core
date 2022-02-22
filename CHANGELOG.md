@@ -19,6 +19,7 @@
 - Drop support for Python 3.7.0 + 3.7.1 ([#4584](https://github.com/dbt-labs/dbt-core/issues/4584), [#4585](https://github.com/dbt-labs/dbt-core/pull/4585), [#4643](https://github.com/dbt-labs/dbt-core/pull/4643))
 - Re-format codebase (except tests) using pre-commit hooks ([#3195](https://github.com/dbt-labs/dbt-core/issues/3195), [#4697](https://github.com/dbt-labs/dbt-core/pull/4697))
 - Add deps module README ([#4686](https://github.com/dbt-labs/dbt-core/pull/4686/))
+- Initial conversion of tests to pytest ([#4690](https://github.com/dbt-labs/dbt-core/issues/4690), [#4691](https://github.com/dbt-labs/dbt-core/pull/4691))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))

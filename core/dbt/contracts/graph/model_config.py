@@ -389,7 +389,9 @@ class NodeConfig(NodeAndTestConfig):
         metadata=MergeBehavior.Update.meta(),
     )
     full_refresh: Optional[bool] = None
-    unique_key: Optional[Union[str, List[str]]] = None
+    # 'unique_key' doesn't use 'Optional' because typing.get_type_hints was
+    # sometimes getting the Union order wrong, causing serialization failures.
+    unique_key: Union[str, List[str], None] = None
     on_schema_change: Optional[str] = "ignore"
 
     @classmethod
