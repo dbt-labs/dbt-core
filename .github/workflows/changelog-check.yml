@@ -40,7 +40,7 @@ jobs:
         id: changed-files-for-unreleased
         uses: tj-actions/changed-files@v17
         with:
-          path: .changes/unreleased
+          path: /.changes/unreleased
       - name: Check a file has been added to .changes/unreleased
         run: |
           for file in ${{ steps.changed-files-for-unreleased.outputs.added_files }}; do
