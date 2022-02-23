@@ -57,18 +57,24 @@ jobs:
             changelog:
               - added: '.changes/unreleased/**.yaml'
       - name: Check a file has been added to .changes/unreleased
-        uses: actions/github-script@0.3.0
+        uses: actions/github-script@v6
         if: steps.filter.outputs.changelog == 'false'
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
-            github.issues.createComment({ issue_number, owner, repo, body: 'Missing Changelog entry. 👋' });
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '👋 Please add a changelog entry!'
+            })
       - name: Check a file has been added to .changes/unreleased
-        uses: actions/github-script@0.3.0
+        uses: actions/github-script@v6
         if: steps.filter.outputs.changelog == 'true'
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
-            github.issues.createComment({ issue_number, owner, repo, body: 'Thanks for the changelog entry ! 👋' });
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '👋 Thanks for adding a changelog entry!'
+            })
