@@ -1,3 +1,4 @@
+
 ## dbt-core 1.0.4 (TBD)
 
 ### Fixes
