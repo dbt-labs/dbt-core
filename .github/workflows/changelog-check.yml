@@ -25,11 +25,6 @@ on:
 
 permissions: read-all
 
-# will cancel previous workflows triggered by the same event and for the same ref for PRs or same SHA otherwise  (TODO: do I need this here?)
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ contains(github.event_name, 'pull_request') && github.event.pull_request.head.ref || github.sha }}
-  cancel-in-progress: true
-
 defaults:
   run:
     shell: bash
@@ -41,12 +36,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Run changed-files with defaults on .changes/unreleased
-        id: changed-files-for-changes
-        uses: tj-actions/changed-files@v15.1
+      - name: Run changed-files on .changes/unreleased
+        id: changed-files-for-unreleased
+        uses: tj-actions/changed-files@v17
         with:
           path: .changes/unreleased
-      - name: Check for files that have been added to .changes/unreleased
-        if: steps.changed-files-for-changes.outputs.added_files.any_changed != 'true'
-        run:
-          echo "stop run, no changelog exists" # TODO: post a comment about how to fix this similar to cla-bot?
+      - name: Check a file has been added to .changes/unreleased
+        run: |
+          for file in ${{ steps.changed-files-for-unreleased.outputs.added_files }}; do
+            echo "$file was added"
+          done
