@@ -55,8 +55,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             changelog:
-              - added: '.changes/unreleased/**'
+              - added: '.changes/unreleased/**.yaml'
       - name: Check a file has been added to .changes/unreleased
         if: steps.filter.outputs.changelog == 'false'
         run: |
           echo "no file was added!"
+      - name: Check a file has been added to .changes/unreleased
+        if: steps.filter.outputs.changelog == 'true'
+        run: |
+          echo "file was added! Hooray."
