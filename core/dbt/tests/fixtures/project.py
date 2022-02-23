@@ -112,7 +112,7 @@ def dbt_profile_data(unique_schema, database_host):
 def profiles_yml(profiles_root, dbt_profile_data):
     os.environ["DBT_PROFILES_DIR"] = str(profiles_root)
     path = os.path.join(profiles_root, "profiles.yml")
-    with open(path, "w") as fp:
+    with open(path, "w", encoding="utf-8") as fp:
         fp.write(yaml.safe_dump(dbt_profile_data))
     yield dbt_profile_data
     del os.environ["DBT_PROFILES_DIR"]
@@ -138,7 +138,8 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
     if project_config_update:
         project_config.update(project_config_update)
     runtime_config_file = project_root.join("dbt_project.yml")
-    runtime_config_file.write(yaml.safe_dump(project_config))
+    with open(runtime_config_file, "w", encoding="utf-8") as fp:
+        fp.write(yaml.safe_dump(project_config))
 
 
 # Fixture to provide packages as either yaml or dictionary
@@ -155,7 +156,8 @@ def packages_yml(project_root, packages):
             data = packages
         else:
             data = yaml.safe_dump(packages)
-        project_root.join("packages.yml").write(data)
+        with open(project_root.join("packages.yml"), "w", encoding="utf-8") as fp:
+            fp.write(data)
 
 
 # Fixture to provide selectors as either yaml or dictionary
@@ -172,7 +174,8 @@ def selectors_yml(project_root, selectors):
             data = selectors
         else:
             data = yaml.safe_dump(selectors)
-        project_root.join("selectors.yml").write(data)
+        with open(project_root.join("selectors.yml"), "w", encoding="utf-8") as fp:
+            fp.write(data)
 
 
 # This creates an adapter that is used for running test setup and teardown,
@@ -205,13 +208,15 @@ def write_project_files(project_root, dir_name, file_dict):
 def write_project_files_recursively(path, file_dict):
     for name, value in file_dict.items():
         if name.endswith(".sql") or name.endswith(".csv") or name.endswith(".md"):
-            path.join(name).write(value)
+            with open(path.join(name), "w", encoding="utf-8") as fp:
+                fp.write(value)
         elif name.endswith(".yml") or name.endswith(".yaml"):
             if isinstance(value, str):
                 data = value
             else:
                 data = yaml.safe_dump(value)
-            path.join(name).write(data)
+            with open(path.join(name), "w", encoding="utf-8") as fp:
+                fp.write(data)
         else:
             write_project_files_recursively(path.mkdir(name), value)
 

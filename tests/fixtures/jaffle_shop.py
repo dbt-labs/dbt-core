@@ -395,7 +395,7 @@ def seeds():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     for file_name in ("raw_customers.csv", "raw_orders.csv", "raw_payments.csv"):
         path = os.path.join(dir_path, "jaffle_shop_data", file_name)
-        with open(path, "rb") as fp:
+        with open(path, "r") as fp:
             seeds[file_name] = fp.read()
     return seeds
 

@@ -64,7 +64,7 @@ def models():
 def seeds(test_data_dir):
     # Read seed file and return
     path = os.path.join(test_data_dir, "seed-initial.csv")
-    with open(path, "rb") as fp:
+    with open(path, "r") as fp:
         seed_csv = fp.read()
         return {"seed.csv": seed_csv}
     return {}
