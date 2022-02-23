@@ -3,7 +3,7 @@
 ### Fixes
 - Fix bug causing empty node level meta, snapshot config errors ([#4459](https://github.com/dbt-labs/dbt-core/issues/4459), [#4726](https://github.com/dbt-labs/dbt-core/pull/4726))
 
-## dbt-core 1.0.3 (TBD)
+## dbt-core 1.0.3 (February 21, 2022)
 
 ### Fixes
 - Fix bug accessing target fields in deps and clean commands ([#4752](https://github.com/dbt-labs/dbt-core/issues/4752), [#4758](https://github.com/dbt-labs/dbt-core/issues/4758))
