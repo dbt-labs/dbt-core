@@ -60,13 +60,15 @@ jobs:
         uses: actions/github-script@0.3.0
         if: steps.filter.outputs.changelog == 'false'
         with:
-        script: |
-          const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
-          github.issues.createComment({ issue_number, owner, repo, body: 'Missing Changelog entry. 👋' });
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
+            github.issues.createComment({ issue_number, owner, repo, body: 'Missing Changelog entry. 👋' });
       - name: Check a file has been added to .changes/unreleased
         uses: actions/github-script@0.3.0
         if: steps.filter.outputs.changelog == 'true'
         with:
-        script: |
-          const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
-          github.issues.createComment({ issue_number, owner, repo, body: 'Thanks for the changelog entry ! 👋' });
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
+            github.issues.createComment({ issue_number, owner, repo, body: 'Thanks for the changelog entry ! 👋' });
