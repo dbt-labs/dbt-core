@@ -58,9 +58,15 @@ jobs:
               - added: '.changes/unreleased/**.yaml'
       - name: Check a file has been added to .changes/unreleased
         if: steps.filter.outputs.changelog == 'false'
-        run: |
-          echo "no file was added!"
+        with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
+          github.issues.createComment({ issue_number, owner, repo, body: 'Missing Changelog entry. 👋' });
       - name: Check a file has been added to .changes/unreleased
         if: steps.filter.outputs.changelog == 'true'
-        run: |
-          echo "file was added! Hooray."
+        with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
+          github.issues.createComment({ issue_number, owner, repo, body: 'Thanks for the changelog entry ! 👋' });
