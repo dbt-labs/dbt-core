@@ -36,8 +36,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out the repository
+      - name: Check out the repository (PR)
+        if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Run changed-files on .changes/unreleased
         id: changed-files-for-unreleased
         uses: tj-actions/changed-files@v17
