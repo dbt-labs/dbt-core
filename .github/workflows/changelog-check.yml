@@ -36,6 +36,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
       - name: Run changed-files on .changes/unreleased
         id: changed-files-for-unreleased
         uses: tj-actions/changed-files@v17
