@@ -65,3 +65,4 @@ jobs:
               repo: context.repo.repo,
               body: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](CONTRIBUTING.md)."
             })
+            core.setFailed('Changelog entry required to merge.')
