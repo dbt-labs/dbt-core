@@ -56,7 +56,7 @@ jobs:
               - added: '.changes/unreleased/**.yaml'
       - name: Check a file has been added to .changes/unreleased if required
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'My Label')
+        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
         with:
           script: |
             github.rest.issues.createComment({
@@ -67,7 +67,7 @@ jobs:
             })
       - name: Check a file has been added to .changes/unreleased
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'true' && !contains( github.event.pull_request.labels.*.name, 'cla:yes')
+        if: steps.filter.outputs.changelog == 'true' && !contains( github.event.pull_request.labels.*.name, 'something')
         with:
           script: |
             github.rest.issues.createComment({
@@ -76,3 +76,5 @@ jobs:
               repo: context.repo.repo,
               body: "👋 Thanks for adding a changelog entry!  Delete this before the end.  It's really just here to test output."
             })
+          script: |
+            core.setFailed('Changelog entry required to merge.')
