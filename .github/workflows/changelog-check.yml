@@ -63,7 +63,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](CONTRIBUTING.md).'
+              body: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](CONTRIBUTING.md)."
             })
       - name: Check a file has been added to .changes/unreleased
         uses: actions/github-script@v6
@@ -74,5 +74,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '👋 Thanks for adding a changelog entry!  Delete this before the end.  It's really just here to test output.'
+              body: "👋 Thanks for adding a changelog entry!  Delete this before the end.  It's really just here to test output."
             })
