@@ -76,5 +76,4 @@ jobs:
               repo: context.repo.repo,
               body: "👋 Thanks for adding a changelog entry!  Delete this before the end.  It's really just here to test output."
             })
-          script: |
             core.setFailed('Changelog entry required to merge.')
