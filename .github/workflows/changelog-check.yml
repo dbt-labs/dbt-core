@@ -54,25 +54,25 @@ jobs:
           filters: |
             changelog:
               - added: '.changes/unreleased/**.yaml'
-      - name: Check a file has been added to .changes/unreleased
+      - name: Check a file has been added to .changes/unreleased if required
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'false'
+        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'My Label')
         with:
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '👋 Please add a changelog entry!'
+              body: 'Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](CONTRIBUTING.md).'
             })
       - name: Check a file has been added to .changes/unreleased
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'true'
+        if: steps.filter.outputs.changelog == 'true' && !contains( github.event.pull_request.labels.*.name, 'My Label')
         with:
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '👋 Thanks for adding a changelog entry!'
+              body: '👋 Thanks for adding a changelog entry!  Delete this before the end.  It's really just here to test output.'
             })
