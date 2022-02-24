@@ -67,7 +67,7 @@ jobs:
             })
       - name: Check a file has been added to .changes/unreleased
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'true' && !contains( github.event.pull_request.labels.*.name, 'My Label')
+        if: steps.filter.outputs.changelog == 'true' && !contains( github.event.pull_request.labels.*.name, 'cla:yes')
         with:
           script: |
             github.rest.issues.createComment({
