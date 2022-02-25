@@ -8,6 +8,7 @@ mypy==0.782
 pip-tools
 pre-commit
 pytest
+pytest-cov
 pytest-dotenv
 pytest-logbook
 pytest-csv
