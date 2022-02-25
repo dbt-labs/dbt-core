@@ -1,6 +1,5 @@
 import pytest
-import os
-from dbt.tests.util import run_dbt, copy_file
+from dbt.tests.util import run_dbt, copy_file, read_file
 from dbt.tests.tables import TableComparison
 
 # advanced_incremental.sql
@@ -146,11 +145,8 @@ def models():
 @pytest.fixture
 def seeds(test_data_dir):
     # Read seed file and return
-    path = os.path.join(test_data_dir, "seed-initial.csv")
-    with open(path, "rb") as fp:
-        seed_csv = fp.read()
-        return {"seed.csv": seed_csv}
-    return {}
+    seed_csv = read_file(test_data_dir, "seed-initial.csv")
+    return {"seed.csv": seed_csv}
 
 
 @pytest.fixture
