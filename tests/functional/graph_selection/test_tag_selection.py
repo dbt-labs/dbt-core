@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.graph_selection.fixtures import models, create_tables  # noqa
+from tests.functional.graph_selection.fixtures import models  # noqa
 
 
 @pytest.fixture
@@ -75,17 +75,20 @@ def _verify_select_tag(results):
     assert "users" in models_run
 
 
-def test__postgres__select_tag(project, create_tables):  # noqa
+def test__postgres__select_tag(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:specified_as_string"])
     _verify_select_tag(results)
 
 
-def test__postgres__select_tag_selector_str(project, create_tables):  # noqa
+def test__postgres__select_tag_selector_str(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "tag_specified_as_string_str"])
     _verify_select_tag(results)
 
 
-def test__postgres__select_tag_selector_dict(project, create_tables):  # noqa
+def test__postgres__select_tag_selector_dict(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "tag_specified_as_string_dict"])
     _verify_select_tag(results)
 
@@ -98,17 +101,20 @@ def _verify_select_tag_and_children(results):
     assert "users_rollup" in models_run
 
 
-def test__postgres__select_tag_and_children(project, create_tables):  # noqa
+def test__postgres__select_tag_and_children(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--models", "+tag:specified_in_project+"])
     _verify_select_tag_and_children(results)
 
 
-def test__postgres__select_tag_and_children_selector_str(project, create_tables):  # noqa
+def test__postgres__select_tag_and_children_selector_str(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "tag_specified_in_project_children_str"])
     _verify_select_tag_and_children(results)
 
 
-def test__postgres__select_tag_and_children_selector_dict(project, create_tables):  # noqa
+def test__postgres__select_tag_and_children_selector_dict(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "tag_specified_in_project_children_dict"])
     _verify_select_tag_and_children(results)
 
@@ -122,22 +128,21 @@ def _verify_select_bi(results):
     assert "users_rollup" in models_run
 
 
-def test__postgres__select_tag_in_model_with_project_config(project, create_tables):  # noqa
+def test__postgres__select_tag_in_model_with_project_config(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi"])
     _verify_select_bi(results)
 
 
-def test__postgres__select_tag_in_model_with_project_config_selector(
-    project, create_tables  # noqa
-):
+def test__postgres__select_tag_in_model_with_project_config_selector(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "tagged-bi"])
     _verify_select_bi(results)
 
 
 # check that model configs aren't squashed by project configs
-def test__postgres__select_tag_in_model_with_project_config_parents_children(
-    project, create_tables  # noqa
-):
+def test__postgres__select_tag_in_model_with_project_config_parents_children(project):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--models", "@tag:users"])
     assert len(results) == 4
 
@@ -170,8 +175,9 @@ def test__postgres__select_tag_in_model_with_project_config_parents_children(
 
 
 def test__postgres__select_tag_in_model_with_project_config_parents_children_selectors(
-    project, create_tables  # noqa
-):
+    project,
+):  # noqa
+    run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "user_tagged_childrens_parents"])
     assert len(results) == 4
 

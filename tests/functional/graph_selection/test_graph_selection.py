@@ -4,7 +4,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 from dbt.tests.tables import TableComparison
-from tests.functional.graph_selection.fixtures import models, seeds, create_tables  # noqa
+from tests.functional.graph_selection.fixtures import models, seeds  # noqa
 
 
 selectors_yml = """
@@ -106,8 +106,8 @@ def test__postgres__tags_and_children_limited(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_children(project, create_tables):  # noqa
-
+def test__postgres__specific_model_and_children(project):
+    run_dbt(["seed"])
     results = run_dbt(["run", "--select", "users+"])
     assert len(results) == 4
     table_comp = TableComparison(
@@ -124,8 +124,8 @@ def test__postgres__specific_model_and_children(project, create_tables):  # noqa
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_children_limited(project, create_tables):  # noqa
-
+def test__postgres__specific_model_and_children_limited(project):
+    run_dbt(["seed"])
     results = run_dbt(["run", "--select", "users+1"])
     assert len(results) == 3
     table_comp = TableComparison(
@@ -142,8 +142,8 @@ def test__postgres__specific_model_and_children_limited(project, create_tables):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_parents(project, create_tables):  # noqa
-
+def test__postgres__specific_model_and_parents(project):
+    run_dbt(["seed"])
     results = run_dbt(["run", "--select", "+users_rollup"])
     assert len(results) == 2
     table_comp = TableComparison(
@@ -158,8 +158,8 @@ def test__postgres__specific_model_and_parents(project, create_tables):  # noqa
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_parents_limited(project, create_tables):  # noqa
-
+def test__postgres__specific_model_and_parents_limited(project):
+    run_dbt(["seed"])
     results = run_dbt(["run", "--select", "1+users_rollup"])
     assert len(results) == 2
     table_comp = TableComparison(
@@ -191,7 +191,7 @@ def test__postgres__specific_model_with_exclusion(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__locally_qualified_name(project, project_root):  # noqa
+def test__postgres__locally_qualified_name(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "test.subdir"])
     assert len(results) == 2

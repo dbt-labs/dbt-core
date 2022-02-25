@@ -139,6 +139,16 @@ nested_users_sql = """
 select 1 as id
 """
 
+properties_yml = """
+version: 2
+seeds:
+  - name: summary_expected
+    config:
+      column_types:
+        ct: BIGINT
+        gender: text
+"""
+
 
 @pytest.fixture
 def models():
@@ -159,20 +169,16 @@ def models():
     }
 
 
-# seed function and create_tables would do similar things
-# if you want to use create tables, pass it as an argument to the test function
-# if you want to use seeds. do run_dbt(['seed']) in your test function
 @pytest.fixture
 def seeds(test_data_dir):
     # Read seed file and return
+    seeds = {"properties.yml": properties_yml}
     path = os.path.join(test_data_dir, "seed-initial.csv")
     with open(path, "rb") as fp:
         seed_csv = fp.read()
-        return {"seed.csv": seed_csv}
-    return {}
-
-
-@pytest.fixture
-def create_tables(project):
-    path = os.path.join(project.test_data_dir, "seed.sql")
-    project.run_sql_file(path)
+        seeds["seed.csv"] = seed_csv
+    path = os.path.join(test_data_dir, "summary_expected.csv")
+    with open(path, "rb") as fp:
+        summary_csv = fp.read()
+        seeds["summary_expected.csv"] = summary_csv
+    return seeds

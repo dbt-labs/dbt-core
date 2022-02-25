@@ -2,12 +2,13 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-from tests.functional.graph_selection.fixtures import models, create_tables, seeds  # noqa
+from tests.functional.graph_selection.fixtures import models, seeds  # noqa
 
 
 def run_schema_and_assert(project, include, exclude, expected_tests):
-    # run_dbt(['seed'])
+    # deps must run before seed
     run_dbt(["deps"])
+    run_dbt(["seed"])
     results = run_dbt(["run", "--exclude", "never_selected"])
     assert len(results) == 10
 
@@ -36,7 +37,7 @@ def packages():
     }
 
 
-def test__postgres__schema_tests_no_specifiers(project, create_tables):  # noqa
+def test__postgres__schema_tests_no_specifiers(project):
     run_schema_and_assert(
         project,
         None,
@@ -50,23 +51,23 @@ def test__postgres__schema_tests_no_specifiers(project, create_tables):  # noqa
     )
 
 
-def test__postgres__schema_tests_specify_model(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_model(project):
     run_schema_and_assert(project, "users", None, ["unique_users_id"])
 
 
-def test__postgres__schema_tests_specify_tag(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_tag(project):
     run_schema_and_assert(
         project, "tag:bi", None, ["unique_users_id", "unique_users_rollup_gender"]
     )
 
 
-def test__postgres__schema_tests_specify_model_and_children(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_model_and_children(project):
     run_schema_and_assert(
         project, "users+", None, ["unique_users_id", "unique_users_rollup_gender"]
     )
 
 
-def test__postgres__schema_tests_specify_tag_and_children(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_tag_and_children(project):
     run_schema_and_assert(
         project,
         "tag:base+",
@@ -75,19 +76,17 @@ def test__postgres__schema_tests_specify_tag_and_children(project, create_tables
     )
 
 
-def test__postgres__schema_tests_specify_model_and_parents(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_model_and_parents(project):
     run_schema_and_assert(
         project, "+users_rollup", None, ["unique_users_id", "unique_users_rollup_gender"]
     )
 
 
-def test__postgres__schema_tests_specify_model_and_parents_with_exclude(
-    project, create_tables  # noqa
-):
+def test__postgres__schema_tests_specify_model_and_parents_with_exclude(project):
     run_schema_and_assert(project, "+users_rollup", "users_rollup", ["unique_users_id"])
 
 
-def test__postgres__schema_tests_specify_exclude_only(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_exclude_only(project):
     run_schema_and_assert(
         project,
         None,
@@ -96,7 +95,7 @@ def test__postgres__schema_tests_specify_exclude_only(project, create_tables):  
     )
 
 
-def test__postgres__schema_tests_specify_model_in_pkg(project, create_tables):  # noqa
+def test__postgres__schema_tests_specify_model_in_pkg(project):
     run_schema_and_assert(
         project,
         "test.users_rollup",
@@ -107,7 +106,7 @@ def test__postgres__schema_tests_specify_model_in_pkg(project, create_tables):  
     )
 
 
-def test__postgres__schema_tests_with_glob(project, create_tables):  # noqa
+def test__postgres__schema_tests_with_glob(project):
     run_schema_and_assert(
         project,
         "*",
@@ -116,17 +115,17 @@ def test__postgres__schema_tests_with_glob(project, create_tables):  # noqa
     )
 
 
-def test__postgres__schema_tests_dep_package_only(project, create_tables):  # noqa
+def test__postgres__schema_tests_dep_package_only(project):
     run_schema_and_assert(project, "dbt_integration_project", None, ["unique_table_model_id"])
 
 
-def test__postgres__schema_tests_model_in_dep_pkg(project, create_tables):  # noqa
+def test__postgres__schema_tests_model_in_dep_pkg(project):
     run_schema_and_assert(
         project, "dbt_integration_project.table_model", None, ["unique_table_model_id"]
     )
 
 
-def test__postgres__schema_tests_exclude_pkg(project, create_tables):  # noqa
+def test__postgres__schema_tests_exclude_pkg(project):
     run_schema_and_assert(
         project,
         None,

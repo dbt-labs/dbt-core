@@ -71,12 +71,6 @@ def selectors():
     return selectors_yml
 
 
-# @pytest.fixture
-# def create_tables(test_data_dir, unique_schema):
-#     path = os.path.join(test_data_dir, "seed.sql")
-#     run_sql_file(path, unique_schema)
-
-
 def verify_selected_users(project, results):
     # users
     assert len(results) == 1
