@@ -71,3 +71,15 @@ def copy_file(src_path, src, dest_path, dest) -> None:
 def rm_file(src_path, src) -> None:
     # remove files from proj_path
     os.remove(os.path.join(src_path, src))
+
+
+def write_file(contents, *paths):
+    with open(os.path.join(*paths), "w", encoding="utf-8") as fp:
+        fp.write(contents)
+
+
+def read_file(*paths):
+    contents = ""
+    with open(os.path.join(*paths), "r") as fp:
+        contents = fp.read()
+    return contents
