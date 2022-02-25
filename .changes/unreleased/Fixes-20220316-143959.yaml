@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix partial parsing bug with multiple snapshot blocks
+time: 2022-03-16T14:39:59.16756-04:00
+custom:
+  Author: gshank
+  Issue: "4771"
+  PR: "4773"

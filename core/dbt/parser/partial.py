@@ -272,10 +272,10 @@ class PartialParsing:
         if self.already_scheduled_for_parsing(old_source_file):
             return
 
-        # These files only have one node.
-        unique_id = None
+        # These files only have one node except for snapshots
+        unique_ids = []
         if old_source_file.nodes:
-            unique_id = old_source_file.nodes[0]
+            unique_ids = old_source_file.nodes
         else:
             # It's not clear when this would actually happen.
             # Logging in case there are other associated errors.
@@ -286,7 +286,7 @@ class PartialParsing:
         self.deleted_manifest.files[file_id] = old_source_file
         self.saved_files[file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
-        if unique_id:
+        for unique_id in unique_ids:
             self.remove_node_in_saved(new_source_file, unique_id)
 
     def remove_node_in_saved(self, source_file, unique_id):
@@ -358,7 +358,7 @@ class PartialParsing:
         if not source_file.nodes:
             fire_event(PartialParsingMissingNodes(file_id=source_file.file_id))
             return
-        # There is generally only 1 node for SQL files, except for macros
+        # There is generally only 1 node for SQL files, except for macros and snapshots
         for unique_id in source_file.nodes:
             self.remove_node_in_saved(source_file, unique_id)
             self.schedule_referencing_nodes_for_parsing(unique_id)
