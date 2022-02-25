@@ -38,6 +38,9 @@ Contributors:
 - Fix slow `dbt run` when using Postgres adapter, by deduplicating relations in `postgres_get_relations` ([#3058](https://github.com/dbt-labs/dbt-core/issues/3058), [#4521](https://github.com/dbt-labs/dbt-core/pull/4521))
 - Fix partial parsing bug with multiple snapshot blocks ([#4771](https//github.com/dbt-labs/dbt-core/issues/4772), [#4773](https://github.com/dbt-labs/dbt-core/pull/4773))
 
+### Docs
+- Resolve errors related to operations preventing DAG from generating in the docs.  Also patch a spark issue to allow search to filter accurately past the missing columns. ([#4578](https://github.com/dbt-labs/dbt-core/issues/4578), [#4763](https://github.com/dbt-labs/dbt-core/pull/4763))
+
 ## dbt-core 1.0.3 (TBD)
 
 ### Fixes
