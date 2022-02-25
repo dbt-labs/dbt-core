@@ -1,5 +1,5 @@
-import os
 import pytest
+from dbt.tests.util import read_file
 
 
 schema_yml = """
@@ -173,12 +173,6 @@ def models():
 def seeds(test_data_dir):
     # Read seed file and return
     seeds = {"properties.yml": properties_yml}
-    path = os.path.join(test_data_dir, "seed-initial.csv")
-    with open(path, "rb") as fp:
-        seed_csv = fp.read()
-        seeds["seed.csv"] = seed_csv
-    path = os.path.join(test_data_dir, "summary_expected.csv")
-    with open(path, "rb") as fp:
-        summary_csv = fp.read()
-        seeds["summary_expected.csv"] = summary_csv
+    for seed_file in ["seed.csv", "summary_expected.csv"]:
+        seeds[seed_file] = read_file(test_data_dir, seed_file)
     return seeds

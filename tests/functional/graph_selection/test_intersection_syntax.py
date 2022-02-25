@@ -83,63 +83,63 @@ def verify_selected_users(project, results):
     assert "nested_users" not in created_models
 
 
-def test__postgres__same_model_intersection(project):
+def test_same_model_intersection(project):
     run_dbt(["seed"])
 
     results = run_dbt(["run", "--models", "users,users"])
     verify_selected_users(project, results)
 
 
-def test__postgres__same_model_intersection_selectors(project):
+def test_same_model_intersection_selectors(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "same_intersection"])
     verify_selected_users(project, results)
 
 
-def test__postgres__tags_intersection(project):
+def test_tags_intersection(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi,tag:users"])
     verify_selected_users(project, results)
 
 
-def test__postgres__tags_intersection_selectors(project):
+def test_tags_intersection_selectors(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "tags_intersection"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_triple_descending(project):
+def test_intersection_triple_descending(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "*,tag:bi,tag:users"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_triple_descending_schema(project):
+def test_intersection_triple_descending_schema(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "*,tag:bi,tag:users"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_triple_descending_schema_selectors(project):
+def test_intersection_triple_descending_schema_selectors(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "triple_descending"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_triple_ascending(project):
+def test_intersection_triple_ascending(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:users,tag:bi,*"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_triple_ascending_schema_selectors(project):
+def test_intersection_triple_ascending_schema_selectors(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "triple_ascending"])
@@ -158,7 +158,7 @@ def verify_selected_users_and_rollup(project, results):
     assert "nested_users" not in created_models
 
 
-def test__postgres__intersection_with_exclusion(project):
+def test_intersection_with_exclusion(project):
 
     run_dbt(["seed"])
     results = run_dbt(
@@ -173,49 +173,49 @@ def test__postgres__intersection_with_exclusion(project):
     verify_selected_users_and_rollup(project, results)
 
 
-def test__postgres__intersection_with_exclusion_selectors(project):
+def test_intersection_with_exclusion_selectors(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "intersection_with_exclusion"])
     verify_selected_users_and_rollup(project, results)
 
 
-def test__postgres__intersection_exclude_intersection(project):
+def test_intersection_exclude_intersection(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi,@users", "--exclude", "tag:bi,users_rollup+"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_exclude_intersection_selectors(project):
+def test_intersection_exclude_intersection_selectors(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "intersection_exclude_intersection"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_exclude_intersection_lack(project):
+def test_intersection_exclude_intersection_lack(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi,@users", "--exclude", "@emails,@emails_alt"])
     verify_selected_users_and_rollup(project, results)
 
 
-def test__postgres__intersection_exclude_intersection_lack_selector(project):
+def test_intersection_exclude_intersection_lack_selector(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "intersection_exclude_intersection_lack"])
     verify_selected_users_and_rollup(project, results)
 
 
-def test__postgres__intersection_exclude_triple_intersection(project):
+def test_intersection_exclude_triple_intersection(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi,@users", "--exclude", "*,tag:bi,users_rollup"])
     verify_selected_users(project, results)
 
 
-def test__postgres__intersection_concat(project):
+def test_intersection_concat(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi,@users", "emails_alt"])
@@ -230,7 +230,7 @@ def test__postgres__intersection_concat(project):
     assert "nested_users" not in created_models
 
 
-def test__postgres__intersection_concat_intersection(project):
+def test_intersection_concat_intersection(project):
 
     run_dbt(["seed"])
     results = run_dbt(["run", "--models", "tag:bi,@users", "@emails_alt,emails_alt"])
@@ -245,7 +245,7 @@ def test__postgres__intersection_concat_intersection(project):
     assert "nested_users" not in created_models
 
 
-def test__postgres__intersection_concat_exclude(project):
+def test_intersection_concat_exclude(project):
 
     run_dbt(["seed"])
     results = run_dbt(
@@ -262,7 +262,7 @@ def test__postgres__intersection_concat_exclude(project):
     assert "nested_users" not in created_models
 
 
-def test__postgres__intersection_concat_exclude_concat(project):
+def test_intersection_concat_exclude_concat(project):
 
     run_dbt(["seed"])
     results = run_dbt(
@@ -287,7 +287,7 @@ def test__postgres__intersection_concat_exclude_concat(project):
     assert "nested_users" not in created_models
 
 
-def test__postgres__intersection_concat_exclude_intersection_concat(project):
+def test_intersection_concat_exclude_intersection_concat(project):
 
     run_dbt(["seed"])
     results = run_dbt(

@@ -37,7 +37,7 @@ def packages():
     }
 
 
-def test__postgres__schema_tests_no_specifiers(project):
+def test_schema_tests_no_specifiers(project):
     run_schema_and_assert(
         project,
         None,
@@ -51,23 +51,23 @@ def test__postgres__schema_tests_no_specifiers(project):
     )
 
 
-def test__postgres__schema_tests_specify_model(project):
+def test_schema_tests_specify_model(project):
     run_schema_and_assert(project, "users", None, ["unique_users_id"])
 
 
-def test__postgres__schema_tests_specify_tag(project):
+def test_schema_tests_specify_tag(project):
     run_schema_and_assert(
         project, "tag:bi", None, ["unique_users_id", "unique_users_rollup_gender"]
     )
 
 
-def test__postgres__schema_tests_specify_model_and_children(project):
+def test_schema_tests_specify_model_and_children(project):
     run_schema_and_assert(
         project, "users+", None, ["unique_users_id", "unique_users_rollup_gender"]
     )
 
 
-def test__postgres__schema_tests_specify_tag_and_children(project):
+def test_schema_tests_specify_tag_and_children(project):
     run_schema_and_assert(
         project,
         "tag:base+",
@@ -76,17 +76,17 @@ def test__postgres__schema_tests_specify_tag_and_children(project):
     )
 
 
-def test__postgres__schema_tests_specify_model_and_parents(project):
+def test_schema_tests_specify_model_and_parents(project):
     run_schema_and_assert(
         project, "+users_rollup", None, ["unique_users_id", "unique_users_rollup_gender"]
     )
 
 
-def test__postgres__schema_tests_specify_model_and_parents_with_exclude(project):
+def test_schema_tests_specify_model_and_parents_with_exclude(project):
     run_schema_and_assert(project, "+users_rollup", "users_rollup", ["unique_users_id"])
 
 
-def test__postgres__schema_tests_specify_exclude_only(project):
+def test_schema_tests_specify_exclude_only(project):
     run_schema_and_assert(
         project,
         None,
@@ -95,7 +95,7 @@ def test__postgres__schema_tests_specify_exclude_only(project):
     )
 
 
-def test__postgres__schema_tests_specify_model_in_pkg(project):
+def test_schema_tests_specify_model_in_pkg(project):
     run_schema_and_assert(
         project,
         "test.users_rollup",
@@ -106,7 +106,7 @@ def test__postgres__schema_tests_specify_model_in_pkg(project):
     )
 
 
-def test__postgres__schema_tests_with_glob(project):
+def test_schema_tests_with_glob(project):
     run_schema_and_assert(
         project,
         "*",
@@ -115,17 +115,17 @@ def test__postgres__schema_tests_with_glob(project):
     )
 
 
-def test__postgres__schema_tests_dep_package_only(project):
+def test_schema_tests_dep_package_only(project):
     run_schema_and_assert(project, "dbt_integration_project", None, ["unique_table_model_id"])
 
 
-def test__postgres__schema_tests_model_in_dep_pkg(project):
+def test_schema_tests_model_in_dep_pkg(project):
     run_schema_and_assert(
         project, "dbt_integration_project.table_model", None, ["unique_table_model_id"]
     )
 
 
-def test__postgres__schema_tests_exclude_pkg(project):
+def test_schema_tests_exclude_pkg(project):
     run_schema_and_assert(
         project,
         None,

@@ -32,7 +32,7 @@ def assert_correct_schemas(project, table_comp):
         assert not exists
 
 
-def test__postgres__specific_model(project):
+def test_specific_model(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "users"])
     assert len(results) == 1
@@ -50,7 +50,7 @@ def test__postgres__specific_model(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__tags(project, project_root):
+def test_tags(project, project_root):
     run_dbt(["seed"])
     results = run_dbt(["run", "--selector", "bi_selector"])
     table_comp = TableComparison(
@@ -71,7 +71,7 @@ def test__postgres__tags(project, project_root):
         assert "selectors" in manifest
 
 
-def test__postgres__tags_and_children(project):
+def test_tags_and_children(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "tag:base+"])
     assert len(results) == 5
@@ -88,7 +88,7 @@ def test__postgres__tags_and_children(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__tags_and_children_limited(project):
+def test_tags_and_children_limited(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "tag:base+2"])
     assert len(results) == 4
@@ -106,7 +106,7 @@ def test__postgres__tags_and_children_limited(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_children(project):
+def test_specific_model_and_children(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "users+"])
     assert len(results) == 4
@@ -124,7 +124,7 @@ def test__postgres__specific_model_and_children(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_children_limited(project):
+def test_specific_model_and_children_limited(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "users+1"])
     assert len(results) == 3
@@ -142,7 +142,7 @@ def test__postgres__specific_model_and_children_limited(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_parents(project):
+def test_specific_model_and_parents(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "+users_rollup"])
     assert len(results) == 2
@@ -158,7 +158,7 @@ def test__postgres__specific_model_and_parents(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_and_parents_limited(project):
+def test_specific_model_and_parents_limited(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "1+users_rollup"])
     assert len(results) == 2
@@ -174,7 +174,7 @@ def test__postgres__specific_model_and_parents_limited(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__specific_model_with_exclusion(project):
+def test_specific_model_with_exclusion(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "+users_rollup", "--exclude", "models/users_rollup.sql"])
     assert len(results) == 1
@@ -191,7 +191,7 @@ def test__postgres__specific_model_with_exclusion(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__locally_qualified_name(project):
+def test_locally_qualified_name(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "test.subdir"])
     assert len(results) == 2
@@ -220,7 +220,7 @@ def test__postgres__locally_qualified_name(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__locally_qualified_name_model_with_dots(project):
+def test_locally_qualified_name_model_with_dots(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "alternative.users"])
     assert len(results) == 1
@@ -238,7 +238,7 @@ def test__postgres__locally_qualified_name_model_with_dots(project):
     assert_correct_schemas(project, table_comp)
 
 
-def test__postgres__childrens_parents(project):
+def test_childrens_parents(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "@base_users"])
     assert len(results) == 5
@@ -255,7 +255,7 @@ def test__postgres__childrens_parents(project):
     assert results[0].node.name == "not_null_emails_email"
 
 
-def test__postgres__more_childrens_parents(project):
+def test_more_childrens_parents(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "@users"])
     assert len(results) == 4
@@ -273,7 +273,7 @@ def test__postgres__more_childrens_parents(project):
     ]
 
 
-def test__postgres__concat(project):
+def test_concat(project):
     run_dbt(["seed"])
     results = run_dbt(["run", "--select", "@emails_alt", "users_rollup"])
     assert len(results) == 3
@@ -285,7 +285,7 @@ def test__postgres__concat(project):
     assert "nested_users" not in created_models
 
 
-def test__postgres__concat_exclude(project):
+def test_concat_exclude(project):
     run_dbt(["seed"])
     results = run_dbt(
         ["run", "--select", "@emails_alt", "users_rollup", "--exclude", "emails_alt"]
@@ -299,7 +299,7 @@ def test__postgres__concat_exclude(project):
     assert "nested_users" not in created_models
 
 
-def test__postgres__concat_exclude_concat(project):
+def test_concat_exclude_concat(project):
     run_dbt(["seed"])
     results = run_dbt(
         [
@@ -334,7 +334,7 @@ def test__postgres__concat_exclude_concat(project):
     assert results[0].node.name == "unique_users_id"
 
 
-def test__postgres__exposure_parents(project):
+def test_exposure_parents(project):
     run_dbt(["seed"])
     results = run_dbt(["ls", "--select", "+exposure:seed_ml_exposure"])
     assert len(results) == 2
