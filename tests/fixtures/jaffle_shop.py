@@ -1,5 +1,6 @@
 import pytest
 import os
+from dbt.tests.util import read_file
 
 # models/customers.sql
 customers_sql = """
@@ -394,9 +395,8 @@ def seeds():
     seeds = {}
     dir_path = os.path.dirname(os.path.realpath(__file__))
     for file_name in ("raw_customers.csv", "raw_orders.csv", "raw_payments.csv"):
-        path = os.path.join(dir_path, "jaffle_shop_data", file_name)
-        with open(path, "rb") as fp:
-            seeds[file_name] = fp.read()
+        contents = read_file(dir_path, "jaffle_shop_data", file_name)
+        seeds[file_name] = contents
     return seeds
 
 

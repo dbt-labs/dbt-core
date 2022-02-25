@@ -1,6 +1,5 @@
 import pytest
-import os
-from dbt.tests.util import run_dbt, copy_file
+from dbt.tests.util import run_dbt, copy_file, read_file
 from dbt.tests.tables import TableComparison
 
 
@@ -140,14 +139,10 @@ def models():
 def seeds(test_data_dir):
     # Read seed file and return
     seeds = {"properties.yml": properties_yml}
-    path = os.path.join(test_data_dir, "seed-initial.csv")
-    with open(path, "rb") as fp:
-        seed_csv = fp.read()
-        seeds["users.csv"] = seed_csv
-    path = os.path.join(test_data_dir, "summary_expected.csv")
-    with open(path, "rb") as fp:
-        summary_csv = fp.read()
-        seeds["summary_expected.csv"] = summary_csv
+    seed_csv = read_file(test_data_dir, "seed-initial.csv")
+    seeds["users.csv"] = seed_csv
+    summary_csv = read_file(test_data_dir, "summary_expected.csv")
+    seeds["summary_expected.csv"] = summary_csv
     return seeds
 
 
