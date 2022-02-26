@@ -1,5 +1,6 @@
 import os
 import shutil
+import yaml
 from typing import List
 
 from dbt.main import handle_and_check
@@ -85,3 +86,12 @@ def read_file(*paths):
     with open(os.path.join(*paths), "r") as fp:
         contents = fp.read()
     return contents
+
+
+# For updating yaml config files
+def update_config_file(updates, *paths):
+    current_yaml = read_file(*paths)
+    config = yaml.safe_load(current_yaml)
+    config.update(updates)
+    new_yaml = yaml.safe_dump(config)
+    write_file(new_yaml, *paths)
