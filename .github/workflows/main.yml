@@ -86,8 +86,8 @@ jobs:
       - name: Install python dependencies
         run: |
           pip install --user --upgrade pip
-          pip install tox
           pip --version
+          pip install tox
           tox --version
 
       - name: Run tox
