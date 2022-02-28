@@ -41,7 +41,7 @@ unit: .env ## Runs unit tests with py38.
 .PHONY: test
 test: .env ## Runs unit tests with py38 and code checks against staged changes.
 	@\
-	$(DOCKER_CMD) tox -p -e py38; \
+	$(DOCKER_CMD) tox -e py38; \
 	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
