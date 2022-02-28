@@ -109,8 +109,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    needs: test-metadata
-
     strategy:
       fail-fast: false
       matrix:
