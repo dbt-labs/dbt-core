@@ -16,16 +16,16 @@
 name: Check Changelog Entry
 
 on:
-  push:
-    branches:
-      - "main"
-      - "*.latest"
   pull_request:
   workflow_dispatch:
 
 defaults:
   run:
     shell: bash
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   changelog:
@@ -34,12 +34,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out the repository (PR)
-        if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Check if changelog file was added
         # https://github.com/marketplace/actions/paths-changes-filter
         # For each filter, it sets output variable named by the filter to the text:
