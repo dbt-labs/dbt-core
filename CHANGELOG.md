@@ -304,6 +304,7 @@ Contributors:
 - [@laxjesse](https://github.com/laxjesse) ([#4019](https://github.com/dbt-labs/dbt-core/pull/4019))
 - [@gitznik](https://github.com/Gitznik) ([#4124](https://github.com/dbt-labs/dbt-core/pull/4124))
 
+
 ## Previous Releases
 
 For information on prior major and minor releases, see their changelogs:
@@ -315,3 +316,7 @@ For information on prior major and minor releases, see their changelogs:
 * [0.17](https://github.com/dbt-labs/dbt-core/blob/0.17.latest/CHANGELOG.md)
 * [0.16](https://github.com/dbt-labs/dbt-core/blob/0.16.latest/CHANGELOG.md)
 * [0.15](https://github.com/dbt-labs/dbt-core/blob/0.15.latest/CHANGELOG.md)
+* [0.14](https://github.com/dbt-labs/dbt-core/blob/0.14.latest/CHANGELOG.md)
+* [0.13](https://github.com/dbt-labs/dbt-core/blob/0.13.latest/CHANGELOG.md)
+* [0.12](https://github.com/dbt-labs/dbt-core/blob/0.12.latest/CHANGELOG.md)
+* [0.11 and earlier](https://github.com/dbt-labs/dbt-core/blob/0.11.latest/CHANGELOG.md)
