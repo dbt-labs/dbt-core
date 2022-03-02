@@ -103,5 +103,5 @@ jobs:
       # `${{ github.workspace }}` is used to pass the absolute path
       # ${GITHUB_REF#refs/tags/} gets the branch tag name without the prefix
       - name: Run Measurement
-        run: mkdir tmp && mkdir baselines/9.9.9/ && ls -F && ./app model -v 9.9.9 -b ${{ github.workspace }}/performance/baselines/ -p ${{ github.workspace }}/performance/projects/ -t ${{ github.workspace }}/performance/tmp/ -n 2
+        run: mkdir tmp && mkdir baselines/9.9.9/ && ls -F && ./app model -v 9.9.9 -b ${{ github.workspace }}/performance/baselines/ -p ${{ github.workspace }}/performance/projects/ -t ${{ github.workspace }}/performance/tmp/ -n 20
         working-directory: ${{ github.workspace }}/performance/
