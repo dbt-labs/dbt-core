@@ -11,8 +11,8 @@ env:
   RUNNER_CACHE_PATH: performance/runner/target/release/runner
 
 jobs:
-  latest-runner:
-    name: Build Runner or Use Cached
+  build-runner:
+    name: Build or Fetch Performance Runner
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-D warnings"
@@ -64,7 +64,9 @@ jobs:
 
   # run the performance measurements on the current or default branch
   model:
-    needs: [latest-runner]
+    # depends on `build-runner` as a separate job so that failures in this job do not prevent
+    # a successfully tested and built binary from being cached.
+    needs: [build-runner]
     name: Model a release
     runs-on: ubuntu-latest
     steps:
@@ -83,8 +85,8 @@ jobs:
       - name: Install Hyperfine
         run: wget https://github.com/sharkdp/hyperfine/releases/download/v1.11.0/hyperfine_1.11.0_amd64.deb && sudo dpkg -i hyperfine_1.11.0_amd64.deb
 
-      # runner was just accessed or built so it should always be there
-      - name: Fetch Runner From Cache
+      # this was built in the prior job so it will be there.
+      - name: Fetch Runner
         uses: actions/cache@v2
         id: cache
         with:
@@ -97,9 +99,9 @@ jobs:
       - name: Change Runner Permissions
         run: chmod +x ./performance/app
 
-      # TODO get current version somehow
+      # TODO change stub version
       # `${{ github.workspace }}` is used to pass the absolute path
       # ${GITHUB_REF#refs/tags/} gets the branch tag name without the prefix
       - name: Run Measurement
-        run: mkdir tmp && ./app model -v ${GITHUB_REF#refs/tags/} -b baselines -p projects -t tmp
+        run: mkdir tmp && mkdir baselines/9.9.9/ && ls -F && ./app model -v 9.9.9 -b ${{ github.workspace }}/performance/baselines/ -p ${{ github.workspace }}/performance/projects/ -t ${{ github.workspace }}/performance/tmp/ -n 2
         working-directory: ${{ github.workspace }}/performance/
