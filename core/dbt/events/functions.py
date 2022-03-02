@@ -113,12 +113,6 @@ def setup_event_logger(log_path, level_override=None):
     )
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
-    # For test cases we do multiple setup_event_handler calls and we were getting
-    # file open errors on the clear() call, so explicitly remove the existing handlers
-    # first.
-    for handler in this.FILE_LOG.handlers:
-        handler.close()
-        FILE_LOG.removeHandler(handler)
     this.FILE_LOG.handlers.clear()
     this.FILE_LOG.addHandler(file_handler)
 
