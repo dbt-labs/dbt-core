@@ -1,4 +1,4 @@
-use crate::exceptions::{CalculateError, IOError};
+use crate::exceptions::{IOError, RunnerError};
 use crate::types::*;
 use chrono::prelude::*;
 use serde::de::DeserializeOwned;
@@ -22,19 +22,19 @@ static METRICS: [HyperfineCmd; 1] = [HyperfineCmd {
 // filename with the deserialized json contents of that file.
 pub fn from_json_files<T: DeserializeOwned>(
     results_directory: &Path,
-) -> Result<Vec<(PathBuf, T)>, CalculateError> {
+) -> Result<Vec<(PathBuf, T)>, RunnerError> {
     fs::read_dir(results_directory)
         .or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
-        .or_else(|e| Err(CalculateError::CalculateIOError(e)))?
+        .or_else(|e| Err(RunnerError::RunnerIOError(e)))?
         .into_iter()
         .map(|entry| {
             let ent: DirEntry = entry
                 .or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
-                .or_else(|e| Err(CalculateError::CalculateIOError(e)))?;
+                .or_else(|e| Err(RunnerError::RunnerIOError(e)))?;
 
             Ok(ent.path())
         })
-        .collect::<Result<Vec<PathBuf>, CalculateError>>()?
+        .collect::<Result<Vec<PathBuf>, RunnerError>>()?
         .iter()
         .filter(|path| {
             path.extension()
@@ -44,10 +44,10 @@ pub fn from_json_files<T: DeserializeOwned>(
         .map(|path| {
             fs::read_to_string(path)
                 .or_else(|e| Err(IOError::BadFileContentsErr(path.clone(), Some(e))))
-                .or_else(|e| Err(CalculateError::CalculateIOError(e)))
+                .or_else(|e| Err(RunnerError::RunnerIOError(e)))
                 .and_then(|ref contents| {
                     serde_json::from_str::<T>(contents)
-                        .or_else(|e| Err(CalculateError::BadJSONErr(path.clone(), Some(e))))
+                        .or_else(|e| Err(RunnerError::BadJSONErr(path.clone(), Some(e))))
                 })
                 .map(|m| (path.clone(), m))
         })
@@ -128,10 +128,7 @@ fn clear_dir(dir: &PathBuf) -> Result<(), io::Error> {
 
 // deletes the output directory, makes one hyperfine run for each project-metric pair,
 // reads in the results, and returns a Sample for each project-metric pair.
-pub fn take_samples(
-    projects_dir: &PathBuf,
-    out_dir: &PathBuf,
-) -> Result<Vec<Sample>, CalculateError> {
+pub fn take_samples(projects_dir: &PathBuf, out_dir: &PathBuf) -> Result<Vec<Sample>, RunnerError> {
     clear_dir(out_dir).or_else(|e| Err(IOError::CannotRecreateTempDirErr(out_dir.clone(), e)))?;
 
     // using one time stamp for all samples.
@@ -149,10 +146,10 @@ pub fn take_samples(
         output_file.push(metric.filename());
 
         let status = run_hyperfine(&path, &command, hcmd.clone().prepare, 1, &output_file)
-            .or_else(|e| Err(CalculateError::from(e)))?;
+            .or_else(|e| Err(RunnerError::from(e)))?;
 
         match status.code() {
-            Some(code) if code != 0 => return Err(CalculateError::HyperfineNonZeroExitCode(code)),
+            Some(code) if code != 0 => return Err(RunnerError::HyperfineNonZeroExitCode(code)),
             _ => (),
         }
     }
@@ -175,14 +172,15 @@ pub fn take_samples(
     Ok(samples)
 }
 
-// Calls hyperfine via system command, reads in the results, and writes out a Baseline json file.
+// Calls hyperfine via system command, reads in the results, and writes out Baseline json files.
 // Intended to be called after each new version is released.
 pub fn model<'a>(
     version: Version,
     projects_directory: &PathBuf,
     out_dir: &PathBuf,
     tmp_dir: &PathBuf,
-) -> Result<(), CalculateError> {
+    n_runs: i32,
+) -> Result<Baseline, RunnerError> {
     for (path, project_name, hcmd) in get_projects(projects_directory)? {
         let metric = Metric {
             name: hcmd.name.to_owned(),
@@ -193,46 +191,55 @@ pub fn model<'a>(
         let mut tmp_file = tmp_dir.clone();
         tmp_file.push(metric.filename());
 
-        let status = run_hyperfine(&path, &command, hcmd.clone().prepare, 20, &tmp_file)
-            .or_else(|e| Err(CalculateError::from(e)))?;
+        let status = run_hyperfine(&path, &command, hcmd.clone().prepare, n_runs, &tmp_file)
+            .or_else(|e| Err(RunnerError::from(e)))?;
 
         match status.code() {
-            Some(code) if code != 0 => return Err(CalculateError::HyperfineNonZeroExitCode(code)),
+            Some(code) if code != 0 => return Err(RunnerError::HyperfineNonZeroExitCode(code)),
             _ => (),
         }
     }
 
     // read what hyperfine wrote
-    let measurements: Vec<(PathBuf, Measurements)> = from_json_files::<Measurements>(out_dir)?;
+    let measurements: Vec<(PathBuf, Measurements)> = from_json_files::<Measurements>(tmp_dir)?;
 
     // put it in the right format using the same timestamp for every model.
-    let baseline = from_measurements(version, &measurements, Some(Utc::now()));
+    let baseline = from_measurements(version, &measurements, Some(Utc::now()))?;
 
     // write a file for each baseline measurement
     for model in &baseline.models {
         // create the correct filename like `/out_dir/1.0.0/parse___2000_models.json`
         let mut out_file = out_dir.clone();
         out_file.push(version.to_string());
+
+        // write out the version directory. ignore errors since if it's already made that's fine.
+        match fs::create_dir(out_file.clone()) {
+            _ => (),
+        };
+
+        // continue creating the correct filename
         out_file.push(model.metric.filename());
         out_file.set_extension("json");
 
-        // write the newly modeled baseline to the above path
-        let s = serde_json::to_string(&baseline)
-            .or_else(|e| Err(CalculateError::SerializationErr(e)))?;
+        // get the serialized string
+        let s =
+            serde_json::to_string(&baseline).or_else(|e| Err(RunnerError::SerializationErr(e)))?;
 
+        // TODO writing files in _this function_ isn't the most graceful way organize the code.
+        // write the newly modeled baseline to the above path
         fs::write(out_file.clone(), s)
             .or_else(|e| Err(IOError::WriteErr(out_file.clone(), Some(e))))?;
     }
 
-    Ok(())
+    Ok(baseline)
 }
 
 fn from_measurements(
     version: Version,
     measurements: &[(PathBuf, Measurements)],
     ts: Option<DateTime<Utc>>,
-) -> Baseline {
-    let models = measurements
+) -> Result<Baseline, RunnerError> {
+    let models: Vec<MetricModel> = measurements
         .into_iter()
         .map(|(path, measurements)| {
             // TODO fix unwraps
@@ -248,8 +255,12 @@ fn from_measurements(
         })
         .collect();
 
-    Baseline {
-        version: version,
-        models: models,
+    if models.is_empty() {
+        Err(RunnerError::BaselineWithNoModelsErr())
+    } else {
+        Ok(Baseline {
+            version: version,
+            models: models,
+        })
     }
 }

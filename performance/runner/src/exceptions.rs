@@ -25,13 +25,13 @@ pub enum IOError {
     CannotRecreateTempDirErr(PathBuf, io::Error),
 }
 
-// TODO make this RunnerError instead?
 // Custom Error messages for the error states we could encounter
-// during calculation, and are not prevented at compile time. New
-// constructors should be added for any new error situations that
+// in any of the subcommands, and are not prevented at compile time.
+// New constructors should be added for any new error situations that
 // come up. The desired output of these errors is tested below.
+// TODO make the tests up-to-date with the newly added constructors
 #[derive(Debug, Error)]
-pub enum CalculateError {
+pub enum RunnerError {
     #[error("VersionParseFail: Error parsing input `{}`. Must be in the format \"major.minor.patch\" where each component is an integer.", .0)]
     VersionParseFail(String),
     #[error("MetricParseFail: Error parsing input `{}`. Must be in the format \"metricname___projectname\" with no file extensions.", .0)]
@@ -41,14 +41,16 @@ pub enum CalculateError {
     #[error("SerializationErr: Object cannot be serialized as expected.\nOriginating Exception: {}", .0)]
     SerializationErr(serde_json::Error),
     #[error("{}", .0)]
-    CalculateIOError(IOError),
-    #[error("Hyperfine child process exited with non-zero exit code: {}", .0)]
+    RunnerIOError(IOError),
+    #[error("HyperfineNonZeroExitCode: Hyperfine child process exited with non-zero exit code: {}", .0)]
     HyperfineNonZeroExitCode(i32),
+    #[error("BaselineWithNoModelsErr: Cannot create a baseline from zero models.")]
+    BaselineWithNoModelsErr(),
 }
 
-impl From<IOError> for CalculateError {
+impl From<IOError> for RunnerError {
     fn from(item: IOError) -> Self {
-        CalculateError::CalculateIOError(item)
+        RunnerError::RunnerIOError(item)
     }
 }
 
@@ -103,13 +105,13 @@ Originating Exception: None"#,
     fn test_calculate_error_messages() {
         let pairs = vec![
             (
-                CalculateError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
+                RunnerError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
                 r#"BadJSONErr: JSON in file cannot be deserialized as expected.
 Filepath: dummy/path/file.json
 Originating Exception: None"#,
             ),
             (
-                CalculateError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
+                RunnerError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
                 r#"BadJSONErr: JSON in file cannot be deserialized as expected.
 Filepath: dummy/path/file.json
 Originating Exception: None"#,

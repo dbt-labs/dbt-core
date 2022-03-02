@@ -1,4 +1,4 @@
-use crate::exceptions::CalculateError;
+use crate::exceptions::RunnerError;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -21,7 +21,7 @@ pub struct Metric {
 }
 
 impl FromStr for Metric {
-    type Err = CalculateError;
+    type Err = RunnerError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let split: Vec<&str> = s.split(Metric::sep()).collect();
@@ -30,7 +30,7 @@ impl FromStr for Metric {
                 name: name.to_string(),
                 project_name: project.to_string(),
             }),
-            _ => Err(CalculateError::MetricParseFail(s.to_owned())),
+            _ => Err(RunnerError::MetricParseFail(s.to_owned())),
         }
     }
 }
@@ -82,14 +82,14 @@ pub struct Version {
 }
 
 impl FromStr for Version {
-    type Err = CalculateError;
+    type Err = RunnerError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let ints: Vec<i32> = s
             .split(".")
             .map(|x| x.parse::<i32>())
             .collect::<Result<Vec<i32>, <i32 as FromStr>::Err>>()
-            .or_else(|_| Err(CalculateError::VersionParseFail(s.to_owned())))?;
+            .or_else(|_| Err(RunnerError::VersionParseFail(s.to_owned())))?;
 
         match ints[..] {
             [major, minor, patch] => Ok(Version {
@@ -97,7 +97,7 @@ impl FromStr for Version {
                 minor: minor,
                 patch: patch,
             }),
-            _ => Err(CalculateError::VersionParseFail(s.to_owned())),
+            _ => Err(RunnerError::VersionParseFail(s.to_owned())),
         }
     }
 }

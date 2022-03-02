@@ -5,7 +5,7 @@ mod exceptions;
 mod measure;
 mod types;
 
-use crate::exceptions::CalculateError;
+use crate::exceptions::RunnerError;
 use crate::types::{Calculation, Version};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -28,6 +28,8 @@ enum Opt {
         #[structopt(parse(from_os_str))]
         #[structopt(short)]
         tmp_dir: PathBuf,
+        #[structopt(short)]
+        n_runs: i32,
     },
     #[structopt(name = "sample")]
     Sample {
@@ -48,7 +50,7 @@ enum Opt {
 //
 // This is where all the printing should happen. Exiting happens
 // in main, and module functions should only return values.
-fn run_app() -> Result<i32, CalculateError> {
+fn run_app() -> Result<i32, RunnerError> {
     // match what the user inputs from the cli
     match Opt::from_args() {
         // model subcommand
@@ -57,10 +59,22 @@ fn run_app() -> Result<i32, CalculateError> {
             projects_dir,
             baselines_dir,
             tmp_dir,
+            n_runs,
         } => {
+            // note: I tried resolving relative paths here, and I couldn't get it to work.
+            // this means the cli requires absolute paths for now.
+
             // if there are any nonzero exit codes from the hyperfine runs,
             // return the first one. otherwise return zero.
-            measure::model(version, &projects_dir, &baselines_dir, &tmp_dir)?;
+            let baseline =
+                measure::model(version, &projects_dir, &baselines_dir, &tmp_dir, n_runs)?;
+
+            // print the results to the console for viewing in CI
+            println!(":: Modeling Results ::");
+            let s = serde_json::to_string_pretty(&baseline)
+                .or_else(|e| Err(RunnerError::SerializationErr(e)))?;
+            println!("{}", s);
+
             Ok(0)
         }
 

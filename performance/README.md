@@ -54,25 +54,25 @@ When detecting performance regressions that trigger alerts, block PRs, or delay 
 
 ### Concrete Example
 
-The following example data was collected locally on a macbook pro using the same tools included in this repository.
+The following example data was collected by running the code in this repository in Github Actions.
 
-In dbt v1.0.1, we have the following mean and standard deviation when parsing a dbt project with 2000 models:
+In dbt v1.0.3, we have the following mean and standard deviation when parsing a dbt project with 2000 models:
 
-μ (mean):   49.82<br/>
-σ (stddev): 0.5212<br/>
+μ (mean):   55.06<br/>
+σ (stddev): 2.188<br/>
 
 The 2-sided 3 sigma range can be calculated with these two values via:
 
 x < μ - 3 σ or x > μ + 3 σ<br/>
-x < 49.82 - 3 * 0.5212 or x > 49.82 + 3 * 0.5212 <br/>
-x < 48.26 or x > 51.38<br/>
+x < 55.06 - 3 * 2.188 or x > 55.06 + 3 * 2.188 <br/>
+x < 48.496 or x > 61.624<br/>
 
 It follows that the 1-sided 3 sigma range for performance regressions is just:<br/>
-x > 51.38
+x > 61.624
 
-If when we sample a single `dbt parse` of the same project with a commit slated to go into dbt v1.0.2 on the same macbook pro under the same conditions, we observe a 52s parse time, then this observation is so unlikely if there were no code-induced performance regressions, that we should investigate if there is a performance regression in any of the commits between this failure and the commit where the initial distribution was measured.
+If when we sample a single `dbt parse` of the same project with a commit slated to go into dbt v1.0.4, we observe a 62s parse time, then this observation is so unlikely if there were no code-induced performance regressions, that we should investigate if there is a performance regression in any of the commits between this failure and the commit where the initial distribution was measured.
 
-Observations with 3 sigma significance that are _not_ performance regressions could be due to observing unlikely values (1 in every 741 observations), or variations in the instruments we use to take these measurements such as github actions. At this time we do not measure the variation in the instruments we use to account for these in our calculations.
+Observations with 3 sigma significance that are _not_ performance regressions could be due to observing unlikely values (roughly 1 in every 750 observations), or variations in the instruments we use to take these measurements such as github actions. At this time we do not measure the variation in the instruments we use to account for these in our calculations.
 
 ## Expanding the Tests
 Regression tests run pre-defined dbt commands accross a set of source-committed dbt projects that are known to cause performance bottlenecks. This collection of projects and commands should expand over time to reflect user feedback about poorly performing projects to protect against poor performance in these scenarios in future versions.

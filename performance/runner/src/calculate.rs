@@ -1,4 +1,4 @@
-use crate::exceptions::CalculateError;
+use crate::exceptions::RunnerError;
 use crate::measure;
 use crate::types::*;
 use chrono::prelude::*;
@@ -42,7 +42,7 @@ pub fn regressions(
     baseline_dir: &PathBuf,
     projects_dir: &PathBuf,
     tmp_dir: &PathBuf,
-) -> Result<Vec<Calculation>, CalculateError> {
+) -> Result<Vec<Calculation>, RunnerError> {
     let baselines: Vec<Baseline> = measure::from_json_files::<Baseline>(Path::new(&baseline_dir))?
         .into_iter()
         .map(|(_, x)| x)
