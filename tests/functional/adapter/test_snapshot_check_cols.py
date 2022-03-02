@@ -2,7 +2,6 @@ import pytest
 from dbt.tests.util import run_dbt
 from tests.functional.adapter.files import (
     seeds_base_csv,
-    seeds_newcolumns_csv,
     seeds_added_csv,
     cc_all_snapshot_sql,
     cc_date_snapshot_sql,
@@ -20,7 +19,6 @@ def project_config_update():
 def seeds():
     return {
         "base.csv": seeds_base_csv,
-        "newcolumns.csv": seeds_newcolumns_csv,
         "added.csv": seeds_added_csv,
     }
 
@@ -43,18 +41,25 @@ def check_relation_rows(project, snapshot_name, count):
 def test_snapshot_check_cols(project):
     # seed command
     results = run_dbt(["seed"])
-    assert len(results) == 3
+    assert len(results) == 2
 
     # snapshot command
     results = run_dbt(["snapshot"])
+    for result in results:
+        assert result.status == "success"
 
     # check rowcounts for all snapshots
     check_relation_rows(project, "cc_all_snapshot", 10)
     check_relation_rows(project, "cc_name_snapshot", 10)
     check_relation_rows(project, "cc_date_snapshot", 10)
 
+    relation = relation_from_name(project.adapter, "cc_all_snapshot")
+    result = project.run_sql(f"select * from {relation}", fetch="all")
+
     # point at the "added" seed so the snapshot sees 10 new rows
-    results = run_dbt(["snapshot", "--vars", "seed_name: added"])
+    results = run_dbt(["--no-partial-parse", "snapshot", "--vars", "seed_name: added"])
+    for result in results:
+        assert result.status == "success"
 
     # check rowcounts for all snapshots
     check_relation_rows(project, "cc_all_snapshot", 20)
@@ -72,6 +77,8 @@ def test_snapshot_check_cols(project):
 
     # re-run snapshots, using "added'
     results = run_dbt(["snapshot", "--vars", "seed_name: added"])
+    for result in results:
+        assert result.status == "success"
 
     # check rowcounts for all snapshots
     check_relation_rows(project, "cc_all_snapshot", 30)
@@ -94,6 +101,8 @@ def test_snapshot_check_cols(project):
 
     # re-run snapshots, using "added'
     results = run_dbt(["snapshot", "--vars", "seed_name: added"])
+    for result in results:
+        assert result.status == "success"
 
     # check rowcounts for all snapshots
     check_relation_rows(project, "cc_all_snapshot", 40)
