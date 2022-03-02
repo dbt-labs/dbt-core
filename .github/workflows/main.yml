@@ -156,21 +156,21 @@ jobs:
       - name: Run tests
         run: tox
 
-      - uses: actions/upload-artifact@v2
-        if: always()
-        with:
-          name: logs
-          path: ./logs
-
       - name: Get current date
         if: always()
         id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colons allowed for artifacts
+        run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M_%S')" #no colons allowed for artifacts
 
       - uses: actions/upload-artifact@v2
         if: always()
         with:
-          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.adapter }}-${{ steps.date.outputs.date }}.csv
+          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
+          path: ./logs
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}.csv
           path: integration_results.csv
 
   build:
