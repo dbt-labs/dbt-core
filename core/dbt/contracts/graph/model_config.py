@@ -485,7 +485,8 @@ class SnapshotConfig(EmptySnapshotConfig):
     target_schema: Optional[str] = None
     target_database: Optional[str] = None
     updated_at: Optional[str] = None
-    check_cols: Optional[Union[str, List[str]]] = None
+    # Not using Optional because of serialization issues with a Union of str and List[str]
+    check_cols: Union[str, List[str], None] = None
 
     @classmethod
     def validate(cls, data):

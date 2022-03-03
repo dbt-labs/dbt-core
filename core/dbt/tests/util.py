@@ -1,11 +1,16 @@
 import os
 import shutil
+import yaml
+import json
 from typing import List
 
 from dbt.main import handle_and_check
 from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
-from dbt.events.functions import capture_stdout_logs, stop_capture_stdout_logs
+from dbt.events.functions import fire_event, capture_stdout_logs, stop_capture_stdout_logs
+from dbt.events.test_types import IntegrationTestDebug
+from dbt.context import providers
+from unittest.mock import patch
 
 
 # This is used in pytest tests to run dbt
@@ -85,3 +90,59 @@ def read_file(*paths):
     with open(os.path.join(*paths), "r") as fp:
         contents = fp.read()
     return contents
+
+
+def get_artifact(*paths):
+    contents = read_file(*paths)
+    dct = json.loads(contents)
+    return dct
+
+
+# For updating yaml config files
+def update_config_file(updates, *paths):
+    current_yaml = read_file(*paths)
+    config = yaml.safe_load(current_yaml)
+    config.update(updates)
+    new_yaml = yaml.safe_dump(config)
+    write_file(new_yaml, *paths)
+
+
+def run_sql_with_adapter(adapter, sql, fetch=None):
+    if sql.strip() == "":
+        return
+    # substitute schema and database in sql
+    kwargs = {
+        "schema": adapter.config.credentials.schema,
+        "database": adapter.quote(adapter.config.credentials.database),
+    }
+    sql = sql.format(**kwargs)
+
+    # Since the 'adapter' in dbt.adapters.factory may have been replaced by execution
+    # of dbt commands since the test 'adapter' was created, we patch the 'get_adapter' call in
+    # dbt.context.providers, so that macros that are called refer to this test adapter.
+    # This allows tests to run normal adapter macros as if reset_adapters() were not
+    # called by handle_and_check (for asserts, etc).
+    with patch.object(providers, "get_adapter", return_value=adapter):
+        with adapter.connection_named("__test"):
+            conn = adapter.connections.get_thread_connection()
+            msg = f'test connection "{conn.name}" executing: {sql}'
+            fire_event(IntegrationTestDebug(msg=msg))
+            with conn.handle.cursor() as cursor:
+                try:
+                    cursor.execute(sql)
+                    conn.handle.commit()
+                    conn.handle.commit()
+                    if fetch == "one":
+                        return cursor.fetchone()
+                    elif fetch == "all":
+                        return cursor.fetchall()
+                    else:
+                        return
+                except BaseException as e:
+                    if conn.handle and not getattr(conn.handle, "closed", True):
+                        conn.handle.rollback()
+                    print(sql)
+                    print(e)
+                    raise
+                finally:
+                    conn.transaction_open = False

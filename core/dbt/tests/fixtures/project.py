@@ -4,17 +4,12 @@ import random
 from argparse import Namespace
 from datetime import datetime
 import yaml
-from unittest.mock import patch
-from contextlib import contextmanager
 
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters
 from dbt.events.functions import setup_event_logger
-from dbt.context import providers
-from dbt.events.functions import fire_event
-from dbt.events.test_types import IntegrationTestDebug
-from dbt.tests.util import write_file
+from dbt.tests.util import write_file, run_sql_with_adapter
 
 
 # These are the fixtures that are used in dbt core functional tests
@@ -288,60 +283,16 @@ class TestProjInfo:
         self.test_schema = test_schema
         self.database = database
 
-    @contextmanager
-    def get_connection(self, name="__test"):
-        """Since the 'adapter' in dbt.adapters.factory may have been replaced by execution
-        of dbt commands since the test 'adapter' was created, we patch the 'get_adapter' call in
-        dbt.context.providers, so that macros that are called refer to this test adapter.
-        This allows tests to run normal adapter macros as if reset_adapters() were not
-        called by handle_and_check (for asserts, etc).
-        """
-        with patch.object(providers, "get_adapter", return_value=self.adapter):
-            with self.adapter.connection_named(name):
-                conn = self.adapter.connections.get_thread_connection()
-                yield conn
-
     # Run sql from a path
-    def run_sql_file(self, sql_path):
+    def run_sql_file(self, sql_path, fetch=None):
         with open(sql_path, "r") as f:
             statements = f.read().split(";")
             for statement in statements:
-                self.run_sql(statement)
+                self.run_sql(statement, fetch)
 
     # run sql from a string, using adapter saved at test startup
     def run_sql(self, sql, fetch=None):
-        if sql.strip() == "":
-            return
-        # substitute schema and database in sql
-        adapter = self.adapter
-        kwargs = {
-            "schema": self.test_schema,
-            "database": adapter.quote(self.database),
-        }
-        sql = sql.format(**kwargs)
-
-        with self.get_connection("__test") as conn:
-            msg = f'test connection "{conn.name}" executing: {sql}'
-            fire_event(IntegrationTestDebug(msg=msg))
-            with conn.handle.cursor() as cursor:
-                try:
-                    cursor.execute(sql)
-                    conn.handle.commit()
-                    conn.handle.commit()
-                    if fetch == "one":
-                        return cursor.fetchone()
-                    elif fetch == "all":
-                        return cursor.fetchall()
-                    else:
-                        return
-                except BaseException as e:
-                    if conn.handle and not getattr(conn.handle, "closed", True):
-                        conn.handle.rollback()
-                    print(sql)
-                    print(e)
-                    raise
-                finally:
-                    conn.transaction_open = False
+        return run_sql_with_adapter(self.adapter, sql, fetch=fetch)
 
     def get_tables_in_schema(self):
         sql = """
