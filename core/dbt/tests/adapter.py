@@ -6,7 +6,7 @@ from unittest.mock import patch
 # They are used in the 'adapter' tests directory. At some point they
 # might be moved to dbts.tests.util if they are of general purpose use,
 # but leaving here for now to keep the adapter work more contained.
-# We may want to consolidate in the future since come of this is kind
+# We may want to consolidate in the future since some of this is kind
 # of duplicative of the functionality in dbt.tests.tables.
 
 
@@ -56,6 +56,13 @@ def relation_from_name(adapter, name: str):
 
 
 def check_relation_types(adapter, relation_to_type):
+    """
+    Relation name to table/view
+    {
+        "base": "table",
+        "other": "view",
+    }
+    """
 
     expected_relation_values = {}
     found_relations = []
@@ -175,6 +182,11 @@ def update_rows(adapter, update_rows_config):
 
 
 def generate_update_clause(adapter, clause) -> str:
+    """
+    Called by update_rows function. Expects the "clause" dictionary
+    documented in 'update_rows.
+    """
+
     if "type" not in clause or clause["type"] not in ["add_timestamp", "add_string"]:
         raise TestProcessingException("invalid update_rows clause: type missing or incorrect")
     clause_type = clause["type"]
