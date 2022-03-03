@@ -6,6 +6,6 @@ models:
     - not_null
     - relationships:
         field: id
-        to: node_0
+        to: ref('node_0')
   name: node_1048
 version: 2
