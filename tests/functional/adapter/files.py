@@ -170,23 +170,23 @@ with my_cool_cte as (
 select id, name from my_cool_cte where id is not null
 """
 
-materialized_table = """
+config_materialized_table = """
   {{ config(materialized="table") }}
 """
 
-materialized_view = """
+config_materialized_view = """
   {{ config(materialized="view") }}
 """
 
-materialized_ephemeral = """
+config_materialized_ephemeral = """
   {{ config(materialized="ephemeral") }}
 """
 
-materialized_incremental = """
+config_materialized_incremental = """
   {{ config(materialized="incremental") }}
 """
 
-materialized_var = """
+config_materialized_var = """
   {{ config(materialized=var("materialized_var", "table"))}}
 """
 
@@ -198,11 +198,11 @@ model_ephemeral = """
   select * from {{ ref('ephemeral') }}
 """
 
-base_materialized_var_sql = materialized_var + model_base
-base_table_sql = materialized_table + model_base
-base_view_sql = materialized_view + model_base
-base_ephemeral_sql = materialized_ephemeral + model_base
-ephemeral_with_cte_sql = materialized_ephemeral + model_ephemeral_with_cte
-ephemeral_view_sql = materialized_view + model_ephemeral
-ephemeral_table_sql = materialized_table + model_ephemeral
-incremental_sql = materialized_incremental + model_incremental
+base_materialized_var_sql = config_materialized_var + model_base
+base_table_sql = config_materialized_table + model_base
+base_view_sql = config_materialized_view + model_base
+base_ephemeral_sql = config_materialized_ephemeral + model_base
+ephemeral_with_cte_sql = config_materialized_ephemeral + model_ephemeral_with_cte
+ephemeral_view_sql = config_materialized_view + model_ephemeral
+ephemeral_table_sql = config_materialized_table + model_ephemeral
+incremental_sql = config_materialized_incremental + model_incremental

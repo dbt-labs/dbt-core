@@ -107,13 +107,13 @@ def update_config_file(updates, *paths):
     write_file(new_yaml, *paths)
 
 
-def run_sql(sql, adapter, database, schema, fetch=None):
+def run_sql_with_adapter(adapter, sql, fetch=None):
     if sql.strip() == "":
         return
     # substitute schema and database in sql
     kwargs = {
-        "schema": schema,
-        "database": adapter.quote(database),
+        "schema": adapter.config.credentials.schema,
+        "database": adapter.quote(adapter.config.credentials.database),
     }
     sql = sql.format(**kwargs)
 

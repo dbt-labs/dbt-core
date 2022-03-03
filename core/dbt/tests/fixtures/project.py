@@ -9,7 +9,7 @@ import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters
 from dbt.events.functions import setup_event_logger
-from dbt.tests.util import write_file, run_sql
+from dbt.tests.util import write_file, run_sql_with_adapter
 
 
 # These are the fixtures that are used in dbt core functional tests
@@ -284,15 +284,15 @@ class TestProjInfo:
         self.database = database
 
     # Run sql from a path
-    def run_sql_file(self, sql_path):
+    def run_sql_file(self, sql_path, fetch=None):
         with open(sql_path, "r") as f:
             statements = f.read().split(";")
             for statement in statements:
-                self.run_sql(statement)
+                self.run_sql(statement, fetch)
 
     # run sql from a string, using adapter saved at test startup
     def run_sql(self, sql, fetch=None):
-        return run_sql(sql, self.adapter, self.database, self.test_schema, fetch=fetch)
+        return run_sql_with_adapter(self.adapter, sql, fetch=fetch)
 
     def get_tables_in_schema(self):
         sql = """

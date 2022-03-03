@@ -2,6 +2,13 @@ from itertools import chain, repeat
 from dbt.context import providers
 from unittest.mock import patch
 
+# These functions were extracted from the dbt-adapter-tests spec_file.py.
+# They are used in the 'adapter' tests directory. At some point they
+# might be moved to dbts.tests.util if they are of general purpose use,
+# but leaving here for now to keep the adapter work more contained.
+# We may want to consolidate in the future since come of this is kind
+# of duplicative of the functionality in dbt.tests.tables.
+
 
 class TestProcessingException(Exception):
     pass
