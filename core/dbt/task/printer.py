@@ -11,6 +11,7 @@ from dbt.events.types import (
     StatsLine,
     RunResultError,
     RunResultErrorNoMessage,
+    RunResultErrorWarning,
     SQLCompiledPath,
     CheckNodeTestFailure,
     FirstRunResultError,
@@ -98,7 +99,9 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
                 )
             )
 
-        if result.message:
+        if result.message and is_warning:
+            fire_event(RunResultErrorWarning(msg=result.message))
+        elif result.message:
             fire_event(RunResultError(msg=result.message))
         else:
             fire_event(RunResultErrorNoMessage(status=result.status))

@@ -1609,6 +1609,15 @@ class SQLCompiledPath(InfoLevel):
 
 
 @dataclass
+class RunResultErrorWarning(WarnLevel):
+    msg: str
+    code: str = "Z027"
+
+    def message(self) -> str:
+        return f"  {self.msg}"
+
+
+@dataclass
 class SQlRunnerException(ShowException, DebugLevel):
     exc: Exception
     code: str = "Q006"
