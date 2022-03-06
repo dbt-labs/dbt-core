@@ -1,5 +1,6 @@
 # special support for CLI argument parsing.
 from dbt import flags
+from copy import deepcopy
 import itertools
 from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 
@@ -112,9 +113,9 @@ def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
     return result
 
 
-def _parse_exclusions(definition) -> Optional[SelectionSpec]:
+def _parse_exclusions(definition, result={}) -> Optional[SelectionSpec]:
     exclusions = _get_list_dicts(definition, "exclude")
-    parsed_exclusions = [parse_from_definition(excl) for excl in exclusions]
+    parsed_exclusions = [parse_from_definition(excl, result=result) for excl in exclusions]
     if len(parsed_exclusions) == 1:
         return parsed_exclusions[0]
     elif len(parsed_exclusions) > 1:
@@ -124,7 +125,7 @@ def _parse_exclusions(definition) -> Optional[SelectionSpec]:
 
 
 def _parse_include_exclude_subdefs(
-    definitions: List[RawDefinition],
+    definitions: List[RawDefinition], result={}
 ) -> Tuple[List[SelectionSpec], Optional[SelectionSpec]]:
     include_parts: List[SelectionSpec] = []
     diff_arg: Optional[SelectionSpec] = None
@@ -138,16 +139,16 @@ def _parse_include_exclude_subdefs(
                     f"You cannot provide multiple exclude arguments to the "
                     f"same selector set operator:\n{yaml_sel_cfg}"
                 )
-            diff_arg = _parse_exclusions(definition)
+            diff_arg = _parse_exclusions(definition, result=result)
         else:
-            include_parts.append(parse_from_definition(definition))
+            include_parts.append(parse_from_definition(definition, result=result))
 
     return (include_parts, diff_arg)
 
 
-def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
+def parse_union_definition(definition: Dict[str, Any], result={}) -> SelectionSpec:
     union_def_parts = _get_list_dicts(definition, "union")
-    include, exclude = _parse_include_exclude_subdefs(union_def_parts)
+    include, exclude = _parse_include_exclude_subdefs(union_def_parts, result=result)
 
     union = SelectionUnion(components=include)
 
@@ -158,9 +159,9 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
         return SelectionDifference(components=[union, exclude], raw=definition)
 
 
-def parse_intersection_definition(definition: Dict[str, Any]) -> SelectionSpec:
+def parse_intersection_definition(definition: Dict[str, Any], result={}) -> SelectionSpec:
     intersection_def_parts = _get_list_dicts(definition, "intersection")
-    include, exclude = _parse_include_exclude_subdefs(intersection_def_parts)
+    include, exclude = _parse_include_exclude_subdefs(intersection_def_parts, result=result)
     intersection = SelectionIntersection(components=include)
 
     if exclude is None:
@@ -170,7 +171,7 @@ def parse_intersection_definition(definition: Dict[str, Any]) -> SelectionSpec:
         return SelectionDifference(components=[intersection, exclude], raw=definition)
 
 
-def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
+def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpec:
     diff_arg: Optional[SelectionSpec] = None
     if len(definition) == 1:
         key = list(definition)[0]
@@ -183,10 +184,15 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
             "method": key,
             "value": value,
         }
+    elif definition.get("method") == "selector":
+        sel_def = definition.get("value")
+        if sel_def not in result:
+            raise ValidationException(f"Existing selector definition for {sel_def} not found.")
+        return result[definition["value"]]["definition"]
     elif "method" in definition and "value" in definition:
         dct = definition
         if "exclude" in definition:
-            diff_arg = _parse_exclusions(definition)
+            diff_arg = _parse_exclusions(definition, result=result)
             dct = {k: v for k, v in dct.items() if k != "exclude"}
     else:
         raise ValidationException(
@@ -202,7 +208,11 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
         return SelectionDifference(components=[base, diff_arg])
 
 
-def parse_from_definition(definition: RawDefinition, rootlevel=False) -> SelectionSpec:
+def parse_from_definition(
+    definition: RawDefinition,
+    rootlevel=False,
+    result: Dict[str, Dict[str, Union[SelectionSpec, bool]]] = {},
+) -> SelectionSpec:
 
     if (
         isinstance(definition, dict)
@@ -218,11 +228,11 @@ def parse_from_definition(definition: RawDefinition, rootlevel=False) -> Selecti
     if isinstance(definition, str):
         return SelectionCriteria.from_single_spec(definition)
     elif "union" in definition:
-        return parse_union_definition(definition)
+        return parse_union_definition(definition, result=result)
     elif "intersection" in definition:
-        return parse_intersection_definition(definition)
+        return parse_intersection_definition(definition, result=result)
     elif isinstance(definition, dict):
-        return parse_dict_definition(definition)
+        return parse_dict_definition(definition, result=result)
     else:
         raise ValidationException(
             f"Expected to find union, intersection, str or dict, instead "
@@ -238,6 +248,8 @@ def parse_from_selectors_definition(
     for selector in source.selectors:
         result[selector.name] = {
             "default": selector.default,
-            "definition": parse_from_definition(selector.definition, rootlevel=True),
+            "definition": parse_from_definition(
+                selector.definition, rootlevel=True, result=deepcopy(result)
+            ),
         }
     return result
