@@ -44,7 +44,7 @@ import dbt.contracts.graph.parsed
 from .utils import replace_config
 
 
-def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, alias=None, config_kwargs=None, fqn_extras=None):
+def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, alias=None, config_kwargs=None, fqn_extras=None, depends_on_macros=None):
     if refs is None:
         refs = []
     if sources is None:
@@ -57,6 +57,8 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         alias = name
     if config_kwargs is None:
         config_kwargs = {}
+    if depends_on_macros is None:
+        depends_on_macros = []
 
     if fqn_extras is None:
         fqn_extras = []
@@ -89,7 +91,10 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         tags=tags,
         refs=ref_values,
         sources=source_values,
-        depends_on=DependsOn(nodes=depends_on_nodes, macros=[]),
+        depends_on=DependsOn(
+            nodes=depends_on_nodes,
+            macros=depends_on_macros,
+        ),
         resource_type=NodeType.Model,
         checksum=FileHash.from_contents(''),
     )
@@ -791,6 +796,10 @@ def add_node(manifest, node):
     manifest.nodes[node.unique_id] = node
 
 
+def add_macro(manifest, macro):
+    manifest.macros[macro.unique_id] = macro
+
+
 def change_node(manifest, node, change=None):
     if change is not None:
         node = change(node)
@@ -1034,4 +1043,31 @@ def test_select_state_changed_test_macro_sql(manifest, previous_state, macro_def
         manifest, method, 'modified') == {'not_null_table_model_id'}
     assert search_manifest_using_method(
         manifest, method, 'modified.macros') == {'not_null_table_model_id'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+def test_select_state_changed_test_macros(manifest, previous_state):
+    changed_macro = make_macro('dbt', 'changed_macro', 'blablabla')
+    add_macro(manifest, changed_macro)
+    add_macro(previous_state.manifest, changed_macro.replace(macro_sql='something different'))
+
+    unchanged_macro = make_macro('dbt', 'unchanged_macro', 'blablabla')
+    add_macro(manifest, unchanged_macro)
+    add_macro(previous_state.manifest, unchanged_macro)
+
+    model1 = make_model('dbt', 'model1', 'blablabla',
+            depends_on_macros=[changed_macro.unique_id, unchanged_macro.unique_id])
+    add_node(manifest, model1)
+    add_node(previous_state.manifest, model1)
+
+    model2 = make_model('dbt', 'model2', 'blablabla',
+            depends_on_macros=[unchanged_macro.unique_id, changed_macro.unique_id])
+    add_node(manifest, model2)
+    add_node(previous_state.manifest, model2)
+
+    method = statemethod(manifest, previous_state)
+
+    assert search_manifest_using_method(
+        manifest, method, 'modified') == {'model1', 'model2'}
+    assert search_manifest_using_method(
+        manifest, method, 'modified.macros') == {'model1', 'model2'}
     assert not search_manifest_using_method(manifest, method, 'new')
