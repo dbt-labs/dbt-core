@@ -1,8 +1,0 @@
-
-version: 2
-models:
-    - name: ephemeral
-      columns:
-          - name: id
-            tests:
-                - unique

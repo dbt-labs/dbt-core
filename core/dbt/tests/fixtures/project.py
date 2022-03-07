@@ -121,16 +121,22 @@ def project_config_update():
     return {}
 
 
+@pytest.fixture
+def model_path():
+    return "models"
+
+
 # Combines the project_config_update dictionary with defaults to
 # produce a project_yml config and write it out as dbt_project.yml
 @pytest.fixture(scope="class")
-def dbt_project_yml(project_root, project_config_update, logs_dir):
+def dbt_project_yml(project_root, project_config_update, logs_dir, model_path):
     project_config = {
         "config-version": 2,
         "name": "test",
         "version": "0.1.0",
         "profile": "test",
         "log-path": logs_dir,
+        "model-paths": [model_path],
     }
     if project_config_update:
         project_config.update(project_config_update)
@@ -200,7 +206,12 @@ def write_project_files(project_root, dir_name, file_dict):
 # Write files out from file_dict. Can be nested directories...
 def write_project_files_recursively(path, file_dict):
     for name, value in file_dict.items():
-        if name.endswith(".sql") or name.endswith(".csv") or name.endswith(".md"):
+        if (
+            name.endswith(".sql")
+            or name.endswith(".csv")
+            or name.endswith(".md")
+            or name.endswith(".SQL")
+        ):
             write_file(value, path, name)
         elif name.endswith(".yml") or name.endswith(".yaml"):
             if isinstance(value, str):

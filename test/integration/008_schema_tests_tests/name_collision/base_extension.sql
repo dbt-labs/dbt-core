@@ -1,1 +1,0 @@
-SELECT 'NOT_NULL' AS id
