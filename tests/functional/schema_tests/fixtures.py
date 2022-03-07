@@ -1286,7 +1286,7 @@ def invalid_schema_models():
 
 
 @pytest.fixture(scope="class")
-def models_v2():
+def all_models():
     return {
         "render_test_cli_arg_models": {
             "schema.yml": models_v2__render_test_cli_arg_models__schema_yml,
@@ -1372,48 +1372,26 @@ def quote_required_models():
 @pytest.fixture(scope="class")
 def project_files(
     project_root,
-    wrong_specification_block,
-    test_context_where_subq_models,
     test_utils,
     local_dependency,
-    case_sensitive_models,
     test_context_macros,
-    test_context_models_namespaced,
     macros_v2,
     test_context_macros_namespaced,
     seeds,
-    test_context_models,
-    name_collision,
     test_context_where_subq_macros,
-    invalid_schema_models,
-    models_v2,
+    models,
     local_utils,
-    ephemeral,
-    quote_required_models,
 ):
-    write_project_files(project_root, "wrong_specification_block", wrong_specification_block)
-    write_project_files(
-        project_root, "test-context-where-subq-models", test_context_where_subq_models
-    )
     write_project_files(project_root, "test_utils", test_utils)
     write_project_files(project_root, "local_dependency", local_dependency)
-    write_project_files(project_root, "case-sensitive-models", case_sensitive_models)
     write_project_files(project_root, "test-context-macros", test_context_macros)
-    write_project_files(
-        project_root, "test-context-models-namespaced", test_context_models_namespaced
-    )
     write_project_files(project_root, "macros-v2", macros_v2)
     write_project_files(
         project_root, "test-context-macros-namespaced", test_context_macros_namespaced
     )
     write_project_files(project_root, "seeds", seeds)
-    write_project_files(project_root, "test-context-models", test_context_models)
-    write_project_files(project_root, "name_collision", name_collision)
     write_project_files(
         project_root, "test-context-where-subq-macros", test_context_where_subq_macros
     )
-    write_project_files(project_root, "invalid-schema-models", invalid_schema_models)
-    write_project_files(project_root, "models-v2", models_v2)
+    write_project_files(project_root, "models", models)
     write_project_files(project_root, "local_utils", local_utils)
-    write_project_files(project_root, "ephemeral", ephemeral)
-    write_project_files(project_root, "quote-required-models", quote_required_models)

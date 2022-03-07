@@ -18,7 +18,7 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     name_collision,
     test_context_where_subq_macros,
     invalid_schema_models,
-    models_v2,
+    all_models,
     local_utils,
     ephemeral,
     quote_required_models,
@@ -35,8 +35,8 @@ class TestSchemaTests:
         project.run_sql_file(os.path.join(project.test_data_dir, "seed_failure.sql"))
 
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/models"
+    def models(self, all_models):  # noqa: F811
+        return all_models["models"]
 
     def assertTestFailed(self, result):
         assert result.status == "fail"
@@ -110,8 +110,8 @@ class TestLimitedSchemaTests:
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/limit_null"
+    def models(self, all_models):  # noqa: F811
+        return all_models["limit_null"]
 
     def assertTestFailed(self, result):
         assert result.status == "fail"
@@ -156,8 +156,8 @@ class TestLimitedSchemaTests:
 class TestDefaultBoolType:
     # test with default True/False in get_test_sql macro
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/override_get_test_models"
+    def models(self, all_models):  # noqa: F811
+        return all_models["override_get_test_models"]
 
     def assertTestFailed(self, result):
         assert result.status == "fail"
@@ -202,8 +202,8 @@ class TestDefaultBoolType:
 class TestOtherBoolType:
     # test with expected 0/1 in custom get_test_sql macro
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/override_get_test_models"
+    def models(self, all_models):  # noqa: F811
+        return all_models["override_get_test_models"]
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -255,8 +255,8 @@ class TestOtherBoolType:
 class TestNonBoolType:
     # test with invalid 'x'/'y' in custom get_test_sql macro
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/override_get_test_models_fail"
+    def models(self, all_models):  # noqa: F811
+        return all_models["override_get_test_models_fail"]
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -284,8 +284,8 @@ class TestMalformedSchemaTests:
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/malformed"
+    def models(self, all_models):  # noqa: F811
+        return all_models["malformed"]
 
     def test_malformed_schema_will_break_run(
         self,
@@ -296,13 +296,13 @@ class TestMalformedSchemaTests:
 
 
 class TestCustomConfigSchemaTests:
+    @pytest.fixture(scope="class")
+    def models(self, all_models):  # noqa: F811
+        return all_models["custom-configs"]
+
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
-
-    @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/custom-configs"
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -326,9 +326,8 @@ class TestCustomConfigSchemaTests:
 
 class TestHooksInTests:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        # this makes things easier
-        return "ephemeral"
+    def models(self, ephemeral):  # noqa: F811
+        return ephemeral
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -353,9 +352,8 @@ class TestHooksInTests:
 
 class TestHooksForWhich:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        # test ephemeral models so we don't need to do a run (which would fail)
-        return "ephemeral"
+    def models(self, ephemeral):  # noqa: F811
+        return ephemeral
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -412,8 +410,8 @@ class TestCustomSchemaTests:
         }
 
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/custom"
+    def models(self, all_models):  # noqa: F811
+        return all_models["custom"]
 
     def test_schema_tests(
         self,
@@ -438,8 +436,8 @@ class TestCustomSchemaTests:
 
 class TestQuotedSchemaTestColumns:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "quote-required-models"
+    def models(self, quote_required_models):  # noqa: F811
+        return quote_required_models
 
     def test_quote_required_column(
         self,
@@ -461,8 +459,8 @@ class TestQuotedSchemaTestColumns:
 
 class TestCliVarsSchemaTests:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/render_test_cli_arg_models"
+    def models(self, all_models):  # noqa: F811
+        return all_models["render_test_cli_arg_models"]
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -484,8 +482,8 @@ class TestCliVarsSchemaTests:
 
 class TestConfiguredVarsSchemaTests:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models-v2/render_test_configured_arg_models"
+    def models(self, all_models):  # noqa: F811
+        return all_models["render_test_configured_arg_models"]
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -507,8 +505,8 @@ class TestConfiguredVarsSchemaTests:
 
 class TestSchemaCaseInsensitive:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "case-sensitive-models"
+    def models(self, case_sensitive_models):  # noqa: F811
+        return case_sensitive_models
 
     def test_schema_lowercase_sql(
         self,
@@ -531,8 +529,8 @@ class TestSchemaCaseInsensitive:
 
 class TestSchemaTestContext:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "test-context-models"
+    def models(self, test_context_models):  # noqa: F811
+        return test_context_models
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -576,8 +574,8 @@ class TestSchemaTestContext:
 
 class TestSchemaTestContextWithMacroNamespace:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "test-context-models-namespaced"
+    def models(self, test_context_models_namespaced):  # noqa: F811
+        return test_context_models_namespaced
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -629,8 +627,8 @@ class TestSchemaTestContextWithMacroNamespace:
 
 class TestSchemaTestNameCollision:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "name_collision"
+    def models(self, name_collision):  # noqa: F811
+        return name_collision
 
     def test_collision_test_names_get_hash(
         self,
@@ -655,8 +653,8 @@ class TestSchemaTestNameCollision:
 
 class TestInvalidSchema:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "invalid-schema-models"
+    def models(self, invalid_schema_models):  # noqa: F811
+        return invalid_schema_models
 
     def test_invalid_schema_file(
         self,
@@ -669,8 +667,8 @@ class TestInvalidSchema:
 
 class TestWrongSpecificationBlock:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "wrong_specification_block"
+    def models(self, wrong_specification_block):  # noqa: F811
+        return wrong_specification_block
 
     def test_wrong_specification_block(
         self,
@@ -695,8 +693,8 @@ class TestWrongSpecificationBlock:
 
 class TestSchemaTestContextWhereSubq:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "test-context-where-subq-models"
+    def models(self, test_context_where_subq_models):  # noqa: F811
+        return test_context_where_subq_models
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
