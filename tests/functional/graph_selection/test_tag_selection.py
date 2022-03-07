@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.graph_selection.fixtures import models  # noqa
+from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 
 selectors_yml = """
@@ -72,7 +72,7 @@ def _verify_select_bi(results):
     assert "users_rollup" in models_run
 
 
-class TestTagSelection:
+class TestTagSelection(SelectionFixtures):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {

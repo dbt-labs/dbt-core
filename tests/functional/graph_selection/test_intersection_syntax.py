@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.graph_selection.fixtures import models, seeds  # noqa
+from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 
 selectors_yml = """
@@ -10,7 +10,7 @@ selectors_yml = """
               definition:
                 intersection:
                   - fqn: users
-                  - fqn:users
+                  - fqn: users
             - name: tags_intersection
               definition:
                 intersection:
@@ -90,7 +90,14 @@ def verify_selected_users_and_rollup(project, results):
     assert "nested_users" not in created_models
 
 
-class TestIntersectionSyncs:
+@pytest.fixture
+def run_seed(project):
+    run_dbt(["seed"])
+
+
+# The project and run_seed fixtures will be executed for each test method
+@pytest.mark.usefixtures("project", "run_seed")
+class TestIntersectionSyncs(SelectionFixtures):
     @pytest.fixture(scope="class")
     def selectors(self):
         return selectors_yml

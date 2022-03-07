@@ -4,7 +4,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 from dbt.tests.tables import TableComparison
-from tests.functional.graph_selection.fixtures import models, seeds  # noqa
+from tests.functional.graph_selection.fixtures import SelectionFixtures
 from dbt.context import providers
 from unittest.mock import patch
 
@@ -36,7 +36,14 @@ def clear_schema(project):
     project.run_sql("create schema {schema}")
 
 
-class TestGraphSelection:
+@pytest.fixture
+def run_seed(project):
+    clear_schema(project)
+    run_dbt(["seed"])
+
+
+@pytest.mark.usefixtures("project", "run_seed")
+class TestGraphSelection(SelectionFixtures):
     @pytest.fixture(scope="class")
     def selectors(self):
         return selectors_yml
@@ -59,7 +66,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_tags(self, project, project_root):
-        run_dbt(["seed"])
         results = run_dbt(["run", "--selector", "bi_selector"])
         assert len(results) == 2
         created_tables = project.get_tables_in_schema()
@@ -76,7 +82,6 @@ class TestGraphSelection:
             assert "selectors" in manifest
 
     def test_tags_and_children(self, project):
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "tag:base+"])
         assert len(results) == 5
         created_models = project.get_tables_in_schema()
@@ -89,8 +94,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_tags_and_children_limited(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "tag:base+2"])
         assert len(results) == 4
         created_models = project.get_tables_in_schema()
@@ -104,8 +107,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_specific_model_and_children(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "users+"])
         assert len(results) == 4
         table_comp = TableComparison(
@@ -122,8 +123,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_specific_model_and_children_limited(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "users+1"])
         assert len(results) == 3
         table_comp = TableComparison(
@@ -140,7 +139,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_specific_model_and_parents(self, project):
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "+users_rollup"])
         assert len(results) == 2
         table_comp = TableComparison(
@@ -155,7 +153,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_specific_model_and_parents_limited(self, project):
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "1+users_rollup"])
         assert len(results) == 2
         table_comp = TableComparison(
@@ -170,7 +167,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_specific_model_with_exclusion(self, project):
-        run_dbt(["seed"])
         results = run_dbt(
             ["run", "--select", "+users_rollup", "--exclude", "models/users_rollup.sql"]
         )
@@ -188,7 +184,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_locally_qualified_name(self, project):
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "test.subdir"])
         assert len(results) == 2
         created_models = project.get_tables_in_schema()
@@ -210,7 +205,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_locally_qualified_name_model_with_dots(self, project):
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "alternative.users"])
         assert len(results) == 1
         created_models = project.get_tables_in_schema()
@@ -224,8 +218,6 @@ class TestGraphSelection:
         assert_correct_schemas(project)
 
     def test_childrens_parents(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "@base_users"])
         assert len(results) == 5
         created_models = project.get_tables_in_schema()
@@ -241,8 +233,6 @@ class TestGraphSelection:
         assert results[0].node.name == "not_null_emails_email"
 
     def test_more_childrens_parents(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "@users"])
         assert len(results) == 4
         created_models = project.get_tables_in_schema()
@@ -259,8 +249,6 @@ class TestGraphSelection:
         ]
 
     def test_concat(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["run", "--select", "@emails_alt", "users_rollup"])
         assert len(results) == 3
         created_models = project.get_tables_in_schema()
@@ -271,8 +259,6 @@ class TestGraphSelection:
         assert "nested_users" not in created_models
 
     def test_concat_exclude(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(
             ["run", "--select", "@emails_alt", "users_rollup", "--exclude", "emails_alt"]
         )
@@ -285,8 +271,6 @@ class TestGraphSelection:
         assert "nested_users" not in created_models
 
     def test_concat_exclude_concat(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(
             [
                 "run",
@@ -320,8 +304,6 @@ class TestGraphSelection:
         assert results[0].node.name == "unique_users_id"
 
     def test_exposure_parents(self, project):
-        clear_schema(project)
-        run_dbt(["seed"])
         results = run_dbt(["ls", "--select", "+exposure:seed_ml_exposure"])
         assert len(results) == 2
         assert sorted(results) == ["exposure:test.seed_ml_exposure", "source:test.raw.seed"]

@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-from tests.functional.graph_selection.fixtures import models, seeds  # noqa
+from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 
 def run_schema_and_assert(project, include, exclude, expected_tests):
@@ -25,7 +25,7 @@ def run_schema_and_assert(project, include, exclude, expected_tests):
     assert ran_tests == expected_sorted
 
 
-class TestSchemaTestGraphSelection:
+class TestSchemaTestGraphSelection(SelectionFixtures):
     @pytest.fixture(scope="class")
     def packages(self):
         return {
