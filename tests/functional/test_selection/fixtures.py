@@ -68,7 +68,7 @@ select 1 as fun
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def tests():
     return {
         "cf_a_b.sql": tests__cf_a_b_sql,
@@ -77,7 +77,7 @@ def tests():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "schema.yml": models__schema_yml,
@@ -86,7 +86,7 @@ def models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_files(
     project_root,
     tests,

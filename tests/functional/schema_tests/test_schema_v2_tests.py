@@ -29,12 +29,12 @@ from dbt.contracts.results import TestStatus
 
 
 class TestSchemaTests:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
         project.run_sql_file(os.path.join(project.test_data_dir, "seed_failure.sql"))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/models"
 
@@ -105,11 +105,11 @@ class TestSchemaTests:
 
 
 class TestLimitedSchemaTests:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/limit_null"
 
@@ -155,7 +155,7 @@ class TestLimitedSchemaTests:
 
 class TestDefaultBoolType:
     # test with default True/False in get_test_sql macro
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/override_get_test_models"
 
@@ -201,11 +201,11 @@ class TestDefaultBoolType:
 
 class TestOtherBoolType:
     # test with expected 0/1 in custom get_test_sql macro
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/override_get_test_models"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -254,11 +254,11 @@ class TestOtherBoolType:
 
 class TestNonBoolType:
     # test with invalid 'x'/'y' in custom get_test_sql macro
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/override_get_test_models_fail"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -279,11 +279,11 @@ class TestNonBoolType:
 
 
 class TestMalformedSchemaTests:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/malformed"
 
@@ -296,15 +296,15 @@ class TestMalformedSchemaTests:
 
 
 class TestCustomConfigSchemaTests:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/custom-configs"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -325,12 +325,12 @@ class TestCustomConfigSchemaTests:
 
 
 class TestHooksInTests:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         # this makes things easier
         return "ephemeral"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -352,12 +352,12 @@ class TestHooksInTests:
 
 
 class TestHooksForWhich:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         # test ephemeral models so we don't need to do a run (which would fail)
         return "ephemeral"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -383,11 +383,11 @@ class TestHooksForWhich:
 
 
 class TestCustomSchemaTests:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def packages(self):
         return {
             "packages": [
@@ -401,7 +401,7 @@ class TestCustomSchemaTests:
             ]
         }
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         # dbt-utils contains a schema test (equality)
         # dbt-integration-project contains a schema.yml file
@@ -411,7 +411,7 @@ class TestCustomSchemaTests:
             "macro-paths": ["macros-v2/macros"],
         }
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/custom"
 
@@ -437,7 +437,7 @@ class TestCustomSchemaTests:
 
 
 class TestQuotedSchemaTestColumns:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "quote-required-models"
 
@@ -460,11 +460,11 @@ class TestQuotedSchemaTestColumns:
 
 
 class TestCliVarsSchemaTests:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/render_test_cli_arg_models"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -483,11 +483,11 @@ class TestCliVarsSchemaTests:
 
 
 class TestConfiguredVarsSchemaTests:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "models-v2/render_test_configured_arg_models"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -506,7 +506,7 @@ class TestConfiguredVarsSchemaTests:
 
 
 class TestSchemaCaseInsensitive:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "case-sensitive-models"
 
@@ -530,11 +530,11 @@ class TestSchemaCaseInsensitive:
 
 
 class TestSchemaTestContext:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "test-context-models"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -542,7 +542,7 @@ class TestSchemaTestContext:
             "vars": {"local_utils_dispatch_list": ["local_utils"]},
         }
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def packages(self):
         return {"packages": [{"local": "local_utils"}]}
 
@@ -575,11 +575,11 @@ class TestSchemaTestContext:
 
 
 class TestSchemaTestContextWithMacroNamespace:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "test-context-models-namespaced"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -592,7 +592,7 @@ class TestSchemaTestContextWithMacroNamespace:
             ],
         }
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def packages(self):
         return {
             "packages": [
@@ -628,7 +628,7 @@ class TestSchemaTestContextWithMacroNamespace:
 
 
 class TestSchemaTestNameCollision:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "name_collision"
 
@@ -654,7 +654,7 @@ class TestSchemaTestNameCollision:
 
 
 class TestInvalidSchema:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "invalid-schema-models"
 
@@ -668,7 +668,7 @@ class TestInvalidSchema:
 
 
 class TestWrongSpecificationBlock:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "wrong_specification_block"
 
@@ -694,11 +694,11 @@ class TestWrongSpecificationBlock:
 
 
 class TestSchemaTestContextWhereSubq:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def model_path(self):
         return "test-context-where-subq-models"
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,

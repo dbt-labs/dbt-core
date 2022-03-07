@@ -11,12 +11,12 @@ select 1 /failed
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {"one.sql": models__one_sql, "two.sql": models__two_sql}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_files(
     project_root,
     models,

@@ -9,7 +9,7 @@ from tests.functional.test_selection.fixtures import (  # noqa: F401
 
 
 class TestSelectionExpansion:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {"config-version": 2, "test-paths": ["tests"]}
 
@@ -394,7 +394,7 @@ class TestSelectionExpansion:
 
 
 class TestExpansionWithSelectors(TestSelectionExpansion):
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def selectors(self):
         return """
             selectors:

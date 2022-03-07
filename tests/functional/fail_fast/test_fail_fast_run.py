@@ -5,7 +5,15 @@ from tests.functional.fail_fast.fixtures import models, project_files  # noqa: F
 from dbt.exceptions import FailFastException
 
 
+def check_audit_table(project, count=1):
+    query = "select * from {schema}.audit".format(schema=project.test_schema)
+
+    vals = project.run_sql(query, fetch="all")
+    assert not (len(vals) == count), "Execution was not stopped before run end"
+
+
 class TestFastFailingDuringRun:
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
@@ -31,23 +39,17 @@ class TestFastFailingDuringRun:
             },
         }
 
-    def check_audit_table(self, count=1):
-        query = "select * from {schema}.audit".format(schema=self.unique_schema())
-
-        vals = self.run_sql(query, fetch="all")
-        assert not (len(vals) == count), "Execution was not stopped before run end"
-
     def test_fail_fast_run(
         self,
         project,
     ):
         with pytest.raises(FailFastException):
             run_dbt(["run", "--threads", "1", "--fail-fast"])
-            self.check_audit_table()
+            check_audit_table(project)
 
 
 class TestFailFastFromConfig(TestFastFailingDuringRun):
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiles_config_update(self):
         return {
             "config": {
@@ -62,4 +64,4 @@ class TestFailFastFromConfig(TestFastFailingDuringRun):
     ):
         with pytest.raises(FailFastException):
             run_dbt(["run", "--threads", "1"])
-            self.check_audit_table()
+            check_audit_table(project)

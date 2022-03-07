@@ -1165,12 +1165,12 @@ select 1 as "Id"
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def wrong_specification_block():
     return {"schema.yml": wrong_specification_block__schema_yml}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_context_where_subq_models():
     return {
         "schema.yml": test_context_where_subq_models__schema_yml,
@@ -1178,7 +1178,7 @@ def test_context_where_subq_models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_utils():
     return {
         "dbt_project.yml": test_utils__dbt_project_yml,
@@ -1189,7 +1189,7 @@ def test_utils():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def local_dependency():
     return {
         "dbt_project.yml": local_dependency__dbt_project_yml,
@@ -1197,7 +1197,7 @@ def local_dependency():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def case_sensitive_models():
     return {
         "schema.yml": case_sensitive_models__schema_yml,
@@ -1207,7 +1207,7 @@ def case_sensitive_models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_context_macros():
     return {
         "my_test.sql": test_context_macros__my_test_sql,
@@ -1216,7 +1216,7 @@ def test_context_macros():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_context_models_namespaced():
     return {
         "schema.yml": test_context_models_namespaced__schema_yml,
@@ -1226,7 +1226,7 @@ def test_context_models_namespaced():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def macros_v2():
     return {
         "override_get_test_macros_fail": {
@@ -1240,7 +1240,7 @@ def macros_v2():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_context_macros_namespaced():
     return {
         "my_test.sql": test_context_macros_namespaced__my_test_sql,
@@ -1248,12 +1248,12 @@ def test_context_macros_namespaced():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {"some_seed.csv": seeds__some_seed_csv}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_context_models():
     return {
         "schema.yml": test_context_models__schema_yml,
@@ -1263,7 +1263,7 @@ def test_context_models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def name_collision():
     return {
         "schema.yml": name_collision__schema_yml,
@@ -1272,12 +1272,12 @@ def name_collision():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_context_where_subq_macros():
     return {"custom_generic_test.sql": test_context_where_subq_macros__custom_generic_test_sql}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def invalid_schema_models():
     return {
         "schema.yml": invalid_schema_models__schema_yml,
@@ -1285,7 +1285,7 @@ def invalid_schema_models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models_v2():
     return {
         "render_test_cli_arg_models": {
@@ -1339,7 +1339,7 @@ def models_v2():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def local_utils():
     return {
         "dbt_project.yml": local_utils__dbt_project_yml,
@@ -1351,7 +1351,7 @@ def local_utils():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def ephemeral():
     return {
         "schema.yml": ephemeral__schema_yml,
@@ -1359,7 +1359,7 @@ def ephemeral():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def quote_required_models():
     return {
         "schema.yml": quote_required_models__schema_yml,
@@ -1369,7 +1369,7 @@ def quote_required_models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_files(
     project_root,
     wrong_specification_block,

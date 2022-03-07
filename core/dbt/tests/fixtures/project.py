@@ -63,7 +63,7 @@ def test_data_dir(request):
 
 
 # This fixture can be overridden in a project
-@pytest.fixture
+@pytest.fixture(scope="class")
 def profiles_config_update():
     return {}
 
@@ -99,11 +99,10 @@ def dbt_profile_data(unique_schema, profiles_config_update):
             "target": "default",
         },
     }
-    return profile
 
     if profiles_config_update:
-        profiles_data.update(profiles_config_update)
-    return profiles_data
+        profile.update(profiles_config_update)
+    return profile
 
 
 # Write out the profile data as a yaml file
@@ -121,7 +120,7 @@ def project_config_update():
     return {}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def model_path():
     return "models"
 
