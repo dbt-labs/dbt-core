@@ -11,14 +11,14 @@ from tests.functional.adapter.files import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {
         "base.csv": seeds_base_csv,
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "ephemeral.sql": ephemeral_with_cte_sql,
@@ -28,7 +28,7 @@ def models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def tests():
     return {
         "passing.sql": test_ephemeral_passing_sql,
@@ -36,7 +36,7 @@ def tests():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {
         "name": "data_test_ephemeral_models",

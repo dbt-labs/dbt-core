@@ -126,7 +126,7 @@ select * from {{ ref('seed') }}
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "advanced_incremental.sql": advanced_incremental_sql,
@@ -142,14 +142,14 @@ def models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds(test_data_dir):
     # Read seed file and return
     seed_csv = read_file(test_data_dir, "seed-initial.csv")
     return {"seed.csv": seed_csv}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {"seeds": {"quote_columns": False}}
 
