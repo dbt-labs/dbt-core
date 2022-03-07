@@ -150,7 +150,7 @@ seeds:
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "schema.yml": schema_yml,
@@ -169,7 +169,7 @@ def models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds(test_data_dir):
     # Read seed file and return
     seeds = {"properties.yml": properties_yml}

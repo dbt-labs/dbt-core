@@ -11,12 +11,12 @@ from tests.functional.adapter.files import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {"name": "schema_test"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {
         "base.csv": seeds_base_csv,
@@ -24,7 +24,7 @@ def seeds():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "view_model.sql": base_view_sql,

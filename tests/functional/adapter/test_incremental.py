@@ -9,17 +9,17 @@ from tests.functional.adapter.files import (
 from dbt.tests.adapter import check_relations_equal, relation_from_name
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {"name": "incremental"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {"incremental.sql": incremental_sql, "schema.yml": schema_base_yml}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {"base.csv": seeds_base_csv, "added.csv": seeds_added_csv}
 

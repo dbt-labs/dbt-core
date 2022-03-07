@@ -120,7 +120,7 @@ seeds:
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "ephemeral_copy.sql": ephemeral_copy_sql,
@@ -135,7 +135,7 @@ def models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds(test_data_dir):
     # Read seed file and return
     seeds = {"properties.yml": properties_yml}
@@ -146,7 +146,7 @@ def seeds(test_data_dir):
     return seeds
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {
         "vars": {

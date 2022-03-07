@@ -15,7 +15,7 @@ from dbt.tests.util import write_file, run_sql_with_adapter
 # These are the fixtures that are used in dbt core functional tests
 
 # Used in constructing the unique_schema and logs_dir
-@pytest.fixture
+@pytest.fixture(scope="class")
 def prefix():
     # create a directory name that will be unique per test session
     _randint = random.randint(0, 9999)
@@ -26,7 +26,7 @@ def prefix():
 
 
 # Every test has a unique schema
-@pytest.fixture
+@pytest.fixture(scope="class")
 def unique_schema(request, prefix) -> str:
     test_file = request.module.__name__
     # We only want the last part of the name
@@ -36,17 +36,16 @@ def unique_schema(request, prefix) -> str:
 
 
 # Create a directory for the profile using tmpdir fixture
-@pytest.fixture
-def profiles_root(tmpdir):
-    # tmpdir docs - https://docs.pytest.org/en/6.2.x/tmpdir.html
-    return tmpdir.mkdir("profile")
+@pytest.fixture(scope="class")
+def profiles_root(tmpdir_factory):
+    return tmpdir_factory.mktemp("profile")
 
 
 # Create a directory for the project using tmpdir fixture
-@pytest.fixture
-def project_root(tmpdir):
+@pytest.fixture(scope="class")
+def project_root(tmpdir_factory):
     # tmpdir docs - https://docs.pytest.org/en/6.2.x/tmpdir.html
-    project_root = tmpdir.mkdir("project")
+    project_root = tmpdir_factory.mktemp("project")
     print(f"\n=== Test project_root: {project_root}")
     return project_root
 
@@ -63,48 +62,42 @@ def test_data_dir(request):
     return os.path.join(request.fspath.dirname, "data")
 
 
-# Maybe this doesn't need to be a separate fixture?
-@pytest.fixture(scope="session")
-def database_host():
-    return os.environ.get("DOCKER_TEST_DATABASE_HOST", "localhost")
-
-
 # The profile dictionary, used to write out profiles.yml
-@pytest.fixture
-def dbt_profile_data(unique_schema, database_host):
-    dbname = os.getenv("POSTGRES_TEST_DATABASE", "dbt")
-    return {
+@pytest.fixture(scope="class")
+def dbt_profile_data(unique_schema):
+    profile = {
         "config": {"send_anonymous_usage_stats": False},
         "test": {
             "outputs": {
                 "default": {
                     "type": "postgres",
                     "threads": 4,
-                    "host": database_host,
+                    "host": "localhost",
                     "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
                     "user": os.getenv("POSTGRES_TEST_USER", "root"),
                     "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
-                    "dbname": dbname,
+                    "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
                     "schema": unique_schema,
                 },
                 "other_schema": {
                     "type": "postgres",
                     "threads": 4,
-                    "host": database_host,
+                    "host": "localhost",
                     "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
                     "user": "noaccess",
                     "pass": "password",
-                    "dbname": dbname,
+                    "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
                     "schema": unique_schema + "_alt",  # Should this be the same unique_schema?
                 },
             },
             "target": "default",
         },
     }
+    return profile
 
 
 # Write out the profile data as a yaml file
-@pytest.fixture
+@pytest.fixture(scope="class")
 def profiles_yml(profiles_root, dbt_profile_data):
     os.environ["DBT_PROFILES_DIR"] = str(profiles_root)
     write_file(yaml.safe_dump(dbt_profile_data), profiles_root, "profiles.yml")
@@ -113,14 +106,14 @@ def profiles_yml(profiles_root, dbt_profile_data):
 
 
 # This fixture can be overridden in a project
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {}
 
 
 # Combines the project_config_update dictionary with defaults to
 # produce a project_yml config and write it out as dbt_project.yml
-@pytest.fixture
+@pytest.fixture(scope="class")
 def dbt_project_yml(project_root, project_config_update, logs_dir):
     project_config = {
         "config-version": 2,
@@ -135,13 +128,13 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
 
 
 # Fixture to provide packages as either yaml or dictionary
-@pytest.fixture
+@pytest.fixture(scope="class")
 def packages():
     return {}
 
 
 # Write out the packages.yml file
-@pytest.fixture
+@pytest.fixture(scope="class")
 def packages_yml(project_root, packages):
     if packages:
         if isinstance(packages, str):
@@ -152,13 +145,13 @@ def packages_yml(project_root, packages):
 
 
 # Fixture to provide selectors as either yaml or dictionary
-@pytest.fixture
+@pytest.fixture(scope="class")
 def selectors():
     return {}
 
 
 # Write out the selectors.yml file
-@pytest.fixture
+@pytest.fixture(scope="class")
 def selectors_yml(project_root, selectors):
     if selectors:
         if isinstance(selectors, str):
@@ -172,7 +165,7 @@ def selectors_yml(project_root, selectors):
 # and 'run_sql' commands. The 'run_dbt' commands will create their own adapter
 # so this one needs some special patching to run after dbt commands have been
 # executed
-@pytest.fixture
+@pytest.fixture(scope="class")
 def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
@@ -212,38 +205,38 @@ def write_project_files_recursively(path, file_dict):
 # models, macros, seeds, snapshots, tests, analysis
 # Provide a dictionary of file names to contents. Nested directories
 # are handle by nested dictionaries.
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def macros():
     return {}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def snapshots():
     return {}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def tests():
     return {}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def analysis():
     return {}
 
 
 # Write out the files provided by models, macros, snapshots, seeds, tests, analysis
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_files(project_root, models, macros, snapshots, seeds, tests, analysis):
     write_project_files(project_root, "models", models)
     write_project_files(project_root, "macros", macros)
@@ -254,7 +247,7 @@ def project_files(project_root, models, macros, snapshots, seeds, tests, analysi
 
 
 # We have a separate logs dir for every test
-@pytest.fixture()
+@pytest.fixture(scope="class")
 def logs_dir(request, prefix):
     return os.path.join(request.config.rootdir, "logs", prefix)
 
@@ -310,7 +303,7 @@ class TestProjInfo:
         return {model_name: materialization for (model_name, materialization) in result}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project(
     project_root,
     profiles_root,

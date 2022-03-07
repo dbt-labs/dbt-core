@@ -373,7 +373,7 @@ select * from renamed
 
 
 class JaffleShopProject:
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def models(self):
         return {
             "customers.sql": customers_sql,
@@ -389,7 +389,7 @@ class JaffleShopProject:
             },
         }
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def seeds(self):
         # Read seed file and return
         seeds = {}
@@ -399,7 +399,7 @@ class JaffleShopProject:
             seeds[file_name] = contents
         return seeds
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "name": "jaffle_shop",

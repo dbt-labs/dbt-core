@@ -7,7 +7,7 @@ from dbt.tests.adapter import check_result_nodes_by_name
 from dbt.tests.util import run_dbt
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def tests():
     return {
         "passing.sql": test_passing_sql,
@@ -15,7 +15,7 @@ def tests():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {"name": "data_tests"}
 

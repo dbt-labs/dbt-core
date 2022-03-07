@@ -7,7 +7,7 @@ my_model_sql = """
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {"my_model.sql": my_model_sql}
 

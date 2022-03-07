@@ -11,17 +11,17 @@ from tests.functional.adapter.files import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {"name": "ephemeral"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {"base.csv": seeds_base_csv}
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "ephemeral.sql": base_ephemeral_sql,

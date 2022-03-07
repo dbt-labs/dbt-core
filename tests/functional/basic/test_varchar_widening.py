@@ -31,7 +31,7 @@ select * from {{ this.schema }}.seed
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {"incremental.sql": incremental_sql, "materialized.sql": materialized_sql}
 

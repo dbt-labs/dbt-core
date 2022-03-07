@@ -7,13 +7,13 @@ model_sql = """
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {"model.sql": model_sql}
 
 
-@pytest.fixture
-def dbt_profile_data(unique_schema, database_host):
+@pytest.fixture(scope="class")
+def dbt_profile_data(unique_schema):
 
     return {
         "config": {"send_anonymous_usage_stats": False},
@@ -22,7 +22,7 @@ def dbt_profile_data(unique_schema, database_host):
                 "default": {
                     "type": "postgres",
                     "threads": 4,
-                    "host": database_host,
+                    "host": "localhost",
                     "port": 5432,
                     "user": "root",
                     "pass": "password",

@@ -9,7 +9,7 @@ from tests.functional.adapter.files import (
 from dbt.tests.adapter import relation_from_name, update_rows
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds():
     return {
         "base.csv": seeds_base_csv,
@@ -18,14 +18,14 @@ def seeds():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def snapshots():
     return {
         "ts_snapshot.sql": ts_snapshot_sql,
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def project_config_update():
     return {"name": "snapshot_strategy_timestamp"}
 
