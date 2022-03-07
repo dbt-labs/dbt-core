@@ -62,9 +62,15 @@ def test_data_dir(request):
     return os.path.join(request.fspath.dirname, "data")
 
 
+# This fixture can be overridden in a project
+@pytest.fixture
+def profiles_config_update():
+    return {}
+
+
 # The profile dictionary, used to write out profiles.yml
 @pytest.fixture(scope="class")
-def dbt_profile_data(unique_schema):
+def dbt_profile_data(unique_schema, profiles_config_update):
     profile = {
         "config": {"send_anonymous_usage_stats": False},
         "test": {
@@ -94,6 +100,10 @@ def dbt_profile_data(unique_schema):
         },
     }
     return profile
+
+    if profiles_config_update:
+        profiles_data.update(profiles_config_update)
+    return profiles_data
 
 
 # Write out the profile data as a yaml file
