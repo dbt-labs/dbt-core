@@ -1,7 +1,11 @@
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.test_selection.fixtures import tests, models, project_files  # noqa, F401
+from tests.functional.test_selection.fixtures import (  # noqa: F401
+    tests,
+    models,
+    project_files,
+)
 
 
 class TestSelectionExpansion:
@@ -60,7 +64,10 @@ class TestSelectionExpansion:
 
         assert sorted(tests_run) == sorted(expected_tests)
 
-    def test_all_tests_no_specifiers(self):
+    def test_all_tests_no_specifiers(
+        self,
+        project,
+    ):
         select = None
         exclude = None
         expected = [
@@ -76,7 +83,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_alone(self):
+    def test_model_a_alone(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = None
         expected = [
@@ -91,7 +101,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_model_b(self):
+    def test_model_a_model_b(
+        self,
+        project,
+    ):
         select = "model_a model_b"
         exclude = None
         expected = [
@@ -106,7 +119,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_sources(self):
+    def test_model_a_sources(
+        self,
+        project,
+    ):
         select = "model_a source:*"
         exclude = None
         expected = [
@@ -122,7 +138,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_exclude_model_b(self):
+    def test_exclude_model_b(
+        self,
+        project,
+    ):
         select = None
         exclude = "model_b"
         expected = [
@@ -136,7 +155,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_exclude_specific_test(self):
+    def test_model_a_exclude_specific_test(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = "unique_model_a_fun"
         expected = [
@@ -150,7 +172,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_exclude_specific_test_cautious(self):
+    def test_model_a_exclude_specific_test_cautious(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = "unique_model_a_fun"
         expected = ["just_a"]
@@ -159,7 +184,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
         self.run_tests_and_assert(select, exclude, expected, indirect_selection)
 
-    def test_only_generic(self):
+    def test_only_generic(
+        self,
+        project,
+    ):
         select = "test_type:generic"
         exclude = None
         expected = [
@@ -172,7 +200,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_only_singular_unset(self):
+    def test_model_a_only_singular_unset(
+        self,
+        project,
+    ):
         select = "model_a,test_type:singular"
         exclude = None
         expected = ["cf_a_b", "cf_a_src", "just_a"]
@@ -180,7 +211,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_only_singular_eager(self):
+    def test_model_a_only_singular_eager(
+        self,
+        project,
+    ):
         select = "model_a,test_type:singular"
         exclude = None
         expected = ["cf_a_b", "cf_a_src", "just_a"]
@@ -188,7 +222,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_only_singular_cautious(self):
+    def test_model_a_only_singular_cautious(
+        self,
+        project,
+    ):
         select = "model_a,test_type:singular"
         exclude = None
         expected = ["just_a"]
@@ -199,7 +236,10 @@ class TestSelectionExpansion:
         )
         self.run_tests_and_assert(select, exclude, expected, indirect_selection=indirect_selection)
 
-    def test_only_singular(self):
+    def test_only_singular(
+        self,
+        project,
+    ):
         select = "test_type:singular"
         exclude = None
         expected = ["cf_a_b", "cf_a_src", "just_a"]
@@ -207,7 +247,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_only_singular(self):
+    def test_model_a_only_singular(
+        self,
+        project,
+    ):
         select = "model_a,test_type:singular"
         exclude = None
         expected = ["cf_a_b", "cf_a_src", "just_a"]
@@ -215,7 +258,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_test_name_intersection(self):
+    def test_test_name_intersection(
+        self,
+        project,
+    ):
         select = "model_a,test_name:unique"
         exclude = None
         expected = ["unique_model_a_fun"]
@@ -223,7 +269,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_tag_test_name_intersection(self):
+    def test_model_tag_test_name_intersection(
+        self,
+        project,
+    ):
         select = "tag:a_or_b,test_name:relationships"
         exclude = None
         expected = [
@@ -234,7 +283,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_select_column_level_tag(self):
+    def test_select_column_level_tag(
+        self,
+        project,
+    ):
         select = "tag:column_level_tag"
         exclude = None
         expected = [
@@ -246,7 +298,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_exclude_column_level_tag(self):
+    def test_exclude_column_level_tag(
+        self,
+        project,
+    ):
         select = None
         exclude = "tag:column_level_tag"
         expected = ["cf_a_b", "cf_a_src", "just_a", "source_unique_my_src_my_tbl_fun"]
@@ -254,7 +309,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_test_level_tag(self):
+    def test_test_level_tag(
+        self,
+        project,
+    ):
         select = "tag:test_level_tag"
         exclude = None
         expected = ["relationships_model_a_fun__fun__ref_model_b_"]
@@ -262,7 +320,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_exclude_data_test_tag(self):
+    def test_exclude_data_test_tag(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = "tag:data_test_tag"
         expected = [
@@ -276,7 +337,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_indirect_selection(self):
+    def test_model_a_indirect_selection(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = None
         expected = [
@@ -291,7 +355,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
-    def test_model_a_indirect_selection_eager(self):
+    def test_model_a_indirect_selection_eager(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = None
         expected = [
@@ -307,7 +374,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
         self.run_tests_and_assert(select, exclude, expected, indirect_selection)
 
-    def test_model_a_indirect_selection_exclude_unique_tests(self):
+    def test_model_a_indirect_selection_exclude_unique_tests(
+        self,
+        project,
+    ):
         select = "model_a"
         exclude = "test_name:unique"
         indirect_selection = "eager"
@@ -344,7 +414,10 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
                 indirect_selection: "eager"
         """
 
-    def test_selector_model_a_unset_indirect_selection(self):
+    def test_selector_model_a_unset_indirect_selection(
+        self,
+        project,
+    ):
         expected = [
             "cf_a_b",
             "cf_a_src",
@@ -367,7 +440,10 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             selector_name="model_a_unset_indirect_selection",
         )
 
-    def test_selector_model_a_no_indirect_selection(self):
+    def test_selector_model_a_no_indirect_selection(
+        self,
+        project,
+    ):
         expected = ["just_a", "unique_model_a_fun"]
 
         self.list_tests_and_assert(
@@ -383,7 +459,10 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             selector_name="model_a_no_indirect_selection",
         )
 
-    def test_selector_model_a_yes_indirect_selection(self):
+    def test_selector_model_a_yes_indirect_selection(
+        self,
+        project,
+    ):
         expected = [
             "cf_a_b",
             "cf_a_src",
