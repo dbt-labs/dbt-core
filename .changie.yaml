@@ -1,6 +1,7 @@
 changesDir: .changes
 unreleasedDir: unreleased
-headerPath: header.tpl.md
+header-path: header.tpl.md
+footer-path: footer.tpl.md
 versionHeaderPath: ""
 changelogPath: CHANGELOG.md
 versionExt: md

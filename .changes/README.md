@@ -2,6 +2,13 @@
 
 We use [changie](https://changie.dev/) to automate `CHANGELOG` generation.  For installation and format/command specifics, see the documentation.
 
+### Quick Tour
+
+- All new change entries get generated under `/.changes/unreleased` as a yaml file
+- `header.tpl.md` contains the contents of the entire CHANGELOG file
+- `0.0.0.md` contains the contents of the footer for the entire CHANGELOG file.  changie looks to be in the process of supporting a footer file the same as it supports a header file.  Switch to that when available.  For now, the 0.0.0 in the file name forces it to the bottom of the changelog no matter what version we are releasing.
+- `.changie.yaml` contains the fields in a change, the format of a single change, as well as the format of the Contributors section for each version.
+
 ### Workflow
 
 #### Daily workflow
