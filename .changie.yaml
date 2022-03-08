@@ -1,0 +1,50 @@
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+versionHeaderPath: ""
+changelogPath: CHANGELOG.md
+versionExt: md
+versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
+kindFormat: '### {{.Kind}}'
+changeFormat: '- {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), [#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+kinds:
+- label: Fixes
+- label: Features
+- label: Under the Hood
+- label: Breaking Changes
+- label: Docs
+- label: Dependencies
+custom:
+- key: Author
+  label: GitHub Name
+  type: string
+  minLength: 3
+- key: Issue
+  label: GitHub Issue Number
+  type: int
+  minLength: 4
+- key: PR
+  label: GitHub Pull Request Number
+  type: int
+  minLength: 4
+footerFormat: |
+  Contributors:
+  {{- $contributorDict := dict }}
+  {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "ChenyuLInx" "stu-k" "iknox-fa" "VersusFacit" "McKnight-42" "jtcohen6" }}
+  {{- range $change := .Changes }}
+    {{- $author := $change.Custom.Author }}
+    {{- if not (has $author $core_team)}}
+      {{- $pr := $change.Custom.PR }}
+      {{- if hasKey $contributorDict $author }}
+        {{- $prList := get $contributorDict $author }}
+        {{- $prList = append $prList $pr  }}
+        {{- $contributorDict := set $contributorDict $author $prList }}
+      {{- else }}
+        {{- $prList := list $change.Custom.PR }}
+        {{- $contributorDict := set $contributorDict $author $prList }}
+      {{- end }}
+    {{- end}}
+  {{- end }}
+  {{- range $k,$v := $contributorDict }}
+    - [{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}[#{{$element}}](https://github.com/dbt-labs/dbt-core/pull/{{$element}}){{end}})
+  {{- end }}
