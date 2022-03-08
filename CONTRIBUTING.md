@@ -226,6 +226,15 @@ python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 ```
 > [Here](https://docs.pytest.org/en/reorganize-docs/new-docs/user/commandlineuseful.html)
 > is a list of useful command-line options for `pytest` to use while developing.
+
+## Adding CHANGELOG Entry
+
+We use [changie](https://changie.dev) to generate `CHANGELOG` entries.  Do not edit the `CHANGELOG.md` directly.  Your modifications will be lost.
+
+Follow the steps to [install `changie`](https://changie.dev/guide/installation/) for your system.
+
+Once changie is installed and your PR is created, simply run `changie new` and changie will walk you through the process of creating a changelog entry.  Commit the file that's created and your changelog entry is complete!
+
 ## Submitting a Pull Request
 
 dbt Labs provides a CI environment to test changes to specific adapters, and periodic maintenance checks of `dbt-core` through Github Actions. For example, if you submit a pull request to the `dbt-redshift` repo, GitHub will trigger automated code checks and tests against Redshift.
