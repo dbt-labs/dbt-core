@@ -449,20 +449,24 @@ class StateSelectorMethod(SelectorMethod):
 
         return modified
 
-    def recursively_check_macros_modified(self, node, previous_macros):
+    def recursively_check_macros_modified(self, node, visited_macros):
         # loop through all macros that this node depends on
         for macro_uid in node.depends_on.macros:
             # avoid infinite recursion if we've already seen this macro
-            if macro_uid in previous_macros:
+            if macro_uid in visited_macros:
                 continue
-            previous_macros.append(macro_uid)
+            visited_macros.append(macro_uid)
             # is this macro one of the modified macros?
             if macro_uid in self.modified_macros:
                 return True
             # if not, and this macro depends on other macros, keep looping
             macro_node = self.manifest.macros[macro_uid]
             if len(macro_node.depends_on.macros) > 0:
-                return self.recursively_check_macros_modified(macro_node, previous_macros)
+                return self.recursively_check_macros_modified(macro_node, visited_macros)
+            # this macro hasn't been modified, but we haven't checked
+            # the other macros the node depends on, so keep looking
+            elif len(node.depends_on.macros) > len(visited_macros):
+                continue
             else:
                 return False
 
@@ -475,8 +479,8 @@ class StateSelectorMethod(SelectorMethod):
             return False
         # recursively loop through upstream macros to see if any is modified
         else:
-            previous_macros = []
-            return self.recursively_check_macros_modified(node, previous_macros)
+            visited_macros = []
+            return self.recursively_check_macros_modified(node, visited_macros)
 
     # TODO check modifed_content and check_modified macro seems a bit redundent
     def check_modified_content(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:

@@ -54,7 +54,7 @@ setup(
         'Jinja2==2.11.3',
         'MarkupSafe==2.0.1',
         'agate>=1.6,<1.6.4',
-        'click>=8,<9',
+        'click>=7.0,<9',
         'colorama>=0.3.9,<0.4.5',
         'hologram==0.0.14',
         'isodate>=0.6,<0.7',
