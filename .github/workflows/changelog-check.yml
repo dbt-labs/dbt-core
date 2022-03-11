@@ -48,15 +48,31 @@ jobs:
           filters: |
             changelog:
               - added: '.changes/unreleased/**.yaml'
-      - name: Check a file has been added to .changes/unreleased if required
+      - name: Check if error comment has already posted
+        # https://github.com/marketplace/actions/find-comment
+        # Finds the exact comment string matching the body-includes.  It will be empty strings
+        # if no matching comment was found. Empty strings evaluate to zero in GitHub Actions
+        # expressions. e.g. If comment-body is an empty string
+        # steps.changelog_comment.outputs.comment-body == 0 evaluates to true.
+        uses: peter-evans/find-comment@v1
+        id: changelog_comment
+        with:
+          issue-number: ${{github.event.issue.number}}
+          body-includes: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry)."
+      - run: echo ${{ steps.fc.outputs.comment-body }}
+      - name: Post comment if a changelog file is required, hasn't been added, and no comment exists already
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')  && steps.changelog_comment.outputs.comment-body != 0
         with:
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](CONTRIBUTING.md)."
+              body: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry)."
             })
-            core.setFailed('Changelog entry required to merge.')
+      - name: Fail if no new changelog file exists
+        uses: actions/github-script@v6
+        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+        with:
+          script: core.setFailed('Changelog entry required to merge.')
