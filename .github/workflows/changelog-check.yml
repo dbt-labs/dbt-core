@@ -27,6 +27,9 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  changelog_comment: 'Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry).'
+
 jobs:
   changelog:
     name: changelog
@@ -48,15 +51,26 @@ jobs:
           filters: |
             changelog:
               - added: '.changes/unreleased/**.yaml'
-      - name: Check a file has been added to .changes/unreleased if required
-        uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+      - name: Check if comment already exists
+        uses: peter-evans/find-comment@v1
+        id: changelog_comment
         with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](CONTRIBUTING.md)."
-            })
-            core.setFailed('Changelog entry required to merge.')
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: ${{ env.changelog_comment }}
+      - name: Create PR comment if changelog entry is missing, required, and does nto exist
+        if: |
+          steps.filter.outputs.changelog == 'false' &&
+          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog') &&
+          steps.changelog_comment.outputs.comment-body == ''
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ env.changelog_comment }}
+      - name: Fail job if changelog entry is missing and required
+        if: |
+          steps.filter.outputs.changelog == 'false' &&
+          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+        uses: actions/github-script@v6
+        with:
+          script: core.setFailed('Changelog entry required to merge.')
