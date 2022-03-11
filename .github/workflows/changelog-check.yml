@@ -53,16 +53,16 @@ jobs:
         # Finds the exact comment string matching the body-includes.  It will be empty strings
         # if no matching comment was found. Empty strings evaluate to zero in GitHub Actions
         # expressions. e.g. If comment-body is an empty string
-        # steps.changelog_comment.outputs.comment-body == 0 evaluates to true.
+        # steps.clcomment.outputs.comment-body == 0 evaluates to true.
         uses: peter-evans/find-comment@v1
-        id: changelog_comment
+        id: clcomment
         with:
           issue-number: ${{github.event.issue.number}}
           body-includes: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry)."
-      - run: echo ${{ steps.fc.outputs.comment-body }}
+      - run: echo ${{ steps.clcomment.outputs.comment-body }}
       - name: Post comment if a changelog file is required, hasn't been added, and no comment exists already
         uses: actions/github-script@v6
-        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')  && steps.changelog_comment.outputs.comment-body != 0
+        if: steps.filter.outputs.changelog == 'false' && !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')  && steps.clcomment.outputs.comment-body != 0
         with:
           script: |
             github.rest.issues.createComment({
