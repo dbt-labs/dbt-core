@@ -1,3 +1,45 @@
+import pytest
+from dbt.tests.util import run_dbt
+from tests.functional.simple_snapshot.fixtures import models_slow__gen_sql
+
+
+test_snapshots_changing_strategy__test_snapshot_sql = """
+
+{# /*
+    Given the repro case for the snapshot build, we'd
+    expect to see both records have color='pink'
+    in their most recent rows.
+*/ #}
+
+with expected as (
+
+    select 1 as id, 'pink' as color union all
+    select 2 as id, 'pink' as color
+
+),
+
+actual as (
+
+    select id, color
+    from {{ ref('my_snapshot') }}
+    where color = 'pink'
+      and dbt_valid_to is null
+
+)
+
+select * from expected
+except
+select * from actual
+
+union all
+
+select * from actual
+except
+select * from expected
+"""
+
+
+snapshots_changing_strategy__snapshot_sql = """
 
 {#
     REPRO:
@@ -53,3 +95,33 @@
     {% endif %}
 
 {% endsnapshot %}
+"""
+
+
+@pytest.fixture(scope="class")
+def models():
+    return {"gen.sql": models_slow__gen_sql}
+
+
+@pytest.fixture(scope="class")
+def snapshots():
+    return {"snapshot.sql": snapshots_changing_strategy__snapshot_sql}
+
+
+@pytest.fixture(scope="class")
+def tests():
+    return {"test_snapshot.sql": test_snapshots_changing_strategy__test_snapshot_sql}
+
+
+def test_changing_strategy(project):
+    results = run_dbt(["snapshot", "--vars", "{strategy: check, step: 1}"])
+    assert len(results) == 1
+
+    results = run_dbt(["snapshot", "--vars", "{strategy: check, step: 2}"])
+    assert len(results) == 1
+
+    results = run_dbt(["snapshot", "--vars", "{strategy: timestamp, step: 3}"])
+    assert len(results) == 1
+
+    results = run_dbt(["test"])
+    assert len(results) == 1
