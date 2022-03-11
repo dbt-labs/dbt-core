@@ -48,13 +48,26 @@ jobs:
           filters: |
             changelog:
               - added: '.changes/unreleased/**.yaml'
-
-      - name: Create/Update PR comment if changelog entry is missing and required
+      - name: Check if comment already exists
+        uses: peter-evans/find-comment@v1
+        id: changelog_comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry).
+      - name: Create PR comment if changelog entry is missing, required, and does nto exist
+        if: |
+          steps.filter.outputs.changelog == 'false' &&
+          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog') &&
+          steps.changelog_comment.outputs.comment-body == ''
         uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ github.event.client_payload.pull_request.number }}
+          body: Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry).
+      - name: Create/Update PR comment if changelog entry is missing and required
         if: |
           steps.filter.outputs.changelog == 'false' &&
           !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+        uses: actions/github-script@v6
         with:
-          issue-number: ${{ github.event.client_payload.pull_request.number }}
-          body: "Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry)."
           script: core.setFailed('Changelog entry required to merge.')
