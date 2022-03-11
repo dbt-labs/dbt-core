@@ -67,7 +67,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: ${{ env.changelog_comment }}
-      - name: Create/Update PR comment if changelog entry is missing and required
+      - name: Fail job if changelog entry is missing and required
         if: |
           steps.filter.outputs.changelog == 'false' &&
           !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
