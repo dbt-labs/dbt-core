@@ -177,14 +177,12 @@ class TestIncrementalStrUniqueKey(TestIncrementalUniqueKeyBase):
     def test__postgres_bad_unique_key(self):
         '''expect compilation error from unique key not being a column'''
 
-        err_msg = "invalid identifier 'DBT_INTERNAL_SOURCE.THISISNOTACOLUMN'"
-
         (status, exc) = self.fail_to_build_inc_missing_unique_key_column(
             incremental_model_name='not_found_unique_key'
         )
 
         self.assertEqual(status, RunStatus.Error)
-        self.assertTrue(err_msg in exc)
+        self.assertTrue("thisisnotacolumn" in exc.lower())
 
 
 class TestIncrementalListUniqueKey(TestIncrementalUniqueKeyBase):
@@ -289,11 +287,9 @@ class TestIncrementalListUniqueKey(TestIncrementalUniqueKeyBase):
     def test__postgres_bad_unique_key_list(self):
         '''expect compilation error from unique key not being a column'''
 
-        err_msg = "invalid identifier 'DBT_INTERNAL_SOURCE.THISISNOTACOLUMN'"
-
         (status, exc) = self.fail_to_build_inc_missing_unique_key_column(
             incremental_model_name='not_found_unique_key_list'
         )
 
         self.assertEqual(status, RunStatus.Error)
-        self.assertTrue(err_msg in exc)
+        self.assertTrue("thisisnotacolumn" in exc.lower())
