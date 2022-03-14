@@ -1197,7 +1197,6 @@ def local_dependency():
 def case_sensitive_models():
     return {
         "schema.yml": case_sensitive_models__schema_yml,
-        "uppercase.SQL": case_sensitive_models__uppercase_SQL,
         "lowercase.sql": case_sensitive_models__lowercase_sql,
     }
 

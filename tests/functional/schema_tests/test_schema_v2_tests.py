@@ -2,7 +2,7 @@ import pytest
 import os
 import re
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, write_file
 from tests.functional.schema_tests.fixtures import (  # noqa: F401
     wrong_specification_block,
     test_context_where_subq_models,
@@ -23,6 +23,7 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     ephemeral,
     quote_required_models,
     project_files,
+    case_sensitive_models__uppercase_SQL,
 )
 from dbt.exceptions import ParsingException
 from dbt.contracts.results import TestStatus
@@ -507,6 +508,12 @@ class TestSchemaCaseInsensitive:
     @pytest.fixture(scope="class")
     def models(self, case_sensitive_models):  # noqa: F811
         return case_sensitive_models
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setUP(self, project):
+        # Create the uppercase SQL file
+        model_dir = os.path.join(project.project_root, "models")
+        write_file(case_sensitive_models__uppercase_SQL, model_dir, "uppercase.SQL")
 
     def test_schema_lowercase_sql(
         self,

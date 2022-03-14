@@ -199,12 +199,7 @@ def write_project_files(project_root, dir_name, file_dict):
 # Write files out from file_dict. Can be nested directories...
 def write_project_files_recursively(path, file_dict):
     for name, value in file_dict.items():
-        if (
-            name.endswith(".sql")
-            or name.endswith(".csv")
-            or name.endswith(".md")
-            or name.endswith(".SQL")
-        ):
+        if name.endswith(".sql") or name.endswith(".csv") or name.endswith(".md"):
             write_file(value, path, name)
         elif name.endswith(".yml") or name.endswith(".yaml"):
             if isinstance(value, str):
