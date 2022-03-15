@@ -3,6 +3,7 @@ import pytest  # type: ignore
 import random
 from argparse import Namespace
 from datetime import datetime
+import warnings
 import yaml
 
 import dbt.flags as flags
@@ -13,6 +14,13 @@ from dbt.tests.util import write_file, run_sql_with_adapter
 
 
 # These are the fixtures that are used in dbt core functional tests
+
+# Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
+# This _only_ works for tests in `tests/` that use the project fixture.
+@pytest.fixture(scope="class")
+def filter_logbook():
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
+
 
 # Used in constructing the unique_schema and logs_dir
 @pytest.fixture(scope="class")
@@ -318,6 +326,7 @@ def project(
     shared_data_dir,
     test_data_dir,
     logs_dir,
+    filter_logbook,
 ):
     setup_event_logger(logs_dir)
     orig_cwd = os.getcwd()

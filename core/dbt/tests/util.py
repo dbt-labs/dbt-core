@@ -2,6 +2,7 @@ import os
 import shutil
 import yaml
 import json
+import warnings
 from typing import List
 
 from dbt.main import handle_and_check
@@ -15,6 +16,10 @@ from unittest.mock import patch
 
 # This is used in pytest tests to run dbt
 def run_dbt(args: List[str] = None, expect_pass=True):
+    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
+    # This _only_ works for tests in `tests/` that use the run_dbt method.
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
+
     # The logger will complain about already being initialized if
     # we don't do this.
     log_manager.reset_handlers()
