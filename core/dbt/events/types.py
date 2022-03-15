@@ -2420,7 +2420,7 @@ class EventBufferFull(WarnLevel, Cli, File):
 
 
 @dataclass
-class RecordRetryException(DebugLevel):
+class RecordRetryException(DebugLevel, Cli, File):
     exc: Exception
     code: str = "M021"
 
