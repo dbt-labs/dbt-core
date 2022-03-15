@@ -319,7 +319,6 @@ def project(
     shared_data_dir,
     test_data_dir,
     logs_dir,
-    filter_logbook,
 ):
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
