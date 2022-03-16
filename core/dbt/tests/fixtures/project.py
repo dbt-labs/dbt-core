@@ -3,6 +3,7 @@ import pytest  # type: ignore
 import random
 from argparse import Namespace
 from datetime import datetime
+import warnings
 import yaml
 
 import dbt.flags as flags
@@ -328,6 +329,9 @@ def project(
     test_data_dir,
     logs_dir,
 ):
+    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
+    # This _only_ works for tests in `tests/` that use the project fixture.
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     setup_event_logger(logs_dir)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
