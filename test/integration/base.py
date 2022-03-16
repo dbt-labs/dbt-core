@@ -8,6 +8,7 @@ import tempfile
 import time
 import traceback
 import unittest
+import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
@@ -310,6 +311,13 @@ class DBTIntegrationTest(unittest.TestCase):
         return normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
 
     def setUp(self):
+        # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10. 
+        # This _only_ works for tests in `test/integration`.
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            module="logbook"
+        )
         self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
         self.initial_dir = INITIAL_ROOT

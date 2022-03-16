@@ -194,8 +194,8 @@ def create_debug_text_log_line(e: T_Event) -> str:
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     thread = ""
-    if threading.current_thread().getName():
-        thread_name = threading.current_thread().getName()
+    if threading.current_thread().name:
+        thread_name = threading.current_thread().name
         thread_name = thread_name[:10]
         thread_name = thread_name.ljust(10, " ")
         thread = f" [{thread_name}]:"
