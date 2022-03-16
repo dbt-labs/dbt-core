@@ -1,6 +1,6 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
+from typing import List, Optional, Tuple, Any, Iterable, Dict
 
 import agate
 
@@ -78,7 +78,7 @@ class SQLConnectionManager(BaseConnectionManager):
             return connection, cursor
 
     @abc.abstractclassmethod
-    def get_response(cls, cursor: Any) -> Union[AdapterResponse, str]:
+    def get_response(cls, cursor: Any) -> AdapterResponse:
         """Get the status of the cursor."""
         raise dbt.exceptions.NotImplementedException(
             "`get_response` is not implemented for this adapter!"
@@ -117,7 +117,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[Union[AdapterResponse, str], agate.Table]:
+    ) -> Tuple[AdapterResponse, agate.Table]:
         sql = self._add_query_comment(sql)
         _, cursor = self.add_query(sql, auto_begin)
         response = self.get_response(cursor)
