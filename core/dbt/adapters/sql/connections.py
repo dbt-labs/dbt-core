@@ -1,6 +1,6 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
+from typing import List, Optional, Tuple, Any, Iterable, Dict
 
 import agate
 

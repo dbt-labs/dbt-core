@@ -4,7 +4,7 @@ import os
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
 from threading import get_ident
-from typing import Dict, Tuple, Hashable, Optional, ContextManager, List, Union
+from typing import Dict, Tuple, Hashable, Optional, ContextManager, List
 
 import agate
 
