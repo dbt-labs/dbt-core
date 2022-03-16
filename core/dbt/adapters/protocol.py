@@ -155,7 +155,7 @@ class AdapterProtocol(  # type: ignore[misc]
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[Union[str, AdapterResponse], agate.Table]:
+    ) -> Tuple[AdapterResponse, agate.Table]:
         ...
 
     def get_compiler(self) -> Compiler_T:
