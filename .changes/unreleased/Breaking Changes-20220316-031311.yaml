@@ -1,0 +1,7 @@
+kind: Breaking Changes
+body: get_response and execute now only return a connection.AdapterReponse in type hints
+time: 2022-03-16T03:13:11.656007-07:00
+custom:
+  Author: versusfacit
+  Issue: "4499"
+  PR: "4869"

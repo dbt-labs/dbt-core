@@ -1,8 +1,0 @@
-name: 'local_utils'
-version: '1.0'
-config-version: 2
-
-profile: 'default'
-
-macro-paths: ["macros"]
-

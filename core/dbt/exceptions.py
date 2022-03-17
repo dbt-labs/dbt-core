@@ -966,11 +966,11 @@ def raise_duplicate_source_patch_name(patch_1, patch_2):
     )
 
 
-def raise_invalid_schema_yml_version(path, issue):
+def raise_invalid_property_yml_version(path, issue):
     raise_compiler_error(
-        "The schema file at {} is invalid because {}. Please consult the "
-        "documentation for more information on schema.yml syntax:\n\n"
-        "https://docs.getdbt.com/docs/schemayml-files".format(path, issue)
+        "The yml property file at {} is invalid because {}. Please consult the "
+        "documentation for more information on yml property file syntax:\n\n"
+        "https://docs.getdbt.com/reference/configs-and-properties".format(path, issue)
     )
 
 
@@ -1048,7 +1048,7 @@ CONTEXT_EXPORTS = {
         raise_dependency_error,
         raise_duplicate_patch_name,
         raise_duplicate_resource_name,
-        raise_invalid_schema_yml_version,
+        raise_invalid_property_yml_version,
         raise_not_implemented,
         relation_wrong_type,
     ]

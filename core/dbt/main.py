@@ -5,6 +5,7 @@ import argparse
 import os.path
 import sys
 import traceback
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -118,6 +119,9 @@ class DBTArgumentParser(argparse.ArgumentParser):
 
 
 def main(args=None):
+    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
+    # This _only_ works for regular cli invocations.
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     if args is None:
         args = sys.argv[1:]
     with log_manager.applicationbound():

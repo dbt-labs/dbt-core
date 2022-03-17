@@ -3,6 +3,7 @@ import pytest  # type: ignore
 import random
 from argparse import Namespace
 from datetime import datetime
+import warnings
 import yaml
 
 import dbt.flags as flags
@@ -62,9 +63,15 @@ def test_data_dir(request):
     return os.path.join(request.fspath.dirname, "data")
 
 
+# This fixture can be overridden in a project
+@pytest.fixture(scope="class")
+def profiles_config_update():
+    return {}
+
+
 # The profile dictionary, used to write out profiles.yml
 @pytest.fixture(scope="class")
-def dbt_profile_data(unique_schema):
+def dbt_profile_data(unique_schema, profiles_config_update):
     profile = {
         "config": {"send_anonymous_usage_stats": False},
         "test": {
@@ -93,6 +100,9 @@ def dbt_profile_data(unique_schema):
             "target": "default",
         },
     }
+
+    if profiles_config_update:
+        profile.update(profiles_config_update)
     return profile
 
 
@@ -319,6 +329,9 @@ def project(
     test_data_dir,
     logs_dir,
 ):
+    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
+    # This _only_ works for tests in `tests/` that use the project fixture.
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     setup_event_logger(logs_dir)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
