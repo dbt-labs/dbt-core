@@ -1,0 +1,7 @@
+kind: Fixes
+body: depend on new dbt-extractor version with fixed github links
+time: 2022-03-17T13:24:18.419599-04:00
+custom:
+  Author: nathaniel-may
+  Issue: "4891"
+  PR: "4890"
