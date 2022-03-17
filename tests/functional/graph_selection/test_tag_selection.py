@@ -158,7 +158,7 @@ class TestTagSelection(SelectionFixtures):
             "unique_users_rollup_gender",
         ]
 
-    def test_select_tag_in_model_with_project_config_parents_children_selectors(project):
+    def test_select_tag_in_model_with_project_config_parents_children_selectors(self, project):
         results = run_dbt(["run", "--selector", "user_tagged_childrens_parents"])
         assert len(results) == 4
 
