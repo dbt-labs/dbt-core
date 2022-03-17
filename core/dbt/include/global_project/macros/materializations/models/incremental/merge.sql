@@ -56,7 +56,7 @@
 
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
 
-    {% if unique_key is not none and unique_key != [] %}
+    {% if unique_key %}
         {% if unique_key is sequence and unique_key is not mapping and unique_key is not string %}
             delete from {{target }}
             using {{ source }}
