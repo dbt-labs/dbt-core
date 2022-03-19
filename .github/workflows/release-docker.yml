@@ -12,6 +12,9 @@
 
 name: Docker release
 
+permissions:
+  packages: write
+
 on:
   workflow_dispatch:
     inputs:

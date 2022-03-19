@@ -53,7 +53,7 @@ sources:
         identifier: "{{ var('seed_name', 'base') }}"
 """
 
-schema_test_seed_yml = """
+generic_test_seed_yml = """
 version: 2
 models:
   - name: base
@@ -63,7 +63,7 @@ models:
          - not_null
 """
 
-schema_test_view_yml = """
+generic_test_view_yml = """
 version: 2
 models:
   - name: view_model
@@ -73,7 +73,7 @@ models:
          - not_null
 """
 
-schema_test_table_yml = """
+generic_test_table_yml = """
 version: 2
 models:
   - name: table_model
