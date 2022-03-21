@@ -17,6 +17,7 @@ name: Check Changelog Entry
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 defaults:
@@ -33,6 +34,7 @@ env:
 jobs:
   changelog:
     name: changelog
+    if: "!contains(github.event.pull_request.labels.*.name, 'Skip Changelog')"
 
     runs-on: ubuntu-latest
 
@@ -61,7 +63,6 @@ jobs:
       - name: Create PR comment if changelog entry is missing, required, and does nto exist
         if: |
           steps.filter.outputs.changelog == 'false' &&
-          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog') &&
           steps.changelog_comment.outputs.comment-body == ''
         uses: peter-evans/create-or-update-comment@v1
         with:
@@ -69,8 +70,7 @@ jobs:
           body: ${{ env.changelog_comment }}
       - name: Fail job if changelog entry is missing and required
         if: |
-          steps.filter.outputs.changelog == 'false' &&
-          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+          steps.filter.outputs.changelog == 'false'
         uses: actions/github-script@v6
         with:
           script: core.setFailed('Changelog entry required to merge.')
