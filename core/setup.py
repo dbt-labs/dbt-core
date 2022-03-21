@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.0.3"
+package_version = "1.0.5rc1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
