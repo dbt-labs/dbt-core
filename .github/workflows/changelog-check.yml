@@ -72,8 +72,7 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body: ${{ env.changelog_comment }}
       - name: Fail job if changelog entry is missing and required
-        if: |
-          steps.filter.outputs.changelog == 'false'
+        if: steps.filter.outputs.changelog == 'false'
         uses: actions/github-script@v6
         with:
           script: core.setFailed('Changelog entry required to merge.')
