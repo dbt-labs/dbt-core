@@ -51,3 +51,4 @@ changie merge
 - If changes need to be made to the `CHANGELOG.md`, make the changes to the relevant `<version>.md` file located in the `/.changes` directory.  You will then run `changie merge` to regenerate the `CHANGELOG.MD`.
 - Do not run `changie batch` again on released versions.  Our final release workflow deletes all of the yaml files associated with individual changes.  If for some reason modifications to the `CHANGELOG.md` are required after we've generated the final release `CHANGELOG.md`, the modifications need to be done manually to the `<version>.md` file in the `/.changes` directory.
 - changie can modify, create and delete files depending on the command you run.  This is expected.  Be sure to commit everything that has been modified and deleted.
+blah blah blah
