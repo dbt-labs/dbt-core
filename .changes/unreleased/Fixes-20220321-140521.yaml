@@ -1,0 +1,7 @@
+kind: Fixes
+body: "User wasn't asked for permission to overwite a profile entry when running init inside an existing project"
+time: 2022-03-21T14:05:21.238521-05:00
+custom:
+  Author: NiallRees
+  Issue: "4375"
+  PR: "4447"

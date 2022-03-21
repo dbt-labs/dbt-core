@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Fix errors in Windows for tests/functions
+time: 2022-03-21T14:20:55.648765-05:00
+custom:
+  Author: gshank
+  Issue: "4782"
+  PR: "4767"

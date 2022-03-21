@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Use mashumaro for serialization in event logging
+time: 2022-03-21T14:13:38.758158-05:00
+custom:
+  Author: gshank
+  Issue: "4504"
+  PR: "4505"
