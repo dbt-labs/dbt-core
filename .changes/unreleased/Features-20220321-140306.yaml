@@ -1,0 +1,7 @@
+kind: Features
+body: "Add `--quiet` global flag and `print` Jinja function"
+time: 2022-03-21T14:03:06.565157-05:00
+custom:
+  Author: ehmartens
+  Issue: "3451"
+  PR: "4701"

@@ -11,12 +11,16 @@
 # Ensure code change gets reflected in the CHANGELOG.
 
 # **when?**
-# This will run for all PRs going into main and *.latest.
+# This will run for all PRs going into main and *.latest.  It will
+# run when they are opened, reopened, when any label is added or removed
+# and when new code is pushed to the branch.  The action will then get
+# skipped if the 'Skip Changelog' label is present is any of the labels.
 
 name: Check Changelog Entry
 
 on:
   pull_request:
+    types: [opened, reopened, labeled, unlabeled, synchronize]
   workflow_dispatch:
 
 defaults:
@@ -33,6 +37,7 @@ env:
 jobs:
   changelog:
     name: changelog
+    if: "!contains(github.event.pull_request.labels.*.name, 'Skip Changelog')"
 
     runs-on: ubuntu-latest
 
@@ -61,16 +66,13 @@ jobs:
       - name: Create PR comment if changelog entry is missing, required, and does nto exist
         if: |
           steps.filter.outputs.changelog == 'false' &&
-          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog') &&
           steps.changelog_comment.outputs.comment-body == ''
         uses: peter-evans/create-or-update-comment@v1
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: ${{ env.changelog_comment }}
       - name: Fail job if changelog entry is missing and required
-        if: |
-          steps.filter.outputs.changelog == 'false' &&
-          !contains( github.event.pull_request.labels.*.name, 'Skip Changelog')
+        if: steps.filter.outputs.changelog == 'false'
         uses: actions/github-script@v6
         with:
           script: core.setFailed('Changelog entry required to merge.')
