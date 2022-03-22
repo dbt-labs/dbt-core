@@ -156,14 +156,12 @@
 {% endmacro %}
 
 {% macro postgres__make_backup_relation(base_relation, suffix) %}
-    {% set dt = modules.datetime.datetime.now() %}
-    {% set dtstring = dt.strftime("%H%M%S%f") %}
-    {% set suffix_length = suffix|length + dtstring|length %}
+    {% set suffix_length = suffix|length %}
     {% set relation_max_name_length = 63 %}
     {% if suffix_length > relation_max_name_length %}
-        {% do exceptions.raise_compiler_error('Backup relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ (relation_max_name_length - dtstring|length) ~ ' characters.') %}
+        {% do exceptions.raise_compiler_error('Backup relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ relation_max_name_length ~ ' characters.') %}
     {% endif %}
-    {% set backup_identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix ~ dtstring %}
+    {% set backup_identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix %}
     {% do return(base_relation.incorporate(
                                   path={
                                     "identifier": backup_identifier,
