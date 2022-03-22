@@ -103,7 +103,7 @@ class NativeSandboxEnvironment(MacroFuzzEnvironment):
 
 
 class TextMarker(str):
-    """A special native-env marker that indicates that a value is text and is
+    """A special native-env marker that indicates a value is text and is
     not to be evaluated. Use this to prevent your numbery-strings from becoming
     numbers!
     """
@@ -580,7 +580,7 @@ def extract_toplevel_blocks(
     allowed_blocks: Optional[Set[str]] = None,
     collect_raw_data: bool = True,
 ) -> List[Union[BlockData, BlockTag]]:
-    """Extract the top level blocks with matching block types from a jinja
+    """Extract the top-level blocks with matching block types from a jinja
     file, with some special handling for block nesting.
 
     :param data: The data to extract blocks from.

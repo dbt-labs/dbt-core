@@ -414,6 +414,7 @@ sample_values = [
     IntegrationTestError(msg=''),
     IntegrationTestException(msg=''),
     EventBufferFull(),
+    RecordRetryException(exc=Exception('')),
     UnitTestInfo(msg=''),
 ]
 

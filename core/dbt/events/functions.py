@@ -55,19 +55,8 @@ invocation_id: Optional[str] = None
 # then we should override the logging stream to use the colorama
 # converter. If the TERM var is set (as with Git Bash), then it's safe
 # to send escape characters and no log handler injection is needed.
-colorama_stdout = sys.stdout
-colorama_wrap = True
-
-colorama.init(wrap=colorama_wrap)
-
-if sys.platform == "win32" and not os.getenv("TERM"):
-    colorama_wrap = False
-    colorama_stdout = colorama.AnsiToWin32(sys.stdout).stream
-
-elif sys.platform == "win32":
-    colorama_wrap = False
-
-colorama.init(wrap=colorama_wrap)
+if sys.platform == "win32":
+    colorama.init(wrap=False)
 
 
 def setup_event_logger(log_path, level_override=None):
@@ -205,8 +194,8 @@ def create_debug_text_log_line(e: T_Event) -> str:
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     thread = ""
-    if threading.current_thread().getName():
-        thread_name = threading.current_thread().getName()
+    if threading.current_thread().name:
+        thread_name = threading.current_thread().name
         thread_name = thread_name[:10]
         thread_name = thread_name.ljust(10, " ")
         thread = f" [{thread_name}]:"

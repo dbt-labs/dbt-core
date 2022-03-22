@@ -1035,7 +1035,7 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: ParsedMetric) -> 
 
 
 def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposure: ParsedExposure):
-    """Given a manifest and a exposure in that manifest, process its refs"""
+    """Given a manifest and exposure in that manifest, process its refs"""
     for ref in exposure.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str

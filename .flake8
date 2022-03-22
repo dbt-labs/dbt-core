@@ -8,5 +8,5 @@ ignore =
     W504
     E203 # makes Flake8 work like black
     E741
-max-line-length = 99
+    E501 # long line checking is done in black
 exclude = test

@@ -80,7 +80,7 @@ def table_from_rows(
 
 
 def table_from_data(data, column_names: Iterable[str]) -> agate.Table:
-    "Convert list of dictionaries into an Agate table"
+    "Convert a list of dictionaries into an Agate table"
 
     # The agate table is generated from a list of dicts, so the column order
     # from `data` is not preserved. We can use `select` to reorder the columns

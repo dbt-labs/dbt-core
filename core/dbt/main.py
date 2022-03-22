@@ -5,6 +5,7 @@ import argparse
 import os.path
 import sys
 import traceback
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -46,7 +47,7 @@ from dbt.exceptions import InternalException, NotImplementedException, FailedToC
 
 
 class DBTVersion(argparse.Action):
-    """This is very very similar to the builtin argparse._Version action,
+    """This is very similar to the built-in argparse._Version action,
     except it just calls dbt.version.get_version_information().
     """
 
@@ -118,6 +119,9 @@ class DBTArgumentParser(argparse.ArgumentParser):
 
 
 def main(args=None):
+    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
+    # This _only_ works for regular cli invocations.
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     if args is None:
         args = sys.argv[1:]
     with log_manager.applicationbound():

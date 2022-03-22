@@ -1147,7 +1147,7 @@ class ProviderContext(ManifestContext):
 class MacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:
 
-    - they don't have have all values available that nodes do:
+    - they don't have all values available that nodes do:
        - 'this', 'pre_hooks', 'post_hooks', and 'sql' are missing
        - 'schema' does not use any 'model' information
     - they can't be configured with config() directives

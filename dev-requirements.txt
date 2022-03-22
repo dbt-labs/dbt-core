@@ -1,4 +1,4 @@
-black==21.12b0
+black==22.1.0
 bumpversion
 flake8
 flaky
@@ -8,6 +8,7 @@ mypy==0.782
 pip-tools
 pre-commit
 pytest
+pytest-cov
 pytest-dotenv
 pytest-logbook
 pytest-csv

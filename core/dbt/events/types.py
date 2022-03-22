@@ -2346,7 +2346,7 @@ class TrackingInitializeFailure(ShowException, DebugLevel):
 class RetryExternalCall(DebugLevel):
     attempt: int
     max: int
-    code: str = "Z045"
+    code: str = "M020"
 
     def message(self) -> str:
         return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
@@ -2382,6 +2382,15 @@ class EventBufferFull(WarnLevel):
 
     def message(self) -> str:
         return "Internal event buffer full. Earliest events will be dropped (FIFO)."
+
+
+@dataclass
+class RecordRetryException(DebugLevel):
+    exc: Exception
+    code: str = "M021"
+
+    def message(self) -> str:
+        return f"External call exception: {self.exc}"
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -2737,3 +2746,4 @@ if 1 == 0:
     GeneralWarningMsg(msg="", log_fmt="")
     GeneralWarningException(exc=Exception(""), log_fmt="")
     EventBufferFull()
+    RecordRetryException(exc=Exception(""))

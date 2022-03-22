@@ -41,26 +41,20 @@ unit: .env ## Runs unit tests with py38.
 .PHONY: test
 test: .env ## Runs unit tests with py38 and code checks against staged changes.
 	@\
-	$(DOCKER_CMD) tox -p -e py38; \
+	$(DOCKER_CMD) tox -e py38; \
 	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: integration
-integration: .env integration-postgres ## Alias for integration-postgres.
+integration: .env ## Runs postgres integration tests with py38.
+	@\
+	$(DOCKER_CMD) tox -e py38-integration -- -nauto
 
 .PHONY: integration-fail-fast
-integration-fail-fast: .env integration-postgres-fail-fast ## Alias for integration-postgres-fail-fast.
-
-.PHONY: integration-postgres
-integration-postgres: .env ## Runs postgres integration tests with py38.
+integration-fail-fast: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
 	@\
-	$(DOCKER_CMD) tox -e py38-postgres -- -nauto
-
-.PHONY: integration-postgres-fail-fast
-integration-postgres-fail-fast: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
-	@\
-	$(DOCKER_CMD) tox -e py38-postgres -- -x -nauto
+	$(DOCKER_CMD) tox -e py38-integration -- -x -nauto
 
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.

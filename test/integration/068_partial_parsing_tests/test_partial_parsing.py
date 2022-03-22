@@ -503,10 +503,12 @@ class TestSnapshots(BasePPTest):
         manifest = get_manifest()
         snapshot_id = 'snapshot.test.orders_snapshot'
         self.assertIn(snapshot_id, manifest.nodes)
+        snapshot2_id = 'snapshot.test.orders2_snapshot'
+        self.assertIn(snapshot2_id, manifest.nodes)
 
         # run snapshot
         results = self.run_dbt(["--partial-parse", "snapshot"])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results), 2)
 
         # modify snapshot
         self.copy_file('test-files/snapshot2.sql', 'snapshots/snapshot.sql')

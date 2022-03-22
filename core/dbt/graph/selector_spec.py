@@ -27,7 +27,7 @@ class IndirectSelection(StrEnum):
 
 
 def _probably_path(value: str):
-    """Decide if value is probably a path. Windows has two path separators, so
+    """Decide if the value is probably a path. Windows has two path separators, so
     we should check both sep ('\\') and altsep ('/') there.
     """
     if os.path.sep in value:

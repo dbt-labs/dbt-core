@@ -1,0 +1,8 @@
+kind: Features
+body: Change behaviour of `non_null` test so that it only `select`s all columns if
+  `--store-failures` is enabled.
+time: 2022-03-09T16:38:17.160568Z
+custom:
+  Author: willbowditch
+  Issue: "4769"
+  PR: "4777"

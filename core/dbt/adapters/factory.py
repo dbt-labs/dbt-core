@@ -177,6 +177,10 @@ def get_adapter(config: AdapterRequiredConfig):
     return FACTORY.lookup_adapter(config.credentials.type)
 
 
+def get_adapter_by_type(adapter_type):
+    return FACTORY.lookup_adapter(adapter_type)
+
+
 def reset_adapters():
     """Clear the adapters. This is useful for tests, which change configs."""
     FACTORY.reset_adapters()

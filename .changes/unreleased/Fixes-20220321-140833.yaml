@@ -1,0 +1,7 @@
+kind: Fixes
+body: Allow override of string and numeric types for adapters.
+time: 2022-03-21T14:08:33.384372-05:00
+custom:
+  Author: mdesmet
+  Issue: "4603"
+  PR: "4604"

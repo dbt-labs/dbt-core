@@ -104,7 +104,7 @@ class Connection(ExtensibleDbtClassMixin, Replaceable):
 
 
 class LazyHandle:
-    """Opener must be a callable that takes a Connection object and opens the
+    """The opener must be a callable that takes a Connection object and opens the
     connection, updating the handle on the Connection.
     """
 

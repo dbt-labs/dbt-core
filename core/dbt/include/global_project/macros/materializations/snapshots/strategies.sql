@@ -157,7 +157,7 @@
     {%- set row_changed_expr -%}
     (
     {%- if column_added -%}
-        TRUE
+        {{ get_true_sql() }}
     {%- else -%}
     {%- for col in check_cols -%}
         {{ snapshotted_rel }}.{{ col }} != {{ current_rel }}.{{ col }}

@@ -3,10 +3,7 @@
 </p>
 <p align="center">
   <a href="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml">
-    <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml/badge.svg?event=push" alt="Unit Tests Badge"/>
-  </a>
-  <a href="https://github.com/dbt-labs/dbt-core/actions/workflows/integration.yml">
-    <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/integration.yml/badge.svg?event=push" alt="Integration Tests Badge"/>
+    <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml/badge.svg?event=push" alt="CI Badge"/>
   </a>
 </p>
 

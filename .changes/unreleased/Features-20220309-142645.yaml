@@ -1,0 +1,7 @@
+kind: Features
+body: Testing framework for dbt adapter testing
+time: 2022-03-09T14:26:45.828295-05:00
+custom:
+  Author: gshank
+  Issue: "4730"
+  PR: "4846"

@@ -335,7 +335,7 @@ def _handle_posix_cmd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 
 
 def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    """OSError handling for posix systems.
+    """OSError handling for POSIX systems.
 
     Some things that could happen to trigger an OSError:
         - cwd could not exist
@@ -386,7 +386,7 @@ def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 
 
 def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    """Interpret an OSError exc and raise the appropriate dbt exception."""
+    """Interpret an OSError exception and raise the appropriate dbt exception."""
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
@@ -501,7 +501,7 @@ def move(src, dst):
     directory on windows when it has read-only files in it and the move is
     between two drives.
 
-    This is almost identical to the real shutil.move, except it uses our rmtree
+    This is almost identical to the real shutil.move, except it, uses our rmtree
     and skips handling non-windows OSes since the existing one works ok there.
     """
     src = convert_path(src)
@@ -536,7 +536,7 @@ def move(src, dst):
 
 
 def rmtree(path):
-    """Recursively remove path. On permissions errors on windows, try to remove
+    """Recursively remove the path. On permissions errors on windows, try to remove
     the read-only flag and try again.
     """
     path = convert_path(path)

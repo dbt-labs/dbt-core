@@ -15,12 +15,12 @@ def change_working_directory(directory: str) -> str:
 
     Parameters
     ----------
-    directory : str
+    directory: str
         The directory to which the working directory should be changed.
 
     Yields
     ------
-    out : str
+    out: str
         The new working directory.
     """
     current_working_directory = os.getcwd()
@@ -38,7 +38,7 @@ def temporary_working_directory() -> str:
 
     Returns
     -------
-    out : str
+    out: str
         The temporary working directory.
     """
     # N.B: supressing the OSError is necessary for older (pre 3.10) versions of python 
@@ -82,13 +82,13 @@ def create_directory_with_custom_profiles(
     profiles: Dict
 ) -> None:
     """
-    Create directory with profiles.yml.
+    Create a directory with profiles.yml.
 
     Parameters
     ----------
-    directory : str
+    directory: str
         The directory in which a profiles file is created.
-    profiles : Dict
+    profiles: Dict
         The profiles to put into the profiles.yml
     """
     if not os.path.exists(directory):

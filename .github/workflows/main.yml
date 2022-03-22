@@ -1,9 +1,8 @@
 # **what?**
-# Runs code quality checks, unit tests, and verifies python build on
-# all code commited to the repository. This workflow should not
-# require any secrets since it runs for PRs from forked repos.
-# By default, secrets are not passed to workflows running from
-# a forked repo.
+# Runs code quality checks, unit tests, integration tests and
+# verifies python build on all code commited to the repository. This workflow
+# should not require any secrets since it runs for PRs from forked repos. By
+# default, secrets are not passed to workflows running from a forked repos.
 
 # **why?**
 # Ensure code for dbt meets a certain quality standard.
@@ -18,7 +17,6 @@ on:
   push:
     branches:
       - "main"
-      - "develop"
       - "*.latest"
       - "releases/*"
   pull_request:
@@ -44,8 +42,6 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
-        with:
-          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -53,12 +49,12 @@ jobs:
       - name: Install python dependencies
         run: |
           pip install --user --upgrade pip
-          pip install pre-commit
-          pip install mypy==0.782
-          pip install -r editable-requirements.txt
           pip --version
+          pip install pre-commit
           pre-commit --version
+          pip install mypy==0.782
           mypy --version
+          pip install -r editable-requirements.txt
           dbt --version
 
       - name: Run pre-commit hooks
@@ -81,8 +77,6 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
-        with:
-          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -92,8 +86,8 @@ jobs:
       - name: Install python dependencies
         run: |
           pip install --user --upgrade pip
-          pip install tox
           pip --version
+          pip install tox
           tox --version
 
       - name: Run tox
@@ -110,6 +104,75 @@ jobs:
           name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
           path: unit_results.csv
 
+  integration:
+    name: integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.7, 3.8, 3.9]
+        os: [ubuntu-latest]
+        include:
+          - python-version: 3.8
+            os: windows-latest
+          - python-version: 3.8
+            os: macos-latest
+
+    env:
+      TOXENV: integration
+      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
+      DBT_INVOCATION_ENV: github-actions
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up postgres (linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-postgres-linux
+
+      - name: Set up postgres (macos)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/setup-postgres-macos
+
+      - name: Set up postgres (windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-postgres-windows
+
+      - name: Install python tools
+        run: |
+          pip install --user --upgrade pip
+          pip --version
+          pip install tox
+          tox --version
+
+      - name: Run tests
+        run: tox
+
+      - name: Get current date
+        if: always()
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M_%S')" #no colons allowed for artifacts
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
+          path: ./logs
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}.csv
+          path: integration_results.csv
+
   build:
     name: build packages
 
@@ -118,8 +181,6 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
-        with:
-          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -145,44 +206,6 @@ jobs:
       - name: Check wheel contents
         run: |
           check-wheel-contents dist/*.whl --ignore W007,W008
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: dist
-          path: dist/
-
-  test-build:
-    name: verify packages / python ${{ matrix.python-version }} / ${{ matrix.os }}
-
-    needs: build
-
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: [3.7, 3.8, 3.9]
-
-    steps:
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install python dependencies
-        run: |
-          pip install --user --upgrade pip
-          pip install --upgrade wheel
-          pip --version
-
-      - uses: actions/download-artifact@v2
-        with:
-          name: dist
-          path: dist/
-
-      - name: Show distributions
-        run: ls -lh dist/
 
       - name: Install wheel distributions
         run: |

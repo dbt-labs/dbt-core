@@ -1,1 +1,0 @@
-SELECT 'hello_world' AS extension_id
