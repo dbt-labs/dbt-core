@@ -6,11 +6,12 @@
   {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
   {% set tmp_relation = make_temp_relation(target_relation) %}
+  {%- set tmp_identifier = tmp_relation['identifier'] -%}
+  {%- set backup_identifier = make_backup_relation(target_relation)['identifier'] -%}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
 
-  {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
   {% set backup_identifier = model['name'] + "__dbt_backup" %}
 
   -- the intermediate_ and backup_ relations should not already exist in the database; get_relation
@@ -40,8 +41,6 @@
       {% set build_sql = create_table_as(False, target_relation, sql) %}
 {% elif trigger_full_refresh %}
       {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
-      {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
-      {% set backup_identifier = model['name'] + '__dbt_backup' %}
       {% set intermediate_relation = existing_relation.incorporate(path={"identifier": tmp_identifier}) %}
       {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier}) %}
 

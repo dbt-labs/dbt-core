@@ -10,6 +10,17 @@
     {% do return(tmp_relation) %}
 {% endmacro %}
 
+{% macro make_backup_relation(base_relation, suffix='__dbt_backup') %}
+    {{ return(adapter.dispatch('make_backup_relation', 'dbt')(base_relation, suffix)) }}
+{% endmacro %}
+
+{% macro default__make_backup_relation(base_relation, suffix) %}
+    {% set backup_identifier = base_relation.identifier ~ suffix %}
+    {% set backup_relation = base_relation.incorporate(
+                                  path={"identifier": backup_identifier}
+    ) %}
+    {% do return(backup_relation) %}
+{% endmacro %}
 
 {% macro drop_relation(relation) -%}
   {{ return(adapter.dispatch('drop_relation', 'dbt')(relation)) }}

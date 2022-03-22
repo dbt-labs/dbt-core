@@ -1,12 +1,11 @@
 {%- materialization view, default -%}
 
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_tmp' -%}
-  {%- set backup_identifier = model['name'] + '__dbt_backup' -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,
                                                 type='view') -%}
+  {%- set tmp_identifier = make_temp_relation(target_relation)['identifier'] -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
                                                       schema=schema, database=database, type='view') -%}
   -- the intermediate_relation should not already exist in the database; get_relation
@@ -29,6 +28,7 @@
      this relation will be effectively unused.
   */
   {%- set backup_relation_type = 'view' if old_relation is none else old_relation.type -%}
+  {%- set backup_identifier = make_backup_relation(target_relation)['identifier'] -%}
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
                                                 schema=schema, database=database,
                                                 type=backup_relation_type) -%}
