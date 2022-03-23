@@ -36,7 +36,6 @@ class TestSourceOverrideDuplicates:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "config-version": 2,
             "seeds": {
                 "localdep": {
                     "enabled": False,
