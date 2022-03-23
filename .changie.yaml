@@ -28,7 +28,7 @@ custom:
   type: int
   minLength: 4
 footerFormat: |
-  Contributors:
+  ### Contributors
   {{- $contributorDict := dict }}
   {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "ChenyuLInx" "stu-k" "iknox-fa" "VersusFacit" "McKnight-42" "jtcohen6" }}
   {{- range $change := .Changes }}
