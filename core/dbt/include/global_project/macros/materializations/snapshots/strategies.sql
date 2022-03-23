@@ -132,17 +132,7 @@
     {% set check_cols_config = config['check_cols'] %}
     {% set primary_key = config['unique_key'] %}
     {% set invalidate_hard_deletes = config.get('invalidate_hard_deletes', false) %}
-
-    {% set select_current_time -%}
-        select {{ snapshot_get_time() }} as snapshot_start
-    {%- endset %}
-
-    {#-- don't access the column by name, to avoid dealing with casing issues on snowflake #}
-    {%- set now = run_query(select_current_time)[0][0] -%}
-    {% if now is none or now is undefined -%}
-        {%- do exceptions.raise_compiler_error('Could not get a snapshot start time from the database') -%}
-    {%- endif %}
-    {% set updated_at = config.get('updated_at', snapshot_string_as_time(now)) %}
+    {% set updated_at = snapshot_get_time() %}
 
     {% set column_added = false %}
 
