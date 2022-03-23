@@ -14,14 +14,18 @@
 - Catch all Requests Exceptions on deps install to attempt retries.  Also log the exceptions hit. ([#4849](https://github.com/dbt-labs/dbt-core/issues/4849), [#4865](https://github.com/dbt-labs/dbt-core/pull/4865))
 - Fix partial parsing bug with multiple snapshot blocks ([#4771](https://github.com/dbt-labs/dbt-core/issues/4771), [#4773](https://github.com/dbt-labs/dbt-core/pull/4773))
 - Use cli_vars instead of context to create package and selector renderers ([#4876](https://github.com/dbt-labs/dbt-core/issues/4876), [#4878](https://github.com/dbt-labs/dbt-core/pull/4878))
-- depend on new dbt-extractor version with fixed github links ([#4891](https://github.com/dbt-labs/dbt-core/issues/4891), [#4890](https://github.com/dbt-labs/dbt-core/pull/4890))
+
 ### Under the Hood
 - Automate changelog generation with changie ([#4652](https://github.com/dbt-labs/dbt-core/issues/4652), [#4743](https://github.com/dbt-labs/dbt-core/pull/4743))
 - Fix broken links for changelog generation and tweak GHA to only post a comment once when changelog entry is missing. ([#4848](https://github.com/dbt-labs/dbt-core/issues/4848), [#4857](https://github.com/dbt-labs/dbt-core/pull/4857))
+
 ### Docs
 - Resolve errors related to operations preventing DAG from generating in the docs.  Also patch a spark issue to allow search to filter accurately past the missing columns. ([#4578](https://github.com/dbt-labs/dbt-core/issues/4578), [#4763](https://github.com/dbt-labs/dbt-core/pull/4763))
 Contributors:
   - [twilly](https://github.com/twilly) ([#4681](https://github.com/dbt-labs/dbt-core/pull/4681))
+
+## dbt-core 1.0.4 (March 18, 2022)
+- Depend on new dbt-extractor version with fixed GitHub links to resolve Homebrew installation issues ([#4891](https://github.com/dbt-labs/dbt-core/issues/4891), [#4890](https://github.com/dbt-labs/dbt-core/pull/4890))
 
 
 ## dbt-core 1.0.3 (February 21, 2022)
