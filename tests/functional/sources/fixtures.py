@@ -1,4 +1,219 @@
-favorite_color,id,first_name,email,ip_address,updated_at
+error_models__schema_yml = """version: 2
+sources:
+  - name: test_source
+    loader: custom
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 1, period: day}
+    schema: invalid
+    tables:
+      - name: test_table
+        identifier: source
+        loaded_at_field: updated_at
+"""
+
+error_models__model_sql = """select * from {{ source('test_source', 'test_table') }}
+"""
+
+override_freshness_models__schema_yml = """version: 2
+sources:
+  - name: test_source
+    loader: custom
+    freshness: # default freshness
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    loaded_at_field: loaded_at
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: source_a
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        freshness:
+          warn_after: {count: 6, period: hour}
+          # use the default error_after defined above
+      - name: source_b
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        freshness:
+          warn_after: {count: 6, period: hour}
+          error_after: {} # use the default error_after defined above
+      - name: source_c
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        freshness:
+          warn_after: {count: 6, period: hour}
+          error_after: null # override: disable error_after for this table
+      - name: source_d
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        freshness:
+          warn_after: {count: 6, period: hour}
+          error_after: {count: 72, period: hour} # override: use this new behavior instead of error_after defined above
+      - name: source_e
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        freshness: null # override: disable freshness for this table
+"""
+
+models__schema_yml = """version: 2
+models:
+  - name: descendant_model
+    columns:
+      - name: favorite_color
+        tests:
+          - relationships:
+             to: source('test_source', 'test_table')
+             field: favorite_color
+
+sources:
+  - name: test_source
+    loader: custom
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 1, period: day}
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: test_table
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        freshness:
+          error_after: {count: 18, period: hour}
+        tags:
+          - my_test_source_table_tag
+        columns:
+          - name: favorite_color
+            description: The favorite color
+          - name: id
+            description: The user ID
+            tests:
+              - unique
+              - not_null
+            tags:
+              - id_column
+          - name: first_name
+            description: The first name of the user
+            tests: []
+          - name: email
+            description: The email address of the user
+          - name: ip_address
+            description: The last IP address the user logged in from
+          - name: updated_at
+            description: The last update time for this user
+        tests:
+          - relationships:
+              # do this as a table-level test, just to test out that aspect
+              column_name: favorite_color
+              to: ref('descendant_model')
+              field: favorite_color
+      - name: other_test_table
+        identifier: other_table
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+            tags:
+              - id_column
+      - name: disabled_test_table
+        freshness: null
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+  - name: other_source
+    schema: "{{ var('test_run_schema') }}"
+    quoting:
+      identifier: True
+    tables:
+      - name: test_table
+        identifier: other_source_table
+  - name: external_source
+    schema: "{{ var('test_run_alt_schema', var('test_run_schema')) }}"
+    tables:
+      - name: table
+"""
+
+models__view_model_sql = """{# See here: https://github.com/dbt-labs/dbt-core/pull/1729 #}
+
+select * from {{ ref('ephemeral_model') }}
+"""
+
+models__ephemeral_model_sql = """{{ config(materialized='ephemeral') }}
+
+select 1 as id
+"""
+
+models__descendant_model_sql = """select * from {{ source('test_source', 'test_table') }}
+"""
+
+models__multi_source_model_sql = """select * from {{ source('test_source', 'other_test_table')}}
+  join {{ source('other_source', 'test_table')}} using (id)
+"""
+
+models__nonsource_descendant_sql = """select * from {{ schema }}.source
+"""
+
+malformed_models__schema_yml = """version: 2
+sources:
+  - name: test_source
+    loader: custom
+    schema: "{{ var('test_run_schema') }}"
+    tables:
+      - name: test_table
+        identifier: source
+        tests:
+          - relationships:
+            # this is invalid (list of 3 1-key dicts instead of a single 3-key dict)
+              - column_name: favorite_color
+              - to: ref('descendant_model')
+              - field: favorite_color
+"""
+
+malformed_models__descendant_model_sql = """select * from {{ source('test_source', 'test_table') }}
+"""
+
+filtered_models__schema_yml = """version: 2
+sources:
+  - name: test_source
+    loader: custom
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 1, period: day}
+      filter: id > 1
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tables:
+      - name: test_table
+        identifier: source
+        loaded_at_field: updated_at
+        freshness:
+          error_after: {count: 18, period: hour}
+          filter: id > 101
+"""
+
+macros__macro_sql = """{% macro override_me() -%}
+    {{ exceptions.raise_compiler_error('this is a bad macro') }}
+{%- endmacro %}
+
+{% macro happy_little_macro() -%}
+    {{ override_me() }}
+{%- endmacro %}
+
+
+{% macro vacuum_source(source_name, table_name) -%}
+    {% call statement('stmt', auto_begin=false, fetch_result=false) %}
+        vacuum {{ source(source_name, table_name) }}
+    {% endcall %}
+{%- endmacro %}
+"""
+
+seeds__source_csv = """favorite_color,id,first_name,email,ip_address,updated_at
 blue,1,Larry,lking0@miitbeian.gov.cn,'69.135.206.194',2008-09-12 19:08:31
 blue,2,Larry,lperkins1@toplist.cz,'64.210.133.162',1978-05-09 04:15:14
 blue,3,Anna,amontgomery2@miitbeian.gov.cn,'168.104.64.114',2011-10-16 04:07:57
@@ -99,3 +314,41 @@ green,97,Phillip,phoward2o@usa.gov,'255.247.0.175',2002-12-26 08:44:45
 green,98,Gloria,gwalker2p@usa.gov,'156.140.7.128',1997-10-04 07:58:58
 green,99,Paul,pjohnson2q@umn.edu,'183.59.198.197',1991-11-14 12:33:55
 green,100,Frank,fgreene2r@blogspot.com,'150.143.68.121',2010-06-12 23:55:39
+"""
+
+seeds__other_table_csv = """id,first_name
+1,Larry
+2,Curly
+3,Moe
+"""
+
+seeds__expected_multi_source_csv = """id,first_name,color
+1,Larry,blue
+2,Curly,red
+3,Moe,green
+"""
+
+seeds__other_source_table_csv = """id,color
+1,blue
+2,red
+3,green
+"""
+
+malformed_schema_tests__schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var('test_run_schema') }}"
+    tables:
+      - name: test_table
+        identifier: source
+        columns:
+          - name: favorite_color
+            tests:
+              - relationships:
+                  to: ref('model')
+                  # this will get rendered as its literal
+                  field: "{{ 'favorite' ~ 'color' }}"
+"""
+
+malformed_schema_tests__model_sql = """select * from {{ source('test_source', 'test_table') }}
+"""
