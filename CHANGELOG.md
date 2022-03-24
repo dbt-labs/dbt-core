@@ -7,6 +7,17 @@
 
 
 ## dbt-core 1.1.0-b1 - March 22, 2022
+### Breaking Changes
+- **Relevant to maintainers of adapter plugins _only_:** The abstractmethods `get_response` and `execute` now only return a `connection.AdapterReponse` in type hints. (Previously, they could return a string.) We encourage you to update your methods to return an object of class `AdapterResponse`, or implement a subclass specific to your adapter ([#4499](https://github.com/dbt-labs/dbt-core/issues/4499), [#4869](https://github.com/dbt-labs/dbt-core/pull/4869))
+### Features
+- Change behaviour of `non_null` test so that it only `select`s all columns if `--store-failures` is enabled. ([#4769](https://github.com/dbt-labs/dbt-core/issues/4769), [#4777](https://github.com/dbt-labs/dbt-core/pull/4777))
+- Testing framework for dbt adapter testing ([#4730](https://github.com/dbt-labs/dbt-core/issues/4730), [#4846](https://github.com/dbt-labs/dbt-core/pull/4846))
+- Allow unique key to take a list implementation for postgres/redshift ([#4738](https://github.com/dbt-labs/dbt-core/issues/4738), [#4858](https://github.com/dbt-labs/dbt-core/pull/4858))
+- Added Support for Semantic Versioning ([#4453](https://github.com/dbt-labs/dbt-core/issues/4453), [#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
+- New Dockerfile to support specific db adapters and platforms. See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
+- Allow unique_key to take a list ([#2479](https://github.com/dbt-labs/dbt-core/issues/2479), [#4618](https://github.com/dbt-labs/dbt-core/pull/4618))
+- Add `--quiet` global flag and `print` Jinja function ([#3451](https://github.com/dbt-labs/dbt-core/issues/3451), [#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
+- Add space before justification periods ([#4737](https://github.com/dbt-labs/dbt-core/issues/4737), [#4744](https://github.com/dbt-labs/dbt-core/pull/4744))
 ### Fixes
 - Fix bug causing empty node level meta, snapshot config errors ([#4459](https://github.com/dbt-labs/dbt-core/issues/4459), [#4726](https://github.com/dbt-labs/dbt-core/pull/4726))
 - Catch all Requests Exceptions on deps install to attempt retries.  Also log the exceptions hit. ([#4849](https://github.com/dbt-labs/dbt-core/issues/4849), [#4865](https://github.com/dbt-labs/dbt-core/pull/4865))
@@ -19,15 +30,6 @@
 - Allow override of string and numeric types for adapters. ([#4603](https://github.com/dbt-labs/dbt-core/issues/4603), [#4604](https://github.com/dbt-labs/dbt-core/pull/4604))
 - A change in secret environment variables won't trigger a full reparse ([#4650](https://github.com/dbt-labs/dbt-core/issues/4650), [#4665](https://github.com/dbt-labs/dbt-core/pull/4665))
 - Fix misspellings and typos in docstrings ([#4904](https://github.com/dbt-labs/dbt-core/issues/4904), [#4545](https://github.com/dbt-labs/dbt-core/pull/4545))
-### Features
-- Change behaviour of `non_null` test so that it only `select`s all columns if `--store-failures` is enabled. ([#4769](https://github.com/dbt-labs/dbt-core/issues/4769), [#4777](https://github.com/dbt-labs/dbt-core/pull/4777))
-- Testing framework for dbt adapter testing ([#4730](https://github.com/dbt-labs/dbt-core/issues/4730), [#4846](https://github.com/dbt-labs/dbt-core/pull/4846))
-- Allow unique key to take a list implementation for postgres/redshift ([#4738](https://github.com/dbt-labs/dbt-core/issues/4738), [#4858](https://github.com/dbt-labs/dbt-core/pull/4858))
-- Added Support for Semantic Versioning ([#4453](https://github.com/dbt-labs/dbt-core/issues/4453), [#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
-- New Dockerfile to support specific db adapters and platforms. See docker/README.md for details ([#4495](https://github.com/dbt-labs/dbt-core/issues/4495), [#4487](https://github.com/dbt-labs/dbt-core/pull/4487))
-- Allow unique_key to take a list ([#2479](https://github.com/dbt-labs/dbt-core/issues/2479), [#4618](https://github.com/dbt-labs/dbt-core/pull/4618))
-- Add `--quiet` global flag and `print` Jinja function ([#3451](https://github.com/dbt-labs/dbt-core/issues/3451), [#4701](https://github.com/dbt-labs/dbt-core/pull/4701))
-- Add space before justification periods ([#4737](https://github.com/dbt-labs/dbt-core/issues/4737), [#4744](https://github.com/dbt-labs/dbt-core/pull/4744))
 ### Under the Hood
 - Automate changelog generation with changie ([#4652](https://github.com/dbt-labs/dbt-core/issues/4652), [#4743](https://github.com/dbt-labs/dbt-core/pull/4743))
 - Fix broken links for changelog generation and tweak GHA to only post a comment once when changelog entry is missing. ([#4848](https://github.com/dbt-labs/dbt-core/issues/4848), [#4857](https://github.com/dbt-labs/dbt-core/pull/4857))
@@ -42,11 +44,9 @@
 - Add deps module README ([#4904](https://github.com/dbt-labs/dbt-core/issues/4904), [#4686](https://github.com/dbt-labs/dbt-core/pull/4686))
 - Initial conversion of tests to pytest ([#4690](https://github.com/dbt-labs/dbt-core/issues/4690), [#4691](https://github.com/dbt-labs/dbt-core/pull/4691))
 - Fix errors in Windows for tests/functions ([#4782](https://github.com/dbt-labs/dbt-core/issues/4782), [#4767](https://github.com/dbt-labs/dbt-core/pull/4767))
-### Breaking Changes
-- get_response and execute now only return a connection.AdapterReponse in type hints ([#4499](https://github.com/dbt-labs/dbt-core/issues/4499), [#4869](https://github.com/dbt-labs/dbt-core/pull/4869))
 ### Docs
 - Resolve errors related to operations preventing DAG from generating in the docs.  Also patch a spark issue to allow search to filter accurately past the missing columns. ([#4578](https://github.com/dbt-labs/dbt-core/issues/4578), [#4763](https://github.com/dbt-labs/dbt-core/pull/4763))
-Contributors:
+### Contributors
   - [@NiallRees](https://github.com/NiallRees) ([#4447](https://github.com/dbt-labs/dbt-core/pull/4447))
   - [@alswang18](https://github.com/alswang18) ([#4644](https://github.com/dbt-labs/dbt-core/pull/4644))
   - [@amirkdv](https://github.com/amirkdv) ([#4536](https://github.com/dbt-labs/dbt-core/pull/4536))

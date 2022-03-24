@@ -8,11 +8,11 @@ versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
 changeFormat: '- {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), [#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
 kinds:
-- label: Fixes
-- label: Features
-- label: Under the Hood
 - label: Breaking Changes
+- label: Features
+- label: Fixes
 - label: Docs
+- label: Under the Hood
 - label: Dependencies
 custom:
 - key: Author
@@ -28,7 +28,7 @@ custom:
   type: int
   minLength: 4
 footerFormat: |
-  Contributors:
+  ### Contributors
   {{- $contributorDict := dict }}
   {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "ChenyuLInx" "stu-k" "iknox-fa" "VersusFacit" "McKnight-42" "jtcohen6" }}
   {{- range $change := .Changes }}
