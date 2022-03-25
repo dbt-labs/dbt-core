@@ -1,5 +1,5 @@
 kind: Features
-body: Add `--selected-schema-cache` flag to cache schema object of selected models
+body: Add `--cache_selected_only` flag to cache schema object of selected models
   only.
 time: 2022-03-16T00:38:47.8468296-05:00
 custom:
