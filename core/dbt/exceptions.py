@@ -838,31 +838,47 @@ def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
 
 def raise_duplicate_resource_name(node_1, node_2):
     duped_name = node_1.name
+    node_type = NodeType(node_1.resource_type)
+    pluralized = (
+        node_type.pluralize()
+        if node_1.resource_type == node_2.resource_type
+        else "resources"  # still raise if ref() collision, e.g. model + seed
+    )
 
-    if node_1.resource_type in NodeType.refable():
-        get_func = 'ref("{}")'.format(duped_name)
-    elif node_1.resource_type == NodeType.Source:
+    action = "looking for"
+    # duplicate 'ref' targets
+    if node_type in NodeType.refable():
+        formatted_name = f'ref("{duped_name}")'
+    # duplicate sources
+    elif node_type == NodeType.Source:
         duped_name = node_1.get_full_source_name()
-        get_func = node_1.get_source_representation()
-    elif node_1.resource_type == NodeType.Documentation:
-        get_func = 'doc("{}")'.format(duped_name)
-    elif node_1.resource_type == NodeType.Test and "schema" in node_1.tags:
-        return
+        formatted_name = node_1.get_source_representation()
+    # duplicate docs blocks
+    elif node_type == NodeType.Documentation:
+        formatted_name = f'doc("{duped_name}")'
+    # duplicate generic tests
+    elif node_type == NodeType.Test and hasattr(node_1, "test_metadata"):
+        column_name = f'column "{node_1.column_name}" in ' if node_1.column_name else ""
+        model_name = node_1.file_key_name
+        duped_name = f'{node_1.name}" defined on {column_name}"{model_name}'
+        action = "running"
+        formatted_name = "tests"
+    # all other resource types
     else:
-        get_func = '"{}"'.format(duped_name)
+        formatted_name = duped_name
 
+    # should this be raise_parsing_error instead?
     raise_compiler_error(
-        'dbt found two resources with the name "{}". Since these resources '
-        "have the same name,\ndbt will be unable to find the correct resource "
-        "when {} is used. To fix this,\nchange the name of one of "
-        "these resources:\n- {} ({})\n- {} ({})".format(
-            duped_name,
-            get_func,
-            node_1.unique_id,
-            node_1.original_file_path,
-            node_2.unique_id,
-            node_2.original_file_path,
-        )
+        f"""
+dbt found two {pluralized} with the name "{duped_name}".
+
+Since these resources have the same name, dbt will be unable to find the correct resource
+when {action} {formatted_name}.
+
+To fix this, change the name of one of these resources:
+- {node_1.unique_id} ({node_1.original_file_path})
+- {node_2.unique_id} ({node_2.original_file_path})
+    """.strip()
     )
 
 

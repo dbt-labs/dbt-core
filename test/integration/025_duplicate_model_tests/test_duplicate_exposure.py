@@ -14,7 +14,7 @@ class TestDuplicateExposure(DBTIntegrationTest):
 
     @use_profile("postgres")
     def test_postgres_duplicate_exposure(self):
-        message = "dbt found two resources with the name"
+        message = "dbt found two exposures with the name"
         try:
             self.run_dbt(["compile"])
             self.assertTrue(False, "dbt did not throw for duplicate exposures")
