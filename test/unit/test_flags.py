@@ -235,3 +235,18 @@ class TestFlags(TestCase):
         self.assertEqual(flags.NO_PRINT, True)
         # cleanup
         self.user_config.no_print = None
+
+        # cache_selected_only
+        self.user_config.cache_selected_only = True
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.CACHE_SELECTED_ONLY, True)
+        os.environ['DBT_CACHE_SELECTED_ONLY'] = 'false'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.CACHE_SELECTED_ONLY, False)
+        setattr(self.args, 'cache_selected_only', True)
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.CACHE_SELECTED_ONLY, True)
+        # cleanup
+        os.environ.pop('DBT_CACHE_SELECTED_ONLY')
+        delattr(self.args, 'cache_selected_only')
+        self.user_config.cache_selected_only = False
