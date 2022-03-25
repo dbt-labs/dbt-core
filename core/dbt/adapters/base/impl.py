@@ -341,7 +341,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return info_schema_name_map
 
     def _relations_cache_for_schemas(
-            self, manifest: Manifest, cache_schemas: Set[BaseRelation] = None
+        self, manifest: Manifest, cache_schemas: Set[BaseRelation] = None
     ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
@@ -374,7 +374,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.cache.update_schemas(cache_update)
 
     def set_relations_cache(
-            self, manifest: Manifest, clear: bool = False, required_schemas: Set[BaseRelation] = None
+        self, manifest: Manifest, clear: bool = False, required_schemas: Set[BaseRelation] = None
     ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
