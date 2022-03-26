@@ -22,7 +22,6 @@ class SourceConfigTests:
             # loaded_at_field = some_column
             # database = custom_database
             # schema = custom_schema
-            # # identifier = "seed"  #this doesnt seems to be supported now?
             # meta = {'languages': ['python']}
             # tags = ["important_tag"]
         )
@@ -62,7 +61,7 @@ class TestSourceEnabledConfigProjectLevel(SourceConfigTests):
         }
 
     def test_enabled_source_config_dbt_project(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
 
@@ -76,7 +75,7 @@ class TestSourceEnabledConfigProjectLevel(SourceConfigTests):
             }
         }
         update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
 
         assert (
@@ -108,7 +107,7 @@ class TestConfigYamlSourceLevel(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_config_yaml_source_level(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" not in manifest.sources
         assert "source.test.test_source.disabled_test_table" not in manifest.sources
@@ -137,7 +136,7 @@ class TestConfigYamlSourceTable(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_config_yaml_source_table(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         assert "source.test.test_source.disabled_test_table" not in manifest.sources
@@ -169,7 +168,6 @@ class TestAllConfigsProjectLevel(SourceConfigTests):
                 "loaded_at_field": "some_column",
                 "database": "custom_database",
                 "schema": "custom_schema",
-                # identifier: "seed"  #this doesnt seems to be supported now?
                 "meta": {"languages": ["python"]},
                 "tags": ["important_tag"],
             }
@@ -177,7 +175,7 @@ class TestAllConfigsProjectLevel(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_all_configs_dbt_project(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         config = manifest.sources.get("source.test.test_source.test_table").config
@@ -192,7 +190,7 @@ configs_source_level__schema_yml = """version: 2
 sources:
   - name: test_source
     config:
-        enabled: True,
+        enabled: True
         quoting:
             database: False
             schema: False
@@ -205,7 +203,6 @@ sources:
         loaded_at_field: some_column
         database: custom_database
         schema: custom_schema
-        # identifier: "seed"  #this doesnt seems to be supported now?
         meta: {'languages': ['python']}
         tags: ["important_tag"]
     tables:
@@ -223,7 +220,7 @@ class TestAllConfigsSourceLevel(SourceConfigTests):
         return {"schema.yml": configs_source_level__schema_yml}
 
     def test_source_all_configs_source_level(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         assert "source.test.test_source.other_test_table" in manifest.sources
@@ -246,7 +243,7 @@ sources:
     tables:
       - name: test_table
         config:
-            enabled: True,
+            enabled: True
             quoting:
                 database: False
                 schema: False
@@ -259,7 +256,6 @@ sources:
             loaded_at_field: some_column
             database: custom_database
             schema: custom_schema
-            # identifier: "seed"  #this doesnt seems to be supported now?
             meta: {'languages': ['python']}
             tags: ["important_tag"]
       - name: other_test_table
@@ -275,7 +271,7 @@ class TestSourceAllConfigsSourceTable(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_all_configs_source_table(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         assert "source.test.test_source.other_test_table" in manifest.sources
@@ -296,7 +292,7 @@ all_configs_everywhere__schema_yml = """version: 2
 sources:
   - name: test_source
     config:
-        tags: "source_level_important_tag",
+        tags: ["source_level_important_tag"]
     tables:
       - name: test_table
         config:
@@ -313,14 +309,13 @@ sources:
             loaded_at_field: some_column
             database: custom_database
             schema: custom_schema
-            # identifier: "seed"  #this doesnt seems to be supported now?
             meta: {'languages': ['python']}
             tags: ["important_tag"]
       - name: other_test_table
 """
 
 
-# Test inheritence - set configs atproject, source, and source-table level - expect source-table level to win
+# Test inheritence - set configs at project, source, and source-table level - expect source-table level to win
 # expect fail - not implemented
 class TestSourceConfigsInheritence1(SourceConfigTests):
     @pytest.fixture(scope="class")
@@ -333,7 +328,7 @@ class TestSourceConfigsInheritence1(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_all_configs_source_table(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         assert "source.test.test_source.other_test_table" in manifest.sources
@@ -374,7 +369,6 @@ sources:
         loaded_at_field: some_column
         database: custom_database
         schema: custom_schema
-        # identifier: "seed"  #this doesnt seems to be supported now?
         meta: {'languages': ['python']}
         tags: ["important_tag"]
     tables:
@@ -396,7 +390,7 @@ class TestSourceConfigsInheritence2(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_two_configs_source_level(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         assert "source.test.test_source.other_test_table" in manifest.sources
@@ -412,14 +406,14 @@ class TestSourceConfigsInheritence2(SourceConfigTests):
         assert config_test_table == pytest.expected_config
 
 
-all_configs_everywhere__schema_yml = """version: 2
+all_configs_project_source__schema_yml = """version: 2
 
 sources:
   - name: test_source
     tables:
       - name: test_table
         config:
-            enabled: True,
+            enabled: True
             quoting:
                 database: False
                 schema: False
@@ -432,7 +426,6 @@ sources:
             loaded_at_field: some_column
             database: custom_database
             schema: custom_schema
-            # identifier: "seed"  #this doesnt seems to be supported now?
             meta: {'languages': ['python']}
             tags: ["important_tag"]
       - name: other_test_table
@@ -444,7 +437,7 @@ sources:
 class TestSourceConfigsInheritence3(SourceConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"schema.yml": all_configs_everywhere__schema_yml}
+        return {"schema.yml": all_configs_project_source__schema_yml}
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -452,7 +445,7 @@ class TestSourceConfigsInheritence3(SourceConfigTests):
 
     @pytest.mark.xfail
     def test_source_two_configs_source_table(self, project):
-        run_dbt(["compile"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         assert "source.test.test_source.other_test_table" in manifest.sources
@@ -475,46 +468,17 @@ class TestSourceConfigsInheritence3(SourceConfigTests):
         assert config_other_test_table == expected_project_level_config
 
 
-configs_as_properties__schema_yml = """version: 2
-
-sources:
-  - name: test_source
-    quoting:
-        database: False
-        schema: False
-        identifier: False
-        column: False
-    freshness:
-        error_after: {count: 24, period: hour}
-        warn_after: {count: 12, period: hour}
-    loader: "a_loader"
-    loaded_at_field: some_column
-    database: custom_database
-    schema: custom_schema
-    # identifier: "seed"  #this doesnt seems to be supported now?
-    meta: {'languages': ['python']}
-    tags: ["important_tag"]
-    tables:
-      - name: test_table
-"""
-
-
-# Check backwards compatibility of setting configs as properties at top level
-# expect pass since the properties don't get copied to the node.config yet
-class TestSourceBackwardsCompatibility(SourceConfigTests):
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {"schema.yml": configs_as_properties__schema_yml}
-
-    def test_source_configs_as_properties(self, project):
-        run_dbt(["compile"])
+class SourceBackwardsCompatibility(SourceConfigTests):
+    @pytest.mark.xfail
+    def check_source_configs_and_properties(self, project):
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
         config_test_table = manifest.sources.get("source.test.test_source.test_table").config
 
         # this is new functionality - but it currently passes since SourceConfig is not updated
         # and is commented out in the setup becuse it is not updated with new configs
-        # even when properties are defined at teh top level they should end up on the node.config
+        # even when properties are defined at the top level they should end up on the node.config
         assert isinstance(config_test_table, SourceConfig)
         assert config_test_table == pytest.expected_config
 
@@ -532,9 +496,79 @@ class TestSourceBackwardsCompatibility(SourceConfigTests):
         assert properties_test_table.loaded_at_field == "some_column"
         assert properties_test_table.database == "custom_database"
         assert properties_test_table.schema == "custom_schema"
-        # assert properties_test_table.identifier == "seed"
-        assert properties_test_table.meta == {}  # TODO: why is this blank
+        assert properties_test_table.meta == {}  # TODO: why is this empty
         assert properties_test_table.tags == ["important_tag"]
+
+
+properties_as_configs__schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    quoting:
+        database: False
+        schema: False
+        identifier: False
+        column: False
+    freshness:
+        error_after: {count: 24, period: hour}
+        warn_after: {count: 12, period: hour}
+    loader: "a_loader"
+    loaded_at_field: some_column
+    database: custom_database
+    schema: custom_schema
+    meta: {'languages': ['python']}
+    tags: ["important_tag"]
+    tables:
+      - name: test_table
+"""
+
+
+# Check backwards compatibility of setting configs as properties at top level
+# expect pass since the properties don't get copied to the node.config yet so
+# the values match since we haven't build the full SourceConfig yet
+class TestPropertiesAsConfigs(SourceBackwardsCompatibility):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": properties_as_configs__schema_yml}
+
+    def test_source_configs_as_properties(self, project):
+        self.check_source_configs_and_properties(project)
+
+
+configs_as_properties__schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    config:
+        quoting:
+            database: False
+            schema: False
+            identifier: False
+            column: False
+        freshness:
+            error_after: {count: 24, period: hour}
+            warn_after: {count: 12, period: hour}
+        loader: "a_loader"
+        loaded_at_field: some_column
+        database: custom_database
+        schema: custom_schema
+        meta: {'languages': ['python']}
+        tags: ["important_tag"]
+    tables:
+      - name: test_table
+"""
+
+
+# Check backwards compatibility of setting configs as configs at top level and expect them to end up as properties
+# expect fail since the properties don't get copied to the node.config yet
+class TestConfigsAsProperties(SourceBackwardsCompatibility):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": configs_as_properties__schema_yml}
+
+    @pytest.mark.xfail
+    def test_source_configs_as_properties(self, project):
+        self.check_source_configs_and_properties(project)
 
 
 configs_properites__schema_yml = """version: 2
@@ -553,11 +587,10 @@ sources:
     loaded_at_field: some_column
     database: custom_database
     schema: custom_schema
-    # identifier: "seed"  #this doesnt seems to be supported now?
     meta: {'languages': ['python']}
     tags: ["important_tag"]
     config:
-        enabled: True,
+        enabled: True
         quoting:
             database: False
             schema: False
@@ -570,7 +603,6 @@ sources:
         loaded_at_field: some_column
         database: custom_database
         schema: custom_schema
-        # identifier: "seed"  #this doesnt seems to be supported now?
         meta: {'languages': ['python']}
         tags: ["important_tag"]
     tables:
@@ -589,6 +621,72 @@ class TestErrorSourceConfigProperty(SourceConfigTests):
     def test_error_source_configs_properties(self, project):
         # TODO: update below with correct exception/text/etc.  This is placeholder.
         with pytest.raises(CompilationException) as exc:
-            run_dbt(["compile"])
+            run_dbt(["parse"])
 
         assert "???" in str(exc.value)
+
+
+configs_properites__schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+          config:
+            enabled: True
+            identifier: "seed"
+"""
+
+
+class TestSourceIdentifierConfig:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self):
+        pytest.expected_config = SourceConfig(
+            enabled=True,
+            # TODO: uncomment all this once it's added to SourceConfig, throws error right now
+            # identifier = "seed"
+        )
+
+
+identifier_config_source_table__schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+            identifier: "seed"
+      - name: other_test_table
+"""
+
+
+# Test identifier config at source table level in yml file.  This config differs by
+# table so should only be defined at this level.
+# expect fail - not implemented
+class TestSourceAllCTestSourceIdentifierConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": identifier_config_source_table__schema_yml}
+
+    @pytest.mark.xfail
+    def test_source_identifier_config_source_table(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "source.test.test_source.test_table" in manifest.sources
+        assert "source.test.test_source.other_test_table" in manifest.sources
+        config_test_table = manifest.sources.get("source.test.test_source.test_table").config
+        config_other_test_table = manifest.sources.get(
+            "source.test.test_source.other_test_table"
+        ).config
+
+        assert isinstance(config_test_table, SourceConfig)
+        assert isinstance(config_other_test_table, SourceConfig)
+
+        identifier_expected_config = SourceConfig(
+            enabled=True,
+            # TODO: uncomment this once it's added to SourceConfig, throws error right now
+            # identifier = "seed"
+        )
+
+        assert config_test_table != config_other_test_table
+        assert config_test_table == identifier_expected_config
