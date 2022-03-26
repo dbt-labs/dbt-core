@@ -300,7 +300,7 @@ sources:
     tables:
       - name: test_table
         config:
-            enabled: True,
+            enabled: True
            quoting:
                 database: False
                 schema: False
