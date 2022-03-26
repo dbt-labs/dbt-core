@@ -361,7 +361,7 @@ all_configs_not_table_schema_yml = """version: 2
 sources:
   - name: test_source
     config:
-        enabled: True,
+        enabled: True
         quoting:
             database: False
             schema: False
