@@ -1,79 +1,27 @@
-# Contributing to `dbt`
+# Contributing to `dbt-core`
+
+`dbt-core` is Apache 2.0-licensed open source software. `dbt-core` is what it is today because community members have opened issues, provided feedback, and [contributed to the knowledge loop](https://www.getdbt.com/dbt-labs/values/). Whether you are a seasoned open source contributor or a first-time committer, we welcome and encourage you to contribute code, documentation, ideas, or problem statements to this project.
 
 1. [About this document](#about-this-document)
-2. [Proposing a change](#proposing-a-change)
-3. [Getting the code](#getting-the-code)
-4. [Setting up an environment](#setting-up-an-environment)
-5. [Running `dbt` in development](#running-dbt-in-development)
-6. [Testing](#testing)
-7. [Submitting a Pull Request](#submitting-a-pull-request)
+2. [Getting the code](#getting-the-code)
+3. [Setting up an environment](#setting-up-an-environment)
+4. [Running `dbt` in development](#running-dbt-in-development)
+5. [Testing dbt-core](#testing)
+6. [Submitting a Pull Request](#submitting-a-pull-request)
 
 ## About this document
 
-This document is a guide intended for folks interested in contributing to `dbt-core`. Below, we document the process by which members of the community should create issues and submit pull requests (PRs) in this repository. It is not intended as a guide for using `dbt-core`, and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. This guide assumes you are using macOS or Linux and are comfortable with the command line.
+There are many ways to contribute to the ongoing development of `dbt-core`, such as by participating in discussions and issues. We encourage you to first read our ["Expectations for Open Source Contributors"](TODO: DOCS LINK GOES HERE ONCE MERGED).
 
-If you're new to python development or contributing to open-source software, we encourage you to read this document from start to finish. If you get stuck, drop us a line in the `#dbt-core-development` channel on [slack](https://community.getdbt.com).
+The rest of this document serves as a more granular guide for contributing code changes to `dbt-core` (this repository). It is not intended as a guide for using `dbt-core`, and some pieces assume a level of familiarity with Python development (virtualenvs, `pip`, etc). Specific code snippets in this guide assumes you are using macOS or Linux and are comfortable with the command line.
 
-#### Adapters
+If you get stuck, we're happy to help--drop us a line in the `#dbt-core-development` channel on [slack](https://community.getdbt.com).
 
-If you have an issue or code change suggestion related to a specific database [adapter](https://docs.getdbt.com/docs/available-adapters); please refer to that supported databases seperate repo for those contributions.
+### Notes
 
-### Signing the CLA
-
-Please note that all contributors to `dbt-core` must sign the [Contributor License Agreement](https://docs.getdbt.com/docs/contributor-license-agreements) to have their Pull Request merged into the `dbt-core` codebase. If you are unable to sign the CLA, then the `dbt-core` maintainers will unfortunately be unable to merge your Pull Request. You are, however, welcome to open issues and comment on existing ones.
-
-## Proposing a change
-
-`dbt-core` is Apache 2.0-licensed open source software. `dbt-core` is what it is today because community members like you have opened issues, provided feedback, and contributed to the knowledge loop for the entire communtiy. Whether you are a seasoned open source contributor or a first-time committer, we welcome and encourage you to contribute code, documentation, ideas, or problem statements to this project.
-
-### Defining the problem
-
-If you have an idea for a new feature or if you've discovered a bug in `dbt-core`, the first step is to open an issue. Please check the list of [open issues](https://github.com/dbt-labs/dbt-core/issues) before creating a new one. If you find a relevant issue, please add a comment to the open issue instead of creating a new one. There are hundreds of open issues in this repository and it can be hard to know where to look for a relevant open issue. **The `dbt-core` maintainers are always happy to point contributors in the right direction**, so please err on the side of documenting your idea in a new issue if you are unsure where a problem statement belongs.
-
-> **Note:** All community-contributed Pull Requests _must_ be associated with an open issue. If you submit a Pull Request that does not pertain to an open issue, you will be asked to create an issue describing the problem before the Pull Request can be reviewed.
-
-### Discussing the idea
-
-After you open an issue, a `dbt-core` maintainer will follow up by commenting on your issue (usually within 1-3 days) to explore your idea further and advise on how to implement the suggested changes. In many cases, community members will chime in with their own thoughts on the problem statement. If you as the issue creator are interested in submitting a Pull Request to address the issue, you should indicate this in the body of the issue. The `dbt-core` maintainers are _always_ happy to help contributors with the implementation of fixes and features, so please also indicate if there's anything you're unsure about or could use guidance around in the issue.
-
-### Submitting a change
-
-If an issue is appropriately well scoped and describes a beneficial change to the `dbt-core` codebase, then anyone may submit a Pull Request to implement the functionality described in the issue. See the sections below on how to do this.
-
-The `dbt-core` maintainers will add a `good first issue` label if an issue is suitable for a first-time contributor. This label often means that the required code change is small, limited to one database adapter, or a net-new addition that does not impact existing functionality. You can see the list of currently open issues on the [Contribute](https://github.com/dbt-labs/dbt-core/contribute) page.
-
-Here's a good workflow:
-- Comment on the open issue, expressing your interest in contributing the required code change
-- Outline your planned implementation. If you want help getting started, ask!
-- Follow the steps outlined below to develop locally. Once you have opened a PR, one of the `dbt-core` maintainers will work with you to review your code.
-- Add a test! Tests are crucial for both fixes and new features alike. We want to make sure that code works as intended, and that it avoids any bugs  previously encountered. Currently, the best resource for understanding `dbt-core`'s [unit](test/unit) and [integration](test/integration) tests is the tests themselves. One of the maintainers can help by pointing out relevant examples.
-- Check your formatting and linting with [Flake8](https://flake8.pycqa.org/en/latest/#), [Black](https://github.com/psf/black), and the rest of the hooks we have in our [pre-commit](https://pre-commit.com/) [config](https://github.com/dbt-labs/dbt-core/blob/75201be9db1cb2c6c01fa7e71a314f5e5beb060a/.pre-commit-config.yaml).
-
-In some cases, the right resolution to an open issue might be tangential to the `dbt-core` codebase. The right path forward might be a documentation update or a change that can be made in user-space. In other cases, the issue might describe functionality that the `dbt-core` maintainers are unwilling or unable to incorporate into the `dbt-core` codebase. When it is determined that an open issue describes functionality that will not translate to a code change in the `dbt-core` repository, the issue will be tagged with the `wontfix` label (see below) and closed.
-
-### Using issue labels
-
-The `dbt-core` maintainers use labels to categorize open issues. Most labels describe the domain in the `dbt-core` codebase germane to the discussion.
-
-| tag | description |
-| --- | ----------- |
-| [triage](https://github.com/dbt-labs/dbt-core/labels/triage) | This is a new issue which has not yet been reviewed by a `dbt-core` maintainer. This label is removed when a maintainer reviews and responds to the issue. |
-| [bug](https://github.com/dbt-labs/dbt-core/labels/bug) | This issue represents a defect or regression in `dbt-core` |
-| [enhancement](https://github.com/dbt-labs/dbt-core/labels/enhancement) | This issue represents net-new functionality in `dbt-core` |
-| [good first issue](https://github.com/dbt-labs/dbt-core/labels/good%20first%20issue) | This issue does not require deep knowledge of the `dbt-core` codebase to implement. This issue is appropriate for a first-time contributor. |
-| [help wanted](https://github.com/dbt-labs/dbt-core/labels/help%20wanted) / [discussion](https://github.com/dbt-labs/dbt-core/labels/discussion) | Conversation around this issue in ongoing, and there isn't yet a clear path forward. Input from community members is most welcome. |
-| [duplicate](https://github.com/dbt-labs/dbt-core/issues/duplicate) | This issue is functionally identical to another open issue. The `dbt-core` maintainers will close this issue and encourage community members to focus conversation on the other one. |
-| [snoozed](https://github.com/dbt-labs/dbt-core/labels/snoozed) | This issue describes a good idea, but one which will probably not be addressed in a six-month time horizon. The `dbt-core` maintainers will revist these issues periodically and re-prioritize them accordingly. |
-| [stale](https://github.com/dbt-labs/dbt-core/labels/stale) | This is an old issue which has not recently been updated. Stale issues will periodically be closed by `dbt-core` maintainers, but they can be re-opened if the discussion is restarted. |
-| [wontfix](https://github.com/dbt-labs/dbt-core/labels/wontfix) | This issue does not require a code change in the `dbt-core` repository, or the maintainers are unwilling/unable to merge a Pull Request which implements the behavior described in the issue. |
-
-#### Branching Strategy
-
-`dbt-core` has three types of branches:
-
-- **Trunks** are where active development of the next release takes place. There is one trunk named `main` at the time of writing this, and will be the default branch of the repository.
-- **Release Branches** track a specific, not yet complete release of `dbt-core`. Each minor version release has a corresponding release branch. For example, the `0.11.x` series of releases has a branch called `0.11.latest`. This allows us to release new patch versions under `0.11` without necessarily needing to pull them into the latest version of `dbt-core`.
-- **Feature Branches** track individual features and fixes. On completion they should be merged into the trunk branch or a specific release branch.
+- **Adapters:** Is your issue or proposed code change related to a specific [database adapter](https://docs.getdbt.com/docs/available-adapters)? If so, please open issues, PRs, and discussions in that adapter's repository instead. The sole exception is Postgres; the `dbt-postgres` plugin lives in this repository (`dbt-core`).
+- **CLA:** Please note that anyone contributing code to `dbt-core` must sign the [Contributor License Agreement](https://docs.getdbt.com/docs/contributor-license-agreements). If you are unable to sign the CLA, the `dbt-core` maintainers will unfortunately be unable to merge any of your Pull Requests. We welcome you to participate in discussions, open issues, and comment on existing ones.
+- **Branches:** All pull requests from community contributors should target the `main` branch (default). If the change is needed as a patch for a minor version of dbt that has already been released (or is already a release candidate), a maintainer will backport the changes in your PR to the relevant "latest" release branch (`1.0.latest`, `1.1.latest`, ...)
 
 ## Getting the code
 
@@ -85,11 +33,11 @@ You will need `git` in order to download and modify the `dbt-core` source code. 
 
 If you are not a member of the `dbt-labs` GitHub organization, you can contribute to `dbt-core` by forking the `dbt-core` repository. For a detailed overview on forking, check out the [GitHub docs on forking](https://help.github.com/en/articles/fork-a-repo). In short, you will need to:
 
-1. fork the `dbt-core` repository
-2. clone your fork locally
-3. check out a new branch for your proposed changes
-4. push changes to your fork
-5. open a pull request against `dbt-labs/dbt` from your forked repository
+1. Fork the `dbt-core` repository
+2. Clone your fork locally
+3. Check out a new branch for your proposed changes
+4. Push changes to your fork
+5. Open a pull request against `dbt-labs/dbt-core` from your forked repository
 
 ### dbt Labs contributors
 
@@ -113,7 +61,7 @@ A short list of tools used in `dbt-core` testing that will be helpful to your un
 
 A deep understanding of these tools in not required to effectively contribute to `dbt-core`, but we recommend checking out the attached documentation if you're interested in learning more about them.
 
-#### virtual environments
+#### Virtual environments
 
 We strongly recommend using virtual environments when developing code in `dbt-core`. We recommend creating this virtualenv
 in the root of the `dbt-core` repository. To create a new virtualenv, run:
@@ -124,12 +72,12 @@ source env/bin/activate
 
 This will create and activate a new Python virtual environment.
 
-#### docker and docker-compose
+#### Docker and `docker-compose`
 
-Docker and docker-compose are both used in testing. Specific instructions for you OS can be found [here](https://docs.docker.com/get-docker/).
+Docker and `docker-compose` are both used in testing. Specific instructions for you OS can be found [here](https://docs.docker.com/get-docker/).
 
 
-#### postgres (optional)
+#### Postgres (optional)
 
 For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. On macOS, with homebrew setup, you can run:
 
@@ -149,24 +97,26 @@ make dev
 pip install -r dev-requirements.txt -r editable-requirements.txt
 ```
 
-When `dbt-core` is installed this way, any changes you make to the `dbt-core` source code will be reflected immediately in your next `dbt-core` run.
-
+When installed in this way, any changes you make to your local copy of the source code will be reflected immediately in your next `dbt` run.
 
 ### Running `dbt-core`
 
-With your virtualenv activated, the `dbt-core` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
+With your virtualenv activated, the `dbt` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
 
-Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local postgres instance, or a specific test sandbox within your data warehouse if appropriate.
+Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local Postgres instance, or a specific test sandbox within your data warehouse if appropriate.
 
 ## Testing
 
-Getting the `dbt-core` integration tests set up in your local environment will be very helpful as you start to make changes to your local version of `dbt-core`. The section that follows outlines some helpful tips for setting up the test environment.
+Once you're able to manually test that your code change is working in the desired circumstances, it's important to run automated tests. These tests will ensure that:
+- Your code changes do not unexpectedly break other established functionality
+- Your code changes can handle all known edge cases
+- The functionality you're adding will _keep_ working into the future
 
-Although `dbt-core` works with a number of different databases, you won't need to supply credentials for every one of these databases in your test environment. Instead you can test all dbt-core code changes with Python and Postgres.
+Although `dbt-core` works with a number of different databases, you won't need to supply credentials for every one of these databases in your test environment. Instead, you can test most `dbt-core` code changes with Python and Postgres.
 
 ### Initial setup
 
-We recommend starting with `dbt-core`'s Postgres tests. These tests cover most of the functionality in `dbt-core`, are the fastest to run, and are the easiest to set up. To run the Postgres integration tests, you'll have to do one extra step of setting up the test database:
+Postgres offers the easiest way to test most `dbt-core` functionality today. They are the fastest to run, and the easiest to set up. To run the Postgres integration tests, you'll have to do one extra step of setting up the test database:
 
 ```sh
 make setup-db
@@ -207,18 +157,20 @@ suites.
 
 #### `pytest`
 
-Finally, you can also run a specific test or group of tests using [`pytest`](https://docs.pytest.org/en/latest/) directly. With a virtualenv
-active and dev dependencies installed you can do things like:
+Finally, you can also run a specific test or group of tests using [`pytest`](https://docs.pytest.org/en/latest/) directly. With a virtualenv active and dev dependencies installed you can do things like:
+
 ```sh
-# run specific postgres integration tests
-python -m pytest -m profile_postgres test/integration/001_simple_copy_test
 # run all unit tests in a file
-python -m pytest test/unit/test_graph.py
+python3 -m pytest test/unit/test_graph.py
 # run a specific unit test
-python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
+python3 -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
+# run specific Postgres integration tests (old way)
+python3 -m pytest -m profile_postgres test/integration/074_postgres_unlogged_table_tests
+# run specific Postgres integration tests (new way)
+python3 -m pytest test/functional/sources
 ```
-> [Here](https://docs.pytest.org/en/reorganize-docs/new-docs/user/commandlineuseful.html)
-> is a list of useful command-line options for `pytest` to use while developing.
+
+> See [pytest usage docs](https://docs.pytest.org/en/6.2.x/usage.html) for an overview of useful command-line options.
 
 ## Adding CHANGELOG Entry
 
@@ -230,10 +182,8 @@ Once changie is installed and your PR is created, simply run `changie new` and c
 
 ## Submitting a Pull Request
 
-dbt Labs provides a CI environment to test changes to specific adapters, and periodic maintenance checks of `dbt-core` through Github Actions. For example, if you submit a pull request to the `dbt-redshift` repo, GitHub will trigger automated code checks and tests against Redshift.
-
 A `dbt-core` maintainer will review your PR. They may suggest code revision for style or clarity, or request that you add unit or integration test(s). These are good things! We believe that, with a little bit of help, anyone can contribute high-quality code.
-- First time contributors should note code checks + unit tests require a maintainer to approve.
 
+Automated tests run via GitHub Actions. If you're a first-time contributor, all tests (including code checks and unit tests) will require a maintainer to approve. Changes in the `dbt-core` repository trigger integration tests against Postgres, which a maintainer will enable by adding the `ok to test` label. dbt Labs also provides CI environments in which to test changes to other adapters, triggered by PRs in those adapters' repositories, as well as periodic maintenance checks of each adapter in concert with the latest `dbt-core` code changes.
 
 Once all tests are passing and your PR has been approved, a `dbt-core` maintainer will merge your changes into the active development branch. And that's it! Happy developing :tada:
