@@ -52,34 +52,34 @@ select * from {{ upstream }}
 """
 
 
-@pytest.fixture(scope="class")
-def tests():
-    return {"get_columns_in_relation.sql": tests__get_columns_in_relation_sql}
-
-
-@pytest.fixture(scope="class")
-def models():
-    return {
-        "upstream.sql": models__upstream_sql,
-        "expected.sql": models__expected_sql,
-        "model.sql": models__model_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def project_files(
-    project_root,
-    tests,
-    models,
-):
-    write_project_files(project_root, "tests", tests)
-    write_project_files(project_root, "models", models)
-
-
 class BaseCaching:
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return "models"
+    def tests(self):
+        return {"get_columns_in_relation.sql": tests__get_columns_in_relation_sql}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "upstream.sql": models__upstream_sql,
+            "expected.sql": models__expected_sql,
+            "model.sql": models__model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_files(
+        self,
+        project_root,
+        tests,
+        models,
+    ):
+        write_project_files(project_root, "tests", tests)
+        write_project_files(project_root, "models", models)
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "name": "adapter_methods",
+        }
 
     # snowflake need all tables in CAP name
     @pytest.fixture(scope="class")
@@ -88,7 +88,8 @@ class BaseCaching:
 
     def test_adapter_methods(self, project, equal_tables):
         run_dbt(["compile"])  # trigger any compile-time issues
-        run_dbt()
+        result = run_dbt()
+        assert len(result) == 3
         table_comp = TableComparison(
             adapter=project.adapter, unique_schema=project.test_schema, database=project.database
         )
