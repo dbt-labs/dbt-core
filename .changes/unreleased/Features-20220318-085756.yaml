@@ -1,0 +1,7 @@
+kind: Features
+body: Support custom names for generic tests
+time: 2022-03-18T08:57:56.05584+01:00
+custom:
+  Author: jtcohen6
+  Issue: "3348"
+  PR: "4898"
