@@ -153,19 +153,17 @@ class SourceOverrideTest:
 
         pytest.expected_config = SourceConfig(
             enabled=True,
-            # TODO: uncomment all this once it's added to SourceConfig, throws error right now
-            # quoting = Quoting(database=True, schema=True, identifier=True, column=True)
-            # freshness = FreshnessThreshold(
-            #     warn_after=Time(count=1, period=TimePeriod.minute),
-            #     error_after=Time(count=5, period=TimePeriod.minute),
-            #     filter=None
-            #     )
-            # loader = "override_a_loader"
-            # loaded_at_field = override_some_column
-            # database = override_custom_database
-            # schema = override_custom_schema
-            # meta = {'languages': ['java']}
-            # tags = ["override_important_tag"]
+            quoting={"database": True, "schema": True, "identifier": True, "column": True},
+            freshness={
+                "warn_after": {"count": 1, "period": "minute"},
+                "error_after": {"count": 5, "period": "minute"},
+            },
+            loader="override_a_loader",
+            loaded_at_field="override_some_column",
+            database="override_custom_database",
+            schema="override_custom_schema",
+            meta={"languages": ["java"]},
+            tags=["override_important_tag"],
         )
 
     @pytest.fixture(scope="class")
@@ -240,7 +238,7 @@ class TestSourceLevelOverride(SourceOverrideTest):
     def models(self):
         return {"schema.yml": overrides_source_level__schema_yml}
 
-    @pytest.mark.xfail
+    # @pytest.mark.xfail
     def test_source_level_overrides(self, project):
         run_dbt(["deps"])
 
@@ -302,7 +300,7 @@ class TestSourceTableOverride(SourceOverrideTest):
     def models(self):
         return {"schema.yml": overrides_source_level__schema_yml}
 
-    @pytest.mark.xfail
+    # @pytest.mark.xfail
     def test_source_table_overrides(self, project):
         run_dbt(["deps"])
 

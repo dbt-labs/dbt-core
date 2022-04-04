@@ -335,6 +335,16 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+    quoting: Optional[Dict[str, Any]] = None
+    freshness: Optional[Dict[str, Any]] = None
+    loader: Optional[str] = None
+    loaded_at_field: Optional[
+        Any
+    ] = None  # TODO what type is this? docs say: "<column_name_or_expression>"
+    database: Optional[str] = None
+    schema: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
 
 
 @dataclass
