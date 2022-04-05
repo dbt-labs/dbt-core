@@ -302,7 +302,7 @@ class GitProgressCheckedOutAt(DebugLevel, Cli, File):
 
 
 @dataclass
-class RegistryProgressMakingGETRequest(DebugLevel, Cli, File):
+class RegistryIndexProgressMakingGETRequest(DebugLevel, Cli, File):
     url: str
     code: str = "M022"
 
@@ -340,7 +340,7 @@ class RegistryProgressGETResponse(DebugLevel, Cli, File):
 
 
 @dataclass
-class RegistryResponseUnexpectedType(DebugLevel):
+class RegistryResponseUnexpectedType(DebugLevel, File):
     response: str
     code: str = "M024"
 
@@ -349,7 +349,7 @@ class RegistryResponseUnexpectedType(DebugLevel):
 
 
 @dataclass
-class RegistryResponseMissingTopKeys(DebugLevel):
+class RegistryResponseMissingTopKeys(DebugLevel, File):
     response: str
     code: str = "M025"
 
@@ -359,7 +359,7 @@ class RegistryResponseMissingTopKeys(DebugLevel):
 
 
 @dataclass
-class RegistryResponseMissingNestedKeys(DebugLevel):
+class RegistryResponseMissingNestedKeys(DebugLevel, File):
     response: str
     code: str = "M026"
 
@@ -369,7 +369,7 @@ class RegistryResponseMissingNestedKeys(DebugLevel):
 
 
 @dataclass
-class RegistryResponseExtraNestedKeys(DebugLevel):
+class RegistryResponseExtraNestedKeys(DebugLevel, File):
     response: str
     code: str = "M027"
 
