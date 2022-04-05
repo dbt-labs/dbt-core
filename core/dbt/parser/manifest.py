@@ -781,12 +781,9 @@ class ManifestLoader:
         base_macros_only=False,
     ) -> Manifest:
         with PARSING_STATE:
-            # For testing only, allow loading macros without running
-            # 'dbt deps' first
-            if base_macros_only:
-                projects = root_config.load_base_dependencies()
-            else:
-                projects = root_config.load_dependencies()
+            # base_only/base_macros_only: for testing only,
+            # allows loading macros without running 'dbt deps' first
+            projects = root_config.load_dependencies(base_only=base_macros_only)
 
             # This creates a loader object, including result,
             # and then throws it away, returning only the
