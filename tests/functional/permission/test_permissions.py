@@ -64,7 +64,6 @@ class TestPermissions:
         project,
     ):
         # now it should work!
-        # breakpoint()
         project.run_sql("grant create on database {} to noaccess".format(project.database))
         project.run_sql(
             'grant usage, create on schema "{}" to noaccess'.format(project.test_schema)
