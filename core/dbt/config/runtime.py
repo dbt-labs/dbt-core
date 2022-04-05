@@ -340,6 +340,25 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             self.dependencies = all_projects
         return self.dependencies
 
+    # This is for tests, where we haven't done 'dbt deps' but want to use
+    # the standard macros.
+    def load_base_dependencies(self) -> Mapping[str, "RuntimeConfig"]:
+        if self.dependencies is None:
+            all_projects = {self.project_name: self}
+            internal_packages = get_include_paths(self.credentials.type)
+            project_paths = itertools.chain(internal_packages)
+            for project_name, project in self.load_projects(project_paths):
+                if project_name in all_projects:
+                    raise_compiler_error(
+                        f"dbt found more than one package with the name "
+                        f'"{project_name}" included in this project. Package '
+                        f"names must be unique in a project. Please rename "
+                        f"one of these packages."
+                    )
+                all_projects[project_name] = project
+            self.dependencies = all_projects
+        return self.dependencies
+
     def clear_dependencies(self):
         self.dependencies = None
 

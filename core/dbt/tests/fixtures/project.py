@@ -10,7 +10,12 @@ import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
 from dbt.events.functions import setup_event_logger
-from dbt.tests.util import write_file, run_sql_with_adapter, TestProcessingException
+from dbt.tests.util import (
+    write_file,
+    run_sql_with_adapter,
+    TestProcessingException,
+    get_connection,
+)
 
 
 # These are the fixtures that are used in dbt core functional tests
@@ -168,10 +173,10 @@ def selectors_yml(project_root, selectors):
         write_file(data, project_root, "selectors.yml")
 
 
-# This creates an adapter that is used for running test setup and teardown,
-# and 'run_sql' commands. The 'run_dbt' commands will create their own adapter
-# so this one needs some special patching to run after dbt commands have been
-# executed
+# This creates an adapter that is used for running test setup, such as creating
+# the test schema, and sql commands that are run in tests prior to the first
+# dbt command. After a dbt command is run, the project.adapter property will
+# return the current adapter (for this adapter type) from the adapter factory.
 @pytest.fixture(scope="class")
 def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
     # The profiles.yml and dbt_project.yml should already be written out
@@ -182,6 +187,7 @@ def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_projec
     runtime_config = RuntimeConfig.from_args(args)
     register_adapter(runtime_config)
     adapter = get_adapter(runtime_config)
+    adapter.load_macro_manifest(base_macros_only=True)
     yield adapter
     adapter.cleanup_connections()
     reset_adapters()
@@ -289,6 +295,9 @@ class TestProjInfo:
 
     @property
     def adapter(self):
+        # This returns the last created "adapter" from the adapter factory. Each
+        # dbt command will create a new one. This allows us to avoid patching the
+        # providers 'get_adapter' function.
         return get_adapter_by_type(self.adapter_type)
 
     # Run sql from a path
@@ -301,6 +310,20 @@ class TestProjInfo:
     # run sql from a string, using adapter saved at test startup
     def run_sql(self, sql, fetch=None):
         return run_sql_with_adapter(self.adapter, sql, fetch=fetch)
+
+    def create_test_schema(self):
+        with get_connection(self.adapter):
+            relation = self.adapter.Relation.create(
+                database=self.database, schema=self.test_schema
+            )
+            self.adapter.create_schema(relation)
+
+    def drop_test_schema(self):
+        with get_connection(self.adapter):
+            relation = self.adapter.Relation.create(
+                database=self.database, schema=self.test_schema
+            )
+            self.adapter.drop_schema(relation)
 
     def get_tables_in_schema(self):
         sql = """
@@ -361,10 +384,10 @@ def project(
         database=adapter.config.credentials.database,
         test_config=test_config,
     )
-    project.run_sql("drop schema if exists {schema} cascade")
-    project.run_sql("create schema {schema}")
+    project.drop_test_schema()
+    project.create_test_schema()
 
     yield project
 
-    project.run_sql("drop schema if exists {schema} cascade")
+    project.drop_test_schema()
     os.chdir(orig_cwd)
