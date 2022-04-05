@@ -16,10 +16,10 @@ models__trinary_unique_key_list_sql = """
 }}
 
 select
-    state::varchar(2) as state,
-    county::varchar(12) as county,
-    city::varchar(12) as city,
-    last_visit_date::date as last_visit_date
+    state as state,
+    county as county,
+    city as city,
+    last_visit_date as last_visit_date
 from {{ ref('seed') }}
 
 {% if is_incremental() %}
@@ -65,10 +65,10 @@ models__unary_unique_key_list_sql = """
 }}
 
 select
-    state::varchar(2) as state,
-    county::varchar(12) as county,
-    city::varchar(12) as city,
-    last_visit_date::date as last_visit_date
+    state as state,
+    county as county,
+    city as city,
+    last_visit_date as last_visit_date
 from {{ ref('seed') }}
 
 {% if is_incremental() %}
@@ -167,10 +167,10 @@ models__str_unique_key_sql = """
 }}
 
 select
-    state::varchar(2) as state,
-    county::varchar(12) as county,
-    city::varchar(12) as city,
-    last_visit_date::date as last_visit_date
+    state as state,
+    county as county,
+    city as city,
+    last_visit_date as last_visit_date
 from {{ ref('seed') }}
 
 {% if is_incremental() %}
@@ -188,10 +188,10 @@ models__duplicated_unary_unique_key_list_sql = """
 }}
 
 select
-    state::varchar(2) as state,
-    county::varchar(12) as county,
-    city::varchar(12) as city,
-    last_visit_date::date as last_visit_date
+    state as state,
+    county as county,
+    city as city,
+    last_visit_date as last_visit_date
 from {{ ref('seed') }}
 
 {% if is_incremental() %}
@@ -222,20 +222,20 @@ models__expected__one_str__overwrite_sql = """
 }}
 
 select
-    'CT'::varchar(2) as state,
-    'Hartford'::varchar(12) as county,
-    'Hartford'::varchar(12) as city,
-    '2022-02-14'::date as last_visit_date
+    'CT' as state,
+    'Hartford' as county,
+    'Hartford' as city,
+    cast('2022-02-14' as date) as last_visit_date
 union all
-select 'MA'::varchar(2),'Suffolk'::varchar(12),'Boston'::varchar(12),'2020-02-12'::date
+select 'MA','Suffolk','Boston','2020-02-12'
 union all
-select 'NJ'::varchar(2),'Mercer'::varchar(12),'Trenton'::varchar(12),'2022-01-01'::date
+select 'NJ','Mercer','Trenton','2022-01-01'
 union all
-select 'NY'::varchar(2),'Kings'::varchar(12),'Brooklyn'::varchar(12),'2021-04-02'::date
+select 'NY','Kings','Brooklyn','2021-04-02'
 union all
-select 'NY'::varchar(2),'New York'::varchar(12),'Manhattan'::varchar(12),'2021-04-01'::date
+select 'NY','New York','Manhattan','2021-04-01'
 union all
-select 'PA'::varchar(2),'Philadelphia'::varchar(12),'Philadelphia'::varchar(12),'2021-05-21'::date
+select 'PA','Philadelphia','Philadelphia','2021-05-21'
 
 """
 
@@ -247,20 +247,20 @@ models__expected__unique_key_list__inplace_overwrite_sql = """
 }}
 
 select
-    'CT'::varchar(2) as state,
-    'Hartford'::varchar(12) as county,
-    'Hartford'::varchar(12) as city,
-    '2022-02-14'::date as last_visit_date
+    'CT' as state,
+    'Hartford' as county,
+    'Hartford' as city,
+    cast('2022-02-14' as date) as last_visit_date
 union all
-select 'MA'::varchar(2),'Suffolk'::varchar(12),'Boston'::varchar(12),'2020-02-12'::date
+select 'MA','Suffolk','Boston','2020-02-12'
 union all
-select 'NJ'::varchar(2),'Mercer'::varchar(12),'Trenton'::varchar(12),'2022-01-01'::date
+select 'NJ','Mercer','Trenton','2022-01-01'
 union all
-select 'NY'::varchar(2),'Kings'::varchar(12),'Brooklyn'::varchar(12),'2021-04-02'::date
+select 'NY','Kings','Brooklyn','2021-04-02'
 union all
-select 'NY'::varchar(2),'New York'::varchar(12),'Manhattan'::varchar(12),'2021-04-01'::date
+select 'NY','New York','Manhattan','2021-04-01'
 union all
-select 'PA'::varchar(2),'Philadelphia'::varchar(12),'Philadelphia'::varchar(12),'2021-05-21'::date
+select 'PA','Philadelphia','Philadelphia','2021-05-21'
 
 """
 
