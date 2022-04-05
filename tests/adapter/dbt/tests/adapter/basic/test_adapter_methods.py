@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, check_relations_equal
 from dbt.tests.fixtures.project import write_project_files
-from dbt.tests.tables import TableComparison
 
 
 tests__get_columns_in_relation_sql = """
@@ -90,11 +89,7 @@ class BaseCaching:
         run_dbt(["compile"])  # trigger any compile-time issues
         result = run_dbt()
         assert len(result) == 3
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-        )
-
-        table_comp.assert_tables_equal(*equal_tables)
+        check_relations_equal(project.adapter, equal_tables)
 
 
 class TestBaseCaching(BaseCaching):
