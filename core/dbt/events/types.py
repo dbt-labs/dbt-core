@@ -304,6 +304,25 @@ class GitProgressCheckedOutAt(DebugLevel, Cli, File):
 @dataclass
 class RegistryProgressMakingGETRequest(DebugLevel, Cli, File):
     url: str
+    code: str = "M022"
+
+    def message(self) -> str:
+        return f"Making package index registry request: GET {self.url}"
+
+
+@dataclass
+class RegistryIndexProgressGETResponse(DebugLevel, Cli, File):
+    url: str
+    resp_code: int
+    code: str = "M023"
+
+    def message(self) -> str:
+        return f"Response from registry index: GET {self.url} {self.resp_code}"
+
+
+@dataclass
+class RegistryProgressMakingGETRequest(DebugLevel, Cli, File):
+    url: str
     code: str = "M008"
 
     def message(self) -> str:
@@ -318,6 +337,45 @@ class RegistryProgressGETResponse(DebugLevel, Cli, File):
 
     def message(self) -> str:
         return f"Response from registry: GET {self.url} {self.resp_code}"
+
+
+@dataclass
+class RegistryResponseUnexpectedType(DebugLevel):
+    response: str
+    code: str = "M024"
+
+    def message(self) -> str:
+        return f"Response was None: {self.response}"
+
+
+@dataclass
+class RegistryResponseMissingTopKeys(DebugLevel):
+    response: str
+    code: str = "M025"
+
+    def message(self) -> str:
+        # expected/actual keys logged in exception
+        return f"Response missing top level keys: {self.response}"
+
+
+@dataclass
+class RegistryResponseMissingNestedKeys(DebugLevel):
+    response: str
+    code: str = "M026"
+
+    def message(self) -> str:
+        # expected/actual keys logged in exception
+        return f"Response missing nested keys: {self.response}"
+
+
+@dataclass
+class RegistryResponseExtraNestedKeys(DebugLevel):
+    response: str
+    code: str = "M027"
+
+    def message(self) -> str:
+        # expected/actual keys logged in exception
+        return f"Response contained inconsistent keys: {self.response}"
 
 
 # TODO this was actually `logger.exception(...)` not `logger.error(...)`
@@ -2457,6 +2515,14 @@ if 1 == 0:
     GitNothingToDo(sha="")
     GitProgressUpdatedCheckoutRange(start_sha="", end_sha="")
     GitProgressCheckedOutAt(end_sha="")
+    RegistryIndexProgressMakingGETRequest(url="")
+    RegistryIndexProgressGETResponse(url="", resp_code=1234)
+    RegistryProgressMakingGETRequest(url="")
+    RegistryProgressGETResponse(url="", resp_code=1234)
+    RegistryResponseUnexpectedType(response=""),
+    RegistryResponseMissingTopKeys(response=""),
+    RegistryResponseMissingNestedKeys(response=""),
+    RegistryResponseExtraNestedKeys(response=""),
     SystemErrorRetrievingModTime(path="")
     SystemCouldNotWrite(path="", reason="", exc=Exception(""))
     SystemExecutingCmd(cmd=[""])
