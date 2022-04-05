@@ -472,7 +472,7 @@ class InvocationProcessor(logbook.Processor):
 
 def initialize_from_flags():
     # Setting these used to be in UserConfig, but had to be moved here
-    if flags.SEND_ANONYMOUS_USAGE_STATS:
+    if flags.SEND_ANONYMOUS_USAGE_STATS and not flags.DO_NOT_TRACK:
         initialize_tracking(flags.PROFILES_DIR)
     else:
         do_not_track()
