@@ -11,19 +11,17 @@ class SourceConfigTests:
     def setUp(self):
         pytest.expected_config = SourceConfig(
             enabled=True,
-            # TODO: uncomment all this once it's added to SourceConfig, throws error right now
-            # quoting = Quoting(database=False, schema=False, identifier=False, column=False)
-            # freshness = FreshnessThreshold(
-            #     warn_after=Time(count=12, period=TimePeriod.hour),
-            #     error_after=Time(count=24, period=TimePeriod.hour),
-            #     filter=None
-            #     )
-            # loader = "a_loader"
-            # loaded_at_field = some_column
-            # database = custom_database
-            # schema = custom_schema
-            # meta = {'languages': ['python']}
-            # tags = ["important_tag"]
+            quoting={"database": False, "schema": False, "identifier": False, "column": False},
+            freshness={
+                "warn_after": {"count": 12, "period": "hour"},
+                "error_after": {"count": 24, "period": "hour"},
+            },
+            loader="a_loader",
+            loaded_at_field="some_column",
+            database="custom_database",
+            schema="custom_schema",
+            meta={"languages": ["python"]},
+            tags=["important_tag"],
         )
 
 
@@ -105,7 +103,6 @@ class TestConfigYamlSourceLevel(SourceConfigTests):
             "schema.yml": disabled_source_level__schema_yml,
         }
 
-    @pytest.mark.xfail
     def test_source_config_yaml_source_level(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
@@ -531,7 +528,8 @@ class TestPropertiesAsConfigs(SourceBackwardsCompatibility):
     def models(self):
         return {"schema.yml": properties_as_configs__schema_yml}
 
-    def test_source_configs_as_properties(self, project):
+    @pytest.mark.xfail
+    def test_source_properties_as_configs(self, project):
         self.check_source_configs_and_properties(project)
 
 
