@@ -62,6 +62,8 @@ from dbt.node_types import NodeType
 
 from dbt.utils import merge, AttrDict, MultiDict
 
+from dbt import selected_resources
+
 import agate
 
 
@@ -1240,6 +1242,15 @@ class ModelContext(ProviderContext):
         if self.model.resource_type == NodeType.Operation:
             return None
         return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+    @contextproperty
+    def selected_resources(self) -> Any:
+        """The `selected_resources` variable contains a list of the resources
+        selected based on the parameters provided to the dbt command.
+        Currently, is not populated for the command `run-operation` that
+        doesn't support `--select`.
+        """
+        return selected_resources.SELECTED_RESOURCES
 
 
 # This is called by '_context_for', used in 'render_with_context'
