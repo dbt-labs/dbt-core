@@ -14,7 +14,7 @@ rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
 mkdir -p "$DBT_PATH"/dist
 
-for SUBPATH in core plugins/postgres
+for SUBPATH in core plugins/postgres tests/adapter
 do
     rm -rf "$DBT_PATH"/"$SUBPATH"/dist
     rm -rf "$DBT_PATH"/"$SUBPATH"/build
