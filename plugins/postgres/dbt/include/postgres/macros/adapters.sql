@@ -149,14 +149,27 @@
     {% endif %}
     {% set identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix ~ dtstring %}
 
-    {% do return(base_relation.incorporate(
-                                  path={
-                                    "identifier": identifier,
-                                    "schema": none,
-                                    "database": none
-                                  })) -%}
+    {{ return(base_relation.incorporate(path={"identifier": identifier })) }}
 
   {% endmacro %}
+
+{% macro postgres__make_intermediate_relation(base_relation, suffix) %}
+    {# inherits identifier & returns w/o nones #}
+    {{ return(postgres__make_relation_with_suffix(base_relation, suffix)) }}
+{% endmacro %}
+
+{% macro postgres__make_temp_relation(base_relation, suffix) %}
+    {# inherits identifier & returns w/ nones #}
+    {% set temp_relation = postgres__make_relation_with_suffix(base_relation, suffix) %}
+    {{ return(temp_relation.incorporate(path={"schema": none,
+                                              "database": none})) }}
+{% endmacro %}
+
+{% macro postgres__make_backup_relation(base_relation, backup_relation_type, suffix) %}
+    {# inherits identifier & returns w/o nones #}
+    {% set backup_relation = postgres__make_relation_with_suffix(base_relation, suffix) %}
+    {{ return(backup_relation.incorporate(type=backup_relation_type)) }}
+{% endmacro %}
 
 {#
   By using dollar-quoting like this, users can embed anything they want into their comments
