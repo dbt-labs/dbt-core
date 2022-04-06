@@ -24,10 +24,10 @@ from dbt.events.test_types import IntegrationTestDebug
 #   get_artifact
 #   update_config_file
 #   get_unique_ids_in_results
-#   check_results_nodes_by_name
+#   check_result_nodes_by_name
 #   check_result_nodes_by_unique_id
 
-# SQL related utilities
+# SQL related utilities that use the adapter
 #   run_sql_with_adapter
 #   relation_from_name
 #   check_relation_types (table/view)
@@ -60,6 +60,7 @@ def run_dbt(args: List[str] = None, expect_pass=True):
     return res
 
 
+# Use this if you need to capture the command logs in a test
 def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
     try:
         stringbuf = capture_stdout_logs()
@@ -73,6 +74,8 @@ def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
 
 
 # Used in test cases to get the manifest from the partial parsing file
+# Note: this uses an internal version of the manifest, and in the future
+# parts of it will not be supported for external use.
 def get_manifest(project_root):
     path = os.path.join(project_root, "target", "partial_parse.msgpack")
     if os.path.exists(path):
@@ -84,19 +87,7 @@ def get_manifest(project_root):
         return None
 
 
-def normalize(path):
-    """On windows, neither is enough on its own:
-
-    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
-    'c:\\documents\\all caps\\subdir\\..'
-    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
-    'C:\\documents\\ALL CAPS'
-    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
-    'c:\\documents\\all caps'
-    """
-    return os.path.normcase(os.path.normpath(path))
-
-
+# Used in tests to copy a file, usually from a data directory to the project directory
 def copy_file(src_path, src, dest_path, dest) -> None:
     # dest is a list, so that we can provide nested directories, like 'models' etc.
     # copy files from the data_dir to appropriate project directory
@@ -106,11 +97,14 @@ def copy_file(src_path, src, dest_path, dest) -> None:
     )
 
 
+# Used in tests when you want to remove a file from the project directory
 def rm_file(src_path, src) -> None:
     # remove files from proj_path
     os.remove(os.path.join(src_path, src))
 
 
+# Used in tests to write out the string contents of a file to a
+# file in the project directory.
 # We need to explicitly use encoding="utf-8" because otherwise on
 # Windows we'll get codepage 1252 and things might break
 def write_file(contents, *paths):
@@ -118,6 +112,7 @@ def write_file(contents, *paths):
         fp.write(contents)
 
 
+# Used in test utilities
 def read_file(*paths):
     contents = ""
     with open(os.path.join(*paths), "r") as fp:
@@ -125,6 +120,8 @@ def read_file(*paths):
     return contents
 
 
+# Get an artifact (usually from the target directory) such as
+# manifest.json or catalog.json to use in a test
 def get_artifact(*paths):
     contents = read_file(*paths)
     dct = json.loads(contents)
@@ -140,6 +137,7 @@ def update_config_file(updates, *paths):
     write_file(new_yaml, *paths)
 
 
+# Get the unique_ids in dbt command results
 def get_unique_ids_in_results(results):
     unique_ids = []
     for result in results:
@@ -147,6 +145,7 @@ def get_unique_ids_in_results(results):
     return unique_ids
 
 
+# Check the nodes in the results returned by a dbt run command
 def check_result_nodes_by_name(results, names):
     result_names = []
     for result in results:
@@ -154,6 +153,7 @@ def check_result_nodes_by_name(results, names):
     assert set(names) == set(result_names)
 
 
+# Check the nodes in the results returned by a dbt run command
 def check_result_nodes_by_unique_id(results, unique_ids):
     result_unique_ids = []
     for result in results:
@@ -165,7 +165,7 @@ class TestProcessingException(Exception):
     pass
 
 
-# Testing utilties that use adapter code
+# Testing utilities that use adapter code
 
 # Uses:
 #    adapter.config.credentials
@@ -265,6 +265,8 @@ def check_relation_types(adapter, relation_to_type):
 
 # Replaces assertTablesEqual. assertManyTablesEqual can be replaced
 # by doing a separate call for each set of tables/relations.
+# Wraps check_relations_equal_with_relations by creating relations
+# from the list of names passed in.
 def check_relations_equal(adapter, relation_names):
     if len(relation_names) < 2:
         raise TestProcessingException(

@@ -19,6 +19,40 @@ from dbt.tests.util import (
 
 
 # These are the fixtures that are used in dbt core functional tests
+# The main functional test fixture is the 'project' fixture, which combines
+# other fixtures to write out a dbt_project in a temporary directory.
+#
+# The models, macros, seeds, snapshots, tests, and analysis fixtures all
+# represent directories in a dbt project, and are all dictionaries with
+# file name keys and file contents values.
+#
+# The other commonly used fixture is 'project_config_update'. Other
+# occasionally used fixtures are 'profiles_config_update', 'packages',
+# and 'selectors'.
+#
+# Most test cases have fairly small files which are best included in
+# the test case file itself as string variables, to make it easy to
+# understand what is happening in the test. Files which are used
+# in multiple test case files can be included in a common file, such as
+# files.py or fixtures.py. Large files, such as seed files, which would
+# just clutter the test file can be pulled in from 'data' subdirectories
+# in the test directory.
+#
+# Test logs are written in the 'logs' directory in the root of the repo.
+# Every test case writes to a log directory with the same 'prefix' as the
+# test's unique schema.
+#
+# These fixture have "class" scope. Class scope fixtures can be used both
+# in classes and in single test functions (which act as classes for this
+# purpose). Pytest will collect all classes starting with 'Test', so if
+# you have a class that you want to be subclassed, it's generally best to
+# not start the class name with 'Test'. All standalone functions starting with
+# 'test_' and methods in classes starting with 'test_' (in classes starting
+# with 'Test') will be collected.
+#
+# Please see the pytest docs for further information:
+#     https://docs.pytest.org
+
 
 # Used in constructing the unique_schema and logs_dir
 @pytest.fixture(scope="class")
@@ -68,6 +102,8 @@ def test_data_dir(request):
     return os.path.join(request.fspath.dirname, "data")
 
 
+# This contains the profile target information, for simplicity in setting
+# up different profiles, particularly in the adapter repos.
 @pytest.fixture(scope="class")
 def dbt_profile_target():
     return {
@@ -81,13 +117,16 @@ def dbt_profile_target():
     }
 
 
-# This fixture can be overridden in a project
+# This fixture can be overridden in a project. The data provided in this
+# fixture will be merged into the default project dictionary via a python 'update'.
 @pytest.fixture(scope="class")
 def profiles_config_update():
     return {}
 
 
-# The profile dictionary, used to write out profiles.yml
+# The profile dictionary, used to write out profiles.yml. It will pull in updates
+# from two separate sources, the 'profile_target' and 'profiles_config_update'.
+# The second one is useful when using alternative targets, etc.
 @pytest.fixture(scope="class")
 def dbt_profile_data(unique_schema, dbt_profile_target, profiles_config_update):
     profile = {
@@ -117,13 +156,13 @@ def profiles_yml(profiles_root, dbt_profile_data):
     del os.environ["DBT_PROFILES_DIR"]
 
 
-# This fixture can be overridden in a project
+# Data used to update the dbt_project config data.
 @pytest.fixture(scope="class")
 def project_config_update():
     return {}
 
 
-# Combines the project_config_update dictionary with defaults to
+# Combines the project_config_update dictionary with project_config defaults to
 # produce a project_yml config and write it out as dbt_project.yml
 @pytest.fixture(scope="class")
 def dbt_project_yml(project_root, project_config_update, logs_dir):
@@ -177,6 +216,8 @@ def selectors_yml(project_root, selectors):
 # the test schema, and sql commands that are run in tests prior to the first
 # dbt command. After a dbt command is run, the project.adapter property will
 # return the current adapter (for this adapter type) from the adapter factory.
+# The adapter produced by this fixture will contain the "base" macros (not including
+# macros from dependencies).
 @pytest.fixture(scope="class")
 def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
     # The profiles.yml and dbt_project.yml should already be written out
@@ -220,31 +261,38 @@ def write_project_files_recursively(path, file_dict):
 # models, macros, seeds, snapshots, tests, analysis
 # Provide a dictionary of file names to contents. Nested directories
 # are handle by nested dictionaries.
+
+# models directory
 @pytest.fixture(scope="class")
 def models():
     return {}
 
 
+# macros directory
 @pytest.fixture(scope="class")
 def macros():
     return {}
 
 
+# seeds directory
 @pytest.fixture(scope="class")
 def seeds():
     return {}
 
 
+# snapshots directory
 @pytest.fixture(scope="class")
 def snapshots():
     return {}
 
 
+# tests directory
 @pytest.fixture(scope="class")
 def tests():
     return {}
 
 
+# analysis directory
 @pytest.fixture(scope="class")
 def analysis():
     return {}
@@ -265,6 +313,13 @@ def project_files(project_root, models, macros, snapshots, seeds, tests, analysi
 @pytest.fixture(scope="class")
 def logs_dir(request, prefix):
     return os.path.join(request.config.rootdir, "logs", prefix)
+
+
+# This fixture is for customizing tests that need overrides in adapter
+# repos. Example in dbt.tests.adapter.basic.test_base.
+@pytest.fixture(scope="class")
+def test_config():
+    return {}
 
 
 # This class is returned from the 'project' fixture, and contains information
@@ -307,10 +362,12 @@ class TestProjInfo:
             for statement in statements:
                 self.run_sql(statement, fetch)
 
-    # run sql from a string, using adapter saved at test startup
+    # Run sql from a string, using adapter saved at test startup
     def run_sql(self, sql, fetch=None):
         return run_sql_with_adapter(self.adapter, sql, fetch=fetch)
 
+    # Create the unique test schema. Used in test setup, so that we're
+    # ready for initial sql prior to a run_dbt command.
     def create_test_schema(self):
         with get_connection(self.adapter):
             relation = self.adapter.Relation.create(
@@ -318,6 +375,7 @@ class TestProjInfo:
             )
             self.adapter.create_schema(relation)
 
+    # Drop the unique test schema, usually called in test cleanup
     def drop_test_schema(self):
         with get_connection(self.adapter):
             relation = self.adapter.Relation.create(
@@ -325,6 +383,7 @@ class TestProjInfo:
             )
             self.adapter.drop_schema(relation)
 
+    # This return a dictionary of table names to 'view' or 'table' values.
     def get_tables_in_schema(self):
         sql = """
                 select table_name,
@@ -341,13 +400,10 @@ class TestProjInfo:
         return {model_name: materialization for (model_name, materialization) in result}
 
 
-# This fixture is for customizing tests that need overrides in adapter
-# repos. Example in dbt.tests.adapter.basic.test_base.
-@pytest.fixture(scope="class")
-def test_config():
-    return {}
-
-
+# This is the main fixture that is used in all functional tests. It pulls in the other
+# fixtures that are necessary to set up a dbt project, and saves some of the information
+# in a TestProjInfo class, which it returns, so that individual test cases do not have
+# to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
 def project(
     project_root,
