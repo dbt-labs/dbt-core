@@ -4,6 +4,7 @@ from typing import Any, Dict, NoReturn, Optional, Mapping
 
 from dbt import flags
 from dbt import tracking
+from dbt import selected_resources
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
 from dbt.contracts.graph.compiled import CompiledResource
@@ -555,6 +556,15 @@ class BaseContext(metaclass=ContextMeta):
         TODO: Replace with object that provides read-only access to flag values
         """
         return flags
+
+    @contextproperty
+    def selected_resources(self) -> Any:
+        """The `selected_resources` variable contains a list of the resources
+        selected based on the parameters provided to the dbt command.
+        Currently, is not populated for the command `run-operation` that
+        doesn't support `--select`.
+        """
+        return selected_resources.SELECTED_RESOURCES
 
     @contextmember
     @staticmethod
