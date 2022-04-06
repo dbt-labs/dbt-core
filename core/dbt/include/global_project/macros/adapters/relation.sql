@@ -1,17 +1,17 @@
 {% macro make_temp_relation(base_relation, suffix='__dbt_tmp') %}
-  {{ return(adapter.dispatch('make_temp_relation', 'dbt')(base_relation, suffix))}}
+  {{ return(adapter.dispatch('make_relation_with_suffix', 'dbt')(base_relation, suffix))}}
 {% endmacro %}
 
 {% macro default__make_temp_relation(base_relation, suffix) %}
-    {% set tmp_identifier = base_relation.identifier ~ suffix %}
-    {% set tmp_relation = base_relation.incorporate(
-                                path={"identifier": tmp_identifier}) -%}
+    {% set temp_identifier = base_relation.identifier ~ suffix %}
+    {% set temp_relation = base_relation.incorporate(
+                                path={"identifier": temp_identifier}) -%}
 
-    {% do return(tmp_relation) %}
+    {% do return(temp_relation) %}
 {% endmacro %}
 
 {% macro make_backup_relation(base_relation, suffix='__dbt_backup') %}
-    {{ return(adapter.dispatch('make_backup_relation', 'dbt')(base_relation, suffix)) }}
+    {{ return(adapter.dispatch('make_relation_with_suffix', 'dbt')(base_relation, suffix)) }}
 {% endmacro %}
 
 {% macro default__make_backup_relation(base_relation, suffix) %}

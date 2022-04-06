@@ -6,34 +6,28 @@
                                                 schema=schema,
                                                 database=database,
                                                 type='table') -%}
-  {%- set tmp_identifier =  make_temp_relation(target_relation)['identifier'] -%}
-  {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
-                                                      schema=schema,
-                                                      database=database,
-                                                      type='table') -%}
-  -- the intermediate_relation should not already exist in the database; get_relation
+  {%- set temp_relation =  make_temp_relation(target_relation) -%}
+  {%- set temp_relation = temp_relation.incorporate(path={"schema": schema,
+                                                         "database": database}) -%}
+  -- the temp_relation should not already exist in the database; get_relation
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation
-  {%- set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier,
-                                                                   schema=schema,
-                                                                   database=database) -%}
+  {%- set preexisting_temp_relation = adapter.get_relation(identifier=temp_relation['identifier'],
+                                                           schema=schema,
+                                                           database=database) -%}
   /*
       See ../view/view.sql for more information about this relation.
   */
   {%- set backup_relation_type = 'table' if old_relation is none else old_relation.type -%}
-  {%- set backup_identifier = make_backup_relation(target_relation)['identifier'] -%}
-  {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema,
-                                                database=database,
-                                                type=backup_relation_type) -%}
+  {%- set backup_relation = make_backup_relation(target_relation) -%}
   -- as above, the backup_relation should not already exist
-  {%- set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier,
+  {%- set preexisting_backup_relation = adapter.get_relation(identifier=backup_relation['identifier'],
                                                              schema=schema,
                                                              database=database) -%}
 
 
   -- drop the temp relations if they exist already in the database
-  {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
+  {{ drop_relation_if_exists(preexisting_temp_relation) }}
   {{ drop_relation_if_exists(preexisting_backup_relation) }}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
@@ -43,7 +37,7 @@
 
   -- build model
   {% call statement('main') -%}
-    {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
+    {{ get_create_table_as_sql(False, temp_relation, sql) }}
   {%- endcall %}
 
   -- cleanup
@@ -51,7 +45,7 @@
       {{ adapter.rename_relation(old_relation, backup_relation) }}
   {% endif %}
 
-  {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+  {{ adapter.rename_relation(temp_relation, target_relation) }}
 
   {% do create_indexes(target_relation) %}
 

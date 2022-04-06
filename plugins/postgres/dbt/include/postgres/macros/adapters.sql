@@ -138,37 +138,25 @@
   To prevent this going over the character limit, the base_relation name is truncated to ensure
   that name + suffix + uniquestring is < 63 characters.
 #}
-{% macro postgres__make_temp_relation(base_relation, suffix) %}
+
+{% macro postgres__make_relation_with_suffix(base_relation, suffix) %}
     {% set dt = modules.datetime.datetime.now() %}
     {% set dtstring = dt.strftime("%H%M%S%f") %}
     {% set suffix_length = suffix|length + dtstring|length %}
     {% set relation_max_name_length = 63 %}
     {% if suffix_length > relation_max_name_length %}
-        {% do exceptions.raise_compiler_error('Temp relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ (relation_max_name_length - dtstring|length) ~ ' characters.') %}
+        {% do exceptions.raise_compiler_error('Relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ (relation_max_name_length - dtstring|length) ~ ' characters.') %}
     {% endif %}
-    {% set tmp_identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix ~ dtstring %}
-    {% do return(base_relation.incorporate(
-                                  path={
-                                    "identifier": tmp_identifier,
-                                    "schema": none,
-                                    "database": none
-                                  })) -%}
-{% endmacro %}
+    {% set identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix ~ dtstring %}
 
-{% macro postgres__make_backup_relation(base_relation, suffix) %}
-    {% set suffix_length = suffix|length %}
-    {% set relation_max_name_length = 63 %}
-    {% if suffix_length > relation_max_name_length %}
-        {% do exceptions.raise_compiler_error('Backup relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ relation_max_name_length ~ ' characters.') %}
-    {% endif %}
-    {% set backup_identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix %}
     {% do return(base_relation.incorporate(
                                   path={
-                                    "identifier": backup_identifier,
+                                    "identifier": identifier,
                                     "schema": none,
                                     "database": none
                                   })) -%}
-{% endmacro %}
+
+  {% endmacro %}
 
 {#
   By using dollar-quoting like this, users can embed anything they want into their comments
