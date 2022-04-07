@@ -30,52 +30,75 @@ def snapshots():
 @pytest.fixture(scope="class")
 def project_config_update():
     return {
-        "on-run-start": "{{ assert_selected_models_expected_list(var('expected_list',[])) }}",
+        "on-run-start": "{{ assert_selected_models_expected_list(var('expected_list',None)) }}",
     }
 
 
-def test_selected_resources_build(project):
-    results = run_dbt(
-        [
-            "build",
-            "--select",
-            "model1+",
-            "--vars",
-            '{"expected_list": ["model.test.model1", "model.test.model2", "snapshot.test.cc_all_snapshot"]}',
-        ]
-    )
-    assert results[0].status == "success"
+@pytest.fixture
+def build_all(project):
+    run_dbt(["build"])
 
 
-def test_selected_resources_run(project):
-    results = run_dbt(
-        [
-            "run",
-            "--select",
-            "model1+",
-            "--vars",
-            '{"expected_list": ["model.test.model2", "model.test.model1"]}',
-        ]
-    )
-    assert results[0].status == "success"
+@pytest.mark.usefixtures("build_all")
+class TestSelectedResources:
+    def test_selected_resources_build_selector(self, project):
+        results = run_dbt(
+            [
+                "build",
+                "--select",
+                "model1+",
+                "--vars",
+                '{"expected_list": ["model.test.model1", "model.test.model2", "snapshot.test.cc_all_snapshot"]}',
+            ]
+        )
+        assert results[0].status == "success"
 
+    def test_selected_resources_build_selector_subgraph(self, project):
+        results = run_dbt(
+            [
+                "build",
+                "--select",
+                "model2+",
+                "--vars",
+                '{"expected_list": ["model.test.model2", "snapshot.test.cc_all_snapshot"]}',
+            ]
+        )
+        assert results[0].status == "success"
 
-def test_selected_resources_build_all(project):
-    results = run_dbt(
-        [
-            "build",
-            "--vars",
-            '{"expected_list": ["model.test.model1", "model.test.model2", "snapshot.test.cc_all_snapshot"]}',
-        ]
-    )
-    assert results[0].status == "success"
+    def test_selected_resources_run(self, project):
+        results = run_dbt(
+            [
+                "run",
+                "--select",
+                "model1+",
+                "--vars",
+                '{"expected_list": ["model.test.model2", "model.test.model1"]}',
+            ]
+        )
+        assert results[0].status == "success"
 
+    def test_selected_resources_build_no_selector(self, project):
+        results = run_dbt(
+            [
+                "build",
+                "--vars",
+                '{"expected_list": ["model.test.model1", "model.test.model2", "snapshot.test.cc_all_snapshot"]}',
+            ]
+        )
+        assert results[0].status == "success"
 
-def test_selected_resources_build_no_model(project):
-    results = run_dbt(["build", "--select", "model_that_does_not_exist"])
-    assert not results
+    def test_selected_resources_build_no_model(self, project):
+        results = run_dbt(
+            [
+                "build",
+                "--select",
+                "model_that_does_not_exist",
+                "--vars",
+                '{"expected_list": []}',
+            ]
+        )
+        assert not results
 
-
-def test_selected_resources_test_no_model(project):
-    results = run_dbt(["test", "--select", "model1+", "--vars", '{"expected_list": []}'])
-    assert not results
+    def test_selected_resources_test_no_model(self, project):
+        results = run_dbt(["test", "--select", "model1+", "--vars", '{"expected_list": []}'])
+        assert not results

@@ -1,7 +1,7 @@
 on_run_start_macro_assert_selected_models_expected_list = """
 {% macro assert_selected_models_expected_list(expected_list) %}
 
-  {% if execute %}
+  {% if execute and (expected_list is not none) %}
 
     {% set sorted_selected_resources = selected_resources | sort %}
     {% set sorted_expected_list = expected_list | sort %}
