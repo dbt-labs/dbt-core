@@ -1145,6 +1145,15 @@ class ProviderContext(ManifestContext):
             msg = f"Env var required but not provided: '{var}'"
             raise_parsing_error(msg)
 
+    @contextproperty
+    def selected_resources(self) -> List[str]:
+        """The `selected_resources` variable contains a list of the resources
+        selected based on the parameters provided to the dbt command.
+        Currently, is not populated for the command `run-operation` that
+        doesn't support `--select`.
+        """
+        return selected_resources.SELECTED_RESOURCES
+
 
 class MacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:
@@ -1242,15 +1251,6 @@ class ModelContext(ProviderContext):
         if self.model.resource_type == NodeType.Operation:
             return None
         return self.db_wrapper.Relation.create_from(self.config, self.model)
-
-    @contextproperty
-    def selected_resources(self) -> Any:
-        """The `selected_resources` variable contains a list of the resources
-        selected based on the parameters provided to the dbt command.
-        Currently, is not populated for the command `run-operation` that
-        doesn't support `--select`.
-        """
-        return selected_resources.SELECTED_RESOURCES
 
 
 # This is called by '_context_for', used in 'render_with_context'
