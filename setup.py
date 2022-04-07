@@ -81,4 +81,5 @@ setup(
         'Programming Language :: Python :: 3.9',
     ],
     python_requires=">=3.7",
+    packages=[]
 )
