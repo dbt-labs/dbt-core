@@ -51,7 +51,17 @@ select * from {{ upstream }}
 """
 
 
-class BaseCaching:
+class BaseAdapterMethod:
+    """
+    This test will leverage the following adapter methods:
+        get_relation
+        get_columns_in_relation
+        drop_schema
+        create_schema
+    It will aims to make sure drop_shema actually works, for more context
+    checkout #1983
+    """
+
     @pytest.fixture(scope="class")
     def tests(self):
         return {"get_columns_in_relation.sql": tests__get_columns_in_relation_sql}
@@ -92,5 +102,5 @@ class BaseCaching:
         check_relations_equal(project.adapter, equal_tables)
 
 
-class TestBaseCaching(BaseCaching):
+class TestBaseCaching(BaseAdapterMethod):
     pass
