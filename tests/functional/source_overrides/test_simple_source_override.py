@@ -3,7 +3,7 @@ import pytest
 from dbt.contracts.graph.model_config import SourceConfig
 
 
-from dbt.tests.util import run_dbt, update_config_file, check_relations_equal
+from dbt.tests.util import run_dbt, update_config_file, check_relations_equal, get_manifest
 from dbt.tests.fixtures.project import write_project_files
 from tests.functional.source_overrides.fixtures import (  # noqa: F401
     local_dependency,
