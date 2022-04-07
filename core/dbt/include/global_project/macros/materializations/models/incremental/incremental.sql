@@ -2,13 +2,10 @@
 {% materialization incremental, default -%}
 
   {% set unique_key = config.get('unique_key') %}
-  {% set backup_relation_type = 'table' if this.type is none else this.type -%}
   {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
   {% set temp_relation = make_temp_relation(target_relation) %}
-  {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
-  {%- set backup_relation = backup_relation.incorporate(path={"schema": schema,
-                                                              "database": database}) -%}
+  {%- set backup_identifier = make_backup_relation(target_relation, backup_relation_type=none) -%}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
@@ -20,7 +17,7 @@
   {% set preexisting_temp_relation = adapter.get_relation(identifier=temp_relation['identifier'],
                                                           schema=schema,
                                                           database=database) %}
-  {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_relation['identifier'],
+  {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier['identifier'],
                                                             schema=schema,
                                                             database=database) %}
   {{ drop_relation_if_exists(preexisting_temp_relation) }}
@@ -39,7 +36,10 @@
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
   {% elif trigger_full_refresh %}
+    {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
       {% set intermediate_relation = existing_relation.incorporate(path={"identifier": temp_relation['identifier']}) %}
+      {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier['identifier']}) %}
+
       {% set build_sql = create_table_as(False, intermediate_relation, sql) %}
       {% set need_swap = true %}
       {% do to_drop.append(backup_relation) %}
