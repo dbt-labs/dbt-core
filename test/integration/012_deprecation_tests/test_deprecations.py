@@ -118,7 +118,7 @@ class TestPackageRedirectDeprecation(BaseTestDeprecations):
 
     # this test fails as a result of the caching added in 
     # https://github.com/dbt-labs/dbt-core/pull/4982
-    # This seems to be a testing issue though.  Everything works when testes locally
+    # This seems to be a testing issue though.  Everything works when tested locally
     # and the CompilationException get raised.  Since we're refactoring these tests anyways
     # I won't rewrite this one    
     # @use_profile('postgres')
