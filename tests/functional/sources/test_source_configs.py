@@ -117,7 +117,6 @@ class TestConfigYamlSourceTable(SourceConfigTests):
             "schema.yml": disabled_source_table__schema_yml,
         }
 
-    @pytest.mark.xfail
     def test_source_config_yaml_source_table(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
@@ -197,7 +196,6 @@ class TestSourceConfigsInheritence2(SourceConfigTests):
     def project_config_update(self):
         return {"sources": {"enabled": False}}
 
-    @pytest.mark.xfail
     def test_source_two_configs_source_level(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)

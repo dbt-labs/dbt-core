@@ -266,13 +266,20 @@ class SourcePatcher:
         else:
             generator = UnrenderedConfigGenerator(self.root_project)
 
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply source configs
+        precedence_configs.update(target.source.config)
+        # then overrite anything that is defined on source tables
+        precedence_configs.update(target.table.config)
+
         return generator.calculate_node_config(
             config_call_dict={},
             fqn=target.fqn,
             resource_type=NodeType.Source,
             project_name=target.package_name,
             base=False,
-            patch_config_dict=target.source.config,
+            patch_config_dict=precedence_configs,
         )
 
     def _get_relation_name(self, node: ParsedSourceDefinition):
