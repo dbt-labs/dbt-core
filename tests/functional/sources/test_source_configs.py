@@ -147,30 +147,17 @@ class TestSourceConfigsInheritence1(SourceConfigTests):
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"sources": {"tags": "project_level_important_tag"}}
+        return {"sources": {"enabled": True}}
 
-    @pytest.mark.xfail
     def test_source_all_configs_source_table(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
-        assert "source.test.test_source.other_test_table" in manifest.sources
+        assert "source.test.test_source.other_test_table" not in manifest.sources
         config_test_table = manifest.sources.get("source.test.test_source.test_table").config
-        config_other_test_table = manifest.sources.get(
-            "source.test.test_source.other_test_table"
-        ).config
 
         assert isinstance(config_test_table, SourceConfig)
-        assert isinstance(config_other_test_table, SourceConfig)
-
-        assert config_test_table != config_other_test_table
         assert config_test_table == pytest.expected_config
-
-        expected_source_level_config = SourceConfig(
-            enabled=True,
-        )
-
-        assert config_other_test_table == expected_source_level_config
 
 
 all_configs_not_table_schema_yml = """version: 2
@@ -236,25 +223,12 @@ class TestSourceConfigsInheritence3(SourceConfigTests):
     def project_config_update(self):
         return {"sources": {"enabled": False}}
 
-    @pytest.mark.xfail
     def test_source_two_configs_source_table(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "source.test.test_source.test_table" in manifest.sources
-        assert "source.test.test_source.other_test_table" in manifest.sources
+        assert "source.test.test_source.other_test_table" not in manifest.sources
         config_test_table = manifest.sources.get("source.test.test_source.test_table").config
-        config_other_test_table = manifest.sources.get(
-            "source.test.test_source.other_test_table"
-        ).config
 
         assert isinstance(config_test_table, SourceConfig)
-        assert isinstance(config_other_test_table, SourceConfig)
-
-        assert config_test_table != config_other_test_table
         assert config_test_table == pytest.expected_config
-
-        expected_project_level_config = SourceConfig(
-            enabled=True,
-        )
-
-        assert config_other_test_table == expected_project_level_config
