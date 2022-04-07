@@ -1,25 +1,21 @@
 {% macro make_intermediate_relation(base_relation, suffix='__dbt_tmp') %}
-  {{ return(adapter.dispatch('make_intermediate_relation', 'dbt')(base_relation, suffix))}}
+  {{ return(adapter.dispatch('make_intermediate_relation', 'dbt')(base_relation, suffix)) }}
 {% endmacro %}
 
 {% macro default__make_intermediate_relation(base_relation, suffix) %}
-    {% set temp_identifier = base_relation.identifier ~ suffix %}
-    {% set temp_relation = base_relation.incorporate(
-                                path={"identifier": temp_identifier}) -%}
-
-    {% do return(temp_relation) %}
+    {{ return(default__make_temp_relation(base_relation, suffix)) }}
 {% endmacro %}
 
 {% macro make_temp_relation(base_relation, suffix='__dbt_tmp') %}
-  {{ return(adapter.dispatch('make_temp_relation', 'dbt')(base_relation, suffix))}}
+  {{ return(adapter.dispatch('make_temp_relation', 'dbt')(base_relation, suffix)) }}
 {% endmacro %}
 
 {% macro default__make_temp_relation(base_relation, suffix) %}
-    {% set temp_identifier = base_relation.identifier ~ suffix %}
-    {% set temp_relation = base_relation.incorporate(
+    {%- set temp_identifier = base_relation.identifier ~ suffix -%}
+    {%- set temp_relation = base_relation.incorporate(
                                 path={"identifier": temp_identifier}) -%}
 
-    {% do return(temp_relation) %}
+    {{ return(temp_relation) }}
 {% endmacro %}
 
 {% macro make_backup_relation(base_relation, backup_relation_type, suffix='__dbt_backup') %}
@@ -27,12 +23,12 @@
 {% endmacro %}
 
 {% macro default__make_backup_relation(base_relation, backup_relation_type, suffix) %}
-    {% set backup_identifier = base_relation.identifier ~ suffix %}
-    {% set backup_relation = base_relation.incorporate(
+    {%- set backup_identifier = base_relation.identifier ~ suffix -%}
+    {%- set backup_relation = base_relation.incorporate(
                                   path={"identifier": backup_identifier},
                                   type=backup_relation_type
-    ) %}
-    {% do return(backup_relation) %}
+    ) -%}
+    {{ return(backup_relation) }}
 {% endmacro %}
 
 {% macro drop_relation(relation) -%}

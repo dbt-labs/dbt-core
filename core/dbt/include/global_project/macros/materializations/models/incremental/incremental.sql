@@ -4,7 +4,7 @@
   {% set unique_key = config.get('unique_key') %}
   {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
-  {% set temp_relation = make_temp_relation(target_relation) %}
+  {%- set temp_relation = make_temp_relation(target_relation)-%}
   {%- set backup_identifier = make_backup_relation(target_relation, backup_relation_type=none) -%}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
@@ -36,7 +36,7 @@
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
   {% elif trigger_full_refresh %}
-    {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
+      {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
       {% set intermediate_relation = existing_relation.incorporate(path={"identifier": temp_relation['identifier']}) %}
       {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier['identifier']}) %}
 
