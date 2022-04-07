@@ -19,8 +19,11 @@ from dbt.tests.util import (
 
 
 # These are the fixtures that are used in dbt core functional tests
+#
 # The main functional test fixture is the 'project' fixture, which combines
-# other fixtures to write out a dbt_project in a temporary directory.
+# other fixtures, writes out a dbt project in a temporary directory, creates a temp
+# schema in the testing database, and returns a `TestProjInfo` object that
+# contains information from the other fixtures for convenience.
 #
 # The models, macros, seeds, snapshots, tests, and analysis fixtures all
 # represent directories in a dbt project, and are all dictionaries with
@@ -232,7 +235,8 @@ def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_projec
     runtime_config = RuntimeConfig.from_args(args)
     register_adapter(runtime_config)
     adapter = get_adapter(runtime_config)
-    # We only need the base macros, not macros from dependencies
+    # We only need the base macros, not macros from dependencies, and don't want
+    # to run 'dbt deps' here.
     adapter.load_macro_manifest(base_macros_only=True)
     yield adapter
     adapter.cleanup_connections()

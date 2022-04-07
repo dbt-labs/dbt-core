@@ -42,10 +42,16 @@ from dbt.events.test_types import IntegrationTestDebug
 # =============================================================================
 
 
-# This is used in pytest tests to run dbt
+# 'run_dbt' is used in pytest tests to run dbt commands. It will return
+# different objects depending on the command that is executed.
+# For a run command (and most other commands) it will return a list
+# of results. For the 'docs generate' command it returns a CatalogArtifact.
+# The first parameter is a list of dbt command line arguments, such as
+#   run_dbt(["run", "--vars", "seed_name: base"])
+# If the command is expected to fail, pass in "expect_pass=False"):
+#   run_dbt("test"], expect_pass=False)
 def run_dbt(args: List[str] = None, expect_pass=True):
-    # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
-    # This _only_ works for tests in `tests/` that use the run_dbt method.
+    # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
 
     # The logger will complain about already being initialized if
