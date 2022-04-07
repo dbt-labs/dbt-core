@@ -270,12 +270,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return self._macro_manifest_lazy
 
-    def load_macro_manifest(self) -> MacroManifest:
+    def load_macro_manifest(self, base_macros_only=False) -> MacroManifest:
+        # base_macros_only is for the test framework
         if self._macro_manifest_lazy is None:
             # avoid a circular import
             from dbt.parser.manifest import ManifestLoader
 
-            manifest = ManifestLoader.load_macros(self.config, self.connections.set_query_header)
+            manifest = ManifestLoader.load_macros(
+                self.config, self.connections.set_query_header, base_macros_only=base_macros_only
+            )
             # TODO CT-211
             self._macro_manifest_lazy = manifest  # type: ignore[assignment]
         # TODO CT-211

@@ -3,8 +3,12 @@ import pytest
 import yaml
 from dbt.exceptions import ParsingException
 
-from dbt.tests.util import run_dbt, update_config_file
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import (
+    run_dbt,
+    update_config_file,
+    check_relations_equal,
+    check_table_does_not_exist,
+)
 from tests.functional.sources.common_source_setup import (
     BaseSourcesTest,
 )
@@ -63,16 +67,13 @@ class TestBasicSource(SuccessfulSourcesTest):
     def test_basic_source_def(self, project):
         results = self.run_dbt_with_vars(project, ["run"])
         assert len(results) == 4
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
+
+        check_relations_equal(
+            project.adapter, ["source", "descendant_model", "nonsource_descendant"]
         )
-        table_comp.assert_many_tables_equal(
-            ["source", "descendant_model", "nonsource_descendant"],
-            ["expected_multi_source", "multi_source_model"],
-        )
+        check_relations_equal(project.adapter, ["expected_multi_source", "multi_source_model"])
         results = self.run_dbt_with_vars(project, ["test"])
         assert len(results) == 6
-        print(results)
 
 
 class TestSourceSelector(SuccessfulSourcesTest):
@@ -82,12 +83,9 @@ class TestSourceSelector(SuccessfulSourcesTest):
             project, ["run", "--models", "source:test_source.test_table+"]
         )
         assert len(results) == 1
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-        )
-        table_comp.assert_tables_equal("source", "descendant_model")
-        table_comp.assert_table_does_not_exist("nonsource_descendant")
-        table_comp.assert_table_does_not_exist("multi_source_model")
+        check_relations_equal(project.adapter, ["source", "descendant_model"])
+        check_table_does_not_exist(project.adapter, "nonsource_descendant")
+        check_table_does_not_exist(project.adapter, "multi_source_model")
 
         # do the same thing, but with tags
         results = self.run_dbt_with_vars(
@@ -120,12 +118,9 @@ class TestEmptySource(SuccessfulSourcesTest):
         results = self.run_dbt_with_vars(
             project, ["run", "--models", "source:test_source.test_table"]
         )
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-        )
-        table_comp.assert_table_does_not_exist("nonsource_descendant")
-        table_comp.assert_table_does_not_exist("multi_source_model")
-        table_comp.assert_table_does_not_exist("descendant_model")
+        check_table_does_not_exist(project.adapter, "nonsource_descendant")
+        check_table_does_not_exist(project.adapter, "multi_source_model")
+        check_table_does_not_exist(project.adapter, "descendant_model")
         assert len(results) == 0
 
 
@@ -133,33 +128,24 @@ class TestSourceDef(SuccessfulSourcesTest):
     def test_source_only_def(self, project):
         results = self.run_dbt_with_vars(project, ["run", "--models", "source:other_source+"])
         assert len(results) == 1
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-        )
-        table_comp.assert_tables_equal("expected_multi_source", "multi_source_model")
-        table_comp.assert_table_does_not_exist("nonsource_descendant")
-        table_comp.assert_table_does_not_exist("descendant_model")
+        check_relations_equal(project.adapter, ["expected_multi_source", "multi_source_model"])
+        check_table_does_not_exist(project.adapter, "nonsource_descendant")
+        check_table_does_not_exist(project.adapter, "descendant_model")
 
         results = self.run_dbt_with_vars(project, ["run", "--models", "source:test_source+"])
         assert len(results) == 2
-        table_comp.assert_many_tables_equal(
-            ["source", "descendant_model"], ["expected_multi_source", "multi_source_model"]
-        )
-        table_comp.assert_table_does_not_exist("nonsource_descendant")
+        check_relations_equal(project.adapter, ["source", "descendant_model"])
+        check_relations_equal(project.adapter, ["expected_multi_source", "multi_source_model"])
+        check_table_does_not_exist(project.adapter, "nonsource_descendant")
 
 
 class TestSourceChildrenParents(SuccessfulSourcesTest):
     def test_source_childrens_parents(self, project):
         results = self.run_dbt_with_vars(project, ["run", "--models", "@source:test_source"])
         assert len(results) == 2
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-        )
-        table_comp.assert_many_tables_equal(
-            ["source", "descendant_model"],
-            ["expected_multi_source", "multi_source_model"],
-        )
-        table_comp.assert_table_does_not_exist("nonsource_descendant")
+        check_relations_equal(project.adapter, ["source", "descendant_model"])
+        check_relations_equal(project.adapter, ["expected_multi_source", "multi_source_model"])
+        check_table_does_not_exist(project.adapter, "nonsource_descendant")
 
 
 class TestSourceRunOperation(SuccessfulSourcesTest):

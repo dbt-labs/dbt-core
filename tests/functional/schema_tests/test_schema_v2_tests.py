@@ -58,7 +58,7 @@ class TestSchemaTests:
     ):
         results = run_dbt()
         assert len(results) == 5
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         # If the disabled model's tests ran, there would be 20 of these.
         assert len(test_results) == 19
 
@@ -140,7 +140,7 @@ class TestLimitedSchemaTests:
     ):
         results = run_dbt()
         assert len(results) == 3
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 3
 
         for result in test_results:
@@ -186,7 +186,7 @@ class TestDefaultBoolType:
     ):
         results = run_dbt()
         assert len(results) == 3
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 3
 
         for result in test_results:
@@ -239,7 +239,7 @@ class TestOtherBoolType:
     ):
         results = run_dbt()
         assert len(results) == 3
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 3
 
         for result in test_results:
@@ -425,7 +425,7 @@ class TestCustomSchemaTests:
         results = run_dbt()
         assert len(results) == 4
 
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 6
 
         expected_failures = [

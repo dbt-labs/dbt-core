@@ -2,8 +2,7 @@ import os
 from datetime import datetime
 import pytz
 import pytest
-from dbt.tests.util import run_dbt
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
@@ -61,57 +60,14 @@ snapshots_check_col_noconfig__snapshot_sql = """
 """
 
 
-class OverrideTableComparison_dbt(TableComparison):
-    def _assert_tables_equal_sql(self, relation_a, relation_b, columns=None):
-        # When building the equality tests, only test columns that don't start
-        # with 'dbt_', because those are time-sensitive
-        if columns is None:
-            columns = [
-                c
-                for c in self.get_relation_columns(relation_a)
-                if not c[0].lower().startswith("dbt_")
-            ]
-        return super()._assert_tables_equal_sql(relation_a, relation_b, columns=columns)
-
-
-class RevivedTableComparison(TableComparison):
-    def _assert_tables_equal_sql(self, relation_a, relation_b, columns=None):
-        revived_records = self.run_sql(
-            """
-            select
-                id,
-                updated_at,
-                dbt_valid_from
-            from {}
-            """.format(
-                relation_b
-            ),
-            fetch="all",
-        )
-
-        for result in revived_records:
-            # result is a tuple, the updated_at is second and dbt_valid_from is latest
-            assert isinstance(result[1], datetime)
-            assert isinstance(result[2], datetime)
-            assert result[1].replace(tzinfo=pytz.UTC) == result[2].replace(tzinfo=pytz.UTC)
-
-        if columns is None:
-            columns = [
-                c
-                for c in self.get_relation_columns(relation_a)
-                if not c[0].lower().startswith("dbt_")
-            ]
-        return super()._assert_tables_equal_sql(relation_a, relation_b, columns=columns)
-
-
-def snapshot_setup(project, NUM_SNAPSHOT_MODELS, table_comp):
+def snapshot_setup(project, num_snapshot_models=1):
     path = os.path.join(project.test_data_dir, "seed_pg.sql")
     project.run_sql_file(path)
     results = run_dbt(["snapshot"])
-    assert len(results) == NUM_SNAPSHOT_MODELS
+    assert len(results) == num_snapshot_models
 
     run_dbt(["test"])
-    table_comp.assert_tables_equal("snapshot_actual", "snapshot_expected")
+    check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
 
     path = os.path.join(project.test_data_dir, "invalidate_postgres.sql")
     project.run_sql_file(path)
@@ -120,58 +76,20 @@ def snapshot_setup(project, NUM_SNAPSHOT_MODELS, table_comp):
     project.run_sql_file(path)
 
     results = run_dbt(["snapshot"])
-    assert len(results) == NUM_SNAPSHOT_MODELS
+    assert len(results) == num_snapshot_models
 
     run_dbt(["test"])
-    table_comp.assert_tables_equal("snapshot_actual", "snapshot_expected")
+    check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
 
 
-def ref_setup(project, NUM_SNAPSHOT_MODELS):
+def ref_setup(project, num_snapshot_models=1):
     path = os.path.join(project.test_data_dir, "seed_pg.sql")
     project.run_sql_file(path)
     results = run_dbt(["snapshot"])
-    assert len(results) == NUM_SNAPSHOT_MODELS
+    assert len(results) == num_snapshot_models
 
     results = run_dbt(["run"])
     assert len(results) == 1
-
-
-# these fixtures are slight variations of each other for the basic snapshot tests run
-def basic_snapshot(project):
-    NUM_SNAPSHOT_MODELS = 1
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-
-    snapshot_setup(project, NUM_SNAPSHOT_MODELS, table_comp)
-
-
-def check_cols_snapshot(project):
-    NUM_SNAPSHOT_MODELS = 2
-    table_comp = OverrideTableComparison_dbt(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-
-    snapshot_setup(project, NUM_SNAPSHOT_MODELS, table_comp)
-
-
-def revived_snapshot(project):
-    NUM_SNAPSHOT_MODELS = 2
-    table_comp = RevivedTableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-
-    snapshot_setup(project, NUM_SNAPSHOT_MODELS, table_comp)
-
-
-def basic_ref(project):
-    NUM_SNAPSHOT_MODELS = 1
-    ref_setup(project, NUM_SNAPSHOT_MODELS)
-
-
-def basic_ref_two_snapshots(project):
-    NUM_SNAPSHOT_MODELS = 2
-    ref_setup(project, NUM_SNAPSHOT_MODELS)
 
 
 class Basic:
@@ -197,12 +115,12 @@ class Basic:
 
 class TestBasicSnapshot(Basic):
     def test_basic_snapshot(self, project):
-        basic_snapshot(project)
+        snapshot_setup(project, num_snapshot_models=1)
 
 
 class TestBasicRef(Basic):
     def test_basic_ref(self, project):
-        basic_ref(project)
+        ref_setup(project, num_snapshot_models=1)
 
 
 class CustomNamespace:
@@ -231,12 +149,12 @@ class CustomNamespace:
 
 class TestBasicCustomNamespace(CustomNamespace):
     def test_custom_namespace_snapshot(self, project):
-        basic_snapshot(project)
+        snapshot_setup(project, num_snapshot_models=1)
 
 
 class TestRefCustomNamespace(CustomNamespace):
     def test_custom_namespace_ref(self, project):
-        basic_ref(project)
+        ref_setup(project, num_snapshot_models=1)
 
 
 class CustomSnapshot:
@@ -265,12 +183,12 @@ class CustomSnapshot:
 
 class TestBasicCustomSnapshot(CustomSnapshot):
     def test_custom_snapshot(self, project):
-        basic_snapshot(project)
+        snapshot_setup(project, num_snapshot_models=1)
 
 
 class TestRefCustomSnapshot(CustomSnapshot):
     def test_custom_ref(self, project):
-        basic_ref(project)
+        ref_setup(project, num_snapshot_models=1)
 
 
 class CheckCols:
@@ -296,12 +214,12 @@ class CheckCols:
 
 class TestBasicCheckCols(CheckCols):
     def test_basic_snapshot(self, project):
-        check_cols_snapshot(project)
+        snapshot_setup(project, num_snapshot_models=2)
 
 
 class TestRefCheckCols(CheckCols):
     def test_check_cols_ref(self, project):
-        basic_ref_two_snapshots(project)
+        ref_setup(project, num_snapshot_models=2)
 
 
 class ConfiguredCheckCols:
@@ -341,12 +259,12 @@ class ConfiguredCheckCols:
 
 class TestBasicConfiguredCheckCols(ConfiguredCheckCols):
     def test_configured_snapshot(self, project):
-        check_cols_snapshot(project)
+        snapshot_setup(project, num_snapshot_models=2)
 
 
 class TestRefConfiguredCheckCols(ConfiguredCheckCols):
     def test_configured_ref(self, project):
-        basic_ref_two_snapshots(project)
+        ref_setup(project, num_snapshot_models=2)
 
 
 class UpdatedAtCheckCols:
@@ -387,9 +305,24 @@ class UpdatedAtCheckCols:
 
 class TestBasicUpdatedAtCheckCols(UpdatedAtCheckCols):
     def test_updated_at_snapshot(self, project):
-        revived_snapshot(project)
+        snapshot_setup(project, num_snapshot_models=2)
+
+        snapshot_expected_relation = relation_from_name(project.adapter, "snapshot_expected")
+        revived_records = project.run_sql(
+            """
+            select id, updated_at, dbt_valid_from from {}
+            """.format(
+                snapshot_expected_relation
+            ),
+            fetch="all",
+        )
+        for result in revived_records:
+            # result is a tuple, the updated_at is second and dbt_valid_from is latest
+            assert isinstance(result[1], datetime)
+            assert isinstance(result[2], datetime)
+            assert result[1].replace(tzinfo=pytz.UTC) == result[2].replace(tzinfo=pytz.UTC)
 
 
 class TestRefUpdatedAtCheckCols(UpdatedAtCheckCols):
     def test_updated_at_ref(self, project):
-        basic_ref_two_snapshots(project)
+        ref_setup(project, num_snapshot_models=2)

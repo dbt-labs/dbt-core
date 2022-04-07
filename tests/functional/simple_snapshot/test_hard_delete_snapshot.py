@@ -2,8 +2,7 @@ import os
 from datetime import datetime
 import pytz
 import pytest
-from dbt.tests.util import run_dbt
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, check_relations_equal
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
@@ -49,11 +48,7 @@ def test_snapshot_hard_delete(project):
 
     datetime_snapshot()
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-
-    table_comp.assert_tables_equal("snapshot_expected", "snapshot_actual")
+    check_relations_equal(project.adapter, ["snapshot_expected", "snapshot_actual"])
 
     invalidated_snapshot_datetime = None
     revived_snapshot_datetime = None

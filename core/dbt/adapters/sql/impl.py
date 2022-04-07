@@ -227,11 +227,7 @@ class SQLAdapter(BaseAdapter):
             if hasattr(conn.handle, "commit"):
                 conn.handle.commit()
             if fetch == "one":
-                if hasattr(cursor, "fetchone"):  # for spark
-                    return cursor.fetchone()
-                else:
-                    # for spark
-                    return cursor.fetchall()[0]
+                return cursor.fetchone()
             elif fetch == "all":
                 return cursor.fetchall()
             else:
