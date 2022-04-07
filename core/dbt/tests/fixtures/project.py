@@ -218,6 +218,10 @@ def selectors_yml(project_root, selectors):
 # return the current adapter (for this adapter type) from the adapter factory.
 # The adapter produced by this fixture will contain the "base" macros (not including
 # macros from dependencies).
+#
+# Anything used here must be actually working (dbt_project, profile, project and internal macros),
+# otherwise this will fail. So to test errors in those areas, you need to copy the files
+# into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
 def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
     # The profiles.yml and dbt_project.yml should already be written out
@@ -228,6 +232,7 @@ def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_projec
     runtime_config = RuntimeConfig.from_args(args)
     register_adapter(runtime_config)
     adapter = get_adapter(runtime_config)
+    # We only need the base macros, not macros from dependencies
     adapter.load_macro_manifest(base_macros_only=True)
     yield adapter
     adapter.cleanup_connections()

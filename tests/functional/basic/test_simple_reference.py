@@ -168,16 +168,22 @@ def test_simple_reference(project):
     assert len(results) == 8
 
     # Copies should match
-    check_relations_equal(project.adapter, ["users", "incremental_copy"])
-    check_relations_equal(project.adapter, ["users", "materialized_copy"])
-    check_relations_equal(project.adapter, ["users", "view_copy"])
+    check_relations_equal(
+        project.adapter, ["users", "incremental_copy", "materialized_copy", "view_copy"]
+    )
 
     # Summaries should match
-    check_relations_equal(project.adapter, ["summary_expected", "incremental_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "materialized_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "view_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "ephemeral_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "view_using_ref"])
+    check_relations_equal(
+        project.adapter,
+        [
+            "summary_expected",
+            "incremental_summary",
+            "materialized_summary",
+            "view_summary",
+            "ephemeral_summary",
+            "view_using_ref",
+        ],
+    )
 
     # update the seed files and run seed
     copy_file(
@@ -196,15 +202,22 @@ def test_simple_reference(project):
     assert len(results) == 8
 
     # Copies should match
-    check_relations_equal(project.adapter, ["users", "incremental_copy"])
-    check_relations_equal(project.adapter, ["users", "materialized_copy"])
-    check_relations_equal(project.adapter, ["users", "view_copy"])
+    check_relations_equal(
+        project.adapter, ["users", "incremental_copy", "materialized_copy", "view_copy"]
+    )
 
     # Summaries should match
-    check_relations_equal(project.adapter, ["summary_expected", "incremental_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "materialized_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "view_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "ephemeral_summary"])
+    check_relations_equal(
+        project.adapter,
+        [
+            "summary_expected",
+            "incremental_summary",
+            "materialized_summary",
+            "view_summary",
+            "ephemeral_summary",
+            "view_using_ref",
+        ],
+    )
 
 
 def test_simple_reference_with_models_and_children(project):
@@ -219,8 +232,9 @@ def test_simple_reference_with_models_and_children(project):
     check_relations_equal(project.adapter, ["users", "materialized_copy"])
 
     # Summaries should match
-    check_relations_equal(project.adapter, ["summary_expected", "materialized_summary"])
-    check_relations_equal(project.adapter, ["summary_expected", "ephemeral_summary"])
+    check_relations_equal(
+        project.adapter, ["summary_expected", "materialized_summary", "ephemeral_summary"]
+    )
 
     created_tables = project.get_tables_in_schema()
 
