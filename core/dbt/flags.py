@@ -149,7 +149,7 @@ def set_from_args(args, user_config):
 def _set_overrides_from_env():
     global SEND_ANONYMOUS_USAGE_STATS
 
-    flag_value = get_flag_from_env("DO_NOT_TRACK")
+    flag_value = _get_flag_value_from_env("DO_NOT_TRACK")
     if flag_value is None:
         return
 
@@ -157,7 +157,7 @@ def _set_overrides_from_env():
 
 
 def get_flag_value(flag, args, user_config):
-    flag_value = load_flag_value(flag, args, user_config)
+    flag_value = _load_flag_value(flag, args, user_config)
 
     if flag in ["PRINTER_WIDTH", "EVENT_BUFFER_SIZE"]:  # must be ints
         flag_value = int(flag_value)
@@ -167,13 +167,13 @@ def get_flag_value(flag, args, user_config):
     return flag_value
 
 
-def load_flag_value(flag, args, user_config):
+def _load_flag_value(flag, args, user_config):
     lc_flag = flag.lower()
     flag_value = getattr(args, lc_flag, None)
     if flag_value is not None:
         return flag_value
 
-    flag_value = get_flag_from_env(flag)
+    flag_value = _get_flag_value_from_env(flag)
     if flag_value is not None:
         return flag_value
 
@@ -183,7 +183,7 @@ def load_flag_value(flag, args, user_config):
     return flag_defaults[flag]
 
 
-def get_flag_from_env(flag):
+def _get_flag_value_from_env(flag):
     # Environment variables use pattern 'DBT_{flag name}'
     env_flag = _get_env_flag(flag)
     env_value = os.getenv(env_flag)
