@@ -4,13 +4,6 @@ import shutil
 import tempfile
 import unittest
 
-_INITIALIZE_FROM_FLAGS_TEST_CASES = [
-    (True, True, True),
-    (True, False, True),
-    (False, True, False),
-    (False, False, True),
-]
-
 
 class TestTracking(unittest.TestCase):
     def setUp(self):
@@ -80,21 +73,14 @@ class TestTracking(unittest.TestCase):
         assert isinstance(dbt.tracking.active_user.run_started_at, datetime.datetime)
 
     def test_initialize_from_flags(self):
-        for (
-            do_not_track,
-            send_aonymous_usage_stats,
-            expected,
-        ) in _INITIALIZE_FROM_FLAGS_TEST_CASES:
+        for send_aonymous_usage_stats in [True, False]:
             with self.subTest(
-                do_not_track=do_not_track,
-                send_aonymous_usage_stats=send_aonymous_usage_stats,
-                expected=expected,
+                send_aonymous_usage_stats=send_aonymous_usage_stats
             ):
-                dbt.tracking.flags.DO_NOT_TRACK = do_not_track
                 dbt.tracking.flags.SEND_ANONYMOUS_USAGE_STATS = (
                     send_aonymous_usage_stats
                 )
 
                 dbt.tracking.initialize_from_flags()
 
-                assert dbt.tracking.active_user.do_not_track == expected
+                assert dbt.tracking.active_user.do_not_track != send_aonymous_usage_stats

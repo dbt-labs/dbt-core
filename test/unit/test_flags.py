@@ -178,22 +178,13 @@ class TestFlags(TestCase):
         setattr(self.args, 'send_anonymous_usage_stats', True)
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.SEND_ANONYMOUS_USAGE_STATS, True)
-        # cleanup
-        os.environ.pop('DBT_SEND_ANONYMOUS_USAGE_STATS')
-        delattr(self.args, 'send_anonymous_usage_stats')
-
-        # do_not_track
         os.environ['DO_NOT_TRACK'] = '1'
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.DO_NOT_TRACK, True)
-        os.environ['DO_NOT_TRACK'] = '2'
-        flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.DO_NOT_TRACK, False)
-        os.environ['DO_NOT_TRACK'] = '0'
-        flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.DO_NOT_TRACK, False)
+        self.assertEqual(flags.SEND_ANONYMOUS_USAGE_STATS, False)
         # cleanup
+        os.environ.pop('DBT_SEND_ANONYMOUS_USAGE_STATS')
         os.environ.pop('DO_NOT_TRACK')
+        delattr(self.args, 'send_anonymous_usage_stats')
 
         # printer_width
         self.user_config.printer_width = 100

@@ -29,13 +29,22 @@ LOG_FORMAT = None
 VERSION_CHECK = None
 FAIL_FAST = None
 SEND_ANONYMOUS_USAGE_STATS = None
-DO_NOT_TRACK = None
 PRINTER_WIDTH = 80
 WHICH = None
 INDIRECT_SELECTION = None
 LOG_CACHE_EVENTS = None
 EVENT_BUFFER_SIZE = 100000
 QUIET = None
+
+_NON_BOOLEAN_FLAGS = [
+    "LOG_FORMAT",
+    "PRINTER_WIDTH",
+    "PROFILES_DIR",
+    "INDIRECT_SELECTION",
+    "EVENT_BUFFER_SIZE",
+]
+
+_NON_DBT_ENV_FLAGS = ["DO_NOT_TRACK"]
 
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
@@ -53,7 +62,6 @@ flag_defaults = {
     "VERSION_CHECK": True,
     "FAIL_FAST": False,
     "SEND_ANONYMOUS_USAGE_STATS": True,
-    "DO_NOT_TRACK": False,
     "PRINTER_WIDTH": 80,
     "INDIRECT_SELECTION": "eager",
     "LOG_CACHE_EVENTS": False,
@@ -107,7 +115,7 @@ def set_from_args(args, user_config):
     # black insists in putting them all on one line
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
-    global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, DO_NOT_TRACK
+    global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
     global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE, QUIET
 
     STRICT_MODE = False  # backwards compatibility
@@ -129,38 +137,28 @@ def set_from_args(args, user_config):
     VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
     FAIL_FAST = get_flag_value("FAIL_FAST", args, user_config)
     SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
-    DO_NOT_TRACK = get_flag_value("DO_NOT_TRACK", args, user_config)
     PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value("INDIRECT_SELECTION", args, user_config)
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
     EVENT_BUFFER_SIZE = get_flag_value("EVENT_BUFFER_SIZE", args, user_config)
     QUIET = get_flag_value("QUIET", args, user_config)
 
+    _set_overrides_from_env()
+
+
+def _set_overrides_from_env():
+    global SEND_ANONYMOUS_USAGE_STATS
+
+    flag_value = get_flag_from_env("DO_NOT_TRACK")
+    if flag_value is None:
+        return
+
+    SEND_ANONYMOUS_USAGE_STATS = not flag_value
+
 
 def get_flag_value(flag, args, user_config):
-    lc_flag = flag.lower()
-    flag_value = getattr(args, lc_flag, None)
-    if flag_value is None:
-        # Environment variables use pattern 'DBT_{flag name}'
-        env_flag = _get_env_flag(flag)
-        env_value = os.getenv(env_flag)
-        if env_value is not None and env_value != "":
-            env_value = env_value.lower()
-            # non Boolean values
-            if flag in [
-                "LOG_FORMAT",
-                "PRINTER_WIDTH",
-                "PROFILES_DIR",
-                "INDIRECT_SELECTION",
-                "EVENT_BUFFER_SIZE",
-            ]:
-                flag_value = env_value
-            else:
-                flag_value = env_set_bool(env_value)
-        elif user_config is not None and getattr(user_config, lc_flag, None) is not None:
-            flag_value = getattr(user_config, lc_flag)
-        else:
-            flag_value = flag_defaults[flag]
+    flag_value = load_flag_value(flag, args, user_config)
+
     if flag in ["PRINTER_WIDTH", "EVENT_BUFFER_SIZE"]:  # must be ints
         flag_value = int(flag_value)
     if flag == "PROFILES_DIR":
@@ -169,8 +167,40 @@ def get_flag_value(flag, args, user_config):
     return flag_value
 
 
+def load_flag_value(flag, args, user_config):
+    lc_flag = flag.lower()
+    flag_value = getattr(args, lc_flag, None)
+    if flag_value is not None:
+        return flag_value
+
+    flag_value = get_flag_from_env(flag)
+    if flag_value is not None:
+        return flag_value
+
+    if user_config is not None and getattr(user_config, lc_flag, None) is not None:
+        return getattr(user_config, lc_flag)
+
+    return flag_defaults[flag]
+
+
+def get_flag_from_env(flag):
+    # Environment variables use pattern 'DBT_{flag name}'
+    env_flag = _get_env_flag(flag)
+    env_value = os.getenv(env_flag)
+    if env_value is None or env_value == "":
+        return None
+
+    env_value = env_value.lower()
+    if flag in _NON_BOOLEAN_FLAGS:
+        flag_value = env_value
+    else:
+        flag_value = env_set_bool(env_value)
+
+    return flag_value
+
+
 def _get_env_flag(flag):
-    return "DO_NOT_TRACK" if flag == "DO_NOT_TRACK" else f"DBT_{flag}"
+    return flag if flag in _NON_DBT_ENV_FLAGS else f"DBT_{flag}"
 
 
 def get_flag_dict():
