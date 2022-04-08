@@ -48,18 +48,19 @@ class TestPermissions:
         project.run_sql('drop schema if exists "{}" cascade'.format(project.test_schema))
         with pytest.raises(RuntimeError):
             run_dbt(["run", "--target", "noaccess"], expect_pass=False)
+        # this command will update the adapter to use default profile again
+        run_dbt(["run", "--target", "default"], expect_pass=False)
 
     def test_create_schema_permissions(
         self,
         project,
     ):
         # now it should work!
-        project.run_sql("grant create on database {} to noaccess".format(project.database))
         project.run_sql(
             'grant usage, create on schema "{}" to noaccess'.format(project.test_schema)
         )
-        project.run_sql(
-            'grant select on all tables in schema "{}" to noaccess'.format(project.test_schema)
-        )
         results = run_dbt(["run", "--target", "noaccess"])
         assert len(results) == 1
+        # this command will update the adapter to use default profile again
+        # otherwise we are going to have issue tear down
+        run_dbt(["run", "--target", "default"])
