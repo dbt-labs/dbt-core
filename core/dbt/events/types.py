@@ -2439,7 +2439,10 @@ class EventBufferFull(WarnLevel):
     code: str = "Z048"
 
     def message(self) -> str:
-        return "Internal event buffer full. Earliest events will be dropped (FIFO)."
+        return (
+            "Internal logging/event buffer full."
+            "Earliest logs/events will be dropped as new ones are fired (FIFO)."
+        )
 
 
 @dataclass
