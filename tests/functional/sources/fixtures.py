@@ -68,6 +68,10 @@ models:
           - relationships:
              to: source('test_source', 'test_table')
              field: favorite_color
+      - name: id
+        tests:
+          - unique
+          - not_null
 
 sources:
   - name: test_source
