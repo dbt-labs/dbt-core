@@ -109,7 +109,6 @@ sources:
 
 
 # Test enabled config at source table level in yaml file
-# expect fail - not implemented
 class TestConfigYamlSourceTable(SourceConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
@@ -139,7 +138,6 @@ sources:
 
 
 # Test inheritence - set configs at project, source, and source-table level - expect source-table level to win
-# expect fail - not implemented
 class TestSourceConfigsInheritence1(SourceConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
@@ -173,7 +171,6 @@ sources:
 
 
 # Test inheritence - set configs at project and source level - expect source level to win
-# expect fail - not implemented
 class TestSourceConfigsInheritence2(SourceConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
@@ -213,7 +210,6 @@ sources:
 
 
 # Test inheritence - set configs at project and source-table level - expect source-table level to win
-# expect fail - not implemented
 class TestSourceConfigsInheritence3(SourceConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
