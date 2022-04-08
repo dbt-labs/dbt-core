@@ -6,10 +6,6 @@
   {%- set strategy_name = config.get('strategy') -%}
   {%- set unique_key = config.get('unique_key') %}
 
-  {% if not adapter.check_schema_exists(model.database, model.schema) %}
-    {% do create_schema(model.database, model.schema) %}
-  {% endif %}
-
   {% set target_relation_exists, target_relation = get_or_create_relation(
           database=model.database,
           schema=model.schema,

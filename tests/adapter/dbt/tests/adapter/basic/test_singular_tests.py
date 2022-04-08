@@ -20,7 +20,7 @@ class BaseSingularTests:
 
     def test_singular_tests(self, project):
         # test command
-        results = run_dbt(["test"])
+        results = run_dbt(["test"], expect_pass=False)
         assert len(results) == 2
 
         # We have the right result nodes

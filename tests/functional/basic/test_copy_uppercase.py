@@ -1,6 +1,5 @@
 import pytest
-from dbt.tests.tables import TableComparison
-from dbt.tests.util import run_dbt, read_file
+from dbt.tests.util import run_dbt, read_file, check_relations_equal
 
 from tests.functional.basic.test_simple_copy import (
     advanced_incremental_sql,
@@ -76,9 +75,6 @@ def test_simple_copy_uppercase(project):
     results = run_dbt()
     assert len(results) == 7
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_many_tables_equal(
-        ["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"]
+    check_relations_equal(
+        project.adapter, ["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"]
     )

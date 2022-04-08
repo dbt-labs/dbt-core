@@ -1,7 +1,6 @@
 import pytest
 import os
-from dbt.tests.util import run_dbt
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, check_relations_equal
 
 
 incremental_sql = """
@@ -43,12 +42,8 @@ def test_varchar_widening(project):
     results = run_dbt(["run"])
     assert len(results) == 2
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-
-    table_comp.assert_tables_equal("seed", "incremental")
-    table_comp.assert_tables_equal("seed", "materialized")
+    check_relations_equal(project.adapter, ["seed", "incremental"])
+    check_relations_equal(project.adapter, ["seed", "materialized"])
 
     path = os.path.join(project.test_data_dir, "varchar300_seed.sql")
     project.run_sql_file(path)
@@ -56,5 +51,5 @@ def test_varchar_widening(project):
     results = run_dbt(["run"])
     assert len(results) == 2
 
-    table_comp.assert_tables_equal("seed", "incremental")
-    table_comp.assert_tables_equal("seed", "materialized")
+    check_relations_equal(project.adapter, ["seed", "incremental"])
+    check_relations_equal(project.adapter, ["seed", "materialized"])

@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, check_result_nodes_by_name
 from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 
@@ -66,87 +66,57 @@ selectors_yml = """
         """
 
 
-def verify_selected_users(project, results):
-    # users
-    assert len(results) == 1
-
-    created_models = project.get_tables_in_schema()
-    assert "users" in created_models
-    assert "users_rollup" not in created_models
-    assert "emails_alt" not in created_models
-    assert "subdir" not in created_models
-    assert "nested_users" not in created_models
-
-
-def verify_selected_users_and_rollup(project, results):
-    # users, users_rollup
-    assert len(results) == 2
-
-    created_models = project.get_tables_in_schema()
-    assert "users" in created_models
-    assert "users_rollup" in created_models
-    assert "emails_alt" not in created_models
-    assert "subdir" not in created_models
-    assert "nested_users" not in created_models
-
-
-@pytest.fixture
-def run_seed(project):
-    run_dbt(["seed"])
-
-
 # The project and run_seed fixtures will be executed for each test method
-@pytest.mark.usefixtures("project", "run_seed")
 class TestIntersectionSyncs(SelectionFixtures):
+    # The tests here aiming to test whether the correct node is selected,
+    # we don't need the run to pass
     @pytest.fixture(scope="class")
     def selectors(self):
         return selectors_yml
 
     def test_same_model_intersection(self, project):
-        run_dbt(["seed"])
-
-        results = run_dbt(["run", "--models", "users,users"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--models", "users,users"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_same_model_intersection_selectors(self, project):
 
-        results = run_dbt(["run", "--selector", "same_intersection"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--selector", "same_intersection"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_tags_intersection(self, project):
 
-        results = run_dbt(["run", "--models", "tag:bi,tag:users"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--models", "tag:bi,tag:users"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_tags_intersection_selectors(self, project):
 
-        results = run_dbt(["run", "--selector", "tags_intersection"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--selector", "tags_intersection"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_triple_descending(self, project):
 
-        results = run_dbt(["run", "--models", "*,tag:bi,tag:users"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--models", "*,tag:bi,tag:users"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_triple_descending_schema(self, project):
 
-        results = run_dbt(["run", "--models", "*,tag:bi,tag:users"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--models", "*,tag:bi,tag:users"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_triple_descending_schema_selectors(self, project):
 
-        results = run_dbt(["run", "--selector", "triple_descending"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--selector", "triple_descending"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_triple_ascending(self, project):
 
-        results = run_dbt(["run", "--models", "tag:users,tag:bi,*"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--models", "tag:users,tag:bi,*"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_triple_ascending_schema_selectors(self, project):
 
-        results = run_dbt(["run", "--selector", "triple_ascending"])
-        verify_selected_users(project, results)
+        results = run_dbt(["run", "--selector", "triple_ascending"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_with_exclusion(self, project):
 
@@ -157,90 +127,86 @@ class TestIntersectionSyncs(SelectionFixtures):
                 "+users_rollup_dependency,users+",
                 "--exclude",
                 "users_rollup_dependency",
-            ]
+            ],
+            expect_pass=False,
         )
-        verify_selected_users_and_rollup(project, results)
+        check_result_nodes_by_name(results, ["users", "users_rollup"])
 
     def test_intersection_with_exclusion_selectors(self, project):
 
-        results = run_dbt(["run", "--selector", "intersection_with_exclusion"])
-        verify_selected_users_and_rollup(project, results)
+        results = run_dbt(["run", "--selector", "intersection_with_exclusion"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users", "users_rollup"])
 
     def test_intersection_exclude_intersection(self, project):
 
         results = run_dbt(
-            ["run", "--models", "tag:bi,@users", "--exclude", "tag:bi,users_rollup+"]
+            ["run", "--models", "tag:bi,@users", "--exclude", "tag:bi,users_rollup+"],
+            expect_pass=False,
         )
-        verify_selected_users(project, results)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_exclude_intersection_selectors(self, project):
 
-        results = run_dbt(["run", "--selector", "intersection_exclude_intersection"])
-        verify_selected_users(project, results)
+        results = run_dbt(
+            ["run", "--selector", "intersection_exclude_intersection"],
+            expect_pass=False,
+        )
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_exclude_intersection_lack(self, project):
 
-        results = run_dbt(["run", "--models", "tag:bi,@users", "--exclude", "@emails,@emails_alt"])
-        verify_selected_users_and_rollup(project, results)
+        results = run_dbt(
+            ["run", "--models", "tag:bi,@users", "--exclude", "@emails,@emails_alt"],
+            expect_pass=False,
+        )
+        check_result_nodes_by_name(results, ["users", "users_rollup"])
 
     def test_intersection_exclude_intersection_lack_selector(self, project):
 
-        results = run_dbt(["run", "--selector", "intersection_exclude_intersection_lack"])
-        verify_selected_users_and_rollup(project, results)
+        results = run_dbt(
+            ["run", "--selector", "intersection_exclude_intersection_lack"],
+            expect_pass=False,
+        )
+        check_result_nodes_by_name(results, ["users", "users_rollup"])
 
     def test_intersection_exclude_triple_intersection(self, project):
 
         results = run_dbt(
-            ["run", "--models", "tag:bi,@users", "--exclude", "*,tag:bi,users_rollup"]
+            ["run", "--models", "tag:bi,@users", "--exclude", "*,tag:bi,users_rollup"],
+            expect_pass=False,
         )
-        verify_selected_users(project, results)
+        check_result_nodes_by_name(results, ["users"])
 
     def test_intersection_concat(self, project):
 
-        results = run_dbt(["run", "--models", "tag:bi,@users", "emails_alt"])
-        # users, users_rollup, emails_alt
-        assert len(results) == 3
-
-        created_models = project.get_tables_in_schema()
-        assert "users" in created_models
-        assert "users_rollup" in created_models
-        assert "emails_alt" in created_models
-        assert "subdir" not in created_models
-        assert "nested_users" not in created_models
+        results = run_dbt(["run", "--models", "tag:bi,@users", "emails_alt"], expect_pass=False)
+        check_result_nodes_by_name(results, ["users", "users_rollup", "emails_alt"])
 
     def test_intersection_concat_intersection(self, project):
 
-        run_dbt(["seed"])
-        results = run_dbt(["run", "--models", "tag:bi,@users", "@emails_alt,emails_alt"])
-        # users, users_rollup, emails_alt
-        assert len(results) == 3
-
-        created_models = project.get_tables_in_schema()
-        assert "users" in created_models
-        assert "users_rollup" in created_models
-        assert "emails_alt" in created_models
-        assert "subdir" not in created_models
-        assert "nested_users" not in created_models
+        results = run_dbt(
+            ["run", "--models", "tag:bi,@users", "@emails_alt,emails_alt"],
+            expect_pass=False,
+        )
+        check_result_nodes_by_name(results, ["users", "users_rollup", "emails_alt"])
 
     def test_intersection_concat_exclude(self, project):
 
-        run_dbt(["seed"])
         results = run_dbt(
-            ["run", "--models", "tag:bi,@users", "emails_alt", "--exclude", "users_rollup"]
+            [
+                "run",
+                "--models",
+                "tag:bi,@users",
+                "emails_alt",
+                "--exclude",
+                "users_rollup",
+            ],
+            expect_pass=False,
         )
-        # users, emails_alt
-        assert len(results) == 2
-
-        created_models = project.get_tables_in_schema()
-        assert "users" in created_models
-        assert "emails_alt" in created_models
-        assert "users_rollup" not in created_models
-        assert "subdir" not in created_models
-        assert "nested_users" not in created_models
+        check_result_nodes_by_name(results, ["users", "emails_alt"])
 
     def test_intersection_concat_exclude_concat(self, project):
 
-        run_dbt(["seed"])
         results = run_dbt(
             [
                 "run",
@@ -250,21 +216,13 @@ class TestIntersectionSyncs(SelectionFixtures):
                 "--exclude",
                 "users_rollup_dependency",
                 "users_rollup",
-            ]
+            ],
+            expect_pass=False,
         )
-        # users, emails_alt
-        assert len(results) == 2
-
-        created_models = project.get_tables_in_schema()
-        assert "users" in created_models
-        assert "emails_alt" in created_models
-        assert "users_rollup" not in created_models
-        assert "subdir" not in created_models
-        assert "nested_users" not in created_models
+        check_result_nodes_by_name(results, ["users", "emails_alt"])
 
     def test_intersection_concat_exclude_intersection_concat(self, project):
 
-        run_dbt(["seed"])
         results = run_dbt(
             [
                 "run",
@@ -274,14 +232,7 @@ class TestIntersectionSyncs(SelectionFixtures):
                 "--exclude",
                 "@users,users_rollup_dependency",
                 "@users,users_rollup",
-            ]
+            ],
+            expect_pass=False,
         )
-        # users, emails_alt
-        assert len(results) == 2
-
-        created_models = project.get_tables_in_schema()
-        assert "users" in created_models
-        assert "emails_alt" in created_models
-        assert "users_rollup" not in created_models
-        assert "subdir" not in created_models
-        assert "nested_users" not in created_models
+        check_result_nodes_by_name(results, ["users", "emails_alt"])

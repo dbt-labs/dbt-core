@@ -1,0 +1,7 @@
+kind: Docs
+body: Updated docker README to reflect necessity of using BuildKit
+time: 2022-04-08T13:35:40.361554-05:00
+custom:
+  Author: iknox-fa
+  Issue: "4990"
+  PR: "5018"

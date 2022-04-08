@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
 import pytest
 
-from dbt.tests.util import run_dbt, update_config_file
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, update_config_file, check_relations_equal
 from dbt.tests.fixtures.project import write_project_files
 from tests.functional.source_overrides.fixtures import (  # noqa: F401
     local_dependency,
@@ -106,10 +105,7 @@ class TestSourceOverride:
         results = run_dbt(["run"])
         assert len(results) == 1
 
-        table_comp = TableComparison(
-            adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-        )
-        table_comp.assert_tables_equal("expected_result", "my_model")
+        check_relations_equal(project.adapter, ["expected_result", "my_model"])
 
         # set the updated_at field of this seed to last week
         insert_id = self._set_updated_at_to(insert_id, timedelta(days=-7), project)
