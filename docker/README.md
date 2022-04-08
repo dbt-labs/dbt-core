@@ -17,6 +17,11 @@ In order to build a new image, run the following docker command.
 ```
 docker build --tag <your_image_name>  --target <target_name> <path/to/dockerfile>
 ```
+---
+> **Note:**  Docker must be configured to use [BuildKit](https://docs.docker.com/develop/develop-images/build_enhancements/) in order for images to build properly!
+
+---
+
 By default the images will be populated with the most recent release of `dbt-core` and whatever database adapter you select.  If you need to use a different version you can specify it by git ref using the `--build-arg` flag:
 ```
 docker build --tag <your_image_name> \
@@ -32,7 +37,10 @@ valid arg names for versioning are:
 * `dbt_snowflake_ref`
 * `dbt_spark_ref`
 
-> Note: Only overide a _single_ build arg for each build. Using multiple overides may lead to a non-functioning image.
+---
+>**NOTE:**  Only override a _single_ build arg for each build. Using multiple overrides may lead to a non-functioning image.
+
+---
 
 If you wish to build an image with a third-party adapter you can use the `dbt-third-party` target.  This target requires you provide a path to the adapter that can be processed by `pip` by using the `dbt_third_party` build arg:
 ```
@@ -101,6 +109,9 @@ docker run \
 my-dbt \
 ls
 ```
-> Notes:
-> * Bind-mount sources _must_ be an absolute path
-> * You may need to make adjustments to the docker networking setting depending on the specifics of your data warehouse/database host.
+---
+**Notes:**
+* Bind-mount sources _must_ be an absolute path
+* You may need to make adjustments to the docker networking setting depending on the specifics of your data warehouse/database host.
+
+---
