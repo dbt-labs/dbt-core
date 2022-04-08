@@ -1,6 +1,9 @@
-import pytest
-from pathlib import Path
+import csv
 import os
+import pytest
+
+from pathlib import Path
+
 from dbt.tests.util import (
     run_dbt,
     read_file,
@@ -8,12 +11,30 @@ from dbt.tests.util import (
     check_table_does_exist,
     check_table_does_not_exist,
 )
-from tests.functional.simple_seed.fixtures import models__downstream_from_seed_actual
+from tests.functional.simple_seed.fixtures import (
+    models__downstream_from_seed_actual,
+    models__from_basic_seed,
+    seeds__disabled_in_config,
+    seeds__enabled_in_config,
+    seeds__tricky,
+    seeds__wont_parse,
+)
 
 # from `test/integration/test_simple_seed`, test_postgres_simple_seed
 
 
-class SeedTestBase(object):
+class SeedConfigBase(object):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "seeds": {
+                "quote_columns": False,
+            },
+        }
+
+
+class SeedTestBase(SeedConfigBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
@@ -23,10 +44,7 @@ class SeedTestBase(object):
     def seeds(self):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         seed_actual_csv = read_file(dir_path, "seeds", "seed_actual.csv")
-        return {
-            # "model.sql": model,
-            "seed_actual.csv": seed_actual_csv
-        }
+        return {"seed_actual.csv": seed_actual_csv}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -56,16 +74,6 @@ class SeedTestBase(object):
 
 
 class TestBasicSeedTests(SeedTestBase):
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "config-version": 2,
-            "seed-paths": ["seeds"],
-            "seeds": {
-                "quote_columns": False,
-            },
-        }
-
     def test_postgres_simple_seed(self, project):
         """Build models and observe that run truncates a seed and re-inserts rows"""
         self._build_relations_for_test(project)
@@ -85,7 +93,6 @@ class TestSeedConfigFullRefreshOn(SeedTestBase):
     def project_config_update(self):
         return {
             "config-version": 2,
-            "seed-paths": ["seeds"],
             "seeds": {"quote_columns": False, "full_refresh": True},
         }
 
@@ -100,7 +107,6 @@ class TestSeedConfigFullRefreshOff(SeedTestBase):
     def project_config_update(self):
         return {
             "config-version": 2,
-            "seed-paths": ["seeds"],
             "seeds": {"quote_columns": False, "full_refresh": False},
         }
 
@@ -111,3 +117,174 @@ class TestSeedConfigFullRefreshOff(SeedTestBase):
         self._check_relation_end_state(
             run_result=run_dbt(["seed", "--full-refresh"]), project=project, exists=True
         )
+
+
+class TestSeedCustomSchema(SeedTestBase):
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project):
+        """Create table for ensuring seeds and models used in tests build correctly"""
+        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "seeds": {
+                "schema": "custom_schema",
+                "quote_columns": False,
+            },
+        }
+
+    def test_postgres_simple_seed_with_schema(self, project):
+        results = run_dbt(["seed"])
+        assert len(results) == 1
+        # TODO: 1/4 custom schema work; but unsure how to provide these lines with custom schema on seed_actual
+        # check_relations_equal(project.adapter, ["seed_actual", "seed_expected"])
+
+        # this should truncate the seed_actual table, then re-insert
+        results = run_dbt(["seed"])
+        assert len(results) == 1
+        # TODO: 2/4
+        # check_relations_equal(project.adapter, ["seed_actual", "seed_expected"])
+
+    def test_postgres_simple_seed_with_drop_and_schema(self):
+        results = run_dbt(["seed"])
+        assert len(results) == 1
+        # TODO: 3/4
+        # check_relations_equal(project.adapter, ["seed_actual", "seed_expected"])
+
+        # this should drop the seed table, then re-create
+        results = run_dbt(["seed", "--full-refresh"])
+        results = run_dbt(["seed"])
+        # TODO: 4/4
+        # check_relations_equal(project.adapter, ["seed_actual", "seed_expected"])
+
+
+class TestSimpleSeedEnabledViaConfig(object):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "seed_enabled.csv": seeds__enabled_in_config,
+            "seed_disabled.csv": seeds__disabled_in_config,
+            "seed_tricky.csv": seeds__tricky,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "seeds": {
+                "test": {"seed_enabled": {"enabled": True}, "seed_disabled": {"enabled": False}},
+                "quote_columns": False,
+            },
+        }
+
+    def test_postgres_simple_seed_with_disabled(self, project):
+        results = run_dbt(["seed"])
+        len(results) == 2
+        check_table_does_exist(project.adapter, "seed_enabled")
+        check_table_does_not_exist(project.adapter, "seed_disabled")
+        check_table_does_exist(project.adapter, "seed_tricky")
+        # TODO: 1/3 is there a better way to enforce cleanup
+        project.run_sql(f"drop table {project.test_schema}.seed_enabled")
+        project.run_sql(f"drop table {project.test_schema}.seed_tricky")
+
+    def test_postgres_simple_seed_selection(self, project):
+        results = run_dbt(["seed", "--select", "seed_enabled"])
+        len(results) == 1
+        check_table_does_exist(project.adapter, "seed_enabled")
+        check_table_does_not_exist(project.adapter, "seed_disabled")
+        check_table_does_not_exist(project.adapter, "seed_tricky")
+        # TODO: 2/3
+        project.run_sql(f"drop table {project.test_schema}.seed_enabled")
+
+    def test_postgres_simple_seed_exclude(self, project):
+        results = run_dbt(["seed", "--exclude", "seed_enabled"])
+        len(results) == 1
+        check_table_does_not_exist(project.adapter, "seed_enabled")
+        check_table_does_not_exist(project.adapter, "seed_disabled")
+        check_table_does_exist(project.adapter, "seed_tricky")
+        # TODO: 3/3
+        project.run_sql(f"drop table {project.test_schema}.seed_tricky")
+
+
+class TestSeedParsing(SeedConfigBase):
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project):
+        """Create table for ensuring seeds and models used in tests build correctly"""
+        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"seed.csv": seeds__wont_parse}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": models__from_basic_seed}
+
+    def test_postgres_dbt_run_skips_seeds(self, project):
+        # run does not try to parse the seed files
+        len(run_dbt()) == 1
+
+        # make sure 'dbt seed' fails, otherwise our test is invalid!
+        run_dbt(["seed"], expect_pass=False)
+
+
+class TestSimpleSeedWithBOM(SeedConfigBase):
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project):
+        """Create table for ensuring seeds and models used in tests build correctly"""
+        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        seed_bom = read_file(dir_path, "data", "seed_bom.csv")
+        return {"seed_bom.csv": seed_bom}
+
+    def test_postgres_simple_seed(self, project):
+        # first make sure nobody "fixed" the file by accident
+        seed_path = project.test_data_dir / Path("seed_bom.csv")
+        with open(seed_path, encoding="utf-8") as fp:
+            assert fp.read(1) == "\ufeff"
+
+        results = run_dbt(["seed"])
+        len(results) == 1
+        check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
+
+
+class TestSimpleSeedWithUnicode(SeedConfigBase):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        seed_unicode = read_file(dir_path, "data", "seed_unicode.csv")
+        return {"seed_unicode.csv": seed_unicode}
+
+    def test_postgres_simple_seed(self, project):
+        results = run_dbt(["seed"])
+        len(results) == 1
+
+
+class TestSimpleSeedWithDots(SeedConfigBase):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        dotted_seed = read_file(dir_path, "data", "seed.with.dots.csv")
+        return {"seed.with.dots.csv": dotted_seed}
+
+    def test_postgres_simple_seed(self, project):
+        results = run_dbt(["seed"])
+        len(results) == 1
+
+
+class TestSimpleBigSeedBatched(SeedConfigBase):
+    def test_postgres_big_batched_seed(self, project):
+        big_seed = project.test_data_dir / Path("big-seed.csv")
+        with open(big_seed, "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(["id"])
+            for i in range(0, 20000):
+                writer.writerow([i])
+
+        results = run_dbt(["seed"])
+        len(results) == 1
