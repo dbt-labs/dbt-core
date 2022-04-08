@@ -46,6 +46,7 @@ def test_snapshot_hard_delete(project):
     path = os.path.join(project.test_data_dir, "seed_pg.sql")
     project.run_sql_file(path)
 
+    # run the first snapshot
     datetime_snapshot()
 
     check_relations_equal(project.adapter, ["snapshot_expected", "snapshot_actual"])
@@ -81,7 +82,8 @@ def test_snapshot_hard_delete(project):
         assert result[-1].replace(tzinfo=pytz.UTC) >= invalidated_snapshot_datetime
 
     # revive records
-    revival_timestamp = datetime.now(pytz.UTC).strftime(r"%Y-%m-%d %H:%M:%S")
+    # Timestamp must have microseconds for tests below to be meaningful
+    revival_timestamp = datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
     project.run_sql(
         """
         insert into {}.{}.seed (id, first_name, last_name, email, gender, ip_address, updated_at) values
@@ -93,9 +95,11 @@ def test_snapshot_hard_delete(project):
     )
 
     # snapshot and assert records were revived
+    # Note: the revived_snapshot_datetime here is later than the revival_timestamp above
     revived_snapshot_datetime = datetime_snapshot()
 
     # records which weren't revived (id != 10, 11)
+    # dbt_valid_to is not null
     invalidated_records = project.run_sql(
         """
         select
@@ -117,6 +121,7 @@ def test_snapshot_hard_delete(project):
         assert result[1].replace(tzinfo=pytz.UTC) >= invalidated_snapshot_datetime
 
     # records which were revived (id = 10, 11)
+    # dbt_valid_to is null
     revived_records = project.run_sql(
         """
         select
@@ -135,10 +140,8 @@ def test_snapshot_hard_delete(project):
     assert len(revived_records) == 2
     for result in revived_records:
         # result is a tuple, the dbt_valid_from is second and dbt_valid_to is latest
+        # dbt_valid_from is the same as the 'updated_at' added in the revived_rows
+        # dbt_valid_to is null
         assert isinstance(result[1], datetime)
-        # there are milliseconds (part of microseconds in datetime objects) in the
-        # revived_snapshot_datetime and not in result datetime so set the microseconds to 0
-        assert result[1].replace(tzinfo=pytz.UTC) >= revived_snapshot_datetime.replace(
-            microsecond=0
-        )
+        assert result[1].replace(tzinfo=pytz.UTC) <= revived_snapshot_datetime
         assert result[2] is None
