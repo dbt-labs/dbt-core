@@ -73,7 +73,10 @@ class TestSchemaTestGraphSelection(SelectionFixtures):
 
     def test_schema_tests_specify_model_and_parents(self, project):
         run_schema_and_assert(
-            project, "+users_rollup", None, ["unique_users_id", "unique_users_rollup_gender"]
+            project,
+            "+users_rollup",
+            None,
+            ["unique_users_id", "unique_users_rollup_gender"],
         )
 
     def test_schema_tests_specify_model_and_parents_with_exclude(self, project):
@@ -102,7 +105,11 @@ class TestSchemaTestGraphSelection(SelectionFixtures):
             project,
             "*",
             "users",
-            ["not_null_emails_email", "unique_table_model_id", "unique_users_rollup_gender"],
+            [
+                "not_null_emails_email",
+                "unique_table_model_id",
+                "unique_users_rollup_gender",
+            ],
         )
 
     def test_schema_tests_dep_package_only(self, project):
@@ -110,7 +117,10 @@ class TestSchemaTestGraphSelection(SelectionFixtures):
 
     def test_schema_tests_model_in_dep_pkg(self, project):
         run_schema_and_assert(
-            project, "dbt_integration_project.table_model", None, ["unique_table_model_id"]
+            project,
+            "dbt_integration_project.table_model",
+            None,
+            ["unique_table_model_id"],
         )
 
     def test_schema_tests_exclude_pkg(self, project):
