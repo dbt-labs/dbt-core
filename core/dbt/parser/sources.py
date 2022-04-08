@@ -271,6 +271,8 @@ class SourcePatcher:
         # first apply source configs
         precedence_configs.update(target.source.config)
         # then overrite anything that is defined on source tables
+        # this is not quite complex enough for configs that can be set as top-level node keys, but
+        # it works while source configs can only include `enabled`.
         precedence_configs.update(target.table.config)
 
         return generator.calculate_node_config(
