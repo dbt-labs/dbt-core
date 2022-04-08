@@ -2,7 +2,7 @@ import os
 import json
 import pytest
 
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, check_result_nodes_by_name
 from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 
@@ -41,14 +41,12 @@ class TestGraphSelection(SelectionFixtures):
 
     def test_specific_model(self, project):
         results = run_dbt(["run", "--select", "users"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users"])
         assert_correct_schemas(project)
 
     def test_tags(self, project, project_root):
         results = run_dbt(["run", "--selector", "bi_selector"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users", "users_rollup"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users", "users_rollup"])
         assert_correct_schemas(project)
         manifest_path = project_root.join("target/manifest.json")
         assert os.path.exists(manifest_path)
@@ -58,117 +56,121 @@ class TestGraphSelection(SelectionFixtures):
 
     def test_tags_and_children(self, project):
         results = run_dbt(["run", "--select", "tag:base+"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(
-            ["emails_alt", "users_rollup", "users", "alternative.users", "users_rollup_dependency"]
-        ) == set(models_selected)
+        check_result_nodes_by_name(
+            results,
+            [
+                "emails_alt",
+                "users_rollup",
+                "users",
+                "alternative.users",
+                "users_rollup_dependency",
+            ],
+        )
         assert_correct_schemas(project)
 
     def test_tags_and_children_limited(self, project):
         results = run_dbt(["run", "--select", "tag:base+2"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["emails_alt", "users_rollup", "users", "alternative.users"]) == set(
-            models_selected
+        check_result_nodes_by_name(
+            results, ["emails_alt", "users_rollup", "users", "alternative.users"]
         )
-
         assert_correct_schemas(project)
 
     def test_specific_model_and_children(self, project):
         results = run_dbt(["run", "--select", "users+"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users", "users_rollup", "emails_alt", "users_rollup_dependency"]) == set(
-            models_selected
+        check_result_nodes_by_name(
+            results, ["users", "users_rollup", "emails_alt", "users_rollup_dependency"]
         )
         assert_correct_schemas(project)
 
     def test_specific_model_and_children_limited(self, project):
         results = run_dbt(["run", "--select", "users+1"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users", "users_rollup", "emails_alt"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users", "users_rollup", "emails_alt"])
         assert_correct_schemas(project)
 
     def test_specific_model_and_parents(self, project):
         results = run_dbt(["run", "--select", "+users_rollup"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users_rollup", "users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users_rollup", "users"])
         assert_correct_schemas(project)
 
     def test_specific_model_and_parents_limited(self, project):
         results = run_dbt(["run", "--select", "1+users_rollup"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users", "users_rollup"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users", "users_rollup"])
         assert_correct_schemas(project)
 
     def test_specific_model_with_exclusion(self, project):
         results = run_dbt(
-            ["run", "--select", "+users_rollup", "--exclude", "models/users_rollup.sql"],
+            [
+                "run",
+                "--select",
+                "+users_rollup",
+                "--exclude",
+                "models/users_rollup.sql",
+            ],
             expect_pass=False,
         )
-        models_selected = [r.node.name for r in results]
-        assert set(["users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users"])
         assert_correct_schemas(project)
 
     def test_locally_qualified_name(self, project):
         results = run_dbt(["run", "--select", "test.subdir"])
-        models_selected = [r.node.name for r in results]
-        assert set(["nested_users", "subdir"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["nested_users", "subdir"])
         assert_correct_schemas(project)
 
         results = run_dbt(["run", "--select", "models/test/subdir*"])
-        models_selected = [r.node.name for r in results]
-        assert set(["nested_users", "subdir"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["nested_users", "subdir"])
         assert_correct_schemas(project)
 
     def test_locally_qualified_name_model_with_dots(self, project):
         results = run_dbt(["run", "--select", "alternative.users"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["alternative.users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["alternative.users"])
         assert_correct_schemas(project)
 
         results = run_dbt(["run", "--select", "models/alternative.*"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["alternative.users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["alternative.users"])
         assert_correct_schemas(project)
 
     def test_childrens_parents(self, project):
         results = run_dbt(["run", "--select", "@base_users"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(
-            ["alternative.users", "users_rollup", "users", "emails_alt", "users_rollup_dependency"]
-        ) == set(models_selected)
+        check_result_nodes_by_name(
+            results,
+            [
+                "alternative.users",
+                "users_rollup",
+                "users",
+                "emails_alt",
+                "users_rollup_dependency",
+            ],
+        )
 
         results = run_dbt(["test", "--select", "test_name:not_null"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["not_null_emails_email"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["not_null_emails_email"])
 
     def test_more_childrens_parents(self, project):
         results = run_dbt(["run", "--select", "@users"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        models_selected = [r.node.name for r in results]
-        assert set(["users_rollup", "users", "emails_alt", "users_rollup_dependency"]) == set(
-            models_selected
+        check_result_nodes_by_name(
+            results, ["users_rollup", "users", "emails_alt", "users_rollup_dependency"]
         )
 
         results = run_dbt(["test", "--select", "test_name:unique"], expect_pass=False)
-        assert set(["emails_alt", "users_rollup_dependency", "users", "users_rollup"]) == set(
-            models_selected
-        )
+        check_result_nodes_by_name(results, ["unique_users_id", "unique_users_rollup_gender"])
 
     def test_concat(self, project):
         results = run_dbt(["run", "--select", "@emails_alt", "users_rollup"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(["users_rollup", "users", "emails_alt"]) == set(models_selected)
-        assert "users_rollup" in models_selected
-        assert "users" in models_selected
-        assert "emails_alt" in models_selected
+        check_result_nodes_by_name(results, ["users_rollup", "users", "emails_alt"])
 
     def test_concat_exclude(self, project):
         results = run_dbt(
-            ["run", "--select", "@emails_alt", "users_rollup", "--exclude", "emails_alt"],
+            [
+                "run",
+                "--select",
+                "@emails_alt",
+                "users_rollup",
+                "--exclude",
+                "emails_alt",
+            ],
             expect_pass=False,
         )
-        models_selected = [r.node.name for r in results]
-        assert set(["users_rollup", "users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users_rollup", "users"])
 
     def test_concat_exclude_concat(self, project):
         results = run_dbt(
@@ -183,9 +185,7 @@ class TestGraphSelection(SelectionFixtures):
             ],
             expect_pass=False,
         )
-        assert len(results) == 1
-        models_selected = [r.node.name for r in results]
-        assert set(["users"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["users"])
 
         results = run_dbt(
             [
@@ -199,12 +199,14 @@ class TestGraphSelection(SelectionFixtures):
             ],
             expect_pass=False,
         )
-        models_selected = [r.node.name for r in results]
-        assert set(["unique_users_id"]) == set(models_selected)
+        check_result_nodes_by_name(results, ["unique_users_id"])
 
     def test_exposure_parents(self, project):
         results = run_dbt(["ls", "--select", "+exposure:seed_ml_exposure"])
-        assert sorted(results) == ["exposure:test.seed_ml_exposure", "source:test.raw.seed"]
+        assert sorted(results) == [
+            "exposure:test.seed_ml_exposure",
+            "source:test.raw.seed",
+        ]
         results = run_dbt(["ls", "--select", "1+exposure:user_exposure"])
         assert sorted(results) == [
             "exposure:test.user_exposure",
@@ -214,10 +216,10 @@ class TestGraphSelection(SelectionFixtures):
             "test.users_rollup",
         ]
         results = run_dbt(["run", "-m", "+exposure:user_exposure"], expect_pass=False)
-        models_selected = [r.node.name for r in results]
-        assert set(
+        check_result_nodes_by_name(
+            results,
             [
                 "users_rollup",
                 "users",
-            ]
-        ) == set(models_selected)
+            ],
+        )
