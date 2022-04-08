@@ -150,29 +150,29 @@ seeds:
 """
 
 
-@pytest.fixture
-def models():
-    return {
-        "schema.yml": schema_yml,
-        "base_users.sql": base_users_sql,
-        "users.sql": users_sql,
-        "users_rollup.sql": users_rollup_sql,
-        "users_rollup_dependency.sql": users_rollup_dependency_sql,
-        "emails.sql": emails_sql,
-        "emails_alt.sql": emails_alt_sql,
-        "alternative.users.sql": alternative_users_sql,
-        "never_selected.sql": never_selected_sql,
-        "test": {
-            "subdir.sql": subdir_sql,
-            "subdir": {"nested_users.sql": nested_users_sql},
-        },
-    }
+class SelectionFixtures:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_yml,
+            "base_users.sql": base_users_sql,
+            "users.sql": users_sql,
+            "users_rollup.sql": users_rollup_sql,
+            "users_rollup_dependency.sql": users_rollup_dependency_sql,
+            "emails.sql": emails_sql,
+            "emails_alt.sql": emails_alt_sql,
+            "alternative.users.sql": alternative_users_sql,
+            "never_selected.sql": never_selected_sql,
+            "test": {
+                "subdir.sql": subdir_sql,
+                "subdir": {"nested_users.sql": nested_users_sql},
+            },
+        }
 
-
-@pytest.fixture
-def seeds(test_data_dir):
-    # Read seed file and return
-    seeds = {"properties.yml": properties_yml}
-    for seed_file in ["seed.csv", "summary_expected.csv"]:
-        seeds[seed_file] = read_file(test_data_dir, seed_file)
-    return seeds
+    @pytest.fixture(scope="class")
+    def seeds(self, test_data_dir):
+        # Read seed file and return
+        seeds = {"properties.yml": properties_yml}
+        for seed_file in ["seed.csv", "summary_expected.csv"]:
+            seeds[seed_file] = read_file(test_data_dir, seed_file)
+        return seeds

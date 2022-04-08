@@ -1,0 +1,7 @@
+kind: Fixes
+body: A change in secret environment variables won't trigger a full reparse
+time: 2022-03-21T14:09:21.004543-05:00
+custom:
+  Author: nathaniel-may
+  Issue: "4650"
+  PR: "4665"

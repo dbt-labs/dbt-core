@@ -1,0 +1,11 @@
+kind: Breaking Changes
+body: >
+  **Relevant to maintainers of adapter plugins _only_:**
+  The abstractmethods `get_response` and `execute` now only return a `connection.AdapterReponse` in type hints.
+  (Previously, they could return a string.) We encourage you to update your methods to return an object of
+  class `AdapterResponse`, or implement a subclass specific to your adapter
+time: 2022-03-16T03:13:11.656007-07:00
+custom:
+  Author: versusfacit
+  Issue: "4499"
+  PR: "4869"

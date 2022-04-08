@@ -1,0 +1,7 @@
+kind: Fixes
+body: Add project name validation to `dbt init`
+time: 2022-03-21T14:07:20.153071-05:00
+custom:
+  Author: amirkdv
+  Issue: "4490"
+  PR: "4536"

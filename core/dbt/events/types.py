@@ -292,6 +292,25 @@ class GitProgressCheckedOutAt(DebugLevel):
 
 
 @dataclass
+class RegistryIndexProgressMakingGETRequest(DebugLevel):
+    url: str
+    code: str = "M022"
+
+    def message(self) -> str:
+        return f"Making package index registry request: GET {self.url}"
+
+
+@dataclass
+class RegistryIndexProgressGETResponse(DebugLevel):
+    url: str
+    resp_code: int
+    code: str = "M023"
+
+    def message(self) -> str:
+        return f"Response from registry index: GET {self.url} {self.resp_code}"
+
+
+@dataclass
 class RegistryProgressMakingGETRequest(DebugLevel):
     url: str
     code: str = "M008"
@@ -308,6 +327,45 @@ class RegistryProgressGETResponse(DebugLevel):
 
     def message(self) -> str:
         return f"Response from registry: GET {self.url} {self.resp_code}"
+
+
+@dataclass
+class RegistryResponseUnexpectedType(DebugLevel):
+    response: str
+    code: str = "M024"
+
+    def message(self) -> str:
+        return f"Response was None: {self.response}"
+
+
+@dataclass
+class RegistryResponseMissingTopKeys(DebugLevel):
+    response: str
+    code: str = "M025"
+
+    def message(self) -> str:
+        # expected/actual keys logged in exception
+        return f"Response missing top level keys: {self.response}"
+
+
+@dataclass
+class RegistryResponseMissingNestedKeys(DebugLevel):
+    response: str
+    code: str = "M026"
+
+    def message(self) -> str:
+        # expected/actual keys logged in exception
+        return f"Response missing nested keys: {self.response}"
+
+
+@dataclass
+class RegistryResponseExtraNestedKeys(DebugLevel):
+    response: str
+    code: str = "M027"
+
+    def message(self) -> str:
+        # expected/actual keys logged in exception
+        return f"Response contained inconsistent keys: {self.response}"
 
 
 # TODO this was actually `logger.exception(...)` not `logger.error(...)`
@@ -2346,7 +2404,7 @@ class TrackingInitializeFailure(ShowException, DebugLevel):
 class RetryExternalCall(DebugLevel):
     attempt: int
     max: int
-    code: str = "Z045"
+    code: str = "M020"
 
     def message(self) -> str:
         return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
@@ -2384,6 +2442,15 @@ class EventBufferFull(WarnLevel):
         return "Internal event buffer full. Earliest events will be dropped (FIFO)."
 
 
+@dataclass
+class RecordRetryException(DebugLevel):
+    exc: Exception
+    code: str = "M021"
+
+    def message(self) -> str:
+        return f"External call exception: {self.exc}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -2413,6 +2480,14 @@ if 1 == 0:
     GitNothingToDo(sha="")
     GitProgressUpdatedCheckoutRange(start_sha="", end_sha="")
     GitProgressCheckedOutAt(end_sha="")
+    RegistryIndexProgressMakingGETRequest(url="")
+    RegistryIndexProgressGETResponse(url="", resp_code=1234)
+    RegistryProgressMakingGETRequest(url="")
+    RegistryProgressGETResponse(url="", resp_code=1234)
+    RegistryResponseUnexpectedType(response=""),
+    RegistryResponseMissingTopKeys(response=""),
+    RegistryResponseMissingNestedKeys(response=""),
+    RegistryResponseExtraNestedKeys(response=""),
     SystemErrorRetrievingModTime(path="")
     SystemCouldNotWrite(path="", reason="", exc=Exception(""))
     SystemExecutingCmd(cmd=[""])
@@ -2737,3 +2812,4 @@ if 1 == 0:
     GeneralWarningMsg(msg="", log_fmt="")
     GeneralWarningException(exc=Exception(""), log_fmt="")
     EventBufferFull()
+    RecordRetryException(exc=Exception(""))

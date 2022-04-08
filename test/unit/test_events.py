@@ -402,6 +402,12 @@ sample_values = [
     PrintDebugStackTrace(),
     MainReportArgs(args={}),
     RegistryProgressMakingGETRequest(url=''),
+    RegistryIndexProgressMakingGETRequest(url=""),
+    RegistryIndexProgressGETResponse(url="", resp_code=1),
+    RegistryResponseUnexpectedType(response=""),
+    RegistryResponseMissingTopKeys(response=""),
+    RegistryResponseMissingNestedKeys(response=""),
+    RegistryResponseExtraNestedKeys(response=""),
     DepsUTD(),
     PartialParsingNotEnabled(),
     SQlRunnerException(exc=Exception('')),
@@ -414,6 +420,7 @@ sample_values = [
     IntegrationTestError(msg=''),
     IntegrationTestException(msg=''),
     EventBufferFull(),
+    RecordRetryException(exc=Exception('')),
     UnitTestInfo(msg=''),
 ]
 

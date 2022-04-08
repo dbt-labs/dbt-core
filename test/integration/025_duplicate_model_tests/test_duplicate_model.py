@@ -14,7 +14,7 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
 
     @use_profile("postgres")
     def test_postgres_duplicate_model_enabled(self):
-        message = "dbt found two resources with the name"
+        message = "dbt found two models with the name"
         try:
             self.run_dbt(["run"])
             self.assertTrue(False, "dbt did not throw for duplicate models")
@@ -80,7 +80,7 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
     @use_profile("postgres")
     def test_postgres_duplicate_model_enabled_across_packages(self):
         self.run_dbt(["deps"])
-        message = "dbt found two resources with the name"
+        message = "dbt found two models with the name"
         try:
             self.run_dbt(["run"])
             self.assertTrue(False, "dbt did not throw for duplicate models")

@@ -221,7 +221,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[Union[str, AdapterResponse], agate.Table]:
+    ) -> Tuple[AdapterResponse, agate.Table]:
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
 
@@ -229,8 +229,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
-        :return: A tuple of the status and the results (empty if fetch=False).
-        :rtype: Tuple[Union[str, AdapterResponse], agate.Table]
+        :return: A tuple of the query status and results (empty if fetch=False).
+        :rtype: Tuple[AdapterResponse, agate.Table]
         """
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
 
@@ -270,12 +270,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return self._macro_manifest_lazy
 
-    def load_macro_manifest(self) -> MacroManifest:
+    def load_macro_manifest(self, base_macros_only=False) -> MacroManifest:
+        # base_macros_only is for the test framework
         if self._macro_manifest_lazy is None:
             # avoid a circular import
             from dbt.parser.manifest import ManifestLoader
 
-            manifest = ManifestLoader.load_macros(self.config, self.connections.set_query_header)
+            manifest = ManifestLoader.load_macros(
+                self.config, self.connections.set_query_header, base_macros_only=base_macros_only
+            )
             # TODO CT-211
             self._macro_manifest_lazy = manifest  # type: ignore[assignment]
         # TODO CT-211

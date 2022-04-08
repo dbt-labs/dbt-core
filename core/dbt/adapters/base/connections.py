@@ -4,7 +4,7 @@ import os
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
 from threading import get_ident
-from typing import Dict, Tuple, Hashable, Optional, ContextManager, List, Union
+from typing import Dict, Tuple, Hashable, Optional, ContextManager, List
 
 import agate
 
@@ -281,15 +281,15 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[Union[str, AdapterResponse], agate.Table]:
+    ) -> Tuple[AdapterResponse, agate.Table]:
         """Execute the given SQL.
 
         :param str sql: The sql to execute.
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
-        :return: A tuple of the status and the results (empty if fetch=False).
-        :rtype: Tuple[Union[str, AdapterResponse], agate.Table]
+        :return: A tuple of the query status and results (empty if fetch=False).
+        :rtype: Tuple[AdapterResponse, agate.Table]
         """
         raise dbt.exceptions.NotImplementedException(
             "`execute` is not implemented for this adapter!"

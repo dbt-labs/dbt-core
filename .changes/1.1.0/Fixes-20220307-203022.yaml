@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix bug causing empty node level meta, snapshot config errors
+time: 2022-03-07T20:30:22.624709-06:00
+custom:
+  Author: gshank
+  Issue: "4459"
+  PR: "4726"

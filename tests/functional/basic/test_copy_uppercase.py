@@ -1,6 +1,5 @@
 import pytest
-from dbt.tests.tables import TableComparison
-from dbt.tests.util import run_dbt, read_file
+from dbt.tests.util import run_dbt, read_file, check_relations_equal
 
 from tests.functional.basic.test_simple_copy import (
     advanced_incremental_sql,
@@ -21,8 +20,8 @@ select * from {{ ref('MATERIALIZED') }}
 """
 
 
-@pytest.fixture
-def dbt_profile_data(unique_schema, database_host):
+@pytest.fixture(scope="class")
+def dbt_profile_data(unique_schema):
     return {
         "config": {"send_anonymous_usage_stats": False},
         "test": {
@@ -30,7 +29,7 @@ def dbt_profile_data(unique_schema, database_host):
                 "default": {
                     "type": "postgres",
                     "threads": 4,
-                    "host": database_host,
+                    "host": "localhost",
                     "port": 5432,
                     "user": "root",
                     "pass": "password",
@@ -43,7 +42,7 @@ def dbt_profile_data(unique_schema, database_host):
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "ADVANCED_INCREMENTAL.sql": advanced_incremental_sql,
@@ -59,7 +58,7 @@ def models():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def seeds(test_data_dir):
     # Read seed file and return
     seed_csv = read_file(test_data_dir, "seed-initial.csv")
@@ -76,9 +75,6 @@ def test_simple_copy_uppercase(project):
     results = run_dbt()
     assert len(results) == 7
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_many_tables_equal(
-        ["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"]
+    check_relations_equal(
+        project.adapter, ["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"]
     )

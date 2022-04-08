@@ -14,7 +14,7 @@ select 1 as id
 """
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def models():
     return {
         "descendant.sql": descendant_sql,

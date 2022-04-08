@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add Graph Compilation and Adapter Cache tracking
+time: 2022-03-21T14:28:54.160087-04:00
+custom:
+  Author: ChenyuLInx
+  Issue: "4625"
+  PR: "4912"
