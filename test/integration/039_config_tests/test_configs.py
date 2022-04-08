@@ -1,9 +1,11 @@
+from datetime import datetime
 import os
 import shutil
 
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.exceptions import CompilationException
-
+from dbt.config.utils import get_project_config
+from argparse import Namespace
 
 class TestConfigs(DBTIntegrationTest):
     @property
@@ -243,6 +245,7 @@ class TestUnusedModelConfigs(DBTIntegrationTest):
 
         self.run_dbt(['seed'])
 
+
 class TestConfigIndivTests(DBTIntegrationTest):
     @property
     def schema(self):
@@ -298,7 +301,6 @@ class TestConfigIndivTests(DBTIntegrationTest):
         self.assertEqual(results[1].status, 'fail')
 
 
-
 class TestConfigGetDefault(DBTIntegrationTest):
     @property
     def schema(self):
@@ -316,3 +318,33 @@ class TestConfigGetDefault(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         self.assertEqual(str(results[0].status), 'error')
         self.assertIn('column "default_value" does not exist', results[0].message)
+
+
+class TestConfigUtils(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    @property
+    def models(self):
+        return "models"
+
+    @property
+    def project_config(self):
+        project_path = os.path.dirname(os.path.realpath(__file__)) + "/project"
+        project_config = get_project_config(
+            project_path, "test", Namespace(profiles_dir=project_path)
+        )
+
+        # thanks yaml :(
+        project_config["name"] = str(project_config["name"])
+        project_config["version"] = str(project_config["version"])
+        return project_config
+
+    @use_profile("postgres")
+    def test_postgres_get_project_config(self):
+
+        seed_result = self.run_dbt(["seed"], expect_pass=True)
+        run_result = self.run_dbt(["run"], expect_pass=True)
+        self.assertEqual(len(seed_result), 1)
+        self.assertEqual(len(run_result), 1)
