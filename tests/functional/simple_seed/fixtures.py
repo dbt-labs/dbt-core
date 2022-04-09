@@ -2,8 +2,7 @@
 # Seeds
 #
 
-seeds__enabled_in_config = """
-id,first_name,email,ip_address,birthday
+seeds__enabled_in_config = """id,first_name,email,ip_address,birthday
 1,Larry,lking0@miitbeian.gov.cn,69.135.206.194,2008-09-12 19:08:31
 2,Larry,lperkins1@toplist.cz,64.210.133.162,1978-05-09 04:15:14
 3,Anna,amontgomery2@miitbeian.gov.cn,168.104.64.114,2011-10-16 04:07:57
@@ -27,8 +26,7 @@ id,first_name,email,ip_address,birthday
 
 """
 
-seeds__disabled_in_config = """
-id,first_name,email,ip_address,birthday
+seeds__disabled_in_config = """id,first_name,email,ip_address,birthday
 1,Larry,lking0@miitbeian.gov.cn,69.135.206.194,2008-09-12 19:08:31
 2,Larry,lperkins1@toplist.cz,64.210.133.162,1978-05-09 04:15:14
 3,Anna,amontgomery2@miitbeian.gov.cn,168.104.64.114,2011-10-16 04:07:57
@@ -53,7 +51,7 @@ id,first_name,email,ip_address,birthday
 """
 
 # used to tease out include/exclude edge case behavior for 'dbt seed'
-seeds__tricky = """
+seeds__tricky = """\
 id,id_str,a_bool,looks_like_a_bool,a_date,looks_like_a_date,relative,weekday
 1,1,true,true,2019-01-01 12:32:30,2019-01-01 12:32:30,tomorrow,Saturday
 2,2,True,True,2019-01-01 12:32:31,2019-01-01 12:32:31,today,Sunday
@@ -65,21 +63,105 @@ id,id_str,a_bool,looks_like_a_bool,a_date,looks_like_a_date,relative,weekday
 """
 
 
-seeds__wont_parse = """
-a,b,c
+seeds__wont_parse = """a,b,c
 1,7,23,90,5
 2
 
 """
 
 #
+# Macros
+#
+
+macros__schema_test = """
+{% test column_type(model, column_name, type) %}
+
+    {% set cols = adapter.get_columns_in_relation(model) %}
+
+    {% set col_types = {} %}
+    {% for col in cols %}
+        {% do col_types.update({col.name: col.data_type}) %}
+    {% endfor %}
+
+    {% set validation_message = 'Got a column type of ' ~ col_types.get(column_name) ~ ', expected ' ~ type %}
+
+    {% set val = 0 if col_types.get(column_name) == type else 1 %}
+    {% if val == 1 and execute %}
+        {{ log(validation_message, info=True) }}
+    {% endif %}
+
+    select '{{ validation_message }}' as validation_error
+    from (select true) as nothing
+    where {{ val }} = 1
+
+{% endtest %}
+
+"""
+
+#
 # Models
 #
+
 models__downstream_from_seed_actual = """
     select * from {{ ref('seed_actual') }}
 
 """
 models__from_basic_seed = """
 select * from {{ this.schema }}.seed_expected
+
+"""
+
+#
+# Properties
+#
+
+properties__schema_yml = """
+version: 2
+seeds:
+- name: seed_enabled
+  columns:
+  - name: birthday
+    tests:
+    - column_type:
+        type: date
+  - name: id
+    tests:
+    - column_type:
+        type: text
+
+- name: seed_tricky
+  columns:
+  - name: id
+    tests:
+    - column_type:
+        type: integer
+  - name: id_str
+    tests:
+    - column_type:
+        type: text
+  - name: a_bool
+    tests:
+    - column_type:
+        type: boolean
+  - name: looks_like_a_bool
+    tests:
+    - column_type:
+        type: text
+  - name: a_date
+    tests:
+    - column_type:
+        type: timestamp without time zone
+  - name: looks_like_a_date
+    tests:
+    - column_type:
+        type: text
+  - name: relative
+    tests:
+    - column_type:
+        type: text
+  - name: weekday
+    tests:
+    - column_type:
+        type: text
 
 """
