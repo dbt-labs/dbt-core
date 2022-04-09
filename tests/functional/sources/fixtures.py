@@ -162,6 +162,8 @@ models__multi_source_model_sql = """select * from {{ source('test_source', 'othe
 models__nonsource_descendant_sql = """select * from {{ schema }}.source
 """
 
+models__newly_added_model_sql = """select 2 as id"""
+
 malformed_models__schema_yml = """version: 2
 sources:
   - name: test_source

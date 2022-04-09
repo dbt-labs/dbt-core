@@ -9,6 +9,7 @@ from tests.functional.sources.common_source_setup import BaseSourcesTest
 
 from tests.functional.sources.fixtures import (
     error_models__schema_yml,
+    models__newly_added_model_sql,
 )
 
 
@@ -225,6 +226,8 @@ class TestSourceFresherNothingToDo(SuccessfulSourceFreshnessTest):
 # - run source freshness with `warn` → run `dbt run —select source_status:fresher` → assert nothing is run
 # - run source freshness with `error` → run `dbt run —select source_status:fresher+` → assert downstream nodes pass and work correctly
 # - run source freshness with `error` → run `dbt run —select source_status:fresher` → assert nothing is run
+
+
 class TestSourceFresherRun(SuccessfulSourceFreshnessTest):
     def test_source_fresher_run_error(self, project):
         self.run_dbt_with_vars(project, ["run"])
@@ -320,6 +323,55 @@ class TestSourceFresherRun(SuccessfulSourceFreshnessTest):
         )
         nodes = set([elem.node.name for elem in source_fresher_plus_results])
         assert nodes == {"descendant_model"}
+
+
+class TestSourceFresherBuildStateModified(SuccessfulSourceFreshnessTest):
+    def test_source_fresher_build_state_modified_pass(self, project, project_root):
+        self.run_dbt_with_vars(project, ["run"])
+
+        self._set_updated_at_to(project, timedelta(hours=-2))
+        previous_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "previous_state/sources.json"]
+        )
+        self._assert_freshness_results("previous_state/sources.json", "pass")
+
+        self._set_updated_at_to(project, timedelta(hours=-1))
+        current_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "target/sources.json"]
+        )
+        self._assert_freshness_results("target/sources.json", "pass")
+
+        assert previous_state_results[0].max_loaded_at < current_state_results[0].max_loaded_at
+
+        models_path = project_root.join("models/")
+        assert os.path.exists(models_path)
+        with open(f"{models_path}/newly_added_model.sql", "w") as fp:
+            fp.write(models__newly_added_model_sql)
+
+        copy_to_previous_state()
+        state_modified_results = self.run_dbt_with_vars(
+            project,
+            [
+                "build",
+                "--select",
+                "source_status:fresher+",
+                "state:modified+",
+                "--defer",
+                "--state",
+                "previous_state",
+            ],
+        )
+        nodes = set([elem.node.name for elem in state_modified_results])
+        assert nodes == {
+            "newly_added_model",
+            "source_unique_test_source_test_table_id",
+            "unique_descendant_model_id",
+            "not_null_descendant_model_id",
+            "source_not_null_test_source_test_table_id",
+            "descendant_model",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+        }
 
 
 class TestSourceFresherRuntimeError(SuccessfulSourceFreshnessTest):
