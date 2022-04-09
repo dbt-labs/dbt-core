@@ -2,7 +2,7 @@
 # Seeds
 #
 
-seeds__enabled_in_config = """id,first_name,email,ip_address,birthday
+seeds__enabled_in_config = """seed_id,first_name,email,ip_address,birthday
 1,Larry,lking0@miitbeian.gov.cn,69.135.206.194,2008-09-12 19:08:31
 2,Larry,lperkins1@toplist.cz,64.210.133.162,1978-05-09 04:15:14
 3,Anna,amontgomery2@miitbeian.gov.cn,168.104.64.114,2011-10-16 04:07:57
@@ -26,7 +26,7 @@ seeds__enabled_in_config = """id,first_name,email,ip_address,birthday
 
 """
 
-seeds__disabled_in_config = """id,first_name,email,ip_address,birthday
+seeds__disabled_in_config = """seed_id,first_name,email,ip_address,birthday
 1,Larry,lking0@miitbeian.gov.cn,69.135.206.194,2008-09-12 19:08:31
 2,Larry,lperkins1@toplist.cz,64.210.133.162,1978-05-09 04:15:14
 3,Anna,amontgomery2@miitbeian.gov.cn,168.104.64.114,2011-10-16 04:07:57
@@ -52,7 +52,7 @@ seeds__disabled_in_config = """id,first_name,email,ip_address,birthday
 
 # used to tease out include/exclude edge case behavior for 'dbt seed'
 seeds__tricky = """\
-id,id_str,a_bool,looks_like_a_bool,a_date,looks_like_a_date,relative,weekday
+seed_id,seed_id_str,a_bool,looks_like_a_bool,a_date,looks_like_a_date,relative,weekday
 1,1,true,true,2019-01-01 12:32:30,2019-01-01 12:32:30,tomorrow,Saturday
 2,2,True,True,2019-01-01 12:32:31,2019-01-01 12:32:31,today,Sunday
 3,3,TRUE,TRUE,2019-01-01 12:32:32,2019-01-01 12:32:32,yesterday,Monday
@@ -103,7 +103,7 @@ macros__schema_test = """
 #
 
 models__downstream_from_seed_actual = """
-    select * from {{ ref('seed_actual') }}
+select * from {{ ref('seed_actual') }}
 
 """
 models__from_basic_seed = """
@@ -124,18 +124,18 @@ seeds:
     tests:
     - column_type:
         type: date
-  - name: id
+  - name: seed_id
     tests:
     - column_type:
         type: text
 
 - name: seed_tricky
   columns:
-  - name: id
+  - name: seed_id
     tests:
     - column_type:
         type: integer
-  - name: id_str
+  - name: seed_id_str
     tests:
     - column_type:
         type: text

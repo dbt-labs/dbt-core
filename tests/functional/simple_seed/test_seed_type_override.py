@@ -50,13 +50,13 @@ class TestSimpleSeedColumnOverride(TestSimpleSeedColumnOverride):
 
     def seed_enabled_types(self):
         return {
-            "id": "text",
+            "seed_id": "text",
             "birthday": "date",
         }
 
     def seed_tricky_types(self):
         return {
-            "id_str": "text",
+            "seed_id_str": "text",
             "looks_like_a_bool": "text",
             "looks_like_a_date": "text",
         }

@@ -1,6 +1,8 @@
 import csv
 import pytest
+import shutil
 
+from codecs import BOM_UTF8
 from pathlib import Path
 
 from dbt.tests.util import (
@@ -220,25 +222,28 @@ class TestSeedParsing(SeedConfigBase):
         run_dbt(["seed"], expect_pass=False)
 
 
+# BOM = byte order mark; see https://www.ibm.com/docs/en/netezza?topic=formats-byte-order-mark
 class TestSimpleSeedWithBOM(SeedConfigBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
         project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
 
-    @pytest.fixture(scope="class")
-    def seeds(self, test_data_dir):
-        seed_bom = read_file(test_data_dir, "seed_bom.csv")
-        return {"seed_bom.csv": seed_bom}
-
     def test_simple_seed(self, project):
-        # first make sure nobody "fixed" the file by accident
-        seed_path = project.test_data_dir / Path("seed_bom.csv")
-        with open(seed_path, encoding="utf-8") as fp:
-            assert fp.read(1) == "\ufeff"
-
+        shutil.copyfile(
+            project.test_data_dir / Path("seed_bom.csv"),
+            project.project_root / Path("seeds") / Path("seed_bom.csv"),
+        )
         results = run_dbt(["seed"])
-        len(results) == 1
+        assert len(results) == 1
+
+        # encoding param must be specified in open, so long as Python reads files with a
+        # default file encoding for character sets beyond extended ASCII.
+        with open(
+            project.project_root / Path("seeds") / Path("seed_bom.csv"), encoding="utf-8"
+        ) as fp:
+            assert fp.read(1) == BOM_UTF8.decode("utf-8")
+
         check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
 
 
@@ -269,7 +274,7 @@ class TestSimpleBigSeedBatched(SeedConfigBase):
         big_seed = project.test_data_dir / Path("big-seed.csv")
         with open(big_seed, "w") as f:
             writer = csv.writer(f)
-            writer.writerow(["id"])
+            writer.writerow(["seed_id"])
             for i in range(0, 20000):
                 writer.writerow([i])
 
