@@ -9,9 +9,10 @@ pip-tools
 pre-commit
 pytest
 pytest-cov
+pytest-csv
 pytest-dotenv
 pytest-logbook
-pytest-csv
+pytest-mock
 pytest-xdist
 pytz
 tox>=3.13
