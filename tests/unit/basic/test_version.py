@@ -1,5 +1,3 @@
-import pytest
-
 import dbt.version
 from dbt.ui import green, red, yellow
 
