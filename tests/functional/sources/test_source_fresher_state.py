@@ -268,7 +268,7 @@ class TestSourceFresherRun(SuccessfulSourceFreshnessTest):
         previous_state_results = self.run_dbt_with_vars(
             project,
             ["source", "freshness", "-o", "previous_state/sources.json"],
-            expect_pass=False,
+            expect_pass=True,
         )
         self._assert_freshness_results("previous_state/sources.json", "warn")
         copy_to_previous_state()
@@ -394,7 +394,9 @@ class TestSourceFresherRuntimeError(SuccessfulSourceFreshnessTest):
 
         self._set_updated_at_to(project, timedelta(hours=-1))
         current_state_results = self.run_dbt_with_vars(
-            project, ["source", "freshness", "-o", "target/sources.json"]
+            project,
+            ["source", "freshness", "-o", "target/sources.json"],
+            expect_pass=False,
         )
         assert len(current_state_results) == 1
         assert current_state_results[0].status == "runtime error"
@@ -463,14 +465,16 @@ class TestSourceFresherTest(SuccessfulSourceFreshnessTest):
         previous_state_results = self.run_dbt_with_vars(
             project,
             ["source", "freshness", "-o", "previous_state/sources.json"],
-            expect_pass=False,
+            expect_pass=True,
         )
         self._assert_freshness_results("previous_state/sources.json", "warn")
         copy_to_previous_state()
 
         self._set_updated_at_to(project, timedelta(hours=-11))
         current_state_results = self.run_dbt_with_vars(
-            project, ["source", "freshness", "-o", "target/sources.json"]
+            project,
+            ["source", "freshness", "-o", "target/sources.json"],
+            expect_pass=True,
         )
         self._assert_freshness_results("target/sources.json", "warn")
 
