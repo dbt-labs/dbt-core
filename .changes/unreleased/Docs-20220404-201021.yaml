@@ -1,0 +1,7 @@
+kind: Docs
+body: 'Fixed capitalization in UI for exposures of `type: ml`'
+time: 2022-04-04T20:10:21.941618-05:00
+custom:
+  Author: jonstacks
+  Issue: "4984"
+  PR: "4995"
