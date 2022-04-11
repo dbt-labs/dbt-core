@@ -13,6 +13,7 @@ from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
     error_models__schema_yml,
     models__newly_added_model_sql,
+    models__newly_added_error_model_sql,
 )
 
 
@@ -123,8 +124,6 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
 
         assert len(data["results"]) == 1
 
-        # TODO: replace below calls - could they be more sane?
-        # TODO: could use this as a schema template to artifically create previous and current state sources.json
         assert data["results"] == [
             {
                 "unique_id": "source.test.test_source.test_table",
@@ -159,9 +158,7 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
 class TestSourceFresherNothingToDo(SuccessfulSourceFreshnessTest):
     def test_source_fresher_nothing_to_do(self, project):
         self.run_dbt_with_vars(project, ["run"])
-        self._set_updated_at_to(
-            project, timedelta(hours=-2)
-        )  # this is the fixture we need to dynamically setup different sources.json files in different directories
+        self._set_updated_at_to(project, timedelta(hours=-2))
         previous_state_results = self.run_dbt_with_vars(
             project, ["source", "freshness", "-o", "previous_state/sources.json"]
         )
@@ -367,7 +364,6 @@ class TestSourceFresherRuntimeError(SuccessfulSourceFreshnessTest):
 
 class TestSourceFresherTest(SuccessfulSourceFreshnessTest):
     def test_source_fresher_run_error(self, project):
-        # Boilerplate setup - can we abstract this somewhere?
         self.run_dbt_with_vars(project, ["run"])
         previous_state_results = self.run_dbt_with_vars(
             project,
@@ -504,30 +500,6 @@ class TestSourceFresherTest(SuccessfulSourceFreshnessTest):
         }
 
 
-# TODO: Anais' tests
-# TODO: probably add a class and inherit TestSourceFreshness or SuccessfulSourceFreshnessTest
-# TODO: manipulate the sources.json path AND results to be artificially older than current state
-# TODO: run_dbt_with_vars will be my go to function for running ["source_status:fresher+", "-o", "target/pass_source.json"]
-# Assert all the test cases below
-# - run source freshness with `pass` → run `dbt build —select source_status:fresher+` → assert downstream nodes pass and work correctly
-# - run source freshness with `pass` → run `dbt build —select source_status:fresher` → assert source tests run only
-# - run source freshness with `warn` → run `dbt build —select source_status:fresher+` → assert downstream nodes pass and work correctly
-# - run source freshness with `warn` → run `dbt build —select source_status:fresher` → assert source tests run only
-# - run source freshness with `error` → run `dbt build —select source_status:fresher+` → assert downstream nodes pass and work correctly
-# - run source freshness with `error` → run `dbt build —select source_status:fresher` → assert source tests run only
-
-
-# Make sure this works in combination with `result:error+`
-# - run a job with an error model → run source freshness regardless of pass,warn,error → change a model to work correctly → run `dbt build —select source_status:fresher+ result:error+` → assert downstream nodes pass and work correctly
-
-# Make sure this work in combination with `result:fail+`
-# - run a job with a failed test → run source freshness regardless of pass,warn,error → change a model to pass test → run `dbt build —select source_status:fresher+ result:fail+` → assert downstream nodes pass and work correctly
-
-# Assert intentional failure is coming through
-# - `"No previous state comparison freshness results in sources.json”`
-
-# Assert intentional failure is coming through
-# - `"No current state comparison freshness results in sources.json”`
 class TestSourceFresherBuild(SuccessfulSourceFreshnessTest):
     def test_source_fresher_build_error(self, project):
         self.run_dbt_with_vars(project, ["build"])
@@ -701,3 +673,55 @@ class TestSourceFresherNoCurrentState(SuccessfulSourceFreshnessTest):
         assert "No current state comparison freshness results in sources.json" in str(
             excinfo.value
         )
+
+
+class TestSourceFresherBuildResultSelectors(SuccessfulSourceFreshnessTest):
+    def test_source_fresher_build_state_modified_pass(self, project, project_root):
+        models_path = project_root.join("models/")
+        assert os.path.exists(models_path)
+        with open(f"{models_path}/newly_added_error_model.sql", "w") as fp:
+            fp.write(models__newly_added_error_model_sql)
+
+        self.run_dbt_with_vars(project, ["run"], expect_pass=False)
+
+        self._set_updated_at_to(project, timedelta(hours=-2))
+        previous_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "previous_state/sources.json"]
+        )
+
+        self._assert_freshness_results("previous_state/sources.json", "pass")
+        copy_to_previous_state()
+
+        self._set_updated_at_to(project, timedelta(hours=-1))
+        current_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "target/sources.json"]
+        )
+
+        self._assert_freshness_results("target/sources.json", "pass")
+
+        assert previous_state_results[0].max_loaded_at < current_state_results[0].max_loaded_at
+
+        state_modified_results = self.run_dbt_with_vars(
+            project,
+            [
+                "build",
+                "--select",
+                "source_status:fresher+",
+                "result:error+",
+                "--defer",
+                "--state",
+                "previous_state",
+            ],
+            expect_pass=False,
+        )
+        nodes = set([elem.node.name for elem in state_modified_results])
+        assert nodes == {
+            "newly_added_error_model",
+            "source_unique_test_source_test_table_id",
+            "unique_descendant_model_id",
+            "not_null_descendant_model_id",
+            "source_not_null_test_source_test_table_id",
+            "descendant_model",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+        }
