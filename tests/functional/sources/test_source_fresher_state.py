@@ -153,43 +153,6 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
         ]
 
 
-# TODO: warn_source, pass_source, error_source serve as starting points for previous state sources.json
-# TODO: inherit SuccessfulSourceFreshnessTest as a base class for downstream tests
-# class TestSourceFreshness(SuccessfulSourceFreshnessTest):
-#     def test_source_freshness(self, project):
-#         # test_source.test_table should have a loaded_at field of `updated_at`
-#         # and a freshness of warn_after: 10 hours, error_after: 18 hours
-#         # by default, our data set is way out of date!
-
-#         results = self.run_dbt_with_vars(
-#             project, ["source", "freshness", "-o", "target/error_source.json"], expect_pass=False
-#         )
-#         assert len(results) == 1
-#         assert results[0].status == "error"
-#         self._assert_freshness_results("target/error_source.json", "error")
-
-#         self._set_updated_at_to(project, timedelta(hours=-12))
-#         results = self.run_dbt_with_vars(
-#             project,
-#             ["source", "freshness", "-o", "target/warn_source.json"],
-#         )
-#         assert len(results) == 1
-#         assert results[0].status == "warn"
-#         self._assert_freshness_results("target/warn_source.json", "warn")
-
-#         self._set_updated_at_to(project, timedelta(hours=-2))
-#         results = self.run_dbt_with_vars(
-#             project,
-#             ["source", "freshness", "-o", "target/pass_source.json"],
-#         )
-#         assert len(results) == 1
-#         assert results[0].status == "pass"
-#         self._assert_freshness_results("target/pass_source.json", "pass")
-
-
-# TODO: Sung's tests
-# Assert nothing to do if current state sources is not fresher than previous state
-# - run source freshness regardless of pass,warn,error →  run `dbt build —select source_status:fresher+` → assert nothing runs
 class TestSourceFresherNothingToDo(SuccessfulSourceFreshnessTest):
     def test_source_fresher_nothing_to_do(self, project):
         self.run_dbt_with_vars(project, ["run"])
@@ -214,18 +177,6 @@ class TestSourceFresherNothingToDo(SuccessfulSourceFreshnessTest):
             ["test", "-s", "source_status:fresher+", "--defer", "--state", "./previous_state"],
         )
         assert source_fresher_results.results == []
-
-
-# TODO: probably add a class and inherit TestSourceFreshness or SuccessfulSourceFreshnessTest
-# TODO: manipulate the sources.json path AND results to be artificially older than current state
-# TODO: run_dbt_with_vars will be my go to function for running ["source_status:fresher+", "-o", "target/pass_source.json"]
-# Assert all the test cases below
-# - run source freshness with `pass` → run `dbt run —select source_status:fresher+` → assert downstream nodes pass and work correctly
-# - run source freshness with `pass` → run `dbt run —select source_status:fresher` → assert nothing is run
-# - run source freshness with `warn` → run `dbt run —select source_status:fresher+` → assert downstream nodes pass and work correctly
-# - run source freshness with `warn` → run `dbt run —select source_status:fresher` → assert nothing is run
-# - run source freshness with `error` → run `dbt run —select source_status:fresher+` → assert downstream nodes pass and work correctly
-# - run source freshness with `error` → run `dbt run —select source_status:fresher` → assert nothing is run
 
 
 class TestSourceFresherRun(SuccessfulSourceFreshnessTest):
@@ -549,10 +500,6 @@ class TestSourceFresherTest(SuccessfulSourceFreshnessTest):
             "not_null_descendant_model_id",
         }
 
-
-# TODO: Matt's tests
-# Make sure this works in combination with `state:modified+`
-# - run source freshness regardless of pass,warn,error → change a model → run `dbt build —select source_status:fresher+ state:modified+` → assert downstream nodes pass and work correctly
 
 # TODO: Anais' tests
 # TODO: probably add a class and inherit TestSourceFreshness or SuccessfulSourceFreshnessTest
