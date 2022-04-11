@@ -4,6 +4,9 @@ import shutil
 import pytest
 from datetime import datetime, timedelta
 
+from dbt.exceptions import InternalException
+
+
 import dbt.version
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 
@@ -525,3 +528,176 @@ class TestSourceFresherTest(SuccessfulSourceFreshnessTest):
 
 # Assert intentional failure is coming through
 # - `"No current state comparison freshness results in sources.json”`
+class TestSourceFresherBuild(SuccessfulSourceFreshnessTest):
+    def test_source_fresher_build_error(self, project):
+        self.run_dbt_with_vars(project, ["build"])
+        previous_state_results = self.run_dbt_with_vars(
+            project,
+            ["source", "freshness", "-o", "previous_state/sources.json"],
+            expect_pass=False,
+        )
+        self._assert_freshness_results("previous_state/sources.json", "error")
+        copy_to_previous_state()
+
+        self._set_updated_at_to(project, timedelta(hours=-20))
+        current_state_results = self.run_dbt_with_vars(
+            project,
+            ["source", "freshness", "-o", "target/sources.json"],
+            expect_pass=False,
+        )
+        self._assert_freshness_results("target/sources.json", "error")
+
+        assert previous_state_results[0].max_loaded_at < current_state_results[0].max_loaded_at
+
+        source_fresher_results = self.run_dbt_with_vars(
+            project,
+            ["build", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+        )
+        nodes = set([elem.node.name for elem in source_fresher_results])
+        assert nodes == {
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+            "source_not_null_test_source_test_table_id",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "source_unique_test_source_test_table_id",
+        }
+
+        source_fresher_plus_results = self.run_dbt_with_vars(
+            project,
+            ["build", "-s", "source_status:fresher+", "--defer", "--state", "previous_state"],
+        )
+        nodes = set([elem.node.name for elem in source_fresher_plus_results])
+        assert nodes == {
+            "descendant_model",
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+            "source_not_null_test_source_test_table_id",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "source_unique_test_source_test_table_id",
+            "unique_descendant_model_id",
+            "not_null_descendant_model_id",
+        }
+
+    def test_source_fresher_build_warn(self, project):
+        self.run_dbt_with_vars(project, ["build"])
+        self._set_updated_at_to(project, timedelta(hours=-17))
+        previous_state_results = self.run_dbt_with_vars(
+            project,
+            ["source", "freshness", "-o", "previous_state/sources.json"],
+            expect_pass=True,
+        )
+        self._assert_freshness_results("previous_state/sources.json", "warn")
+        copy_to_previous_state()
+
+        self._set_updated_at_to(project, timedelta(hours=-11))
+        current_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "target/sources.json"]
+        )
+        self._assert_freshness_results("target/sources.json", "warn")
+
+        assert previous_state_results[0].max_loaded_at < current_state_results[0].max_loaded_at
+
+        source_fresher_results = self.run_dbt_with_vars(
+            project,
+            ["build", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+        )
+        nodes = set([elem.node.name for elem in source_fresher_results])
+        assert nodes == {
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+            "source_not_null_test_source_test_table_id",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "source_unique_test_source_test_table_id",
+        }
+
+        source_fresher_plus_results = self.run_dbt_with_vars(
+            project,
+            ["build", "-s", "source_status:fresher+", "--defer", "--state", "previous_state"],
+        )
+        nodes = set([elem.node.name for elem in source_fresher_plus_results])
+        assert nodes == {
+            "descendant_model",
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+            "source_not_null_test_source_test_table_id",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "source_unique_test_source_test_table_id",
+            "unique_descendant_model_id",
+            "not_null_descendant_model_id",
+        }
+
+    def test_source_fresher_build_pass(self, project):
+        self.run_dbt_with_vars(project, ["build"])
+        self._set_updated_at_to(project, timedelta(hours=-2))
+        previous_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "previous_state/sources.json"]
+        )
+        self._assert_freshness_results("previous_state/sources.json", "pass")
+        copy_to_previous_state()
+
+        self._set_updated_at_to(project, timedelta(hours=-1))
+        current_state_results = self.run_dbt_with_vars(
+            project, ["source", "freshness", "-o", "target/sources.json"]
+        )
+        self._assert_freshness_results("target/sources.json", "pass")
+
+        assert previous_state_results[0].max_loaded_at < current_state_results[0].max_loaded_at
+
+        source_fresher_results = self.run_dbt_with_vars(
+            project,
+            ["build", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+        )
+        nodes = set([elem.node.name for elem in source_fresher_results])
+        assert nodes == {
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+            "source_not_null_test_source_test_table_id",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "source_unique_test_source_test_table_id",
+        }
+
+        source_fresher_plus_results = self.run_dbt_with_vars(
+            project,
+            ["build", "-s", "source_status:fresher+", "--defer", "--state", "previous_state"],
+        )
+        nodes = set([elem.node.name for elem in source_fresher_plus_results])
+        assert nodes == {
+            "descendant_model",
+            "relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_",
+            "source_not_null_test_source_test_table_id",
+            "source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_",
+            "source_unique_test_source_test_table_id",
+            "unique_descendant_model_id",
+            "not_null_descendant_model_id",
+        }
+
+
+class TestSourceFresherNoPreviousState(SuccessfulSourceFreshnessTest):
+    def test_intentional_failure_no_previous_state(self, project):
+        self.run_dbt_with_vars(project, ["run"])
+        # TODO add the current and previous but with previous as null
+        with pytest.raises(InternalException) as excinfo:
+            self.run_dbt_with_vars(
+                project,
+                ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+            )
+        assert "No previous state comparison freshness results in sources.json" in str(
+            excinfo.value
+        )
+
+
+class TestSourceFresherNoCurrentState(SuccessfulSourceFreshnessTest):
+    def test_intentional_failure_no_previous_state(self, project):
+        self.run_dbt_with_vars(project, ["run"])
+        previous_state_results = self.run_dbt_with_vars(
+            project,
+            ["source", "freshness", "-o", "previous_state/sources.json"],
+            expect_pass=False,
+        )
+        self._assert_freshness_results("previous_state/sources.json", "error")
+        copy_to_previous_state()
+        assert previous_state_results[0].max_loaded_at is not None
+
+        with pytest.raises(InternalException) as excinfo:
+            self.run_dbt_with_vars(
+                project,
+                ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
+            )
+        assert "No current state comparison freshness results in sources.json" in str(
+            excinfo.value
+        )
