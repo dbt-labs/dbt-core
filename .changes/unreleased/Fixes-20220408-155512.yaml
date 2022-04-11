@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix hard delete snapshot test
+time: 2022-04-08T15:55:12.552138-04:00
+custom:
+  Author: gshank
+  Issue: "4916"
+  PR: "5020"

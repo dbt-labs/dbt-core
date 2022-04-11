@@ -1,6 +1,5 @@
 import pytest
-from dbt.tests.util import run_dbt, copy_file, read_file
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, copy_file, read_file, check_relations_equal
 
 # advanced_incremental.sql
 advanced_incremental_sql = """
@@ -163,11 +162,8 @@ def test_simple_copy(project, test_data_dir):
     # Run the project and ensure that all the models loaded
     results = run_dbt()
     assert len(results) == 7
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_many_tables_equal(
-        ["seed", "view_model", "incremental", "materialized", "get_and_ref"]
+    check_relations_equal(
+        project.adapter, ["seed", "view_model", "incremental", "materialized", "get_and_ref"]
     )
 
     # Change the seed.csv file and see if everything is the same, i.e. everything has been updated
@@ -176,8 +172,8 @@ def test_simple_copy(project, test_data_dir):
     assert len(results) == 1
     results = run_dbt()
     assert len(results) == 7
-    table_comp.assert_many_tables_equal(
-        ["seed", "view_model", "incremental", "materialized", "get_and_ref"]
+    check_relations_equal(
+        project.adapter, ["seed", "view_model", "incremental", "materialized", "get_and_ref"]
     )
 
 

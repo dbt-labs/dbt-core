@@ -1,6 +1,5 @@
 import pytest
-from dbt.tests.util import run_dbt, copy_file, read_file
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, copy_file, read_file, check_relations_equal
 
 
 ephemeral_copy_sql = """
@@ -168,21 +167,23 @@ def test_simple_reference(project):
     results = run_dbt()
     assert len(results) == 8
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
+    # Copies should match
+    check_relations_equal(
+        project.adapter, ["users", "incremental_copy", "materialized_copy", "view_copy"]
     )
 
-    # Copies should match
-    table_comp.assert_tables_equal("users", "incremental_copy")
-    table_comp.assert_tables_equal("users", "materialized_copy")
-    table_comp.assert_tables_equal("users", "view_copy")
-
     # Summaries should match
-    table_comp.assert_tables_equal("summary_expected", "incremental_summary")
-    table_comp.assert_tables_equal("summary_expected", "materialized_summary")
-    table_comp.assert_tables_equal("summary_expected", "view_summary")
-    table_comp.assert_tables_equal("summary_expected", "ephemeral_summary")
-    table_comp.assert_tables_equal("summary_expected", "view_using_ref")
+    check_relations_equal(
+        project.adapter,
+        [
+            "summary_expected",
+            "incremental_summary",
+            "materialized_summary",
+            "view_summary",
+            "ephemeral_summary",
+            "view_using_ref",
+        ],
+    )
 
     # update the seed files and run seed
     copy_file(
@@ -201,15 +202,22 @@ def test_simple_reference(project):
     assert len(results) == 8
 
     # Copies should match
-    table_comp.assert_tables_equal("users", "incremental_copy")
-    table_comp.assert_tables_equal("users", "materialized_copy")
-    table_comp.assert_tables_equal("users", "view_copy")
+    check_relations_equal(
+        project.adapter, ["users", "incremental_copy", "materialized_copy", "view_copy"]
+    )
 
     # Summaries should match
-    table_comp.assert_tables_equal("summary_expected", "incremental_summary")
-    table_comp.assert_tables_equal("summary_expected", "materialized_summary")
-    table_comp.assert_tables_equal("summary_expected", "view_summary")
-    table_comp.assert_tables_equal("summary_expected", "ephemeral_summary")
+    check_relations_equal(
+        project.adapter,
+        [
+            "summary_expected",
+            "incremental_summary",
+            "materialized_summary",
+            "view_summary",
+            "ephemeral_summary",
+            "view_using_ref",
+        ],
+    )
 
 
 def test_simple_reference_with_models_and_children(project):
@@ -220,16 +228,13 @@ def test_simple_reference_with_models_and_children(project):
     results = run_dbt(["run", "--models", "materialized_copy+", "ephemeral_copy+"])
     assert len(results) == 3
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-
     # Copies should match
-    table_comp.assert_tables_equal("users", "materialized_copy")
+    check_relations_equal(project.adapter, ["users", "materialized_copy"])
 
     # Summaries should match
-    table_comp.assert_tables_equal("summary_expected", "materialized_summary")
-    table_comp.assert_tables_equal("summary_expected", "ephemeral_summary")
+    check_relations_equal(
+        project.adapter, ["summary_expected", "materialized_summary", "ephemeral_summary"]
+    )
 
     created_tables = project.get_tables_in_schema()
 
@@ -260,10 +265,7 @@ def test_simple_ref_with_models(project):
     assert len(results) == 1
 
     # Copies should match
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_tables_equal("users", "materialized_copy")
+    check_relations_equal(project.adapter, ["users", "materialized_copy"])
 
     created_tables = project.get_tables_in_schema()
     assert "materialized_copy" in created_tables

@@ -1,20 +1,10 @@
 import pytest
-from pytest import mark
 import os
 
 from dbt.tests.util import run_dbt
 from tests.functional.permission.fixtures import models, project_files  # noqa: F401
 
 
-# postgres sometimes fails with an internal error if you run these tests too close together.
-def postgres_error(err, *args):
-    msg = str(err)
-    if "tuple concurrently updated" in msg:
-        return True
-    return False
-
-
-@mark.flaky(rerun_filter=postgres_error)
 class TestPermissions:
     @pytest.fixture(autouse=True)
     def setUp(self, project):
@@ -44,7 +34,7 @@ class TestPermissions:
                         "user": "noaccess",
                         "pass": "password",
                         "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
-                        "schema": unique_schema + "_alt",  # Should this be the same unique_schema?
+                        "schema": unique_schema,
                     },
                 },
             }
@@ -58,19 +48,3 @@ class TestPermissions:
         project.run_sql('drop schema if exists "{}" cascade'.format(project.test_schema))
         with pytest.raises(RuntimeError):
             run_dbt(["run", "--target", "noaccess"], expect_pass=False)
-
-    def test_create_schema_permissions(
-        self,
-        project,
-    ):
-        # now it should work!
-        # breakpoint()
-        project.run_sql("grant create on database {} to noaccess".format(project.database))
-        project.run_sql(
-            'grant usage, create on schema "{}" to noaccess'.format(project.test_schema)
-        )
-        project.run_sql(
-            'grant select on all tables in schema "{}" to noaccess'.format(project.test_schema)
-        )
-        results = run_dbt(["run", "--target", "noaccess"])
-        assert len(results) == 1

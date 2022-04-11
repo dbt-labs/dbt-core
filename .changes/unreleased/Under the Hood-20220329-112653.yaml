@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: update docker image to use python 3.10.3
+time: 2022-03-29T11:26:53.359066-04:00
+custom:
+  Author: nathaniel-may
+  Issue: "4904"
+  PR: "4963"

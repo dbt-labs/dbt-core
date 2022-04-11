@@ -1,0 +1,7 @@
+kind: Features
+body: Support the DO_NOT_TRACK environment variable from the consoledonottrack.com initiative
+time: 2022-04-06T08:03:28.877054+02:00
+custom:
+  Author: agoblet
+  Issue: "3540"
+  PR: "5000"

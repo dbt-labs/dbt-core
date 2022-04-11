@@ -46,7 +46,7 @@ class BaseSingularTestsEphemeral:
         check_result_nodes_by_name(results, ["base"])
 
         # Check results from test command
-        results = run_dbt(["test"])
+        results = run_dbt(["test"], expect_pass=False)
         assert len(results) == 2
         check_result_nodes_by_name(results, ["passing", "failing"])
 

@@ -71,3 +71,16 @@ class TestTracking(unittest.TestCase):
         assert dbt.tracking.active_user.id is None
         assert isinstance(dbt.tracking.active_user.invocation_id, str)
         assert isinstance(dbt.tracking.active_user.run_started_at, datetime.datetime)
+
+    def test_initialize_from_flags(self):
+        for send_aonymous_usage_stats in [True, False]:
+            with self.subTest(
+                send_aonymous_usage_stats=send_aonymous_usage_stats
+            ):
+                dbt.tracking.flags.SEND_ANONYMOUS_USAGE_STATS = (
+                    send_aonymous_usage_stats
+                )
+
+                dbt.tracking.initialize_from_flags()
+
+                assert dbt.tracking.active_user.do_not_track != send_aonymous_usage_stats

@@ -659,7 +659,8 @@ class ManifestLoader:
             reparse_reason = ReparseReason.file_not_found
 
         # this event is only fired if a full reparse is needed
-        dbt.tracking.track_partial_parser({"full_reparse_reason": reparse_reason})
+        if dbt.tracking.active_user is not None:  # no active_user if doing load_macros
+            dbt.tracking.track_partial_parser({"full_reparse_reason": reparse_reason})
 
         return None
 
@@ -777,9 +778,13 @@ class ManifestLoader:
         cls,
         root_config: RuntimeConfig,
         macro_hook: Callable[[Manifest], Any],
+        base_macros_only=False,
     ) -> Manifest:
         with PARSING_STATE:
-            projects = root_config.load_dependencies()
+            # base_only/base_macros_only: for testing only,
+            # allows loading macros without running 'dbt deps' first
+            projects = root_config.load_dependencies(base_only=base_macros_only)
+
             # This creates a loader object, including result,
             # and then throws it away, returning only the
             # manifest

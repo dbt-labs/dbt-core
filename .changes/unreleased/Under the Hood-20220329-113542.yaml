@@ -1,0 +1,8 @@
+kind: Under the Hood
+body: updates black to 22.3.0 which fixes dependency incompatibility when running
+  with precommit.
+time: 2022-03-29T11:35:42.38155-04:00
+custom:
+  Author: nathaniel-may
+  Issue: "4904"
+  PR: "4972"

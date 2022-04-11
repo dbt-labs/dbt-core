@@ -1,7 +1,6 @@
 import os
 import pytest
-from dbt.tests.util import run_dbt
-from dbt.tests.tables import TableComparison
+from dbt.tests.util import run_dbt, check_relations_equal, check_table_does_not_exist
 from tests.functional.simple_snapshot.fixtures import (
     seeds__seed_newcol_csv,
     seeds__seed_csv,
@@ -21,13 +20,10 @@ def all_snapshots(project):
     results = run_dbt(["snapshot"])
     assert len(results) == 4
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_tables_equal("snapshot_castillo", "snapshot_castillo_expected")
-    table_comp.assert_tables_equal("snapshot_alvarez", "snapshot_alvarez_expected")
-    table_comp.assert_tables_equal("snapshot_kelly", "snapshot_kelly_expected")
-    table_comp.assert_tables_equal("snapshot_actual", "snapshot_expected")
+    check_relations_equal(project.adapter, ["snapshot_castillo", "snapshot_castillo_expected"])
+    check_relations_equal(project.adapter, ["snapshot_alvarez", "snapshot_alvarez_expected"])
+    check_relations_equal(project.adapter, ["snapshot_kelly", "snapshot_kelly_expected"])
+    check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
 
     path = os.path.join(project.test_data_dir, "invalidate_postgres.sql")
     project.run_sql_file(path)
@@ -37,10 +33,10 @@ def all_snapshots(project):
 
     results = run_dbt(["snapshot"])
     assert len(results) == 4
-    table_comp.assert_tables_equal("snapshot_castillo", "snapshot_castillo_expected")
-    table_comp.assert_tables_equal("snapshot_alvarez", "snapshot_alvarez_expected")
-    table_comp.assert_tables_equal("snapshot_kelly", "snapshot_kelly_expected")
-    table_comp.assert_tables_equal("snapshot_actual", "snapshot_expected")
+    check_relations_equal(project.adapter, ["snapshot_castillo", "snapshot_castillo_expected"])
+    check_relations_equal(project.adapter, ["snapshot_alvarez", "snapshot_alvarez_expected"])
+    check_relations_equal(project.adapter, ["snapshot_kelly", "snapshot_kelly_expected"])
+    check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
 
 
 def exclude_snapshots(project):
@@ -49,13 +45,10 @@ def exclude_snapshots(project):
     results = run_dbt(["snapshot", "--exclude", "snapshot_castillo"])
     assert len(results) == 3
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_table_does_not_exist("snapshot_castillo")
-    table_comp.assert_tables_equal("snapshot_alvarez", "snapshot_alvarez_expected")
-    table_comp.assert_tables_equal("snapshot_kelly", "snapshot_kelly_expected")
-    table_comp.assert_tables_equal("snapshot_actual", "snapshot_expected")
+    check_table_does_not_exist(project.adapter, "snapshot_castillo")
+    check_relations_equal(project.adapter, ["snapshot_alvarez", "snapshot_alvarez_expected"])
+    check_relations_equal(project.adapter, ["snapshot_kelly", "snapshot_kelly_expected"])
+    check_relations_equal(project.adapter, ["snapshot_actual", "snapshot_expected"])
 
 
 def select_snapshots(project):
@@ -64,13 +57,10 @@ def select_snapshots(project):
     results = run_dbt(["snapshot", "--select", "snapshot_castillo"])
     assert len(results) == 1
 
-    table_comp = TableComparison(
-        adapter=project.adapter, unique_schema=project.test_schema, database=project.database
-    )
-    table_comp.assert_tables_equal("snapshot_castillo", "snapshot_castillo_expected")
-    table_comp.assert_table_does_not_exist("snapshot_alvarez")
-    table_comp.assert_table_does_not_exist("snapshot_kelly")
-    table_comp.assert_table_does_not_exist("snapshot_actual")
+    check_relations_equal(project.adapter, ["snapshot_castillo", "snapshot_castillo_expected"])
+    check_table_does_not_exist(project.adapter, "snapshot_alvarez")
+    check_table_does_not_exist(project.adapter, "snapshot_kelly")
+    check_table_does_not_exist(project.adapter, "snapshot_actual")
 
 
 # all of the tests below use one of both of the above tests with

@@ -292,7 +292,7 @@ class TestSourceFreshnessErrors(SuccessfulSourceFreshnessTest):
 
 class TestSourceFreshnessFilter(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
-    def filtered_models(self):
+    def models(self):
         return {"schema.yml": filtered_models__schema_yml}
 
     def test_source_freshness_all_records(self, project):
