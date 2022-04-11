@@ -35,6 +35,7 @@ INDIRECT_SELECTION = None
 LOG_CACHE_EVENTS = None
 EVENT_BUFFER_SIZE = 100000
 QUIET = None
+NO_PRINT = None
 
 _NON_BOOLEAN_FLAGS = [
     "LOG_FORMAT",
@@ -67,6 +68,7 @@ flag_defaults = {
     "LOG_CACHE_EVENTS": False,
     "EVENT_BUFFER_SIZE": 100000,
     "QUIET": False,
+    "NO_PRINT": False,
 }
 
 
@@ -116,7 +118,7 @@ def set_from_args(args, user_config):
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
     global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
-    global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE, QUIET
+    global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE, QUIET, NO_PRINT
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
@@ -142,6 +144,7 @@ def set_from_args(args, user_config):
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
     EVENT_BUFFER_SIZE = get_flag_value("EVENT_BUFFER_SIZE", args, user_config)
     QUIET = get_flag_value("QUIET", args, user_config)
+    NO_PRINT = get_flag_value("NO_PRINT", args, user_config)
 
     _set_overrides_from_env()
 
@@ -222,4 +225,5 @@ def get_flag_dict():
         "log_cache_events": LOG_CACHE_EVENTS,
         "event_buffer_size": EVENT_BUFFER_SIZE,
         "quiet": QUIET,
+        "no_print": NO_PRINT,
     }

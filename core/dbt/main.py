@@ -1088,6 +1088,15 @@ def parse_args(args, cls=DBTArgumentParser):
         """,
     )
 
+    p.add_argument(
+        "--no-print",
+        action="store_true",
+        default=None,
+        help="""
+        Suppress all {{ print() }} macro calls.
+        """,
+    )
+
     subs = p.add_subparsers(title="Available sub-commands")
 
     base_subparser = _build_base_subparser()

@@ -228,3 +228,10 @@ class TestFlags(TestCase):
         self.assertEqual(flags.QUIET, True)
         # cleanup
         self.user_config.quiet = None
+
+        # no_print
+        self.user_config.no_print = True
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.NO_PRINT, True)
+        # cleanup
+        self.user_config.no_print = None

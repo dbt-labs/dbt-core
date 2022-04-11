@@ -569,7 +569,9 @@ class BaseContext(metaclass=ContextMeta):
               {{ print("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
             {% endmacro %}"
         """
-        print(msg)
+
+        if not flags.NO_PRINT:
+            print(msg)
         return ""
 
 

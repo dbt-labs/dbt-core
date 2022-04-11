@@ -1,0 +1,7 @@
+kind: Features
+body: Add `--no-print` global flag
+time: 2022-04-08T11:41:18.934373+01:00
+custom:
+  Author: poloaraujo
+  Issue: "4710"
+  PR: "4854"
