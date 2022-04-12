@@ -2,7 +2,6 @@ import pytest
 
 from dbt import deprecations
 import dbt.exceptions
-
 from dbt.tests.util import run_dbt
 
 
@@ -22,7 +21,7 @@ select 1 as id
 class TestConfigPathDeprecation:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"already_exists.sql": models__already_exists_sql}
+        return {"already_exists.sql": "where-were-going-we-dont-need-models"}
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -98,13 +97,7 @@ class TestPackageRedirectDeprecation:
     def packages(self):
         return {"packages": [{"package": "fishtown-analytics/dbt_utils", "version": "0.7.0"}]}
 
-    def test_package_redirect(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["deps"])
-        expected = {"package-redirect"}
-        assert expected == deprecations.active_deprecations
-
+    # if I flip the order of this and `test_package_redirect` this one fails (doesn't raise excception)???
     def test_package_redirect_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
@@ -113,3 +106,10 @@ class TestPackageRedirectDeprecation:
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
         assert expected_msg in exc_str
+
+    def test_package_redirect(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        run_dbt(["deps"])
+        expected = {"package-redirect"}
+        assert expected == deprecations.active_deprecations
