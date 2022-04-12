@@ -21,11 +21,11 @@ from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
 from dbt.exceptions import (
-    CompilationError,
-    DbtInternalError,
-    MissingMaterializationError,
-    DbtRuntimeError,
-    DbtValidationError,
+    CompilationException,
+    InternalException,
+    RuntimeException,
+    ValidationException,
+    missing_materialization,
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (

@@ -464,6 +464,11 @@ class TestProjInfo:
         result = self.run_sql(sql, fetch="all")
         return {model_name: materialization for (model_name, materialization) in result}
 
+    def update_models(self, models: dict):
+        """Update the modules in the test project"""
+        self.project_root.join("models").remove()
+        write_project_files(self.project_root, "models", models)
+
 
 # This is the main fixture that is used in all functional tests. It pulls in the other
 # fixtures that are necessary to set up a dbt project, and saves some of the information

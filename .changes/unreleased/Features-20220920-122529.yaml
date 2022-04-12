@@ -1,0 +1,7 @@
+kind: Features
+body: Added a `manage` CLI command that allows users to drop unused database relations
+time: 2022-09-20T12:25:29.226182+02:00
+custom:
+  Author: agoblet bneijt
+  Issue: "4957"
+  PR: "5392"

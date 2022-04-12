@@ -7,6 +7,7 @@ from dbt.dataclass_schema import (
     HyphenatedDbtClassMixin,
     ExtensibleDbtClassMixin,
     register_pattern,
+    StrEnum,
 )
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any
@@ -181,6 +182,19 @@ BANNED_PROJECT_NAMES = {
 }
 
 
+class PruneModelsAction(StrEnum):
+    SKIP = "skip"
+    DROP = "drop"
+    WARN = "warn"
+
+
+@dataclass
+class SchemaManagementConfiguration(HyphenatedDbtClassMixin, Replaceable):
+    database: Optional[str] = None
+    schema: Optional[str] = None
+    prune_models: Optional[PruneModelsAction] = None
+
+
 @dataclass
 class Project(HyphenatedDbtClassMixin, Replaceable):
     name: Identifier
@@ -198,6 +212,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     asset_paths: Optional[List[str]] = None
     target_path: Optional[str] = None
     snapshot_paths: Optional[List[str]] = None
+    managed_schemas: Optional[List[SchemaManagementConfiguration]] = None
     clean_targets: Optional[List[str]] = None
     profile: Optional[str] = None
     log_path: Optional[str] = None
