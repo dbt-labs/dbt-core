@@ -68,6 +68,10 @@ models:
           - relationships:
              to: source('test_source', 'test_table')
              field: favorite_color
+      - name: id
+        tests:
+          - unique
+          - not_null
 
 sources:
   - name: test_source
@@ -157,6 +161,10 @@ models__multi_source_model_sql = """select * from {{ source('test_source', 'othe
 
 models__nonsource_descendant_sql = """select * from {{ schema }}.source
 """
+
+models__newly_added_model_sql = """select 2 as id"""
+
+models__newly_added_error_model_sql = """select error from fake_table"""
 
 malformed_models__schema_yml = """version: 2
 sources:

@@ -787,7 +787,7 @@ def test_select_metric(manifest):
 @pytest.fixture
 def previous_state(manifest):
     writable = copy.deepcopy(manifest).writable_manifest()
-    state = PreviousState(Path('/path/does/not/exist'))
+    state = PreviousState(path=Path('/path/does/not/exist'),current_path=Path('/path/does/not/exist'))
     state.manifest = writable
     return state
 

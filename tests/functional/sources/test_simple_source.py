@@ -73,7 +73,7 @@ class TestBasicSource(SuccessfulSourcesTest):
         )
         check_relations_equal(project.adapter, ["expected_multi_source", "multi_source_model"])
         results = self.run_dbt_with_vars(project, ["test"])
-        assert len(results) == 6
+        assert len(results) == 8
 
 
 class TestSourceSelector(SuccessfulSourcesTest):
@@ -96,16 +96,16 @@ class TestSourceSelector(SuccessfulSourcesTest):
         results = self.run_dbt_with_vars(
             project, ["test", "--models", "source:test_source.test_table+"]
         )
-        assert len(results) == 4
+        assert len(results) == 6
 
         results = self.run_dbt_with_vars(
             project, ["test", "--models", "tag:my_test_source_table_tag+"]
         )
-        assert len(results) == 4
+        assert len(results) == 6
 
         results = self.run_dbt_with_vars(project, ["test", "--models", "tag:my_test_source_tag+"])
         # test_table + other_test_table
-        assert len(results) == 6
+        assert len(results) == 8
 
         results = self.run_dbt_with_vars(project, ["test", "--models", "tag:id_column"])
         # all 4 id column tests
