@@ -100,55 +100,56 @@ def _format_core_msg(lines: List[List[str]]) -> str:
 
 
 def _get_plugins_msg(installed: Type[dbt.semver.VersionSpecifier]) -> str:
-    msg = "Plugins:\n"
-    msg_lines = []
+    msg_lines = ["Plugins:"]
 
     plugins = []
-    plugin_msgs = []
+    display_update_msg = False
     for name, version_s in _get_dbt_plugins_info():
-        compatability_msg, update_msg = _get_plugin_msg_info(name, version_s, installed)
+        compatability_msg, needs_update = _get_plugin_msg_info(name, version_s, installed)
+        if needs_update:
+            display_update_msg = True
         plugins.append([name, version_s, compatability_msg])
-        plugin_msgs.append(update_msg)
 
-    for i, plugin in enumerate(_pad_lines(plugins, seperator=":")):
-        msg_lines.append(_format_single_plugin(plugin, plugin_msgs[i]))
-    return msg + "\n".join(msg_lines)
+    for plugin in _pad_lines(plugins, seperator=":"):
+        msg_lines.append(_format_single_plugin(plugin, ""))
+
+    if display_update_msg:
+        update_msg = (
+            "  At least one plugin is out of date or incompatible with dbt-core.\n"
+            "  You can find instructions for upgrading here:\n"
+            "  https://docs.getdbt.com/docs/installation"
+        )
+        msg_lines += ["", update_msg]
+
+    return "\n".join(msg_lines)
 
 
 def _get_plugin_msg_info(
     name: str, version_s: str, core: Type[dbt.semver.VersionSpecifier]
-) -> Tuple[str, str]:
+) -> Tuple[str, bool]:
     plugin = dbt.semver.VersionSpecifier.from_version_string(version_s)
     latest_plugin = get_latest_version(version_url=get_package_pypi_url(name))
 
-    update_msg = ""
+    needs_update = False
 
     if plugin.major != core.major or plugin.minor != core.minor:
         compatibility_msg = red("Not compatible!")
-        update_msg = (
-            f"  The installed version of dbt-core and dbt-{name} are not compatible.\n"
-            "  You can find instructions for upgrading here:\n"
-            "  https://docs.getdbt.com/dbt-cli/install/overview"
-        )
-        return (compatibility_msg, update_msg)
+        needs_update = True
+        return (compatibility_msg, needs_update)
 
     if not latest_plugin:
         compatibility_msg = yellow("Could not determine latest version")
-        return (compatibility_msg, update_msg)
+        return (compatibility_msg, needs_update)
 
     if plugin < latest_plugin:
         compatibility_msg = yellow("Update available!")
-        update_msg = (
-            f"  Your version of dbt-{name} is out of date! "
-            "You can find instructions for upgrading here:\n"
-            "  https://docs.getdbt.com/dbt-cli/install/overview"
-        )
+        needs_update = True
     elif plugin > latest_plugin:
         compatibility_msg = green("Ahead of latest version!")
     else:
         compatibility_msg = green("Up to date!")
 
-    return (compatibility_msg, update_msg)
+    return (compatibility_msg, needs_update)
 
 
 def _format_single_plugin(plugin: List[str], update_msg: str) -> str:

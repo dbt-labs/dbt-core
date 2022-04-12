@@ -130,7 +130,6 @@ class TestGetVersionInformation:
                 "Plugins:",
                 "",
                 "",
-                "",
             ]
         )
 
@@ -239,9 +238,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {yellow('Update available!')}",
-                "  Your version of dbt-foobar is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -268,9 +268,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {yellow('Update available!')}",
-                "  Your version of dbt-foobar is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview" "",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -297,10 +298,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -327,10 +328,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -357,10 +358,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -387,10 +388,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -417,10 +418,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -447,10 +448,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -477,10 +478,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -507,10 +508,10 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -545,15 +546,12 @@ class TestGetVersionInformation:
                 f"  - bazqux: 2.1.0    - {yellow('Could not determine latest version')}",
                 f"  - quuux:  2.1.0    - {green('Up to date!')}",
                 f"  - corge:  22.21.20 - {red('Not compatible!')}",
-                "  The installed version of dbt-core and dbt-corge are not compatible.\n"
-                "  You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
-                "",
                 f"  - grault: 2.1.0    - {yellow('Update available!')}",
-                "  Your version of dbt-grault is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
-                "",
                 f"  - garply: 2.1.0-b1 - {yellow('Could not determine latest version')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
