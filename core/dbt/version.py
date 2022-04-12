@@ -131,7 +131,7 @@ def _get_plugin_msg_info(
     if plugin.major != core.major or plugin.minor != core.minor:
         compatibility_msg = red("Not compatible!")
         update_msg = (
-            f"  Your version of dbt-{name} is not compatible with dbt-core!\n"
+            f"  The installed version of dbt-core and dbt-{name} are not compatible.\n"
             "  You can find instructions for upgrading here:\n"
             "  https://docs.getdbt.com/dbt-cli/install/overview"
         )

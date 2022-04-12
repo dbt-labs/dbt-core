@@ -296,7 +296,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -326,7 +326,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -356,7 +356,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -386,7 +386,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -416,7 +416,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -446,7 +446,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -476,7 +476,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -506,7 +506,7 @@ class TestGetVersionInformation:
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {red('Not compatible!')}",
-                "  Your version of dbt-foobar is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-foobar are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
@@ -544,7 +544,7 @@ class TestGetVersionInformation:
                 f"  - bazqux: 2.1.0    - {yellow('Could not determine latest version')}",
                 f"  - quuux:  2.1.0    - {green('Up to date!')}",
                 f"  - corge:  22.21.20 - {red('Not compatible!')}",
-                "  Your version of dbt-corge is not compatible with dbt-core!",
+                "  The installed version of dbt-core and dbt-corge are not compatible.\n"
                 "  You can find instructions for upgrading here:",
                 "  https://docs.getdbt.com/dbt-cli/install/overview",
                 "",
