@@ -16,7 +16,7 @@ kinds:
 - label: Dependencies
 custom:
 - key: Author
-  label: GitHub Name(s) (separated by a single space for multiple names)
+  label: GitHub Username(s) (separated by a single space if multiple)
   type: string
   minLength: 3
 - key: Issue
