@@ -73,7 +73,7 @@ When detecting performance regressions that trigger alerts, block PRs, or delay 
 
 In practice, the number of performance regression failures due to random noise will be higher because we are not incorporating the variance of the tools we use to measure, namely GHA.
 
-### Concrete Example
+### Concrete Example: Performance Regression Detection
 
 The following example data was collected by running the code in this repository in Github Actions.
 
@@ -94,6 +94,19 @@ x > 41.98
 If when we sample a single `dbt parse` of the same project with a commit slated to go into dbt v1.0.4, we observe a 42s parse time, then this observation is so unlikely if there were no code-induced performance regressions, that we should investigate if there is a performance regression in any of the commits between this failure and the commit where the initial distribution was measured.
 
 Observations with 3 sigma significance that are _not_ performance regressions could be due to observing unlikely values (roughly 1 in every 750 observations), or variations in the instruments we use to take these measurements such as github actions. At this time we do not measure the variation in the instruments we use to account for these in our calculations which means failures due to random noise are more likely than they would be if we did take them into account.
+
+### Concrete Example: Performance Modeling
+
+Once a new dbt version is released (excluding pre-releases), the performance characteristics of that released version need to be measured. In this repository this measurement is referred to as a baseline.
+
+After dbt v1.0.99 is released, a github action running from main takes the following steps:
+- Checks out main for the latest performance runner
+- pip installs dbt v1.0.99
+- builds the runner if it's not already in the github actions cache
+- uses the performance runner model sub command with `./runner model`.
+- The model subcommand calls hyperfine to run all of the project-command pairs a large number of times (maybe 20 or so) and save the hyperfine outputs to files in `performance/baselines/1.0.99/` one file per command-project pair.
+- The action opens two PRs with these files: one against `main` and one against `1.0.latest` so that future PRs against these branches will detect regressions against the performance characteristics of dbt v1.0.99 instead of v1.0.98.
+- The release driver for dbt v1.0.99 reviews and merges these PRs which is the sole deliverable of the performance modeling work.
 
 ## Future work
 - pin commands to projects by reading commands from a file defined in the project.
