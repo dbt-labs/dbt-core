@@ -44,7 +44,9 @@ pub fn regressions(
         .map(|(_, x)| x)
         .collect();
 
-    // check that we have at least one baseline
+    // check that we have at least one baseline.
+    // If this error is returned, in all liklihood the runner cannot read the existing baselines
+    // for some reason. Every branch is expected to have baselines from when they were branched off of main.
     if baselines.is_empty() {
         return Err(RunnerError::NoVersionedBaselineData(
             target_baseline_dir.clone(),
