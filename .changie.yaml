@@ -29,6 +29,7 @@ custom:
   minLength: 4
 footerFormat: |
   {{- $contributorDict := dict }}
+  {{- /* any names added to this list should be all lowercase for later matching purposes */}}
   {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "dependabot" }}
   {{- range $change := .Changes }}
     {{- $authorList := splitList " " $change.Custom.Author }}
