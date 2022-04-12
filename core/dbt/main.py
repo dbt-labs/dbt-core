@@ -1096,7 +1096,7 @@ def parse_args(args, cls=DBTArgumentParser):
         Suppress all {{ print() }} macro calls.
         """,
     )
-    
+
     schema_cache_flag = p.add_mutually_exclusive_group()
     schema_cache_flag.add_argument(
         "--cache-selected-only",
