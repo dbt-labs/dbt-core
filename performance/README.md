@@ -18,6 +18,8 @@ Here are all the components of the testing module:
 - A GitHub action for modeling the performance distribution for a new release: `/.github/workflows/model_performance.yml`.
 - A GitHub action for sampling performance of dbt at your commit and comparing it against a previous release: `/.github/workflows/sample_performance.yml`.
 
+At this time, the biggest risk in the design of this project is how to account for the natural variation of GitHub Action runs. Typically, performance work is done on dedicated hardware to elimiate this factor. However, there are ways to integrate the variation in obeservation tools if it can be measured.
+
 ## Adding Test Scenarios
 
 A clear process for maintainers and community members to add new performance testing targets will exist after the next stage of the test suite is complete. For details, see #4768.
