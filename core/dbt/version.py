@@ -138,7 +138,7 @@ def _get_plugin_msg_info(
         return (compatibility_msg, update_msg)
 
     if not latest_plugin:
-        compatibility_msg = yellow("No PYPI version available")
+        compatibility_msg = yellow("Could not determine latest version")
         return (compatibility_msg, update_msg)
 
     if plugin < latest_plugin:
