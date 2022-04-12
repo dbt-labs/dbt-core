@@ -454,5 +454,9 @@ def project(
 
     yield project
 
-    project.drop_test_schema()
+    # Some commands will not have an installed adapter when running and will raise a KeyError here.  Just pass for now.
+    try:
+        project.drop_test_schema()
+    except KeyError:
+        pass
     os.chdir(orig_cwd)

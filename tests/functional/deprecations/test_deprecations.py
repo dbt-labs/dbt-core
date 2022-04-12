@@ -97,7 +97,14 @@ class TestPackageRedirectDeprecation:
     def packages(self):
         return {"packages": [{"package": "fishtown-analytics/dbt_utils", "version": "0.7.0"}]}
 
-    # if I flip the order of this and `test_package_redirect` this one fails (doesn't raise excception)???
+    def test_package_redirect(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        run_dbt(["deps"])
+        expected = {"package-redirect"}
+        assert expected == deprecations.active_deprecations
+
+    # if this test comes before test_package_redirect it will raise an exception as expected
     def test_package_redirect_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
@@ -106,10 +113,3 @@ class TestPackageRedirectDeprecation:
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
         assert expected_msg in exc_str
-
-    def test_package_redirect(self, project):
-        deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
-        run_dbt(["deps"])
-        expected = {"package-redirect"}
-        assert expected == deprecations.active_deprecations
