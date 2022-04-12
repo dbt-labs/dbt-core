@@ -31,7 +31,7 @@ def _get_url(name, registry_base_url=None):
 
 
 def _get_with_retries(package_name, registry_base_url=None):
-    get_fn = functools.partial(_get_cached, package_name, registry_base_url)
+    get_fn = functools.partial(_get, package_name, registry_base_url)
     return connection_exception_retry(get_fn, 5)
 
 
@@ -111,12 +111,12 @@ def _get(package_name, registry_base_url=None):
     return response
 
 
-_get_cached = memoized(_get)
+_get_cached = memoized(_get_with_retries)
 
 
 def package(package_name, registry_base_url=None) -> Dict[str, Any]:
     # returns a dictionary of metadata for all versions of a package
-    response = _get_with_retries(package_name, registry_base_url)
+    response = _get_cached(package_name, registry_base_url)
     return response["versions"]
 
 
