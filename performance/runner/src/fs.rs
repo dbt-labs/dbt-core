@@ -13,7 +13,7 @@ use std::{cmp, fs};
 // To add a new metric to the test suite, simply define it in this list
 static METRICS: [HyperfineCmd; 1] = [HyperfineCmd {
     name: "parse",
-    prepare: "rm -rf target/",
+    prepare: "dbt clean",
     cmd: "dbt parse --no-version-check",
 }];
 
