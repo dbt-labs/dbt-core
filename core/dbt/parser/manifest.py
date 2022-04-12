@@ -465,6 +465,8 @@ class ManifestLoader:
                     else:
                         dct = block.file.dict_from_yaml
                     parser.parse_file(block, dct=dct)
+                    # Came out of here with UnpatchedSourceDefinition containing configs at the source level
+                    # and not configs at the table level (as expected)
                 else:
                     parser.parse_file(block)
                 project_parsed_path_count += 1

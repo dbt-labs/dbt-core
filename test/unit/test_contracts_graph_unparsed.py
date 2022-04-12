@@ -308,6 +308,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
         to_dict = {
             'name': 'foo',
             'description': '',
+            'config': {},
             'loader': '',
             'freshness': {'error_after': {}, 'warn_after': {}},
             'quoting': {},
@@ -316,6 +317,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                 {
                     'name': 'table1',
                     'description': '',
+                    'config': {},
                     'docs': {'show': True},
                     'tests': [],
                     'columns': [],
@@ -327,6 +329,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                 {
                     'name': 'table2',
                     'description': 'table 2',
+                    'config': {},
                     'docs': {'show': True},
                     'tests': [],
                     'columns': [],
