@@ -66,7 +66,7 @@ def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
 
     if latest is None:
         update_info = (
-            "The latest version of dbt could not be determined!\n"
+            "The latest version of dbt-core could not be determined!\n"
             "Make sure that the following URL is accessible:\n"
             f"{PYPI_VERSION_URL}"
         )
@@ -80,7 +80,7 @@ def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
     elif installed < latest:
         latest_line[2] = yellow("Update available!")
         update_info = (
-            "Your version of dbt is out of date! "
+            "Your version of dbt-core is out of date! "
             "You can find instructions for upgrading here:\n"
             "https://docs.getdbt.com/docs/installation"
         )
@@ -128,10 +128,10 @@ def _get_plugin_msg_info(
 
     update_msg = ""
 
-    if plugin.major != core.major and plugin.minor != core.minor:
+    if plugin.major != core.major or plugin.minor != core.minor:
         compatibility_msg = red("Not compatible!")
         update_msg = (
-            f"  Your version of dbt-{name} is not compatible with core!\n"
+            f"  Your version of dbt-{name} is not compatible with dbt-core!\n"
             "  You can find instructions for upgrading here:\n"
             "  https://docs.getdbt.com/dbt-cli/install/overview"
         )
