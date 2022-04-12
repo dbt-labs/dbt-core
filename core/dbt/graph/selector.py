@@ -17,6 +17,8 @@ from dbt.contracts.graph.compiled import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.state import PreviousState
 
+from dbt import selected_resources
+
 
 def get_package_names(nodes):
     return set([node.split(".")[1] for node in nodes])
@@ -269,6 +271,7 @@ class NodeSelector(MethodManager):
         dependecies.
         """
         selected_nodes = self.get_selected(spec)
+        selected_resources.set_selected_resources(selected_nodes)
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?
         return GraphQueue(new_graph.graph, self.manifest, selected_nodes)
