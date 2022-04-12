@@ -311,7 +311,7 @@ class ManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v4.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v5.json',
                     'dbt_version': dbt.version.__version__,
                     'env': {ENV_KEY_NAME: 'value'},
                     'invocation_id': invocation_id,
@@ -462,7 +462,7 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v4.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v5.json',
                     'dbt_version': dbt.version.__version__,
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -708,7 +708,7 @@ class MixedManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v4.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v5.json',
                     'dbt_version': dbt.version.__version__,
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                     'env': {ENV_KEY_NAME: 'value'},
