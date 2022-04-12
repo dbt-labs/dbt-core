@@ -51,3 +51,17 @@ class TestCachingUppercaseModel(TestBaseCaching):
     @use_profile('postgres')
     def test_postgres_cache(self):
         self.cache_run()
+
+class TestCachingSelectedSchemaOnly(TestBaseCaching):
+    @property
+    def models(self):
+        return "models_multi_schemas"
+        
+    def run_and_get_adapter(self):
+        # select only the 'model' in the default schema
+        self.run_dbt(['--cache-selected-only', 'run', '--select', 'model'])
+        return FACTORY.adapters[self.adapter_type]
+
+    @use_profile('postgres')
+    def test_postgres_cache(self):
+        self.cache_run()

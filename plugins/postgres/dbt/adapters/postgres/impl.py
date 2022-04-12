@@ -126,8 +126,8 @@ class PostgresAdapter(SQLAdapter):
 
         self._link_cached_database_relations(schemas)
 
-    def _relations_cache_for_schemas(self, manifest):
-        super()._relations_cache_for_schemas(manifest)
+    def _relations_cache_for_schemas(self, manifest, cache_schemas=None):
+        super()._relations_cache_for_schemas(manifest, cache_schemas)
         self._link_cached_relations(manifest)
 
     def timestamp_add_sql(self, add_to: str, number: int = 1, interval: str = "hour") -> str:

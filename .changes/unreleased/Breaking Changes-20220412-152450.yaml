@@ -1,0 +1,9 @@
+kind: Breaking Changes
+body: 'For adapter plugin maintainers only: Internal adapter methods `set_relations_cache` + `_relations_cache_for_schemas`
+  each take an additional argument, for use with experimental `CACHE_SELECTED_ONLY`
+  config'
+time: 2022-04-12T15:24:50.159572+02:00
+custom:
+  Author: karunpoudel
+  Issue: "4688"
+  PR: "4860"

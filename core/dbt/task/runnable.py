@@ -399,9 +399,12 @@ class GraphRunnableTask(ManifestTask):
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
-    def populate_adapter_cache(self, adapter):
+    def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
         start_populate_cache = time.perf_counter()
-        adapter.set_relations_cache(self.manifest)
+        if flags.CACHE_SELECTED_ONLY is True:
+            adapter.set_relations_cache(self.manifest, required_schemas=required_schemas)
+        else:
+            adapter.set_relations_cache(self.manifest)
         cache_populate_time = time.perf_counter() - start_populate_cache
         if dbt.tracking.active_user is not None:
             dbt.tracking.track_runnable_timing(
@@ -504,8 +507,7 @@ class GraphRunnableTask(ManifestTask):
 
         return result
 
-    def create_schemas(self, adapter, selected_uids: Iterable[str]):
-        required_schemas = self.get_model_schemas(adapter, selected_uids)
+    def create_schemas(self, adapter, required_schemas: Set[BaseRelation]):
         # we want the string form of the information schema database
         required_databases: Set[BaseRelation] = set()
         for required in required_schemas:

@@ -340,11 +340,14 @@ class BaseAdapter(metaclass=AdapterMeta):
         # databases
         return info_schema_name_map
 
-    def _relations_cache_for_schemas(self, manifest: Manifest) -> None:
+    def _relations_cache_for_schemas(
+        self, manifest: Manifest, cache_schemas: Set[BaseRelation] = None
+    ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
-        cache_schemas = self._get_cache_schemas(manifest)
+        if not cache_schemas:
+            cache_schemas = self._get_cache_schemas(manifest)
         with executor(self.config) as tpe:
             futures: List[Future[List[BaseRelation]]] = []
             for cache_schema in cache_schemas:
@@ -370,14 +373,16 @@ class BaseAdapter(metaclass=AdapterMeta):
             cache_update.add((relation.database, relation.schema))
         self.cache.update_schemas(cache_update)
 
-    def set_relations_cache(self, manifest: Manifest, clear: bool = False) -> None:
+    def set_relations_cache(
+        self, manifest: Manifest, clear: bool = False, required_schemas: Set[BaseRelation] = None
+    ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
         with self.cache.lock:
             if clear:
                 self.cache.clear()
-            self._relations_cache_for_schemas(manifest)
+            self._relations_cache_for_schemas(manifest, required_schemas)
 
     @available
     def cache_added(self, relation: Optional[BaseRelation]) -> str:
