@@ -22,7 +22,8 @@ def get_version_information() -> str:
     installed = get_installed_version()
     latest = get_latest_version()
 
-    core_msg, core_info_msg = _get_core_msg(installed, latest)
+    core_msg_lines, core_info_msg = _get_core_msg_lines(installed, latest)
+    core_msg = _format_core_msg(core_msg_lines)
     plugin_version_msg = _get_plugins_msg(installed)
 
     msg_lines = [core_msg, plugin_version_msg]
@@ -49,14 +50,6 @@ def get_latest_version(
         return None
 
     return dbt.semver.VersionSpecifier.from_version_string(version_string)
-
-
-def _get_core_msg(installed, latest) -> Tuple[str, str]:
-    core_msg_lines, update_info = _get_core_msg_lines(installed, latest)
-    return (
-        _format_core_msg(core_msg_lines),
-        update_info,
-    )
 
 
 def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
