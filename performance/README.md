@@ -26,7 +26,7 @@ A clear process for maintainers and community members to add new performance tes
 
 ## Investigating Regressions
 
-If your commit has failed one of the performance regression tests, it does not necessarily mean your commit has a performance regression. However, the observed runtime value was so much slower than the expected value that it was unlikely to be random noise. This means that any commit after the release it is being compared against through this failing commit might contain the cause. Start by investigating the failing commit and working your way backwards.
+If your commit has failed one of the performance regression tests, it does not necessarily mean your commit has a performance regression. However, the observed runtime value was so much slower than the expected value that it was unlikely to be random noise. If it is not due to random noise, this commit contains the code that is causing this performance regression. However, it may not be the commit that introduced that code. That code may have been introduced in the commit before even if it passed due to natural variation in sampling. When investigating a performance regression, start with the failing commit and working your way backwards.
 
 Here's an example of how this could happen:
 
@@ -101,7 +101,7 @@ Observations with 3 sigma significance that are _not_ performance regressions co
 
 Once a new dbt version is released (excluding pre-releases), the performance characteristics of that released version need to be measured. In this repository this measurement is referred to as a baseline.
 
-After dbt v1.0.99 is released, a github action running from main takes the following steps:
+After dbt v1.0.99 is released, a github action running from `main`, for the latest version of that action, takes the following steps:
 - Checks out main for the latest performance runner
 - pip installs dbt v1.0.99
 - builds the runner if it's not already in the github actions cache
