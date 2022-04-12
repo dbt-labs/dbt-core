@@ -85,6 +85,9 @@ pub struct Version {
 impl FromStr for Version {
     type Err = RunnerError;
 
+    // TODO: right now this only parses versions in the form "1.1.1"
+    // but it could also easily also parse the form "v1.1.1" so dropping the v
+    // doesn't have to be done in the action.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let ints: Vec<i32> = s
             .split(".")
