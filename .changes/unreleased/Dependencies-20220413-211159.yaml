@@ -1,0 +1,7 @@
+kind: Dependencies
+body: first pass at automating changelog for dependabot
+time: 2022-04-13T21:11:59.000000-05:00
+custom:
+  Author: emmyoop
+  Issue: 4904
+  PR: 5050
