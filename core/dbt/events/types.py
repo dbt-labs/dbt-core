@@ -2296,6 +2296,15 @@ class DepsSetDownloadDirectory(DebugLevel):
 
 
 @dataclass
+class ProjectInvalidName(InfoLevel):
+    name: str
+    code: str = "A028"
+
+    def message(self) -> str:
+        return f"{self.name} is not a valid project name."
+
+
+@dataclass
 class EnsureGitInstalled(ErrorLevel):
     code: str = "Z036"
 

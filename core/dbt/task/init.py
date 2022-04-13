@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import re
 import shutil
-from typing import Optional
+from typing import Optional, Tuple
 
 import yaml
 import click
@@ -26,6 +26,7 @@ from dbt.events.types import (
     ProfileWrittenWithProjectTemplateYAML,
     SettingUpProfile,
     InvalidProfileTemplateYAML,
+    ProjectInvalidName,
     ProjectNameAlreadyExists,
     GetAddendum,
 )
@@ -253,15 +254,22 @@ class InitTask(BaseTask):
         numeric_choice = click.prompt(prompt_msg, type=click.INT)
         return available_adapters[numeric_choice - 1]
 
-    def get_valid_project_name(self) -> str:
-        """Returns a valid project name, either from CLI arg or user prompt."""
+    def get_valid_project_name(self) -> Tuple[str, bool]:
+        """Returns a tuple containing a project name and a boolean indicating
+        if the name is valid.
+
+        If args.skip_profile_setup is not set, the user will be prompted if no
+        arg for the project name is specified or if the specified project name
+        is invalid."""
         name = self.args.project_name
         while not ProjectName.is_valid(name):
+            if self.args.skip_profile_setup:
+                return (name, False)
             if name:
                 click.echo(name + " is not a valid project name.")
             name = click.prompt("Enter a name for your project (letters, digits, underscore)")
 
-        return name
+        return (name, True)
 
     def run(self):
         """Entry point for the init task."""
@@ -298,7 +306,11 @@ class InitTask(BaseTask):
 
         # When dbt init is run outside of an existing project,
         # create a new project and set up the user's profile.
-        project_name = self.get_valid_project_name()
+        (project_name, project_name_valid) = self.get_valid_project_name()
+        if not project_name_valid:
+            fire_event(ProjectInvalidName(name=project_name))
+            return
+
         project_path = Path(project_name)
         if project_path.exists():
             fire_event(ProjectNameAlreadyExists(name=project_name))
