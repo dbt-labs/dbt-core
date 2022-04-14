@@ -78,17 +78,6 @@ jobs:
         # github.token and not the token you configure using the env: GITHUB_TOKEN.
         # See: https://github.com/gr2m/create-or-update-pull-request-action/issues/281
         persist-credentials: false
-    - name: Get name and email for commit
-      # The action to update the PR expects the author to be in the format of name <email>.
-      # Grab the name and email from the last commit to this PR and use it to commit the new
-      # changelog file
-      if: steps.filter.outputs.changelog == 'false'
-      id: user
-      run: |
-        USERNAME="$(git log -n 1 --pretty=format:%an)"
-        USEREMAIL="$(git log -n 1 --pretty=format:%ae)"
-        echo "::set-output name=USERNAME::$USERNAME"
-        echo "::set-output name=USEREMAIL::$USEREMAIL"
     - name: Create file from template
       if: steps.filter.outputs.changelog == 'false'
       run: |
@@ -107,5 +96,5 @@ jobs:
       with:
         branch: ${{ github.event.pull_request.head.ref }}
         # author expected in the format "Lorem J. Ipsum <lorem@example.com>"
-        author: "${{ steps.user.outputs.USERNAME }} <${{ steps.user.outputs.USEREMAIL }}>"
+        author: "Github Build Bot <buildbot@fishtownanalytics.com>"
         commit-message: "Add automated changelog yaml from template"
