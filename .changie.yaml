@@ -16,7 +16,7 @@ kinds:
 - label: Dependencies
 custom:
 - key: Author
-  label: GitHub Name
+  label: GitHub Username(s) (separated by a single space if multiple)
   type: string
   minLength: 3
 - key: Issue
@@ -28,23 +28,33 @@ custom:
   type: int
   minLength: 4
 footerFormat: |
-  ### Contributors
   {{- $contributorDict := dict }}
-  {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "ChenyuLInx" "stu-k" "iknox-fa" "VersusFacit" "McKnight-42" "jtcohen6" }}
+  {{- /* any names added to this list should be all lowercase for later matching purposes */}}
+  {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "dependabot" }}
   {{- range $change := .Changes }}
-    {{- $author := $change.Custom.Author }}
-    {{- if not (has $author $core_team)}}
-      {{- $pr := $change.Custom.PR }}
-      {{- if hasKey $contributorDict $author }}
-        {{- $prList := get $contributorDict $author }}
-        {{- $prList = append $prList $pr  }}
-        {{- $contributorDict := set $contributorDict $author $prList }}
-      {{- else }}
-        {{- $prList := list $change.Custom.PR }}
-        {{- $contributorDict := set $contributorDict $author $prList }}
-      {{- end }}
+    {{- $authorList := splitList " " $change.Custom.Author }}
+    {{- /* loop through all authors for a PR */}}
+    {{- range $author := $authorList }}
+      {{- $authorLower := lower $author }}
+      {{- /* we only want to include non-core team contributors */}}
+      {{- if not (has $authorLower $core_team)}}
+        {{- $pr := $change.Custom.PR }}
+        {{- /* check if this contributor has other PRs associated with them already */}}
+        {{- if hasKey $contributorDict $author }}
+          {{- $prList := get $contributorDict $author }}
+          {{- $prList = append $prList $pr  }}
+          {{- $contributorDict := set $contributorDict $author $prList }}
+        {{- else }}
+          {{- $prList := list $change.Custom.PR }}
+          {{- $contributorDict := set $contributorDict $author $prList }}
+        {{- end }}
+      {{- end}}
     {{- end}}
   {{- end }}
+  {{- /* no indentation here for formatting so the final markdown doesn't have unneeded indentations */}}
+  {{- if $contributorDict}}
+  ### Contributors
   {{- range $k,$v := $contributorDict }}
-    - [@{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}[#{{$element}}](https://github.com/dbt-labs/dbt-core/pull/{{$element}}){{end}})
+  - [@{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}[#{{$element}}](https://github.com/dbt-labs/dbt-core/pull/{{$element}}){{end}})
+  {{- end }}
   {{- end }}

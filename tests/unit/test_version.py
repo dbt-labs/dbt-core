@@ -16,13 +16,13 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -42,13 +42,13 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.1",
-                "   latest version: 1.0.0",
-                "",
-                "Your version of dbt is ahead of the latest release!",
+                "Core:",
+                "  - installed: 1.0.1",
+                f"  - latest:    1.0.0 - {yellow('Ahead of latest version!')}",
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -68,14 +68,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.1",
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.1 - {yellow('Update available!')}",
                 "",
-                "Your version of dbt is out of date! You can find instructions for upgrading here:",
-                "https://docs.getdbt.com/docs/installation",
+                "  Your version of dbt-core is out of date!",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -94,15 +97,16 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: unknown",
+                "Core:",
+                "  - installed: 1.0.0",
                 "",
-                "The latest version of dbt could not be determined!",
-                "Make sure that the following URL is accessible:",
-                "https://pypi.org/pypi/dbt-core/json",
+                "  The latest version of dbt-core could not be determined!",
+                "  Make sure that the following URL is accessible:",
+                "  https://pypi.org/pypi/dbt-core/json",
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -119,12 +123,12 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
+                "",
                 "",
             ]
         )
@@ -147,16 +151,16 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {green('Up to date!')}",
-                f"  - bazqux: 1.0.0 - {green('Up to date!')}",
-                f"  - quuxcorge: 1.0.0 - {green('Up to date!')}",
+                f"  - foobar:       1.0.0 - {green('Up to date!')}",
+                f"  - bazqux:       1.0.0 - {green('Up to date!')}",
+                f"  - quuxcorge:    1.0.0 - {green('Up to date!')}",
                 f"  - graultgarply: 1.0.0 - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -176,13 +180,13 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
                 f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -202,13 +206,13 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                f"  - foobar: 1.0.0 - {yellow('Could not determine latest version')}",
+                "",
                 "",
             ]
         )
@@ -228,13 +232,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                f"  - foobar: 1.0.0 - {yellow('Update available!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
+                "",
                 "",
             ]
         )
@@ -254,13 +262,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                f"  - foobar: 1.0.0 - {yellow('Update available!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
+                "",
                 "",
             ]
         )
@@ -280,13 +292,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 2.0.0",
-                "   latest version: 2.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 2.0.0",
+                f"  - latest:    2.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
+                "",
                 "",
             ]
         )
@@ -306,13 +322,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 2.0.0",
-                "   latest version: 2.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 2.0.0",
+                f"  - latest:    2.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {yellow('No PYPI version available')}",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
+                "",
                 "",
             ]
         )
@@ -332,15 +352,16 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 2.0.0",
-                "   latest version: 2.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 2.0.0",
+                f"  - latest:    2.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Out of date!')}",
-                "  Your version of dbt-foobar is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -361,15 +382,16 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 2.0.0",
-                "   latest version: 2.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 2.0.0",
+                f"  - latest:    2.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {red('Out of date!')}",
-                "  Your version of dbt-foobar is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -390,13 +412,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.1.0",
-                "   latest version: 1.1.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.1.0",
+                f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {green('Up to date!')}",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
+                "",
                 "",
             ]
         )
@@ -416,13 +442,17 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.1.0",
-                "   latest version: 1.1.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.1.0",
+                f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {yellow('No PYPI version available')}",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
+                "",
                 "",
             ]
         )
@@ -442,15 +472,16 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.1.0",
-                "   latest version: 1.1.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.1.0",
+                f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {yellow('Update available!')}",
-                "  Your version of dbt-foobar is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -471,15 +502,16 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.1.0",
-                "   latest version: 1.1.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.1.0",
+                f"  - latest:    1.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 1.0.0 - {yellow('Update available!')}",
-                "  Your version of dbt-foobar is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
+                f"  - foobar: 1.0.0 - {red('Not compatible!')}",
+                "",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
                 "",
             ]
@@ -494,35 +526,63 @@ class TestGetVersionInformation:
             latest="2.1.0",
             plugins={
                 "foobar": ("2.1.0", "2.1.0"),
-                "bazqux": ("1.0.0", None),
-                "quuux": ("1.1.0", "1.1.0"),
-                "corge": ("2.2.2", "2.2.3"),
-                "grault": ("1.1.0", "1.2.3"),
-                "garply": ("2.1.0", None),
+                "bazqux": ("2.1.0", None),
+                "quuux": ("2.1.0", "2.1.0"),
+                "corge": ("22.21.20", "22.21.21"),
+                "grault": ("2.1.0", "2.1.1"),
+                "garply": ("2.1.0-b1", None),
             },
         )
 
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 2.1.0",
-                "   latest version: 2.1.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 2.1.0",
+                f"  - latest:    2.1.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                f"  - foobar: 2.1.0 - {green('Up to date!')}",
-                f"  - bazqux: 1.0.0 - {yellow('No PYPI version available')}",
-                f"  - quuux: 1.1.0 - {green('Up to date!')}",
-                f"  - corge: 2.2.2 - {yellow('Update available!')}",
-                "  Your version of dbt-corge is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
+                f"  - foobar: 2.1.0    - {green('Up to date!')}",
+                f"  - bazqux: 2.1.0    - {yellow('Could not determine latest version')}",
+                f"  - quuux:  2.1.0    - {green('Up to date!')}",
+                f"  - corge:  22.21.20 - {red('Not compatible!')}",
+                f"  - grault: 2.1.0    - {yellow('Update available!')}",
+                f"  - garply: 2.1.0-b1 - {yellow('Could not determine latest version')}",
                 "",
-                f"  - grault: 1.1.0 - {red('Out of date!')}",
-                "  Your version of dbt-grault is out of date! You can find instructions for upgrading here:",
-                "  https://docs.getdbt.com/dbt-cli/install/overview",
+                "  At least one plugin is out of date or incompatible with dbt-core.",
+                "  You can find instructions for upgrading here:",
+                "  https://docs.getdbt.com/docs/installation",
                 "",
-                f"  - garply: 2.1.0 - {green('Up to date!')}",
+                "",
+            ]
+        )
+
+        assert expected == actual
+
+    def test_plugins_alignment(self, mocker):
+        mock_versions(
+            mocker,
+            installed="1.1.1-b123",
+            latest="1.1.1-b123",
+            plugins={
+                "foobar": ("1.1.0-b1", "1.1.0-b1"),
+                "bazqux": ("1.1.1-b123", "1.1.1-b123"),
+                "quuux": ("1.1.0", "1.1.0"),
+            },
+        )
+
+        actual = dbt.version.get_version_information()
+        expected = "\n".join(
+            [
+                "Core:",
+                "  - installed: 1.1.1-b123",
+                f"  - latest:    1.1.1-b123 - {green('Up to date!')}",
+                "",
+                "Plugins:",
+                f"  - foobar: 1.1.0-b1   - {green('Up to date!')}",
+                f"  - bazqux: 1.1.1-b123 - {green('Up to date!')}",
+                f"  - quuux:  1.1.0      - {green('Up to date!')}",
+                "",
                 "",
             ]
         )
@@ -592,18 +652,18 @@ class TestGetVersionInformation:
         actual = dbt.version.get_version_information()
         expected = "\n".join(
             [
-                "installed version: 1.0.0",
-                "   latest version: 1.0.0",
-                "",
-                green("Up to date!"),
+                "Core:",
+                "  - installed: 1.0.0",
+                f"  - latest:    1.0.0 - {green('Up to date!')}",
                 "",
                 "Plugins:",
-                "  - foobar: 1.0.0 - Up to date!",
-                "  - bazqux: 1.0.0 - Up to date!",
-                "  - quuux: 1.0.0 - Up to date!",
-                "  - corge: 1.0.0 - Up to date!",
-                "  - grault: 1.0.0 - Up to date!",
-                "  - garply: 1.0.0 - Up to date!",
+                f"  - foobar: 1.0.0 - {yellow('Could not determine latest version')}",
+                f"  - bazqux: 1.0.0 - {yellow('Could not determine latest version')}",
+                f"  - quuux:  1.0.0 - {yellow('Could not determine latest version')}",
+                f"  - corge:  1.0.0 - {yellow('Could not determine latest version')}",
+                f"  - grault: 1.0.0 - {yellow('Could not determine latest version')}",
+                f"  - garply: 1.0.0 - {yellow('Could not determine latest version')}",
+                "",
                 "",
             ]
         )
