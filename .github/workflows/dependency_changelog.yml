@@ -27,8 +27,8 @@ on:
     types: [opened, labeled]
 
 permissions:
-  contents: read
-  pull-requests: write
+  contents: write
+  pull-requests: read
 
 jobs:
   dependency_changelog:
