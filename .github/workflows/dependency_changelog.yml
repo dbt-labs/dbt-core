@@ -12,24 +12,32 @@
 #   PR: <PR number>
 #
 # **why?**
-# Automate changelog generation for more visability
+# Automate changelog generation for more visability with automated dependency updates via dependabot.
 
 # **when?**
-# Once a PR is created and it has been correctly labeled with `dependencies`
+# Once a PR is created and it has been correctly labeled with `dependencies`.  The intended use
+# is for the PRs created by dependabot.  You can also manually trigger this by adding the
+# `dependencies` label at any time.
 
 name: Dependency Changelog
+
 on:
   pull_request:
-    # TODO: if a label is applied before it's opened will `labeled` still trigger?
+    # catch when the PR is opened with the label or when the label is added
     types: [opened, labeled]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
-  build:
+  dependency_changelog:
     if: ${{ github.event.label.name == 'dependencies' }}
     runs-on: ubuntu-latest
 
     steps:
-    # timestamp changes the order the changelog entries are listed in the final Changelog.md file.
+    # timestamp changes the order the changelog entries are listed in the final Changelog.md file.  Precision is not
+    # important here.
     # The timestamp on the filename and the timestamp in the contents of the file have different expected formats.
     - name: Get File Name Timestamp
       id: filename_time
@@ -41,19 +49,20 @@ jobs:
       uses: nanzm/get-time-action@v1.1
       with:
         format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
+    # changie expects files to be named in a specific pattern.
     - name: Generate Filepath
       id: fp
       run: |
         FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
         echo "::set-output name=FILEPATH::$FILEPATH"
     - name: Check if changelog file exists already
-        # if there's already a changelog entry, don't add another one!
-        # https://github.com/marketplace/actions/paths-changes-filter
-        # For each filter, it sets output variable named by the filter to the text:
-        #  'true' - if any of changed files matches any of filter rules
-        #  'false' - if none of changed files matches any of filter rules
-        # also, returns:
-        #  `changes` - JSON array with names of all filters matching any of the changed files
+      # if there's already a changelog entry, don't add another one!
+      # https://github.com/marketplace/actions/paths-changes-filter
+      # For each filter, it sets output variable named by the filter to the text:
+      #  'true' - if any of changed files matches any of filter rules
+      #  'false' - if none of changed files matches any of filter rules
+      # also, returns:
+      #  `changes` - JSON array with names of all filters matching any of the changed files
       uses: dorny/paths-filter@v2
       id: filter
       with:
@@ -99,4 +108,4 @@ jobs:
         branch: ${{ github.event.pull_request.head.ref }}
         # author expected in the format "Lorem J. Ipsum <lorem@example.com>"
         author: "${{ steps.user.outputs.USERNAME }} <${{ steps.user.outputs.USEREMAIL }}>"
-        commit-message: "Add automated changelog entry"
+        commit-message: "Add automated changelog yaml from template"
