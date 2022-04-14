@@ -5,18 +5,10 @@ import dbt
 
 from dbt.tests.util import run_dbt, rm_file, get_artifact, check_datetime_between
 from dbt.tests.fixtures.project import write_project_files
-from tests.functional.docs_generate.expected_catalog import (
+from dbt.tests.adapter.basic.expected_catalog import (
     base_expected_catalog,
     no_stats,
     expected_references_catalog,
-)
-from tests.functional.docs_generate.expected_manifest import (
-    expected_seeded_manifest,
-    expected_references_manifest,
-)
-from tests.functional.docs_generate.expected_run_results import (
-    expected_run_results,
-    expected_references_run_results,
 )
 
 models__schema_yml = """
@@ -352,80 +344,6 @@ def verify_metadata(metadata, dbt_schema_version, start_time):
     assert metadata["env"] == {key: "env_value"}
 
 
-def verify_manifest(project, expected_manifest, start_time):
-    manifest_path = os.path.join(project.project_root, "target", "manifest.json")
-    assert os.path.exists(manifest_path)
-
-    manifest = get_artifact(manifest_path)
-
-    manifest_keys = {
-        "nodes",
-        "sources",
-        "macros",
-        "parent_map",
-        "child_map",
-        "metrics",
-        "docs",
-        "metadata",
-        "docs",
-        "disabled",
-        "exposures",
-        "selectors",
-    }
-
-    assert set(manifest.keys()) == manifest_keys
-
-    for key in manifest_keys:
-        if key == "macros":
-            verify_manifest_macros(manifest, expected_manifest.get("macros"))
-        elif key == "metadata":
-            metadata = manifest["metadata"]
-            verify_metadata(
-                metadata, "https://schemas.getdbt.com/dbt/manifest/v5.json", start_time
-            )
-            assert (
-                "project_id" in metadata
-                and metadata["project_id"] == "098f6bcd4621d373cade4e832627b4f6"
-            )
-            assert (
-                "send_anonymous_usage_stats" in metadata
-                and metadata["send_anonymous_usage_stats"] is False
-            )
-            assert "adapter_type" in metadata and metadata["adapter_type"] == project.adapter_type
-        elif key in ["nodes", "sources", "exposures", "metrics", "disabled", "docs"]:
-            for unique_id, node in expected_manifest[key].items():
-                assert unique_id in manifest[key]
-                assert manifest[key][unique_id] == node
-        else:  # ['docs', 'parent_map', 'child_map', 'selectors']
-            assert manifest[key] == expected_manifest[key]
-
-
-def verify_manifest_macros(manifest, expected=None):
-    assert "macros" in manifest
-    if expected:
-        for unique_id, expected_macro in expected.items():
-            assert unique_id in manifest["macros"]
-            actual_macro = manifest["macros"][unique_id]
-            assert expected_macro == actual_macro
-
-
-def verify_run_results(project, expected_run_results, start_time):
-    run_results_path = os.path.join(project.project_root, "target", "run_results.json")
-    run_results = get_artifact(run_results_path)
-    assert "metadata" in run_results
-    verify_metadata(
-        run_results["metadata"], "https://schemas.getdbt.com/dbt/run-results/v4.json", start_time
-    )
-    assert "elapsed_time" in run_results
-    assert run_results["elapsed_time"] > 0
-    assert isinstance(run_results["elapsed_time"], float)
-    assert "args" in run_results
-    # sort the results so we can make reasonable assertions
-    run_results["results"].sort(key=lambda r: r["unique_id"])
-    assert run_results["results"] == expected_run_results
-    set(run_results) == {"elapsed_time", "results", "metadata"}
-
-
 def run_and_generate(project, args=None):
     results = run_dbt(["run"])
     assert len(results) == 2
@@ -485,7 +403,7 @@ class BaseGenerateProject:
         }
 
 
-class TestDocsGenerate(BaseGenerateProject):
+class BaseDocsGenerate(BaseGenerateProject):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -518,16 +436,17 @@ class TestDocsGenerate(BaseGenerateProject):
         start_time = run_and_generate(project)
         verify_catalog(project, expected_catalog, start_time)
 
-        verify_manifest(project, expected_seeded_manifest(project, quote_model=False), start_time)
-        verify_run_results(project, expected_run_results(), start_time)
-
         # Check that assets have been copied to the target directory for use in the docs html page
         assert os.path.exists(os.path.join(".", "target", "assets"))
         assert os.path.exists(os.path.join(".", "target", "assets", "lorem-ipsum.txt"))
         assert not os.path.exists(os.path.join(".", "target", "non-existent-assets"))
 
 
-class TestReferences(BaseGenerateProject):
+class TestDocsGenerate(BaseDocsGenerate):
+    pass
+
+
+class BaseReferences(BaseGenerateProject):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -541,5 +460,7 @@ class TestReferences(BaseGenerateProject):
     def test_references(self, project):
         start_time = run_and_generate(project)
         verify_catalog(project, expected_references_catalog(project), start_time)
-        verify_manifest(project, expected_references_manifest(project), start_time)
-        verify_run_results(project, expected_references_run_results(), start_time)
+
+
+class TestReferences(BaseReferences):
+    pass
