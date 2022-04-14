@@ -13,7 +13,7 @@ from dbt.tests.util import (
     check_table_does_not_exist,
 )
 
-from dbt.tests.adapter.seed.fixtures import (
+from tests.functional.simple_seed.fixtures import (
     models__downstream_from_seed_actual,
     models__from_basic_seed,
     seeds__disabled_in_config,
@@ -73,7 +73,7 @@ class SeedTestBase(SeedConfigBase):
             check_table_does_not_exist(project.adapter, "models__downstream_from_seed_actual")
 
 
-class BasicSeedTests(SeedTestBase):
+class TestBasicSeedTests(SeedTestBase):
     def test_simple_seed(self, project):
         """Build models and observe that run truncates a seed and re-inserts rows"""
         self._build_relations_for_test(project)
@@ -88,7 +88,7 @@ class BasicSeedTests(SeedTestBase):
         )
 
 
-class SeedConfigFullRefreshOn(SeedTestBase):
+class TestSeedConfigFullRefreshOn(SeedTestBase):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -101,7 +101,7 @@ class SeedConfigFullRefreshOn(SeedTestBase):
         self._check_relation_end_state(run_result=run_dbt(["seed"]), project=project, exists=False)
 
 
-class SeedConfigFullRefreshOff(SeedTestBase):
+class TestSeedConfigFullRefreshOff(SeedTestBase):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -117,7 +117,7 @@ class SeedConfigFullRefreshOff(SeedTestBase):
         )
 
 
-class SeedCustomSchema(SeedTestBase):
+class TestSeedCustomSchema(SeedTestBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
@@ -156,7 +156,7 @@ class SeedCustomSchema(SeedTestBase):
         check_relations_equal(project.adapter, [f"{custom_schema}.seed_actual", "seed_expected"])
 
 
-class SimpleSeedEnabledViaConfig(object):
+class TestSimpleSeedEnabledViaConfig(object):
     @pytest.fixture(scope="session")
     def seeds(self):
         return {
@@ -201,7 +201,7 @@ class SimpleSeedEnabledViaConfig(object):
         check_table_does_exist(project.adapter, "seed_tricky")
 
 
-class SeedParsing(SeedConfigBase):
+class TestSeedParsing(SeedConfigBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
@@ -224,7 +224,7 @@ class SeedParsing(SeedConfigBase):
 
 
 # BOM = byte order mark; see https://www.ibm.com/docs/en/netezza?topic=formats-byte-order-mark
-class SimpleSeedWithBOM(SeedConfigBase):
+class TestSimpleSeedWithBOM(SeedConfigBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
@@ -250,7 +250,7 @@ class SimpleSeedWithBOM(SeedConfigBase):
         check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
 
 
-class SeedSpecificFormats(SeedConfigBase):
+class TestSeedSpecificFormats(SeedConfigBase):
     """Expect all edge cases to build"""
 
     def _make_big_seed(self, test_data_dir):
@@ -277,35 +277,3 @@ class SeedSpecificFormats(SeedConfigBase):
     def test_simple_seed(self, project):
         results = run_dbt(["seed"])
         len(results) == 3
-
-
-class TestBasicSeedTests(BasicSeedTests):
-    pass
-
-
-class TestSeedConfigFullRefreshOn(SeedConfigFullRefreshOn):
-    pass
-
-
-class TestSeedConfigFullRefreshOff(SeedConfigFullRefreshOff):
-    pass
-
-
-class TestSeedCustomSchema(SeedCustomSchema):
-    pass
-
-
-class TestSimpleSeedEnabledViaConfig(SimpleSeedEnabledViaConfig):
-    pass
-
-
-class TestSeedParsing(SeedParsing):
-    pass
-
-
-class TestSimpleSeedWithBOM(SimpleSeedWithBOM):
-    pass
-
-
-class TestSeedSpecificFormats(SeedSpecificFormats):
-    pass

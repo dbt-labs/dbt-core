@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-from dbt.tests.adapter.seed.fixtures import (
+from tests.functional.simple_seed.fixtures import (
     macros__schema_test,
     properties__schema_yml,
     seeds__disabled_in_config,
