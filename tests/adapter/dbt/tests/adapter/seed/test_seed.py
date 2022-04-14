@@ -253,21 +253,23 @@ class SimpleSeedWithBOM(SeedConfigBase):
 class SeedSpecificFormats(SeedConfigBase):
     """Expect all edge cases to build"""
 
-    @pytest.fixture(scope="class")
-    def seeds(self, test_data_dir):
-        seed_unicode = read_file(test_data_dir, "seed_unicode.csv")
-        dotted_seed = read_file(test_data_dir, "seed.with.dots.csv")
-
+    def _make_big_seed(self, test_data_dir):
         big_seed_path = test_data_dir / Path("tmp.csv")
         with open(big_seed_path, "w") as f:
             writer = csv.writer(f)
             writer.writerow(["seed_id"])
             for i in range(0, 20000):
                 writer.writerow([i])
-        big_seed = read_file(big_seed_path)
+        return big_seed_path
+
+    @pytest.fixture(scope="class")
+    def seeds(self, test_data_dir):
+        seed_unicode = read_file(test_data_dir, "seed_unicode.csv")
+        dotted_seed = read_file(test_data_dir, "seed.with.dots.csv")
+        big_seed = read_file(self._make_big_seed(test_data_dir))
 
         return {
-            "big-seed.csv": big_seed,
+            "big_seed.csv": big_seed,
             "seed.with.dots.csv": dotted_seed,
             "seed_unicode.csv": seed_unicode,
         }
