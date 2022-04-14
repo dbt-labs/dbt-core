@@ -89,6 +89,15 @@ def _get(package_name, registry_base_url=None):
         fire_event(RegistryResponseExtraNestedKeys(response=response))
         raise requests.exceptions.ContentDecodingError(error_msg, response=resp)
 
+    return response
+
+
+_get_cached = memoized(_get_with_retries)
+
+
+def package(package_name, registry_base_url=None) -> Dict[str, Any]:
+    # returns a dictionary of metadata for all versions of a package
+    response = _get_cached(package_name, registry_base_url)
     # Either redirectnamespace or redirectname in the JSON response indicate a redirect
     # redirectnamespace redirects based on package ownership
     # redirectname redirects based on package name
@@ -107,16 +116,6 @@ def _get(package_name, registry_base_url=None):
 
         new_nwo = use_namespace + "/" + use_name
         deprecations.warn("package-redirect", old_name=package_name, new_name=new_nwo)
-
-    return response
-
-
-_get_cached = memoized(_get_with_retries)
-
-
-def package(package_name, registry_base_url=None) -> Dict[str, Any]:
-    # returns a dictionary of metadata for all versions of a package
-    response = _get_cached(package_name, registry_base_url)
     return response["versions"]
 
 
