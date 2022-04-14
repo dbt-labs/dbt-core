@@ -63,7 +63,7 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: 'github-actions[bot]'
           body-includes: ${{ env.changelog_comment }}
-      - name: Create PR comment if changelog entry is missing, required, and does nto exist
+      - name: Create PR comment if changelog entry is missing, required, and does not exist
         if: |
           steps.filter.outputs.changelog == 'false' &&
           steps.changelog_comment.outputs.comment-body == ''
