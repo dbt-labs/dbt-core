@@ -2,6 +2,7 @@ import csv
 import pytest
 import shutil
 
+from codecs import BOM_UTF8
 from pathlib import Path
 
 from dbt.tests.util import (
@@ -237,8 +238,15 @@ class TestSimpleSeedWithBOM(SeedConfigBase):
         results = run_dbt(["seed"])
         assert len(results) == 1
 
-        with open(project.project_root / Path("seeds") / Path("seed_bom.csv")) as fp:
-            assert fp.read(1) == "\ufeff"
+        print("HERE1>>>>>")
+        import locale
+
+        print(locale.getpreferredencoding(False))
+        with open(
+            project.project_root / Path("seeds") / Path("seed_bom.csv"), encoding="utf-8"
+        ) as fp:
+            assert fp.read(1) == BOM_UTF8.decode("utf-8")
+        print("HERE2>>>>>")
 
         check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
 
