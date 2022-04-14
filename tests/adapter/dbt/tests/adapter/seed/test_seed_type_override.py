@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-from tests.functional.simple_seed.fixtures import (
+from dbt.tests.adapter.seed.fixtures import (
     macros__schema_test,
     properties__schema_yml,
     seeds__disabled_in_config,
@@ -12,6 +12,12 @@ from tests.functional.simple_seed.fixtures import (
 
 
 class SimpleSeedColumnOverride(object):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": properties__schema_yml,
+        }
+
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -40,14 +46,6 @@ class SimpleSeedColumnOverride(object):
             },
         }
 
-
-class TestSimpleSeedColumnOverride(SimpleSeedColumnOverride):
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": properties__schema_yml,
-        }
-
     def seed_enabled_types(self):
         return {
             "seed_id": "text",
@@ -66,3 +64,7 @@ class TestSimpleSeedColumnOverride(SimpleSeedColumnOverride):
         len(results) == 2
         results = run_dbt(["test"])
         len(results) == 10
+
+
+class TestSimpleSeedColumnOverride(SimpleSeedColumnOverride):
+    pass
