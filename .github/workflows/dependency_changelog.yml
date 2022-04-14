@@ -44,17 +44,20 @@ jobs:
       uses: nanzm/get-time-action@v1.1
       with:
         format: 'YYYYMMDD-HHmmss'
+
     - name: Get File Content Timestamp
       id: file_content_time
       uses: nanzm/get-time-action@v1.1
       with:
         format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
+
     # changie expects files to be named in a specific pattern.
     - name: Generate Filepath
       id: fp
       run: |
         FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
         echo "::set-output name=FILEPATH::$FILEPATH"
+
     - name: Check if changelog file exists already
       # if there's already a changelog entry, don't add another one!
       # https://github.com/marketplace/actions/paths-changes-filter
@@ -70,6 +73,7 @@ jobs:
         filters: |
           changelog:
             - added: '.changes/unreleased/**.yaml'
+
     - name: Checkout Branch
       if: steps.filter.outputs.changelog == 'false'
       uses: actions/checkout@v2
@@ -78,6 +82,7 @@ jobs:
         # github.token and not the token you configure using the env: GITHUB_TOKEN.
         # See: https://github.com/gr2m/create-or-update-pull-request-action/issues/281
         persist-credentials: false
+
     - name: Create file from template
       if: steps.filter.outputs.changelog == 'false'
       run: |
@@ -88,6 +93,7 @@ jobs:
         echo "  Author: ${{ github.event.pull_request.user.login }}" >> "${{ steps.fp.outputs.FILEPATH }}"
         echo "  Issue: 4904" >> "${{ steps.fp.outputs.FILEPATH }}"  # github.event.pull_request.issue for auto id?
         echo "  PR: ${{ github.event.pull_request.number }}" >> "${{ steps.fp.outputs.FILEPATH }}"
+
     - name: Commit Changelog File
       if: steps.filter.outputs.changelog == 'false'
       uses: gr2m/create-or-update-pull-request-action@v1
