@@ -1,5 +1,5 @@
 create table {schema}.seed_expected (
-	id INTEGER,
+	seed_id INTEGER,
 	first_name TEXT,
 	email TEXT,
 	ip_address TEXT,
@@ -8,7 +8,7 @@ create table {schema}.seed_expected (
 
 
 INSERT INTO {schema}.seed_expected
-    ("id","first_name","email","ip_address","birthday")
+    ("seed_id","first_name","email","ip_address","birthday")
 VALUES
     (1,'Larry','lking0@miitbeian.gov.cn','69.135.206.194','2008-09-12 19:08:31'),
     (2,'Larry','lperkins1@toplist.cz','64.210.133.162','1978-05-09 04:15:14'),
