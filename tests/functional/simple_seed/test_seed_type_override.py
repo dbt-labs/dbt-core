@@ -11,7 +11,7 @@ from tests.functional.simple_seed.fixtures import (
 )
 
 
-class TestSimpleSeedColumnOverride(object):
+class SimpleSeedColumnOverride(object):
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -41,7 +41,7 @@ class TestSimpleSeedColumnOverride(object):
         }
 
 
-class TestSimpleSeedColumnOverride(TestSimpleSeedColumnOverride):
+class TestSimpleSeedColumnOverride(SimpleSeedColumnOverride):
     @pytest.fixture(scope="class")
     def models(self):
         return {
