@@ -414,7 +414,7 @@ def verify_run_results(project, expected_run_results, start_time):
     run_results = get_artifact(run_results_path)
     assert "metadata" in run_results
     verify_metadata(
-        run_results["metadata"], "https://schemas.getdbt.com/dbt/run-results/v5.json", start_time
+        run_results["metadata"], "https://schemas.getdbt.com/dbt/run-results/v4.json", start_time
     )
     assert "elapsed_time" in run_results
     assert run_results["elapsed_time"] > 0
