@@ -1,0 +1,7 @@
+kind: Dependencies
+body: [WIP] add new GHA for dependabot PRs
+time: 2022-04-14T13:22:43.000000-05:00
+custom:
+  Author: emmyoop
+  Issue: 4904
+  PR: 5064
