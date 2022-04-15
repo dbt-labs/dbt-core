@@ -2,6 +2,7 @@ import pytest
 import os
 from datetime import datetime
 import dbt
+import jsonschema
 
 from dbt.tests.util import run_dbt, get_artifact, check_datetime_between
 from tests.functional.artifacts.expected_manifest import (
@@ -12,6 +13,9 @@ from tests.functional.artifacts.expected_run_results import (
     expected_run_results,
     expected_references_run_results,
 )
+
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.contracts.results import RunResultsArtifact
 
 models__schema_yml = """
 version: 2
@@ -330,11 +334,20 @@ def verify_metadata(metadata, dbt_schema_version, start_time):
     assert metadata["env"] == {key: "env_value"}
 
 
-def verify_manifest(project, expected_manifest, start_time):
+def verify_manifest(project, expected_manifest, start_time, manifest_schema_path):
     manifest_path = os.path.join(project.project_root, "target", "manifest.json")
     assert os.path.exists(manifest_path)
-
     manifest = get_artifact(manifest_path)
+
+    # Verify that manifest jsonschema from WritableManifest works
+    manifest_schema = WritableManifest.json_schema()
+    validate(manifest_schema, manifest)
+
+    # Verify that stored manifest jsonschema works.
+    # If this fails, schemas need to be updated with:
+    #   scripts/collect-artifact-schema.py --path schemas
+    stored_manifest_schema = get_artifact(manifest_schema_path)
+    validate(stored_manifest_schema, manifest)
 
     manifest_keys = {
         "nodes",
@@ -358,9 +371,8 @@ def verify_manifest(project, expected_manifest, start_time):
             verify_manifest_macros(manifest, expected_manifest.get("macros"))
         elif key == "metadata":
             metadata = manifest["metadata"]
-            verify_metadata(
-                metadata, "https://schemas.getdbt.com/dbt/manifest/v5.json", start_time
-            )
+            dbt_schema_version = str(WritableManifest.dbt_schema_version)
+            verify_metadata(metadata, dbt_schema_version, start_time)
             assert (
                 "project_id" in metadata
                 and metadata["project_id"] == "098f6bcd4621d373cade4e832627b4f6"
@@ -387,13 +399,23 @@ def verify_manifest_macros(manifest, expected=None):
             assert expected_macro == actual_macro
 
 
-def verify_run_results(project, expected_run_results, start_time):
+def verify_run_results(project, expected_run_results, start_time, run_results_schema_path):
     run_results_path = os.path.join(project.project_root, "target", "run_results.json")
     run_results = get_artifact(run_results_path)
     assert "metadata" in run_results
-    verify_metadata(
-        run_results["metadata"], "https://schemas.getdbt.com/dbt/run-results/v4.json", start_time
-    )
+
+    # Verify that jsonschema for RunResultsArtifact works
+    run_results_schema = RunResultsArtifact.json_schema()
+    validate(run_results_schema, run_results)
+
+    # Verify that stored run_results jsonschema works.
+    # If this fails, schemas need to be updated with:
+    #   scripts/collect-artifact-schema.py --path schemas
+    stored_run_results_schema = get_artifact(run_results_schema_path)
+    validate(stored_run_results_schema, run_results)
+
+    dbt_schema_version = str(RunResultsArtifact.dbt_schema_version)
+    verify_metadata(run_results["metadata"], dbt_schema_version, start_time)
     assert "elapsed_time" in run_results
     assert run_results["elapsed_time"] > 0
     assert isinstance(run_results["elapsed_time"], float)
@@ -444,6 +466,28 @@ class BaseVerifyProject:
             "quoting": {"identifier": False},
         }
 
+    @pytest.fixture(scope="class")
+    def manifest_schema_path(self, request):
+        schema_version_paths = WritableManifest.dbt_schema_version.path.split("/")
+        manifest_schema_path = os.path.join(
+            request.config.rootdir, "schemas", *schema_version_paths
+        )
+        return manifest_schema_path
+
+    @pytest.fixture(scope="class")
+    def run_results_schema_path(self, request):
+        schema_version_paths = RunResultsArtifact.dbt_schema_version.path.split("/")
+        run_results_schema_path = os.path.join(
+            request.config.rootdir, "schemas", *schema_version_paths
+        )
+        return run_results_schema_path
+
+
+def validate(artifact_schema, artifact_dict):
+    validator = jsonschema.Draft7Validator(artifact_schema)
+    error = next(iter(validator.iter_errors(artifact_dict)), None)
+    assert error is None
+
 
 class TestVerifyArtifacts(BaseVerifyProject):
     @pytest.fixture(scope="class")
@@ -456,12 +500,18 @@ class TestVerifyArtifacts(BaseVerifyProject):
         }
 
     # Test generic "docs generate" command
-    def test_run_and_generate(self, project):
+    def test_run_and_generate(self, project, manifest_schema_path, run_results_schema_path):
         start_time = datetime.utcnow()
         results = run_dbt(["compile"])
         assert len(results) == 7
-        verify_manifest(project, expected_seeded_manifest(project, quote_model=False), start_time)
-        verify_run_results(project, expected_run_results(), start_time)
+
+        verify_manifest(
+            project,
+            expected_seeded_manifest(project, quote_model=False),
+            start_time,
+            manifest_schema_path,
+        )
+        verify_run_results(project, expected_run_results(), start_time, run_results_schema_path)
 
 
 class TestVerifyArtifactsReferences(BaseVerifyProject):
@@ -475,9 +525,13 @@ class TestVerifyArtifactsReferences(BaseVerifyProject):
             "docs.md": ref_models__docs_md,
         }
 
-    def test_references(self, project):
+    def test_references(self, project, manifest_schema_path, run_results_schema_path):
         start_time = datetime.utcnow()
         results = run_dbt(["compile"])
         assert len(results) == 4
-        verify_manifest(project, expected_references_manifest(project), start_time)
-        verify_run_results(project, expected_references_run_results(), start_time)
+        verify_manifest(
+            project, expected_references_manifest(project), start_time, manifest_schema_path
+        )
+        verify_run_results(
+            project, expected_references_run_results(), start_time, run_results_schema_path
+        )
