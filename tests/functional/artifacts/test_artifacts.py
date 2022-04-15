@@ -434,7 +434,6 @@ class BaseVerifyProject:
     def project_config_update(self, unique_schema):
         alternate_schema = unique_schema + "_test"
         return {
-            "asset-paths": ["assets", "invalid-asset-paths"],
             "vars": {
                 "test_schema": unique_schema,
                 "alternate_schema": alternate_schema,
