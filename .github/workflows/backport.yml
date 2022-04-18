@@ -35,13 +35,7 @@ jobs:
     # See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target.
     if: >
       github.event.pull_request.merged
-      && (
-        github.event.action == 'closed'
-        || (
-          github.event.action == 'labeled'
-          && contains(github.event.label.name, 'backport')
-        )
-      )
+      && contains(github.event.pull_request.labels, 'backport')
     steps:
       - uses: tibdex/backport@v2.0.2
         with:
