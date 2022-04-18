@@ -106,7 +106,7 @@ jobs:
         # app, events triggered by the GITHUB_TOKEN will not create a new workflow run. This prevents
         # you from accidentally creating recursive workflow runs. To get around this, use a Personal
         # Access Token to commit changes.
-        GITHUB_TOKEN: ${{ secrets.BUILDBOT_PAT }}
+        GITHUB_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
       with:
         branch: ${{ github.event.pull_request.head.ref }}
         # author expected in the format "Lorem J. Ipsum <lorem@example.com>"
