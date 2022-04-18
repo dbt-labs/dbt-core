@@ -21,7 +21,7 @@ select 1 as id
 class TestConfigPathDeprecation:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"already_exists.sql": "where-were-going-we-dont-need-models"}
+        return {"already_exists.sql": models_trivial__model_sql}
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -91,7 +91,7 @@ class TestPackageInstallPathDeprecation:
 class TestPackageRedirectDeprecation:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"already_exists.sql": "where-were-going-we-dont-need-models"}
+        return {"already_exists.sql": models_trivial__model_sql}
 
     @pytest.fixture(scope="class")
     def packages(self):
