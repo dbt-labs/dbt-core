@@ -16,15 +16,16 @@
 # Once a PR is "Squash and merge"'d and it has been correctly labeled
 # according to the naming convention.
 
-# This workflow file is copied straight from the given example:
-# https://github.com/tibdex/backport/blob/main/.github/workflows/backport.yml
-
 name: Backport
 on:
-  pull_request_target:
+  pull_request:
     types:
       - closed
       - labeled
+
+permissions:
+  contents: write
+  pull-requests: read
 
 jobs:
   backport:
