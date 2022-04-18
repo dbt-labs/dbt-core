@@ -67,24 +67,26 @@ jobs:
       # also, returns:
       #  `changes` - JSON array with names of all filters matching any of the changed files
       uses: dorny/paths-filter@v2
-      id: filter
+      id: changelog_check
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         filters: |
-          changelog:
+          exists:
             - added: '.changes/unreleased/**.yaml'
 
     - name: Checkout Branch
-      if: steps.filter.outputs.changelog == 'false'
+      if: steps.changelog_check.outputs.exists == 'false'
       uses: actions/checkout@v2
       with:
         # persist-credentials: false is crucial otherwise Git push is performed with
         # github.token and not the token you configure using the env: GITHUB_TOKEN.
         # See: https://github.com/gr2m/create-or-update-pull-request-action/issues/281
-        persist-credentials: false
+        # persist-credentials: false
+        # specifying the ref avoids checking out the repository in a detached state
+        ref: ${{ github.event.pull_request.head.ref }}
 
     - name: Create file from template
-      if: steps.filter.outputs.changelog == 'false'
+      if: steps.changelog_check.outputs.exists == 'false'
       run: |
         echo kind: Dependencies > "${{ steps.fp.outputs.FILEPATH }}"
         echo body: ${{ github.event.pull_request.title }} >> "${{ steps.fp.outputs.FILEPATH }}"
@@ -94,13 +96,22 @@ jobs:
         echo "  Issue: 4904" >> "${{ steps.fp.outputs.FILEPATH }}"  # github.event.pull_request.issue for auto id?
         echo "  PR: ${{ github.event.pull_request.number }}" >> "${{ steps.fp.outputs.FILEPATH }}"
 
+    # - name: Commit Changelog File
+    #   if: steps.changelog_check.outputs.exists == 'false'
+    #   uses: gr2m/create-or-update-pull-request-action@v1
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #   with:
+    #     branch: ${{ github.event.pull_request.head.ref }}
+    #     # author expected in the format "Lorem J. Ipsum <lorem@example.com>"
+    #     author: "Github Build Bot <buildbot@fishtownanalytics.com>"
+    #     commit-message: "Add automated changelog yaml from template"
     - name: Commit Changelog File
-      if: steps.filter.outputs.changelog == 'false'
-      uses: gr2m/create-or-update-pull-request-action@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      if: steps.changelog_check.outputs.exists == 'false'
+      uses: stefanzweifel/git-auto-commit-action@v4
       with:
+        commit_message: Add automated changelog yaml from template
+        commit_user_name: Github Build Bot
+        commit_user_email: buildbot@fishtownanalytics.com
+        commit_author: Github Build Bot <buildbot@fishtownanalytics.com>
         branch: ${{ github.event.pull_request.head.ref }}
-        # author expected in the format "Lorem J. Ipsum <lorem@example.com>"
-        author: "Github Build Bot <buildbot@fishtownanalytics.com>"
-        commit-message: "Add automated changelog yaml from template"
