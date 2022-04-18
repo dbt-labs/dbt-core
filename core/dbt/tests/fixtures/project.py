@@ -455,8 +455,9 @@ def project(
     yield project
 
     # Some commands will not have an installed adapter when running and will raise a KeyError here.  Just pass for now.
+    # See https://github.com/dbt-labs/dbt-core/issues/5041
     try:
         project.drop_test_schema()
-    except KeyError:
+    except AttributeError:  # KeyError:
         pass
     os.chdir(orig_cwd)
