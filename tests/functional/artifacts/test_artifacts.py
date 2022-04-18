@@ -385,7 +385,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         elif key in ["nodes", "sources", "exposures", "metrics", "disabled", "docs"]:
             for unique_id, node in expected_manifest[key].items():
                 assert unique_id in manifest[key]
-                assert manifest[key][unique_id] == node
+                assert manifest[key][unique_id] == node, f"{unique_id} did not match"
         else:  # ['docs', 'parent_map', 'child_map', 'selectors']
             assert manifest[key] == expected_manifest[key]
 

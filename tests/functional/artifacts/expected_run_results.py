@@ -1,11 +1,5 @@
 from unittest.mock import ANY
-
-
-class AnyFloat:
-    """Any float. Use this in assert calls to assert that it is a float."""
-
-    def __eq__(self, other):
-        return isinstance(other, float)
+from dbt.tests.util import AnyFloat
 
 
 def expected_run_results():

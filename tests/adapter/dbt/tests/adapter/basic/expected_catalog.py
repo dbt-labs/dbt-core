@@ -1,3 +1,6 @@
+from dbt.tests.util import AnyInteger
+
+
 def no_stats():
     return {
         "has_stats": {
@@ -12,6 +15,7 @@ def no_stats():
 
 def base_expected_catalog(
     project,
+    role,
     id_type,
     text_type,
     time_type,
@@ -21,7 +25,6 @@ def base_expected_catalog(
     seed_stats=None,
     case=None,
     case_columns=False,
-    model_database=None,
 ):
 
     if case is None:
@@ -34,40 +37,38 @@ def base_expected_catalog(
     if seed_stats is None:
         seed_stats = model_stats
 
-    if model_database is None:
-        model_database = project.database
-    my_schema_name = project.test_schema
-    role = "root"
-    alternate_schema = project.test_schema + "_test"
+    model_database = project.database
+    my_schema_name = case(project.test_schema)
+    alternate_schema = case(project.test_schema + "_test")
 
     expected_cols = {
         col_case("id"): {
             "name": col_case("id"),
-            "index": 1,
+            "index": AnyInteger(),
             "type": id_type,
             "comment": None,
         },
         col_case("first_name"): {
             "name": col_case("first_name"),
-            "index": 2,
+            "index": AnyInteger(),
             "type": text_type,
             "comment": None,
         },
         col_case("email"): {
             "name": col_case("email"),
-            "index": 3,
+            "index": AnyInteger(),
             "type": text_type,
             "comment": None,
         },
         col_case("ip_address"): {
             "name": col_case("ip_address"),
-            "index": 4,
+            "index": AnyInteger(),
             "type": text_type,
             "comment": None,
         },
         col_case("updated_at"): {
             "name": col_case("updated_at"),
-            "index": 5,
+            "index": AnyInteger(),
             "type": time_type,
             "comment": None,
         },
@@ -132,55 +133,81 @@ def base_expected_catalog(
     }
 
 
-def expected_references_catalog(project):
+def expected_references_catalog(
+    project,
+    role,
+    id_type,
+    text_type,
+    time_type,
+    view_type,
+    table_type,
+    model_stats,
+    bigint_type=None,
+    seed_stats=None,
+    case=None,
+    case_columns=False,
+    view_summary_stats=None,
+):
+    if case is None:
+
+        def case(x):
+            return x
+
+    col_case = case if case_columns else lambda x: x
+
+    if seed_stats is None:
+        seed_stats = model_stats
+
+    if view_summary_stats is None:
+        view_summary_stats = model_stats
+
     model_database = project.database
-    my_schema_name = project.test_schema
-    role = "root"
-    stats = no_stats()
+    my_schema_name = case(project.test_schema)
+
     summary_columns = {
         "first_name": {
             "name": "first_name",
             "index": 1,
-            "type": "text",
+            "type": text_type,
             "comment": None,
         },
         "ct": {
             "name": "ct",
             "index": 2,
-            "type": "bigint",
+            "type": bigint_type,
             "comment": None,
         },
     }
 
     seed_columns = {
         "id": {
-            "name": "id",
+            "name": col_case("id"),
             "index": 1,
-            "type": "integer",
+            "type": id_type,
             "comment": None,
         },
         "first_name": {
-            "name": "first_name",
+            "name": col_case("first_name"),
             "index": 2,
-            "type": "text",
+            "type": text_type,
             "comment": None,
         },
         "email": {
-            "name": "email",
+            "name": col_case("email"),
             "index": 3,
-            "type": "text",
+            "type": text_type,
             "comment": None,
         },
         "ip_address": {
-            "name": "ip_address",
+            "name": col_case("ip_address"),
             "index": 4,
-            "type": "text",
+            "type": text_type,
             "comment": None,
         },
         "updated_at": {
-            "name": "updated_at",
+            "name": col_case("updated_at"),
             "index": 5,
-            "type": "timestamp without time zone",
+            "type": time_type,
             "comment": None,
         },
     }
@@ -191,12 +218,12 @@ def expected_references_catalog(project):
                 "metadata": {
                     "schema": my_schema_name,
                     "database": project.database,
-                    "name": "seed",
-                    "type": "BASE TABLE",
+                    "name": case("seed"),
+                    "type": table_type,
                     "comment": None,
                     "owner": role,
                 },
-                "stats": stats,
+                "stats": seed_stats,
                 "columns": seed_columns,
             },
             "model.test.ephemeral_summary": {
@@ -204,12 +231,12 @@ def expected_references_catalog(project):
                 "metadata": {
                     "schema": my_schema_name,
                     "database": model_database,
-                    "name": "ephemeral_summary",
-                    "type": "BASE TABLE",
+                    "name": case("ephemeral_summary"),
+                    "type": table_type,
                     "comment": None,
                     "owner": role,
                 },
-                "stats": stats,
+                "stats": model_stats,
                 "columns": summary_columns,
             },
             "model.test.view_summary": {
@@ -217,12 +244,12 @@ def expected_references_catalog(project):
                 "metadata": {
                     "schema": my_schema_name,
                     "database": model_database,
-                    "name": "view_summary",
-                    "type": "VIEW",
+                    "name": case("view_summary"),
+                    "type": view_type,
                     "comment": None,
                     "owner": role,
                 },
-                "stats": stats,
+                "stats": view_summary_stats,
                 "columns": summary_columns,
             },
         },
@@ -232,12 +259,12 @@ def expected_references_catalog(project):
                 "metadata": {
                     "schema": my_schema_name,
                     "database": project.database,
-                    "name": "seed",
-                    "type": "BASE TABLE",
+                    "name": case("seed"),
+                    "type": table_type,
                     "comment": None,
                     "owner": role,
                 },
-                "stats": stats,
+                "stats": seed_stats,
                 "columns": seed_columns,
             },
         },

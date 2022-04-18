@@ -205,24 +205,6 @@ models:
     description: "{{ doc('view_summary') }}"
     columns: *summary_columns
 
-sources:
-  - name: my_source
-    description: "{{ doc('source_info') }}"
-    loader: a_loader
-    schema: "{{ var('test_schema') }}"
-    quoting:
-      database: False
-      identifier: False
-    tables:
-      - name: my_table
-        description: "{{ doc('table_info') }}"
-        identifier: seed
-        quoting:
-          identifier: True
-        columns:
-          - name: id
-            description: "{{ doc('column_info') }}"
-
 exposures:
   - name: notebook_exposure
     type: notebook
@@ -240,6 +222,27 @@ exposures:
         - python
     tags: ['my_department']
 
+"""
+
+ref_sources__schema_yml = """
+version: 2
+sources:
+  - name: my_source
+    description: "{{ doc('source_info') }}"
+    loader: a_loader
+    schema: "{{ var('test_schema') }}"
+    quoting:
+      database: False
+      identifier: False
+    tables:
+      - name: my_table
+        description: "{{ doc('table_info') }}"
+        identifier: seed
+        quoting:
+          identifier: True
+        columns:
+          - name: id
+            description: "{{ doc('column_info') }}"
 """
 
 ref_models__view_summary_sql = """
@@ -327,7 +330,13 @@ def verify_catalog(project, expected_catalog, start_time):
     )
     assert not catalog["errors"]
     for key in "nodes", "sources":
-        assert catalog[key] == expected_catalog[key]
+        for unique_id, expected_node in expected_catalog[key].items():
+            found_node = catalog[key][unique_id]
+            for node_key in expected_node:
+                assert node_key in found_node
+                assert (
+                    found_node[node_key] == expected_node[node_key]
+                ), f"Key '{node_key}' in '{unique_id}' did not match"
 
 
 def verify_metadata(metadata, dbt_schema_version, start_time):
@@ -414,9 +423,10 @@ class BaseDocsGenerate(BaseGenerateProject):
         }
 
     @pytest.fixture(scope="class")
-    def expected_catalog(self, project):
+    def expected_catalog(self, project, profile_user):
         return base_expected_catalog(
             project,
+            role=profile_user,
             id_type="integer",
             text_type="text",
             time_type="timestamp without time zone",
@@ -446,21 +456,36 @@ class TestDocsGenerate(BaseDocsGenerate):
     pass
 
 
-class BaseReferences(BaseGenerateProject):
+class BaseDocsGenReferences(BaseGenerateProject):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "schema.yml": ref_models__schema_yml,
+            "sources.yml": ref_sources__schema_yml,
             "view_summary.sql": ref_models__view_summary_sql,
             "ephemeral_summary.sql": ref_models__ephemeral_summary_sql,
             "ephemeral_copy.sql": ref_models__ephemeral_copy_sql,
             "docs.md": ref_models__docs_md,
         }
 
-    def test_references(self, project):
+    @pytest.fixture(scope="class")
+    def expected_catalog(self, project, profile_user):
+        return expected_references_catalog(
+            project,
+            role=profile_user,
+            id_type="integer",
+            text_type="text",
+            time_type="timestamp without time zone",
+            bigint_type="bigint",
+            view_type="VIEW",
+            table_type="BASE TABLE",
+            model_stats=no_stats(),
+        )
+
+    def test_references(self, project, expected_catalog):
         start_time = run_and_generate(project)
-        verify_catalog(project, expected_references_catalog(project), start_time)
+        verify_catalog(project, expected_catalog, start_time)
 
 
-class TestReferences(BaseReferences):
+class TestDocsGenReferences(BaseDocsGenReferences):
     pass

@@ -39,7 +39,12 @@ from dbt.events.test_types import IntegrationTestDebug
 #   get_relation_columns
 #   update_rows
 #      generate_update_clause
-
+#
+# Classes for comparing fields in dictionaries
+#   AnyFloat
+#   AnyInteger
+#   AnyString
+#   AnyStringWith
 # =============================================================================
 
 
@@ -430,3 +435,46 @@ def check_table_does_not_exist(adapter, name):
 def check_table_does_exist(adapter, name):
     columns = get_relation_columns(adapter, name)
     assert len(columns) > 0
+
+
+# Utility classes for enabling comparison of dictionaries
+
+
+class AnyFloat:
+    """Any float. Use this in assert calls"""
+
+    def __eq__(self, other):
+        return isinstance(other, float)
+
+
+class AnyInteger:
+    """Any Integer. Use this in assert calls"""
+
+    def __eq__(self, other):
+        return isinstance(other, int)
+
+
+class AnyString:
+    """Any string. Use this in assert calls"""
+
+    def __eq__(self, other):
+        return isinstance(other, str)
+
+
+class AnyStringWith:
+    """AnyStringWith("AUTO")"""
+
+    def __init__(self, contains=None):
+        self.contains = contains
+
+    def __eq__(self, other):
+        if not isinstance(other, str):
+            return False
+
+        if self.contains is None:
+            return True
+
+        return self.contains in other
+
+    def __repr__(self):
+        return "AnyStringWith<{!r}>".format(self.contains)

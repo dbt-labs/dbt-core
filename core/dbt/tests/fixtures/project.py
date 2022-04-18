@@ -120,6 +120,11 @@ def dbt_profile_target():
     }
 
 
+@pytest.fixture(scope="class")
+def profile_user(dbt_profile_target):
+    return dbt_profile_target["user"]
+
+
 # This fixture can be overridden in a project. The data provided in this
 # fixture will be merged into the default project dictionary via a python 'update'.
 @pytest.fixture(scope="class")

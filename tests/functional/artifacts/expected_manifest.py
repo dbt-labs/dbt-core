@@ -2,6 +2,7 @@ import hashlib
 import dbt
 import os
 from unittest.mock import ANY
+from dbt.tests.util import AnyStringWith
 
 # This produces an "expected manifest", with a number of the fields
 # modified to avoid ephemeral changes.
@@ -170,23 +171,6 @@ class LineIndifferent:
 
     def __str__(self):
         return self.__repr__()
-
-
-class AnyStringWith:
-    def __init__(self, contains=None):
-        self.contains = contains
-
-    def __eq__(self, other):
-        if not isinstance(other, str):
-            return False
-
-        if self.contains is None:
-            return True
-
-        return self.contains in other
-
-    def __repr__(self):
-        return "AnyStringWith<{!r}>".format(self.contains)
 
 
 def expected_seeded_manifest(project, model_database=None, quote_model=False):
