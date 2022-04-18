@@ -94,7 +94,6 @@ jobs:
         echo '  Author: ${{ github.event.pull_request.user.login }}' >> "${{ steps.fp.outputs.FILEPATH }}"
         echo '  Issue: "4904"' >> "${{ steps.fp.outputs.FILEPATH }}"  # github.event.pull_request.issue for auto id?
         echo '  PR: "${{ github.event.pull_request.number }}"' >> "${{ steps.fp.outputs.FILEPATH }}"
-        echo  >> "${{ steps.fp.outputs.FILEPATH }}"
 
     - name: Commit Changelog File
       if: steps.changelog_check.outputs.exists == 'false'
