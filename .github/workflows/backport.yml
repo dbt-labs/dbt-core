@@ -16,19 +16,32 @@
 # Once a PR is "Squash and merge"'d and it has been correctly labeled
 # according to the naming convention.
 
+# This workflow file is copied straight from the given example:
+# https://github.com/tibdex/backport/blob/main/.github/workflows/backport.yml
+
 name: Backport
 on:
-  pull_request:
+  pull_request_target:
     types:
       - closed
       - labeled
 
 jobs:
   backport:
-    runs-on: ubuntu-18.04
     name: Backport
+    runs-on: ubuntu-latest
+    # Only react to merged PRs for security reasons.
+    # See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target.
+    if: >
+      github.event.pull_request.merged
+      && (
+        github.event.action == 'closed'
+        || (
+          github.event.action == 'labeled'
+          && contains(github.event.label.name, 'backport')
+        )
+      )
     steps:
-      - name: Backport
-        uses: dbt-labs/backport@v1.1.1
+      - uses: tibdex/backport@v2.0.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
