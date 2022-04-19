@@ -5,7 +5,7 @@ With `dbt` ever evolving and progressing, we continue to ship and release versio
 
 We already have an established versioning strategy when it comes to major/minor/patch releases. The following is our approach as to what to expect from each release version:
 
-* Major: This signifies that breaking changes which require user action are included in this release.
+* Major version: This signifies that breaking changes which require user action are included in this release.
 * Minor version: This signifies that new features are included in this release.
 * Patch version: This signifies that bug and security fixes are included in this release.
 
@@ -13,29 +13,33 @@ We need a versioning strategy that allows us to to convey to users the confidenc
 
 We need a branching strategy to support the goals of the versioning strategy. We do not want to have to stop development on `main` as we await a release, nor do we want every change in `main` published in every release. Using branches, we can decide which changes go into which release.
 
+## Common Terminology
+* Release version: refers to the numeric value of the release (eg. `1.0.1`, `0.21.0`) There are major, minor, and patch release versions that map to standard [semantic versioning practices](https://semver.org/#semantic-versioning-200).
+* Release stage: refers to the stability of the release (eg. beta, rc, final). 
+
 ## Requirements
 The following are requirements that must be met for releasing dbt:
 
 1. We must have major, minor, and patch releases.
-1. We must have release types that have the goal of garnering early feedback from the Community.
-1. We must have release types that aim to identify bugs and test for stability.
-1. We must have release types that are stable and of production quality.
-1. We must have the ability to isolate changes from different versions based on the type of release.
+1. We must have release stages that have the goal of garnering early feedback from the Community.
+1. We must have release stages that aim to identify bugs and test for stability.
+1. We must have release stages that are stable and of production quality.
+1. We must have the ability to isolate changes from different versions and stages to release.
 
 ## Decisions
 
-### Version Types
+### Version Stages
 <details>
 <summary> Header Explanations: </summary>
 
-- Type: the type of the version (e.g. beta, final)
-- Released?: does this type of version need to be released?
-- Branches: the branches where these version types are present (e.g. beta version numbers should only exist on the `main` branch)
-- Release Versions: the releases where the version type is applicable (i.e. we will only have alphas for major and minor releases, we will not have alphas for patch releases)
+- Stages: defined in [Common Terminology](#common-terminology)
+- Released?: do we plan to release this stage to GitHub, PyPi, etc.
+- Branches: the branches where these release stages are present (e.g. betas should only exist on the `main` branch)
+- Applicable Release Versions: the release versions where the release stage is applicable (i.e. we will only have alphas for major and minor versions, we will not have alphas for patch versions)
 - Expectations: the stability of the code changes in the release
 </details>
 
-| Type | Released? | Branches | Release Versions | Expectations |
+| Stage | Released? | Branches | Applicable Release Versions | Expectations |
 | ---- | --------- | -------- | ---------------- | ------------ |
 | Alpha | No | `main` | Major / Minor | Experimental |
 | Beta | Yes | `main` | Major / Minor | Experimental |
@@ -43,7 +47,7 @@ The following are requirements that must be met for releasing dbt:
 | Final | Yes | Release branch | Major / Minor / Patch | Production |
 
 ### Branching Strategy
-Based off of the release version and expectations, the version type's branching strategy can be determined. 
+Based off of the release version and expectations, the version stage's branching strategy can be determined. 
  * Alpha and Beta versions are experimental, and therefore exist only on the `main` branch, where all our changes reside
  * Alpha versions are never released. They signify that development is underway, though the changes they contain have not been released in any form
  * An RC version denotes a more stable state. A release branch will be created for RC releases to limit the changes a release contains
