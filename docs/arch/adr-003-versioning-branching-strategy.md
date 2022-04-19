@@ -56,6 +56,18 @@ Based off of the release version and expectations, the version stage's branching
 
  ![Branching Strategy](images/ReleasingBranchStrategy.png)
 
+### Changes for Specific Release Versions
+There will be times that we will want to target changes to go into specific release versions. Below outlines 2 different scenarios in which this can occur and how we will approach them.
+
+1. If a release branch already exists: This is the most common scenario where we want to add a change to an upcoming release and the release branch has already been cut. In this instance, developers will commit their changes to `main` first. Those changes (or some form of them) will then be applied to the release branch in question so that they can be included in the specific release version. 
+\* Disclaimer: the how and when to apply changes to a release branch will be covered in another upcoming ADR.
+
+1. If a release branch is not yet cut: This is the scenario where we start to develop a feature for a future version before we have cut a release branch for the upcoming version (eg. we want to work on a feature for `1.2.0` but we haven't cut the release branch for `1.1.0` yet). 
+    1. Is this dead code? If so, then commiting the changes to `main` is acceptable. There must be 0 risk of users hitting this so if unsure, please uses the alternative option.
+    1. Use a feature branch until the release branch is cut. Then when it makes sense, merge the feature branch into `main` and continue development.
+
+   ** Sometimes feature flags are used by teams to also achieve this goal. In our case, feature flags aren't controlled by the team and instead dependent of a user to toggle them on/off. Core uses feature flags instead for offering experimental functionality for users to try and test out. This is different from hiding features from going into certain releases.
+
 ## Status
 In Progress
 
