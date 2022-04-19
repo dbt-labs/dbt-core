@@ -1,7 +1,0 @@
-kind: Docs
-body: Bump jekyll from 3.8.7 to 3.9.0
-time: 2022-04-04T20:12:03.146811-05:00
-custom:
-  Author: emmyoop
-  Issue: "4984"
-  PR: "4995"

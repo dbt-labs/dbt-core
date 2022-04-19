@@ -1,7 +1,0 @@
-kind: Fixes
-body: Inconsistent timestamps between inserted/updated and deleted rows in snapshots
-time: 2022-03-14T20:02:36.119598832+01:00
-custom:
-  Author: kadero
-  Issue: "4347"
-  PR: "4513"

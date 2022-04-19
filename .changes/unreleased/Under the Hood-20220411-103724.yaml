@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Updating tests and docs to show that we now support Python 3.10
-time: 2022-04-11T10:37:24.806649-04:00
-custom:
-  Author: leahwicz
-  Issue: "4974"
-  PR: "5025"
