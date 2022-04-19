@@ -1,9 +1,0 @@
-kind: Features
-body: Add a variable called selected_resources in the Jinja context containing a list
-  of all the resources matching the nodes for  the --select, --exclude and/or --selector
-  parameters.
-time: 2022-04-04T19:04:39.347479+02:00
-custom:
-  Author: b-per
-  Issue: "3471"
-  PR: "5001"

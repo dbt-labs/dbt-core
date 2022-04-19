@@ -1,7 +1,0 @@
-kind: Fixes
-body: Use cli_vars instead of context to create package and selector renderers
-time: 2022-03-16T15:54:20.608384-04:00
-custom:
-  Author: gshank
-  Issue: "4876"
-  PR: "4878"

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Re-format codebase (except tests) using pre-commit hooks
-time: 2022-03-21T14:16:10.285506-05:00
-custom:
-  Author: iknox-fa
-  Issue: "3195"
-  PR: "4697"

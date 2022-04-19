@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Drop support for Python <3.7.2
-time: 2022-03-21T14:15:23.893773-05:00
-custom:
-  Author: jtcohen6
-  Issue: "4584"
-  PR: "4643"

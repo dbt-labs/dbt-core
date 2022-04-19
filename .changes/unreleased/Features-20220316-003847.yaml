@@ -1,8 +1,0 @@
-kind: Features
-body: Add `--cache_selected_only` flag to cache schema object of selected models
-  only.
-time: 2022-03-16T00:38:47.8468296-05:00
-custom:
-  Author: karunpoudel
-  Issue: "4688"
-  PR: "4860"
