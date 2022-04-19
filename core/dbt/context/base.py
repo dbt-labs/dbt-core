@@ -1,11 +1,17 @@
 import json
 import os
-from typing import Any, Dict, NoReturn, Optional, Mapping
+from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set
 
 from dbt import flags
 from dbt import tracking
 from dbt.clients.jinja import get_rendered
-from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
+from dbt.clients.yaml_helper import (
+    yaml,
+    safe_load,
+    SafeLoader,
+    Loader,
+    Dumper,
+)  # noqa: F401
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import (
     raise_compiler_error,
@@ -455,6 +461,26 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return yaml.safe_dump(data=value, sort_keys=sort_keys)
         except (ValueError, yaml.YAMLError):
+            return default
+
+    @contextmember
+    @staticmethod
+    def set(value: Iterable, default: Any = None) -> Optional[Set[Any]]:
+        """The `set` context method can be used to convert any iterable
+        to a sequence of iterable elements that are unique (a set).
+
+        :param value: The iterable
+        :param default: A default value to return if the `value` argument
+            is not an iterable
+
+        Usage:
+            {% set my_list = [1, 2, 2, 3] %}
+            {% set my_set = set(my_list) %}
+            {% do log(my_set) %} {# {1, 2, 3} #}
+        """
+        try:
+            return set(value)
+        except TypeError:
             return default
 
     @contextmember
