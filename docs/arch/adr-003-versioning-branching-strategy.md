@@ -64,3 +64,4 @@ The only real change here is the addition of an Alpha release, the intent of whi
 The following are topics that are outside the scope of this document and will be addressed in their own ADR:
 * Hotfixes and their branching strategies
 * How and why we bump release versions right before a release.
+* How and when do we backport changes to release branches
