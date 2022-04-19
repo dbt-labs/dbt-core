@@ -16,7 +16,7 @@ body:
           required: true
       label: Is this your first time opening an issue?
       options:
-        - label: I have read the [expectations for OSS Contributors](TODO: DOCS LINK ONCE MERGED)
+        - label: I have read the [expectations for open source contributors](https://docs.getdbt.com/docs/contributing/oss-expectations)
           required: true
   - type: textarea
     attributes:
