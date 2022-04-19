@@ -50,10 +50,10 @@
 - [@jonstacks](https://github.com/jonstacks) ([#4995](https://github.com/dbt-labs/dbt-core/pull/4995))
 - [@kadero](https://github.com/kadero) ([#4513](https://github.com/dbt-labs/dbt-core/pull/4513))
 - [@karunpoudel](https://github.com/karunpoudel) ([#4860](https://github.com/dbt-labs/dbt-core/pull/4860), [#4860](https://github.com/dbt-labs/dbt-core/pull/4860))
-- [@matt-winkler,](https://github.com/matt-winkler,) ([#4256](https://github.com/dbt-labs/dbt-core/pull/4256))
+- [@matt-winkler](https://github.com/matt-winkler) ([#4256](https://github.com/dbt-labs/dbt-core/pull/4256))
 - [@pgoslatara](https://github.com/pgoslatara) ([#4995](https://github.com/dbt-labs/dbt-core/pull/4995))
 - [@poloaraujo](https://github.com/poloaraujo) ([#4854](https://github.com/dbt-labs/dbt-core/pull/4854))
-- [@sungchun12,](https://github.com/sungchun12,) ([#4256](https://github.com/dbt-labs/dbt-core/pull/4256))
+- [@sungchun12](https://github.com/sungchun12) ([#4256](https://github.com/dbt-labs/dbt-core/pull/4256))
 
 
 ## dbt-core 1.1.0-b1 - March 22, 2022
