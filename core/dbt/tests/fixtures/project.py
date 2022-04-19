@@ -454,5 +454,13 @@ def project(
 
     yield project
 
-    project.drop_test_schema()
+    # deps, debug and clean commands will not have an installed adapter when running and will raise
+    # a KeyError here.  Just pass for now.
+    # See https://github.com/dbt-labs/dbt-core/issues/5041
+    # The debug command also results in an AttributeError since `QueryCommentedProfile` doesn't have
+    # a `load_dependencies` method.
+    try:
+        project.drop_test_schema()
+    except (KeyError, AttributeError):
+        pass
     os.chdir(orig_cwd)
