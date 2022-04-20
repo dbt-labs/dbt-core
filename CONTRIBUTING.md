@@ -1,6 +1,6 @@
 # Contributing to `dbt-core`
 
-`dbt-core` is Apache 2.0-licensed open source software. `dbt-core` is what it is today because community members have opened issues, provided feedback, and [contributed to the knowledge loop](https://www.getdbt.com/dbt-labs/values/). Whether you are a seasoned open source contributor or a first-time committer, we welcome and encourage you to contribute code, documentation, ideas, or problem statements to this project.
+`dbt-core` is open source software. It is what it is today because community members have opened issues, provided feedback, and [contributed to the knowledge loop](https://www.getdbt.com/dbt-labs/values/). Whether you are a seasoned open source contributor or a first-time committer, we welcome and encourage you to contribute code, documentation, ideas, or problem statements to this project.
 
 1. [About this document](#about-this-document)
 2. [Getting the code](#getting-the-code)
@@ -11,11 +11,11 @@
 
 ## About this document
 
-There are many ways to contribute to the ongoing development of `dbt-core`, such as by participating in discussions and issues. We encourage you to first read our ["Expectations for Open Source Contributors"](https://docs.getdbt.com/docs/contributing/oss-expectations).
+There are many ways to contribute to the ongoing development of `dbt-core`, such as by participating in discussions and issues. We encourage you to first read our higher-level document: ["Expectations for Open Source Contributors"](https://docs.getdbt.com/docs/contributing/oss-expectations).
 
-The rest of this document serves as a more granular guide for contributing code changes to `dbt-core` (this repository). It is not intended as a guide for using `dbt-core`, and some pieces assume a level of familiarity with Python development (virtualenvs, `pip`, etc). Specific code snippets in this guide assumes you are using macOS or Linux and are comfortable with the command line.
+The rest of this document serves as a more granular guide for contributing code changes to `dbt-core` (this repository). It is not intended as a guide for using `dbt-core`, and some pieces assume a level of familiarity with Python development (virtualenvs, `pip`, etc). Specific code snippets in this guide assume you are using macOS or Linux and are comfortable with the command line.
 
-If you get stuck, we're happy to help--drop us a line in the `#dbt-core-development` channel on [slack](https://community.getdbt.com).
+If you get stuck, we're happy to help! Drop us a line in the `#dbt-core-development` channel in the [dbt Community Slack](https://community.getdbt.com).
 
 ### Notes
 
@@ -49,17 +49,19 @@ There are some tools that will be helpful to you in developing locally. While th
 
 ### Tools
 
-A short list of tools used in `dbt-core` testing that will be helpful to your understanding:
+These are the tools used in `dbt-core` development and testing:
 
-- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.7, Python 3.8, Python 3.9, and Python 3.10
-- [`pytest`](https://docs.pytest.org/en/latest/) to discover/run tests
-- [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) - but don't worry too much, nobody _really_ understands how make works and our Makefile is super simple
+- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.7, 3.8, 3.9, and 3.10
+- [`pytest`](https://docs.pytest.org/en/latest/) to define, discover, and run tests
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
-- [Github Actions](https://github.com/features/actions)
+- [`pre-commit`](https.pre-commit.com) to easily run those checks
+- [`changie`](https://changie.dev/) to create changelog entries, without merge conflicts
+- [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) to run multiple setup or test steps in combination. Don't worry too much, nobody _really_ understands how `make` works, and our Makefile aims to be super simple.
+- [Github Actions](https://github.com/features/actions) for automating tests and checks, once a PR is pushed to the `dbt-core` repository
 
-A deep understanding of these tools in not required to effectively contribute to `dbt-core`, but we recommend checking out the attached documentation if you're interested in learning more about them.
+A deep understanding of these tools in not required to effectively contribute to `dbt-core`, but we recommend checking out the attached documentation if you're interested in learning more about each one.
 
 #### Virtual environments
 
@@ -107,10 +109,10 @@ Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as
 
 ## Testing
 
-Once you're able to manually test that your code change is working in the desired circumstances, it's important to run automated tests. These tests will ensure that:
+Once you're able to manually test that your code change is working as expected, it's important to run existing automated tests, as well as adding some new ones. These tests will ensure that:
 - Your code changes do not unexpectedly break other established functionality
 - Your code changes can handle all known edge cases
-- The functionality you're adding will _keep_ working into the future
+- The functionality you're adding will _keep_ working in the future
 
 Although `dbt-core` works with a number of different databases, you won't need to supply credentials for every one of these databases in your test environment. Instead, you can test most `dbt-core` code changes with Python and Postgres.
 
@@ -167,18 +169,20 @@ python3 -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 # run specific Postgres integration tests (old way)
 python3 -m pytest -m profile_postgres test/integration/074_postgres_unlogged_table_tests
 # run specific Postgres integration tests (new way)
-python3 -m pytest test/functional/sources
+python3 -m pytest tests/functional/sources
 ```
 
 > See [pytest usage docs](https://docs.pytest.org/en/6.2.x/usage.html) for an overview of useful command-line options.
 
 ## Adding CHANGELOG Entry
 
-We use [changie](https://changie.dev) to generate `CHANGELOG` entries.  Do not edit the `CHANGELOG.md` directly.  Your modifications will be lost.
+We use [changie](https://changie.dev) to generate `CHANGELOG` entries. **Note:** Do not edit the `CHANGELOG.md` directly. Your modifications will be lost.
 
 Follow the steps to [install `changie`](https://changie.dev/guide/installation/) for your system.
 
 Once changie is installed and your PR is created, simply run `changie new` and changie will walk you through the process of creating a changelog entry.  Commit the file that's created and your changelog entry is complete!
+
+You don't need to worry about which `dbt-core` version your change will go into. Just create the changelog entry with `changie`, and open your PR against the `main` branch. All merged changes will be included in the next minor version of `dbt-core`. The Core maintainers _may_ choose to "backport" specific changes in order to patch older minor versions. In that case, a maintainer will take care of that backport after merging your PR, before releasing the new version of `dbt-core`.
 
 ## Submitting a Pull Request
 
