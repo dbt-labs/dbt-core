@@ -1,7 +1,0 @@
-kind: Fixes
-body: Support click versions in the v7.x series
-time: 2022-03-09T10:05:30.796158-06:00
-custom:
-  Author: twilly
-  Issue: "4566"
-  PR: "4681"

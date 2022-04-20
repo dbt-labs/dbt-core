@@ -1,8 +1,0 @@
-kind: Fixes
-body: Fixed a bug where nodes that depend on multiple macros couldn't be selected
-  using `-s state:modified`
-time: 2022-03-09T10:07:51.735463-06:00
-custom:
-  Author: stu-k
-  Issue: "4678"
-  PR: "4820"
