@@ -463,9 +463,9 @@ class BaseContext(metaclass=ContextMeta):
         except (ValueError, yaml.YAMLError):
             return default
 
-    @contextmember
+    @contextmember("set")
     @staticmethod
-    def set(value: Iterable, default: Any = None) -> Optional[Set[Any]]:
+    def _set(value: Iterable[Any], default: Any = None) -> Optional[Set[Any]]:
         """The `set` context method can be used to convert any iterable
         to a sequence of iterable elements that are unique (a set).
 
@@ -476,10 +476,32 @@ class BaseContext(metaclass=ContextMeta):
         Usage:
             {% set my_list = [1, 2, 2, 3] %}
             {% set my_set = set(my_list) %}
-            {% do log(my_set) %} {# {1, 2, 3} #}
+            {% do log(my_set) %}  {# {1, 2, 3} #}
         """
         try:
             return set(value)
+        except TypeError:
+            return default
+
+    @contextmember("zip")
+    @staticmethod
+    def _zip(*args: Iterable[Any], default: Any = None) -> Optional[Iterable[Any]]:
+        """The `zip` context method can be used to used to return
+        an iterator of tuples, where the i-th tuple contains the i-th
+        element from each of the argument iterables.
+
+        :param *args: Any number of iterables
+        :param default: A default value to return if `*args` is not
+            iterable
+
+        Usage:
+            {% set my_list_a = [1, 2] %}
+            {% set my_list_b = ['alice', 'bob'] %}
+            {% set my_zip = zip(my_list_a, my_list_b) | list %}
+            {% do log(my_set) %}  {# [(1, 'alice'), (2, 'bob')] #}
+        """
+        try:
+            return zip(*args)
         except TypeError:
             return default
 

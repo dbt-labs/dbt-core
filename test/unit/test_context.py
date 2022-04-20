@@ -192,6 +192,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "fromyaml",
         "toyaml",
         "set",
+        "zip",
         "log",
         "run_started_at",
         "invocation_id",
