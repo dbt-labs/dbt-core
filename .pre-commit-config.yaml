@@ -43,7 +43,7 @@ repos:
     alias: flake8-check
     stages: [manual]
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.782
+  rev: v0.942
   hooks:
   - id: mypy
     # N.B.: Mypy is... a bit fragile.
