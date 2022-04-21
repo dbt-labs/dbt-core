@@ -1,0 +1,7 @@
+kind: Fixes
+body: Restore ability to utilize `updated_at` for check_cols snapshots
+time: 2022-04-15T11:29:27.063462-06:00
+custom:
+  Author: dbeatty10
+  Issue: "5076"
+  PR: "5077"

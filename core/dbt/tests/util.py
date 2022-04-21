@@ -273,13 +273,15 @@ def check_relation_types(adapter, relation_to_type):
 # by doing a separate call for each set of tables/relations.
 # Wraps check_relations_equal_with_relations by creating relations
 # from the list of names passed in.
-def check_relations_equal(adapter, relation_names):
+def check_relations_equal(adapter, relation_names, compare_snapshot_cols=False):
     if len(relation_names) < 2:
         raise TestProcessingException(
             "Not enough relations to compare",
         )
     relations = [relation_from_name(adapter, name) for name in relation_names]
-    return check_relations_equal_with_relations(adapter, relations)
+    return check_relations_equal_with_relations(
+        adapter, relations, compare_snapshot_cols=compare_snapshot_cols
+    )
 
 
 # This can be used when checking relations in different schemas, by supplying
@@ -288,16 +290,17 @@ def check_relations_equal(adapter, relation_names):
 #    adapter.get_columns_in_relation
 #    adapter.get_rows_different_sql
 #    adapter.execute
-def check_relations_equal_with_relations(adapter, relations):
+def check_relations_equal_with_relations(adapter, relations, compare_snapshot_cols=False):
 
     with get_connection(adapter):
         basis, compares = relations[0], relations[1:]
         # Skip columns starting with "dbt_" because we don't want to
         # compare those, since they are time sensitive
+        # (unless comparing "dbt_" snapshot columns is explicitly enabled)
         column_names = [
             c.name
             for c in adapter.get_columns_in_relation(basis)
-            if not c.name.lower().startswith("dbt_")
+            if not c.name.lower().startswith("dbt_") or compare_snapshot_cols
         ]
 
         for relation in compares:
