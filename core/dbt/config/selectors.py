@@ -5,7 +5,7 @@ from dbt.clients.yaml_helper import (  # noqa: F401
 )
 from dbt.dataclass_schema import ValidationError
 
-from .renderer import SelectorRenderer
+from .renderer import BaseRenderer
 
 from dbt.clients.system import (
     load_file_contents,
@@ -60,8 +60,8 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     def render_from_dict(
         cls,
         data: Dict[str, Any],
-        renderer: SelectorRenderer,
-    ) -> 'SelectorConfig':
+        renderer: BaseRenderer,
+    ) -> "SelectorConfig":
         try:
             rendered = renderer.render_data(data)
         except (ValidationError, RuntimeException) as exc:
@@ -73,8 +73,10 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
 
     @classmethod
     def from_path(
-        cls, path: Path, renderer: SelectorRenderer,
-    ) -> 'SelectorConfig':
+        cls,
+        path: Path,
+        renderer: BaseRenderer,
+    ) -> "SelectorConfig":
         try:
             data = load_yaml_text(load_file_contents(str(path)))
         except (ValidationError, RuntimeException) as exc:
