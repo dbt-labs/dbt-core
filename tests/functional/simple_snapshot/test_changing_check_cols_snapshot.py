@@ -9,7 +9,7 @@ snapshot_sql = """
             target_schema=schema,
             strategy='check',
             unique_key='id',
-            check_cols=var("check_cols"),
+            check_cols=var("check_cols", ['name']),
             updated_at="'" ~ var("updated_at") ~  "'::timestamp",
         )
     }}
