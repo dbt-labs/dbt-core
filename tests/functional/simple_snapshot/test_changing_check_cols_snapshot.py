@@ -74,6 +74,10 @@ def test_simple_snapshot(project):
     As long as no error is thrown, then the snapshot was successful
     """
 
+    # 1. Create a table that represents the expected data after a series of snapshots
+    results = run_dbt(["seed", "--show", "--vars", "{version: 1, updated_at: 2016-07-01}"])
+    assert len(results) == 1
+
     # Snapshot 1
     results = run_dbt(
         ["snapshot", "--vars", "{version: 1, check_cols: ['name'], updated_at: 2016-07-01}"]
