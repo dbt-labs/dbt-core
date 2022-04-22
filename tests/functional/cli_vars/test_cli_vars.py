@@ -1,7 +1,8 @@
 import pytest
 import yaml
 
-from dbt.tests.util import run_dbt, get_artifact
+from dbt.tests.util import run_dbt, get_artifact, write_config_file
+from dbt.exceptions import RuntimeException
 
 
 models_complex__schema_yml = """
@@ -50,6 +51,10 @@ select
     '{{ var("simple") }}'::varchar as simple
 """
 
+really_simple_model_sql = """
+select 'abc' as simple
+"""
+
 
 class TestCLIVars:
     @pytest.fixture(scope="class")
@@ -92,3 +97,21 @@ class TestCLIVarsSimple:
         assert len(results) == 1
         run_results = get_artifact(project.project_root, "target", "run_results.json")
         assert run_results["args"]["vars"] == "{simple: abc, unused: def}"
+
+
+class TestCLIVarsProfile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_simple__schema_yml,
+            "simple_model.sql": really_simple_model_sql,
+        }
+
+    def test_cli_vars_in_profile(self, project, dbt_profile_data):
+        profile = dbt_profile_data
+        profile["test"]["outputs"]["default"]["host"] = "{{ var('db_host') }}"
+        write_config_file(profile, project.profiles_dir, "profiles.yml")
+        with pytest.raises(RuntimeException):
+            results = run_dbt(["run"])
+        results = run_dbt(["run", "--vars", "db_host: localhost"])
+        assert len(results) == 1

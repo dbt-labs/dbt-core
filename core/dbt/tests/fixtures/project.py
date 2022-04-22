@@ -107,6 +107,9 @@ def test_data_dir(request):
 
 # This contains the profile target information, for simplicity in setting
 # up different profiles, particularly in the adapter repos.
+# Note: because we load the profile to create the adapter, this
+# fixture can't be used to test vars and env_vars or errors. The
+# profile must be written out after the test starts.
 @pytest.fixture(scope="class")
 def dbt_profile_target():
     return {
