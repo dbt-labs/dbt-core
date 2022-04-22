@@ -2,7 +2,7 @@ import pytest
 import yaml
 
 from dbt.tests.util import run_dbt, get_artifact, write_config_file
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import RuntimeException, CompilationException
 
 
 models_complex__schema_yml = """
@@ -154,3 +154,55 @@ class TestCLIVarsPackages:
         # With vars arg deps succeeds
         results = run_dbt(["deps", "--vars", "dip_version: 1.1"])
         assert results is None
+
+
+initial_selectors_yml = """
+selectors:
+  - name: dev_defer_snapshots
+    default: "{{ target.name == 'dev' | as_bool }}"
+    definition:
+      method: fqn
+      value: '*'
+      exclude:
+        - method: config.materialized
+          value: snapshot
+"""
+
+var_selectors_yml = """
+selectors:
+  - name: dev_defer_snapshots
+    default: "{{ var('snapshot_target') == 'dev' | as_bool }}"
+    definition:
+      method: fqn
+      value: '*'
+      exclude:
+        - method: config.materialized
+          value: snapshot
+"""
+
+
+class TestCLIVarsSelectors:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_simple__schema_yml,
+            "simple_model.sql": really_simple_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def selectors(self):
+        return initial_selectors_yml
+
+    def test_vars_in_selectors(self, project):
+        # initially runs ok
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        # Update the selectors.yml file to have a var
+        write_config_file(var_selectors_yml, project.project_root, "selectors.yml")
+        with pytest.raises(CompilationException):
+            run_dbt(["run"])
+
+        # Var in cli_vars works
+        results = run_dbt(["run", "--vars", "snapshot_target: dev"])
+        assert len(results) == 1
