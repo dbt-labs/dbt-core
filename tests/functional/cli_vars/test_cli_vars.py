@@ -115,3 +115,42 @@ class TestCLIVarsProfile:
             results = run_dbt(["run"])
         results = run_dbt(["run", "--vars", "db_host: localhost"])
         assert len(results) == 1
+
+
+class TestCLIVarsPackages:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_simple__schema_yml,
+            "simple_model.sql": really_simple_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-integration-project",
+                    "revision": "1.1",
+                }
+            ]
+        }
+
+    def test_cli_vars_in_packages(self, project, packages_config):
+        # Run working deps and run commands
+        run_dbt(["deps"])
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        # Change packages.yml to contain a var
+        packages = packages_config
+        packages["packages"][0]["revision"] = "{{ var('dip_version') }}"
+        write_config_file(packages, project.project_root, "packages.yml")
+
+        # Without vars args deps fails
+        with pytest.raises(RuntimeException):
+            run_dbt(["deps"])
+
+        # With vars arg deps succeeds
+        results = run_dbt(["deps", "--vars", "dip_version: 1.1"])
+        assert results is None
