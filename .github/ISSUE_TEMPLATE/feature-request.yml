@@ -6,13 +6,17 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this feature requests!
+        Thanks for taking the time to fill out this feature request!
   - type: checkboxes
     attributes:
       label: Is there an existing feature request for this?
       description: Please search to see if an issue already exists for the feature you would like.
       options:
         - label: I have searched the existing issues
+          required: true
+      label: Is this your first time opening an issue?
+      options:
+        - label: I have read the [expectations for open source contributors](https://docs.getdbt.com/docs/contributing/oss-expectations)
           required: true
   - type: textarea
     attributes:
