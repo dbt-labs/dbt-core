@@ -15,7 +15,7 @@ def format_fancy_output_line(
         progress = ""
     else:
         progress = "{} of {} ".format(index, total)
-    prefix = "{progress}{message}".format(progress=progress, message=msg)
+    prefix = "{progress}{message} ".format(progress=progress, message=msg)
 
     truncate_width = ui.printer_width() - 3
     justified = prefix.ljust(ui.printer_width(), ".")

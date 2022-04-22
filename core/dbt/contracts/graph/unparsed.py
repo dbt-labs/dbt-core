@@ -242,6 +242,7 @@ class Quoting(dbtClassMixin, Mergeable):
 
 @dataclass
 class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
+    config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
@@ -322,6 +323,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
     path: Path = field(
         metadata=dict(description="The path to the patch-defining yml file"),
     )
+    config: Dict[str, Any] = field(default_factory=dict)
     description: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
     database: Optional[str] = None

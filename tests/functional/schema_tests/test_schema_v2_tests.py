@@ -16,6 +16,9 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     seeds,
     test_context_models,
     name_collision,
+    dupe_tests_collide,
+    custom_generic_test_names,
+    custom_generic_test_names_alt_format,
     test_context_where_subq_macros,
     invalid_schema_models,
     all_models,
@@ -25,7 +28,7 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     project_files,
     case_sensitive_models__uppercase_SQL,
 )
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingException, CompilationException
 from dbt.contracts.results import TestStatus
 
 
@@ -55,7 +58,7 @@ class TestSchemaTests:
     ):
         results = run_dbt()
         assert len(results) == 5
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         # If the disabled model's tests ran, there would be 20 of these.
         assert len(test_results) == 19
 
@@ -137,7 +140,7 @@ class TestLimitedSchemaTests:
     ):
         results = run_dbt()
         assert len(results) == 3
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 3
 
         for result in test_results:
@@ -183,7 +186,7 @@ class TestDefaultBoolType:
     ):
         results = run_dbt()
         assert len(results) == 3
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 3
 
         for result in test_results:
@@ -236,7 +239,7 @@ class TestOtherBoolType:
     ):
         results = run_dbt()
         assert len(results) == 3
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 3
 
         for result in test_results:
@@ -422,7 +425,7 @@ class TestCustomSchemaTests:
         results = run_dbt()
         assert len(results) == 4
 
-        test_results = run_dbt(["test"])
+        test_results = run_dbt(["test"], expect_pass=False)
         assert len(test_results) == 6
 
         expected_failures = [
@@ -656,6 +659,63 @@ class TestSchemaTestNameCollision:
         ]
         assert test_results[0].node.unique_id in expected_unique_ids
         assert test_results[1].node.unique_id in expected_unique_ids
+
+
+class TestGenericTestsCollide:
+    @pytest.fixture(scope="class")
+    def models(self, dupe_tests_collide):  # noqa: F811
+        return dupe_tests_collide
+
+    def test_generic_test_collision(
+        self,
+        project,
+    ):
+        """These tests collide, since only the configs differ"""
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
+        assert "dbt found two tests with the name" in str(exc)
+
+
+class TestGenericTestsCustomNames:
+    @pytest.fixture(scope="class")
+    def models(self, custom_generic_test_names):  # noqa: F811
+        return custom_generic_test_names
+
+    # users can define custom names for specific instances of generic tests
+    def test_generic_tests_with_custom_names(
+        self,
+        project,
+    ):
+        """These tests don't collide, since they have user-provided custom names"""
+        results = run_dbt()
+        test_results = run_dbt(["test"])
+
+        # model + both tests run
+        assert len(results) == 1
+        assert len(test_results) == 2
+
+        # custom names propagate to the unique_id
+        expected_unique_ids = [
+            "test.test.not_null_where_1_equals_1.7b96089006",
+            "test.test.not_null_where_1_equals_2.8ae586e17f",
+        ]
+        assert test_results[0].node.unique_id in expected_unique_ids
+        assert test_results[1].node.unique_id in expected_unique_ids
+
+
+class TestGenericTestsCustomNamesAltFormat(TestGenericTestsCustomNames):
+    @pytest.fixture(scope="class")
+    def models(self, custom_generic_test_names_alt_format):  # noqa: F811
+        return custom_generic_test_names_alt_format
+
+    # exactly as above, just alternative format for yaml definition
+    def test_collision_test_names_get_hash(
+        self,
+        project,
+    ):
+        """These tests don't collide, since they have user-provided custom names,
+        defined using an alternative format"""
+        super().test_generic_tests_with_custom_names(project)
 
 
 class TestInvalidSchema:

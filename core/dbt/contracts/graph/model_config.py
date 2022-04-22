@@ -335,6 +335,40 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+    # to be implmented to complete CT-201
+    # quoting: Dict[str, Any] = field(
+    #     default_factory=dict,
+    #     metadata=MergeBehavior.Update.meta(),
+    # )
+    # freshness: Optional[Dict[str, Any]] = field(
+    #     default=None,
+    #     metadata=CompareBehavior.Exclude.meta(),
+    # )
+    # loader: Optional[str] = field(
+    #     default=None,
+    #     metadata=CompareBehavior.Exclude.meta(),
+    # )
+    # # TODO what type is this? docs say: "<column_name_or_expression>"
+    # loaded_at_field: Optional[str] = field(
+    #     default=None,
+    #     metadata=CompareBehavior.Exclude.meta(),
+    # )
+    # database: Optional[str] = field(
+    #     default=None,
+    #     metadata=CompareBehavior.Exclude.meta(),
+    # )
+    # schema: Optional[str] = field(
+    #     default=None,
+    #     metadata=CompareBehavior.Exclude.meta(),
+    # )
+    # meta: Dict[str, Any] = field(
+    #     default_factory=dict,
+    #     metadata=MergeBehavior.Update.meta(),
+    # )
+    # tags: Union[List[str], str] = field(
+    #     default_factory=list_str,
+    #     metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
+    # )
 
 
 @dataclass

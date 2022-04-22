@@ -420,6 +420,73 @@ name_collision__base_extension_sql = """
 SELECT 'NOT_NULL' AS id
 """
 
+
+dupe_generic_tests_collide__schema_yml = """
+version: 2
+models:
+- name: model_a
+  columns:
+  - name: id
+    tests:
+    - not_null:
+        config:
+          where: "1=1"
+    - not_null:
+        config:
+          where: "1=2"
+
+"""
+
+dupe_generic_tests_collide__model_a = """
+SELECT 'NOT_NULL' AS id
+"""
+
+
+custom_generic_test_names__schema_yml = """
+version: 2
+models:
+- name: model_a
+  columns:
+  - name: id
+    tests:
+    - not_null:
+        name: not_null_where_1_equals_1
+        config:
+          where: "1=1"
+    - not_null:
+        name: not_null_where_1_equals_2
+        config:
+          where: "1=2"
+
+"""
+
+custom_generic_test_names__model_a = """
+SELECT 'NOT_NULL' AS id
+"""
+
+custom_generic_test_names_alt_format__schema_yml = """
+version: 2
+models:
+- name: model_a
+  columns:
+  - name: id
+    tests:
+    - name: not_null_where_1_equals_1
+      test_name: not_null
+      config:
+        where: "1=1"
+    - name: not_null_where_1_equals_2
+      test_name: not_null
+      config:
+        where: "1=2"
+
+"""
+
+custom_generic_test_names_alt_format__model_a = """
+SELECT 'NOT_NULL' AS id
+"""
+
+
 test_context_where_subq_macros__custom_generic_test_sql = """
 /*{# This test will fail if get_where_subquery() is missing from TestContext + TestMacroNamespace #}*/
 
@@ -1263,6 +1330,30 @@ def name_collision():
         "schema.yml": name_collision__schema_yml,
         "base.sql": name_collision__base_sql,
         "base_extension.sql": name_collision__base_extension_sql,
+    }
+
+
+@pytest.fixture(scope="class")
+def dupe_tests_collide():
+    return {
+        "schema.yml": dupe_generic_tests_collide__schema_yml,
+        "model_a.sql": dupe_generic_tests_collide__model_a,
+    }
+
+
+@pytest.fixture(scope="class")
+def custom_generic_test_names():
+    return {
+        "schema.yml": custom_generic_test_names__schema_yml,
+        "model_a.sql": custom_generic_test_names__model_a,
+    }
+
+
+@pytest.fixture(scope="class")
+def custom_generic_test_names_alt_format():
+    return {
+        "schema.yml": custom_generic_test_names_alt_format__schema_yml,
+        "model_a.sql": custom_generic_test_names_alt_format__model_a,
     }
 
 

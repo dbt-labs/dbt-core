@@ -312,22 +312,26 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         warn_or_error(msg, log_fmt=warning_tag("{}"))
 
-    def load_dependencies(self) -> Mapping[str, "RuntimeConfig"]:
+    def load_dependencies(self, base_only=False) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:
             all_projects = {self.project_name: self}
             internal_packages = get_include_paths(self.credentials.type)
-            # raise exception if fewer installed packages than in packages.yml
-            count_packages_specified = len(self.packages.packages)  # type: ignore
-            count_packages_installed = len(tuple(self._get_project_directories()))
-            if count_packages_specified > count_packages_installed:
-                raise_compiler_error(
-                    f"dbt found {count_packages_specified} package(s) "
-                    f"specified in packages.yml, but only "
-                    f"{count_packages_installed} package(s) installed "
-                    f'in {self.packages_install_path}. Run "dbt deps" to '
-                    f"install package dependencies."
-                )
-            project_paths = itertools.chain(internal_packages, self._get_project_directories())
+            if base_only:
+                # Test setup -- we want to load macros without dependencies
+                project_paths = itertools.chain(internal_packages)
+            else:
+                # raise exception if fewer installed packages than in packages.yml
+                count_packages_specified = len(self.packages.packages)  # type: ignore
+                count_packages_installed = len(tuple(self._get_project_directories()))
+                if count_packages_specified > count_packages_installed:
+                    raise_compiler_error(
+                        f"dbt found {count_packages_specified} package(s) "
+                        f"specified in packages.yml, but only "
+                        f"{count_packages_installed} package(s) installed "
+                        f'in {self.packages_install_path}. Run "dbt deps" to '
+                        f"install package dependencies."
+                    )
+                project_paths = itertools.chain(internal_packages, self._get_project_directories())
             for project_name, project in self.load_projects(project_paths):
                 if project_name in all_projects:
                     raise_compiler_error(

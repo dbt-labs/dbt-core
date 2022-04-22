@@ -12,7 +12,6 @@ jobs:
         with:
           stale-issue-message: "This issue has been marked as Stale because it has been open for 180 days with no activity. If you would like the issue to remain open, please remove the stale label or comment on the issue, or it will be closed in 7 days."
           stale-pr-message: "This PR has been marked as Stale because it has been open for 180 days with no activity. If you would like the PR to remain open, please remove the stale label or comment on the PR, or it will be closed in 7 days."
+          close-issue-message: "Although we are closing this issue as stale, it's not gone forever. Issues can be reopened if there is renewed community interest; add a comment to notify the maintainers."
           # mark issues/PRs stale when they haven't seen activity in 180 days
           days-before-stale: 180
-          # ignore checking issues with the following labels
-          exempt-issue-labels: "epic,discussion"

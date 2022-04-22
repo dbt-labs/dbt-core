@@ -1088,6 +1088,36 @@ def parse_args(args, cls=DBTArgumentParser):
         """,
     )
 
+    p.add_argument(
+        "--no-print",
+        action="store_true",
+        default=None,
+        help="""
+        Suppress all {{ print() }} macro calls.
+        """,
+    )
+
+    schema_cache_flag = p.add_mutually_exclusive_group()
+    schema_cache_flag.add_argument(
+        "--cache-selected-only",
+        action="store_const",
+        const=True,
+        default=None,
+        dest="cache_selected_only",
+        help="""
+        Pre cache database objects relevant to selected resource only.
+        """,
+    )
+    schema_cache_flag.add_argument(
+        "--no-cache-selected-only",
+        action="store_const",
+        const=False,
+        dest="cache_selected_only",
+        help="""
+        Pre cache all database objects related to the project.
+        """,
+    )
+
     subs = p.add_subparsers(title="Available sub-commands")
 
     base_subparser = _build_base_subparser()

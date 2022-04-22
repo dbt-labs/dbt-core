@@ -1,4 +1,4 @@
-black==22.1.0
+black==22.3.0
 bumpversion
 flake8
 flaky
@@ -9,9 +9,10 @@ pip-tools
 pre-commit
 pytest
 pytest-cov
+pytest-csv
 pytest-dotenv
 pytest-logbook
-pytest-csv
+pytest-mock
 pytest-xdist
 pytz
 tox>=3.13

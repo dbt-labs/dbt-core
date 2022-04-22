@@ -178,8 +178,12 @@ class TestFlags(TestCase):
         setattr(self.args, 'send_anonymous_usage_stats', True)
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.SEND_ANONYMOUS_USAGE_STATS, True)
+        os.environ['DO_NOT_TRACK'] = '1'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.SEND_ANONYMOUS_USAGE_STATS, False)
         # cleanup
         os.environ.pop('DBT_SEND_ANONYMOUS_USAGE_STATS')
+        os.environ.pop('DO_NOT_TRACK')
         delattr(self.args, 'send_anonymous_usage_stats')
 
         # printer_width
@@ -224,3 +228,25 @@ class TestFlags(TestCase):
         self.assertEqual(flags.QUIET, True)
         # cleanup
         self.user_config.quiet = None
+
+        # no_print
+        self.user_config.no_print = True
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.NO_PRINT, True)
+        # cleanup
+        self.user_config.no_print = None
+
+        # cache_selected_only
+        self.user_config.cache_selected_only = True
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.CACHE_SELECTED_ONLY, True)
+        os.environ['DBT_CACHE_SELECTED_ONLY'] = 'false'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.CACHE_SELECTED_ONLY, False)
+        setattr(self.args, 'cache_selected_only', True)
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.CACHE_SELECTED_ONLY, True)
+        # cleanup
+        os.environ.pop('DBT_CACHE_SELECTED_ONLY')
+        delattr(self.args, 'cache_selected_only')
+        self.user_config.cache_selected_only = False

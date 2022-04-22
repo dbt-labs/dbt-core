@@ -22,6 +22,13 @@
     {# no-op #}
 {% endmacro %}
 
+{% macro get_true_sql() %}
+  {{ adapter.dispatch('get_true_sql', 'dbt')() }}
+{% endmacro %}
+
+{% macro default__get_true_sql() %}
+    {{ return('TRUE') }}
+{% endmacro %}
 
 {% macro snapshot_staging_table(strategy, source_sql, target_relation) -%}
   {{ adapter.dispatch('snapshot_staging_table', 'dbt')(strategy, source_sql, target_relation) }}

@@ -1,6 +1,7 @@
 import os
 import time
 import json
+from pathlib import Path
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
@@ -50,6 +51,7 @@ from dbt.exceptions import (
 
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph
 from dbt.parser.manifest import ManifestLoader
+import dbt.tracking
 
 import dbt.exceptions
 from dbt import flags
@@ -88,7 +90,12 @@ class ManifestTask(ConfiguredTask):
 
     def _runtime_initialize(self):
         self.load_manifest()
+
+        start_compile_manifest = time.perf_counter()
         self.compile_manifest()
+        compile_time = time.perf_counter() - start_compile_manifest
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_runnable_timing({"graph_compilation_elapsed": compile_time})
 
 
 class GraphRunnableTask(ManifestTask):
@@ -110,7 +117,9 @@ class GraphRunnableTask(ManifestTask):
 
     def set_previous_state(self):
         if self.args.state is not None:
-            self.previous_state = PreviousState(self.args.state)
+            self.previous_state = PreviousState(
+                path=self.args.state, current_path=Path(self.config.target_path)
+            )
 
     def index_offset(self, value: int) -> int:
         return value
@@ -390,8 +399,17 @@ class GraphRunnableTask(ManifestTask):
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
-    def populate_adapter_cache(self, adapter):
-        adapter.set_relations_cache(self.manifest)
+    def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
+        start_populate_cache = time.perf_counter()
+        if flags.CACHE_SELECTED_ONLY is True:
+            adapter.set_relations_cache(self.manifest, required_schemas=required_schemas)
+        else:
+            adapter.set_relations_cache(self.manifest)
+        cache_populate_time = time.perf_counter() - start_populate_cache
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_runnable_timing(
+                {"adapter_cache_construction_elapsed": cache_populate_time}
+            )
 
     def before_hooks(self, adapter):
         pass
@@ -489,8 +507,7 @@ class GraphRunnableTask(ManifestTask):
 
         return result
 
-    def create_schemas(self, adapter, selected_uids: Iterable[str]):
-        required_schemas = self.get_model_schemas(adapter, selected_uids)
+    def create_schemas(self, adapter, required_schemas: Set[BaseRelation]):
         # we want the string form of the information schema database
         required_databases: Set[BaseRelation] = set()
         for required in required_schemas:

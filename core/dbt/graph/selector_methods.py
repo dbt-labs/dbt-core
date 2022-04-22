@@ -48,6 +48,7 @@ class MethodName(StrEnum):
     Exposure = "exposure"
     Metric = "metric"
     Result = "result"
+    SourceStatus = "source_status"
 
 
 def is_selected_node(fqn: List[str], node_selector: str):
@@ -526,6 +527,62 @@ class ResultSelectorMethod(SelectorMethod):
                 yield node
 
 
+class SourceStatusSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+
+        if self.previous_state is None or self.previous_state.sources is None:
+            raise InternalException(
+                "No previous state comparison freshness results in sources.json"
+            )
+        elif self.previous_state.sources_current is None:
+            raise InternalException(
+                "No current state comparison freshness results in sources.json"
+            )
+
+        current_state_sources = {
+            result.unique_id: getattr(result, "max_loaded_at", None)
+            for result in self.previous_state.sources_current.results
+            if hasattr(result, "max_loaded_at")
+        }
+
+        current_state_sources_runtime_error = {
+            result.unique_id
+            for result in self.previous_state.sources_current.results
+            if not hasattr(result, "max_loaded_at")
+        }
+
+        previous_state_sources = {
+            result.unique_id: getattr(result, "max_loaded_at", None)
+            for result in self.previous_state.sources.results
+            if hasattr(result, "max_loaded_at")
+        }
+
+        previous_state_sources_runtime_error = {
+            result.unique_id
+            for result in self.previous_state.sources_current.results
+            if not hasattr(result, "max_loaded_at")
+        }
+
+        matches = set()
+        if selector == "fresher":
+            for unique_id in current_state_sources:
+                if unique_id not in previous_state_sources:
+                    matches.add(unique_id)
+                elif current_state_sources[unique_id] > previous_state_sources[unique_id]:
+                    matches.add(unique_id)
+
+            for unique_id in matches:
+                if (
+                    unique_id in previous_state_sources_runtime_error
+                    or unique_id in current_state_sources_runtime_error
+                ):
+                    matches.remove(unique_id)
+
+        for node, real_node in self.all_nodes(included_nodes):
+            if node in matches:
+                yield node
+
+
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
@@ -541,6 +598,7 @@ class MethodManager:
         MethodName.Exposure: ExposureSelectorMethod,
         MethodName.Metric: MetricSelectorMethod,
         MethodName.Result: ResultSelectorMethod,
+        MethodName.SourceStatus: SourceStatusSelectorMethod,
     }
 
     def __init__(

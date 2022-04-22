@@ -115,10 +115,10 @@ class DbtProjectYamlRenderer(BaseRenderer):
         "Project config"
 
     def get_package_renderer(self) -> BaseRenderer:
-        return PackageRenderer(self.context)
+        return PackageRenderer(self.ctx_obj.cli_vars)
 
     def get_selector_renderer(self) -> BaseRenderer:
-        return SelectorRenderer(self.context)
+        return SelectorRenderer(self.ctx_obj.cli_vars)
 
     def render_project(
         self,

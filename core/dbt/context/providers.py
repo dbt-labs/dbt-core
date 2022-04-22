@@ -62,6 +62,8 @@ from dbt.node_types import NodeType
 
 from dbt.utils import merge, AttrDict, MultiDict
 
+from dbt import selected_resources
+
 import agate
 
 
@@ -1142,6 +1144,15 @@ class ProviderContext(ManifestContext):
         else:
             msg = f"Env var required but not provided: '{var}'"
             raise_parsing_error(msg)
+
+    @contextproperty
+    def selected_resources(self) -> List[str]:
+        """The `selected_resources` variable contains a list of the resources
+        selected based on the parameters provided to the dbt command.
+        Currently, is not populated for the command `run-operation` that
+        doesn't support `--select`.
+        """
+        return selected_resources.SELECTED_RESOURCES
 
 
 class MacroContext(ProviderContext):

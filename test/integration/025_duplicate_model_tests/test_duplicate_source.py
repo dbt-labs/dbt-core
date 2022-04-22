@@ -14,7 +14,7 @@ class TestDuplicateSourceEnabled(DBTIntegrationTest):
 
     @use_profile("postgres")
     def test_postgres_duplicate_source_enabled(self):
-        message = "dbt found two resources with the name"
+        message = "dbt found two sources with the name"
         try:
             self.run_dbt(["compile"])
             self.assertTrue(False, "dbt did not throw for duplicate sources")
