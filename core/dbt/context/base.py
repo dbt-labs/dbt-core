@@ -5,13 +5,7 @@ from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set
 from dbt import flags
 from dbt import tracking
 from dbt.clients.jinja import get_rendered
-from dbt.clients.yaml_helper import (
-    yaml,
-    safe_load,
-    SafeLoader,
-    Loader,
-    Dumper,
-)  # noqa: F401
+from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import (
     raise_compiler_error,
