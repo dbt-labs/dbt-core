@@ -66,20 +66,6 @@ class Normalized:
         return normalize(self.value) == normalize(other)
 
 
-class FakeArgs:
-    def __init__(self):
-        self.threads = 1
-        self.defer = False
-        self.full_refresh = False
-        self.models = None
-        self.select = None
-        self.exclude = None
-        self.single_threaded = False
-        self.selector_name = None
-        self.state = None
-        self.defer = None
-
-
 class TestArgs:
     def __init__(self, kwargs):
         self.which = 'run'
@@ -311,7 +297,7 @@ class DBTIntegrationTest(unittest.TestCase):
         return normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
 
     def setUp(self):
-        # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10. 
+        # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
         # This _only_ works for tests in `test/integration`.
         warnings.filterwarnings(
             "ignore",
