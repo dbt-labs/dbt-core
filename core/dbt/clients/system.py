@@ -13,7 +13,7 @@ import requests
 import stat
 from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
 
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, scrub_secrets, env_secrets
 from dbt.events.types import (
     SystemErrorRetrievingModTime,
     SystemCouldNotWrite,
@@ -431,7 +431,8 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))
-        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode, out, err)
+        scrubbed_cmd = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
+        raise dbt.exceptions.CommandResultError(cwd, scrubbed_cmd, proc.returncode, out, err)
 
     return out, err
 

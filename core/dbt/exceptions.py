@@ -383,10 +383,11 @@ class FailedToConnectException(DatabaseException):
 
 class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message="Error running command"):
+        cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
         super().__init__(message)
         self.cwd = cwd
-        self.cmd = cmd
-        self.args = (cwd, cmd, message)
+        self.cmd = cmd_scrubbed
+        self.args = (cwd, cmd_scrubbed, message)
 
     def __str__(self):
         if len(self.cmd) == 0:

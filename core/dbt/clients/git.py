@@ -2,7 +2,7 @@ import re
 import os.path
 
 from dbt.clients.system import run_cmd, rmdir
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, scrub_secrets, env_secrets
 from dbt.events.types import (
     GitSparseCheckoutSubdirectory,
     GitProgressCheckoutRevision,
@@ -28,7 +28,7 @@ def _is_commit(revision: str) -> bool:
 
 
 def _raise_git_cloning_error(repo, revision, error):
-    stderr = error.stderr.decode("utf-8").strip()
+    stderr = scrub_secrets(error.stderr.decode("utf-8").strip(), env_secrets())
     if "usage: git" in stderr:
         stderr = stderr.split("\nusage: git")[0]
     if re.match("fatal: destination path '(.+)' already exists", stderr):
