@@ -410,6 +410,8 @@ class WorkingDirectoryError(CommandError):
 
 class CommandResultError(CommandError):
     def __init__(self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"):
+        stdout = scrub_secrets(stdout, env_secrets())
+        stderr = scrub_secrets(stderr, env_secrets())
         super().__init__(cwd, cmd, message)
         self.returncode = returncode
         self.stdout = stdout

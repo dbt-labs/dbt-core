@@ -431,8 +431,12 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))
+        scrubbed_out = scrub_secrets(str(out), env_secrets())
+        scrubbed_err = scrub_secrets(str(err), env_secrets())
         scrubbed_cmd = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
-        raise dbt.exceptions.CommandResultError(cwd, scrubbed_cmd, proc.returncode, out, err)
+        raise dbt.exceptions.CommandResultError(
+            cwd, scrubbed_cmd, proc.returncode, scrubbed_out, scrubbed_err
+        )
 
     return out, err
 
