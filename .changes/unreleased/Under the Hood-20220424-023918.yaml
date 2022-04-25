@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Migrate integration test 009 to the new framework.
-time: 2022-04-24T02:39:18.536437-07:00
-custom:
-  Author: versusfacit
-  Issue: "488"
-  PR: "5139"
