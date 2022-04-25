@@ -44,6 +44,27 @@ seeds:
 
 """
 
+# see config in test class
+properties__disabled_source_yml = """
+version: 2
+sources:
+  - name: test_source
+    schema: "{{ target.schema }}"
+    tables:
+      - name: test_table
+        identifier: seed
+"""
+
+#
+# Macros
+#
+
+macros__bad_macros = """
+{% macro some_macro(arg) %}
+    {{ arg }}
+{% endmacro %}
+"""
+
 #
 # Models
 #
@@ -70,6 +91,15 @@ select * from {{ this.schema }}.seed
 
 models__dependent_on_view = """
 select * from {{ ref('models__view_disabled') }}
+"""
+
+models__with_bad_macro = """
+{{ some_macro(invalid='test') }}
+select 1 as id
+"""
+
+models__referencing_disabled_source = """
+select * from {{ source('test_source', 'test_table') }}
 """
 
 #
@@ -136,86 +166,62 @@ class TestMissingModelReference(InvalidModelBase):
         assert "which was not found" in str(exc.value)
 
 
-# class TestInvalidMacroCall(DBTIntegrationTest):
-#     @property
-#     def schema(self):
-#         return "invalid_models_011"
+class TestInvalidMacroCall(InvalidModelBase):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"macros__bad_macros.sql": macros__bad_macros}
 
-#     @property
-#     def models(self):
-#         return "models-invalid-macro"
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"models__with_bad_macro.sql": models__with_bad_macro}
 
-#     @staticmethod
-#     def dir(path):
-#         return path.lstrip("/")
+    def test_with_invalid_macro_call(self, project):
+        with pytest.raises(CompilationException) as exc:
+            run_dbt(["compile"])
 
-#     @property
-#     def project_config(self):
-#         return {
-#             'config-version': 2,
-#             'macro-paths': [self.dir('bad-macros')],
-#         }
-
-#     @use_profile('postgres')
-#     def test_postgres_call_invalid(self):
-#         with self.assertRaises(Exception) as exc:
-#             self.run_dbt(['compile'])
-
-#         macro_path = os.path.join('bad-macros', 'macros.sql')
-#         model_path = os.path.join('models-invalid-macro', 'bad_macro.sql')
-
-#         self.assertIn(f'> in macro some_macro ({macro_path})', str(exc.exception))
-#         self.assertIn(f'> called by model bad_macro ({model_path})', str(exc.exception))
+        assert "macro 'dbt_macro__some_macro' takes no keyword argument 'invalid'" in str(
+            exc.value
+        )
 
 
-# class TestInvalidDisabledSource(DBTIntegrationTest):
-#     def setUp(self):
-#         super().setUp()
-#         self.run_sql_file("seed.sql")
+class TestInvalidDisabledSource(InvalidModelBase):
+    @pytest.fixture(scope="class")
+    def properties(self):
+        return {
+            "properties__seed_types.yml": properties__seed_types_yml,
+            "properties__disabled_source.yml": properties__disabled_source_yml,
+        }
 
-#     @property
-#     def schema(self):
-#         return "invalid_models_011"
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"models__referencing_disabled_source.sql": models__referencing_disabled_source}
 
-#     @property
-#     def models(self):
-#         return 'sources-disabled'
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "sources": {
+                "test": {
+                    "enabled": False,
+                }
+            }
+        }
 
-#     @property
-#     def project_config(self):
-#         return {
-#             'config-version': 2,
-#             'sources': {
-#                 'test': {
-#                     'enabled': False,
-#                 }
-#             }
-#         }
+    def test_postgres_source_disabled(self, project):
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
 
-#     @use_profile('postgres')
-#     def test_postgres_source_disabled(self):
-#         with self.assertRaises(RuntimeError) as exc:
-#             self.run_dbt()
-
-#         self.assertIn('which is disabled', str(exc.exception))
+        assert "which is disabled" in str(exc.value)
 
 
-# class TestInvalidMissingSource(DBTIntegrationTest):
-#     def setUp(self):
-#         super().setUp()
-#         self.run_sql_file("seed.sql")
+class TestInvalidMissingSource(InvalidModelBase):
+    """like TestInvalidDisabledSource but source omitted entirely"""
 
-#     @property
-#     def schema(self):
-#         return "invalid_models_011"
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"models__referencing_disabled_source.sql": models__referencing_disabled_source}
 
-#     @property
-#     def models(self):
-#         return 'sources-missing'
+    def test_source_missing(self, project):
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
 
-#     @use_profile('postgres')
-#     def test_postgres_source_missing(self):
-#         with self.assertRaises(RuntimeError) as exc:
-#             self.run_dbt()
-
-#         self.assertIn('which was not found', str(exc.exception))
+        assert "which was not found" in str(exc.value)
