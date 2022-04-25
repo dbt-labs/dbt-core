@@ -614,6 +614,6 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
             fire_event(RecordRetryException(exc=exc))
             fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
-            _connection_exception_retry(fn, max_attempts, attempt + 1)
+            return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
             raise ConnectionException('External connection exception occurred: ' + str(exc))
