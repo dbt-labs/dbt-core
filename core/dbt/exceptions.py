@@ -412,8 +412,8 @@ class CommandResultError(CommandError):
     def __init__(self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"):
         super().__init__(cwd, cmd, message)
         self.returncode = returncode
-        self.stdout = scrub_secrets(str(stdout), env_secrets())
-        self.stderr = scrub_secrets(str(stderr), env_secrets())
+        self.stdout = scrub_secrets(stdout.decode("utf-8"), env_secrets())
+        self.stderr = scrub_secrets(stderr.decode("utf-8"), env_secrets())
         self.args = (cwd, self.cmd, returncode, stdout, stderr, message)
 
     def __str__(self):
@@ -705,7 +705,6 @@ def missing_materialization(model, adapter_type):
 
 def bad_package_spec(repo, spec, error_message):
     msg = "Error checking out spec='{}' for repo {}\n{}".format(spec, repo, error_message)
-
     raise InternalException(scrub_secrets(msg, env_secrets()))
 
 
