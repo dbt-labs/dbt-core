@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import ParsingException
+from dbt.exceptions import CompilationException, ParsingException
 
 from dbt.tests.util import (
     run_dbt,
@@ -48,7 +48,7 @@ seeds:
 # Models
 #
 
-models__view_model = """
+models__view_bad_enabled_value = """
 {{
   config(
     enabled = 'false'
@@ -56,6 +56,20 @@ models__view_model = """
 }}
 
 select * from {{ this.schema }}.seed
+"""
+
+models__view_disabled = """
+{{
+  config(
+    enabled = False
+  )
+}}
+
+select * from {{ this.schema }}.seed
+"""
+
+models__dependent_on_view = """
+select * from {{ ref('models__view_disabled') }}
 """
 
 #
@@ -77,11 +91,11 @@ class InvalidModelBase(object):
         }
 
 
-class TestInvalidDisabledModels(InvalidModelBase):
+class TestMalformedEnabledParam(InvalidModelBase):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "models__view_model.sql": models__view_model,
+            "models__view_bad_enabled_value.sql": models__view_bad_enabled_value,
         }
 
     def test_view_disabled(self, project):
@@ -91,44 +105,35 @@ class TestInvalidDisabledModels(InvalidModelBase):
         assert "enabled" in str(exc.value)
 
 
-# class TestDisabledModelReference(DBTIntegrationTest):
+class TestReferencingDisabledModel(InvalidModelBase):
+    """Expects that the upstream model is disabled"""
 
-#     def setUp(self):
-#         DBTIntegrationTest.setUp(self)
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models__view_disabled.sql": models__view_disabled,
+            "models__dependent_on_view.sql": models__dependent_on_view,
+        }
 
-#         self.run_sql_file("seed.sql")
+    def test_referencing_disabled_model(self, project):
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
 
-#     @property
-#     def schema(self):
-#         return "invalid_models_011"
-
-#     @property
-#     def models(self):
-#         return "models-disabled"
-
-#     @use_profile('postgres')
-#     def test_postgres_view_with_incremental_attributes(self):
-#         with self.assertRaises(RuntimeError) as exc:
-#             self.run_dbt()
-
-#         self.assertIn('which is disabled', str(exc.exception))
+        assert "which is disabled" in str(exc.value)
 
 
-# class TestMissingModelReference(DBTIntegrationTest):
-#     @property
-#     def schema(self):
-#         return "invalid_models_011"
+class TestMissingModelReference(InvalidModelBase):
+    """Expects that the upstream model is not found"""
 
-#     @property
-#     def models(self):
-#         return "models-not-found"
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"models__dependent_on_view.sql": models__dependent_on_view}
 
-#     @use_profile('postgres')
-#     def test_postgres_view_with_incremental_attributes(self):
-#         with self.assertRaises(RuntimeError) as exc:
-#             self.run_dbt()
+    def test_models_not_found(self, project):
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
 
-#         self.assertIn('which was not found', str(exc.exception))
+        assert "which was not found" in str(exc.value)
 
 
 # class TestInvalidMacroCall(DBTIntegrationTest):
