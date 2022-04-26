@@ -155,6 +155,10 @@ class TestCLIVarsPackages:
         results = run_dbt(["deps", "--vars", "dip_version: 1.1"])
         assert results is None
 
+        # Do a dbt run command so adapter exists
+        results = run_dbt(["run", "--vars", "dip_version: 1.1"], expect_pass=False)
+        assert len(results) == 4
+
 
 initial_selectors_yml = """
 selectors:
