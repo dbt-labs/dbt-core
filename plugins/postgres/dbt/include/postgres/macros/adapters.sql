@@ -139,10 +139,15 @@
   that name + suffix + uniquestring is < 63 characters.
 #}
 
-{% macro postgres__make_relation_with_suffix(base_relation, suffix) %}
-    {% set dt = modules.datetime.datetime.now() %}
-    {% set dtstring = dt.strftime("%H%M%S%f") %}
-    {% set suffix_length = suffix|length + dtstring|length %}
+{% macro postgres__make_relation_with_suffix(base_relation, suffix, dstring) %}
+    {% if dstring %}
+      {% set dt = modules.datetime.datetime.now() %}
+      {% set dtstring = dt.strftime("%H%M%S%f") %}
+      {% set suffix_length = suffix|length + dtstring|length %}
+    {% else%}
+      {% set suffix_length = suffix|length %}
+    {% endif %}
+
     {% set relation_max_name_length = 63 %}
     {% if suffix_length > relation_max_name_length %}
         {% do exceptions.raise_compiler_error('Relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ (relation_max_name_length - dtstring|length) ~ ' characters.') %}
@@ -154,17 +159,17 @@
   {% endmacro %}
 
 {% macro postgres__make_intermediate_relation(base_relation, suffix) %}
-    {{ return(postgres__make_relation_with_suffix(base_relation, suffix)) }}
+    {{ return(postgres__make_relation_with_suffix(base_relation, suffix, dstring=False)) }}
 {% endmacro %}
 
 {% macro postgres__make_temp_relation(base_relation, suffix) %}
-    {% set temp_relation = postgres__make_relation_with_suffix(base_relation, suffix) %}
+    {% set temp_relation = postgres__make_relation_with_suffix(base_relation, suffix, dstring=True) %}
     {{ return(temp_relation.incorporate(path={"schema": none,
                                               "database": none})) }}
 {% endmacro %}
 
 {% macro postgres__make_backup_relation(base_relation, backup_relation_type, suffix) %}
-    {% set backup_relation = postgres__make_relation_with_suffix(base_relation, suffix) %}
+    {% set backup_relation = postgres__make_relation_with_suffix(base_relation, suffix, dstring=False) %}
     {{ return(backup_relation.incorporate(type=backup_relation_type)) }}
 {% endmacro %}
 
