@@ -1,0 +1,7 @@
+kind: Features
+body: Adds itertools to modules Jinja namespace
+time: 2022-04-24T13:26:55.008246+01:00
+custom:
+  Author: bd3dowling
+  Issue: "5130"
+  PR: "5140"
