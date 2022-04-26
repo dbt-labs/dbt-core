@@ -3,8 +3,6 @@
 from collections import namedtuple
 from typing import Any, Optional
 
-from dbt.contracts.relation import RelationType
-
 
 _ReferenceKey = namedtuple("_ReferenceKey", "database schema identifier")
 
@@ -16,7 +14,7 @@ def lowercase(value: Optional[str]) -> Optional[str]:
         return value.lower()
 
 
-def _make_key(relation: RelationType) -> _ReferenceKey:
+def _make_key(relation: Any) -> _ReferenceKey:
     """Make _ReferenceKeys with lowercase values for the cache so we don't have
     to keep track of quoting
     """
