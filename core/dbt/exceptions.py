@@ -18,7 +18,7 @@ def validator_error_message(exc):
     if not isinstance(exc, dbt.dataclass_schema.ValidationError):
         return str(exc)
     path = "[%s]" % "][".join(map(repr, exc.relative_path))
-    return 'at path {}: {}'.format(path, exc.message)
+    return "at path {}: {}".format(path, exc.message)
 
 
 class Exception(builtins.Exception):
@@ -28,8 +28,8 @@ class Exception(builtins.Exception):
     def data(self):
         # if overriding, make sure the result is json-serializable.
         return {
-            'type': self.__class__.__name__,
-            'message': str(self),
+            "type": self.__class__.__name__,
+            "message": str(self),
         }
 
 
@@ -63,27 +63,21 @@ class RuntimeException(RuntimeError, Exception):
 
     @property
     def type(self):
-        return 'Runtime'
+        return "Runtime"
 
     def node_to_string(self, node):
         if node is None:
             return "<Unknown>"
-        if not hasattr(node, 'name'):
+        if not hasattr(node, "name"):
             # we probably failed to parse a block, so we can't know the name
-            return '{} ({})'.format(
-                node.resource_type,
-                node.original_file_path
-            )
+            return "{} ({})".format(node.resource_type, node.original_file_path)
 
-        if hasattr(node, 'contents'):
+        if hasattr(node, "contents"):
             # handle FileBlocks. They aren't really nodes but we want to render
             # out the path we know at least. This indicates an error during
             # block parsing.
-            return '{}'.format(node.path.original_file_path)
-        return "{} {} ({})".format(
-            node.resource_type,
-            node.name,
-            node.original_file_path)
+            return "{}".format(node.path.original_file_path)
+        return "{} {} ({})".format(node.resource_type, node.name, node.original_file_path)
 
     def process_stack(self):
         lines = []
@@ -94,15 +88,13 @@ class RuntimeException(RuntimeError, Exception):
             lines.append("")
 
             for item in stack:
-                msg = 'called by'
+                msg = "called by"
 
                 if first:
-                    msg = 'in'
+                    msg = "in"
                     first = False
 
-                lines.append("> {} {}".format(
-                    msg,
-                    self.node_to_string(item)))
+                lines.append("> {} {}".format(msg, self.node_to_string(item)))
 
         return lines
 
@@ -112,29 +104,29 @@ class RuntimeException(RuntimeError, Exception):
         if self.node is not None:
             node_string = " in {}".format(self.node_to_string(self.node))
 
-        if hasattr(self.msg, 'split'):
+        if hasattr(self.msg, "split"):
             split_msg = self.msg.split("\n")
         else:
             split_msg = str(self.msg).split("\n")
 
-        lines = ["{}{}".format(self.type + ' Error',
-                               node_string)] + split_msg
+        lines = ["{}{}".format(self.type + " Error", node_string)] + split_msg
 
         lines += self.process_stack()
 
-        return lines[0] + "\n" + "\n".join(
-            ["  " + line for line in lines[1:]])
+        return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
 
     def data(self):
         result = Exception.data(self)
         if self.node is None:
             return result
 
-        result.update({
-            'raw_sql': self.node.raw_sql,
-            # the node isn't always compiled, but if it is, include that!
-            'compiled_sql': getattr(self.node, 'compiled_sql', None),
-        })
+        result.update(
+            {
+                "raw_sql": self.node.raw_sql,
+                # the node isn't always compiled, but if it is, include that!
+                "compiled_sql": getattr(self.node, "compiled_sql", None),
+            }
+        )
         return result
 
 
@@ -145,7 +137,7 @@ class RPCFailureResult(RuntimeException):
 
 class RPCTimeoutException(RuntimeException):
     CODE = 10008
-    MESSAGE = 'RPC timeout error'
+    MESSAGE = "RPC timeout error"
 
     def __init__(self, timeout):
         super().__init__(self.MESSAGE)
@@ -153,59 +145,54 @@ class RPCTimeoutException(RuntimeException):
 
     def data(self):
         result = super().data()
-        result.update({
-            'timeout': self.timeout,
-            'message': 'RPC timed out after {}s'.format(self.timeout),
-        })
+        result.update(
+            {
+                "timeout": self.timeout,
+                "message": "RPC timed out after {}s".format(self.timeout),
+            }
+        )
         return result
 
 
 class RPCKilledException(RuntimeException):
     CODE = 10009
-    MESSAGE = 'RPC process killed'
+    MESSAGE = "RPC process killed"
 
     def __init__(self, signum):
         self.signum = signum
-        self.message = 'RPC process killed by signal {}'.format(self.signum)
+        self.message = "RPC process killed by signal {}".format(self.signum)
         super().__init__(self.message)
 
     def data(self):
         return {
-            'signum': self.signum,
-            'message': self.message,
+            "signum": self.signum,
+            "message": self.message,
         }
 
 
 class RPCCompiling(RuntimeException):
     CODE = 10010
-    MESSAGE = (
-        'RPC server is compiling the project, call the "status" method for'
-        ' compile status'
-    )
+    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
     def __init__(self, msg=None, node=None):
         if msg is None:
-            msg = 'compile in progress'
+            msg = "compile in progress"
         super().__init__(msg, node)
 
 
 class RPCLoadException(RuntimeException):
     CODE = 10011
     MESSAGE = (
-        'RPC server failed to compile project, call the "status" method for'
-        ' compile status'
+        'RPC server failed to compile project, call the "status" method for' " compile status"
     )
 
     def __init__(self, cause):
         self.cause = cause
-        self.message = '{}: {}'.format(self.MESSAGE, self.cause['message'])
+        self.message = "{}: {}".format(self.MESSAGE, self.cause["message"])
         super().__init__(self.message)
 
     def data(self):
-        return {
-            'cause': self.cause,
-            'message': self.message
-        }
+        return {"cause": self.cause, "message": self.message}
 
 
 class DatabaseException(RuntimeException):
@@ -215,14 +202,14 @@ class DatabaseException(RuntimeException):
     def process_stack(self):
         lines = []
 
-        if hasattr(self.node, 'build_path') and self.node.build_path:
+        if hasattr(self.node, "build_path") and self.node.build_path:
             lines.append("compiled SQL at {}".format(self.node.build_path))
 
         return lines + RuntimeException.process_stack(self)
 
     @property
     def type(self):
-        return 'Database'
+        return "Database"
 
 
 class CompilationException(RuntimeException):
@@ -231,7 +218,7 @@ class CompilationException(RuntimeException):
 
     @property
     def type(self):
-        return 'Compilation'
+        return "Compilation"
 
 
 class RecursionException(RuntimeException):
@@ -249,14 +236,14 @@ class ParsingException(RuntimeException):
 
     @property
     def type(self):
-        return 'Parsing'
+        return "Parsing"
 
 
 class JSONValidationException(ValidationException):
     def __init__(self, typename, errors):
         self.typename = typename
         self.errors = errors
-        self.errors_message = ', '.join(errors)
+        self.errors_message = ", ".join(errors)
         msg = 'Invalid arguments passed to "{}" instance: {}'.format(
             self.typename, self.errors_message
         )
@@ -271,7 +258,7 @@ class IncompatibleSchemaException(RuntimeException):
     def __init__(self, expected: str, found: Optional[str]):
         self.expected = expected
         self.found = found
-        self.filename = 'input file'
+        self.filename = "input file"
 
         super().__init__(self.get_message())
 
@@ -280,14 +267,14 @@ class IncompatibleSchemaException(RuntimeException):
         self.msg = self.get_message()
 
     def get_message(self) -> str:
-        found_str = 'nothing'
+        found_str = "nothing"
         if self.found is not None:
             found_str = f'"{self.found}"'
 
         msg = (
             f'Expected a schema version of "{self.expected}" in '
-            f'{self.filename}, but found {found_str}. Are you running with a '
-            f'different version of dbt?'
+            f"{self.filename}, but found {found_str}. Are you running with a "
+            f"different version of dbt?"
         )
         return msg
 
@@ -300,23 +287,24 @@ class JinjaRenderingException(CompilationException):
 
 
 class UndefinedMacroException(CompilationException):
-
-    def __str__(self, prefix='! ') -> str:
+    def __str__(self, prefix="! ") -> str:
         msg = super().__str__(prefix)
-        return f'{msg}. This can happen when calling a macro that does ' \
-            'not exist. Check for typos and/or install package dependencies ' \
+        return (
+            f"{msg}. This can happen when calling a macro that does "
+            "not exist. Check for typos and/or install package dependencies "
             'with "dbt deps".'
+        )
 
 
 class UnknownAsyncIDException(Exception):
     CODE = 10012
-    MESSAGE = 'RPC server got an unknown async ID'
+    MESSAGE = "RPC server got an unknown async ID"
 
     def __init__(self, task_id):
         self.task_id = task_id
 
     def __str__(self):
-        return '{}: {}'.format(self.MESSAGE, self.task_id)
+        return "{}: {}".format(self.MESSAGE, self.task_id)
 
 
 class AliasException(ValidationException):
@@ -333,25 +321,23 @@ class DbtConfigError(RuntimeException):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
-    def __init__(
-        self, message, project=None, result_type='invalid_project', path=None
-    ):
+    def __init__(self, message, project=None, result_type="invalid_project", path=None):
         self.project = project
         super().__init__(message)
         self.result_type = result_type
         self.path = path
 
-    def __str__(self, prefix='! ') -> str:
+    def __str__(self, prefix="! ") -> str:
         msg = super().__str__(prefix)
         if self.path is None:
             return msg
         else:
-            return f'{msg}\n\nError encountered in {self.path}'
+            return f"{msg}\n\nError encountered in {self.path}"
 
 
 class FailFastException(RuntimeException):
     CODE = 10013
-    MESSAGE = 'FailFast Error'
+    MESSAGE = "FailFast Error"
 
     def __init__(self, message, result=None, node=None):
         super().__init__(msg=message, node=node)
@@ -359,7 +345,7 @@ class FailFastException(RuntimeException):
 
     @property
     def type(self):
-        return 'FailFast'
+        return "FailFast"
 
 
 class DbtProjectError(DbtConfigError):
@@ -396,15 +382,16 @@ class FailedToConnectException(DatabaseException):
 
 
 class CommandError(RuntimeException):
-    def __init__(self, cwd, cmd, message='Error running command'):
+    def __init__(self, cwd, cmd, message="Error running command"):
+        cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
         super().__init__(message)
         self.cwd = cwd
-        self.cmd = cmd
-        self.args = (cwd, cmd, message)
+        self.cmd = cmd_scrubbed
+        self.args = (cwd, cmd_scrubbed, message)
 
     def __str__(self):
         if len(self.cmd) == 0:
-            return '{}: No arguments given'.format(self.msg)
+            return "{}: No arguments given".format(self.msg)
         return '{}: "{}"'.format(self.msg, self.cmd[0])
 
 
@@ -422,16 +409,15 @@ class WorkingDirectoryError(CommandError):
 
 
 class CommandResultError(CommandError):
-    def __init__(self, cwd, cmd, returncode, stdout, stderr,
-                 message='Got a non-zero returncode'):
+    def __init__(self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"):
         super().__init__(cwd, cmd, message)
         self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
-        self.args = (cwd, cmd, returncode, stdout, stderr, message)
+        self.stdout = scrub_secrets(stdout.decode("utf-8"), env_secrets())
+        self.stderr = scrub_secrets(stderr.decode("utf-8"), env_secrets())
+        self.args = (cwd, self.cmd, returncode, self.stdout, self.stderr, message)
 
     def __str__(self):
-        return '{} running: {}'.format(self.msg, self.cmd)
+        return "{} running: {}".format(self.msg, self.cmd)
 
 
 class InvalidConnectionException(RuntimeException):
@@ -439,8 +425,9 @@ class InvalidConnectionException(RuntimeException):
         self.thread_id = thread_id
         self.known = known
         super().__init__(
-            msg='connection never acquired for thread {}, have {}'
-            .format(self.thread_id, self.known)
+            msg="connection never acquired for thread {}, have {}".format(
+                self.thread_id, self.known
+            )
         )
 
 
@@ -473,53 +460,65 @@ def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
 
 def raise_git_cloning_problem(repo) -> NoReturn:
     repo = scrub_secrets(repo, env_secrets())
-    msg = '''\
+    msg = """\
     Something went wrong while cloning {}
     Check the debug logs for more information
-    '''
+    """
     raise RuntimeException(msg.format(repo))
 
 
 def disallow_secret_env_var(env_var_name) -> NoReturn:
     """Raise an error when a secret env var is referenced outside allowed
     rendering contexts"""
-    msg = ("Secret env vars are allowed only in profiles.yml or packages.yml. "
-           "Found '{env_var_name}' referenced elsewhere.")
+    msg = (
+        "Secret env vars are allowed only in profiles.yml or packages.yml. "
+        "Found '{env_var_name}' referenced elsewhere."
+    )
     raise_parsing_error(msg.format(env_var_name=env_var_name))
 
 
-def invalid_type_error(method_name, arg_name, got_value, expected_type,
-                       version='0.13.0') -> NoReturn:
+def invalid_type_error(
+    method_name, arg_name, got_value, expected_type, version="0.13.0"
+) -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros
     has changed.
     """
     got_type = type(got_value)
-    msg = ("As of {version}, 'adapter.{method_name}' expects argument "
-           "'{arg_name}' to be of type '{expected_type}', instead got "
-           "{got_value} ({got_type})")
-    raise_compiler_error(msg.format(version=version, method_name=method_name,
-                         arg_name=arg_name, expected_type=expected_type,
-                         got_value=got_value, got_type=got_type))
+    msg = (
+        "As of {version}, 'adapter.{method_name}' expects argument "
+        "'{arg_name}' to be of type '{expected_type}', instead got "
+        "{got_value} ({got_type})"
+    )
+    raise_compiler_error(
+        msg.format(
+            version=version,
+            method_name=method_name,
+            arg_name=arg_name,
+            expected_type=expected_type,
+            got_value=got_value,
+            got_type=got_type,
+        )
+    )
 
 
 def invalid_bool_error(got_value, macro_name) -> NoReturn:
     """Raise a CompilationException when an macro expects a boolean but gets some
     other value.
     """
-    msg = ("Macro '{macro_name}' returns '{got_value}'.  It is not type 'bool' "
-           "and cannot not be converted reliably to a bool.")
+    msg = (
+        "Macro '{macro_name}' returns '{got_value}'.  It is not type 'bool' "
+        "and cannot not be converted reliably to a bool."
+    )
     raise_compiler_error(msg.format(macro_name=macro_name, got_value=got_value))
 
 
 def ref_invalid_args(model, args) -> NoReturn:
-    raise_compiler_error(
-        "ref() takes at most two arguments ({} given)".format(len(args)),
-        model)
+    raise_compiler_error("ref() takes at most two arguments ({} given)".format(len(args)), model)
 
 
 def ref_bad_context(model, args) -> NoReturn:
-    ref_args = ', '.join("'{}'".format(a) for a in args)
-    ref_string = '{{{{ ref({}) }}}}'.format(ref_args)
+    ref_args = ", ".join("'{}'".format(a) for a in args)
+    ref_string = "{{{{ ref({}) }}}}".format(ref_args)
 
     base_error_msg = """dbt was unable to infer all dependencies for the model "{model_name}".
 This typically happens when ref() is placed within a conditional block.
@@ -532,54 +531,50 @@ To fix this, add the following hint to the top of the model "{model_name}":
     # to 'users', in their respective schemas, then you would want to see
     # 'bar_users' in your error messge instead of just 'users'.
     if isinstance(model, dict):  # TODO: remove this path
-        model_name = model['name']
-        model_path = model['path']
+        model_name = model["name"]
+        model_path = model["path"]
     else:
         model_name = model.name
         model_path = model.path
     error_msg = base_error_msg.format(
-        model_name=model_name,
-        model_path=model_path,
-        ref_string=ref_string
+        model_name=model_name, model_path=model_path, ref_string=ref_string
     )
     raise_compiler_error(error_msg, model)
 
 
 def doc_invalid_args(model, args) -> NoReturn:
-    raise_compiler_error(
-        "doc() takes at most two arguments ({} given)".format(len(args)),
-        model)
+    raise_compiler_error("doc() takes at most two arguments ({} given)".format(len(args)), model)
 
 
 def doc_target_not_found(
     model, target_doc_name: str, target_doc_package: Optional[str]
 ) -> NoReturn:
-    target_package_string = ''
+    target_package_string = ""
 
     if target_doc_package is not None:
         target_package_string = "in package '{}' ".format(target_doc_package)
 
-    msg = (
-        "Documentation for '{}' depends on doc '{}' {} which was not found"
-    ).format(
-        model.unique_id,
-        target_doc_name,
-        target_package_string
+    msg = ("Documentation for '{}' depends on doc '{}' {} which was not found").format(
+        model.unique_id, target_doc_name, target_package_string
     )
     raise_compiler_error(msg, model)
 
 
 def _get_target_failure_msg(
-    model, target_name: str, target_model_package: Optional[str],
-    include_path: bool, reason: str, target_kind: str
+    model,
+    target_name: str,
+    target_model_package: Optional[str],
+    include_path: bool,
+    reason: str,
+    target_kind: str,
 ) -> str:
-    target_package_string = ''
+    target_package_string = ""
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
-    source_path_string = ''
+    source_path_string = ""
     if include_path:
-        source_path_string = ' ({})'.format(model.original_file_path)
+        source_path_string = " ({})".format(model.original_file_path)
 
     return "{} '{}'{} depends on a {} named '{}' {}which {}".format(
         model.resource_type.title(),
@@ -588,23 +583,29 @@ def _get_target_failure_msg(
         target_kind,
         target_name,
         target_package_string,
-        reason
+        reason,
     )
 
 
 def get_target_not_found_or_disabled_msg(
-    model, target_model_name: str, target_model_package: Optional[str],
+    model,
+    target_model_name: str,
+    target_model_package: Optional[str],
     disabled: Optional[bool] = None,
 ) -> str:
     if disabled is None:
-        reason = 'was not found or is disabled'
+        reason = "was not found or is disabled"
     elif disabled is True:
-        reason = 'is disabled'
+        reason = "is disabled"
     else:
-        reason = 'was not found'
+        reason = "was not found"
     return _get_target_failure_msg(
-        model, target_model_name, target_model_package, include_path=True,
-        reason=reason, target_kind='node'
+        model,
+        target_model_name,
+        target_model_package,
+        include_path=True,
+        reason=reason,
+        target_kind="node",
     )
 
 
@@ -626,47 +627,45 @@ def get_source_not_found_or_disabled_msg(
     target_table_name: str,
     disabled: Optional[bool] = None,
 ) -> str:
-    full_name = f'{target_name}.{target_table_name}'
+    full_name = f"{target_name}.{target_table_name}"
     if disabled is None:
-        reason = 'was not found or is disabled'
+        reason = "was not found or is disabled"
     elif disabled is True:
-        reason = 'is disabled'
+        reason = "is disabled"
     else:
-        reason = 'was not found'
+        reason = "was not found"
     return _get_target_failure_msg(
-        model, full_name, None, include_path=True,
-        reason=reason, target_kind='source'
+        model, full_name, None, include_path=True, reason=reason, target_kind="source"
     )
 
 
 def source_target_not_found(
-    model,
-    target_name: str,
-    target_table_name: str,
-    disabled: Optional[bool] = None
+    model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
 ) -> NoReturn:
-    msg = get_source_not_found_or_disabled_msg(
-        model, target_name, target_table_name, disabled
-    )
+    msg = get_source_not_found_or_disabled_msg(model, target_name, target_table_name, disabled)
     raise_compiler_error(msg, model)
 
 
 def dependency_not_found(model, target_model_name):
     raise_compiler_error(
-        "'{}' depends on '{}' which is not in the graph!"
-        .format(model.unique_id, target_model_name),
-        model)
+        "'{}' depends on '{}' which is not in the graph!".format(
+            model.unique_id, target_model_name
+        ),
+        model,
+    )
 
 
 def macro_not_found(model, target_macro_id):
     raise_compiler_error(
         model,
-        "'{}' references macro '{}' which is not defined!"
-        .format(model.unique_id, target_macro_id))
+        "'{}' references macro '{}' which is not defined!".format(
+            model.unique_id, target_macro_id
+        ),
+    )
 
 
 def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
-    msg = '''\
+    msg = """\
     The "packages" argument of adapter.dispatch() has been deprecated.
     Use the "macro_namespace" argument instead.
 
@@ -675,7 +674,7 @@ def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
     For more information, see:
 
     https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch
-    '''
+    """
     raise_compiler_error(msg.format(macro_name))
 
 
@@ -683,9 +682,9 @@ def materialization_not_available(model, adapter_type):
     materialization = model.get_materialization()
 
     raise_compiler_error(
-        "Materialization '{}' is not available for {}!"
-        .format(materialization, adapter_type),
-        model)
+        "Materialization '{}' is not available for {}!".format(materialization, adapter_type),
+        model,
+    )
 
 
 def missing_materialization(model, adapter_type):
@@ -693,84 +692,84 @@ def missing_materialization(model, adapter_type):
 
     valid_types = "'default'"
 
-    if adapter_type != 'default':
+    if adapter_type != "default":
         valid_types = "'default' and '{}'".format(adapter_type)
 
     raise_compiler_error(
-        "No materialization '{}' was found for adapter {}! (searched types {})"
-        .format(materialization, adapter_type, valid_types),
-        model)
+        "No materialization '{}' was found for adapter {}! (searched types {})".format(
+            materialization, adapter_type, valid_types
+        ),
+        model,
+    )
 
 
 def bad_package_spec(repo, spec, error_message):
     msg = "Error checking out spec='{}' for repo {}\n{}".format(spec, repo, error_message)
-
     raise InternalException(scrub_secrets(msg, env_secrets()))
 
 
 def raise_cache_inconsistent(message):
-    raise InternalException('Cache inconsistency detected: {}'.format(message))
+    raise InternalException("Cache inconsistency detected: {}".format(message))
 
 
 def missing_config(model, name):
     raise_compiler_error(
-        "Model '{}' does not define a required config parameter '{}'."
-        .format(model.unique_id, name),
-        model)
+        "Model '{}' does not define a required config parameter '{}'.".format(
+            model.unique_id, name
+        ),
+        model,
+    )
 
 
 def missing_relation(relation, model=None):
-    raise_compiler_error(
-        "Relation {} not found!".format(relation),
-        model)
+    raise_compiler_error("Relation {} not found!".format(relation), model)
 
 
 def raise_dataclass_not_dict(obj):
     msg = (
         'The object ("{obj}") was used as a dictionary. This '
-        'capability has been removed from objects of this type.'
+        "capability has been removed from objects of this type."
     )
     raise_compiler_error(msg)
 
 
 def relation_wrong_type(relation, expected_type, model=None):
     raise_compiler_error(
-        ('Trying to create {expected_type} {relation}, '
-         'but it currently exists as a {current_type}. Either '
-         'drop {relation} manually, or run dbt with '
-         '`--full-refresh` and dbt will drop it for you.')
-        .format(relation=relation,
-                current_type=relation.type,
-                expected_type=expected_type),
-        model)
+        (
+            "Trying to create {expected_type} {relation}, "
+            "but it currently exists as a {current_type}. Either "
+            "drop {relation} manually, or run dbt with "
+            "`--full-refresh` and dbt will drop it for you."
+        ).format(relation=relation, current_type=relation.type, expected_type=expected_type),
+        model,
+    )
 
 
 def package_not_found(package_name):
-    raise_dependency_error(
-        "Package {} was not found in the package index".format(package_name))
+    raise_dependency_error("Package {} was not found in the package index".format(package_name))
 
 
 def package_version_not_found(package_name, version_range, available_versions):
-    base_msg = ('Could not find a matching version for package {}\n'
-                '  Requested range: {}\n'
-                '  Available versions: {}')
-    raise_dependency_error(base_msg.format(package_name,
-                                           version_range,
-                                           available_versions))
+    base_msg = (
+        "Could not find a matching version for package {}\n"
+        "  Requested range: {}\n"
+        "  Available versions: {}"
+    )
+    raise_dependency_error(base_msg.format(package_name, version_range, available_versions))
 
 
 def invalid_materialization_argument(name, argument):
     raise_compiler_error(
-        "materialization '{}' received unknown argument '{}'."
-        .format(name, argument))
+        "materialization '{}' received unknown argument '{}'.".format(name, argument)
+    )
 
 
 def system_error(operation_name):
     raise_compiler_error(
         "dbt encountered an error when attempting to {}. "
         "If this error persists, please create an issue at: \n\n"
-        "https://github.com/dbt-labs/dbt-core"
-        .format(operation_name))
+        "https://github.com/dbt-labs/dbt-core".format(operation_name)
+    )
 
 
 class ConnectionException(Exception):
@@ -778,22 +777,25 @@ class ConnectionException(Exception):
     There was a problem with the connection that returned a bad response,
     timed out, or resulted in a file that is corrupt.
     """
+
     pass
 
 
 def raise_dep_not_found(node, node_description, required_pkg):
     raise_compiler_error(
         'Error while parsing {}.\nThe required package "{}" was not found. '
-        'Is the package installed?\nHint: You may need to run '
-        '`dbt deps`.'.format(node_description, required_pkg), node=node)
+        "Is the package installed?\nHint: You may need to run "
+        "`dbt deps`.".format(node_description, required_pkg),
+        node=node,
+    )
 
 
 def multiple_matching_relations(kwargs, matches):
     raise_compiler_error(
-        'get_relation returned more than one relation with the given args. '
-        'Please specify a database or schema to narrow down the result set.'
-        '\n{}\n\n{}'
-        .format(kwargs, matches))
+        "get_relation returned more than one relation with the given args. "
+        "Please specify a database or schema to narrow down the result set."
+        "\n{}\n\n{}".format(kwargs, matches)
+    )
 
 
 def get_relation_returned_multiple_results(kwargs, matches):
@@ -802,33 +804,34 @@ def get_relation_returned_multiple_results(kwargs, matches):
 
 def approximate_relation_match(target, relation):
     raise_compiler_error(
-        'When searching for a relation, dbt found an approximate match. '
-        'Instead of guessing \nwhich relation to use, dbt will move on. '
-        'Please delete {relation}, or rename it to be less ambiguous.'
-        '\nSearched for: {target}\nFound: {relation}'
-        .format(target=target,
-                relation=relation))
+        "When searching for a relation, dbt found an approximate match. "
+        "Instead of guessing \nwhich relation to use, dbt will move on. "
+        "Please delete {relation}, or rename it to be less ambiguous."
+        "\nSearched for: {target}\nFound: {relation}".format(target=target, relation=relation)
+    )
 
 
 def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
     duped_name = node_1.name
     if node_1.package_name != node_2.package_name:
-        extra = (
-            ' ("{}" and "{}" are both in the "{}" namespace)'
-            .format(node_1.package_name, node_2.package_name, namespace)
+        extra = ' ("{}" and "{}" are both in the "{}" namespace)'.format(
+            node_1.package_name, node_2.package_name, namespace
         )
     else:
-        extra = ''
+        extra = ""
 
     raise_compiler_error(
         'dbt found two macros with the name "{}" in the namespace "{}"{}. '
-        'Since these macros have the same name and exist in the same '
-        'namespace, dbt will be unable to decide which to call. To fix this, '
-        'change the name of one of these macros:\n- {} ({})\n- {} ({})'
-        .format(
-            duped_name, namespace, extra,
-            node_1.unique_id, node_1.original_file_path,
-            node_2.unique_id, node_2.original_file_path
+        "Since these macros have the same name and exist in the same "
+        "namespace, dbt will be unable to decide which to call. To fix this, "
+        "change the name of one of these macros:\n- {} ({})\n- {} ({})".format(
+            duped_name,
+            namespace,
+            extra,
+            node_1.unique_id,
+            node_1.original_file_path,
+            node_2.unique_id,
+            node_2.original_file_path,
         )
     )
 
@@ -843,20 +846,24 @@ def raise_duplicate_resource_name(node_1, node_2):
         get_func = node_1.get_source_representation()
     elif node_1.resource_type == NodeType.Documentation:
         get_func = 'doc("{}")'.format(duped_name)
-    elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
+    elif node_1.resource_type == NodeType.Test and "schema" in node_1.tags:
         return
     else:
         get_func = '"{}"'.format(duped_name)
 
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
-        'have the same name,\ndbt will be unable to find the correct resource '
-        'when {} is used. To fix this,\nchange the name of one of '
-        'these resources:\n- {} ({})\n- {} ({})'.format(
+        "have the same name,\ndbt will be unable to find the correct resource "
+        "when {} is used. To fix this,\nchange the name of one of "
+        "these resources:\n- {} ({})\n- {} ({})".format(
             duped_name,
             get_func,
-            node_1.unique_id, node_1.original_file_path,
-            node_2.unique_id, node_2.original_file_path))
+            node_1.unique_id,
+            node_1.original_file_path,
+            node_2.unique_id,
+            node_2.original_file_path,
+        )
+    )
 
 
 def raise_ambiguous_alias(node_1, node_2, duped_name=None):
@@ -865,55 +872,56 @@ def raise_ambiguous_alias(node_1, node_2, duped_name=None):
 
     raise_compiler_error(
         'dbt found two resources with the database representation "{}".\ndbt '
-        'cannot create two resources with identical database representations. '
-        'To fix this,\nchange the configuration of one of these resources:'
-        '\n- {} ({})\n- {} ({})'.format(
+        "cannot create two resources with identical database representations. "
+        "To fix this,\nchange the configuration of one of these resources:"
+        "\n- {} ({})\n- {} ({})".format(
             duped_name,
-            node_1.unique_id, node_1.original_file_path,
-            node_2.unique_id, node_2.original_file_path))
+            node_1.unique_id,
+            node_1.original_file_path,
+            node_2.unique_id,
+            node_2.original_file_path,
+        )
+    )
 
 
 def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
-
     def get_match_string(match):
         return "{}.{}".format(
-            match.get('metadata', {}).get('schema'),
-            match.get('metadata', {}).get('name'))
+            match.get("metadata", {}).get("schema"), match.get("metadata", {}).get("name")
+        )
 
     raise_compiler_error(
-        'dbt found two relations in your warehouse with similar database '
-        'identifiers. dbt\nis unable to determine which of these relations '
+        "dbt found two relations in your warehouse with similar database "
+        "identifiers. dbt\nis unable to determine which of these relations "
         'was created by the model "{unique_id}".\nIn order for dbt to '
-        'correctly generate the catalog, one of the following relations must '
-        'be deleted or renamed:\n\n - {match_1_s}\n - {match_2_s}'.format(
+        "correctly generate the catalog, one of the following relations must "
+        "be deleted or renamed:\n\n - {match_1_s}\n - {match_2_s}".format(
             unique_id=unique_id,
             match_1_s=get_match_string(match_1),
             match_2_s=get_match_string(match_2),
-        ))
+        )
+    )
 
 
 def raise_patch_targets_not_found(patches):
-    patch_list = '\n\t'.join(
-        'model {} (referenced in path {})'.format(p.name, p.original_file_path)
+    patch_list = "\n\t".join(
+        "model {} (referenced in path {})".format(p.name, p.original_file_path)
         for p in patches.values()
     )
     raise_compiler_error(
-        'dbt could not find models for the following patches:\n\t{}'.format(
-            patch_list
-        )
+        "dbt could not find models for the following patches:\n\t{}".format(patch_list)
     )
 
 
 def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
     if path_1 == path_2:
         return (
-            f'remove one of the {type_name} entries for {name} in this file:\n'
-            f' - {path_1!s}\n'
+            f"remove one of the {type_name} entries for {name} in this file:\n" f" - {path_1!s}\n"
         )
     else:
         return (
-            f'remove the {type_name} entry for {name} in one of these files:\n'
-            f' - {path_1!s}\n{path_2!s}'
+            f"remove the {type_name} entry for {name} in one of these files:\n"
+            f" - {path_1!s}\n{path_2!s}"
         )
 
 
@@ -923,93 +931,81 @@ def raise_duplicate_patch_name(patch_1, existing_patch_path):
         patch_1.original_file_path,
         existing_patch_path,
         name,
-        'resource',
+        "resource",
     )
     raise_compiler_error(
-        f'dbt found two schema.yml entries for the same resource named '
-        f'{name}. Resources and their associated columns may only be '
-        f'described a single time. To fix this, {fix}'
+        f"dbt found two schema.yml entries for the same resource named "
+        f"{name}. Resources and their associated columns may only be "
+        f"described a single time. To fix this, {fix}"
     )
 
 
 def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
     package_name = patch_1.package_name
     name = patch_1.name
-    fix = _fix_dupe_msg(
-        patch_1.original_file_path,
-        existing_patch_path,
-        name,
-        'macros'
-    )
+    fix = _fix_dupe_msg(patch_1.original_file_path, existing_patch_path, name, "macros")
     raise_compiler_error(
-        f'dbt found two schema.yml entries for the same macro in package '
-        f'{package_name} named {name}. Macros may only be described a single '
-        f'time. To fix this, {fix}'
+        f"dbt found two schema.yml entries for the same macro in package "
+        f"{package_name} named {name}. Macros may only be described a single "
+        f"time. To fix this, {fix}"
     )
 
 
 def raise_duplicate_source_patch_name(patch_1, patch_2):
-    name = f'{patch_1.overrides}.{patch_1.name}'
+    name = f"{patch_1.overrides}.{patch_1.name}"
     fix = _fix_dupe_msg(
         patch_1.path,
         patch_2.path,
         name,
-        'sources',
+        "sources",
     )
     raise_compiler_error(
-        f'dbt found two schema.yml entries for the same source named '
-        f'{patch_1.name} in package {patch_1.overrides}. Sources may only be '
-        f'overridden a single time. To fix this, {fix}'
+        f"dbt found two schema.yml entries for the same source named "
+        f"{patch_1.name} in package {patch_1.overrides}. Sources may only be "
+        f"overridden a single time. To fix this, {fix}"
     )
 
 
 def raise_invalid_schema_yml_version(path, issue):
     raise_compiler_error(
-        'The schema file at {} is invalid because {}. Please consult the '
-        'documentation for more information on schema.yml syntax:\n\n'
-        'https://docs.getdbt.com/docs/schemayml-files'
-        .format(path, issue)
+        "The schema file at {} is invalid because {}. Please consult the "
+        "documentation for more information on schema.yml syntax:\n\n"
+        "https://docs.getdbt.com/docs/schemayml-files".format(path, issue)
     )
 
 
 def raise_unrecognized_credentials_type(typename, supported_types):
     raise_compiler_error(
-        'Unrecognized credentials type "{}" - supported types are ({})'
-        .format(typename, ', '.join('"{}"'.format(t) for t in supported_types))
+        'Unrecognized credentials type "{}" - supported types are ({})'.format(
+            typename, ", ".join('"{}"'.format(t) for t in supported_types)
+        )
     )
 
 
 def warn_invalid_patch(patch, resource_type):
     msg = line_wrap_message(
-        f'''\
+        f"""\
         '{patch.name}' is a {resource_type} node, but it is
         specified in the {patch.yaml_key} section of
         {patch.original_file_path}.
         To fix this error, place the `{patch.name}`
         specification under the {resource_type.pluralize()} key instead.
-        '''
+        """
     )
-    warn_or_error(msg, log_fmt=warning_tag('{}'))
+    warn_or_error(msg, log_fmt=warning_tag("{}"))
 
 
 def raise_not_implemented(msg):
-    raise NotImplementedException(
-        "ERROR: {}"
-        .format(msg))
+    raise NotImplementedException("ERROR: {}".format(msg))
 
 
 def raise_duplicate_alias(
     kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
 ) -> NoReturn:
     # dupe found: go through the dict so we can have a nice-ish error
-    key_names = ', '.join(
-        "{}".format(k) for k in kwargs if
-        aliases.get(k) == canonical_key
-    )
+    key_names = ", ".join("{}".format(k) for k in kwargs if aliases.get(k) == canonical_key)
 
-    raise AliasException(
-        f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"'
-    )
+    raise AliasException(f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"')
 
 
 def warn_or_error(msg, node=None, log_fmt=None):
@@ -1037,8 +1033,7 @@ def warn(msg, node=None):
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
     fn.__name__: fn
-    for fn in
-    [
+    for fn in [
         warn,
         missing_config,
         missing_materialization,
@@ -1069,12 +1064,12 @@ def wrapper(model):
             except RuntimeException as exc:
                 exc.add_node(model)
                 raise exc
+
         return inner
+
     return wrap
 
 
 def wrapped_exports(model):
     wrap = wrapper(model)
-    return {
-        name: wrap(export) for name, export in CONTEXT_EXPORTS.items()
-    }
+    return {name: wrap(export) for name, export in CONTEXT_EXPORTS.items()}
