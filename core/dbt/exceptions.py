@@ -414,7 +414,7 @@ class CommandResultError(CommandError):
         self.returncode = returncode
         self.stdout = scrub_secrets(stdout.decode("utf-8"), env_secrets())
         self.stderr = scrub_secrets(stderr.decode("utf-8"), env_secrets())
-        self.args = (cwd, self.cmd, returncode, stdout, stderr, message)
+        self.args = (cwd, self.cmd, returncode, self.stdout, self.stderr, message)
 
     def __str__(self):
         return "{} running: {}".format(self.msg, self.cmd)
