@@ -143,16 +143,14 @@
     {% if dstring %}
       {% set dt = modules.datetime.datetime.now() %}
       {% set dtstring = dt.strftime("%H%M%S%f") %}
-      {% set suffix_length = suffix|length + dtstring|length %}
-    {% else%}
-      {% set suffix_length = suffix|length %}
+      {% set suffix = suffix ~ dtstring %}
     {% endif %}
-
+    {% set suffix_length = suffix|length %}
     {% set relation_max_name_length = 63 %}
     {% if suffix_length > relation_max_name_length %}
-        {% do exceptions.raise_compiler_error('Relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ (relation_max_name_length - dtstring|length) ~ ' characters.') %}
+        {% do exceptions.raise_compiler_error('Relation suffix is too long (' ~ suffix_length ~ ' characters). Maximum length is ' ~ relation_max_name_length ~ ' characters.') %}
     {% endif %}
-    {% set identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix ~ dtstring %}
+    {% set identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix %}
 
     {{ return(base_relation.incorporate(path={"identifier": identifier })) }}
 
