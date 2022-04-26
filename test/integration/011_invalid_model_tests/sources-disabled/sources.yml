@@ -1,7 +1,0 @@
-version: 2
-sources:
-  - name: test_source
-    schema: "{{ target.schema }}"
-    tables:
-      - name: test_table
-        identifier: seed

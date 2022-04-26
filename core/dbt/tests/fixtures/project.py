@@ -292,6 +292,12 @@ def macros():
     return {}
 
 
+# properties directory
+@pytest.fixture(scope="class")
+def properties():
+    return {}
+
+
 # seeds directory
 @pytest.fixture(scope="class")
 def seeds():
@@ -316,10 +322,10 @@ def analysis():
     return {}
 
 
-# Write out the files provided by models, macros, snapshots, seeds, tests, analysis
+# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analysis
 @pytest.fixture(scope="class")
-def project_files(project_root, models, macros, snapshots, seeds, tests, analysis):
-    write_project_files(project_root, "models", models)
+def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analysis):
+    write_project_files(project_root, "models", {**models, **properties})
     write_project_files(project_root, "macros", macros)
     write_project_files(project_root, "snapshots", snapshots)
     write_project_files(project_root, "seeds", seeds)
