@@ -3,6 +3,7 @@ import shutil
 import yaml
 import json
 import warnings
+from datetime import datetime
 from typing import List
 from contextlib import contextmanager
 
@@ -38,7 +39,12 @@ from dbt.events.test_types import IntegrationTestDebug
 #   get_relation_columns
 #   update_rows
 #      generate_update_clause
-
+#
+# Classes for comparing fields in dictionaries
+#   AnyFloat
+#   AnyInteger
+#   AnyString
+#   AnyStringWith
 # =============================================================================
 
 
@@ -104,9 +110,9 @@ def copy_file(src_path, src, dest_path, dest) -> None:
 
 
 # Used in tests when you want to remove a file from the project directory
-def rm_file(src_path, src) -> None:
+def rm_file(*paths) -> None:
     # remove files from proj_path
-    os.remove(os.path.join(src_path, src))
+    os.remove(os.path.join(*paths))
 
 
 # Used in tests to write out the string contents of a file to a
@@ -165,6 +171,16 @@ def check_result_nodes_by_unique_id(results, unique_ids):
     for result in results:
         result_unique_ids.append(result.node.unique_id)
     assert set(unique_ids) == set(result_unique_ids)
+
+
+# Check datetime is between start and end/now
+def check_datetime_between(timestr, start, end=None):
+    datefmt = "%Y-%m-%dT%H:%M:%S.%fZ"
+    if end is None:
+        end = datetime.utcnow()
+    parsed = datetime.strptime(timestr, datefmt)
+    assert start <= parsed
+    assert end >= parsed
 
 
 class TestProcessingException(Exception):
@@ -273,13 +289,15 @@ def check_relation_types(adapter, relation_to_type):
 # by doing a separate call for each set of tables/relations.
 # Wraps check_relations_equal_with_relations by creating relations
 # from the list of names passed in.
-def check_relations_equal(adapter, relation_names):
+def check_relations_equal(adapter, relation_names, compare_snapshot_cols=False):
     if len(relation_names) < 2:
         raise TestProcessingException(
             "Not enough relations to compare",
         )
     relations = [relation_from_name(adapter, name) for name in relation_names]
-    return check_relations_equal_with_relations(adapter, relations)
+    return check_relations_equal_with_relations(
+        adapter, relations, compare_snapshot_cols=compare_snapshot_cols
+    )
 
 
 # This can be used when checking relations in different schemas, by supplying
@@ -288,16 +306,17 @@ def check_relations_equal(adapter, relation_names):
 #    adapter.get_columns_in_relation
 #    adapter.get_rows_different_sql
 #    adapter.execute
-def check_relations_equal_with_relations(adapter, relations):
+def check_relations_equal_with_relations(adapter, relations, compare_snapshot_cols=False):
 
     with get_connection(adapter):
         basis, compares = relations[0], relations[1:]
         # Skip columns starting with "dbt_" because we don't want to
         # compare those, since they are time sensitive
+        # (unless comparing "dbt_" snapshot columns is explicitly enabled)
         column_names = [
             c.name
             for c in adapter.get_columns_in_relation(basis)
-            if not c.name.lower().startswith("dbt_")
+            if not c.name.lower().startswith("dbt_") or compare_snapshot_cols
         ]
 
         for relation in compares:
@@ -419,3 +438,46 @@ def check_table_does_not_exist(adapter, name):
 def check_table_does_exist(adapter, name):
     columns = get_relation_columns(adapter, name)
     assert len(columns) > 0
+
+
+# Utility classes for enabling comparison of dictionaries
+
+
+class AnyFloat:
+    """Any float. Use this in assert calls"""
+
+    def __eq__(self, other):
+        return isinstance(other, float)
+
+
+class AnyInteger:
+    """Any Integer. Use this in assert calls"""
+
+    def __eq__(self, other):
+        return isinstance(other, int)
+
+
+class AnyString:
+    """Any string. Use this in assert calls"""
+
+    def __eq__(self, other):
+        return isinstance(other, str)
+
+
+class AnyStringWith:
+    """AnyStringWith("AUTO")"""
+
+    def __init__(self, contains=None):
+        self.contains = contains
+
+    def __eq__(self, other):
+        if not isinstance(other, str):
+            return False
+
+        if self.contains is None:
+            return True
+
+        return self.contains in other
+
+    def __repr__(self):
+        return "AnyStringWith<{!r}>".format(self.contains)
