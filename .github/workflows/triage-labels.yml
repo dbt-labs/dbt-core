@@ -23,15 +23,11 @@ permissions:
 
 jobs:
   triage_label:
-    if: "contains(github.event.issues.labels.*.name, 'awaiting_response')"
-
+    if: contains(github.event.issue.labels.*.name, 'awaiting_response')
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-ecosystem/action-remove-labels@v1
+      - name: initial labeling
+        uses: andymckay/labeler@master
         with:
-          labels: awaiting_response
-      - uses: actions-ecosystem/action-add-labels@v1
-        with:
-          labels: triage
+          add-labels: "triage"
+          remove-labels: "awaiting_response"
