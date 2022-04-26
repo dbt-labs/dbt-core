@@ -301,3 +301,65 @@ def test_parse_yaml_complex():
             ),
         ),
     ) == parsed['test_name']["definition"]
+
+
+def test_parse_selection():
+    sf = parse_file('''\
+        selectors:
+            - name: default
+              definition:
+                union:
+                  - tag: foo
+                  - tag: bar
+            - name: inherited
+              definition:
+                method: selector
+                value: default
+    ''')
+    assert len(sf.selectors) == 2
+    parsed = cli.parse_from_selectors_definition(sf)
+    assert 'default' in parsed
+    assert 'inherited' in parsed
+    assert Union(
+        Criteria(method=MethodName.Tag, value='foo'),
+        Criteria(method=MethodName.Tag, value='bar'),
+    ) == parsed['default']["definition"]
+    assert Union(
+        Criteria(method=MethodName.Tag, value='foo'),
+        Criteria(method=MethodName.Tag, value='bar'),
+    ) == parsed['inherited']["definition"]
+
+
+def test_parse_selection_with_exclusion():
+    sf = parse_file('''\
+        selectors:
+            - name: default
+              definition:
+                union:
+                  - tag: foo
+                  - tag: bar
+            - name: inherited
+              definition:
+                union:
+                  - method: selector
+                    value: default
+                  - exclude:
+                    - tag: bar
+    ''')
+    assert len(sf.selectors) == 2
+    parsed = cli.parse_from_selectors_definition(sf)
+    assert 'default' in parsed
+    assert 'inherited' in parsed
+    assert Union(
+        Criteria(method=MethodName.Tag, value='foo'),
+        Criteria(method=MethodName.Tag, value='bar'),
+    ) == parsed['default']["definition"]
+    assert Difference(
+        Union(
+            Union(
+                Criteria(method=MethodName.Tag, value='foo'),
+                Criteria(method=MethodName.Tag, value='bar'),
+            )
+        ),
+        Criteria(method=MethodName.Tag, value='bar'),
+    ) == parsed['inherited']["definition"]
