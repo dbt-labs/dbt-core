@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   triage_label:
-    if: "contains(github.event.issues.labels.*.name, 'awaiting_response')"
+    if: github.event.label.name == 'awaiting_response'
 
     runs-on: ubuntu-latest
 
