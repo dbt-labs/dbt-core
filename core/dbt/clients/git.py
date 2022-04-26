@@ -28,7 +28,7 @@ def _is_commit(revision: str) -> bool:
 
 
 def _raise_git_cloning_error(repo, revision, error):
-    stderr = error.stderr.decode("utf-8").strip()
+    stderr = error.stderr.strip()
     if "usage: git" in stderr:
         stderr = stderr.split("\nusage: git")[0]
     if re.match("fatal: destination path '(.+)' already exists", stderr):
@@ -115,8 +115,8 @@ def checkout(cwd, repo, revision=None):
     try:
         return _checkout(cwd, repo, revision)
     except CommandResultError as exc:
-        stderr = exc.stderr.decode("utf-8").strip()
-    bad_package_spec(repo, revision, stderr)
+        stderr = exc.stderr.strip()
+        bad_package_spec(repo, revision, stderr)
 
 
 def get_current_sha(cwd):
@@ -142,7 +142,7 @@ def clone_and_checkout(
             subdirectory=subdirectory,
         )
     except CommandResultError as exc:
-        err = exc.stderr.decode("utf-8")
+        err = exc.stderr
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:
             raise_git_cloning_problem(repo)
