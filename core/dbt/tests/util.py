@@ -23,6 +23,7 @@ from dbt.events.test_types import IntegrationTestDebug
 #   read_file
 #   get_artifact
 #   update_config_file
+#   write_config_file
 #   get_unique_ids_in_results
 #   check_result_nodes_by_name
 #   check_result_nodes_by_unique_id
@@ -141,6 +142,13 @@ def update_config_file(updates, *paths):
     config.update(updates)
     new_yaml = yaml.safe_dump(config)
     write_file(new_yaml, *paths)
+
+
+# Write new config file
+def write_config_file(data, *paths):
+    if type(data) is dict:
+        data = yaml.safe_dump(data)
+    write_file(data, *paths)
 
 
 # Get the unique_ids in dbt command results

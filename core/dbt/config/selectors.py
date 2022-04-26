@@ -3,7 +3,7 @@ from typing import Dict, Any, Union
 from dbt.clients.yaml_helper import yaml, Loader, Dumper, load_yaml_text  # noqa: F401
 from dbt.dataclass_schema import ValidationError
 
-from .renderer import SelectorRenderer
+from .renderer import BaseRenderer
 
 from dbt.clients.system import (
     load_file_contents,
@@ -57,7 +57,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     def render_from_dict(
         cls,
         data: Dict[str, Any],
-        renderer: SelectorRenderer,
+        renderer: BaseRenderer,
     ) -> "SelectorConfig":
         try:
             rendered = renderer.render_data(data)
@@ -72,7 +72,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     def from_path(
         cls,
         path: Path,
-        renderer: SelectorRenderer,
+        renderer: BaseRenderer,
     ) -> "SelectorConfig":
         try:
             data = load_yaml_text(load_file_contents(str(path)))
