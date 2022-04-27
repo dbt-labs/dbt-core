@@ -602,7 +602,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.seed_paths, ['seeds'])
         self.assertEqual(project.test_paths, ['tests'])
         self.assertEqual(project.analysis_paths, ['analyses'])
-        self.assertEqual(project.docs_paths, ['models', 'seeds', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(set(project.docs_paths), set(['models', 'seeds', 'snapshots', 'analyses', 'macros']))
         self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, 'target')
         self.assertEqual(project.clean_targets, ['target'])
@@ -635,7 +635,7 @@ class TestProject(BaseConfigTest):
             'target-path': 'other-target',
         })
         project = project_from_config_norender(self.default_project_data)
-        self.assertEqual(project.docs_paths, ['other-models', 'seeds', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(set(project.docs_paths), set(['other-models', 'seeds', 'snapshots', 'analyses', 'macros']))
         self.assertEqual(project.clean_targets, ['other-target'])
 
     def test_hashed_name(self):
@@ -1215,7 +1215,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.seed_paths, ['seeds'])
         self.assertEqual(config.test_paths, ['tests'])
         self.assertEqual(config.analysis_paths, ['analyses'])
-        self.assertEqual(config.docs_paths, ['models', 'seeds', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(set(config.docs_paths), set(['models', 'seeds', 'snapshots', 'analyses', 'macros']))
         self.assertEqual(config.asset_paths, [])
         self.assertEqual(config.target_path, 'target')
         self.assertEqual(config.clean_targets, ['target'])
