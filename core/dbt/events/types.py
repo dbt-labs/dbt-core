@@ -2418,10 +2418,6 @@ class GeneralWarningMsg(WarnLevel):
 
     def message(self) -> str:
         return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
-        # if self.log_fmt is not None:
-        #     return self.log_fmt.format(self.msg)
-        # else:
-        #     return self.msg
 
 
 @dataclass
