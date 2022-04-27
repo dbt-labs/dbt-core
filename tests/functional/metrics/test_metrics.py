@@ -165,4 +165,5 @@ class TestNamesWithSpaces:
         }
 
     def test_names_with_spaces(self, project):
-        run_dbt(["run"])
+        with pytest.raises(ParsingException):
+            run_dbt(["run"])

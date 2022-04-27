@@ -7,7 +7,7 @@ from dbt.contracts.util import (
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
 
@@ -460,3 +460,9 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedMetric, cls).validate(data)
+        if "name" in data and " " in data["name"]:
+            raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
