@@ -6,9 +6,9 @@ cffi==1.15.0
 charset-normalizer==2.0.12
 click==8.1.2
 colorama==0.4.4
-dbt-core==1.0.6rc1
+dbt-core==1.0.6
 dbt-extractor==0.4.1
-dbt-postgres==1.0.6rc1
+dbt-postgres==1.0.6
 future==0.18.2
 hologram==0.0.14
 idna==3.3
@@ -30,7 +30,7 @@ pycparser==2.21
 pyparsing==3.0.8
 pyrsistent==0.18.1
 python-dateutil==2.8.2
-python-slugify==6.1.1
+python-slugify==6.1.2
 pytimeparse==1.1.8
 pytz==2022.1
 PyYAML==6.0

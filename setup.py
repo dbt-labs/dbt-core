@@ -5,7 +5,7 @@ import sys
 
 if 'sdist' not in sys.argv:
     print('')
-    print('As of v1.0.6rc1, `pip install dbt` is no longer supported.')
+    print('As of v1.0.6, `pip install dbt` is no longer supported.')
     print('Instead, please use one of the following.')
     print('')
     print('**To use dbt with your specific database, platform, or query engine:**')
@@ -50,7 +50,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 package_name = "dbt"
-package_version = "1.0.6rc1"
+package_version = "1.0.6"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
