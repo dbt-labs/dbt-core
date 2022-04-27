@@ -17,6 +17,7 @@ pytest-xdist
 pytz
 tox>=3.13
 twine
+types-colorama
 types-PyYAML
 types-freezegun
 types-Jinja2
