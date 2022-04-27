@@ -1,0 +1,7 @@
+kind: Features
+body: 'seed: Add new macro get_csv_sql'
+time: 2022-05-03T14:29:34.847959075Z
+custom:
+  Author: adamantike
+  Issue: "5206"
+  PR: "5207"
