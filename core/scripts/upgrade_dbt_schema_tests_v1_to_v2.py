@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sys
+from typing import List
 import yaml
 
 LOGGER = logging.getLogger("upgrade_dbt_schema")
@@ -362,7 +363,7 @@ def convert_schema(initial, extra_complex_tests):
 
 
 class CustomSortedSchema(dict):
-    ITEMS_ORDER = NotImplemented
+    ITEMS_ORDER: List[str]
 
     @classmethod
     def _items_keyfunc(cls, items):

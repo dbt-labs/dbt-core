@@ -246,16 +246,17 @@ def _supports_long_paths() -> bool:
     # https://stackoverflow.com/a/35097999/11262881
     # I don't know exaclty what he means, but I am inclined to believe him as
     # he's pretty active on Python windows bugs!
-    try:
-        dll = WinDLL("ntdll")
-    except OSError:  # I don't think this happens? you need ntdll to run python
-        return False
-    # not all windows versions have it at all
-    if not hasattr(dll, "RtlAreLongPathsEnabled"):
-        return False
-    # tell windows we want to get back a single unsigned byte (a bool).
-    dll.RtlAreLongPathsEnabled.restype = c_bool
-    return dll.RtlAreLongPathsEnabled()
+    else:
+        try:
+            dll = WinDLL("ntdll")
+        except OSError:  # I don't think this happens? you need ntdll to run python
+            return False
+        # not all windows versions have it at all
+        if not hasattr(dll, "RtlAreLongPathsEnabled"):
+            return False
+        # tell windows we want to get back a single unsigned byte (a bool).
+        dll.RtlAreLongPathsEnabled.restype = c_bool
+        return dll.RtlAreLongPathsEnabled()
 
 
 def convert_path(path: str) -> str:

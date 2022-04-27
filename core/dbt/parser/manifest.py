@@ -946,8 +946,6 @@ def _check_resource_uniqueness(
     for resource, node in manifest.nodes.items():
         if not node.is_relational:
             continue
-        # appease mypy - sources aren't refable!
-        assert not isinstance(node, ParsedSourceDefinition)
 
         name = node.name
         # the full node name is really defined by the adapter's relation

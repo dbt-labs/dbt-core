@@ -140,8 +140,6 @@ class AdapterContainer:
                 raise InternalException(f"No plugin found for {plugin_name}") from None
             plugins.append(plugin)
             seen.add(plugin_name)
-            if plugin.dependencies is None:
-                continue
             for dep in plugin.dependencies:
                 if dep not in seen:
                     plugin_names.append(dep)
