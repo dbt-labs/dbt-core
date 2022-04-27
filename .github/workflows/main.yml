@@ -52,7 +52,7 @@ jobs:
           pip --version
           pip install pre-commit
           pre-commit --version
-          pip install mypy==0.782
+          pip install mypy==0.942
           mypy --version
           pip install -r editable-requirements.txt
           dbt --version
