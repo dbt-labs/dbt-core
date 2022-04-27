@@ -1,0 +1,7 @@
+kind: Fixes
+body: Add warning if yaml contains duplicate keys
+time: 2022-04-28T10:01:57.893956+12:00
+custom:
+  Author: jeremyyeo
+  Issue: "5114"
+  PR: "5146"
