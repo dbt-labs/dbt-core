@@ -22,6 +22,13 @@ Raw Error:
 
 
 class UniqueKeyLoader(SafeLoader):
+    """A subclass that checks for unique yaml mapping nodes.
+
+    This class extends `SafeLoader` from the `yaml` library to check for
+    unique top level keys (mapping nodes). See issue (https://github.com/yaml/pyyaml/issues/165)
+    and solution (https://gist.github.com/pypt/94d747fe5180851196eb?permalink_comment_id=4015118).
+    """
+
     def construct_mapping(self, node, deep=False):
         mapping = set()
         for key_node, value_node in node.value:
@@ -77,5 +84,5 @@ def load_yaml_text(contents, path=None):
         raise dbt.exceptions.ValidationException(error)
     except dbt.exceptions.DuplicateYamlKeyException as e:
         # TODO: We may want to raise an exception instead of a warning in the future.
-        msg = f"{e} {path.searched_path}/{path.relative_path}."
-        dbt.exceptions.warn_or_error(msg, log_fmt=warning_tag("{}"))
+        e.msg = f"{e} {path.searched_path}/{path.relative_path}."
+        dbt.exceptions.warn_or_raise(e, log_fmt=warning_tag("{}"))
