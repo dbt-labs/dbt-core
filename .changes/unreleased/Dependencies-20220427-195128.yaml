@@ -1,0 +1,7 @@
+kind: Dependencies
+body: "Bump ubuntu from 20.04 to 22.04"
+time: 2022-04-27T19:51:28.000000-05:00
+custom:
+  Author: dependabot[bot]
+  Issue: "4904"
+  PR: "5141"
