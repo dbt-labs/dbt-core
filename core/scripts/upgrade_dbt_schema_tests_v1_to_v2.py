@@ -396,7 +396,7 @@ class CustomSortedColumnsSchema(CustomSortedSchema):
 
 
 for cls in (CustomSortedRootSchema, CustomSortedModelsSchema, CustomSortedColumnsSchema):
-    yaml.add_representer(cls, cls.representer)
+    yaml.add_representer(cls, cls.representer)  # type: ignore [attr-defined]
 
 
 if __name__ == "__main__":
