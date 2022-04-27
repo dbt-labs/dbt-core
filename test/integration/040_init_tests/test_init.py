@@ -79,6 +79,7 @@ test:
   target: dev
 """
 
+  # See CT-570 / GH 5180
     @mark.skip(
       reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
     )
@@ -136,6 +137,7 @@ test:
   target: dev
 """
 
+    # See CT-570 / GH 5180
     @mark.skip(
       reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
     )
@@ -251,7 +253,7 @@ prompts:
       user: test_username
   target: dev
 """
-
+    # See CT-570 / GH 5180
     @mark.skip(
       reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
     )
@@ -310,6 +312,7 @@ test:
       user: test_username
   target: dev
 """
+    # See CT-570 / GH 5180
     @mark.skip(
       reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
     )
@@ -427,6 +430,7 @@ models:
     example:
       +materialized: view
 """
+    # See CT-570 / GH 5180
     @mark.skip(
       reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
     )

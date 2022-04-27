@@ -228,7 +228,8 @@ def _get_adapter_plugin_names() -> Iterator[str]:
 
     # https://github.com/dbt-labs/dbt-core/pull/5171 changes how importing adapters works a bit and renders the previous discovery method useless for postgres.
     # To solve this we manually add that path to the search path below.
-    #  I don't like this solution.  Not one bit.
+    # I don't like this solution.  Not one bit.
+    # This can go away when we move the postgres adapter to it's own repo.
     postgres_path = Path(__file__ + "/../../../plugins/postgres/dbt/adapters").resolve()
     spec.submodule_search_locations.append(str(postgres_path))
 
