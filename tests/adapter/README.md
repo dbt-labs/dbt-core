@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dbt-labs/dbt-core/fa1ea14ddfb1d5ae319d5141844910dd53ab2834/etc/dbt-core.svg" alt="dbt logo" width="750"/>
+</p>
+
 # dbt-tests-adapter
 
 For context and guidance on using this package, please read: ["Testing a new adapter"](https://docs.getdbt.com/docs/contributing/testing-a-new-adapter)
