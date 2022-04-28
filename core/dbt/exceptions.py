@@ -437,6 +437,10 @@ class InvalidSelectorException(RuntimeException):
         super().__init__(name)
 
 
+class DuplicateYamlKeyException(CompilationException):
+    pass
+
+
 def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 
@@ -903,7 +907,8 @@ def raise_ambiguous_alias(node_1, node_2, duped_name=None):
 def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
     def get_match_string(match):
         return "{}.{}".format(
-            match.get("metadata", {}).get("schema"), match.get("metadata", {}).get("name")
+            match.get("metadata", {}).get("schema"),
+            match.get("metadata", {}).get("name"),
         )
 
     raise_compiler_error(
