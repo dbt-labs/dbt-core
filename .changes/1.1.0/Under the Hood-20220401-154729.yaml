@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Remove TableComparison and convert existing calls to use dbt.tests.util
-time: 2022-04-01T15:47:29.054759-04:00
-custom:
-  Author: gshank
-  Issue: "4778"
-  PR: "4986"
