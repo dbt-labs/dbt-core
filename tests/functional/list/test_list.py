@@ -21,10 +21,6 @@ class TestList:
         return os.path.normpath(value)
 
     @pytest.fixture(scope="class")
-    def model_path(self):
-        return self.dir("models")
-
-    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "config-version": 2,
