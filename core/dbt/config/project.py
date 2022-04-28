@@ -132,7 +132,11 @@ def _all_source_paths(
     analysis_paths: List[str],
     macro_paths: List[str],
 ) -> List[str]:
-    return list(chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths))
+    # We need to turn a list of lists into just a list, then convert to a set to
+    # get only unique elements, then back to a list
+    return list(
+        set(list(chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)))
+    )
 
 
 T = TypeVar("T")
