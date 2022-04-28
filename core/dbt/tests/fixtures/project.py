@@ -182,6 +182,7 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
     if project_config_update:
         project_config.update(project_config_update)
     write_file(yaml.safe_dump(project_config), project_root, "dbt_project.yml")
+    return project_config
 
 
 # Fixture to provide packages as either yaml or dictionary
