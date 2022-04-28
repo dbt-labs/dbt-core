@@ -55,6 +55,7 @@ jobs:
           pip install mypy==0.942
           mypy --version
           pip install -r editable-requirements.txt
+          pip install -r dev-requirements.txt
           dbt --version
 
       - name: Run pre-commit hooks
