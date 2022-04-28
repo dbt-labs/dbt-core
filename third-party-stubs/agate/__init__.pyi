@@ -1,4 +1,4 @@
-from collections import Sequence
+from collections.abc import Sequence
 
 from typing import Any, Optional, Callable, Iterable, Dict, Union
 
