@@ -3,5 +3,5 @@ body: Mypy -> 0.942 + fixed import logic to allow for full mypy coverage
 time: 2022-04-27T11:21:27.499359-05:00
 custom:
   Author: iknox-fa
-  Issue: "4805, 4089"
+  Issue: "4805"
   PR: "5171"
