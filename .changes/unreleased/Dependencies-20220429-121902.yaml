@@ -1,0 +1,7 @@
+kind: Dependencies
+body: "Bump jinja2 from 2.11.3 to 3.1.2 in /core"
+time: 2022-04-29T12:19:02.000000-05:00
+custom:
+  Author: dependabot[bot]
+  Issue: "4904"
+  PR: "5190"
