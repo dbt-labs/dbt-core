@@ -404,11 +404,16 @@ class TestProjInfo:
 
     # Drop the unique test schema, usually called in test cleanup
     def drop_test_schema(self):
-        with get_connection(self.adapter):
-            for schema_name in self.created_schemas:
-                relation = self.adapter.Relation.create(database=self.database, schema=schema_name)
-                self.adapter.drop_schema(relation)
-            self.created_schemas = []
+        for schema_name in self.created_schemas:
+            relation = self.adapter.Relation.create(database=self.database, schema=schema_name)
+            schema = self.adapter.quote_as_configured(relation.schema, "schema")
+            self.run_sql(f"drop schema if exists {schema} cascade")
+        self.created_schemas = []
+        # with get_connection(self.adapter):
+        #     for schema_name in self.created_schemas:
+        #         relation = self.adapter.Relation.create(database=self.database, schema=schema_name)
+        #         self.adapter.drop_schema(relation)
+        #     self.created_schemas = []
 
     # This return a dictionary of table names to 'view' or 'table' values.
     def get_tables_in_schema(self):
