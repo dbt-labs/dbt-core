@@ -35,9 +35,9 @@ select
     '{{ run_started_at }}' as run_started_at,
     '{{ invocation_id }}'  as invocation_id,
 
-    '{{ env_var("DBT_TEST_013_ENV_VAR") }}' as env_var,
+    '{{ env_var("DBT_TEST_ENV_VAR") }}' as env_var,
     'secret_variable' as env_var_secret, -- make sure the value itself is scrubbed from the logs
-    '{{ env_var("DBT_TEST_013_NOT_SECRET") }}' as env_var_not_secret
+    '{{ env_var("DBT_TEST_NOT_SECRET") }}' as env_var_not_secret
 
 """
 
@@ -49,12 +49,16 @@ class TestEnvVars:
 
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ["DBT_TEST_013_ENV_VAR"] = "1"
-
-        os.environ["DBT_TEST_013_USER"] = "root"
-        os.environ["DBT_TEST_013_PASS"] = "password"
-        os.environ[SECRET_ENV_PREFIX + "013_SECRET"] = "secret_variable"
-        os.environ["DBT_TEST_013_NOT_SECRET"] = "regular_variable"
+        os.environ["DBT_TEST_ENV_VAR"] = "1"
+        os.environ["DBT_TEST_USER"] = "root"
+        os.environ["DBT_TEST_PASS"] = "password"
+        os.environ[SECRET_ENV_PREFIX + "SECRET"] = "secret_variable"
+        os.environ["DBT_TEST_NOT_SECRET"] = "regular_variable"
+        yield
+        del os.environ["DBT_TEST_ENV_VAR"]
+        del os.environ["DBT_TEST_USER"]
+        del os.environ[SECRET_ENV_PREFIX + "SECRET"]
+        del os.environ["DBT_TEST_NOT_SECRET"]
 
     @pytest.fixture(scope="class")
     def profiles_config_update(self, unique_schema):
@@ -79,8 +83,8 @@ class TestEnvVars:
                         "host": "localhost",
                         "port": 5432,
                         # root/password
-                        "user": "{{ env_var('DBT_TEST_013_USER') }}",
-                        "pass": "{{ env_var('DBT_TEST_013_PASS') }}",
+                        "user": "{{ env_var('DBT_TEST_USER') }}",
+                        "pass": "{{ env_var('DBT_TEST_PASS') }}",
                         "dbname": "dbt",
                         "schema": unique_schema,
                     },
@@ -125,7 +129,7 @@ class TestEnvVars:
         ctx = self.get_ctx_vars(project)
 
         manifest = get_manifest(project.project_root)
-        expected = {"DBT_TEST_013_ENV_VAR": "1", "DBT_TEST_013_NOT_SECRET": "regular_variable"}
+        expected = {"DBT_TEST_ENV_VAR": "1", "DBT_TEST_NOT_SECRET": "regular_variable"}
         assert manifest.env_vars == expected
 
         this = '"{}"."{}"."context"'.format(project.database, project.test_schema)

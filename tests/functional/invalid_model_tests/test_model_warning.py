@@ -8,10 +8,6 @@ warnings_sql = """
 select 1 as id
 """
 
-# Note: this test is in the wrong directory. It has nothing to do with contexts,
-# and is just a test that issuing a warning in a model works. Move when a better
-# location is identified.
-
 
 class TestEmitWarning:
     @pytest.fixture(scope="class")

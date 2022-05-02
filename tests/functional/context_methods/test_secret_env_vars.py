@@ -17,9 +17,9 @@ secret_bad__context_sql = """
 
 select
 
-    '{{ env_var("DBT_TEST_013_ENV_VAR") }}' as env_var,
-    '{{ env_var("DBT_ENV_SECRET_013_SECRET") }}' as env_var_secret, -- this should raise an error!
-    '{{ env_var("DBT_TEST_013_NOT_SECRET") }}' as env_var_not_secret
+    '{{ env_var("DBT_TEST_ENV_VAR") }}' as env_var,
+    '{{ env_var("DBT_ENV_SECRET_SECRET") }}' as env_var_secret, -- this should raise an error!
+    '{{ env_var("DBT_TEST_NOT_SECRET") }}' as env_var_not_secret
 
 """
 
@@ -63,9 +63,9 @@ select
     '{{ run_started_at }}' as run_started_at,
     '{{ invocation_id }}'  as invocation_id,
 
-    '{{ env_var("DBT_TEST_013_ENV_VAR") }}' as env_var,
+    '{{ env_var("DBT_TEST_ENV_VAR") }}' as env_var,
     'secret_variable' as env_var_secret, -- make sure the value itself is scrubbed from the logs
-    '{{ env_var("DBT_TEST_013_NOT_SECRET") }}' as env_var_not_secret
+    '{{ env_var("DBT_TEST_NOT_SECRET") }}' as env_var_not_secret
 """
 
 
@@ -75,6 +75,10 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
         os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
         os.environ[SECRET_ENV_PREFIX + "PASS"] = "password"
         os.environ[SECRET_ENV_PREFIX + "PACKAGE"] = "first_dependency"
+        yield
+        del os.environ[SECRET_ENV_PREFIX + "USER"]
+        del os.environ[SECRET_ENV_PREFIX + "PASS"]
+        del os.environ[SECRET_ENV_PREFIX + "PACKAGE"]
 
     @pytest.fixture(scope="class")
     def models(self):
