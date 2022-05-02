@@ -1,7 +1,7 @@
 # Release Versioning / Branching Strategy
 
 ## Context
-With `dbt` ever evolving and progressing, we continue to ship and release versions on a regular basis. As we release `dbt`, versioning and branching become key to identifying what changes for users and conveying the expectations of those changes. We currently push all our changes to `main` which is the latest version of our code. We don't always want to release the latest version of our code though. We want to be able to isolate changes to go into particular releases based on urgency (e.g. bug fixes) and stability (e.g. new features). 
+With `dbt` ever evolving and progressing, we continue to ship and release versions on a regular basis. As we release `dbt`, versioning and branching become key to identifying what is different for users and conveying the expectations of those changes. We currently push all our commits to `main` which is the latest version of our code. We don't always want to release the latest version of our code though. We want to be able to isolate commits to go into particular releases based on urgency (e.g. bug fixes) and stability (e.g. new features). 
 
 We already have an established versioning strategy when it comes to major/minor/patch releases. The following is our approach as to what to expect from each release version:
 
