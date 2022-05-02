@@ -26,6 +26,27 @@ The following are requirements that must be met for releasing dbt:
 1. We must have release phases that are stable and of production quality.
 1. We must have the ability to isolate changes from different versions and phases to release.
 
+## Branching Strategy Options
+The 2 branching strategies we are considering using going forward are:
+	1. A new branch for each and every release
+	1. A new branch for each minor version which we release minor and patch versions from (current strategy)
+
+### New branch for every release
+#### Pros: 
+* Easy mapping between a release and a branch. Great for troubleshooting issues.
+* Less confusing and more straightforward for running a release on a branch. No question of what version is being released.
+#### Cons:
+* Breaks current adapters CI which needs to point to the exact `dbt-core` branch that it needs to test with. The branches would need to be updated in all adapter repos for each final and prerelease branch every time we have a new release branch for `dbt-core`. 
+* Confusing for backporting. We will need to keep creating new labels and making sure we remove the old labels because we don't want to accidently backport to the wrong branch.
+
+### Minor release branches (current strategy)
+#### Pros:
+* Adapter CI testing will continue to work with this strategy and makes it less complicated overall. Adapters and `dbt-core` need to be on the same minor version but can be on different patch versions. The current CI workflows verify that the changes slated for a new `1.1` patch are compatible across all repos by checking out the `1.1.latest` branch of each repo. The 1:1 mapping of adapter branches to `dbt-core` branches makes this easy.
+* Easy backporting. There is no need to figure out the exact branch that you need to backport to and accidently backporting to an older, stale branch.
+#### Cons:
+* Branches contain more than 1 release which is confusing. Without a 1:1 mapping between branch and release, you must rely on tags instead to know where in the branch the release was cut.
+* Releasing from the same branch multiple times can lead to confusion as to which version we are releasing and actually stops us from releasing the wrong version.
+
 ## Decisions
 
 ### Version phases
@@ -53,6 +74,10 @@ Based off of the release version and expectations, the version phase's branching
  * An RC version denotes a more stable state. A release branch will be created for RC releases to limit the changes a release contains
  * Final versions are stable and tested. Only verified changes will go into these releases, which are inherited from the corresponding RC version
  * A release branch will exist for each unique major or minor version, to be named accordingly: `<major>.<minor>.latest` (e.g. `1.0.latest`)
+    * This is keeping with our current stratgey that we use today.
+    * The reasoning for this decision is largely based off of not wanting to break the current adapters CI workflows and needing to redesign these as well. With patch versions of adapters and `dbt-core` needing to be compatible, testing off of a single minor version branch is much simpler. 
+    * Making this current decision does not back us into a corner if we would like to revisit this again in the future. The release workflows created will be able to run on a branch that is version specific or not which makes this flexible as we test out our new processes.
+    
 
  ![Branching Strategy](images/ReleasingBranchStrategy.png)
 
