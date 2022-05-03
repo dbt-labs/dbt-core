@@ -1,4 +1,0 @@
-name: view_default_override
-config-version: 2
-version: '1.0'
-macro-paths: ['macros']
