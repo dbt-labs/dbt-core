@@ -171,6 +171,7 @@ class SQLAdapter(BaseAdapter):
             "relation": relation,
         }
         self.execute_macro(DROP_SCHEMA_MACRO_NAME, kwargs=kwargs)
+        self.commit_if_has_connection()
         # we can update the cache here
         self.cache.drop_schema(relation.database, relation.schema)
 
