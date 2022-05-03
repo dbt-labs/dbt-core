@@ -5,7 +5,7 @@
 1. [About this document](#about-this-document)
 2. [Getting the code](#getting-the-code)
 3. [Setting up an environment](#setting-up-an-environment)
-4. [Running `dbt` in development](#running-dbt-in-development)
+4. [Running `dbt` in development](#running-dbt-core-in-development)
 5. [Testing dbt-core](#testing)
 6. [Submitting a Pull Request](#submitting-a-pull-request)
 
@@ -56,10 +56,10 @@ These are the tools used in `dbt-core` development and testing:
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
-- [`pre-commit`](https.pre-commit.com) to easily run those checks
+- [`pre-commit`](https://pre-commit.com) to easily run those checks
 - [`changie`](https://changie.dev/) to create changelog entries, without merge conflicts
 - [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) to run multiple setup or test steps in combination. Don't worry too much, nobody _really_ understands how `make` works, and our Makefile aims to be super simple.
-- [Github Actions](https://github.com/features/actions) for automating tests and checks, once a PR is pushed to the `dbt-core` repository
+- [GitHub Actions](https://github.com/features/actions) for automating tests and checks, once a PR is pushed to the `dbt-core` repository
 
 A deep understanding of these tools in not required to effectively contribute to `dbt-core`, but we recommend checking out the attached documentation if you're interested in learning more about each one.
 
@@ -144,14 +144,14 @@ make test
 # Runs postgres integration tests with py38 in "fail fast" mode.
 make integration
 ```
-> These make targets assume you have a local install of a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and pre-commit for code quality checks,
+> These make targets assume you have a local installation of a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and pre-commit for code quality checks,
 > unless you use choose a Docker container to run tests. Run `make help` for more info.
 
 Check out the other targets in the Makefile to see other commonly used test
 suites.
 
 #### `pre-commit`
-[`pre-commit`](https.pre-commit.com) takes care of running all code-checks for formatting and linting. Run `make dev` to install `pre-commit` in your local environment.  Once this is done you can use any of the linter-based make targets as well as a git pre-commit hook that will ensure proper formatting and linting.
+[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `make dev` to install `pre-commit` in your local environment.  Once this is done you can use any of the linter-based make targets as well as a git pre-commit hook that will ensure proper formatting and linting.
 
 #### `tox`
 
