@@ -142,9 +142,7 @@ class TestRuntimeWrapper(unittest.TestCase):
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
         self.namespace = mock.MagicMock()
-        self.wrapper = providers.RuntimeDatabaseWrapper(
-            self.mock_adapter, self.namespace
-        )
+        self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):
@@ -192,7 +190,9 @@ REQUIRED_BASE_KEYS = frozenset(
         "fromyaml",
         "toyaml",
         "set",
+        "try_set",
         "zip",
+        "try_zip",
         "log",
         "run_started_at",
         "invocation_id",
@@ -403,9 +403,7 @@ def test_query_header_context(config_postgres, manifest_fx):
     assert_has_keys(REQUIRED_QUERY_HEADER_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_runtime_context(
-    config_postgres, manifest_fx, get_adapter, get_include_paths
-):
+def test_macro_runtime_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_macro_context(
         macro=manifest_fx.macros["macro.root.macro_a"],
         config=config_postgres,
@@ -415,9 +413,7 @@ def test_macro_runtime_context(
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_parse_context(
-    config_postgres, manifest_fx, get_adapter, get_include_paths
-):
+def test_model_parse_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_parser_model_context(
         model=mock_model(),
         config=config_postgres,
@@ -427,9 +423,7 @@ def test_model_parse_context(
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_runtime_context(
-    config_postgres, manifest_fx, get_adapter, get_include_paths
-):
+def test_model_runtime_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_model_context(
         model=mock_model(),
         config=config_postgres,
@@ -444,9 +438,7 @@ def test_docs_runtime_context(config_postgres):
 
 
 def test_macro_namespace_duplicates(config_postgres, manifest_fx):
-    mn = macros.MacroNamespaceBuilder(
-        "root", "search", MacroStack(), ["dbt_postgres", "dbt"]
-    )
+    mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
     mn.add_macros(manifest_fx.macros.values(), {})
 
     # same pkg, same name: error
@@ -458,9 +450,7 @@ def test_macro_namespace_duplicates(config_postgres, manifest_fx):
 
 
 def test_macro_namespace(config_postgres, manifest_fx):
-    mn = macros.MacroNamespaceBuilder(
-        "root", "search", MacroStack(), ["dbt_postgres", "dbt"]
-    )
+    mn = macros.MacroNamespaceBuilder("root", "search", MacroStack(), ["dbt_postgres", "dbt"])
 
     dbt_macro = mock_macro("some_macro", "dbt")
     # same namespace, same name, different pkg!
@@ -468,9 +458,7 @@ def test_macro_namespace(config_postgres, manifest_fx):
     # same name, different package
     package_macro = mock_macro("some_macro", "root")
 
-    all_macros = itertools.chain(
-        manifest_fx.macros.values(), [dbt_macro, pg_macro, package_macro]
-    )
+    all_macros = itertools.chain(manifest_fx.macros.values(), [dbt_macro, pg_macro, package_macro])
 
     namespace = mn.build_namespace(all_macros, {})
     dct = dict(namespace)
