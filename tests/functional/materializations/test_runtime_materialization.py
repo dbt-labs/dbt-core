@@ -119,11 +119,12 @@ def seeds():
     return {"seed.csv": seeds__seed_csv}
 
 
-class TestRuntimeMaterialization:
-    @pytest.fixture(scope="class", autouse=True)
-    def setup(self, project):
-        run_dbt(["seed"])
+@pytest.fixture(scope="class", autouse=True)
+def setup(project):
+    run_dbt(["seed"])
 
+
+class TestRuntimeMaterialization:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -184,12 +185,13 @@ class TestRuntimeMaterialization:
         check_relations_equal(project.adapter, ["seed", "incremental"])
 
 
-# class TestRuntimeMaterializationWithConfig(TestRuntimeMaterialization):
-#   @pytest.fixture(scope="class")
-#   def project_config_update(self):
-#       result = super().project_config
-#       result.update({'models': {'full_refresh': True}})
-#       return result
-
-#   def run_dbt_full_refresh(self):
-#       return run_dbt(['run'])
+# Run same tests with models configured with full_refresh
+class TestRuntimeMaterializationWithConfig(TestRuntimeMaterialization):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "seeds": {
+                "quote_columns": False,
+            },
+            "models": {"full_refresh": True},
+        }
