@@ -1,9 +1,0 @@
-version: 2
-models:
-- name: simple_model
-  columns:
-  - name: simple
-    tests:
-    - accepted_values:
-        values:
-        - abc

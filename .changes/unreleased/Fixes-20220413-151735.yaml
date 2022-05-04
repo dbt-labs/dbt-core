@@ -1,7 +1,0 @@
-kind: Fixes
-body: Relax minimum supported version of MarkupSafe
-time: 2022-04-13T15:17:35.055274145-03:00
-custom:
-  Author: adamantike
-  Issue: "4745"
-  PR: "5039"

@@ -205,7 +205,11 @@ test:
   host: localhost
   dbname: my_db
   schema: my_schema
+  target: my_target
 prompts:
+  target:
+    hint: 'The target name'
+    type: string
   port:
     hint: 'The port (for integer test purposes)'
     type: int
@@ -220,12 +224,14 @@ prompts:
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
         manager.prompt.side_effect = [
+            'my_target',
             5432,
             'test_username',
             'test_password'
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
+            call.prompt('target (The target name)', default=None, hide_input=False, type=click.STRING),
             call.prompt('port (The port (for integer test purposes))', default=5432, hide_input=False, type=click.INT),
             call.prompt('user (Your username)', default=None, hide_input=False, type=None),
             call.prompt('pass (Your password)', default=None, hide_input=True, type=None)
@@ -234,7 +240,7 @@ prompts:
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == """test:
   outputs:
-    dev:
+    my_target:
       dbname: my_db
       host: localhost
       pass: test_password
@@ -243,7 +249,7 @@ prompts:
       threads: 4
       type: postgres
       user: test_username
-  target: dev
+  target: my_target
 """
 
     @use_profile('postgres')

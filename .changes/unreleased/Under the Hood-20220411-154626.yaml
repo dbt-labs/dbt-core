@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Update --version output and logic
-time: 2022-04-11T15:46:26.113705-05:00
-custom:
-  Author: stu-k
-  Issue: "4724"
-  PR: "5029"

@@ -1,7 +1,0 @@
-kind: Features
-body: Add space before justification periods
-time: 2022-03-22T14:48:22.64892-04:00
-custom:
-  Author: joellabes
-  Issue: "4737"
-  PR: "4744"

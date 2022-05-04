@@ -1,7 +1,0 @@
-kind: Fixes
-body: Corrected permissions settings for docker release workflow
-time: 2022-03-18T09:58:46.061468-05:00
-custom:
-  Author: iknox-fa
-  Issue: "4902"
-  PR: "4903"

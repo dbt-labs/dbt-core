@@ -15,5 +15,3 @@ jobs:
           close-issue-message: "Although we are closing this issue as stale, it's not gone forever. Issues can be reopened if there is renewed community interest; add a comment to notify the maintainers."
           # mark issues/PRs stale when they haven't seen activity in 180 days
           days-before-stale: 180
-          # ignore checking issues with the following labels
-          exempt-issue-labels: "epic,discussion"

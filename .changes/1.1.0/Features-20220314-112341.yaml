@@ -1,7 +1,0 @@
-kind: Features
-body: Allow unique key to take a list implementation for postgres/redshift
-time: 2022-03-14T11:23:41.293726-05:00
-custom:
-  Author: McKnight-42
-  Issue: "4738"
-  PR: "4858"

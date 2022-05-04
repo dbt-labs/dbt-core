@@ -107,6 +107,9 @@ def test_data_dir(request):
 
 # This contains the profile target information, for simplicity in setting
 # up different profiles, particularly in the adapter repos.
+# Note: because we load the profile to create the adapter, this
+# fixture can't be used to test vars and env_vars or errors. The
+# profile must be written out after the test starts.
 @pytest.fixture(scope="class")
 def dbt_profile_target():
     return {
@@ -118,6 +121,11 @@ def dbt_profile_target():
         "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
         "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
     }
+
+
+@pytest.fixture(scope="class")
+def profile_user(dbt_profile_target):
+    return dbt_profile_target["user"]
 
 
 # This fixture can be overridden in a project. The data provided in this
@@ -179,6 +187,7 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
     if project_config_update:
         project_config.update(project_config_update)
     write_file(yaml.safe_dump(project_config), project_root, "dbt_project.yml")
+    return project_config
 
 
 # Fixture to provide packages as either yaml or dictionary
@@ -253,16 +262,17 @@ def write_project_files(project_root, dir_name, file_dict):
 # Write files out from file_dict. Can be nested directories...
 def write_project_files_recursively(path, file_dict):
     if type(file_dict) is not dict:
-        raise TestProcessingException(f"Error creating {path}. Did you forget the file extension?")
+        raise TestProcessingException(f"File dict is not a dict: '{file_dict}' for path '{path}'")
+    suffix_list = [".sql", ".csv", ".md", ".txt"]
     for name, value in file_dict.items():
-        if name.endswith(".sql") or name.endswith(".csv") or name.endswith(".md"):
-            write_file(value, path, name)
-        elif name.endswith(".yml") or name.endswith(".yaml"):
+        if name.endswith(".yml") or name.endswith(".yaml"):
             if isinstance(value, str):
                 data = value
             else:
                 data = yaml.safe_dump(value)
             write_file(data, path, name)
+        elif name.endswith(tuple(suffix_list)):
+            write_file(value, path, name)
         else:
             write_project_files_recursively(path.mkdir(name), value)
 
@@ -280,6 +290,12 @@ def models():
 # macros directory
 @pytest.fixture(scope="class")
 def macros():
+    return {}
+
+
+# properties directory
+@pytest.fixture(scope="class")
+def properties():
     return {}
 
 
@@ -307,10 +323,10 @@ def analysis():
     return {}
 
 
-# Write out the files provided by models, macros, snapshots, seeds, tests, analysis
+# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analysis
 @pytest.fixture(scope="class")
-def project_files(project_root, models, macros, snapshots, seeds, tests, analysis):
-    write_project_files(project_root, "models", models)
+def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analysis):
+    write_project_files(project_root, "models", {**models, **properties})
     write_project_files(project_root, "macros", macros)
     write_project_files(project_root, "snapshots", snapshots)
     write_project_files(project_root, "seeds", seeds)
@@ -356,6 +372,7 @@ class TestProjInfo:
         self.test_schema = test_schema
         self.database = database
         self.test_config = test_config
+        self.created_schemas = []
 
     @property
     def adapter(self):
@@ -377,20 +394,21 @@ class TestProjInfo:
 
     # Create the unique test schema. Used in test setup, so that we're
     # ready for initial sql prior to a run_dbt command.
-    def create_test_schema(self):
+    def create_test_schema(self, schema_name=None):
+        if schema_name is None:
+            schema_name = self.test_schema
         with get_connection(self.adapter):
-            relation = self.adapter.Relation.create(
-                database=self.database, schema=self.test_schema
-            )
+            relation = self.adapter.Relation.create(database=self.database, schema=schema_name)
             self.adapter.create_schema(relation)
+            self.created_schemas.append(schema_name)
 
     # Drop the unique test schema, usually called in test cleanup
     def drop_test_schema(self):
         with get_connection(self.adapter):
-            relation = self.adapter.Relation.create(
-                database=self.database, schema=self.test_schema
-            )
-            self.adapter.drop_schema(relation)
+            for schema_name in self.created_schemas:
+                relation = self.adapter.Relation.create(database=self.database, schema=schema_name)
+                self.adapter.drop_schema(relation)
+            self.created_schemas = []
 
     # This return a dictionary of table names to 'view' or 'table' values.
     def get_tables_in_schema(self):
@@ -454,5 +472,13 @@ def project(
 
     yield project
 
-    project.drop_test_schema()
+    # deps, debug and clean commands will not have an installed adapter when running and will raise
+    # a KeyError here.  Just pass for now.
+    # See https://github.com/dbt-labs/dbt-core/issues/5041
+    # The debug command also results in an AttributeError since `Profile` doesn't have
+    # a `load_dependencies` method.
+    try:
+        project.drop_test_schema()
+    except (KeyError, AttributeError):
+        pass
     os.chdir(orig_cwd)

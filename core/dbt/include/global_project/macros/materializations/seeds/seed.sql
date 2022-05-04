@@ -31,9 +31,7 @@
   {% set sql = load_csv_rows(model, agate_table) %}
 
   {% call noop_statement('main', code ~ ' ' ~ rows_affected, code, rows_affected) %}
-    {{ create_table_sql }};
-    -- dbt seed --
-    {{ sql }}
+    {{ get_csv_sql(create_table_sql, sql) }};
   {% endcall %}
 
   {% set target_relation = this.incorporate(type='table') %}

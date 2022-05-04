@@ -1,0 +1,7 @@
+kind: Features
+body: allow target as an option in profile_template.yml
+time: 2022-04-28T06:56:44.511519-04:00
+custom:
+  Author: alexrosenfeld10
+  Issue: "5179"
+  PR: "5184"

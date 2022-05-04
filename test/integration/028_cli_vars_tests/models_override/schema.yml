@@ -1,9 +1,0 @@
-version: 2
-models:
-- name: test_vars
-  columns:
-  - name: field
-    tests:
-    - accepted_values:
-        values:
-        - override

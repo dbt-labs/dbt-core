@@ -11,31 +11,7 @@ from tests.functional.sources.fixtures import (
     filtered_models__schema_yml,
     override_freshness_models__schema_yml,
 )
-
-
-# put these here for now to get tests working
-class AnyStringWith:
-    def __init__(self, contains=None):
-        self.contains = contains
-
-    def __eq__(self, other):
-        if not isinstance(other, str):
-            return False
-
-        if self.contains is None:
-            return True
-
-        return self.contains in other
-
-    def __repr__(self):
-        return "AnyStringWith<{!r}>".format(self.contains)
-
-
-class AnyFloat:
-    """Any float. Use this in assertEqual() calls to assert that it is a float."""
-
-    def __eq__(self, other):
-        return isinstance(other, float)
+from dbt.tests.util import AnyStringWith, AnyFloat
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):

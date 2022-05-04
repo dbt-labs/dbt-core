@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix misspellings and typos in docstrings
-time: 2022-03-21T14:10:07.962502-05:00
-custom:
-  Author: kazanzhy
-  Issue: "4904"
-  PR: "4545"

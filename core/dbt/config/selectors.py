@@ -1,9 +1,10 @@
 from pathlib import Path
+from copy import deepcopy
 from typing import Dict, Any, Union
 from dbt.clients.yaml_helper import yaml, Loader, Dumper, load_yaml_text  # noqa: F401
 from dbt.dataclass_schema import ValidationError
 
-from .renderer import SelectorRenderer
+from .renderer import BaseRenderer
 
 from dbt.clients.system import (
     load_file_contents,
@@ -57,7 +58,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     def render_from_dict(
         cls,
         data: Dict[str, Any],
-        renderer: SelectorRenderer,
+        renderer: BaseRenderer,
     ) -> "SelectorConfig":
         try:
             rendered = renderer.render_data(data)
@@ -72,7 +73,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     def from_path(
         cls,
         path: Path,
-        renderer: SelectorRenderer,
+        renderer: BaseRenderer,
     ) -> "SelectorConfig":
         try:
             data = load_yaml_text(load_file_contents(str(path)))
@@ -140,28 +141,33 @@ def validate_selector_default(selector_file: SelectorFile) -> None:
 # good to combine the two flows into one at some point.
 class SelectorDict:
     @classmethod
-    def parse_dict_definition(cls, definition):
+    def parse_dict_definition(cls, definition, selector_dict={}):
         key = list(definition)[0]
         value = definition[key]
         if isinstance(value, list):
             new_values = []
             for sel_def in value:
-                new_value = cls.parse_from_definition(sel_def)
+                new_value = cls.parse_from_definition(sel_def, selector_dict=selector_dict)
                 new_values.append(new_value)
             value = new_values
         if key == "exclude":
             definition = {key: value}
         elif len(definition) == 1:
             definition = {"method": key, "value": value}
+        elif key == "method" and value == "selector":
+            sel_def = definition.get("value")
+            if sel_def not in selector_dict:
+                raise DbtSelectorsError(f"Existing selector definition for {sel_def} not found.")
+            return selector_dict[definition["value"]]["definition"]
         return definition
 
     @classmethod
-    def parse_a_definition(cls, def_type, definition):
+    def parse_a_definition(cls, def_type, definition, selector_dict={}):
         # this definition must be a list
         new_dict = {def_type: []}
         for sel_def in definition[def_type]:
             if isinstance(sel_def, dict):
-                sel_def = cls.parse_from_definition(sel_def)
+                sel_def = cls.parse_from_definition(sel_def, selector_dict=selector_dict)
                 new_dict[def_type].append(sel_def)
             elif isinstance(sel_def, str):
                 sel_def = SelectionCriteria.dict_from_single_spec(sel_def)
@@ -171,15 +177,17 @@ class SelectorDict:
         return new_dict
 
     @classmethod
-    def parse_from_definition(cls, definition):
+    def parse_from_definition(cls, definition, selector_dict={}):
         if isinstance(definition, str):
             definition = SelectionCriteria.dict_from_single_spec(definition)
         elif "union" in definition:
-            definition = cls.parse_a_definition("union", definition)
+            definition = cls.parse_a_definition("union", definition, selector_dict=selector_dict)
         elif "intersection" in definition:
-            definition = cls.parse_a_definition("intersection", definition)
+            definition = cls.parse_a_definition(
+                "intersection", definition, selector_dict=selector_dict
+            )
         elif isinstance(definition, dict):
-            definition = cls.parse_dict_definition(definition)
+            definition = cls.parse_dict_definition(definition, selector_dict=selector_dict)
         return definition
 
     # This is the normal entrypoint of this code. Give it the
@@ -190,6 +198,8 @@ class SelectorDict:
         for selector in selectors:
             sel_name = selector["name"]
             selector_dict[sel_name] = selector
-            definition = cls.parse_from_definition(selector["definition"])
+            definition = cls.parse_from_definition(
+                selector["definition"], selector_dict=deepcopy(selector_dict)
+            )
             selector_dict[sel_name]["definition"] = definition
         return selector_dict

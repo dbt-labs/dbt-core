@@ -115,7 +115,7 @@ def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
     """If loading the yaml fails, raise an exception."""
     path = source_file.path.relative_path
     try:
-        return load_yaml_text(source_file.contents)
+        return load_yaml_text(source_file.contents, source_file.path)
     except ValidationException as e:
         reason = validator_error_message(e)
         raise ParsingException(
@@ -548,7 +548,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 def check_format_version(file_path, yaml_dct) -> None:
     if "version" not in yaml_dct:
         raise_invalid_property_yml_version(
-            file_path, "the yml property file {} is missing a version tag".format(file_path)
+            file_path,
+            "the yml property file {} is missing a version tag".format(file_path),
         )
 
     version = yaml_dct["version"]
@@ -562,7 +563,8 @@ def check_format_version(file_path, yaml_dct) -> None:
         )
     if version != 2:
         raise_invalid_property_yml_version(
-            file_path, "its 'version:' tag is set to {}.  Only 2 is supported".format(version)
+            file_path,
+            "its 'version:' tag is set to {}.  Only 2 is supported".format(version),
         )
 
 
