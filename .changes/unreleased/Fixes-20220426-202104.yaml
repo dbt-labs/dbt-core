@@ -1,0 +1,7 @@
+kind: Fixes
+body: Ensure the metric name does not contain spaces
+time: 2022-04-26T20:21:04.360693-04:00
+custom:
+  Author: gshank
+  Issue: "4572"
+  PR: "5173"

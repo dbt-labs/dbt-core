@@ -107,3 +107,5 @@ jobs:
           base: ${{github.ref}}
           title: 'Bumping version to ${{steps.variables.outputs.VERSION_NUMBER}}'
           branch: 'bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_${{GITHUB.RUN_ID}}'
+          labels: |
+            Skip Changelog

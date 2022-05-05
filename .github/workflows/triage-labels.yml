@@ -1,0 +1,33 @@
+# **what?**
+# When the core team triages, we sometimes need more information from the issue creator.  In
+# those cases we remove the `triage` label and add the `awaiting_response` label.  Once we
+# recieve a response in the form of a comment, we want the `awaiting_response` label removed
+# in favor of the `triage` label so we are aware that the issue needs action.
+
+# **why?**
+# To help with out team triage issue tracking
+
+# **when?**
+# This will run when a comment is added to an issue and that issue has to `awaiting_response` label.
+
+name: Update Triage Label
+
+on: issue_comment
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  issues: write
+
+jobs:
+  triage_label:
+    if: contains(github.event.issue.labels.*.name, 'awaiting_response')
+    runs-on: ubuntu-latest
+    steps:
+      - name: initial labeling
+        uses: andymckay/labeler@master
+        with:
+          add-labels: "triage"
+          remove-labels: "awaiting_response"

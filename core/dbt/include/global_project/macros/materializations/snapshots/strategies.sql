@@ -103,8 +103,14 @@
 {% endmacro %}
 
 
-{% macro snapshot_check_all_get_existing_columns(node, target_exists) -%}
-    {%- set query_columns = get_columns_in_query(node['compiled_sql']) -%}
+{% macro snapshot_check_all_get_existing_columns(node, target_exists, check_cols_config) -%}
+    {% if check_cols_config == 'all' %}
+        {%- set query_columns = get_columns_in_query(node['compiled_sql']) -%}
+    {% elif check_cols_config is iterable and (check_cols_config | length) > 0 %}
+        {% set query_columns = check_cols_config %}
+    {% else %}
+        {% do exceptions.raise_compiler_error("Invalid value for 'check_cols': " ~ check_cols_config) %}
+    {% endif %}
     {%- if not target_exists -%}
         {# no table yet -> return whatever the query does #}
         {{ return([false, query_columns]) }}
@@ -136,13 +142,7 @@
 
     {% set column_added = false %}
 
-    {% if check_cols_config == 'all' %}
-        {% set column_added, check_cols = snapshot_check_all_get_existing_columns(node, target_exists) %}
-    {% elif check_cols_config is iterable and (check_cols_config | length) > 0 %}
-        {% set check_cols = check_cols_config %}
-    {% else %}
-        {% do exceptions.raise_compiler_error("Invalid value for 'check_cols': " ~ check_cols_config) %}
-    {% endif %}
+    {% set column_added, check_cols = snapshot_check_all_get_existing_columns(node, target_exists, check_cols_config) %}
 
     {%- set row_changed_expr -%}
     (

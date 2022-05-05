@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   dependency_changelog:
-    if: ${{ github.event.label.name == 'dependencies' }}
+    if: "contains(github.event.pull_request.labels.*.name, 'dependencies')"
     runs-on: ubuntu-latest
 
     steps:

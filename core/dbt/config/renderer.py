@@ -114,11 +114,9 @@ class DbtProjectYamlRenderer(BaseRenderer):
     def name(self):
         "Project config"
 
+    # Uses SecretRenderer
     def get_package_renderer(self) -> BaseRenderer:
         return PackageRenderer(self.ctx_obj.cli_vars)
-
-    def get_selector_renderer(self) -> BaseRenderer:
-        return SelectorRenderer(self.ctx_obj.cli_vars)
 
     def render_project(
         self,
@@ -136,8 +134,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
         return package_renderer.render_data(packages)
 
     def render_selectors(self, selectors: Dict[str, Any]):
-        selector_renderer = self.get_selector_renderer()
-        return selector_renderer.render_data(selectors)
+        return self.render_data(selectors)
 
     def render_entry(self, value: Any, keypath: Keypath) -> Any:
         result = super().render_entry(value, keypath)
@@ -165,18 +162,10 @@ class DbtProjectYamlRenderer(BaseRenderer):
         return True
 
 
-class SelectorRenderer(BaseRenderer):
-    @property
-    def name(self):
-        return "Selector config"
-
-
 class SecretRenderer(BaseRenderer):
-    def __init__(self, cli_vars: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, cli_vars: Dict[str, Any] = {}) -> None:
         # Generate contexts here because we want to save the context
         # object in order to retrieve the env_vars.
-        if cli_vars is None:
-            cli_vars = {}
         self.ctx_obj = SecretContext(cli_vars)
         context = self.ctx_obj.to_dict()
         super().__init__(context)

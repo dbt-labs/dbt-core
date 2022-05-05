@@ -1,8 +1,0 @@
---- 
-config-version: 2
-model-paths: 
-  - models-ok
-name: test
-profile: test
-test-paths: []
-version: "1.0"

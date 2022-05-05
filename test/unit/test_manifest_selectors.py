@@ -1,13 +1,15 @@
 import dbt.exceptions
 import textwrap
 import yaml
+from collections import OrderedDict
 import unittest
 from dbt.config.selectors import SelectorDict
+from dbt.exceptions import DbtSelectorsError
 
 
-def get_selector_dict(txt: str) -> dict:
+def get_selector_dict(txt: str) -> OrderedDict:
     txt = textwrap.dedent(txt)
-    dct = yaml.safe_load(txt)
+    dct = OrderedDict(yaml.safe_load(txt))
     return dct
 
 
@@ -113,3 +115,73 @@ class SelectorUnitTest(unittest.TestCase):
         expected = {'method': 'fqn', 'value': 'my_model', 'children': True, 'children_depth': '2'}
         definition = sel_dict['my_model_children_selector']['definition']
         self.assertEqual(expected, definition)
+
+    def test_selector_definition(self):
+        dct = get_selector_dict('''\
+            selectors:
+              - name: default
+                definition:
+                  union:
+                    - intersection:
+                      - tag: foo
+                      - tag: bar
+              - name: inherited
+                definition:
+                  method: selector
+                  value: default
+            ''')
+
+        sel_dict = SelectorDict.parse_from_selectors_list(dct['selectors'])
+        assert(sel_dict)
+        definition = sel_dict['default']['definition']
+        expected = sel_dict['inherited']['definition']
+        self.assertEqual(expected, definition)
+
+    def test_selector_definition_with_exclusion(self):
+        dct = get_selector_dict('''\
+            selectors:
+              - name: default
+                definition:
+                  union:
+                    - intersection:
+                      - tag: foo
+                      - tag: bar
+              - name: inherited
+                definition:
+                  union:
+                    - method: selector
+                      value: default
+                    - exclude:
+                      - tag: bar
+              - name: comparison
+                definition:
+                  union:
+                    - union:
+                      - intersection:
+                        - tag: foo
+                        - tag: bar
+                    - exclude:
+                      - tag: bar
+            ''')
+
+        sel_dict = SelectorDict.parse_from_selectors_list((dct['selectors']))
+        assert(sel_dict)
+        definition = sel_dict['inherited']['definition']
+        expected = sel_dict['comparison']['definition']
+        self.assertEqual(expected, definition)
+
+    def test_missing_selector(self):
+        dct = get_selector_dict('''\
+            selectors:
+              - name: inherited
+                definition:
+                  method: selector
+                  value: default
+            ''')
+        with self.assertRaises(DbtSelectorsError) as err:
+            sel_dict = SelectorDict.parse_from_selectors_list((dct['selectors']))
+
+        self.assertEqual(
+            'Existing selector definition for default not found.',
+            str(err.exception.msg)
+        )

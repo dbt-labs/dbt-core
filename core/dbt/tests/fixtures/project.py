@@ -107,6 +107,9 @@ def test_data_dir(request):
 
 # This contains the profile target information, for simplicity in setting
 # up different profiles, particularly in the adapter repos.
+# Note: because we load the profile to create the adapter, this
+# fixture can't be used to test vars and env_vars or errors. The
+# profile must be written out after the test starts.
 @pytest.fixture(scope="class")
 def dbt_profile_target():
     return {
@@ -184,6 +187,7 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
     if project_config_update:
         project_config.update(project_config_update)
     write_file(yaml.safe_dump(project_config), project_root, "dbt_project.yml")
+    return project_config
 
 
 # Fixture to provide packages as either yaml or dictionary
@@ -289,6 +293,12 @@ def macros():
     return {}
 
 
+# properties directory
+@pytest.fixture(scope="class")
+def properties():
+    return {}
+
+
 # seeds directory
 @pytest.fixture(scope="class")
 def seeds():
@@ -313,10 +323,10 @@ def analysis():
     return {}
 
 
-# Write out the files provided by models, macros, snapshots, seeds, tests, analysis
+# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analysis
 @pytest.fixture(scope="class")
-def project_files(project_root, models, macros, snapshots, seeds, tests, analysis):
-    write_project_files(project_root, "models", models)
+def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analysis):
+    write_project_files(project_root, "models", {**models, **properties})
     write_project_files(project_root, "macros", macros)
     write_project_files(project_root, "snapshots", snapshots)
     write_project_files(project_root, "seeds", seeds)
@@ -465,7 +475,7 @@ def project(
     # deps, debug and clean commands will not have an installed adapter when running and will raise
     # a KeyError here.  Just pass for now.
     # See https://github.com/dbt-labs/dbt-core/issues/5041
-    # The debug command also results in an AttributeError since `QueryCommentedProfile` doesn't have
+    # The debug command also results in an AttributeError since `Profile` doesn't have
     # a `load_dependencies` method.
     try:
         project.drop_test_schema()

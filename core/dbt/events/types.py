@@ -2352,11 +2352,15 @@ class WritingInjectedSQLForNode(DebugLevel):
 
 
 @dataclass
-class DisableTracking(WarnLevel):
+class DisableTracking(DebugLevel):
     code: str = "Z039"
 
     def message(self) -> str:
-        return "Error sending message, disabling tracking"
+        return (
+            "Error sending anonymous usage statistics. Disabling tracking for this execution. "
+            "If you wish to permanently disable tracking, see: "
+            "https://docs.getdbt.com/reference/global-configs#send-anonymous-usage-stats."
+        )
 
 
 @dataclass

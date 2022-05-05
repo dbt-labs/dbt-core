@@ -23,6 +23,7 @@ from dbt.version import __version__ as dbt_version
 import pytz
 import datetime
 import re
+import itertools
 
 # Contexts in dbt Core
 # Contexts are used for Jinja rendering. They include context methods,
@@ -77,11 +78,35 @@ def get_re_module_context() -> Dict[str, Any]:
     return {name: getattr(re, name) for name in context_exports}
 
 
+def get_itertools_module_context() -> Dict[str, Any]:
+    # Excluded dropwhile, filterfalse, takewhile and groupby;
+    # first 3 illogical for Jinja and last redundant.
+    context_exports = [
+        "count",
+        "cycle",
+        "repeat",
+        "accumulate",
+        "chain",
+        "compress",
+        "islice",
+        "starmap",
+        "tee",
+        "zip_longest",
+        "product",
+        "permutations",
+        "combinations",
+        "combinations_with_replacement",
+    ]
+
+    return {name: getattr(itertools, name) for name in context_exports}
+
+
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
     return {
         "pytz": get_pytz_module_context(),
         "datetime": get_datetime_module_context(),
         "re": get_re_module_context(),
+        "itertools": get_itertools_module_context(),
     }
 
 
