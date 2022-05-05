@@ -540,7 +540,7 @@ class SourceStatusSelectorMethod(SelectorMethod):
             )
 
         current_state_sources = {
-            result.unique_id: getattr(result, "max_loaded_at", None)
+            result.unique_id: getattr(result, "max_loaded_at", 0)
             for result in self.previous_state.sources_current.results
             if hasattr(result, "max_loaded_at")
         }
@@ -552,7 +552,7 @@ class SourceStatusSelectorMethod(SelectorMethod):
         }
 
         previous_state_sources = {
-            result.unique_id: getattr(result, "max_loaded_at", None)
+            result.unique_id: getattr(result, "max_loaded_at", 0)
             for result in self.previous_state.sources.results
             if hasattr(result, "max_loaded_at")
         }

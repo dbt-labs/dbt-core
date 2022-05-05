@@ -2421,9 +2421,7 @@ class GeneralWarningMsg(WarnLevel):
     code: str = "Z046"
 
     def message(self) -> str:
-        if self.log_fmt is not None:
-            return self.log_fmt.format(self.msg)
-        return self.msg
+        return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
 
 
 @dataclass
@@ -2433,9 +2431,7 @@ class GeneralWarningException(WarnLevel):
     code: str = "Z047"
 
     def message(self) -> str:
-        if self.log_fmt is not None:
-            return self.log_fmt.format(str(self.exc))
-        return str(self.exc)
+        return self.log_fmt.format(str(self.exc)) if self.log_fmt is not None else str(self.exc)
 
 
 @dataclass

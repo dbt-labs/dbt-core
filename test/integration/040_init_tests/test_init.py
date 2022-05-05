@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from test.integration.base import DBTIntegrationTest, use_profile
-
+from pytest import mark
 
 class TestInit(DBTIntegrationTest):
     def tearDown(self):
@@ -79,6 +79,10 @@ test:
   target: dev
 """
 
+  # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -133,6 +137,10 @@ test:
   target: dev
 """
 
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -251,7 +259,10 @@ prompts:
       user: test_username
   target: my_target
 """
-
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -307,7 +318,10 @@ test:
       user: test_username
   target: dev
 """
-
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -422,7 +436,10 @@ models:
     example:
       +materialized: view
 """
-
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')

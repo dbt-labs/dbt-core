@@ -63,7 +63,7 @@ class SourcePatcher:
                 self.sources[unpatched.unique_id] = unpatched
                 continue
             # returns None if there is no patch
-            patch = self.get_patch_for(unpatched)
+            patch = self.get_patch_for(unpatched)  # type: ignore[unreachable] # CT-564 / GH 5169
 
             # returns unpatched if there is no patch
             patched = self.patch_source(unpatched, patch)
@@ -213,8 +213,8 @@ class SourcePatcher:
         self,
         unpatched: UnpatchedSourceDefinition,
     ) -> Optional[SourcePatch]:
-        if isinstance(unpatched, ParsedSourceDefinition):
-            return None
+        if isinstance(unpatched, ParsedSourceDefinition):  # type: ignore[unreachable] # CT-564 / GH 5169
+            return None  # type: ignore[unreachable] # CT-564 / GH 5169
         key = (unpatched.package_name, unpatched.source.name)
         patch: Optional[SourcePatch] = self.manifest.source_patches.get(key)
         if patch is None:

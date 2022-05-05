@@ -246,16 +246,17 @@ def _supports_long_paths() -> bool:
     # https://stackoverflow.com/a/35097999/11262881
     # I don't know exaclty what he means, but I am inclined to believe him as
     # he's pretty active on Python windows bugs!
-    try:
-        dll = WinDLL("ntdll")
-    except OSError:  # I don't think this happens? you need ntdll to run python
-        return False
-    # not all windows versions have it at all
-    if not hasattr(dll, "RtlAreLongPathsEnabled"):
-        return False
-    # tell windows we want to get back a single unsigned byte (a bool).
-    dll.RtlAreLongPathsEnabled.restype = c_bool
-    return dll.RtlAreLongPathsEnabled()
+    else:
+        try:
+            dll = WinDLL("ntdll")
+        except OSError:  # I don't think this happens? you need ntdll to run python
+            return False
+        # not all windows versions have it at all
+        if not hasattr(dll, "RtlAreLongPathsEnabled"):
+            return False
+        # tell windows we want to get back a single unsigned byte (a bool).
+        dll.RtlAreLongPathsEnabled.restype = c_bool
+        return dll.RtlAreLongPathsEnabled()
 
 
 def convert_path(path: str) -> str:
@@ -443,7 +444,11 @@ def download_with_retries(
     connection_exception_retry(download_fn, 5)
 
 
-def download(url: str, path: str, timeout: Optional[Union[float, tuple]] = None) -> None:
+def download(
+    url: str,
+    path: str,
+    timeout: Optional[Union[float, Tuple[float, float], Tuple[float, None]]] = None,
+) -> None:
     path = convert_path(path)
     connection_timeout = timeout or float(os.getenv("DBT_HTTP_TIMEOUT", 10))
     response = requests.get(url, timeout=connection_timeout)

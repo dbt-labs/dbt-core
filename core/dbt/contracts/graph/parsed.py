@@ -586,10 +586,7 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     @property
     def columns(self) -> Sequence[UnparsedColumn]:
-        if self.table.columns is None:
-            return []
-        else:
-            return self.table.columns
+        return [] if self.table.columns is None else self.table.columns
 
     def get_tests(self) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
         for test in self.tests:
