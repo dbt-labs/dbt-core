@@ -54,7 +54,7 @@ jobs:
           pre-commit --version
           pip install mypy==0.942
           mypy --version
-          pip install -r editable-requirements.txt
+          pip install -r requirements.txt
           pip install -r dev-requirements.txt
           dbt --version
 
