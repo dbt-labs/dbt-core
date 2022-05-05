@@ -505,12 +505,11 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def try_set(value: Iterable[Any], default: Any = None) -> Optional[Set[Any]]:
+    def try_set(value: Iterable[Any]) -> Set[Any]:
         """The `try_set` context method can be used to convert any iterable
         to a sequence of iterable elements that are unique (a set). The
         difference to the `set` context method is that the `try_set` method
-        will raise an exception instead of silently returning `None` upon a
-        TypeError (provided that the default value is `None`).
+        will raise an exception on a TypeError.
 
         :param value: The iterable
         :param default: A default value to return if the `value` argument
@@ -524,10 +523,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return set(value)
         except TypeError as e:
-            if not default:
-                raise CompilationException(e)
-            else:
-                return default
+            raise CompilationException(e)
 
     @contextmember("zip")
     @staticmethod
@@ -553,13 +549,12 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def try_zip(*args: Iterable[Any], default: Any = None) -> Optional[Iterable[Any]]:
+    def try_zip(*args: Iterable[Any]) -> Iterable[Any]:
         """The `try_zip` context method can be used to used to return
         an iterator of tuples, where the i-th tuple contains the i-th
         element from each of the argument iterables. The difference to the
         `zip` context method is that the `try_zip` method will raise an
-        exception instead of silently returning `None` upon a TypeError
-        (provided that the default value is `None`).
+        exception on a TypeError.
 
         :param *args: Any number of iterables
         :param default: A default value to return if `*args` is not
@@ -568,16 +563,13 @@ class BaseContext(metaclass=ContextMeta):
         Usage:
             {% set my_list_a = [1, 2] %}
             {% set my_list_b = ['alice', 'bob'] %}
-            {% set my_zip = zip(my_list_a, my_list_b) | list %}
+            {% set my_zip = try_zip(my_list_a, my_list_b) | list %}
             {% do log(my_set) %}  {# [(1, 'alice'), (2, 'bob')] #}
         """
         try:
             return zip(*args)
         except TypeError as e:
-            if not default:
-                raise CompilationException(e)
-            else:
-                return default
+            raise CompilationException(e)
 
     @contextmember
     @staticmethod
