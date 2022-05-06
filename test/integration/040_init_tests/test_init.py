@@ -29,6 +29,10 @@ class TestInit(DBTIntegrationTest):
     def models(self):
         return 'models'
 
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')

@@ -3,7 +3,6 @@ import importlib.util
 import os
 import glob
 import json
-from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
 
 import requests
@@ -225,13 +224,6 @@ def _get_adapter_plugin_names() -> Iterator[str]:
     # not be reporting plugin versions today
     if spec is None or spec.submodule_search_locations is None:
         return
-
-    # https://github.com/dbt-labs/dbt-core/pull/5171 changes how importing adapters works a bit and renders the previous discovery method useless for postgres.
-    # To solve this we manually add that path to the search path below.
-    # I don't like this solution.  Not one bit.
-    # This can go away when we move the postgres adapter to it's own repo.
-    postgres_path = Path(__file__ + "/../../../plugins/postgres/dbt/adapters").resolve()
-    spec.submodule_search_locations.append(str(postgres_path))
 
     for adapters_path in spec.submodule_search_locations:
         version_glob = os.path.join(adapters_path, "*", "__version__.py")
