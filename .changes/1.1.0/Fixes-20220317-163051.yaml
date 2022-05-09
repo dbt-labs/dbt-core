@@ -1,7 +1,0 @@
-kind: Fixes
-body: Update bumpervsion config to stop looking for missing setup.py
-time: 2022-03-17T16:30:51.299919-05:00
-custom:
-  Author: iknox-fa
-  Issue: "-1"
-  PR: "4896"

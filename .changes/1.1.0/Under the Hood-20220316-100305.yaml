@@ -1,8 +1,0 @@
-kind: Under the Hood
-body: Enable more dialects to snapshot sources with added columns, even those that
-  don't support boolean datatypes
-time: 2022-03-16T10:03:05.96768-05:00
-custom:
-  Author: McKnight-42
-  Issue: "4488"
-  PR: "4871"

@@ -221,6 +221,36 @@ class TestAllowSecretProfilePackage(DBTIntegrationTest):
         self.assertFalse("first_dependency" in log_output)
 
 
+class TestCloneFailSecretScrubbed(DBTIntegrationTest):
+    
+    def setUp(self):
+        os.environ[SECRET_ENV_PREFIX + "GIT_TOKEN"] = "abc123"
+        DBTIntegrationTest.setUp(self)
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {"git": "https://fakeuser:{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') }}@github.com/dbt-labs/fake-repo.git"},
+            ]
+        }
+            
+    @property
+    def schema(self):
+        return "context_vars_013"
+
+    @property
+    def models(self):
+        return "models"
+
+    @use_profile('postgres')
+    def test_postgres_fail_clone_with_scrubbing(self):
+        with self.assertRaises(dbt.exceptions.InternalException) as exc:
+            _, log_output = self.run_dbt_and_capture(['deps'])
+
+        assert "abc123" not in str(exc.exception)
+
+
 class TestEmitWarning(DBTIntegrationTest):
     @property
     def schema(self):

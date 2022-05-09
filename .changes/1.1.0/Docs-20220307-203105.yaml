@@ -1,8 +1,0 @@
-kind: Docs
-body: Resolve errors related to operations preventing DAG from generating in the docs.  Also
-  patch a spark issue to allow search to filter accurately past the missing columns.
-time: 2022-03-07T20:31:05.557064-06:00
-custom:
-  Author: emmyoop
-  Issue: "4578"
-  PR: "4763"

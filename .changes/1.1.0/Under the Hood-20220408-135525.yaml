@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Added .git-blame-ignore-revs file to mask re-formmating commits from git blame
-time: 2022-04-08T13:55:25.790513-05:00
-custom:
-  Author: iknox-fa
-  Issue: "5004"
-  PR: "5019"

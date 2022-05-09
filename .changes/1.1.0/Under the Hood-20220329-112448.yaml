@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Create a dbt.tests.adapter release when releasing dbt and postgres
-time: 2022-03-29T11:24:48.34465-04:00
-custom:
-  Author: gshank
-  Issue: "4812"
-  PR: "4948"
