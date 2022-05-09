@@ -1,0 +1,7 @@
+kind: Dependencies
+body: "Bump hologram from 0.0.14 to 0.0.15 in /core"
+time: 2022-05-09T00:59:21.000000-05:00
+custom:
+  Author: dependabot[bot]
+  Issue: "4904"
+  PR: "5220"
