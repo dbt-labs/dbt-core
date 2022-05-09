@@ -1,0 +1,8 @@
+kind: Fixes
+body: Changed how `--select state:modified` detects changes for macros nodes depend
+  on
+time: 2022-05-09T13:13:12.889074-05:00
+custom:
+  Author: stu-k
+  Issue: "5202"
+  PR: "5224"
