@@ -1,26 +1,25 @@
 
 {% materialization incremental, default -%}
 
-  {% set unique_key = config.get('unique_key') %}
-  {% set target_relation = this.incorporate(type='table') %}
-  {% set existing_relation = load_relation(this) %}
+  -- relations
+  {%- set existing_relation = load_cached_relation(this) -%}
+  {%- set target_relation = this.incorporate(type='table') -%}
   {%- set temp_relation = make_temp_relation(target_relation)-%}
-  {%- set intermediate_relation = make_intermediate_relation(target_relation) -%}
-  {%- set backup_identifier = make_backup_relation(target_relation, backup_relation_type=none) -%}
-  {%- set full_refresh_mode = (should_full_refresh()) -%}
+  {%- set intermediate_relation = make_intermediate_relation(target_relation)-%}
+  {%- set backup_relation_type = 'table' if existing_relation is none else existing_relation.type -%}
+  {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
 
-  {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
+  -- configs
+  {%- set unique_key = config.get('unique_key') -%}
+  {%- set full_refresh_mode = (should_full_refresh()  or existing_relation.is_view) -%}
+  {%- set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') -%}
 
   -- the temp_ and backup_ relations should not already exist in the database; get_relation
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation. This has to happen before
   -- BEGIN, in a separate transaction
-  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=intermediate_relation['identifier'],
-                                                          schema=schema,
-                                                          database=database) %}
-  {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier['identifier'],
-                                                            schema=schema,
-                                                            database=database) %}
+  {%- set preexisting_intermediate_relation = load_cached_relation(intermediate_relation)-%}
+  {%- set preexisting_backup_relation = load_cached_relation(backup_relation) -%}
   {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
   {{ drop_relation_if_exists(preexisting_backup_relation) }}
 
@@ -31,21 +30,13 @@
 
   {% set to_drop = [] %}
 
-  {# -- first check whether we want to full refresh for source view or config reasons #}
-  {% set trigger_full_refresh = (full_refresh_mode or existing_relation.is_view) %}
-
   {% if existing_relation is none %}
-      {% set build_sql = create_table_as(False, target_relation, sql) %}
-  {% elif trigger_full_refresh %}
-      {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
-      {% set intermediate_relation = existing_relation.incorporate(path={"identifier": temp_relation['identifier']}) %}
-      {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier['identifier']}) %}
-
-      {% set build_sql = create_table_as(False, intermediate_relation, sql) %}
+      {% set build_sql = get_create_table_as_sql(False, target_relation, sql) %}
+  {% elif full_refresh_mode %}
+      {% set build_sql = get_create_table_as_sql(False, intermediate_relation, sql) %}
       {% set need_swap = true %}
-      {% do to_drop.append(backup_relation) %}
   {% else %}
-    {% do run_query(create_table_as(True, temp_relation, sql)) %}
+    {% do run_query(get_create_table_as_sql(True, temp_relation, sql)) %}
     {% do adapter.expand_target_column_types(
              from_relation=temp_relation,
              to_relation=target_relation) %}
@@ -65,6 +56,7 @@
   {% if need_swap %}
       {% do adapter.rename_relation(target_relation, backup_relation) %}
       {% do adapter.rename_relation(intermediate_relation, target_relation) %}
+      {% do to_drop.append(backup_relation) %}
   {% endif %}
 
   {% do persist_docs(target_relation, model) %}
