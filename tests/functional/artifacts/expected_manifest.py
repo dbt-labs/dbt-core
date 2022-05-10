@@ -30,6 +30,7 @@ def get_rendered_model_config(**updates):
         "on_schema_change": "ignore",
         "meta": {},
         "unique_key": None,
+        "grants": {},
     }
     result.update(updates)
     return result
@@ -57,6 +58,7 @@ def get_rendered_seed_config(**updates):
         "alias": None,
         "meta": {},
         "unique_key": None,
+        "grants": {},
     }
     result.update(updates)
     return result
@@ -88,6 +90,7 @@ def get_rendered_snapshot_config(**updates):
         "unique_key": "id",
         "target_schema": None,
         "meta": {},
+        "grants": {},
     }
     result.update(updates)
     return result

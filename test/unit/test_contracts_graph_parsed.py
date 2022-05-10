@@ -160,6 +160,7 @@ def base_parsed_model_dict():
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {},
+        'config_call_dict': {},
     }
 
 
@@ -262,6 +263,7 @@ def complex_parsed_model_dict():
             'materialized': 'ephemeral',
             'post_hook': ['insert into blah(a, b) select "1", 1'],
         },
+        'config_call_dict': {},
     }
 
 
@@ -446,6 +448,7 @@ def basic_parsed_seed_dict():
         'meta': {},
         'checksum': {'name': 'path', 'checksum': 'seeds/seed.csv'},
         'unrendered_config': {},
+        'config_call_dict': {},
     }
 
 
@@ -543,6 +546,7 @@ def complex_parsed_seed_dict():
         'unrendered_config': {
             'persist_docs': {'relation': True, 'columns': True},
         },
+        'config_call_dict': {},
     }
 
 
@@ -791,6 +795,7 @@ def base_parsed_hook_dict():
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {},
+        'config_call_dict': {},
     }
 
 
@@ -873,6 +878,7 @@ def complex_parsed_hook_dict():
             'column_types': {'a': 'text'},
             'materialized': 'table',
         },
+        'config_call_dict': {},
     }
 
 
@@ -964,6 +970,7 @@ def minimal_parsed_schema_test_dict():
             'kwargs': {},
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'config_call_dict': {},
     }
 
 
@@ -1009,6 +1016,7 @@ def basic_parsed_schema_test_dict():
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {},
+        'config_call_dict': {},
     }
 
 
@@ -1093,6 +1101,7 @@ def complex_parsed_schema_test_dict():
             'materialized': 'table',
             'severity': 'WARN'
         },
+        'config_call_dict': {},
     }
 
 
@@ -1436,6 +1445,7 @@ def basic_timestamp_snapshot_dict():
             'target_database': 'some_snapshot_db',
             'target_schema': 'some_snapshot_schema',
         },
+        'config_call_dict': {},
     }
 
 
@@ -1570,6 +1580,7 @@ def basic_check_snapshot_dict():
             'strategy': 'check',
             'check_cols': 'all',
         },
+        'config_call_dict': {},
     }
 
 

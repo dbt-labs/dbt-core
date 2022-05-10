@@ -514,6 +514,9 @@ class ModelParserTest(BaseParserTest):
             raw_sql=raw_sql,
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table'},
+            config_call_dict={
+                'materialized': 'table',
+            },
         )
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' + normalize('models/nested/model_1.sql')
@@ -800,6 +803,13 @@ class SnapshotParserTest(BaseParserTest):
                 'strategy': 'timestamp',
                 'updated_at': 'last_update',
             },
+            config_call_dict={
+                'strategy': 'timestamp', 
+                'target_database': 'dbt', 
+                'target_schema': 'analytics', 
+                'unique_key': 'id', 
+                'updated_at': 'last_update',
+            },
         )
         assertEqualNodes(expected, node)
         file_id = 'snowplow://' + normalize('snapshots/nested/snap_1.sql')
@@ -861,6 +871,13 @@ class SnapshotParserTest(BaseParserTest):
                 'strategy': 'timestamp',
                 'updated_at': 'last_update',
             },
+            config_call_dict={
+                'strategy': 'timestamp', 
+                'target_database': 'dbt', 
+                'target_schema': 'analytics', 
+                'unique_key': 'id', 
+                'updated_at': 'last_update',
+            },
         )
         expect_bar = ParsedSnapshotNode(
             alias='bar',
@@ -889,6 +906,13 @@ class SnapshotParserTest(BaseParserTest):
                 'target_schema': 'analytics',
                 'target_database': 'dbt',
                 'strategy': 'timestamp',
+                'updated_at': 'last_update',
+            },
+            config_call_dict={
+                'strategy': 'timestamp', 
+                'target_database': 'dbt', 
+                'target_schema': 'analytics', 
+                'unique_key': 'id', 
                 'updated_at': 'last_update',
             },
         )
