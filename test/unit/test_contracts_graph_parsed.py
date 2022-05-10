@@ -72,6 +72,7 @@ def populated_node_config_dict():
         'extra': 'even more',
         'on_schema_change': 'ignore',
         'meta': {},
+        'grants': {},
     }
 
 
@@ -151,6 +152,7 @@ def base_parsed_model_dict():
             'tags': [],
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -243,6 +245,7 @@ def complex_parsed_model_dict():
             'tags': [],
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'docs': {'show': True},
         'columns': {
@@ -435,6 +438,7 @@ def basic_parsed_seed_dict():
             'tags': [],
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -529,6 +533,7 @@ def complex_parsed_seed_dict():
             'quote_columns': True,
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -779,6 +784,7 @@ def base_parsed_hook_dict():
             'tags': [],
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -850,6 +856,7 @@ def complex_parsed_hook_dict():
             'tags': [],
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'docs': {'show': True},
         'columns': {
@@ -1183,6 +1190,7 @@ def basic_timestamp_snapshot_config_dict():
         'target_schema': 'some_snapshot_schema',
         'on_schema_change': 'ignore',
         'meta': {},
+        'grants': {},
     }
 
 
@@ -1216,6 +1224,7 @@ def complex_timestamp_snapshot_config_dict():
         'updated_at': 'last_update',
         'on_schema_change': 'ignore',
         'meta': {},
+        'grants': {},
     }
 
 
@@ -1273,6 +1282,7 @@ def basic_check_snapshot_config_dict():
         'check_cols': 'all',
         'on_schema_change': 'ignore',
         'meta': {},
+        'grants': {},
     }
 
 
@@ -1306,6 +1316,7 @@ def complex_set_snapshot_config_dict():
         'check_cols': ['a', 'b'],
         'on_schema_change': 'ignore',
         'meta': {},
+        'grants': {},
     }
 
 
@@ -1412,6 +1423,7 @@ def basic_timestamp_snapshot_dict():
             'updated_at': 'last_update',
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -1545,6 +1557,7 @@ def basic_check_snapshot_dict():
             'check_cols': 'all',
             'on_schema_change': 'ignore',
             'meta': {},
+            'grants': {},
         },
         'docs': {'show': True},
         'columns': {},

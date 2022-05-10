@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Iterator, Dict, Any, TypeVar, Generic
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
-from dbt.contracts.graph.model_config import BaseConfig, get_config_for
+from dbt.contracts.graph.model_config import BaseConfig, get_config_for, _listify
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
@@ -270,12 +270,33 @@ class ContextConfig:
             if k in BaseConfig.mergebehavior["append"]:
                 if not isinstance(v, list):
                     v = [v]
-            if k in BaseConfig.mergebehavior["update"] and not isinstance(v, dict):
-                raise InternalException(f"expected dict, got {v}")
-            if k in config_call_dict and isinstance(config_call_dict[k], list):
-                config_call_dict[k].extend(v)
-            elif k in config_call_dict and isinstance(config_call_dict[k], dict):
-                config_call_dict[k].update(v)
+                if k in config_call_dict and isinstance(config_call_dict[k], list):
+                    config_call_dict[k].extend(v)
+                else:
+                    config_call_dict[k] = v
+
+            elif k in BaseConfig.mergebehavior["update"]:
+                if not isinstance(v, dict):
+                    raise InternalException(f"expected dict, got {v}")
+                if k in config_call_dict and isinstance(config_call_dict[k], dict):
+                    config_call_dict[k].update(v)
+                else:
+                    config_call_dict[k] = v
+            elif k in BaseConfig.mergebehavior["dict_key_append"]:
+                if not isinstance(v, dict):
+                    raise InternalException(f"expected dict, got {v}")
+                if k in config_call_dict and isinstance(config_call_dict[k], dict):
+                    new_v = {}
+                    for key in v.keys():
+                        new_v[key] = _listify(v[key])
+                    for key in config_call_dict[k].keys():
+                        if key in new_v:
+                            new_v[key].extend(config_call_dict[k][key])
+                        else:
+                            new_v[key] = _listify(config_call_dict[k][key])
+                    config_call_dict[k] = new_v
+                else:
+                    config_call_dict[k] = v
             else:
                 config_call_dict[k] = v
 

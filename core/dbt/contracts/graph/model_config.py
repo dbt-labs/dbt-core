@@ -66,6 +66,7 @@ class MergeBehavior(Metadata):
     Append = 1
     Update = 2
     Clobber = 3
+    DictKeyAppend = 4
 
     @classmethod
     def default_field(cls) -> "MergeBehavior":
@@ -141,6 +142,21 @@ def _merge_field_value(
         value = self_value.copy()
         value.update(other_value)
         return value
+    elif merge_behavior == MergeBehavior.DictKeyAppend:
+        if not isinstance(self_value, dict):
+            raise InternalException(f"expected dict, got {self_value}")
+        if not isinstance(other_value, dict):
+            raise InternalException(f"expected dict, got {other_value}")
+        new_dict = {}
+        for key in self_value.keys():
+            new_dict[key] = _listify(self_value[key])
+        for key in other_value.keys():
+            if key in new_dict:
+                new_dict[key].extend(other_value[key])
+            else:
+                new_dict[key] = _listify(other_value[key])
+        return new_dict
+
     else:
         raise InternalException(f"Got an invalid merge_behavior: {merge_behavior}")
 
@@ -257,6 +273,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
     mergebehavior = {
         "append": ["pre-hook", "pre_hook", "post-hook", "post_hook", "tags"],
         "update": ["quoting", "column_types", "meta"],
+        "dict_key_append": ["grants"],
     }
 
     @classmethod
@@ -427,6 +444,9 @@ class NodeConfig(NodeAndTestConfig):
     # sometimes getting the Union order wrong, causing serialization failures.
     unique_key: Union[str, List[str], None] = None
     on_schema_change: Optional[str] = "ignore"
+    grants: Dict[str, Any] = field(
+        default_factory=dict, metadata=MergeBehavior.DictKeyAppend.meta()
+    )
 
     @classmethod
     def __pre_deserialize__(cls, data):
