@@ -45,7 +45,7 @@ The 2 branching strategies we are considering using going forward are:
 * Easy backporting. There is no need to figure out the exact branch that you need to backport to and accidently backporting to an older, stale branch.
 #### Cons:
 * Branches contain more than 1 release which is confusing. Without a 1:1 mapping between branch and release, you must rely on tags instead to know where in the branch the release was cut.
-* Releasing from the same branch multiple times can lead to confusion as to which version we are releasing and actually stops us from releasing the wrong version.
+* Releasing from the same branch multiple times can lead to confusion as to which version we are releasing. A branch named for the specific version could be extracted and used to run the bumpversion script instead of relying on human input at release time.
 
 ## Decisions
 
