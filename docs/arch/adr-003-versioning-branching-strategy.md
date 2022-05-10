@@ -60,7 +60,7 @@ The 2 branching strategies we are considering using going forward are:
 - Expectations: the stability of the code changes in the release
 </details>
 
-| phase | Released? | Branches | Applicable Release Versions | Expectations |
+| Phase | Released? | Branches | Applicable Release Versions | Expectations |
 | ---- | --------- | -------- | ---------------- | ------------ |
 | Alpha | No | `main` | Major / Minor | Experimental |
 | Beta | Yes | `main` | Major / Minor | Experimental |
@@ -71,7 +71,7 @@ The 2 branching strategies we are considering using going forward are:
 Based off of the release version and expectations, the version phase's branching strategy can be determined. 
  * Alpha and Beta versions are experimental, and therefore exist only on the `main` branch, where all our changes reside
  * Alpha versions are never released. They signify that development is underway, though the changes they contain have not been released in any form
- * An RC version denotes a more stable state. A release branch will be created for RC releases to limit the changes a release contains
+ * A Release Candidate (RC) version denotes a more stable state. A release branch will be created for RC releases to limit the changes a release contains
  * Final versions are stable and tested. Only verified changes will go into these releases, which are inherited from the corresponding RC version
  * A release branch will exist for each unique major or minor version, to be named accordingly: `<major>.<minor>.latest` (e.g. `1.0.latest`)
     * This is keeping with our current stratgey that we use today.
@@ -88,7 +88,7 @@ There will be times that we will want to target changes to go into specific rele
 \* Disclaimer: the how and when to apply changes to a release branch will be covered in another upcoming ADR.
 
 1. If a release branch is not yet cut: This is the scenario where we start to develop a feature for a future version before we have cut a release branch for the upcoming version (eg. we want to work on a feature for `1.2.0` but we haven't cut the release branch for `1.1.0` yet). 
-    1. Is this dead code? If so, then commiting the changes to `main` is acceptable. There must be 0 risk of users hitting this so if unsure, please uses the alternative option.
+    1. Is this dead code? If so, then commiting the changes to `main` is acceptable. There must be 0 risk of users hitting this so if unsure, please use the alternative option.
     1. Use a feature branch until the release branch is cut. Then when it makes sense, merge the feature branch into `main` and continue development.
 
    ** Sometimes feature flags are used by teams to also achieve this goal. In our case, feature flags aren't controlled by the team and instead dependent of a user to toggle them on/off. Core uses feature flags instead for offering experimental functionality for users to try and test out. This is different from hiding features from going into certain releases.
