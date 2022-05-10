@@ -25,6 +25,7 @@ The following are requirements that must be met for releasing dbt:
 1. We must have release phases that aim to identify bugs and test for stability.
 1. We must have release phases that are stable and of production quality.
 1. We must have the ability to isolate changes from different versions and phases to release.
+1. A version of `dbt-core` is considered released when it is available on GitHub Releases, PyPi, GitHub Container Registry, and Homebrew. This also applies to the individual `dbt` adapters. Otherwise, a version is considered partially released if only on a subset of those platforms.
 
 ## Branching Strategy Options
 The 2 branching strategies we are considering using going forward are:
