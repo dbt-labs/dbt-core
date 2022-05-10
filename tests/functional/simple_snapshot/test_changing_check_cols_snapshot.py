@@ -62,7 +62,7 @@ def project_config_update():
     }
 
 
-def test_simple_snapshot(project):
+def run_check_cols_snapshot_with_schema_change(project, check_cols_override=None):
     """
     Test that snapshots using the "check" strategy and explicit check_cols support adding columns.
 
@@ -74,28 +74,53 @@ def test_simple_snapshot(project):
     As long as no error is thrown, then the snapshot was successful
     """
 
+    check_cols = check_cols_override or ["name", "other"]
+
     # 1. Create a table that represents the expected data after a series of snapshots
-    results = run_dbt(["seed", "--show", "--vars", "{version: 1, updated_at: 2016-07-01}"])
+    vars_dict = {"version": 1, "updated_at": "2016-07-01"}
+    results = run_dbt(["seed", "--show", "--vars", str(vars_dict)])
     assert len(results) == 1
 
     # Snapshot 1
-    results = run_dbt(
-        ["snapshot", "--vars", "{version: 1, check_cols: ['name'], updated_at: 2016-07-01}"]
-    )
+    # Use only 'name' for check_cols
+    vars_dict = {"version": 1, "check_cols": [check_cols[0]], "updated_at": "2016-07-01"}
+    results = run_dbt(["snapshot", "--vars", str(vars_dict)])
     assert len(results) == 1
 
     # Snapshot 2
-    results = run_dbt(
-        [
-            "snapshot",
-            "--vars",
-            "{version: 2, check_cols: ['name', 'other'], updated_at: 2016-07-02}",
-        ]
-    )
+    # Use both 'name' and 'other' for check_cols
+    vars_dict = {"version": 2, "check_cols": check_cols, "updated_at": "2016-07-02"}
+    results = run_dbt(["snapshot", "--vars", str(vars_dict)])
     assert len(results) == 1
 
     check_relations_equal(
         project.adapter,
         ["snapshot_check_cols_new_column", "snapshot_check_cols_new_column_expected"],
         compare_snapshot_cols=True,
+    )
+
+    # Snapshot 3
+    # Run it again. Nothing has changed — ensure we don't detect changes
+    vars_dict = {"version": 2, "check_cols": check_cols, "updated_at": "2016-07-02"}
+    results = run_dbt(["snapshot", "--vars", str(vars_dict)])
+    assert len(results) == 1
+
+    check_relations_equal(
+        project.adapter,
+        ["snapshot_check_cols_new_column", "snapshot_check_cols_new_column_expected"],
+        compare_snapshot_cols=True,
+    )
+
+
+def test_check_cols_snapshot_with_schema_change(project):
+    run_check_cols_snapshot_with_schema_change(project)
+
+
+def test_check_cols_snapshot_with_schema_change_and_mismatched_casing(project):
+    """
+    Test that this still works if the database-stored version of 'name' + 'other'
+    differs from the user-configured 'NAME' and 'OTHER'
+    """
+    run_check_cols_snapshot_with_schema_change(
+        project=project, check_cols_override=["NAME", "OTHER"]
     )
