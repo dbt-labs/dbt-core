@@ -1,0 +1,64 @@
+import pytest
+
+from dbt.tests.util import run_dbt, get_manifest, write_file
+
+dbt_project_yml = """
+models:
+  test:
+    my_model:
+      +grants:
+        my_select: ["reporter", "bi"]
+"""
+
+model_schema_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      grants:
+        my_select: ["someone"]
+"""
+
+
+my_model_sql = """
+{{ config(grants={'my_select': ['other_user']}) }}
+select 1 as fun
+"""
+
+
+class TestGrantConfigs:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"my_model.sql": my_model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return dbt_project_yml
+
+    def test_model_grant_config(self, project):
+        # This test uses "my_select" instead of "select", so that when
+        # actual granting of permissions happens, it won't break this
+        # test.
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model"
+        assert model_id in manifest.nodes
+
+        model = manifest.nodes[model_id]
+        model_config = model.config
+        assert hasattr(model_config, "grants")
+
+        expected = {"my_select": ["reporter", "bi", "other_user"]}
+        assert model_config.grants == expected
+
+        write_file(model_schema_yml, project.project_root, "models", "schema.yml")
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
+        expected = {"my_select": ["reporter", "bi", "someone", "other_user"]}
+        assert model_config.grants == expected
