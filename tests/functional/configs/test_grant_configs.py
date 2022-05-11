@@ -10,18 +10,28 @@ models:
         my_select: ["reporter", "bi"]
 """
 
-model_schema_yml = """
+append_schema_yml = """
 version: 2
 models:
   - name: my_model
     config:
       grants:
-        my_select: ["someone"]
+        +my_select: ["someone"]
 """
 
 
-my_model_sql = """
+my_model_base_sql = """
+select 1 as fun
+"""
+
+
+my_model_clobber_sql = """
 {{ config(grants={'my_select': ['other_user']}) }}
+select 1 as fun
+"""
+
+my_model_extend_sql = """
+{{ config(grants={'+my_select': ['other_user']}) }}
 select 1 as fun
 """
 
@@ -29,7 +39,7 @@ select 1 as fun
 class TestGrantConfigs:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": my_model_sql}
+        return {"my_model.sql": my_model_base_sql}
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -50,10 +60,30 @@ class TestGrantConfigs:
         model_config = model.config
         assert hasattr(model_config, "grants")
 
+        # no schema grant, no model grant, just project
+        expected = {"my_select": ["reporter", "bi"]}
+        assert model_config.grants == expected
+
+        # add model grant with clobber
+        write_file(my_model_clobber_sql, project.project_root, "models", "my_model.sql")
+        results = run_dbt(["run"])
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
+        expected = {"my_select": ["other_user"]}
+        assert model_config.grants == expected
+
+        # change model to extend grants
+        write_file(my_model_extend_sql, project.project_root, "models", "my_model.sql")
+        results = run_dbt(["run"])
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
         expected = {"my_select": ["reporter", "bi", "other_user"]}
         assert model_config.grants == expected
 
-        write_file(model_schema_yml, project.project_root, "models", "schema.yml")
+        # add schema file with extend
+        write_file(append_schema_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["run"])
         assert len(results) == 1
 

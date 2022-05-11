@@ -151,10 +151,15 @@ def _merge_field_value(
         for key in self_value.keys():
             new_dict[key] = _listify(self_value[key])
         for key in other_value.keys():
-            if key in new_dict:
-                new_dict[key].extend(other_value[key])
+            extend = False
+            new_key = key
+            if new_key.startswith("+"):
+                new_key = key.lstrip("+")
+                extend = True
+            if new_key in new_dict and extend:
+                new_dict[new_key].extend(other_value[key])
             else:
-                new_dict[key] = _listify(other_value[key])
+                new_dict[new_key] = _listify(other_value[key])
         return new_dict
 
     else:

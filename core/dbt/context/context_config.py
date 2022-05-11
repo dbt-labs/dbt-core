@@ -290,10 +290,16 @@ class ContextConfig:
                     for key in v.keys():
                         new_v[key] = _listify(v[key])
                     for key in config_call_dict[k].keys():
-                        if key in new_v:
-                            new_v[key].extend(config_call_dict[k][key])
+                        extend = False
+                        new_key = key
+                        # This might start with a +
+                        if new_key.startwith("+"):
+                            new_key = key.lstrip("+")
+                            extend = True
+                        if new_key in new_v and extend:
+                            new_v[new_key].extend(config_call_dict[k][key])
                         else:
-                            new_v[key] = _listify(config_call_dict[k][key])
+                            new_v[new_key] = _listify(config_call_dict[k][key])
                     config_call_dict[k] = new_v
                 else:
                     config_call_dict[k] = v
