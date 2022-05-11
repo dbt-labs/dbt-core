@@ -5,6 +5,7 @@
   {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
   {%- set temp_relation = make_temp_relation(target_relation)-%}
+  {%- set intermediate_relation = make_intermediate_relation(target_relation) -%}
   {%- set backup_identifier = make_backup_relation(target_relation, backup_relation_type=none) -%}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
@@ -14,13 +15,13 @@
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation. This has to happen before
   -- BEGIN, in a separate transaction
-  {% set preexisting_temp_relation = adapter.get_relation(identifier=temp_relation['identifier'],
+  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=intermediate_relation['identifier'],
                                                           schema=schema,
                                                           database=database) %}
   {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier['identifier'],
                                                             schema=schema,
                                                             database=database) %}
-  {{ drop_relation_if_exists(preexisting_temp_relation) }}
+  {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
   {{ drop_relation_if_exists(preexisting_backup_relation) }}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
