@@ -177,7 +177,10 @@ class TestRuntimeMaterialization:
         check_relations_equal(project.adapter, ["seed", "view"])
 
         # Again, but against the incremental materialization
+        results = run_dbt(["run", "--model", "incremental"])
         project.run_sql(create_incremental__dbt_tmp_sql)
+        assert len(results) == 1
+
         results = run_dbt(["run", "--model", "incremental", "--full-refresh"])
         assert len(results) == 1
 
