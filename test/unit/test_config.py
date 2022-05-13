@@ -317,7 +317,7 @@ class TestProfile(BaseConfigTest):
             'model-paths': ['models'],
             'source-paths': ['other-models'],
         })
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:            
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             project = project_from_config_norender(self.default_project_data)
 
         self.assertIn('source-paths and model-paths', str(exc.exception))
@@ -1228,6 +1228,45 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.seeds, {})
         self.assertEqual(config.packages, PackageConfig(packages=[]))
         self.assertEqual(config.project_name, 'my_test_project')
+
+
+class TestUnsetProfileConfig(BaseConfigTest):
+    def setUp(self):
+        self.profiles_dir = '/invalid-profiles-path'
+        self.project_dir = '/invalid-root-path'
+        super().setUp()
+        self.default_project_data['project-root'] = self.project_dir
+
+    def get_project(self):
+        return project_from_config_norender(self.default_project_data, verify_version=self.args.version_check)
+
+    def get_profile(self):
+        renderer = empty_profile_renderer()
+        return dbt.config.Profile.from_raw_profiles(
+            self.default_profile_data, self.default_project_data['profile'], renderer
+        )
+
+    def test_str(self):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.UnsetProfileConfig.from_parts(project, profile, {})
+
+        str(config)
+
+    def test_repr(self):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.UnsetProfileConfig.from_parts(project, profile, {})
+
+        repr(config)
+
+    def test_to_project_config(self):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.UnsetProfileConfig.from_parts(project, profile, {})
+        project_config = config.to_project_config()
+
+        self.assertEqual(project_config["profile"], "")
 
 
 class TestVariableRuntimeConfigFiles(BaseFileTest):
