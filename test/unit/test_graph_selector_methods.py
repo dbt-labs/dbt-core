@@ -1,4 +1,5 @@
 import copy
+
 import pytest
 from unittest import mock
 
@@ -31,6 +32,7 @@ from dbt.graph.selector_methods import (
     TagSelectorMethod,
     SourceSelectorMethod,
     PathSelectorMethod,
+    FileSelectorMethod,
     PackageSelectorMethod,
     ConfigSelectorMethod,
     TestNameSelectorMethod,
@@ -701,6 +703,20 @@ def test_select_path(manifest):
         manifest, method, 'models/missing.sql')
     assert not search_manifest_using_method(
         manifest, method, 'models/missing*')
+
+
+def test_select_file(manifest):
+    methods = MethodManager(manifest, None)
+    method = methods.get_method('file', [])
+    assert isinstance(method, FileSelectorMethod)
+    assert method.arguments == []
+
+    assert search_manifest_using_method(
+        manifest, method, 'table_model.sql') == {'table_model'}
+    assert search_manifest_using_method(
+        manifest, method, 'union_model.sql') == {'union_model', 'mynamespace.union_model'}
+    assert not search_manifest_using_method(
+        manifest, method, 'missing.sql')
 
 
 def test_select_package(manifest):

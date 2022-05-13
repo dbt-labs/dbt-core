@@ -598,6 +598,7 @@ class MethodManager:
         MethodName.Tag: TagSelectorMethod,
         MethodName.Source: SourceSelectorMethod,
         MethodName.Path: PathSelectorMethod,
+        MethodName.File: FileSelectorMethod,
         MethodName.Package: PackageSelectorMethod,
         MethodName.Config: ConfigSelectorMethod,
         MethodName.TestName: TestNameSelectorMethod,
