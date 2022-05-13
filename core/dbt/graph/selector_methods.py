@@ -39,6 +39,7 @@ class MethodName(StrEnum):
     Tag = "tag"
     Source = "source"
     Path = "path"
+    File = "file"
     Package = "package"
     Config = "config"
     TestName = "test_name"
@@ -280,7 +281,7 @@ class MetricSelectorMethod(SelectorMethod):
 
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        """Yields nodes from inclucded that match the given path."""
+        """Yields nodes from included that match the given path."""
         # use '.' and not 'root' for easy comparison
         root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
@@ -291,6 +292,14 @@ class PathSelectorMethod(SelectorMethod):
             if ofp in paths:
                 yield node
             elif any(parent in paths for parent in ofp.parents):
+                yield node
+
+
+class FileSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """Yields nodes from included that match the given file name."""
+        for node, real_node in self.all_nodes(included_nodes):
+            if Path(real_node.original_file_path).name == selector:
                 yield node
 
 
@@ -589,6 +598,7 @@ class MethodManager:
         MethodName.Tag: TagSelectorMethod,
         MethodName.Source: SourceSelectorMethod,
         MethodName.Path: PathSelectorMethod,
+        MethodName.File: FileSelectorMethod,
         MethodName.Package: PackageSelectorMethod,
         MethodName.Config: ConfigSelectorMethod,
         MethodName.TestName: TestNameSelectorMethod,

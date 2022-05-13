@@ -80,6 +80,8 @@ class SelectionCriteria:
     def default_method(cls, value: str) -> MethodName:
         if _probably_path(value):
             return MethodName.Path
+        elif value.lower().endswith(".sql"):
+            return MethodName.File
         else:
             return MethodName.FQN
 
