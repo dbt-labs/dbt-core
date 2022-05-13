@@ -425,25 +425,31 @@ class StateSelectorMethod(SelectorMethod):
         return modified
 
     def recursively_check_macros_modified(self, node, visited_macros):
-        # loop through all macros that this node depends on
         for macro_uid in node.depends_on.macros:
-            # avoid infinite recursion if we've already seen this macro
             if macro_uid in visited_macros:
                 continue
             visited_macros.append(macro_uid)
-            # is this macro one of the modified macros?
+
             if macro_uid in self.modified_macros:
                 return True
-            # if not, and this macro depends on other macros, keep looping
+
+            # this macro hasn't been modified, but depends on other
+            # macros which each need to be tested for modification
             macro_node = self.manifest.macros[macro_uid]
             if len(macro_node.depends_on.macros) > 0:
-                return self.recursively_check_macros_modified(macro_node, visited_macros)
+                upstream_macros_changed = self.recursively_check_macros_modified(
+                    macro_node, visited_macros
+                )
+                if upstream_macros_changed:
+                    return True
+                continue
+
             # this macro hasn't been modified, but we haven't checked
             # the other macros the node depends on, so keep looking
-            elif len(node.depends_on.macros) > len(visited_macros):
+            if len(node.depends_on.macros) > len(visited_macros):
                 continue
-            else:
-                return False
+
+        return False
 
     def check_macros_modified(self, node):
         # check if there are any changes in macros the first time

@@ -1087,3 +1087,38 @@ def test_select_state_changed_test_macros(manifest, previous_state):
     assert search_manifest_using_method(
         manifest, method, 'modified.macros') == {'model1', 'model2'}
     assert not search_manifest_using_method(manifest, method, 'new')
+
+def test_select_state_changed_test_macros_with_upstream_change(manifest, previous_state):
+    changed_macro = make_macro('dbt', 'changed_macro', 'blablabla')
+    add_macro(manifest, changed_macro)
+    add_macro(previous_state.manifest, changed_macro.replace(macro_sql='something different'))
+
+    unchanged_macro1 = make_macro('dbt', 'unchanged_macro', 'blablabla')
+    add_macro(manifest, unchanged_macro1)
+    add_macro(previous_state.manifest, unchanged_macro1)
+
+    unchanged_macro2 = make_macro('dbt', 'unchanged_macro', 'blablabla', depends_on_macros=[unchanged_macro1.unique_id, changed_macro.unique_id])
+    add_macro(manifest, unchanged_macro2)
+    add_macro(previous_state.manifest, unchanged_macro2)
+
+    unchanged_macro3 = make_macro('dbt', 'unchanged_macro', 'blablabla', depends_on_macros=[changed_macro.unique_id, unchanged_macro1.unique_id])
+    add_macro(manifest, unchanged_macro3)
+    add_macro(previous_state.manifest, unchanged_macro3)
+
+    model1 = make_model('dbt', 'model1', 'blablabla',
+            depends_on_macros=[unchanged_macro1.unique_id])
+    add_node(manifest, model1)
+    add_node(previous_state.manifest, model1)
+
+    model2 = make_model('dbt', 'model2', 'blablabla',
+            depends_on_macros=[unchanged_macro3.unique_id])
+    add_node(manifest, model2)
+    add_node(previous_state.manifest, model2)
+
+    method = statemethod(manifest, previous_state)
+
+    assert search_manifest_using_method(
+        manifest, method, 'modified') == {'model1', 'model2'}
+    assert search_manifest_using_method(
+        manifest, method, 'modified.macros') == {'model1', 'model2'}
+    assert not search_manifest_using_method(manifest, method, 'new')
