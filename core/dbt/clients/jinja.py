@@ -482,7 +482,7 @@ def get_environment(
         env_cls = MacroFuzzEnvironment
         filters = TEXT_FILTERS
 
-    env = env_cls(**args)
+    env = env_cls(loader=jinja2.FileSystemLoader(searchpath="./"), **args)
     env.filters.update(filters)
 
     return env
