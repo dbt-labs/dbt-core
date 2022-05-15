@@ -63,6 +63,7 @@ from dbt.node_types import NodeType
 from dbt.utils import merge, AttrDict, MultiDict
 
 from dbt import selected_resources
+from dbt import executed_command
 
 import agate
 
@@ -1153,6 +1154,13 @@ class ProviderContext(ManifestContext):
         doesn't support `--select`.
         """
         return selected_resources.SELECTED_RESOURCES
+
+    @contextproperty
+    def executed_command(self) -> str:
+        """The `executed_command` variable contains a dbt command that is executed at the moment.
+        It might be useful to differentiate behavior while `test` command is executed.
+        """
+        return executed_command.EXECUTED_COMMAND
 
 
 class MacroContext(ProviderContext):

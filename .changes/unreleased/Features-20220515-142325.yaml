@@ -1,0 +1,7 @@
+kind: Features
+body: Add executed_command to Jinja context
+time: 2022-05-15T14:23:25.2078669+02:00
+custom:
+  Author: SOVALINUX
+  Issue: "5251"
+  PR: "5252"

@@ -37,6 +37,7 @@ import dbt.task.serve as serve_task
 import dbt.task.snapshot as snapshot_task
 import dbt.task.test as test_task
 from dbt.profiler import profiler
+from dbt import executed_command
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
 import dbt.tracking
@@ -1199,5 +1200,7 @@ def parse_args(args, cls=DBTArgumentParser):
         # and exit with a error
         p.print_help()
         p.exit(1)
+
+    executed_command.set_executed_command(getattr(parsed, "which", None))
 
     return parsed
