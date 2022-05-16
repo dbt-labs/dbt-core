@@ -125,6 +125,9 @@ def _listify(value: Any) -> List:
         return [value]
 
 
+# There are two versions of this code. The one here is for config
+# objects, the one in _add_config_call in context_config.py is for
+# config_call_dict dictionaries.
 def _merge_field_value(
     merge_behavior: MergeBehavior,
     self_value: Any,
@@ -153,12 +156,17 @@ def _merge_field_value(
         for key in other_value.keys():
             extend = False
             new_key = key
+            # This might start with a +, to indicate we should extend the list
+            # instead of just clobbering it
             if new_key.startswith("+"):
                 new_key = key.lstrip("+")
                 extend = True
             if new_key in new_dict and extend:
-                new_dict[new_key].extend(other_value[key])
+                # extend the list
+                value = other_value[key]
+                new_dict[new_key].extend(_listify(value))
             else:
+                # clobber the list
                 new_dict[new_key] = _listify(other_value[key])
         return new_dict
 

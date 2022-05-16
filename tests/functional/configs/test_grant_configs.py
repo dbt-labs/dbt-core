@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest, write_file
+from dbt.tests.util import run_dbt, get_manifest, write_file, write_config_file
 
 dbt_project_yml = """
 models:
@@ -35,6 +35,17 @@ my_model_extend_sql = """
 select 1 as fun
 """
 
+my_model_extend_string_sql = """
+{{ config(grants={'+my_select': 'other_user'}) }}
+select 1 as fun
+"""
+
+my_model_extend_twice_sql = """
+{{ config(grants={'+my_select': ['other_user']}) }}
+{{ config(grants={'+my_select': ['alt_user']}) }}
+select 1 as fun
+"""
+
 
 class TestGrantConfigs:
     @pytest.fixture(scope="class")
@@ -45,7 +56,7 @@ class TestGrantConfigs:
     def project_config_update(self):
         return dbt_project_yml
 
-    def test_model_grant_config(self, project):
+    def test_model_grant_config(self, project, logs_dir):
         # This test uses "my_select" instead of "select", so that when
         # actual granting of permissions happens, it won't break this
         # test.
@@ -91,4 +102,55 @@ class TestGrantConfigs:
         model_config = manifest.nodes[model_id].config
 
         expected = {"my_select": ["reporter", "bi", "someone", "other_user"]}
+        assert model_config.grants == expected
+
+        # change model file to have string instead of list
+        write_file(my_model_extend_string_sql, project.project_root, "models", "my_model.sql")
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
+        expected = {"my_select": ["reporter", "bi", "someone", "other_user"]}
+        assert model_config.grants == expected
+
+        # change model file to have string instead of list
+        write_file(my_model_extend_twice_sql, project.project_root, "models", "my_model.sql")
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
+        expected = {"my_select": ["reporter", "bi", "someone", "other_user", "alt_user"]}
+        assert model_config.grants == expected
+
+        # Remove grant from dbt_project
+        config = {
+            "config-version": 2,
+            "name": "test",
+            "version": "0.1.0",
+            "profile": "test",
+            "log-path": logs_dir,
+        }
+        write_config_file(config, project.project_root, "dbt_project.yml")
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
+        expected = {"my_select": ["someone", "other_user", "alt_user"]}
+        assert model_config.grants == expected
+
+        # Remove my_model config, leaving only schema file
+        write_file(my_model_base_sql, project.project_root, "models", "my_model.sql")
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
+        manifest = get_manifest(project.project_root)
+        model_config = manifest.nodes[model_id].config
+
+        expected = {"my_select": ["someone"]}
         assert model_config.grants == expected

@@ -264,6 +264,9 @@ class ContextConfig:
 
     @classmethod
     def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
+        # config_call_dict is already encountered configs, opts is new
+        # This mirrors code in _merge_field_value in model_config.py which is similar but
+        # operates on config objects.
         for k, v in opts.items():
             # MergeBehavior for post-hook and pre-hook is to collect all
             # values, instead of overwriting
@@ -286,23 +289,24 @@ class ContextConfig:
                 if not isinstance(v, dict):
                     raise InternalException(f"expected dict, got {v}")
                 if k in config_call_dict and isinstance(config_call_dict[k], dict):
-                    new_v = {}
-                    for key in v.keys():
-                        new_v[key] = _listify(v[key])
-                    for key in config_call_dict[k].keys():
+                    for key, value in v.items():
                         extend = False
-                        new_key = key
-                        # This might start with a +
-                        if new_key.startwith("+"):
-                            new_key = key.lstrip("+")
+                        # This might start with a +, to indicate we should extend the list
+                        # instead of just clobbering it
+                        if key.startswith("+"):
                             extend = True
-                        if new_key in new_v and extend:
-                            new_v[new_key].extend(config_call_dict[k][key])
+                        if key in config_call_dict[k] and extend:
+                            # extend the list
+                            config_call_dict[k][key].extend(_listify(value))
                         else:
-                            new_v[new_key] = _listify(config_call_dict[k][key])
-                    config_call_dict[k] = new_v
+                            # clobber the list
+                            config_call_dict[k][key] = _listify(value)
                 else:
+                    # This is always a dictionary
                     config_call_dict[k] = v
+                    # listify everything
+                    for key, value in config_call_dict[k].items():
+                        config_call_dict[k][key] = _listify(value)
             else:
                 config_call_dict[k] = v
 
