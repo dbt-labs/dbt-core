@@ -212,7 +212,8 @@ my_model_md = """
 {% enddocs %}
 """
 
-class TestDocsRemoveReplace():
+
+class TestDocsRemoveReplace:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -222,13 +223,31 @@ class TestDocsRemoveReplace():
         }
 
     def test_remove_replace(self, project):
-        run_dbt(["parse"])
+        run_dbt(["parse", "--write-manifest"])
+        manifest = get_manifest(project.project_root)
+        doc_id = "test.whatever"
+        assert doc_id in manifest.docs
+        doc = manifest.docs[doc_id]
+        doc_file = manifest.files[doc.file_id]
+
+        model_id = "model.test.my_model"
+        assert model_id in manifest.nodes
+
+        assert doc_file.nodes == [model_id]
+
+        model = manifest.nodes[model_id]
+        model_file_id = model.file_id
+        assert model_file_id in manifest.files
 
         # remove the doc file
         rm_file(project.project_root, "models", "my_model.md")
         # remove description from schema file
         write_file(my_model_no_description_yml, project.project_root, "models", "my_model.yml")
-        run_dbt(["parse"])
+        run_dbt(["parse", "--write-manifest"])
+        manifest = get_manifest(project.project_root)
+        assert doc_id not in manifest.docs
+        # The bug was that the file still existed in manifest.files
+        assert doc.file_id not in manifest.files
 
         # put back the doc file
         write_file(my_model_md, project.project_root, "models", "my_model.md")

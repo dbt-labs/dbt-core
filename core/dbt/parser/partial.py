@@ -573,6 +573,10 @@ class PartialParsing:
         # doc source_file.nodes
         self.schedule_nodes_for_parsing(source_file.nodes)
         source_file.nodes = []
+        # Remove the file object
+        self.deleted_manifest.files[source_file.file_id] = self.saved_manifest.files.pop(
+            source_file.file_id
+        )
 
     # Schema files -----------------------
     # Changed schema files
