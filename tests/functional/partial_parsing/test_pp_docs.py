@@ -1,5 +1,5 @@
 import pytest
-from dbt.tests.util import run_dbt, write_file, get_manifest
+from dbt.tests.util import run_dbt, write_file, get_manifest, rm_file
 
 model_one_sql = """
 select 1 as fun
@@ -187,3 +187,51 @@ class TestDocs:
         # check that _lock is working
         with manifest._lock:
             assert manifest._lock
+
+
+my_model_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+        description: "{{ doc('whatever') }}"
+"""
+
+my_model_no_description_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+"""
+
+my_model_md = """
+{% docs whatever %}
+  cool stuff
+{% enddocs %}
+"""
+
+class TestDocsRemoveReplace():
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+            "my_model.yml": my_model_yml,
+            "my_model.md": my_model_md,
+        }
+
+    def test_remove_replace(self, project):
+        run_dbt(["parse"])
+
+        # remove the doc file
+        rm_file(project.project_root, "models", "my_model.md")
+        # remove description from schema file
+        write_file(my_model_no_description_yml, project.project_root, "models", "my_model.yml")
+        run_dbt(["parse"])
+
+        # put back the doc file
+        write_file(my_model_md, project.project_root, "models", "my_model.md")
+        # put back the description in the schema file
+        write_file(my_model_yml, project.project_root, "models", "my_model.yml")
+        run_dbt(["parse"])
