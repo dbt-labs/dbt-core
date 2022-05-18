@@ -17,6 +17,7 @@ from dbt.exceptions import (
 from dbt.logger import SECRET_ENV_PREFIX
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import MacroEventInfo, MacroEventDebug
+from dbt.utils import get_dbt_config_module
 from dbt.version import __version__ as dbt_version
 
 # These modules are added to the context. Consider alternative
@@ -651,6 +652,22 @@ class BaseContext(metaclass=ContextMeta):
             {{ dt_local }}
         """  # noqa
         return get_context_modules()
+
+    @contextproperty
+    def extra_jinja_context(self) -> Any:
+        """
+        Looks for `extra_jinja_context` in a dbt_config in your
+        PYTHONPATH and exposes it in your jinja context
+        """
+        extra_jinja_context = {}
+        try:
+            dbt_config = get_dbt_config_module()
+            if dbt_config and hasattr(dbt_config, "extra_jinja_context"):
+                extra_jinja_context = dbt_config.extra_jinja_context
+        except Exception:
+            # do nothin'!
+            pass
+        return extra_jinja_context
 
     @contextproperty
     def flags(self) -> Any:

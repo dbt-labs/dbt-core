@@ -20,6 +20,7 @@ from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
 from enum import Enum
+from importlib import import_module
 from typing_extensions import Protocol
 from typing import (
     Tuple,
@@ -659,3 +660,19 @@ def args_to_dict(args):
             var_args[key] = str(var_args[key])
         dict_args[key] = var_args[key]
     return dict_args
+
+
+def get_dbt_config_module():
+    """
+    Looks for a module `dbt_config` somewhere in your PYTHONPATH
+    and returns it. This allows for things like the `extra_jinja_context`
+    configuration hook that can contain python callables or objects, and
+    gets exposed in your jinja context.
+    """
+    dbt_config = None
+    try:
+        dbt_config = import_module("dbt_config")
+    except Exception:
+        # do nothin'!
+        pass
+    return dbt_config
