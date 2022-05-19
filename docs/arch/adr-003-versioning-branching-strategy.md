@@ -27,7 +27,7 @@ The following are requirements that must be met for releasing dbt:
 1. We must have the ability to isolate changes from different versions and phases to release.
 1. A version of `dbt-core` is considered released when it is available on GitHub Releases, PyPi, GitHub Container Registry, and Homebrew. This also applies to the individual `dbt` adapters. Otherwise, a version is considered partially released if only on a subset of those platforms.
 
-## Branching Strategy Options
+## Branching Strategies Considered
 The 2 branching strategies we are considering using going forward are:
 	1. A new branch for each and every release
 	1. A new branch for each minor version which we release minor and patch versions from (current strategy)
@@ -95,7 +95,7 @@ There will be times that we will want to target changes to go into specific rele
    ** Sometimes feature flags are used by teams to also achieve this goal. In our case, feature flags aren't controlled by the team and instead dependent of a user to toggle them on/off. Core uses feature flags instead for offering experimental functionality for users to try and test out. This is different from hiding features from going into certain releases.
 
 ## Status
-In Progress
+Completed
 
 ## Consequences
 This doesn't drastically change our current versioning or branching strategies, but documents our existing flows.
