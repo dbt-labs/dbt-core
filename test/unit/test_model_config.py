@@ -11,13 +11,14 @@ class ThingWithMergeBehavior(dbtClassMixin):
     appended: List[str] = field(metadata={'merge': MergeBehavior.Append})
     updated: Dict[str, int] = field(metadata={'merge': MergeBehavior.Update})
     clobbered: str = field(metadata={'merge': MergeBehavior.Clobber})
+    keysappended: Dict[str, int] = field(metadata={'merge': MergeBehavior.DictKeyAppend})
 
 
 
 def test_merge_behavior_meta():
     existing = {'foo': 'bar'}
     initial_existing = existing.copy()
-    assert set(MergeBehavior) == {MergeBehavior.Append, MergeBehavior.Update, MergeBehavior.Clobber}
+    assert set(MergeBehavior) == {MergeBehavior.Append, MergeBehavior.Update, MergeBehavior.Clobber, MergeBehavior.DictKeyAppend}
     for behavior in MergeBehavior:
         assert behavior.meta() == {'merge': behavior}
         assert behavior.meta(existing) == {'merge': behavior, 'foo': 'bar'}
@@ -27,11 +28,12 @@ def test_merge_behavior_meta():
 def test_merge_behavior_from_field():
     fields = [f[0] for f in ThingWithMergeBehavior._get_fields()]
     fields = {name: f for f, name in ThingWithMergeBehavior._get_fields()}
-    assert set(fields) == {'default_behavior', 'appended', 'updated', 'clobbered'}
+    assert set(fields) == {'default_behavior', 'appended', 'updated', 'clobbered', 'keysappended'}
     assert MergeBehavior.from_field(fields['default_behavior']) == MergeBehavior.Clobber
     assert MergeBehavior.from_field(fields['appended']) == MergeBehavior.Append
     assert MergeBehavior.from_field(fields['updated']) == MergeBehavior.Update
     assert MergeBehavior.from_field(fields['clobbered']) == MergeBehavior.Clobber
+    assert MergeBehavior.from_field(fields['keysappended']) == MergeBehavior.DictKeyAppend
 
 
 @dataclass

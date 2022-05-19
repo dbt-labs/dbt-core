@@ -1135,6 +1135,12 @@ class WritableManifest(ArtifactMixin):
         )
     )
 
+    def __post_serialize__(self, dct):
+        for unique_id, node in dct["nodes"].items():
+            if "config_call_dict" in node:
+                del node["config_call_dict"]
+        return dct
+
 
 def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
     if value.unique_id in src:
