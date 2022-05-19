@@ -273,7 +273,7 @@ class ContextConfig:
             if k in BaseConfig.mergebehavior["append"]:
                 if not isinstance(v, list):
                     v = [v]
-                if k in config_call_dict and isinstance(config_call_dict[k], list):
+                if k in config_call_dict:  # should always be a list here
                     config_call_dict[k].extend(v)
                 else:
                     config_call_dict[k] = v
@@ -288,7 +288,7 @@ class ContextConfig:
             elif k in BaseConfig.mergebehavior["dict_key_append"]:
                 if not isinstance(v, dict):
                     raise InternalException(f"expected dict, got {v}")
-                if k in config_call_dict and isinstance(config_call_dict[k], dict):
+                if k in config_call_dict:  # should always be a dict
                     for key, value in v.items():
                         extend = False
                         # This might start with a +, to indicate we should extend the list
