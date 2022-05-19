@@ -1,18 +1,16 @@
 {%- materialization view, default -%}
 
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_tmp' -%}
-  {%- set backup_identifier = model['name'] + '__dbt_backup' -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,
                                                 type='view') -%}
-  {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
-                                                      schema=schema, database=database, type='view') -%}
+  {%- set intermediate_relation =  make_intermediate_relation(target_relation) -%}
+
   -- the intermediate_relation should not already exist in the database; get_relation
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation
-  {%- set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier,
+  {%- set preexisting_intermediate_relation = adapter.get_relation(identifier=intermediate_relation['identifier'],
                                                                    schema=schema,
                                                                    database=database) -%}
   /*
@@ -29,11 +27,9 @@
      this relation will be effectively unused.
   */
   {%- set backup_relation_type = 'view' if old_relation is none else old_relation.type -%}
-  {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema, database=database,
-                                                type=backup_relation_type) -%}
+  {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
   -- as above, the backup_relation should not already exist
-  {%- set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier,
+  {%- set preexisting_backup_relation = adapter.get_relation(identifier=backup_relation['identifier'],
                                                              schema=schema,
                                                              database=database) -%}
 
