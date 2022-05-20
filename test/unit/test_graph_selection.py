@@ -11,6 +11,13 @@ from dbt.node_types import NodeType
 
 import networkx as nx
 
+from dbt import flags
+
+from argparse import Namespace
+from dbt.contracts.project import UserConfig
+
+flags.set_from_args(Namespace(), UserConfig())
+
 
 def _get_graph():
     integer_graph = nx.balanced_tree(2, 2, nx.DiGraph())
