@@ -1,0 +1,7 @@
+kind: Dependencies
+body: Lowering networkx dependency range due to new version's breaking change
+time: 2022-05-20T12:09:20.999784-04:00
+custom:
+  Author: leahwicz
+  Issue: "5254"
+  PR: "5280"
