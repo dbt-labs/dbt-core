@@ -86,8 +86,8 @@
 {% endmacro %}
 
 
-{# a user-friendly interface into adapter.get_relation #}
-{% macro load_relation(relation) %}
+-- a user-friendly interface into adapter.get_relation
+{% macro load_cached_relation(relation) %}
   {% do return(adapter.get_relation(
     database=relation.database,
     schema=relation.schema,
@@ -95,8 +95,12 @@
   )) -%}
 {% endmacro %}
 
+-- old name for backwards compatibility
+{% macro load_relation(relation) %}
+    {{ return(load_cached_relation(relation)) }}
+{% endmacro %}
 
-{# not used much, here for backwards compatibility #}
+
 {% macro drop_relation_if_exists(relation) %}
   {% if relation is not none %}
     {{ adapter.drop_relation(relation) }}
