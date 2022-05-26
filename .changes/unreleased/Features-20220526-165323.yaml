@@ -1,0 +1,7 @@
+kind: Features
+body: allows user to include the file extension for .py models in the dbt run -m command.
+time: 2022-05-26T16:53:23.389671-07:00
+custom:
+  Author: leoebfolsom
+  Issue: "5289"
+  PR: "5295"
