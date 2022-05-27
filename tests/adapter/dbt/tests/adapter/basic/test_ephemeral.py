@@ -12,7 +12,6 @@ from dbt.tests.adapter.basic.files import (
     base_ephemeral_sql,
     ephemeral_view_sql,
     ephemeral_table_sql,
-    ephemeral_table_py,
     schema_base_yml,
 )
 
@@ -32,7 +31,6 @@ class BaseEphemeral:
             "ephemeral.sql": base_ephemeral_sql,
             "view_model.sql": ephemeral_view_sql,
             "table_model.sql": ephemeral_table_sql,
-            "table_model.py": ephemeral_table_py,
             "schema.yml": schema_base_yml,
         }
 

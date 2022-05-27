@@ -472,17 +472,19 @@ def table_model(ephemeral_model):
         path='subdirectory/table_model.sql'
     )
 
+
 @pytest.fixture
-def table_model_py(ephemeral_model):
+def table_model_py(seed):
     return make_model(
         'pkg',
         'table_model_py',
-        'select * from {{ ref("ephemeral_model") }}',
+        'select * from {{ ref("seed") }}',
         config_kwargs={'materialized': 'table'},
-        refs=[ephemeral_model],
-        tags=['uses_ephemeral'],
+        refs=[seed],
+        tags=[],
         path='subdirectory/table_model.py'
     )
+
 
 @pytest.fixture
 def ext_source():
@@ -656,7 +658,7 @@ def test_select_tag(manifest):
     assert method.arguments == []
 
     assert search_manifest_using_method(manifest, method, 'uses_ephemeral') == {
-        'view_model', 'table_model', 'table_model_py'}
+        'view_model', 'table_model'}
     assert not search_manifest_using_method(manifest, method, 'missing')
 
 
