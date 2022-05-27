@@ -200,9 +200,11 @@ model_ephemeral = """
 
 base_materialized_var_sql = config_materialized_var + model_base
 base_table_sql = config_materialized_table + model_base
+base_table_py = config_materialized_table + model_base
 base_view_sql = config_materialized_view + model_base
 base_ephemeral_sql = config_materialized_ephemeral + model_base
 ephemeral_with_cte_sql = config_materialized_ephemeral + model_ephemeral_with_cte
 ephemeral_view_sql = config_materialized_view + model_ephemeral
 ephemeral_table_sql = config_materialized_table + model_ephemeral
+ephemeral_table_py = config_materialized_table + model_ephemeral
 incremental_sql = config_materialized_incremental + model_incremental
