@@ -130,8 +130,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     methods are marked with a (passable) in their docstrings. Check docstrings
     for type information, etc.
 
-    To implement a macro, implement "${adapter_type}__${macro_name}". in the
+    To implement a macro, implement "${adapter_type}__${macro_name}" in the
     adapter's internal project.
+
+    To invoke a method in an adapter macro, call it on the 'adapter' Jinja
+    object using dot syntax.
+
+    To invoke a method in model code, add the @available decorator atop a method
+    declaration. Methods are invoked as macros.
 
     Methods:
         - exception_handler
