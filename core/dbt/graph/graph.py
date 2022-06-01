@@ -28,20 +28,16 @@ class Graph:
         """Returns all nodes having a path to `node` in `graph`"""
         if not self.graph.has_node(node):
             raise InternalException(f"Node {node} not found in the graph!")
-        # This used to use nx.utils.reversed(self.graph), but that is deprecated,
-        # so changing to use self.graph.reverse(copy=False) as recommeneded
-        G = self.graph.reverse(copy=False) if self.graph.is_directed() else self.graph
-        anc = nx.single_source_shortest_path_length(G=G, source=node, cutoff=max_depth).keys()
-        return anc - {node}
+        return {
+            child
+            for _, child in nx.bfs_edges(self.graph, node, reverse=True, depth_limit=max_depth)
+        }
 
     def descendants(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
             raise InternalException(f"Node {node} not found in the graph!")
-        des = nx.single_source_shortest_path_length(
-            G=self.graph, source=node, cutoff=max_depth
-        ).keys()
-        return des - {node}
+        return {child for _, child in nx.bfs_edges(self.graph, node, depth_limit=max_depth)}
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
