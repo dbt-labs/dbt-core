@@ -20,8 +20,6 @@ from dbt.dataclass_schema import dbtClassMixin
 # then we should override the logging stream to use the colorama
 # converter. If the TERM var is set (as with Git Bash), then it's safe
 # to send escape characters and no log handler injection is needed.
-logging_stdout = sys.stdout
-
 if sys.platform == "win32" and (not os.getenv("TERM") or os.getenv("TERM") == "None"):
     colorama.init(wrap=True)
 
@@ -453,7 +451,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
 
 
 class LogManager(logbook.NestedSetup):
-    def __init__(self, stdout=logging_stdout, stderr=sys.stderr):
+    def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
         self.stdout = stdout
         self.stderr = stderr
         self._null_handler = logbook.NullHandler()
