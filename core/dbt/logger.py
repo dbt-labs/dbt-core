@@ -21,11 +21,9 @@ from dbt.dataclass_schema import dbtClassMixin
 # converter. If the TERM var is set (as with Git Bash), then it's safe
 # to send escape characters and no log handler injection is needed.
 logging_stdout = sys.stdout
-if sys.platform == "win32":
-    if not os.getenv("TERM"):
-        logging_stdout = colorama.AnsiToWin32(sys.stdout).stream
-    colorama.init(wrap=False)
 
+if sys.platform == "win32" and (not os.getenv("TERM") or os.getenv("TERM") == "None"):
+    colorama.init(wrap=True)
 
 STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = (
