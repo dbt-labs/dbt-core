@@ -9,7 +9,7 @@ endif
 .PHONY: dev
 dev: ## Installs dbt-* packages in develop mode along with development dependencies.
 	@\
-	pip install -r dev-requirements.txt -r editable-requirements.txt && \
+	pip install -r dev-requirements.txt -r editable-requirements.txt
 
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
