@@ -2,7 +2,7 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from dbt.dataclass_schema import StrEnum
+from dbt.dataclass_schema import StrEnum, dbtClassMixin
 
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
@@ -169,7 +169,7 @@ class SelectionCriteria:
         )
 
 
-class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):
+class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMeta):
     def __init__(
         self,
         components: Iterable[SelectionSpec],
