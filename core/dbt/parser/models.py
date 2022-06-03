@@ -14,7 +14,7 @@ from dbt.events.types import (
     ExperimentalParserSuccess,
     ExperimentalParserFailure,
 )
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanugage
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
 import dbt.tracking as tracking
@@ -24,6 +24,82 @@ from functools import reduce
 from itertools import chain
 import random
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+
+# New for Python models :p
+import ast
+from dbt.dataclass_schema import ValidationError
+from dbt.exceptions import ParsingException, validator_error_message
+
+
+class PythonParseVisitor(ast.NodeVisitor):
+    def __init__(self, dbt_node):
+        super().__init__()
+
+        self.dbt_node = dbt_node
+        self.dbt_function_calls = []
+        self.packages = []
+
+    @classmethod
+    def _flatten_attr(cls, node):
+        if isinstance(node, ast.Attribute):
+            return str(cls._flatten_attr(node.value)) + "." + node.attr
+        elif isinstance(node, ast.Name):
+            return str(node.id)
+        else:
+            pass
+
+    def _safe_eval(self, node):
+        try:
+            return ast.literal_eval(node)
+        except (SyntaxError, ValueError, TypeError) as exc:
+            msg = validator_error_message(exc)
+            raise ParsingException(msg, node=self.dbt_node) from exc
+        except (MemoryError, RecursionError) as exc:
+            msg = validator_error_message(exc)
+            raise ParsingException(msg, node=self.dbt_node) from exc
+
+    def _get_call_literals(self, node):
+        # List of literals
+        arg_literals = []
+        kwarg_literals = {}
+
+        # TODO : Make sure this throws (and that we catch it)
+        # for non-literal inputs
+        for arg in node.args:
+            rendered = self._safe_eval(arg)
+            arg_literals.append(rendered)
+
+        for keyword in node.keywords:
+            key = keyword.arg
+            rendered = self._safe_eval(keyword.value)
+            kwarg_literals[key] = rendered
+
+        return arg_literals, kwarg_literals
+
+    def visit_Call(self, node):
+
+        func_name = self._flatten_attr(node.func)
+
+        if func_name in ["dbt.ref", "dbt.source", "dbt.config"]:
+            # drop the dot-dbt prefix
+            func_name = func_name.split(".")[-1]
+
+            args, kwargs = self._get_call_literals(node)
+            self.dbt_function_calls.append((func_name, args, kwargs))
+
+    def visit_Import(self, node: ast.Import) -> Any:
+        for n in node.names:
+            self.packages.append(n.name.split(".")[0])
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:
+        if node.module:
+            self.packages.append(node.module.split(".")[0])
+
+
+def merge_packages(original_packages_with_version, new_packages):
+    original_packages = [package.split("==")[0] for package in original_packages_with_version]
+    additional_packages = [package for package in new_packages if package not in original_packages]
+    return original_packages_with_version + list(set(additional_packages))
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -40,10 +116,42 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
+    def parse_python_model(self, node, config, context):
+        try:
+            tree = ast.parse(node.raw_sql)
+        except SyntaxError as exc:
+            msg = validator_error_message(exc)
+            raise ParsingException(msg, node=node) from exc
+
+        dbtParser = PythonParseVisitor(node)
+        dbtParser.visit(tree)
+
+        for (func, args, kwargs) in dbtParser.dbt_function_calls:
+            if func == "config":
+                config_packages = kwargs.get("packages", [])
+                kwargs["packages"] = merge_packages(config_packages, dbtParser.packages)
+            context[func](*args, **kwargs)
+
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
-        if not flags.STATIC_PARSER:
+        if node.path.endswith(".py"):
+            try:
+                context = self._context_for(node, config)
+                self.parse_python_model(node, config, context)
+                self.update_parsed_node_config(node, config, context=context)
+                node.config.language = ModelLanugage.python
+                # TODO revisit the place to add jinja prefix for this
+                # TODO rename node.raw_sql
+                node.raw_sql = "{{py_script_prefix(model)}}\n\n" + node.raw_sql
+
+            except ValidationError as exc:
+                # we got a ValidationError - probably bad types in config()
+                msg = validator_error_message(exc)
+                raise ParsingException(msg, node=node) from exc
+            return
+
+        elif not flags.STATIC_PARSER:
             # jinja rendering
             super().render_update(node, config)
             fire_event(StaticParserCausedJinjaRendering(path=node.path))

@@ -22,7 +22,7 @@ from dbt.parser.search import FileBlock
 from dbt.parser.generic_test_builders import YamlBlock
 from dbt.parser.sources import SourcePatcher
 
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanugage
 from dbt.contracts.files import SourceFile, FileHash, FilePath, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import (
@@ -177,6 +177,19 @@ def assertEqualNodes(node_one, node_two):
     node_two_dict = node_two.to_dict()
     if 'created_at' in node_two_dict:
         del node_two_dict['created_at']
+    # we don't reall care the order of packages, doing this because it is hard to
+    # make config.packages a set instead of a list
+    if 'config' in node_one_dict and 'packages' in node_one_dict['config']:
+        if not 'config' in node_two_dict and 'packages' in node_two_dict['config']:
+            return False
+        node_one_dict['config']['packages'] = set(node_one_dict['config']['packages'])
+        node_two_dict['config']['packages'] = set(node_two_dict['config']['packages'])
+        node_one_dict['unrendered_config']['packages'] = set(node_one_dict['config']['packages'])
+        node_two_dict['unrendered_config']['packages'] = set(node_two_dict['config']['packages'])
+        if 'packages' in node_one_dict['config_call_dict']:
+            node_one_dict['config_call_dict']['packages'] = set(node_one_dict['config_call_dict']['packages'])
+            node_two_dict['config_call_dict']['packages'] = set(node_two_dict['config_call_dict']['packages'])
+
     assert node_one_dict == node_two_dict
 
 
@@ -522,6 +535,57 @@ class ModelParserTest(BaseParserTest):
         file_id = 'snowplow://' + normalize('models/nested/model_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.model_1'])
+    
+    def test_parse_python_file(self):
+        py_code = """
+def model( dbt):
+    dbt.config(
+        materialized='table',
+        packages = ['sklearn==0.1.0']
+    )
+    import textblob
+    import text as a
+    from torch import b
+    import textblob.text
+    import sklearn
+    df = dbt.ref("my_sql_model")
+    df = dbt.ref("my_sql_model")
+    df = dbt.ref("my_sql_model_2")
+
+    df = df.limit(2)
+    return df   
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+        node = list(self.parser.manifest.nodes.values())[0]
+
+        python_packages = ['sklearn==0.1.0', 'torch', 'textblob', 'text']
+        expected = ParsedModelNode(
+            alias='py_model',
+            name='py_model',
+            database='test',
+            schema='analytics',
+            resource_type=NodeType.Model,
+            unique_id='model.snowplow.py_model',
+            fqn=['snowplow', 'nested', 'py_model'],
+            package_name='snowplow',
+            original_file_path=normalize('models/nested/py_model.py'),
+            root_path=get_abs_os_path('./dbt_packages/snowplow'),
+            config=NodeConfig(materialized='table', language=ModelLanugage.python, packages=python_packages),
+            # config.packages = ['textblob']
+            path=normalize('nested/py_model.py'),
+            raw_sql='{{py_script_prefix(model)}}\n\n' + py_code,
+            checksum=block.file.checksum,
+            unrendered_config={'materialized': 'table', 'packages':python_packages},
+            config_call_dict={'materialized': 'table', 'packages':python_packages},
+            refs=[['my_sql_model'], ['my_sql_model'], ['my_sql_model_2']]
+        )
+        assertEqualNodes(node, expected)
+        file_id = 'snowplow://' + normalize('models/nested/py_model.py')
+        self.assertIn(file_id, self.parser.manifest.files)
+        self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.py_model'])
 
     def test_parse_error(self):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')

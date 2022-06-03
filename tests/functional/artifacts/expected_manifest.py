@@ -32,6 +32,8 @@ def get_rendered_model_config(**updates):
         "unique_key": None,
         "grants": {},
         "incremental_strategy": None,
+        "language": "sql",
+        "packages": [],
     }
     result.update(updates)
     return result
@@ -61,6 +63,8 @@ def get_rendered_seed_config(**updates):
         "unique_key": None,
         "grants": {},
         "incremental_strategy": None,
+        "language": "sql",
+        "packages": [],
     }
     result.update(updates)
     return result
@@ -94,6 +98,8 @@ def get_rendered_snapshot_config(**updates):
         "meta": {},
         "grants": {},
         "incremental_strategy": None,
+        "language": "sql",
+        "packages": [],
     }
     result.update(updates)
     return result

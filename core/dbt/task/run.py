@@ -218,6 +218,8 @@ class ModelRunner(CompileRunner):
 
     def _build_run_model_result(self, model, context):
         result = context["load_result"]("main")
+        if not result:
+            raise RuntimeException("main is not being called during running model")
         adapter_response = {}
         if isinstance(result.response, dbtClassMixin):
             adapter_response = result.response.to_dict(omit_none=True)
