@@ -6,25 +6,25 @@ The Adapters module is responsible for defining database connection methods, sch
 
 ## `base`
 
-Defines the most primitive version of connection to a database including an abstract class inwhich macros and methods need to be defined per adapter, also defines how relations are named and made between models.
+Defines the most base implementation Adapters can use to build out full functionality sweet
 
 ## `sql`
 
-Defines a connection method for a database that initially inherits the above base connection and  comes with some premade methods and macros that can be overwritten as needed per adapter. (most common type of adapter.)
+Defines a sql implementation for adapters that initially inherits the above base implementation and  comes with some premade methods and macros that can be overwritten as needed per adapter. (most common type of adapter.)
 
 # Files
 
 ## `cache.py`
 
-Defines schema for sending information back and forth between database to enusre any changes (drops, new table creations) from your dbt project are reflected in your database.
+Caches information from the databases to compare what is being asked of via dbt to reflect those changes in the database
 
 ## `factory.py`
-Methods of connection management between dbt and the database.
+Defines how we generate adapter objects
 
 ## `protocol.py`
 
-initializes various protocl methods that can be implemented as needed per adapter.
+Defines various methods to be used in dbt to database interfacing. Also can let certain dependencies like mypy what the methods used do/exist.
 
 ## `reference_keys.py`
 
-configures naming scheme for cache elements to be universal.
+Configures naming scheme for cache elements to be universal.
