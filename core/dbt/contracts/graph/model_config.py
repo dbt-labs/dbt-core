@@ -11,7 +11,7 @@ from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
 from dbt.exceptions import InternalException, CompilationException
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
-from dbt.node_types import NodeType, ModelLanugage
+from dbt.node_types import NodeType, ModelLanguage
 
 
 M = TypeVar("M", bound="Metadata")
@@ -461,7 +461,7 @@ class NodeConfig(NodeAndTestConfig):
     grants: Dict[str, Any] = field(
         default_factory=dict, metadata=MergeBehavior.DictKeyAppend.meta()
     )
-    language: Optional[str] = ModelLanugage.sql
+    language: Optional[str] = ModelLanguage.sql
     packages: List[str] = field(
         default_factory=list,
         metadata=MergeBehavior.Append.meta(),

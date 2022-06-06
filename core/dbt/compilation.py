@@ -29,7 +29,7 @@ from dbt.exceptions import (
 from dbt.graph import Graph
 from dbt.events.functions import fire_event
 from dbt.events.types import FoundStats, CompilingNode, WritingInjectedSQLForNode
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
 import dbt.tracking
 
@@ -371,11 +371,22 @@ class Compiler:
 
         context = self._create_node_context(compiled_node, manifest, extra_context)
 
-        compiled_node.compiled_sql = jinja.get_rendered(
-            node.raw_sql,
-            context,
-            node,
-        )
+        if compiled_node.config.get("language") == ModelLanguage.python:
+            # TODO could we also 'minify' this code at all? just aesthetic, not functional
+            prefix = jinja.get_rendered(
+                "{{ py_script_prefix(model) }}",
+                context,
+                node,
+            )
+            # we should NOT jinja render the python model's 'raw code'
+            compiled_node.compiled_sql = f"{prefix}\n\n{node.raw_sql}"
+
+        else:
+            compiled_node.compiled_sql = jinja.get_rendered(
+                node.raw_sql,
+                context,
+                node,
+            )
 
         compiled_node.relation_name = self._get_relation_name(node)
 

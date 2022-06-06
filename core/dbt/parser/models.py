@@ -14,7 +14,7 @@ from dbt.events.types import (
     ExperimentalParserSuccess,
     ExperimentalParserFailure,
 )
-from dbt.node_types import NodeType, ModelLanugage
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
 import dbt.tracking as tracking
@@ -140,10 +140,8 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
                 self.update_parsed_node_config(node, config, context=context)
-                node.config.language = ModelLanugage.python
-                # TODO revisit the place to add jinja prefix for this
-                # TODO rename node.raw_sql
-                node.raw_sql = "{{py_script_prefix(model)}}\n\n" + node.raw_sql
+                # TODO 'language' should be a top-level node property, not 'config'
+                node.config.language = ModelLanguage.python
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
