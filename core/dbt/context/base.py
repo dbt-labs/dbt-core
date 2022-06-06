@@ -26,38 +26,7 @@ import datetime
 import re
 import itertools
 
-# Contexts in dbt Core
-# Contexts are used for Jinja rendering. They include context methods,
-# executable macros, and various settings that are available in Jinja.
-#
-# Different contexts are used in different places because we allow access
-# to different methods and data in different places. Executable SQL, for
-# example, includes the available macros and the model, while Jinja in
-# yaml files is more limited.
-#
-# The context that is passed to Jinja is always in a dictionary format,
-# not an actual class, so a 'to_dict()' is executed on a context class
-# before it is used for rendering.
-#
-# Each context has a generate_<name>_context function to create the context.
-# ProviderContext subclasses have different generate functions for
-# parsing and for execution.
-#
-# Context class hierarchy
-#
-#   BaseContext -- core/dbt/context/base.py
-#     SecretContext -- core/dbt/context/secret.py
-#     TargetContext -- core/dbt/context/target.py
-#       ConfiguredContext -- core/dbt/context/configured.py
-#         SchemaYamlContext -- core/dbt/context/configured.py
-#           DocsRuntimeContext -- core/dbt/context/configured.py
-#         MacroResolvingContext -- core/dbt/context/configured.py
-#         ManifestContext -- core/dbt/context/manifest.py
-#           QueryHeaderContext -- core/dbt/context/manifest.py
-#           ProviderContext -- core/dbt/context/provider.py
-#             MacroContext -- core/dbt/context/provider.py
-#             ModelContext -- core/dbt/context/provider.py
-#             TestContext -- core/dbt/context/provider.py
+# See the `contexts` module README for more information on how contexts work
 
 
 def get_pytz_module_context() -> Dict[str, Any]:
