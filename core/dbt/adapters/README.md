@@ -1,6 +1,6 @@
 # Adapters README
 
-The Adapters module is responsible for defining database connection methods, schema for caching, how relations are defined, and the two major types of connection types we have base and sql.
+The Adapters module is responsible for defining database connection methods, caching information from databases, how relations are defined, and the two major types of connection types we have - base and sql.
 
 # Directories
 
