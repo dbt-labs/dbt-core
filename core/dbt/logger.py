@@ -15,17 +15,16 @@ import colorama
 import logbook
 from dbt.dataclass_schema import dbtClassMixin
 
-# Colorama needs some help on windows because we're using logger.info
-# intead of print(). If the Windows env doesn't have a TERM var set,
-# then we should override the logging stream to use the colorama
-# converter. If the TERM var is set (as with Git Bash), then it's safe
-# to send escape characters and no log handler injection is needed.
-logging_stdout = sys.stdout
-if sys.platform == "win32":
-    if not os.getenv("TERM"):
-        logging_stdout = colorama.AnsiToWin32(sys.stdout).stream
-    colorama.init(wrap=False)
+# Colorama is needed for colored logs on Windows because we're using logger.info
+# intead of print(). If the Windows env doesn't have a TERM var set or it is set to None
+# (i.e. in the case of Git Bash on Windows- this emulates Unix), then it's safe to initialize
+# Colorama with wrapping turned on which allows us to strip ANSI sequences from stdout.
+# You can safely initialize Colorama for any OS and the coloring stays the same except
+# when piped to anoter process for Linux and MacOS, then it loses the coloring. To combat
+# that, we will just initialize Colorama when needed on Windows using a non-Unix terminal.
 
+if sys.platform == "win32" and (not os.getenv("TERM") or os.getenv("TERM") == "None"):
+    colorama.init(wrap=True)
 
 STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = (
@@ -455,7 +454,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
 
 
 class LogManager(logbook.NestedSetup):
-    def __init__(self, stdout=logging_stdout, stderr=sys.stderr):
+    def __init__(self, stdout=sys.stdout, stderr=sys.stderr):
         self.stdout = stdout
         self.stderr = stderr
         self._null_handler = logbook.NullHandler()
