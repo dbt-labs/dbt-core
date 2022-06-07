@@ -1,0 +1,7 @@
+kind: Fixes
+body: Include schema file config in unrendered_config
+time: 2022-06-07T12:30:58.535207-04:00
+custom:
+  Author: gshank
+  Issue: "5338"
+  PR: "5344"
