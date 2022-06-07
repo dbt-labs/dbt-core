@@ -1,4 +1,3 @@
-import colorama
 from colorama import Style
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
@@ -49,14 +48,6 @@ STDOUT_LOG.addHandler(stdout_handler)
 format_color = True
 format_json = False
 invocation_id: Optional[str] = None
-
-# Colorama needs some help on windows because we're using logger.info
-# intead of print(). If the Windows env doesn't have a TERM var set,
-# then we should override the logging stream to use the colorama
-# converter. If the TERM var is set (as with Git Bash), then it's safe
-# to send escape characters and no log handler injection is needed.
-if sys.platform == "win32":
-    colorama.init(wrap=False)
 
 
 def setup_event_logger(log_path, level_override=None):
