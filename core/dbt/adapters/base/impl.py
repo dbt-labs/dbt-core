@@ -1125,6 +1125,37 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return sql
 
+    def validate_incremental_strategy(self):
+        return ["append", "delete+insert"]
+
+    @available.parse_none
+    def get_incremental_strategy_macro(self, strategy: str):
+        # Construct macro_name from strategy name
+        if strategy is None:
+            strategy = "default"
+        strategy = strategy.replace("+", "_")
+        macro_name = f"get_incremental_{strategy}_sql"
+        # get a macro and return it
+        manifest = self._macro_manifest
+        macro = manifest.find_macro_by_name(macro_name, self.config.project_name, None)
+        if not macro:
+            raise RuntimeException(
+                'dbt could not find a macro with the name "{}" in {}'.format(
+                    macro_name, self.config.project_name
+                )
+            )
+
+        from dbt.context.providers import generate_runtime_macro_context
+
+        macro_context = generate_runtime_macro_context(
+            macro=macro,
+            config=self.config,
+            manifest=manifest,  # type: ignore[arg-type]
+            package_name=self.config.project_name,
+        )
+        macro_function = MacroGenerator(macro, macro_context)
+        return macro_function
+
 
 COLUMNS_EQUAL_SQL = """
 with diff_count as (

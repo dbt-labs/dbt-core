@@ -26,7 +26,7 @@
         {% do predicates.append('FALSE') %}
     {% endif %}
 
-    {{ sql_header if sql_header is not none }}
+    {# sql_header if sql_header is not none #}
 
     merge into {{ target }} as DBT_INTERNAL_DEST
         using {{ source }} as DBT_INTERNAL_SOURCE
@@ -75,7 +75,7 @@
             );
 
         {% endif %}
-        {% endif %}
+    {% endif %}
 
     insert into {{ target }} ({{ dest_cols_csv }})
     (
@@ -86,16 +86,16 @@
 {%- endmacro %}
 
 
-{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
-  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates, include_sql_header) }}
+{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates) -%}
+  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates) }}
 {%- endmacro %}
 
-{% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header) -%}
+{% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates) -%}
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
     {%- set sql_header = config.get('sql_header', none) -%}
 
-    {{ sql_header if sql_header is not none and include_sql_header }}
+    {{ sql_header if sql_header is not none }}
 
     merge into {{ target }} as DBT_INTERNAL_DEST
         using {{ source }} as DBT_INTERNAL_SOURCE
