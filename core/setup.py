@@ -47,9 +47,6 @@ setup(
             "dbt = dbt.main:main",
         ],
     },
-    scripts=[
-        "scripts/dbt",
-    ],
     install_requires=[
         "Jinja2==2.11.3",
         "MarkupSafe>=0.23,<2.1",
