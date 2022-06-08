@@ -22,7 +22,7 @@ from dbt.parser.search import FileBlock
 from dbt.parser.generic_test_builders import YamlBlock
 from dbt.parser.sources import SourcePatcher
 
-from dbt.node_types import NodeType, ModelLanugage
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.contracts.files import SourceFile, FileHash, FilePath, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import (
@@ -573,10 +573,10 @@ def model( dbt):
             package_name='snowplow',
             original_file_path=normalize('models/nested/py_model.py'),
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
-            config=NodeConfig(materialized='table', language=ModelLanugage.python, packages=python_packages),
+            config=NodeConfig(materialized='table', language=ModelLanguage.python, packages=python_packages),
             # config.packages = ['textblob']
             path=normalize('nested/py_model.py'),
-            raw_sql='{{py_script_prefix(model)}}\n\n' + py_code,
+            raw_sql=py_code,
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table', 'packages':python_packages},
             config_call_dict={'materialized': 'table', 'packages':python_packages},

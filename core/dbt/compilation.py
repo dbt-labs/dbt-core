@@ -373,13 +373,13 @@ class Compiler:
 
         if compiled_node.config.get("language") == ModelLanguage.python:
             # TODO could we also 'minify' this code at all? just aesthetic, not functional
-            prefix = jinja.get_rendered(
-                "{{ py_script_prefix(model) }}",
+            postfix = jinja.get_rendered(
+                "{{ py_script_postfix(model) }}",
                 context,
                 node,
             )
             # we should NOT jinja render the python model's 'raw code'
-            compiled_node.compiled_sql = f"{prefix}\n\n{node.raw_sql}"
+            compiled_node.compiled_sql = f"{node.raw_sql}\n\n{postfix}"
 
         else:
             compiled_node.compiled_sql = jinja.get_rendered(

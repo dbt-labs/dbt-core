@@ -17,6 +17,7 @@ from dbt.events.types import (
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
+from dbt.clients.jinja import get_rendered
 import dbt.tracking as tracking
 from dbt import utils
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
@@ -28,7 +29,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 # New for Python models :p
 import ast
 from dbt.dataclass_schema import ValidationError
-from dbt.exceptions import ParsingException, validator_error_message
+from dbt.exceptions import ParsingException, validator_error_message, UndefinedMacroException
 
 
 class PythonParseVisitor(ast.NodeVisitor):
@@ -79,8 +80,7 @@ class PythonParseVisitor(ast.NodeVisitor):
     def visit_Call(self, node):
 
         func_name = self._flatten_attr(node.func)
-
-        if func_name in ["dbt.ref", "dbt.source", "dbt.config"]:
+        if func_name in ["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"]:
             # drop the dot-dbt prefix
             func_name = func_name.split(".")[-1]
 
@@ -100,6 +100,20 @@ def merge_packages(original_packages_with_version, new_packages):
     original_packages = [package.split("==")[0] for package in original_packages_with_version]
     additional_packages = [package for package in new_packages if package not in original_packages]
     return original_packages_with_version + list(set(additional_packages))
+
+
+def verify_python_model_code(node):
+    # TODO: add a test for this
+    try:
+        rendered_python = get_rendered(
+            node.raw_sql,
+            {},
+            node,
+        )
+        if rendered_python != node.raw_sql:
+            raise ParsingException("")
+    except (UndefinedMacroException, ParsingException):
+        raise ParsingException("No jinja in python model code is allowed", node=node)
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -130,6 +144,10 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             if func == "config":
                 config_packages = kwargs.get("packages", [])
                 kwargs["packages"] = merge_packages(config_packages, dbtParser.packages)
+            if func == "get":
+                context["config"](utilized=args)
+                continue
+
             context[func](*args, **kwargs)
 
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
@@ -137,6 +155,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         if node.path.endswith(".py"):
             try:
+                verify_python_model_code(node)
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
                 self.update_parsed_node_config(node, config, context=context)
