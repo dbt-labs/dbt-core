@@ -202,6 +202,14 @@ class VersionedSchema(dbtClassMixin):
         return result
 
     @classmethod
+    def is_compatible_version(cls, schema_version):
+        compatible_versions = [str(cls.dbt_schema_version)]
+        if hasattr(cls, "compatible_previous_versions"):
+            for name, version in cls.compatible_previous_versions():
+                compatible_versions.append(str(SchemaVersion(name, version)))
+        return str(schema_version) in compatible_versions
+
+    @classmethod
     def read_and_check_versions(cls, path: str):
         try:
             data = read_json(path)
@@ -242,11 +250,3 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
         super().validate(data)
         if cls.dbt_schema_version is None:
             raise InternalException("Cannot call from_dict with no schema version!")
-
-    @classmethod
-    def is_compatible_version(cls, schema_version):
-        compatible_versions = [str(cls.dbt_schema_version)]
-        if hasattr(cls, "compatible_previous_versions"):
-            for name, version in cls.compatible_previous_versions():
-                compatible_versions.append(str(SchemaVersion(name, version)))
-        return str(schema_version) in compatible_versions
