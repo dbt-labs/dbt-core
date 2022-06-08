@@ -1135,6 +1135,10 @@ class WritableManifest(ArtifactMixin):
         )
     )
 
+    @classmethod
+    def compatible_previous_versions(self):
+        return [("manifest", 4)]
+
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:

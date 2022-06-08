@@ -38,7 +38,7 @@ class TestPreviousVersionState:
         self.compare_previous_state(project, "v5", True)
 
     def test_compare_state_v4(self, project):
-        self.compare_previous_state(project, "v4", False)
+        self.compare_previous_state(project, "v4", True)
 
     def test_compare_state_v3(self, project):
         self.compare_previous_state(project, "v3", False)
