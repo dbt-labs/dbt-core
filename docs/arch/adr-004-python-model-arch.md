@@ -13,9 +13,14 @@ We are thinking of supporting `python` ([roadmap](https://github.com/dbt-labs/db
 - None, users can write whatever code they like.
 - focusing on data transformation logic where each python model should have a model function that returns a database object for dbt to materialize.
 
-#### What logic should live in dbt-core
+#### Where should the implementation live
+Two places we need to consider are `dbt-core` and each individual adapter code-base. What are the pieces needed? How do we decide what goes where?
+
 
 #### Are we going to allow writing macros in python
+- Not allowing it.
+- Allowing certain Jinja templating
+- Allow everything
 
 ## Decisions
 #### Where to run the code
@@ -27,8 +32,9 @@ We want dbt to focus on transformation logic, so we opt for setting up some tool
 1. Code in the python model node should include a model function that takes a `dbt` object as an argument, do the data transformation logic inside, and return a dataframe in the end. We think folks should load their data into dataframes using the `dbt.ref`, `dbt.source` provided over raw data references. We also think logic to write dataframe to database objects should live in materialization logic instead of transformation code.
 1. That `dbt` object should also have an attribute called `dbt.config` to allow users to define configurations of the current python model like materialization logic, a specific version of python libraries, etc. This `dbt.config` object should also provide a clear access function for variables defined in project YAML. This way user can access arbitrary configuration at runtime.
 
-#### What logic should live in dbt-core
+#### Where should the implementation live
 
+Logic in core should be universal and carry the opionions we have for the feature, this includes but not limited to
 1. parsing of python file in dbt-core to get the `ref`, `source`, and `config` information. This information is used to place the python model in the correct place in project DAG and generate the correct python code sent to compute engine. 
 1. `language` as a new top-level node property.
 1. python template code that is not cloud provider-specific, this includes implementation for `dbt.ref`, `dbt.source`. We would use ast parser to parse out all of the `dbt.ref`, `dbt.source` inside python during parsing time, and generate what database resources those points to during compilation time. This should allow user to copy-paste the "compiled" code, and run it themselves against the data warehouse — just like with SQL models. A example of definition for `dbt.ref` could look like this
@@ -41,8 +47,10 @@ We want dbt to focus on transformation logic, so we opt for setting up some tool
 
 1. functional tests for the python model, these tests are expected to be inherited in the adapter code to make sure intended functions are met.
 1. Generalizing the names of properties (`sql`, `raw_sql`, `compiled_sql`) for a future where it's not all SQL.
+1. implementation of restrictions have for python model.
 
-This means adapters will need to implement/modify computing engine specific functions including but not limited to
+
+Computing engine specific logic should live in adapters, including but not limited to
 - `load_df_function` of how to load a dataframe for a given database resource, 
 - `materialize` of how to save a dataframe to table or other materialization formats.
 - some kind of `submit_python` function for submitting python code to compute engine.
