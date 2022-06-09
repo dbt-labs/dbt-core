@@ -55,10 +55,13 @@ class NodeType(StrEnum):
         ]
 
     def pluralize(self) -> str:
-        if self == "analysis":
+        if self is self.Analysis:
             return "analyses"
-        else:
-            return f"{self}s"
+        if self is self.Documentation:
+            return "docs blocks"
+        if self is self.SqlOperation:
+            return "sql operations"
+        return f"{self}s"
 
 
 class RunHookType(StrEnum):
