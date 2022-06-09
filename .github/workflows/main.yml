@@ -61,9 +61,9 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --user --upgrade pip
-          pip install tox
-          pip --version
+          python -m pip install --user --upgrade pip
+          python -m pip install tox
+          python -m pip --version
           tox --version
 
       - name: Run tox
@@ -96,9 +96,9 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --user --upgrade pip
-          pip install tox
-          pip --version
+          python -m pip install --user --upgrade pip
+          python -m pip install tox
+          python -m pip --version
           tox --version
 
       - name: Run tox
@@ -133,9 +133,9 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --user --upgrade pip
-          pip install --upgrade setuptools wheel twine check-wheel-contents
-          pip --version
+          python -m pip install --user --upgrade pip
+          python -m pip install --upgrade setuptools wheel twine check-wheel-contents
+          python -m pip --version
 
       - name: Build distributions
         run: ./scripts/build-dist.sh
@@ -177,9 +177,9 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --user --upgrade pip
-          pip install --upgrade wheel
-          pip --version
+          python -m pip install --user --upgrade pip
+          python -m pip install --upgrade wheel
+          python -m pip --version
 
       - uses: actions/download-artifact@v2
         with:
@@ -191,7 +191,7 @@ jobs:
 
       - name: Install wheel distributions
         run: |
-          find ./dist/*.whl -maxdepth 1 -type f | xargs pip install --force-reinstall --find-links=dist/
+          find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
 
       - name: Check wheel distributions
         run: |
@@ -200,7 +200,7 @@ jobs:
       - name: Install source distributions
         # ignore dbt-1.0.0, which intentionally raises an error when installed from source
         run: |
-          find ./dist/dbt-[a-z]*.gz -maxdepth 1 -type f | xargs pip install --force-reinstall --find-links=dist/
+          find ./dist/dbt-[a-z]*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
 
       - name: Check source distributions
         run: |

@@ -50,7 +50,7 @@ jobs:
           override: true
 
       - name: install dbt
-        run: pip install -r dev-requirements.txt -r editable-requirements.txt
+        run: python -m pip install -r dev-requirements.txt -r editable-requirements.txt
 
       - name: Set up postgres
         uses: ./.github/actions/setup-postgres-linux
