@@ -56,7 +56,7 @@ jobs:
       with:
         status: ${{ job.status }}
         notification_title: 'dbt-core scheduled run of "${{ matrix.branch }}" branch not successful'
-        message_format: ':x: CI on branch ${{"matrix.branch" steps.trigger-step.outputs.workflow-conclusion }}'
-        footer: 'Linked failed CI run $${{steps.trigger-step.outputs.workflow-url}}'
+        message_format: ':x: CI on branch "${{ matrix.branch }}" ${{ steps.trigger-step.outputs.workflow-conclusion }}'
+        footer: 'Linked failed CI run $${{ steps.trigger-step.outputs.workflow-url }}'
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
