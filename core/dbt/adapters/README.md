@@ -1,12 +1,12 @@
 # Adapters README
 
-The Adapters module is responsible for defining database connection methods, caching information from databases, how relations are defined, and the two major types of connection types we have - base and sql.
+The Adapters module is responsible for defining database connection methods, caching information from databases, how relations are defined, and the two major connection types we have - base and sql.
 
 # Directories
 
 ## `base`
 
-Defines the most base implementation Adapters can use to build out full functionality sweet
+Defines the base implementation Adapters can use to build out full functionality.
 
 ## `sql`
 
@@ -16,14 +16,14 @@ Defines a sql implementation for adapters that initially inherits the above base
 
 ## `cache.py`
 
-Caches information from the databases to compare what is being asked of via dbt to reflect those changes in the database
+Cached information from the database.
 
 ## `factory.py`
 Defines how we generate adapter objects
 
 ## `protocol.py`
 
-Defines various methods to be used in dbt to database interfacing. Also can let certain dependencies like mypy what the methods used do/exist.
+Defines various interfaces for various adapter objects. Helps mypy correctly resolve methods.
 
 ## `reference_keys.py`
 
