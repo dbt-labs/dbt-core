@@ -38,6 +38,7 @@ jobs:
       # latest run for results and it gets confused when we kick off multiple runs
       # at once. There is a race condition so we will just run in sequential order.
       max-parallel: 1
+      fail-fast: false
       matrix:
         branch: [main, 1.0.latest, 1.1.latest]
 
