@@ -30,7 +30,8 @@ on:
 permissions: read-all
 
 jobs:
-  dispatch:
+  kick-off-ci:
+    name: Kick-off CI
     runs-on: ubuntu-latest
 
     strategy:
