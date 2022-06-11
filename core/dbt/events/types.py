@@ -1501,10 +1501,11 @@ class HooksRunning(InfoLevel):
 class HookFinished(InfoLevel):
     stat_line: str
     execution: str
+    execution_time: float
     code: str = "E040"
 
     def message(self) -> str:
-        return f"Finished running {self.stat_line}{self.execution}."
+        return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
 
 
 @dataclass
