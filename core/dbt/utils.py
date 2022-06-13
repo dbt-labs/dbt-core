@@ -316,7 +316,7 @@ def timestring() -> str:
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
     return datetime.datetime.utcnow().isoformat() + "Z"
 
-def humanise_execution_time(execution_time: int) -> str:
+def humanize_execution_time(execution_time: int) -> str:
     minutes, seconds = divmod(execution_time, 60)
     hours, minutes = divmod(minutes, 60)
 

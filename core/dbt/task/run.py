@@ -398,7 +398,7 @@ class RunTask(CompileTask):
         execution = ""
 
         if execution_time is not None:
-            execution = utils.humanise_execution_time(execution_time=execution_time)
+            execution = utils.humanize_execution_time(execution_time=execution_time)
 
         with TextOnly():
             fire_event(EmptyLine())
