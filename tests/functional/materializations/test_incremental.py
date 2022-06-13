@@ -1,5 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt
+from dbt.exceptions import RuntimeException
 
 
 my_model_sql = """
@@ -28,13 +29,11 @@ def test_basic(project):
     assert macro_func
     assert type(macro_func).__name__ == "MacroGenerator"
 
-    # Note: the following 2 strategies aren't actually supported on Postgres,
-    # so will probably need to be removed before final version.
-    # Leaving here while developing
-    macro_func = project.adapter.get_incremental_strategy_macro("merge")
-    assert macro_func
-    assert type(macro_func).__name__ == "MacroGenerator"
+    # These two incremental strategies are not valid for Postgres
+    with pytest.raises(RuntimeException) as excinfo:
+        macro_func = project.adapter.get_incremental_strategy_macro("merge")
+    assert "merge" in str(excinfo.value)
 
-    macro_func = project.adapter.get_incremental_strategy_macro("insert_overwrite")
-    assert macro_func
-    assert type(macro_func).__name__ == "MacroGenerator"
+    with pytest.raises(RuntimeException) as excinfo:
+        macro_func = project.adapter.get_incremental_strategy_macro("insert_overwrite")
+    assert "insert_overwrite" in str(excinfo.value)
