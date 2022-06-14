@@ -403,9 +403,7 @@ class RunTask(CompileTask):
         with TextOnly():
             fire_event(EmptyLine())
         fire_event(
-            HookFinished(
-                stat_line=stat_line, execution=execution, execution_time=execution_time
-            )
+            HookFinished(stat_line=stat_line, execution=execution, execution_time=execution_time)
         )
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:

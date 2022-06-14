@@ -2621,7 +2621,7 @@ if 1 == 0:
     DatabaseErrorRunning(hook_type="")
     EmptyLine()
     HooksRunning(num_hooks=0, hook_type="")
-    HookFinished(stat_line="", execution="")
+    HookFinished(stat_line="", execution="", execution_time=0)
     WriteCatalogFailure(num_exceptions=0)
     CatalogWritten(path="")
     CannotGenerateDocs()
