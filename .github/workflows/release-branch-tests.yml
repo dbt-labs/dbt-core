@@ -24,8 +24,6 @@ on:
 
   workflow_dispatch: # for manual triggering
 
-  pull_request: # PR testing only- will remove before merging
-
 # no special access is needed
 permissions: read-all
 
