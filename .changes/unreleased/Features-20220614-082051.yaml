@@ -1,0 +1,7 @@
+kind: Features
+body: Early return from dbt init if no available adapters
+time: 2022-06-14T08:20:51.096872718+02:00
+custom:
+  Author: ulisesojeda
+  Issue: "5365"
+  PR: "5366"
