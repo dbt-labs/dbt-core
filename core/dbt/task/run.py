@@ -398,11 +398,13 @@ class RunTask(CompileTask):
         execution = ""
 
         if execution_time is not None:
-            execution = " in {execution_time:0.2f}s".format(execution_time=execution_time)
+            execution = utils.humanize_execution_time(execution_time=execution_time)
 
         with TextOnly():
             fire_event(EmptyLine())
-        fire_event(HookFinished(stat_line=stat_line, execution=execution))
+        fire_event(
+            HookFinished(stat_line=stat_line, execution=execution, execution_time=execution_time)
+        )
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
         if not self.args.defer:
