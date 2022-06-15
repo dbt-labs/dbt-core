@@ -16,7 +16,8 @@ class TestBasic(JaffleShopProject):
         assert "model.jaffle_shop.orders" in manifest.nodes
 
     def test_execution_time_format_is_humanized(self, project):
-
+        # Create the data from seeds
+        results = run_dbt(["seed"])
         _, log_output = run_dbt_and_capture(["run"])
 
         assert " in 0 hours 0 minutes and " in log_output
