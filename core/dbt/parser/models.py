@@ -141,9 +141,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         dbtParser.visit(tree)
 
         for (func, args, kwargs) in dbtParser.dbt_function_calls:
-            if func == "config":
-                config_packages = kwargs.get("packages", [])
-                kwargs["packages"] = merge_packages(config_packages, dbtParser.packages)
+            # TODO decide what we want to do with detected packages
+            # if func == "config":
+            #     kwargs["detected_packages"] = dbtParser.packages
             if func == "get":
                 context["config"](utilized=args)
                 continue

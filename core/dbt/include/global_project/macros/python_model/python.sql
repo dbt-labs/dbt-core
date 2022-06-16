@@ -75,7 +75,7 @@ class dbtObj:
         self.source = lambda x: source(x, dbt_load_df_function=load_df_function)
         self.ref = lambda x: ref(x, dbt_load_df_function=load_df_function)
         self.config = config
-        self.this = '{{ this }}'
+        self.this = this()
         self.is_incremental = {{ is_incremental() }}
 
 
