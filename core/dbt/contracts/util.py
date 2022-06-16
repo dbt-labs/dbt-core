@@ -202,6 +202,14 @@ class VersionedSchema(dbtClassMixin):
         return result
 
     @classmethod
+    def is_compatible_version(cls, schema_version):
+        compatible_versions = [str(cls.dbt_schema_version)]
+        if hasattr(cls, "compatible_previous_versions"):
+            for name, version in cls.compatible_previous_versions():
+                compatible_versions.append(str(SchemaVersion(name, version)))
+        return str(schema_version) in compatible_versions
+
+    @classmethod
     def read_and_check_versions(cls, path: str):
         try:
             data = read_json(path)
@@ -217,7 +225,7 @@ class VersionedSchema(dbtClassMixin):
             if "metadata" in data and "dbt_schema_version" in data["metadata"]:
                 previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
-                if str(cls.dbt_schema_version) != previous_schema_version:
+                if not cls.is_compatible_version(previous_schema_version):
                     raise IncompatibleSchemaException(
                         expected=str(cls.dbt_schema_version), found=previous_schema_version
                     )
