@@ -1,6 +1,3 @@
-from typing import List
-from dbt.logger import log_cache_events, log_manager
-
 import argparse
 import os.path
 import sys
@@ -8,17 +5,8 @@ import traceback
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
+from typing import List
 
-import dbt.version
-from dbt.events.functions import fire_event, setup_event_logger
-from dbt.events.types import (
-    MainEncounteredError,
-    MainKeyboardInterrupt,
-    MainReportVersion,
-    MainReportArgs,
-    MainTrackingUserState,
-    MainStackTrace,
-)
 import dbt.flags as flags
 import dbt.task.build as build_task
 import dbt.task.clean as clean_task
@@ -36,14 +24,27 @@ import dbt.task.seed as seed_task
 import dbt.task.serve as serve_task
 import dbt.task.snapshot as snapshot_task
 import dbt.task.test as test_task
-from dbt.profiler import profiler
-from dbt.adapters.factory import reset_adapters, cleanup_connections
-
 import dbt.tracking
-
-from dbt.utils import ExitCodes, args_to_dict
+import dbt.version
+from dbt.adapters.factory import cleanup_connections, reset_adapters
 from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
-from dbt.exceptions import InternalException, NotImplementedException, FailedToConnectException
+from dbt.events.functions import fire_event, setup_event_logger
+from dbt.events.types import (
+    MainEncounteredError,
+    MainKeyboardInterrupt,
+    MainReportArgs,
+    MainReportVersion,
+    MainStackTrace,
+    MainTrackingUserState,
+)
+from dbt.exceptions import (
+    FailedToConnectException,
+    InternalException,
+    NotImplementedException,
+)
+from dbt.logger import log_cache_events, log_manager
+from dbt.profiler import profiler
+from dbt.utils import ExitCodes, args_to_dict
 
 
 class DBTVersion(argparse.Action):
@@ -60,7 +61,11 @@ class DBTVersion(argparse.Action):
         help="show program's version number and exit",
     ):
         super().__init__(
-            option_strings=option_strings, dest=dest, default=default, nargs=0, help=help
+            option_strings=option_strings,
+            dest=dest,
+            default=default,
+            nargs=0,
+            help=help,
         )
 
     def __call__(self, parser, namespace, values, option_string=None):
@@ -121,6 +126,7 @@ class DBTArgumentParser(argparse.ArgumentParser):
 def main(args=None):
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for regular cli invocations.
+    print("ciao")
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
     if args is None:
         args = sys.argv[1:]
@@ -199,12 +205,18 @@ def track_run(task):
     dbt.tracking.track_invocation_start(config=task.config, args=task.args)
     try:
         yield
-        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
+        dbt.tracking.track_invocation_end(
+            config=task.config, args=task.args, result_type="ok"
+        )
     except (NotImplementedException, FailedToConnectException) as e:
         fire_event(MainEncounteredError(e=str(e)))
-        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
+        dbt.tracking.track_invocation_end(
+            config=task.config, args=task.args, result_type="error"
+        )
     except Exception:
-        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
+        dbt.tracking.track_invocation_end(
+            config=task.config, args=task.args, result_type="error"
+        )
         raise
     finally:
         dbt.tracking.flush()
@@ -389,9 +401,9 @@ def _build_build_subparser(subparsers, base_subparser):
         """,
     )
 
-    resource_values: List[str] = [str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES] + [
-        "all"
-    ]
+    resource_values: List[str] = [
+        str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
+    ] + ["all"]
     sub.add_argument(
         "--resource-type",
         choices=resource_values,
@@ -477,7 +489,9 @@ def _build_snapshot_subparser(subparsers, base_subparser):
         Overrides settings in profiles.yml.
         """,
     )
-    sub.set_defaults(cls=snapshot_task.SnapshotTask, which="snapshot", rpc_method="snapshot")
+    sub.set_defaults(
+        cls=snapshot_task.SnapshotTask, which="snapshot", rpc_method="snapshot"
+    )
     return sub
 
 
@@ -527,7 +541,9 @@ def _build_compile_subparser(subparsers, base_subparser):
         Compiled SQL files are written to the target/ directory.
         """,
     )
-    sub.set_defaults(cls=compile_task.CompileTask, which="compile", rpc_method="compile")
+    sub.set_defaults(
+        cls=compile_task.CompileTask, which="compile", rpc_method="compile"
+    )
     sub.add_argument("--parse-only", action="store_true")
     return sub
 
@@ -792,7 +808,9 @@ def _build_list_subparser(subparsers, base_subparser):
         aliases=["ls"],
     )
     sub.set_defaults(cls=list_task.ListTask, which="list", rpc_method=None)
-    resource_values: List[str] = [str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES] + [
+    resource_values: List[str] = [
+        str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES
+    ] + [
         "default",
         "all",
     ]
@@ -803,7 +821,9 @@ def _build_list_subparser(subparsers, base_subparser):
         default=[],
         dest="resource_types",
     )
-    sub.add_argument("--output", choices=["json", "name", "path", "selector"], default="selector")
+    sub.add_argument(
+        "--output", choices=["json", "name", "path", "selector"], default="selector"
+    )
     sub.add_argument("--output-keys")
 
     sub.add_argument(
@@ -870,7 +890,9 @@ def _build_run_operation_subparser(subparsers, base_subparser):
         """,
     )
     sub.set_defaults(
-        cls=run_operation_task.RunOperationTask, which="run-operation", rpc_method="run-operation"
+        cls=run_operation_task.RunOperationTask,
+        which="run-operation",
+        rpc_method="run-operation",
     )
     return sub
 
@@ -1148,7 +1170,9 @@ def parse_args(args, cls=DBTArgumentParser):
     )
     # --select, --exclude
     # list_sub sets up its own arguments.
-    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
+    _add_selection_arguments(
+        run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub
+    )
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub)
     # --full-refresh
@@ -1201,3 +1225,7 @@ def parse_args(args, cls=DBTArgumentParser):
         p.exit(1)
 
     return parsed
+
+
+if __name__ == "__main__":
+    main()

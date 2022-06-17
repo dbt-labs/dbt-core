@@ -126,14 +126,14 @@
         {% do exceptions.raise_compiler_error("Invalid value for 'check_cols': " ~ check_cols_config) %}
     {% endif %}
 
-    {%- set existing_cols = adapter.get_columns_in_relation(target_relation) | map(attribute = 'name') | map(adapter.quote) | list -%}
+    {%- set existing_cols = adapter.get_columns_in_relation(target_relation) | map(attribute = 'name') | list -%}
     {%- set ns = namespace() -%} {#-- handle for-loop scoping with a namespace --#}
     {%- set ns.column_added = false -%}
 
     {%- set intersection = [] -%}
     {%- for col in query_columns -%}
         {%- if col in existing_cols -%}
-            {%- do intersection.append(col) -%}
+            {%- do intersection.append(adapter.quote(col)) -%}
         {%- else -%}
             {% set ns.column_added = true %}
         {%- endif -%}
