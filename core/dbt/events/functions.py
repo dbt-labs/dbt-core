@@ -180,7 +180,7 @@ def create_debug_text_log_line(e: T_Event) -> str:
     if type(e) == MainReportVersion:
         separator = 30 * "="
         log_line = f"\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n"
-    color_tag: str = "" if this.format_color else Style.RESET_ALL
+    color_tag: str = "" if not this.format_color else Style.RESET_ALL
     ts: str = get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
