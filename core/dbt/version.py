@@ -224,6 +224,7 @@ def _get_adapter_plugin_names() -> Iterator[str]:
     # not be reporting plugin versions today
     if spec is None or spec.submodule_search_locations is None:
         return
+
     for adapters_path in spec.submodule_search_locations:
         version_glob = os.path.join(adapters_path, "*", "__version__.py")
         for version_path in glob.glob(version_glob):

@@ -7,7 +7,6 @@ from typing import (
     List,
     Generic,
     TypeVar,
-    ClassVar,
     Tuple,
     Union,
     Dict,
@@ -88,10 +87,13 @@ class AdapterProtocol(  # type: ignore[misc]
         Compiler_T,
     ],
 ):
-    AdapterSpecificConfigs: ClassVar[Type[AdapterConfig_T]]
-    Column: ClassVar[Type[Column_T]]
-    Relation: ClassVar[Type[Relation_T]]
-    ConnectionManager: ClassVar[Type[ConnectionManager_T]]
+    # N.B. Technically these are ClassVars, but mypy doesn't support putting type vars in a
+    # ClassVar due to the restirctiveness of PEP-526
+    # See: https://github.com/python/mypy/issues/5144
+    AdapterSpecificConfigs: Type[AdapterConfig_T]
+    Column: Type[Column_T]
+    Relation: Type[Relation_T]
+    ConnectionManager: Type[ConnectionManager_T]
     connections: ConnectionManager_T
 
     def __init__(self, config: AdapterRequiredConfig):

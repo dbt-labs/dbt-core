@@ -1,7 +1,7 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet, Type
 
@@ -417,6 +417,9 @@ class UnsetProfileConfig(RuntimeConfig):
     missing, any access to profile members results in an exception.
     """
 
+    profile_name: str = field(repr=False)
+    target_name: str = field(repr=False)
+
     def __post_init__(self):
         # instead of futzing with InitVar overrides or rewriting __init__, just
         # `del` the attrs we don't want  users touching.
@@ -436,6 +439,56 @@ class UnsetProfileConfig(RuntimeConfig):
     def to_target_dict(self):
         # re-override the poisoned profile behavior
         return DictDefaultEmptyStr({})
+
+    def to_project_config(self, with_packages=False):
+        """Return a dict representation of the config that could be written to
+        disk with `yaml.safe_dump` to get this configuration.
+
+        Overrides dbt.config.Project.to_project_config to omit undefined profile
+        attributes.
+
+        :param with_packages bool: If True, include the serialized packages
+            file in the root.
+        :returns dict: The serialized profile.
+        """
+        result = deepcopy(
+            {
+                "name": self.project_name,
+                "version": self.version,
+                "project-root": self.project_root,
+                "profile": "",
+                "model-paths": self.model_paths,
+                "macro-paths": self.macro_paths,
+                "seed-paths": self.seed_paths,
+                "test-paths": self.test_paths,
+                "analysis-paths": self.analysis_paths,
+                "docs-paths": self.docs_paths,
+                "asset-paths": self.asset_paths,
+                "target-path": self.target_path,
+                "snapshot-paths": self.snapshot_paths,
+                "clean-targets": self.clean_targets,
+                "log-path": self.log_path,
+                "quoting": self.quoting,
+                "models": self.models,
+                "on-run-start": self.on_run_start,
+                "on-run-end": self.on_run_end,
+                "dispatch": self.dispatch,
+                "seeds": self.seeds,
+                "snapshots": self.snapshots,
+                "sources": self.sources,
+                "tests": self.tests,
+                "vars": self.vars.to_dict(),
+                "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
+                "config-version": self.config_version,
+            }
+        )
+        if self.query_comment:
+            result["query-comment"] = self.query_comment.to_dict(omit_none=True)
+
+        if with_packages:
+            result.update(self.packages.to_dict(omit_none=True))
+
+        return result
 
     @classmethod
     def from_parts(

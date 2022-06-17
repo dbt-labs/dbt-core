@@ -186,7 +186,8 @@ class InitTask(BaseTask):
         initial_target = profile_template.get("fixed", {})
         prompts = profile_template.get("prompts", {})
         target = self.generate_target_from_input(prompts, initial_target)
-        profile = {"outputs": {"dev": target}, "target": "dev"}
+        target_name = target.pop("target", "dev")
+        profile = {"outputs": {target_name: target}, "target": target_name}
         self.write_profile(profile, profile_name)
 
     def create_profile_from_target(self, adapter: str, profile_name: str):

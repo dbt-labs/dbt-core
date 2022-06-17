@@ -233,8 +233,6 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         return self.to_dict()
 
     def __post_serialize__(self, dct):
-        if "config_call_dict" in dct:
-            del dct["config_call_dict"]
         if "_event_status" in dct:
             del dct["_event_status"]
         return dct
@@ -586,10 +584,7 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     @property
     def columns(self) -> Sequence[UnparsedColumn]:
-        if self.table.columns is None:
-            return []
-        else:
-            return self.table.columns
+        return [] if self.table.columns is None else self.table.columns
 
     def get_tests(self) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
         for test in self.tests:

@@ -1,0 +1,8 @@
+kind: Fixes
+body: Modifying the drop_test_schema to work better with Redshift issues around locked
+  tables and current transactions
+time: 2022-04-29T16:07:42.750046-05:00
+custom:
+  Author: Mcknight-42
+  Issue: "5200"
+  PR: "5198"

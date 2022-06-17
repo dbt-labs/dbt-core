@@ -1,0 +1,7 @@
+kind: Features
+body: Add selector method when reading selector definitions
+time: 2022-04-08T11:26:10.713088+10:00
+custom:
+  Author: danieldiamond
+  Issue: "4821"
+  PR: "4827"

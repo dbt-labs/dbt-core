@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: 'Fix: Call str and repr for UnsetProfileConfig without a RuntimeException'
+time: 2022-05-03T19:52:12.793729384+02:00
+custom:
+  Author: tomasfarias
+  Issue: "5081"
+  PR: "5209"

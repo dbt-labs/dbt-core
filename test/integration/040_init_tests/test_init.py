@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from test.integration.base import DBTIntegrationTest, use_profile
-
+from pytest import mark
 
 class TestInit(DBTIntegrationTest):
     def tearDown(self):
@@ -29,6 +29,10 @@ class TestInit(DBTIntegrationTest):
     def models(self):
         return 'models'
 
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -79,6 +83,10 @@ test:
   target: dev
 """
 
+  # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -133,6 +141,10 @@ test:
   target: dev
 """
 
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -205,7 +217,11 @@ test:
   host: localhost
   dbname: my_db
   schema: my_schema
+  target: my_target
 prompts:
+  target:
+    hint: 'The target name'
+    type: string
   port:
     hint: 'The port (for integer test purposes)'
     type: int
@@ -220,12 +236,14 @@ prompts:
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
         manager.prompt.side_effect = [
+            'my_target',
             5432,
             'test_username',
             'test_password'
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
+            call.prompt('target (The target name)', default=None, hide_input=False, type=click.STRING),
             call.prompt('port (The port (for integer test purposes))', default=5432, hide_input=False, type=click.INT),
             call.prompt('user (Your username)', default=None, hide_input=False, type=None),
             call.prompt('pass (Your password)', default=None, hide_input=True, type=None)
@@ -234,7 +252,7 @@ prompts:
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == """test:
   outputs:
-    dev:
+    my_target:
       dbname: my_db
       host: localhost
       pass: test_password
@@ -243,9 +261,12 @@ prompts:
       threads: 4
       type: postgres
       user: test_username
-  target: dev
+  target: my_target
 """
-
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -301,7 +322,10 @@ test:
       user: test_username
   target: dev
 """
-
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -416,7 +440,10 @@ models:
     example:
       +materialized: view
 """
-
+    # See CT-570 / GH 5180
+    @mark.skip(
+      reason="Broken because of https://github.com/dbt-labs/dbt-core/pull/5171"
+    )
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')

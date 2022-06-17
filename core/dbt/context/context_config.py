@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Iterator, Dict, Any, TypeVar, Generic
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
-from dbt.contracts.graph.model_config import BaseConfig, get_config_for
+from dbt.contracts.graph.model_config import BaseConfig, get_config_for, _listify
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
@@ -264,18 +264,49 @@ class ContextConfig:
 
     @classmethod
     def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
+        # config_call_dict is already encountered configs, opts is new
+        # This mirrors code in _merge_field_value in model_config.py which is similar but
+        # operates on config objects.
         for k, v in opts.items():
             # MergeBehavior for post-hook and pre-hook is to collect all
             # values, instead of overwriting
             if k in BaseConfig.mergebehavior["append"]:
                 if not isinstance(v, list):
                     v = [v]
-            if k in BaseConfig.mergebehavior["update"] and not isinstance(v, dict):
-                raise InternalException(f"expected dict, got {v}")
-            if k in config_call_dict and isinstance(config_call_dict[k], list):
-                config_call_dict[k].extend(v)
-            elif k in config_call_dict and isinstance(config_call_dict[k], dict):
-                config_call_dict[k].update(v)
+                if k in config_call_dict:  # should always be a list here
+                    config_call_dict[k].extend(v)
+                else:
+                    config_call_dict[k] = v
+
+            elif k in BaseConfig.mergebehavior["update"]:
+                if not isinstance(v, dict):
+                    raise InternalException(f"expected dict, got {v}")
+                if k in config_call_dict and isinstance(config_call_dict[k], dict):
+                    config_call_dict[k].update(v)
+                else:
+                    config_call_dict[k] = v
+            elif k in BaseConfig.mergebehavior["dict_key_append"]:
+                if not isinstance(v, dict):
+                    raise InternalException(f"expected dict, got {v}")
+                if k in config_call_dict:  # should always be a dict
+                    for key, value in v.items():
+                        extend = False
+                        # This might start with a +, to indicate we should extend the list
+                        # instead of just clobbering it
+                        if key.startswith("+"):
+                            extend = True
+                        if key in config_call_dict[k] and extend:
+                            # extend the list
+                            config_call_dict[k][key].extend(_listify(value))
+                        else:
+                            # clobber the list
+                            config_call_dict[k][key] = _listify(value)
+                else:
+                    # This is always a dictionary
+                    config_call_dict[k] = v
+                    # listify everything
+                    for key, value in config_call_dict[k].items():
+                        config_call_dict[k][key] = _listify(value)
             else:
                 config_call_dict[k] = v
 

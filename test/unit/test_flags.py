@@ -7,7 +7,7 @@ from dbt import flags
 from dbt.contracts.project import UserConfig
 from dbt.config.profile import DEFAULT_PROFILES_DIR
 
-from core.dbt.graph.selector_spec import IndirectSelection
+from dbt.graph.selector_spec import IndirectSelection
 
 class TestFlags(TestCase):
 

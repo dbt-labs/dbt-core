@@ -1,5 +1,0 @@
-version: 2
-
-models:
-    - name: model_one
-      description: "{{ doc('customer_table') }}"

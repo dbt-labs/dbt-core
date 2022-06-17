@@ -537,7 +537,7 @@ def _build_parse_subparser(subparsers, base_subparser):
         "parse",
         parents=[base_subparser],
         help="""
-        Parsed the project and provides information on performance
+        Parses the project and provides information on performance
         """,
     )
     sub.set_defaults(cls=parse_task.ParseTask, which="parse", rpc_method="parse")

@@ -18,28 +18,28 @@ COLOR_FG_YELLOW = COLORS["yellow"]
 COLOR_RESET_ALL = COLORS["reset_all"]
 
 
-def color(text: str, color_code: str):
+def color(text: str, color_code: str) -> str:
     if flags.USE_COLORS:
         return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text
 
 
-def printer_width():
+def printer_width() -> int:
     if flags.PRINTER_WIDTH:
         return flags.PRINTER_WIDTH
     return 80
 
 
-def green(text: str):
+def green(text: str) -> str:
     return color(text, COLOR_FG_GREEN)
 
 
-def yellow(text: str):
+def yellow(text: str) -> str:
     return color(text, COLOR_FG_YELLOW)
 
 
-def red(text: str):
+def red(text: str) -> str:
     return color(text, COLOR_FG_RED)
 
 

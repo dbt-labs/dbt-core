@@ -1,0 +1,7 @@
+kind: Features
+body: Move cross-db macros from dbt-utils into dbt-core global project
+time: 2022-05-18T11:46:04.557104+02:00
+custom:
+  Author: jtcohen6 dbeatty10
+  Issue: "4813"
+  PR: "5265"

@@ -9,8 +9,7 @@ endif
 .PHONY: dev
 dev: ## Installs dbt-* packages in develop mode along with development dependencies.
 	@\
-	pip install -r dev-requirements.txt -r editable-requirements.txt && \
-	pre-commit install
+	pip install -r dev-requirements.txt -r editable-requirements.txt
 
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
@@ -34,27 +33,27 @@ lint: .env ## Runs flake8 and mypy code checks against staged changes.
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: unit
-unit: .env ## Runs unit tests with py38.
+unit: .env ## Runs unit tests with py
 	@\
-	$(DOCKER_CMD) tox -e py38
+	$(DOCKER_CMD) tox -e py
 
 .PHONY: test
-test: .env ## Runs unit tests with py38 and code checks against staged changes.
+test: .env ## Runs unit tests with py and code checks against staged changes.
 	@\
-	$(DOCKER_CMD) tox -e py38; \
+	$(DOCKER_CMD) tox -e py; \
 	$(DOCKER_CMD) pre-commit run black-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run flake8-check --hook-stage manual | grep -v "INFO"; \
 	$(DOCKER_CMD) pre-commit run mypy-check --hook-stage manual | grep -v "INFO"
 
 .PHONY: integration
-integration: .env ## Runs postgres integration tests with py38.
+integration: .env ## Runs postgres integration tests with py-integration
 	@\
-	$(DOCKER_CMD) tox -e py38-integration -- -nauto
+	$(DOCKER_CMD) tox -e py-integration -- -nauto
 
 .PHONY: integration-fail-fast
-integration-fail-fast: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
+integration-fail-fast: .env ## Runs postgres integration tests with py-integration in "fail fast" mode.
 	@\
-	$(DOCKER_CMD) tox -e py38-integration -- -x -nauto
+	$(DOCKER_CMD) tox -e py-integration -- -x -nauto
 
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.

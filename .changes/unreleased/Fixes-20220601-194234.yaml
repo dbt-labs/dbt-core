@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fixing Windows color regression
+time: 2022-06-01T19:42:34.263009-04:00
+custom:
+  Author: leahwicz
+  Issue: "5191"
+  PR: "5327"

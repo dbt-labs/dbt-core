@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: removal of scaffold first attempt and create_adapter_plugin.py as they are deprecated new scaffold can be found https://github.com/dbt-labs/dbt-database-adapter-scaffold
+time: 2022-04-20T12:00:25.171923-05:00
+custom:
+  Author: McKnight-42
+  Issue: "4980"
+  PR: "5117"

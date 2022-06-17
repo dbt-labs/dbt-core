@@ -1,0 +1,7 @@
+kind: Features
+body: Adds file selectors and support for file selectors in the default method selector
+time: 2022-05-12T21:57:48.289674-07:00
+custom:
+  Author: jwills
+  Issue: "5240"
+  PR: "5241"

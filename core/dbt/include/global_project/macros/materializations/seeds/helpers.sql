@@ -44,6 +44,17 @@
 {% endmacro %}
 
 
+{% macro get_csv_sql(create_or_truncate_sql, insert_sql) %}
+    {{ adapter.dispatch('get_csv_sql', 'dbt')(create_or_truncate_sql, insert_sql) }}
+{% endmacro %}
+
+{% macro default__get_csv_sql(create_or_truncate_sql, insert_sql) %}
+    {{ create_or_truncate_sql }};
+    -- dbt seed --
+    {{ insert_sql }}
+{% endmacro %}
+
+
 {% macro get_binding_char() -%}
   {{ adapter.dispatch('get_binding_char', 'dbt')() }}
 {%- endmacro %}

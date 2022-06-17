@@ -317,7 +317,7 @@ class TestProfile(BaseConfigTest):
             'model-paths': ['models'],
             'source-paths': ['other-models'],
         })
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:            
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             project = project_from_config_norender(self.default_project_data)
 
         self.assertIn('source-paths and model-paths', str(exc.exception))
@@ -602,7 +602,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.seed_paths, ['seeds'])
         self.assertEqual(project.test_paths, ['tests'])
         self.assertEqual(project.analysis_paths, ['analyses'])
-        self.assertEqual(project.docs_paths, ['models', 'seeds', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(set(project.docs_paths), set(['models', 'seeds', 'snapshots', 'analyses', 'macros']))
         self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, 'target')
         self.assertEqual(project.clean_targets, ['target'])
@@ -635,7 +635,7 @@ class TestProject(BaseConfigTest):
             'target-path': 'other-target',
         })
         project = project_from_config_norender(self.default_project_data)
-        self.assertEqual(project.docs_paths, ['other-models', 'seeds', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(set(project.docs_paths), set(['other-models', 'seeds', 'snapshots', 'analyses', 'macros']))
         self.assertEqual(project.clean_targets, ['other-target'])
 
     def test_hashed_name(self):
@@ -1215,7 +1215,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.seed_paths, ['seeds'])
         self.assertEqual(config.test_paths, ['tests'])
         self.assertEqual(config.analysis_paths, ['analyses'])
-        self.assertEqual(config.docs_paths, ['models', 'seeds', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(set(config.docs_paths), set(['models', 'seeds', 'snapshots', 'analyses', 'macros']))
         self.assertEqual(config.asset_paths, [])
         self.assertEqual(config.target_path, 'target')
         self.assertEqual(config.clean_targets, ['target'])
@@ -1228,6 +1228,45 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.seeds, {})
         self.assertEqual(config.packages, PackageConfig(packages=[]))
         self.assertEqual(config.project_name, 'my_test_project')
+
+
+class TestUnsetProfileConfig(BaseConfigTest):
+    def setUp(self):
+        self.profiles_dir = '/invalid-profiles-path'
+        self.project_dir = '/invalid-root-path'
+        super().setUp()
+        self.default_project_data['project-root'] = self.project_dir
+
+    def get_project(self):
+        return project_from_config_norender(self.default_project_data, verify_version=self.args.version_check)
+
+    def get_profile(self):
+        renderer = empty_profile_renderer()
+        return dbt.config.Profile.from_raw_profiles(
+            self.default_profile_data, self.default_project_data['profile'], renderer
+        )
+
+    def test_str(self):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.UnsetProfileConfig.from_parts(project, profile, {})
+
+        str(config)
+
+    def test_repr(self):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.UnsetProfileConfig.from_parts(project, profile, {})
+
+        repr(config)
+
+    def test_to_project_config(self):
+        project = self.get_project()
+        profile = self.get_profile()
+        config = dbt.config.UnsetProfileConfig.from_parts(project, profile, {})
+        project_config = config.to_project_config()
+
+        self.assertEqual(project_config["profile"], "")
 
 
 class TestVariableRuntimeConfigFiles(BaseFileTest):

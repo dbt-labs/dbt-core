@@ -1501,10 +1501,11 @@ class HooksRunning(InfoLevel):
 class HookFinished(InfoLevel):
     stat_line: str
     execution: str
+    execution_time: float
     code: str = "E040"
 
     def message(self) -> str:
-        return f"Finished running {self.stat_line}{self.execution}."
+        return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
 
 
 @dataclass
@@ -2352,11 +2353,15 @@ class WritingInjectedSQLForNode(DebugLevel):
 
 
 @dataclass
-class DisableTracking(WarnLevel):
+class DisableTracking(DebugLevel):
     code: str = "Z039"
 
     def message(self) -> str:
-        return "Error sending message, disabling tracking"
+        return (
+            "Error sending anonymous usage statistics. Disabling tracking for this execution. "
+            "If you wish to permanently disable tracking, see: "
+            "https://docs.getdbt.com/reference/global-configs#send-anonymous-usage-stats."
+        )
 
 
 @dataclass
@@ -2417,9 +2422,7 @@ class GeneralWarningMsg(WarnLevel):
     code: str = "Z046"
 
     def message(self) -> str:
-        if self.log_fmt is not None:
-            return self.log_fmt.format(self.msg)
-        return self.msg
+        return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
 
 
 @dataclass
@@ -2429,9 +2432,7 @@ class GeneralWarningException(WarnLevel):
     code: str = "Z047"
 
     def message(self) -> str:
-        if self.log_fmt is not None:
-            return self.log_fmt.format(str(self.exc))
-        return str(self.exc)
+        return self.log_fmt.format(str(self.exc)) if self.log_fmt is not None else str(self.exc)
 
 
 @dataclass
@@ -2620,7 +2621,7 @@ if 1 == 0:
     DatabaseErrorRunning(hook_type="")
     EmptyLine()
     HooksRunning(num_hooks=0, hook_type="")
-    HookFinished(stat_line="", execution="")
+    HookFinished(stat_line="", execution="", execution_time=0)
     WriteCatalogFailure(num_exceptions=0)
     CatalogWritten(path="")
     CannotGenerateDocs()

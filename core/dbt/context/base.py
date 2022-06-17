@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, NoReturn, Optional, Mapping
+from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set
 
 from dbt import flags
 from dbt import tracking
@@ -8,8 +8,9 @@ from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import (
-    raise_compiler_error,
+    CompilationException,
     MacroReturn,
+    raise_compiler_error,
     raise_parsing_error,
     disallow_secret_env_var,
 )
@@ -23,39 +24,9 @@ from dbt.version import __version__ as dbt_version
 import pytz
 import datetime
 import re
+import itertools
 
-# Contexts in dbt Core
-# Contexts are used for Jinja rendering. They include context methods,
-# executable macros, and various settings that are available in Jinja.
-#
-# Different contexts are used in different places because we allow access
-# to different methods and data in different places. Executable SQL, for
-# example, includes the available macros and the model, while Jinja in
-# yaml files is more limited.
-#
-# The context that is passed to Jinja is always in a dictionary format,
-# not an actual class, so a 'to_dict()' is executed on a context class
-# before it is used for rendering.
-#
-# Each context has a generate_<name>_context function to create the context.
-# ProviderContext subclasses have different generate functions for
-# parsing and for execution.
-#
-# Context class hierarchy
-#
-#   BaseContext -- core/dbt/context/base.py
-#     SecretContext -- core/dbt/context/secret.py
-#     TargetContext -- core/dbt/context/target.py
-#       ConfiguredContext -- core/dbt/context/configured.py
-#         SchemaYamlContext -- core/dbt/context/configured.py
-#           DocsRuntimeContext -- core/dbt/context/configured.py
-#         MacroResolvingContext -- core/dbt/context/configured.py
-#         ManifestContext -- core/dbt/context/manifest.py
-#           QueryHeaderContext -- core/dbt/context/manifest.py
-#           ProviderContext -- core/dbt/context/provider.py
-#             MacroContext -- core/dbt/context/provider.py
-#             ModelContext -- core/dbt/context/provider.py
-#             TestContext -- core/dbt/context/provider.py
+# See the `contexts` module README for more information on how contexts work
 
 
 def get_pytz_module_context() -> Dict[str, Any]:
@@ -77,11 +48,35 @@ def get_re_module_context() -> Dict[str, Any]:
     return {name: getattr(re, name) for name in context_exports}
 
 
+def get_itertools_module_context() -> Dict[str, Any]:
+    # Excluded dropwhile, filterfalse, takewhile and groupby;
+    # first 3 illogical for Jinja and last redundant.
+    context_exports = [
+        "count",
+        "cycle",
+        "repeat",
+        "accumulate",
+        "chain",
+        "compress",
+        "islice",
+        "starmap",
+        "tee",
+        "zip_longest",
+        "product",
+        "permutations",
+        "combinations",
+        "combinations_with_replacement",
+    ]
+
+    return {name: getattr(itertools, name) for name in context_exports}
+
+
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
     return {
         "pytz": get_pytz_module_context(),
         "datetime": get_datetime_module_context(),
         "re": get_re_module_context(),
+        "itertools": get_itertools_module_context(),
     }
 
 
@@ -456,6 +451,94 @@ class BaseContext(metaclass=ContextMeta):
             return yaml.safe_dump(data=value, sort_keys=sort_keys)
         except (ValueError, yaml.YAMLError):
             return default
+
+    @contextmember("set")
+    @staticmethod
+    def _set(value: Iterable[Any], default: Any = None) -> Optional[Set[Any]]:
+        """The `set` context method can be used to convert any iterable
+        to a sequence of iterable elements that are unique (a set).
+
+        :param value: The iterable
+        :param default: A default value to return if the `value` argument
+            is not an iterable
+
+        Usage:
+            {% set my_list = [1, 2, 2, 3] %}
+            {% set my_set = set(my_list) %}
+            {% do log(my_set) %}  {# {1, 2, 3} #}
+        """
+        try:
+            return set(value)
+        except TypeError:
+            return default
+
+    @contextmember
+    @staticmethod
+    def try_set(value: Iterable[Any]) -> Set[Any]:
+        """The `try_set` context method can be used to convert any iterable
+        to a sequence of iterable elements that are unique (a set). The
+        difference to the `set` context method is that the `try_set` method
+        will raise an exception on a TypeError.
+
+        :param value: The iterable
+        :param default: A default value to return if the `value` argument
+            is not an iterable
+
+        Usage:
+            {% set my_list = [1, 2, 2, 3] %}
+            {% set my_set = try_set(my_list) %}
+            {% do log(my_set) %}  {# {1, 2, 3} #}
+        """
+        try:
+            return set(value)
+        except TypeError as e:
+            raise CompilationException(e)
+
+    @contextmember("zip")
+    @staticmethod
+    def _zip(*args: Iterable[Any], default: Any = None) -> Optional[Iterable[Any]]:
+        """The `try_zip` context method can be used to used to return
+        an iterator of tuples, where the i-th tuple contains the i-th
+        element from each of the argument iterables.
+
+        :param *args: Any number of iterables
+        :param default: A default value to return if `*args` is not
+            iterable
+
+        Usage:
+            {% set my_list_a = [1, 2] %}
+            {% set my_list_b = ['alice', 'bob'] %}
+            {% set my_zip = zip(my_list_a, my_list_b) | list %}
+            {% do log(my_set) %}  {# [(1, 'alice'), (2, 'bob')] #}
+        """
+        try:
+            return zip(*args)
+        except TypeError:
+            return default
+
+    @contextmember
+    @staticmethod
+    def try_zip(*args: Iterable[Any]) -> Iterable[Any]:
+        """The `try_zip` context method can be used to used to return
+        an iterator of tuples, where the i-th tuple contains the i-th
+        element from each of the argument iterables. The difference to the
+        `zip` context method is that the `try_zip` method will raise an
+        exception on a TypeError.
+
+        :param *args: Any number of iterables
+        :param default: A default value to return if `*args` is not
+            iterable
+
+        Usage:
+            {% set my_list_a = [1, 2] %}
+            {% set my_list_b = ['alice', 'bob'] %}
+            {% set my_zip = try_zip(my_list_a, my_list_b) | list %}
+            {% do log(my_set) %}  {# [(1, 'alice'), (2, 'bob')] #}
+        """
+        try:
+            return zip(*args)
+        except TypeError as e:
+            raise CompilationException(e)
 
     @contextmember
     @staticmethod
