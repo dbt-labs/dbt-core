@@ -1,0 +1,7 @@
+kind: Fixes
+body: fixes handling of RESET color code with USE_COLORS=False
+time: 2022-06-17T16:00:27.038058-04:00
+custom:
+  Author: darin-reify
+  Issue: "5288"
+  PR: "5394"
