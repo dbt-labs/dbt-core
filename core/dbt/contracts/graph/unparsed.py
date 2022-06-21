@@ -77,7 +77,6 @@ class UnparsedRunHook(UnparsedNode):
 @dataclass
 class Docs(dbtClassMixin, Replaceable):
     show: bool = True
-    node_color: Optional[str] = None
 
 
 @dataclass
