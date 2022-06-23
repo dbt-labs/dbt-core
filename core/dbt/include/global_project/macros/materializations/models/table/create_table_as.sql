@@ -8,8 +8,8 @@
 
 
 /* {# keep logic under old macro name for backwards compatibility #} */
-{% macro create_table_as(temporary, relation, sql) -%}
-  {{ adapter.dispatch('create_table_as', 'dbt')(temporary, relation, sql) }}
+{% macro create_table_as(temporary, relation, model_code, language='sql') -%}
+  {{ adapter.dispatch('create_table_as', 'dbt')(temporary, relation, model_code, language) }}
 {%- endmacro %}
 
 {% macro default__create_table_as(temporary, relation, sql) -%}
