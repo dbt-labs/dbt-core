@@ -169,6 +169,7 @@ def event_to_serializable_dict(
 def reset_color() -> str:
     return "" if not this.format_color else Style.RESET_ALL
 
+
 def create_info_text_log_line(e: T_Event) -> str:
     color_tag: str = reset_color()
     ts: str = get_ts().strftime("%H:%M:%S")
