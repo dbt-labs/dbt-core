@@ -1,0 +1,7 @@
+kind: Fixes
+body: Remove duplicate key checking introduced in 1.2.0a1
+time: 2022-06-23T08:24:31.900647+12:00
+custom:
+  Author: jeremyyeo
+  Issue: "5331"
+  PR: "5403"
