@@ -1108,6 +1108,13 @@ def _materialization_parameter_sets():
             expected=(project, 'foo'),
         ) for project in ['root', 'dep', 'dbt']
     )
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='foo'), MockMaterialization(project, adapter_type='bar')],
+            adapter_type='bar',
+            expected=(project, 'bar'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
 
     return sets
 

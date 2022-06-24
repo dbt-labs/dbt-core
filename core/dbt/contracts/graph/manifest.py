@@ -350,6 +350,10 @@ class MacroCandidate:
 
 @dataclass
 class MaterializationCandidate(MacroCandidate):
+    # specificity describes where in the inheritance chain this materialization candidate is
+    # a specificity of 0 means a materialization defined by the current adapter
+    # the highest the specificity describes a default materialization. the value itself depends on
+    # how many adapters there are in the inheritance chain
     specificity: int
 
     @classmethod
@@ -665,6 +669,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return disabled_by_file_id
 
     def _get_parent_adapter_types(self, adapter_type: str) -> List[str]:
+        # This is duplicated logic from core/dbt/context/providers.py
+        # Ideally this would instead be incorporating actual dispatch logic
         from dbt.adapters.factory import get_adapter_type_names
 
         # order matters for dispatch:
@@ -699,7 +705,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     project_name=project_name,
                     materialization_name=materialization_name,
                     adapter_type=atype,
-                    specificity=specificity,
+                    specificity=specificity,  # where in the inheritance chain this candidate is
                 )
                 for specificity, atype in enumerate(self._get_parent_adapter_types(adapter_type))
             )
