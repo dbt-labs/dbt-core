@@ -1,5 +1,5 @@
-{#-- 
-TODO:  Only certian adapters need to support python models so this should probably be 
+{#--
+TODO:  Only certian adapters need to support python models so this should probably be
 moved to an override I.E. `spark__statement`  but for some reason it wasn't picking up that change
 when implemented in dbt-spark/dbt/include/spark/macros/adapters.sql
 --#}
