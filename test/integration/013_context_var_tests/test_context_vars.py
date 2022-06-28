@@ -251,6 +251,29 @@ class TestCloneFailSecretScrubbed(DBTIntegrationTest):
         assert "abc123" not in str(exc.exception)
 
 
+class TestCloneFailSecretNotRendered(TestCloneFailSecretScrubbed):
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    "git": "https://fakeuser:{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') | join(' ') }}@github.com/dbt-labs/fake-repo.git"
+                },
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_fail_clone_with_scrubbing(self):
+        with self.assertRaises(dbt.exceptions.InternalException) as exc:
+            _, log_output = self.run_dbt_and_capture(["deps"])
+
+        # we should not see any manipulated form of the secret value (abc123) here
+        # we should see a manipulated form of the placeholder instead
+        assert "a b c 1 2 3" not in str(exc.exception)
+        assert "D B T _ E N V _ S E C R E T _ G I T _ T O K E N" in str(exc.exception)
+
+
 class TestEmitWarning(DBTIntegrationTest):
     @property
     def schema(self):
