@@ -1278,6 +1278,17 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def sql(self) -> Optional[str]:
+        # only doing this in sql model for backward compatible
+        if (
+            getattr(self.model, "extra_ctes_injected", None)
+            and self.model.config.language == "sql"  # type: ignore[union-attr]
+        ):
+            # TODO CT-211
+            return self.model.compiled_sql  # type: ignore[union-attr]
+        return None
+
+    @contextproperty
+    def compiled_code(self) -> Optional[str]:
         if getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
             return self.model.compiled_sql  # type: ignore[union-attr]
