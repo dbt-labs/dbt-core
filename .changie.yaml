@@ -14,6 +14,7 @@ kinds:
 - label: Docs
 - label: Under the Hood
 - label: Dependencies
+- label: Security
 custom:
 - key: Author
   label: GitHub Username(s) (separated by a single space if multiple)
