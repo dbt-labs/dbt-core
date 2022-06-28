@@ -54,7 +54,8 @@ class SqlMacroParser(MacroParser):
             path="from remote system",
             original_file_path="from remote system",
             package_name=self.project.project_name,
-            raw_sql=contents,
+            raw_code=contents,
+            language="sql",
             root_path=self.project.project_root,
             resource_type=NodeType.Macro,
         )

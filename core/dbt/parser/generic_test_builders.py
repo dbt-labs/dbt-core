@@ -456,9 +456,9 @@ class TestBuilder(Generic[Testable]):
         else:
             return ""
 
-    # this is the 'raw_sql' that's used in 'render_update' and execution
+    # this is the 'raw_code' that's used in 'render_update' and execution
     # of the test macro
-    def build_raw_sql(self) -> str:
+    def build_raw_code(self) -> str:
         return ("{{{{ {macro}(**{kwargs_name}) }}}}{config}").format(
             macro=self.macro_name(),
             config=self.construct_config(),

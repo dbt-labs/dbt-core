@@ -646,6 +646,7 @@ class ManifestLoader:
             try:
                 with open(path, "rb") as fp:
                     manifest_mp = fp.read()
+                breakpoint()
                 manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a

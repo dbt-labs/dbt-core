@@ -4,7 +4,6 @@ from dbt.logger import log_cache_events, log_manager
 import argparse
 import os.path
 import sys
-import traceback
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,7 +16,6 @@ from dbt.events.types import (
     MainReportVersion,
     MainReportArgs,
     MainTrackingUserState,
-    MainStackTrace,
 )
 import dbt.flags as flags
 import dbt.task.build as build_task
@@ -141,11 +139,10 @@ def main(args=None):
         except SystemExit as e:
             exit_code = e.code
 
-        except BaseException as e:
-            traceback.print_exc()
-            fire_event(MainEncounteredError(e=str(e)))
-            fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
-            exit_code = ExitCodes.UnhandledError.value
+        # except BaseException as e:
+        #     fire_event(MainEncounteredError(e=str(e)))
+        #     fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
+        #     exit_code = ExitCodes.UnhandledError.value
 
     sys.exit(exit_code)
 

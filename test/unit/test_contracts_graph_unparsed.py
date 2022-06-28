@@ -22,6 +22,7 @@ class TestUnparsedMacro(ContractTestCase):
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
@@ -30,7 +31,8 @@ class TestUnparsedMacro(ContractTestCase):
             path='/root/path.sql',
             original_file_path='/root/path.sql',
             package_name='test',
-            raw_sql='{% macro foo() %}select 1 as id{% endmacro %}',
+            language='sql',
+            raw_code='{% macro foo() %}select 1 as id{% endmacro %}',
             root_path='/root/',
             resource_type=NodeType.Macro,
         )
@@ -42,6 +44,7 @@ class TestUnparsedMacro(ContractTestCase):
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
             # 'package_name': 'test',
+            'language': 'sql',
             'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
@@ -53,6 +56,7 @@ class TestUnparsedMacro(ContractTestCase):
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'extra': 'extra',
@@ -72,6 +76,7 @@ class TestUnparsedNode(ContractTestCase):
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': 'select * from {{ ref("thing") }}',
         }
         node = self.ContractType(
@@ -79,7 +84,8 @@ class TestUnparsedNode(ContractTestCase):
             root_path='/root/',
             path='/root/x/path.sql',
             original_file_path='/root/path.sql',
-            raw_sql='select * from {{ ref("thing") }}',
+            language='sql',
+            raw_code='select * from {{ ref("thing") }}',
             name='foo',
             resource_type=NodeType.Model,
         )
@@ -98,6 +104,7 @@ class TestUnparsedNode(ContractTestCase):
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': '  \n',
         }
         node = UnparsedNode(
@@ -105,7 +112,8 @@ class TestUnparsedNode(ContractTestCase):
             root_path='/root/',
             path='/root/x/path.sql',
             original_file_path='/root/path.sql',
-            raw_sql='  \n',
+            language='sql',
+            raw_code='  \n',
             name='foo',
             resource_type=NodeType.Model,
         )
@@ -123,6 +131,7 @@ class TestUnparsedNode(ContractTestCase):
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': 'select * from {{ ref("thing") }}',
         }
         self.assert_fails_validation(node_dict)
@@ -139,6 +148,7 @@ class TestUnparsedRunHook(ContractTestCase):
             'path': '/root/dbt_project.yml',
             'original_file_path': '/root/dbt_project.yml',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': 'GRANT select on dbt_postgres',
             'index': 4
         }
@@ -147,7 +157,8 @@ class TestUnparsedRunHook(ContractTestCase):
             root_path='test/dbt_project.yml',
             path='/root/dbt_project.yml',
             original_file_path='/root/dbt_project.yml',
-            raw_sql='GRANT select on dbt_postgres',
+            language='sql',
+            raw_code='GRANT select on dbt_postgres',
             name='foo',
             resource_type=NodeType.Operation,
             index=4,
@@ -164,6 +175,7 @@ class TestUnparsedRunHook(ContractTestCase):
             'path': '/root/dbt_project.yml',
             'original_file_path': '/root/dbt_project.yml',
             'package_name': 'test',
+            'language': 'sql',
             'raw_sql': 'GRANT select on dbt_postgres',
             'index': 4
         }

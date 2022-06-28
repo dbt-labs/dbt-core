@@ -573,10 +573,10 @@ class TestSchemaTestContext:
         # dispatch_model_c_
         assert results[1].status == TestStatus.Fail
         # my_datediff
-        assert re.search(r"1000", results[2].node.compiled_sql)
+        assert re.search(r"1000", results[2].node.compiled_code)
         # type_one_model_a_
         assert results[3].status == TestStatus.Fail
-        assert re.search(r"union all", results[3].node.compiled_sql)
+        assert re.search(r"union all", results[3].node.compiled_code)
         # type_two_model_a_
         assert results[4].status == TestStatus.Warn
         assert results[4].node.config.severity == "WARN"
@@ -629,7 +629,7 @@ class TestSchemaTestContextWithMacroNamespace:
         assert results[1].status == TestStatus.Fail
         # type_one_model_a_
         assert results[2].status == TestStatus.Fail
-        assert re.search(r"union all", results[2].node.compiled_sql)
+        assert re.search(r"union all", results[2].node.compiled_code)
         # type_two_model_a_
         assert results[3].status == TestStatus.Warn
         assert results[3].node.config.severity == "WARN"

@@ -4,6 +4,7 @@ from dbt.contracts.util import AdditionalPropertiesMixin, Mergeable, Replaceable
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException, ParsingException
+from dbt.node_types import ModelLanguage
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -26,26 +27,42 @@ class UnparsedBaseNode(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class HasSQL:
-    raw_sql: str
+class HasCode(dbtClassMixin):
+    raw_code: str
+    language: str
 
     @property
     def empty(self):
-        return not self.raw_sql.strip()
+        return not self.raw_code.strip()
+
+    @classmethod
+    def __pre_deserialize__(cls, data):
+        if "raw_sql" in data:
+            data["raw_code"] = data.pop("raw_sql")
+        if "language" not in data:
+            data.language = "sql"
+        return data
+
+    def __post_serialize__(self, dct):
+        # breakpoint()
+        if self.language == ModelLanguage.sql:
+            dct["raw_sql"] = dct.pop("raw_code")
+
+        return dct
 
 
 @dataclass
-class UnparsedMacro(UnparsedBaseNode, HasSQL):
+class UnparsedMacro(UnparsedBaseNode, HasCode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
-class UnparsedGenericTest(UnparsedBaseNode, HasSQL):
+class UnparsedGenericTest(UnparsedBaseNode, HasCode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
-class UnparsedNode(UnparsedBaseNode, HasSQL):
+class UnparsedNode(UnparsedBaseNode, HasCode):
     name: str
     resource_type: NodeType = field(
         metadata={

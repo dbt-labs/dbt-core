@@ -18,7 +18,7 @@ from dbt.contracts.graph.parsed import (
     TestConfig,
     same_seeds,
 )
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.contracts.util import Replaceable
 
 from dbt.dataclass_schema import dbtClassMixin
@@ -41,7 +41,7 @@ class CompiledNodeMixin(dbtClassMixin):
 
 @dataclass
 class CompiledNode(ParsedNode, CompiledNodeMixin):
-    compiled_sql: Optional[str] = None
+    compiled_code: Optional[str] = None
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     relation_name: Optional[str] = None
@@ -59,10 +59,20 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
     def __post_serialize__(self, dct):
+        if self.language == ModelLanguage.sql and "compiled_code" in dct:
+            dct["compiled_sql"] = dct.pop("compiled_code")
         dct = super().__post_serialize__(dct)
         if "_pre_injected_sql" in dct:
             del dct["_pre_injected_sql"]
         return dct
+
+    @classmethod
+    def __pre_deserialize__(cls, data):
+
+        if "compiled_sql" in data:
+            data["compiled_code"] = data.pop("compiled_sql")
+        data = super().__pre_deserialize__(data)
+        return data
 
 
 @dataclass

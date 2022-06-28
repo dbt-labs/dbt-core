@@ -1291,7 +1291,7 @@ class ModelContext(ProviderContext):
     def compiled_code(self) -> Optional[str]:
         if getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
-            return self.model.compiled_sql  # type: ignore[union-attr]
+            return self.model.compiled_code  # type: ignore[union-attr]
         return None
 
     @contextproperty
