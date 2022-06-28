@@ -12,13 +12,14 @@ when implemented in dbt-spark/dbt/include/spark/macros/adapters.sql
       {{ log('Writing runtime {} for node "{}"'.format(language, model['unique_id'])) }}
       {{ write(model_code) }}
     {%- endif -%}
-
     {%- if language == 'sql'-%}
       {%- set res, table = adapter.execute(model_code, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- elif language == 'python' -%}
       {%- set res = adapter.submit_python_job(schema, model['alias'], model_code) -%}
       {#-- TODO: What should table be for python models? --#}
       {%- set table = None -%}
+    {%- else -%}
+      {% do exceptions.raise_compiler_error("statement macro didn't get supported language") %}
     {%- endif -%}
 
     {%- if name is not none -%}
