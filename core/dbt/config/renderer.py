@@ -189,9 +189,11 @@ class SecretRenderer(BaseRenderer):
         return 'Secret'
 
     def render_value(self, value: Any, keypath: Optional[Keypath] = None) -> Any:
-        # First, standard Jinja rendering, with special handling for 'secret' environment variables
-        # "{{ env_var('DBT_SECRET_ENV_VAR') }}" -> "$$$DBT_SECRET_START$$$DBT_SECRET_ENV_{VARIABLE_NAME}$$$DBT_SECRET_END$$$"
-        # This prevents Jinja manipulation of secrets via macros/filters that might leak partial/modified values in logs
+        # First standard Jinja rendering with special handling for 'secret' environment variables
+        # "{{ env_var('DBT_SECRET_ENV_VAR') }}" ->
+        # "$$$DBT_SECRET_START$$$DBT_SECRET_ENV_{VARIABLE_NAME}$$$DBT_SECRET_END$$$"
+        # This prevents Jinja manipulation of secrets via macros/filters
+        # that might leak partial/modified values in logs
         rendered = super().render_value(value, keypath)
         # Now, detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
         # and replace them with the actual secret value
