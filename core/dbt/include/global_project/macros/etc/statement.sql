@@ -15,7 +15,7 @@ when implemented in dbt-spark/dbt/include/spark/macros/adapters.sql
     {%- if language == 'sql'-%}
       {%- set res, table = adapter.execute(model_code, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- elif language == 'python' -%}
-      {%- set res = adapter.submit_python_job(schema, model['alias'], model_code) -%}
+      {%- set res = adapter.submit_python_job(model, model_code) -%}
       {#-- TODO: What should table be for python models? --#}
       {%- set table = None -%}
     {%- else -%}

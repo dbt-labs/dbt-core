@@ -386,7 +386,6 @@ class Compiler:
             )
             # we should NOT jinja render the python model's 'raw code'
             compiled_node.compiled_sql = f"{node.raw_sql}\n\n{postfix}"
-
             # restore quoting settings in the end since context is lazy evaluated
             self.config.quoting = original_quoting
 
