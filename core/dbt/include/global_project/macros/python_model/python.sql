@@ -1,7 +1,6 @@
 {% macro build_ref_function(model) %}
 
     {%- set ref_dict = {} -%}
-    {#-- i mean obviously don't do this... --#}
     {%- for _ref in model.refs -%}
         {%- set resolved = ref(*_ref) -%}
         {%- do ref_dict.update({_ref | join("."): resolved | string}) -%}
@@ -17,7 +16,6 @@ def ref(*args,dbt_load_df_function):
 {% macro build_source_function(model) %}
 
     {%- set source_dict = {} -%}
-    {#-- i mean obviously don't do this... --#}
     {%- for _source in model.sources -%}
         {%- set resolved = source(*_source) -%}
         {%- do source_dict.update({_source | join("."): resolved | string}) -%}
