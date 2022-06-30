@@ -1,6 +1,5 @@
-import os
-import pytest
 from dbt.tests.util import run_dbt, check_relations_equal, get_relation_columns
+
 
 class BaseDataTypeMacro:
     # make it possible to dynamically update the macro call with a namespace
@@ -17,14 +16,16 @@ class BaseDataTypeMacro:
         )
 
     def assert_columns_equal(self, project, expected_cols, actual_cols):
-        assert expected_cols == actual_cols, f"Type difference detected: {expected_cols} vs. {actual_cols}"
+        assert (
+            expected_cols == actual_cols
+        ), f"Type difference detected: {expected_cols} vs. {actual_cols}"
 
     def test_check_types_assert_match(self, project):
-        run_dbt(['build'])
-        
+        run_dbt(["build"])
+
         # check contents equal
         check_relations_equal(project.adapter, ["expected", "actual"])
-        
+
         # check types equal
         expected_cols = get_relation_columns(project.adapter, "expected")
         actual_cols = get_relation_columns(project.adapter, "actual")

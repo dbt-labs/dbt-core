@@ -1,4 +1,3 @@
-import os
 import pytest
 from dbt.tests.adapter.utils.data_types.base_data_type_macro import BaseDataTypeMacro
 
@@ -29,7 +28,7 @@ class BaseTypeTimestamp(BaseDataTypeMacro):
             "expected.csv": seeds__expected_csv,
             "expected.yml": seeds__expected_yml,
         }
-    
+
     @pytest.fixture(scope="class")
     def models(self):
         return {

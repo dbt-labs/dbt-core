@@ -1,4 +1,3 @@
-import os
 import pytest
 from dbt.tests.adapter.utils.data_types.base_data_type_macro import BaseDataTypeMacro
 
@@ -15,15 +14,11 @@ as {{ type_string() }}) as string_col
 class BaseTypeString(BaseDataTypeMacro):
     @pytest.fixture(scope="class")
     def seeds(self):
-        return {
-            "expected.csv": seeds__expected_csv
-        }
-    
+        return {"expected.csv": seeds__expected_csv}
+
     @pytest.fixture(scope="class")
     def models(self):
-        return {
-            "actual.sql": self.interpolate_macro_namespace(models__actual_sql, "type_string")
-        }
+        return {"actual.sql": self.interpolate_macro_namespace(models__actual_sql, "type_string")}
 
 
 class TestTypeString(BaseTypeString):

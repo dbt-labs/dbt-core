@@ -26,15 +26,15 @@
 /*
 POSTGRES
 https://www.postgresql.org/docs/current/datatype-datetime.html:
-The SQL standard requires that writing just `timestamp` 
-be equivalent to `timestamp without time zone`, and 
-PostgreSQL honors that behavior. 
+The SQL standard requires that writing just `timestamp`
+be equivalent to `timestamp without time zone`, and
+PostgreSQL honors that behavior.
 `timestamptz` is accepted as an abbreviation for `timestamp with time zone`;
 this is a PostgreSQL extension.
 
 SNOWFLAKE
 https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#timestamp
-The TIMESTAMP_* variation associated with TIMESTAMP is specified by the 
+The TIMESTAMP_* variation associated with TIMESTAMP is specified by the
 TIMESTAMP_TYPE_MAPPING session parameter. The default is TIMESTAMP_NTZ.
 
 BIGQUERY
@@ -72,7 +72,7 @@ On most databases, the default (precision, scale) is something like:
   Redshift: (18, 0)
   Snowflake: (38, 0)
   Postgres: (<=131072, 0)
-  
+
 https://www.postgresql.org/docs/current/datatype-numeric.html:
 Specifying NUMERIC without any precision or scale creates an “unconstrained numeric”
 column in which numeric values of any length can be stored, up to the implementation limits.
