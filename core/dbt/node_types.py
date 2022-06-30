@@ -12,8 +12,8 @@ class NodeType(StrEnum):
     Seed = "seed"
     # TODO: rm?
     RPCCall = "rpc"
-    SqlOperation = "sql"
-    Documentation = "docs"
+    SqlOperation = "sql operation"
+    Documentation = "docs block"
     Source = "source"
     Macro = "macro"
     Exposure = "exposure"
@@ -57,10 +57,6 @@ class NodeType(StrEnum):
     def pluralize(self) -> str:
         if self is self.Analysis:
             return "analyses"
-        if self is self.Documentation:
-            return "docs blocks"
-        if self is self.SqlOperation:
-            return "sql operations"
         return f"{self}s"
 
 
