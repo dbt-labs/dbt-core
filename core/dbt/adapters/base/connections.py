@@ -1,16 +1,18 @@
 import abc
 import os
+from time import sleep
 
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
 from threading import get_ident
-from typing import Dict, Tuple, Hashable, Optional, ContextManager, List
+from typing import Dict, Tuple, Hashable, Optional, ContextManager, List, Callable, Type
 
 import agate
 
 import dbt.exceptions
 from dbt.contracts.connection import (
     Connection,
+    Credentials,
     Identifier,
     ConnectionState,
     AdapterRequiredConfig,
@@ -21,6 +23,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
+from dbt.events import AdapterLogger
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     NewConnection,
@@ -158,6 +161,131 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
         conn.name = conn_name
         return conn
+
+    @classmethod
+    def set_connection_handle(
+        cls,
+        connection: Connection,
+        logger: AdapterLogger,
+        retry_limit: int = 1,
+        retry_all: bool = False,
+        timeout: int = 5,
+        exception_handlers: Optional[
+            Dict[Type[Exception], Optional[Callable[[Exception], None]]]
+        ] = None,
+        credentials: Optional[Credentials] = None,
+        **kwargs,
+    ) -> Connection:
+        """Given a Connection, set its handle by calling Connection.credentials.acquire_handle.
+
+        :param Connection connection: An instance of a Connection that
+            needs a handle to be set, usually when attempting to open it.
+        :param AdapterLogger logger: A logger to emit messages on retry
+            attempts or errors. When handling expected errors, we call
+            debug, and call warning on unexpected errors or when all
+            retry attempts have been exhausted.
+        :param int retry_limit: How many times to retry the call to
+            acquire_handle. If this limit is exceeded before a successful
+            call, a FailedToConnectException will be raised.
+        :param bool retry_all: Retry on all errors, regardless if they have
+            handlers defined in exception_handlers or not.
+        :param int timeout: How many seconds to wait between attempts to
+            acquire_handle.
+        :param dict exception_handlers: A mapping of exception classes
+            that should be retried to functions to run upon catching them.
+            The values may be set to None if no handling is required before
+            retrying.
+        :param Credentials credentials: A subclass of Credentials that implements
+            acquire_handle to override credentials in connection.
+        :param kwargs: Optional additional keyword arguments to be passed to
+            Connection.credentials.acquire_handle.
+        :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry
+            attempts without successfully acquiring a handle, or upon the first
+            non-expected Exception if retry_all is set to False.
+        :return: The given connection with its appropriate state and handle attributes
+            set depending on whether we successfully acquired a handle or not.
+        """
+        attempt = 1
+        latest_exc = None
+        expected_exceptions = exception_handlers.keys() if exception_handlers else ()
+        exception_handlers = exception_handlers if exception_handlers else {}
+        max_attempts = 1 + retry_limit
+        acquire_handle = (
+            credentials.acquire_handle
+            if credentials is not None
+            else connection.credentials.acquire_handle
+        )
+
+        while attempt <= max_attempts:
+            try:
+                handle = acquire_handle(**kwargs)
+
+            except Exception as e:
+                latest_exc = e
+
+                is_expected = any(issubclass(type(e), exc) for exc in expected_exceptions)
+                if is_expected:
+                    logger.debug(
+                        "Got an error when attempting to open a "
+                        "{conn_type} connection. Retrying due to "
+                        "either retry configuration set to true."
+                        "This was attempt number: {attempt} of "
+                        "{max_attempts}. "
+                        "Retrying in {timeout} "
+                        "seconds. Error: '{error}'".format(
+                            conn_type=cls.TYPE,
+                            attempt=attempt,
+                            max_attempts=max_attempts,
+                            timeout=timeout,
+                            error=e,
+                        )
+                    )
+
+                    exc_handler = exception_handlers.get(type(e), None)
+                    if exc_handler is not None:
+                        exc_handler(e)
+
+                    sleep(timeout)
+                    continue
+
+                if retry_all is True:
+                    logger.warning(
+                        "Got unexpected an error when attempting to open a "
+                        "{conn_type} connection. Retrying due to "
+                        "'retry_all' configuration set to true."
+                        "This was attempt number: {attempt} of "
+                        "{max_attempts}. "
+                        "Retrying in {timeout} "
+                        "seconds. Error: '{error}'".format(
+                            conn_type=cls.TYPE,
+                            attempt=attempt,
+                            max_attempts=max_attempts,
+                            timeout=timeout,
+                            error=e,
+                        )
+                    )
+                    sleep(timeout)
+                    continue
+
+                logger.warning(
+                    "Got unexpected an error when attempting to open a "
+                    "{conn_type} connection. This was attempt number: "
+                    "{attempt} of {max_attempts}. Error: '{error}'".format(
+                        conn_type=cls.TYPE, attempt=attempt, max_attempts=max_attempts, error=e
+                    )
+                )
+                break
+
+            finally:
+                attempt += 1
+
+            connection.handle = handle
+            connection.state = ConnectionState.OPEN
+            return connection
+
+        connection.handle = None
+        connection.state = ConnectionState.FAIL
+        raise dbt.exceptions.FailedToConnectException(str(latest_exc))
 
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:

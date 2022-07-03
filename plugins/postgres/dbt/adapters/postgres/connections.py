@@ -9,8 +9,8 @@ from dbt.contracts.connection import AdapterResponse
 from dbt.events import AdapterLogger
 
 from dbt.helper_types import Port
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
 
 
 logger = AdapterLogger("Postgres")
@@ -22,6 +22,7 @@ class PostgresCredentials(Credentials):
     user: str
     port: Port
     password: str  # on postgres the password is mandatory
+    connect_retries: int = 3
     connect_timeout: int = 10
     role: Optional[str] = None
     search_path: Optional[str] = None
@@ -31,6 +32,13 @@ class PostgresCredentials(Credentials):
     sslkey: Optional[str] = None
     sslrootcert: Optional[str] = None
     application_name: Optional[str] = "dbt"
+    retry_all: bool = False
+    retry_timeout: int = 5
+    retry_on_errors: List[str] = field(
+        default_factory=lambda: [
+            "OperationalError"  # Covers all common connection errors, like timeouts.
+        ]
+    )
 
     _ALIASES = {"dbname": "database", "pass": "password"}
 
@@ -53,6 +61,22 @@ class PostgresCredentials(Credentials):
             "keepalives_idle",
             "sslmode",
         )
+
+    def acquire_handle(self, **kwargs):
+        """Acquire a handle for a Postgres connection with the given credentials."""
+        handle = psycopg2.connect(
+            dbname=self.database,
+            user=self.user,
+            host=self.host,
+            password=self.password,
+            port=self.port,
+            connect_timeout=self.connect_timeout,
+            **kwargs,
+        )
+
+        if self.role:
+            handle.cursor().execute("set role {}".format(self.role))
+        return handle
 
 
 class PostgresConnectionManager(SQLConnectionManager):
@@ -121,31 +145,26 @@ class PostgresConnectionManager(SQLConnectionManager):
         if credentials.application_name:
             kwargs["application_name"] = credentials.application_name
 
-        try:
-            handle = psycopg2.connect(
-                dbname=credentials.database,
-                user=credentials.user,
-                host=credentials.host,
-                password=credentials.password,
-                port=credentials.port,
-                connect_timeout=credentials.connect_timeout,
-                **kwargs,
-            )
+        exception_handlers = {}
+        for error in credentials.retry_on_errors:
+            try:
+                exc = psycopg2.errors.lookup(error)
+            except KeyError:
+                # Some errors don't have codes, so we also work
+                # with Exception class names.
+                exc = getattr(psycopg2.errors, error)
 
-            if credentials.role:
-                handle.cursor().execute("set role {}".format(credentials.role))
+            exception_handlers[exc] = None
 
-            connection.handle = handle
-            connection.state = "open"
-        except psycopg2.Error as e:
-            logger.debug(
-                "Got an error when attempting to open a postgres " "connection: '{}'".format(e)
-            )
-
-            connection.handle = None
-            connection.state = "fail"
-
-            raise dbt.exceptions.FailedToConnectException(str(e))
+        connection = cls.set_connection_handle(
+            connection,
+            logger=logger,
+            retry_limit=credentials.connect_retries,
+            retry_all=credentials.retry_all,
+            timeout=credentials.retry_timeout,
+            exception_handlers=exception_handlers,
+            **kwargs,
+        )
 
         return connection
 
