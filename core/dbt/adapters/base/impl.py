@@ -434,7 +434,8 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Abstract methods for database-specific values, attributes, and types
     ###
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
         raise NotImplementedException("`date_function` is not implemented for this adapter!")

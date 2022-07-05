@@ -166,7 +166,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             "`cancel_open` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def open(cls, connection: Connection) -> Connection:
         """Open the given connection on the adapter and return it.
 
