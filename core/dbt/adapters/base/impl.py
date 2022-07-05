@@ -439,7 +439,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Get the date function used by this adapter's database."""
         raise NotImplementedException("`date_function` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def is_cancelable(cls) -> bool:
         raise NotImplementedException("`is_cancelable` is not implemented for this adapter!")
 
@@ -734,7 +735,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
 
     @available
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
         raise NotImplementedException("`quote` is not implemented for this adapter!")
@@ -780,7 +782,8 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Conversions: These must be implemented by concrete implementations, for
     # converting agate types into their sql equivalents.
     ###
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Text
         type for the given agate table and column index.
@@ -791,7 +794,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_text_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Number
         type for the given agate table and column index.
@@ -802,7 +806,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_number_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
         type for the given agate table and column index.
@@ -815,7 +820,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             "`convert_boolean_type` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.DateTime
         type for the given agate table and column index.
@@ -828,7 +834,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             "`convert_datetime_type` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Date
         type for the given agate table and column index.
@@ -839,7 +846,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_date_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the
         agate.TimeDelta type for the given agate table and column index.
