@@ -1,0 +1,7 @@
+kind: Dependencies
+body: "Update colorama requirement from <0.4.5,>=0.3.9 to >=0.3.9,<0.4.6 in /core"
+time: 2022-06-17T00:18:49.000000-05:00
+custom:
+  Author: dependabot[bot]
+  Issue: "4904"
+  PR: "5388"
