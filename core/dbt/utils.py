@@ -317,6 +317,13 @@ def timestring() -> str:
     return datetime.datetime.utcnow().isoformat() + "Z"
 
 
+def humanize_execution_time(execution_time: int) -> str:
+    minutes, seconds = divmod(execution_time, 60)
+    hours, minutes = divmod(minutes, 60)
+
+    return f" in {int(hours)} hours {int(minutes)} minutes and {seconds:0.2f} seconds"
+
+
 class JSONEncoder(json.JSONEncoder):
     """A 'custom' json encoder that does normal json encoder things, but also
     handles `Decimal`s and `Undefined`s. Decimals can lose precision because

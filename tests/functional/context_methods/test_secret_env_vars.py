@@ -134,3 +134,25 @@ class TestCloneFailSecretScrubbed:
             _, log_output = run_dbt_and_capture(["deps"])
 
         assert "abc123" not in str(excinfo.value)
+
+
+class TestCloneFailSecretNotRendered(TestCloneFailSecretScrubbed):
+    # as above, with some Jinja manipulation
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {
+                    "git": "https://fakeuser:{{ env_var('DBT_ENV_SECRET_GIT_TOKEN') | join(' ') }}@github.com/dbt-labs/fake-repo.git"
+                },
+            ]
+        }
+
+    def test_fail_clone_with_scrubbing(self, project):
+        with pytest.raises(InternalException) as excinfo:
+            _, log_output = run_dbt_and_capture(["deps"])
+
+        # we should not see any manipulated form of the secret value (abc123) here
+        # we should see a manipulated form of the placeholder instead
+        assert "a b c 1 2 3" not in str(excinfo.value)
+        assert "D B T _ E N V _ S E C R E T _ G I T _ T O K E N" in str(excinfo.value)

@@ -1,12 +1,15 @@
 from typing import Dict, Any, Tuple, Optional, Union, Callable
+import re
+import os
 
 from dbt.clients.jinja import get_rendered, catch_jinja
 from dbt.context.target import TargetContext
-from dbt.context.secret import SecretContext
+from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.contracts.connection import HasCredentials
 from dbt.exceptions import DbtProjectError, CompilationException, RecursionException
 from dbt.utils import deep_map_render
+from dbt.logger import SECRET_ENV_PREFIX
 
 
 Keypath = Tuple[Union[str, int], ...]
@@ -173,6 +176,28 @@ class SecretRenderer(BaseRenderer):
     @property
     def name(self):
         return "Secret"
+
+    def render_value(self, value: Any, keypath: Optional[Keypath] = None) -> Any:
+        # First, standard Jinja rendering, with special handling for 'secret' environment variables
+        # "{{ env_var('DBT_SECRET_ENV_VAR') }}" -> "$$$DBT_SECRET_START$$$DBT_SECRET_ENV_{VARIABLE_NAME}$$$DBT_SECRET_END$$$"
+        # This prevents Jinja manipulation of secrets via macros/filters that might leak partial/modified values in logs
+        rendered = super().render_value(value, keypath)
+        # Now, detect instances of the placeholder value ($$$DBT_SECRET_START...DBT_SECRET_END$$$)
+        # and replace them with the actual secret value
+        if SECRET_ENV_PREFIX in str(rendered):
+            search_group = f"({SECRET_ENV_PREFIX}(.*))"
+            pattern = SECRET_PLACEHOLDER.format(search_group).replace("$", r"\$")
+            m = re.search(
+                pattern,
+                rendered,
+            )
+            if m:
+                found = m.group(1)
+                value = os.environ[found]
+                replace_this = SECRET_PLACEHOLDER.format(found)
+                return rendered.replace(replace_this, value)
+        else:
+            return rendered
 
 
 class ProfileRenderer(SecretRenderer):

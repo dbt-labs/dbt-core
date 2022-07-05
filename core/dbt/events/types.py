@@ -1501,10 +1501,11 @@ class HooksRunning(InfoLevel):
 class HookFinished(InfoLevel):
     stat_line: str
     execution: str
+    execution_time: float
     code: str = "E040"
 
     def message(self) -> str:
-        return f"Finished running {self.stat_line}{self.execution}."
+        return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
 
 
 @dataclass
@@ -2620,7 +2621,7 @@ if 1 == 0:
     DatabaseErrorRunning(hook_type="")
     EmptyLine()
     HooksRunning(num_hooks=0, hook_type="")
-    HookFinished(stat_line="", execution="")
+    HookFinished(stat_line="", execution="", execution_time=0)
     WriteCatalogFailure(num_exceptions=0)
     CatalogWritten(path="")
     CannotGenerateDocs()
