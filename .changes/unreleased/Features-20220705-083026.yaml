@@ -1,0 +1,7 @@
+kind: Features
+body: Add support for ratio metrics
+time: 2022-07-05T08:30:26.494837-05:00
+custom:
+  Author: drewbanin callum-mcdata
+  Issue: "4884"
+  PR: "5027"
