@@ -235,7 +235,7 @@
       "properties": {
         "dbt_schema_version": {
           "type": "string",
-          "default": "https://schemas.getdbt.com/dbt/manifest/v6.json"
+          "default": "https://schemas.getdbt.com/dbt/manifest/v5.json"
         },
         "dbt_version": {
           "type": "string",
@@ -5980,5 +5980,5 @@
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://schemas.getdbt.com/dbt/manifest/v6.json"
+  "$id": "https://schemas.getdbt.com/dbt/manifest/v5.json"
 }
