@@ -13,8 +13,8 @@ select 1 as id
 # SETUP: Using this project, we have run past minor versions of dbt
 # to generate each contracted version of `manifest.json`.
 
-# Whenever we bump the manifest version, we should add a new entry for that version,
-# generated from this same project, and add a new comparison test below.
+# Whenever we bump the manifest version, we should add a new entry for that version
+# into `data`, generated from this same project, and update the CURRENT_EXPECTED_MANIFEST_VERSION.
 # You can generate the manifest using the generate_latest_manifest() method below.
 
 # TEST: Then, using the *current* version of dbt (this branch),
@@ -28,6 +28,8 @@ select 1 as id
 
 
 class TestPreviousVersionState:
+    CURRENT_EXPECTED_MANIFEST_VERSION = 6
+
     @pytest.fixture(scope="class")
     def models(self):
         return {"my_model.sql": models__my_model_sql}
@@ -74,26 +76,17 @@ class TestPreviousVersionState:
     def test_compare_state_current(self, project):
         current_schema_version = WritableManifest.dbt_schema_version.version
         assert (
-            current_schema_version == 6
+            current_schema_version == self.CURRENT_EXPECTED_MANIFEST_VERSION
         ), "Sounds like you've bumped the manifest version and need to update this test!"
         self.generate_latest_manifest(project, current_schema_version)
         self.compare_previous_state(project, current_schema_version, True)
 
-    # uncomment this test when we bump the manifest schema!
-    # def test_compare_state_v6(self, project):
-    #     self.compare_previous_state(project, 6, True)
+    def test_backwards_compatible_versions(self, project):
+        # manifest schema version 4 and greater should always be forward compatible
+        for schema_version in range(4, self.CURRENT_EXPECTED_MANIFEST_VERSION):
+            self.compare_previous_state(project, schema_version, True)
 
-    def test_compare_state_v5(self, project):
-        self.compare_previous_state(project, 5, True)
-
-    def test_compare_state_v4(self, project):
-        self.compare_previous_state(project, 4, True)
-
-    def test_compare_state_v3(self, project):
-        self.compare_previous_state(project, 3, False)
-
-    def test_compare_state_v2(self, project):
-        self.compare_previous_state(project, 2, False)
-
-    def test_compare_state_v1(self, project):
-        self.compare_previous_state(project, 1, False)
+    def test_nonbackwards_compatible_versions(self, project):
+        # schema versions 1, 2, 3 are all not forward compatible
+        for schema_version in range(1, 4):
+            self.compare_previous_state(project, schema_version, False)
