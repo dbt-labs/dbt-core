@@ -1,0 +1,8 @@
+kind: Under the Hood
+body: Added the suggested RegEx to check the SemVer string within a package dependency
+  and improved invalid version error handling.
+time: 2022-06-13T17:07:03.773668-05:00
+custom:
+  Author: fivetran-joemarkiewicz
+  Issue: "5201"
+  PR: "5370"
