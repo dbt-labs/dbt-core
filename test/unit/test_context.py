@@ -218,6 +218,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "load_agate_table",
     "ref",
     "source",
+    "metric",
     "config",
     "execute",
     "exceptions",

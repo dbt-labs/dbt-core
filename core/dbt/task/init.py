@@ -14,7 +14,7 @@ from dbt import flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
-from dbt.contracts.project import Name as ProjectName
+from dbt.contracts.util import Identifier as ProjectName
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (

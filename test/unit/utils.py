@@ -157,7 +157,7 @@ class ContractTestCase(TestCase):
         if cls is None:
             cls = self.ContractType
         cls.validate(dct)
-        self.assertEqual(cls.from_dict(dct),  obj)
+        self.assertEqual(cls.from_dict(dct), obj)
 
     def assert_symmetric(self, obj, dct, cls=None):
         self.assert_to_dict(obj, dct)

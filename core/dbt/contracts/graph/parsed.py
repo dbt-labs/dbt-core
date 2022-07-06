@@ -198,6 +198,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     tags: List[str] = field(default_factory=list)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
@@ -794,23 +795,31 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
 
 @dataclass
+class MetricReference(dbtClassMixin, Replaceable):
+    sql: Optional[Union[str, int]]
+    unique_id: Optional[str]
+
+
+@dataclass
 class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
-    model: str
     name: str
     description: str
     label: str
     type: str
-    sql: Optional[str]
+    sql: str
     timestamp: Optional[str]
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
+    model: Optional[str] = None
+    model_unique_id: Optional[str] = None
     resource_type: NodeType = NodeType.Metric
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property

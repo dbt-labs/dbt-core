@@ -1029,7 +1029,7 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label,
             type=unparsed.type,
-            sql=unparsed.sql,
+            sql=str(unparsed.sql),
             timestamp=unparsed.timestamp,
             dimensions=unparsed.dimensions,
             time_grains=unparsed.time_grains,
@@ -1044,8 +1044,17 @@ class MetricParser(YamlReader):
             self.schema_parser.manifest,
             package_name,
         )
-        model_ref = "{{ " + unparsed.model + " }}"
-        get_rendered(model_ref, ctx, parsed, capture_macros=True)
+
+        if parsed.model is not None:
+            model_ref = "{{ " + parsed.model + " }}"
+            get_rendered(model_ref, ctx, parsed)
+
+        parsed.sql = get_rendered(
+            parsed.sql,
+            ctx,
+            node=parsed,
+        )
+
         return parsed
 
     def parse(self) -> Iterable[ParsedMetric]:
