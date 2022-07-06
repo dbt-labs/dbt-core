@@ -77,7 +77,8 @@ class SQLConnectionManager(BaseConnectionManager):
 
             return connection, cursor
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def get_response(cls, cursor: Any) -> AdapterResponse:
         """Get the status of the cursor."""
         raise dbt.exceptions.NotImplementedException(

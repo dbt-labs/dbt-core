@@ -112,7 +112,8 @@ class ConfiguredParser(
             manifest=manifest, config=root_project, component="alias"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def get_compiled_path(cls, block: ConfiguredBlockType) -> str:
         pass
 

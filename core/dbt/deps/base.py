@@ -103,7 +103,8 @@ SomeUnpinned = TypeVar("SomeUnpinned", bound="UnpinnedPackage")
 
 
 class UnpinnedPackage(Generic[SomePinned], BasePackage):
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def from_contract(cls, contract):
         raise NotImplementedError
 
