@@ -12,6 +12,7 @@ import pytest
 import dbt.flags
 import dbt.version
 from dbt import tracking
+from dbt.adapters.base.plugin import AdapterPlugin
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.parsed import (
@@ -36,7 +37,7 @@ from dbt.events.functions import get_invocation_id
 from dbt.node_types import NodeType
 import freezegun
 
-from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMaterialization, MockGenerateMacro
+from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMaterialization, MockGenerateMacro, inject_plugin
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
@@ -1005,6 +1006,27 @@ FindMaterializationSpec = namedtuple('FindMaterializationSpec', 'macros,adapter_
 
 
 def _materialization_parameter_sets():
+    # inject the plugins used for materialization parameter tests
+    with mock.patch('dbt.adapters.base.plugin.project_name_from_path') as get_name:
+        get_name.return_value = 'foo'
+        FooPlugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path='/path/to/root/plugin',
+        )
+        FooPlugin.adapter.type.return_value = 'foo'
+        inject_plugin(FooPlugin)
+
+        get_name.return_value = 'bar'
+        BarPlugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path='/path/to/root/plugin',
+            dependencies=['foo'],
+        )
+        BarPlugin.adapter.type.return_value = 'bar'
+        inject_plugin(BarPlugin)
+
     sets = [
         FindMaterializationSpec(macros=[], adapter_type='foo', expected=None),
     ]
@@ -1077,6 +1099,22 @@ def _materialization_parameter_sets():
             expected=('dep', 'foo'),
         ),
     ])
+
+    # inherit from parent adapter
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='foo')],
+            adapter_type='bar',
+            expected=(project, 'foo'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='foo'), MockMaterialization(project, adapter_type='bar')],
+            adapter_type='bar',
+            expected=(project, 'bar'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
 
     return sets
 

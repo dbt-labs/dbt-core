@@ -328,11 +328,6 @@ class Locality(enum.IntEnum):
     Root = 3
 
 
-class Specificity(enum.IntEnum):
-    Default = 1
-    Adapter = 2
-
-
 @dataclass
 class MacroCandidate:
     locality: Locality
@@ -355,12 +350,14 @@ class MacroCandidate:
 
 @dataclass
 class MaterializationCandidate(MacroCandidate):
-    specificity: Specificity
+    # specificity describes where in the inheritance chain this materialization candidate is
+    # a specificity of 0 means a materialization defined by the current adapter
+    # the highest the specificity describes a default materialization. the value itself depends on
+    # how many adapters there are in the inheritance chain
+    specificity: int
 
     @classmethod
-    def from_macro(
-        cls, candidate: MacroCandidate, specificity: Specificity
-    ) -> "MaterializationCandidate":
+    def from_macro(cls, candidate: MacroCandidate, specificity: int) -> "MaterializationCandidate":
         return cls(
             locality=candidate.locality,
             macro=candidate.macro,
@@ -384,9 +381,9 @@ class MaterializationCandidate(MacroCandidate):
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, MaterializationCandidate):
             return NotImplemented
-        if self.specificity < other.specificity:
-            return True
         if self.specificity > other.specificity:
+            return True
+        if self.specificity < other.specificity:
             return False
         if self.locality < other.locality:
             return True
@@ -671,18 +668,24 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 disabled_by_file_id[node.file_id] = node
         return disabled_by_file_id
 
+    def _get_parent_adapter_types(self, adapter_type: str) -> List[str]:
+        # This is duplicated logic from core/dbt/context/providers.py
+        # Ideally this would instead be incorporating actual dispatch logic
+        from dbt.adapters.factory import get_adapter_type_names
+
+        # order matters for dispatch:
+        #  1. current adapter
+        #  2. any parent adapters (dependencies)
+        #  3. 'default'
+        return get_adapter_type_names(adapter_type) + ["default"]
+
     def _materialization_candidates_for(
         self,
         project_name: str,
         materialization_name: str,
-        adapter_type: Optional[str],
+        adapter_type: str,
+        specificity: int,
     ) -> CandidateList:
-
-        if adapter_type is None:
-            specificity = Specificity.Default
-        else:
-            specificity = Specificity.Adapter
-
         full_name = dbt.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
             adapter_type=adapter_type,
@@ -702,8 +705,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     project_name=project_name,
                     materialization_name=materialization_name,
                     adapter_type=atype,
+                    specificity=specificity,  # where in the inheritance chain this candidate is
                 )
-                for atype in (adapter_type, None)
+                for specificity, atype in enumerate(self._get_parent_adapter_types(adapter_type))
             )
         )
         return candidates.last()

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Add inheritance to materialization macro resolution
+time: 2022-06-08T10:42:51.839945-04:00
+custom:
+  Author: volkangurel
+  Issue: "4646"
+  PR: "5348"
