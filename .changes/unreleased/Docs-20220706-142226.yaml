@@ -1,0 +1,7 @@
+kind: Docs
+body: '[Snyk] Upgrade prismjs from 1.27.0 to 1.28.0'
+time: 2022-07-06T14:22:26.039137-05:00
+custom:
+  Author: emmyoop
+  Issue: "5255"
+  PR: "5446"

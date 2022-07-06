@@ -1,0 +1,7 @@
+kind: Docs
+body: Upgrade cytoscape.js fork
+time: 2022-07-06T14:25:05.575755-05:00
+custom:
+  Author: emmyoop
+  Issue: "5255"
+  PR: "5446"

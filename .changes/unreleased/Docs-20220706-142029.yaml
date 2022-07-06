@@ -1,0 +1,7 @@
+kind: Docs
+body: Fixed sample SQL Code for sources when no database is defined
+time: 2022-07-06T14:20:29.7347-05:00
+custom:
+  Author: b-per
+  Issue: "5255"
+  PR: "5446"
