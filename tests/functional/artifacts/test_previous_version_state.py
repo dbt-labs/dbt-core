@@ -3,6 +3,7 @@ import os
 import shutil
 from dbt.tests.util import run_dbt
 from dbt.exceptions import IncompatibleSchemaException
+from dbt.contracts.graph.manifest import WritableManifest
 
 # This is a *very* simple project, with just one model in it.
 models__my_model_sql = """
@@ -40,7 +41,7 @@ class TestPreviousVersionState:
     ):
         run_dbt(["list"])
         source_path = os.path.join(project.project_root, "target/manifest.json")
-        state_path = os.path.join(project.test_data_dir, f"state/{current_manifest_version}")
+        state_path = os.path.join(project.test_data_dir, f"state/v{current_manifest_version}")
         target_path = os.path.join(state_path, "manifest.json")
         os.makedirs(state_path, exist_ok=True)
         shutil.copyfile(source_path, target_path)
@@ -55,7 +56,7 @@ class TestPreviousVersionState:
         compare_manifest_version,
         expect_pass,
     ):
-        state_path = os.path.join(project.test_data_dir, f"state/{compare_manifest_version}")
+        state_path = os.path.join(project.test_data_dir, f"state/v{compare_manifest_version}")
         cli_args = [
             "list",
             "--select",
@@ -70,21 +71,29 @@ class TestPreviousVersionState:
             with pytest.raises(IncompatibleSchemaException):
                 run_dbt(cli_args, expect_pass=expect_pass)
 
-    def test_compare_state_v6(self, project):
-        # self.generate_latest_manifest(project, "v6")
-        self.compare_previous_state(project, "v6", True)
+    def test_compare_state_current(self, project):
+        current_schema_version = WritableManifest.dbt_schema_version.version
+        assert (
+            current_schema_version == 6
+        ), "Sounds like you've bumped the manifest version and need to update this test!"
+        self.generate_latest_manifest(project, current_schema_version)
+        self.compare_previous_state(project, current_schema_version, True)
+
+    # uncomment this test when we bump the manifest schema!
+    # def test_compare_state_v6(self, project):
+    #     self.compare_previous_state(project, 6, True)
 
     def test_compare_state_v5(self, project):
-        self.compare_previous_state(project, "v5", True)
+        self.compare_previous_state(project, 5, True)
 
     def test_compare_state_v4(self, project):
-        self.compare_previous_state(project, "v4", True)
+        self.compare_previous_state(project, 4, True)
 
     def test_compare_state_v3(self, project):
-        self.compare_previous_state(project, "v3", False)
+        self.compare_previous_state(project, 3, False)
 
     def test_compare_state_v2(self, project):
-        self.compare_previous_state(project, "v2", False)
+        self.compare_previous_state(project, 2, False)
 
     def test_compare_state_v1(self, project):
-        self.compare_previous_state(project, "v1", False)
+        self.compare_previous_state(project, 1, False)
