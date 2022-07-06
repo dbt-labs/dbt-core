@@ -42,9 +42,6 @@ class TestPreviousVersionState:
         source_path = os.path.join(project.project_root, "target/manifest.json")
         state_path = os.path.join(project.test_data_dir, f"state/{current_manifest_version}")
         target_path = os.path.join(state_path, "manifest.json")
-        import ipdb
-
-        ipdb.set_trace()
         os.makedirs(state_path, exist_ok=True)
         shutil.copyfile(source_path, target_path)
 
