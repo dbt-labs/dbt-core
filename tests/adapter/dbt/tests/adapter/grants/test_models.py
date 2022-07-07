@@ -1,12 +1,10 @@
 import pytest
 import os
 from dbt.tests.util import (
-    run_dbt,
     run_dbt_and_capture,
     get_manifest,
     read_file,
     relation_from_name,
-    rm_file,
     write_file,
     get_connection,
 )
