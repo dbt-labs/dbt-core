@@ -49,7 +49,7 @@
   {% endif %}
   {{ adapter.rename_relation(intermediate_relation, target_relation) }}
 
-  {% set should_revoke = do_we_need_to_show_and_revoke_grants(existing_relation, full_refresh_mode=True) %}
+  {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
   {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {% do persist_docs(target_relation, model) %}

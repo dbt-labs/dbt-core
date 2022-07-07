@@ -1093,11 +1093,6 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return Compiler(self.config)
 
-    # used in apply_grants -- True is a safe default
-    @available
-    def do_i_carry_over_grants_when_an_object_is_replaced(self) -> bool:
-        return True
-
     # Methods used in adapter tests
     def update_column_sql(
         self,
