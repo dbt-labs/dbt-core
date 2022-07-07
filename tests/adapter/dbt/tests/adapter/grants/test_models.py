@@ -8,7 +8,10 @@ from dbt.tests.util import (
     relation_from_name,
     rm_file,
     write_file,
+    get_connection,
 )
+
+from dbt.context.base import BaseContext  # diff_of_two_dicts only
 
 TEST_USER_ENV_VARS = ["DBT_TEST_USER_1", "DBT_TEST_USER_2", "DBT_TEST_USER_3"]
 
@@ -34,6 +37,7 @@ models:
         select: ["dbt_test_user_2"]
 """
 
+
 class TestModelGrants:
     @pytest.fixture(scope="class")
     def models(self):
@@ -47,6 +51,16 @@ class TestModelGrants:
             if user_name:
                 test_users.append(user_name)
         return test_users
+
+    def get_grants_on_relation(self, project, relation_name):
+        relation = relation_from_name(project.adapter, relation_name)
+        adapter = project.adapter
+        with get_connection(adapter):
+            kwargs = {"relation": relation}
+            show_grant_sql = adapter.execute_macro("get_show_grant_sql", kwargs=kwargs)
+            _, grant_table = adapter.execute(show_grant_sql, fetch=True)
+            actual_grants = adapter.standardize_grants_dict(grant_table)
+        return actual_grants
 
     def test_basic(self, project, get_test_users, logs_dir):
         # we want the test to fail, not silently skip
@@ -67,6 +81,14 @@ class TestModelGrants:
         grant_log_line = f"grant select on table {my_model_relation} to {test_users[0]};"
         assert grant_log_line in log_output
 
+        # validate actual grants in database
+        actual_grants = self.get_grants_on_relation(project, "my_model")
+        # actual_grants: {'SELECT': ['dbt_test_user_1']}
+        # need a case-insensitive comparison
+        # so just a simple "assert expected == actual_grants" won't work
+        diff = BaseContext.diff_of_two_dicts(expected, actual_grants)
+        assert diff == {}
+
         # Switch to a different user, still view materialization
         write_file(user2_model_schema_yml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
@@ -76,4 +98,7 @@ class TestModelGrants:
         assert grant_log_line in log_output
         assert "revoke select" not in log_output
 
-
+        expected = {"select": ["dbt_test_user_2"]}
+        actual_grants = self.get_grants_on_relation(project, "my_model")
+        diff = BaseContext.diff_of_two_dicts(expected, actual_grants)
+        assert diff == {}
