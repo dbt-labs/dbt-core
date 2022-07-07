@@ -156,8 +156,7 @@ class ContractTestCase(TestCase):
     def assert_from_dict(self, obj, dct, cls=None):
         if cls is None:
             cls = self.ContractType
-        # TODO figure out what to do with validate
-        # cls.validate(dct)
+        cls.validate(dct)
         self.assertEqual(cls.from_dict(dct),  obj)
 
     def assert_symmetric(self, obj, dct, cls=None):
@@ -194,8 +193,7 @@ def compare_dicts(dict1, dict2):
 def assert_from_dict(obj, dct, cls=None):
     if cls is None:
         cls = obj.__class__
-    # TODO resolve validate
-    # cls.validate(dct)
+    cls.validate(dct)
     try:
         obj_from_dict = cls.from_dict(dct)
     except:

@@ -337,8 +337,7 @@ class Compiler:
         model.compiled_code = injected_sql
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
-        # TODO why validate here?
-        # model.validate(model.to_dict(omit_none=True))
+        model.validate(model.to_dict(omit_none=True))
 
         manifest.update_node(model)
 

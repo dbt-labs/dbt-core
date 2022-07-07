@@ -31,6 +31,16 @@ class HasCode(dbtClassMixin):
     raw_code: str
     language: str
 
+    @classmethod
+    def _custom_schema(cls, schema):
+        schema = super()._custom_schema(schema)
+        if "allOf" not in schema:
+            schema["allOf"] = []
+        schema["allOf"].append({"oneOf": [{"required": ["raw_code"]}, {"required": ["raw_sql"]}]})
+        schema["properties"]["raw_sql"] = schema["properties"]["raw_code"]
+        schema["required"].remove("raw_code")
+        return schema
+
     @property
     def empty(self):
         return not self.raw_code.strip()

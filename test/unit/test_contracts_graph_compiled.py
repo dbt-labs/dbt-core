@@ -212,7 +212,7 @@ def basic_compiled_dict():
         'config_call_dict': {},
     }
 
-
+@pytest.mark.skip("Haven't found where we would use uncompiled node")
 def test_basic_uncompiled_model(minimal_uncompiled_dict, basic_uncompiled_dict, basic_uncompiled_model):
     node_dict = basic_uncompiled_dict
     node = basic_uncompiled_model
@@ -528,7 +528,7 @@ def basic_compiled_schema_test_dict():
         'config_call_dict': {},
     }
 
-
+@pytest.mark.skip("Haven't found where we would use uncompiled node")
 def test_basic_uncompiled_schema_test(basic_uncompiled_schema_test_node, basic_uncompiled_schema_test_dict, minimal_schema_test_dict):
     node = basic_uncompiled_schema_test_node
     node_dict = basic_uncompiled_schema_test_dict

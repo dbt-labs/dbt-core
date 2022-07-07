@@ -47,6 +47,17 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
     relation_name: Optional[str] = None
     _pre_injected_sql: Optional[str] = None
 
+    @classmethod
+    def _custom_schema(cls, schema):
+        schema = super()._custom_schema(schema)
+        if "allOf" not in schema:
+            schema["allOf"] = []
+        schema["allOf"].append(
+            {"oneOf": [{"required": ["compiled_code"]}, {"required": ["compiled_sql"]}]}
+        )
+        schema["properties"]["compiled_sql"] = schema["properties"]["compiled_code"]
+        return schema
+
     def set_cte(self, cte_id: str, sql: str):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
         do if extra_ctes were an OrderedDict

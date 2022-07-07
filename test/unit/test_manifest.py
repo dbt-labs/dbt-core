@@ -293,9 +293,8 @@ class ManifestTest(unittest.TestCase):
             exposure.validate(exposure.to_dict(omit_none=True))
         for metric in self.metrics.values():
             metric.validate(metric.to_dict(omit_none=True))
-        # TODO figure out how to still validate the schema
-        # for node in self.nested_nodes.values():
-        #     node.validate(node.to_dict(omit_none=True))
+        for node in self.nested_nodes.values():
+            node.validate(node.to_dict(omit_none=True))
         for source in self.sources.values():
             source.validate(source.to_dict(omit_none=True))
 
