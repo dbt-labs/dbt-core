@@ -561,7 +561,7 @@ def model( dbt):
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
 
-        python_packages = ['sklearn==0.1.0', 'torch', 'textblob', 'text']
+        python_packages = ['sklearn==0.1.0']
         expected = ParsedModelNode(
             alias='py_model',
             name='py_model',
