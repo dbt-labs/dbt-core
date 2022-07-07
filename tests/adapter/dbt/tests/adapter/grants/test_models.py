@@ -89,7 +89,7 @@ class TestModelGrants:
         assert len(test_users) == 3
 
         # View materialization, single select grant
-        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "--log-format", "text", "run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
@@ -112,7 +112,7 @@ class TestModelGrants:
 
         # View materialization, change select grant user
         write_file(user2_model_schema_yml, project.project_root, "models", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "--log-format", "text", "run"])
         assert len(results) == 1
         grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
         assert grant_log_line in log_output
@@ -125,7 +125,7 @@ class TestModelGrants:
 
         # Table materialization, single select grant
         write_file(table_model_schema_yml, project.project_root, "models", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "--log-format", "text", "run"])
         assert len(results) == 1
         grant_log_line = format_grant_log_line(my_model_relation, test_users[0])
         assert grant_log_line in log_output
@@ -138,7 +138,7 @@ class TestModelGrants:
 
         # Table materialization, change select grant user
         write_file(user2_table_model_schema_yml, project.project_root, "models", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "--log-format", "text", "run"])
         assert len(results) == 1
         grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
         assert grant_log_line in log_output
