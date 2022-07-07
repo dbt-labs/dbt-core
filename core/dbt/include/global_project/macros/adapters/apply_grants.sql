@@ -50,7 +50,7 @@
 
 {% macro default__get_revoke_sql(relation, grant_config) %}
     {%- for privilege in grant_config.keys() -%}
-        {%- set grantees = grant[privilege] -%}
+        {%- set grantees = grant_config[privilege] -%}
         {%- if grantees -%}
                 {%- for grantee in grantees -%}
                     revoke {{ privilege }} on {{ relation }} from {{ grantee }};
