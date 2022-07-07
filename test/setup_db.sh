@@ -46,6 +46,9 @@ psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"
 psql -c "CREATE ROLE noaccess WITH PASSWORD 'password' NOSUPERUSER;"
 psql -c "ALTER ROLE noaccess WITH LOGIN;"
 psql -c "GRANT CONNECT ON DATABASE dbt TO noaccess;"
+psql -c "CREATE ROLE dbt_test_user_1;"
+psql -c "CREATE ROLE dbt_test_user_2;"
+psql -c "CREATE ROLE dbt_test_user_3;"
 
 psql -c 'CREATE DATABASE "dbtMixedCase";'
 psql -c 'GRANT CREATE, CONNECT ON DATABASE "dbtMixedCase" TO root WITH GRANT OPTION;'

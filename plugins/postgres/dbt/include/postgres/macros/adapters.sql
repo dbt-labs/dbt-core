@@ -212,6 +212,6 @@
         and table_name = '{{ relation.identifier }}'
 {%- endmacro -%}
 
-{% macro postgres__coppy_grants() %}
+{% macro postgres__are_grants_copied_over_when_replaced() %}
     {{ return(False) }}
 {% endmacro %}

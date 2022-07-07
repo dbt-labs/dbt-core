@@ -540,9 +540,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
     ###
-    # Abstract methods about grants
+    # Methods about grants
     ###
-    @abc.abstractmethod
+    @available
     def standardize_grants_dict(self, grants_table: agate.Table) -> dict:
         """Translate the result of `show grants` (or equivalent) to match the
         grants which a user would configure in their project.

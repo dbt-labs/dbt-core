@@ -634,7 +634,9 @@ class ManifestLoader:
         if not flags.PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
-        path = os.path.join(self.root_project.target_path, PARTIAL_PARSE_FILE_NAME)
+        path = os.path.join(
+            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
+        )
 
         reparse_reason = None
 
