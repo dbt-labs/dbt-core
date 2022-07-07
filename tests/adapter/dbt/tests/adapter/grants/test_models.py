@@ -35,6 +35,29 @@ models:
         select: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
 
+table_model_schema_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      materialized: table
+      grants:
+        select: ["{{ env_var('DBT_TEST_USER_1') }}"]
+"""
+
+user2_table_model_schema_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      materialized: table
+      grants:
+        select: ["{{ env_var('DBT_TEST_USER_2') }}"]
+"""
+
+def format_grant_log_line(relation, user_name):
+    return f"grant select on {relation} to {user_name};"
+
 
 class TestModelGrants:
     @pytest.fixture(scope="class")
@@ -60,12 +83,12 @@ class TestModelGrants:
             actual_grants = adapter.standardize_grants_dict(grant_table)
         return actual_grants
 
-    def test_basic(self, project, get_test_users, logs_dir):
+    def test_model_grants(self, project, get_test_users, logs_dir):
         # we want the test to fail, not silently skip
         test_users = get_test_users
         assert len(test_users) == 3
 
-        # Tests a project with a single model, view materialization
+        # View materialization, single select grant
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
@@ -76,7 +99,7 @@ class TestModelGrants:
         assert model.config.materialized == "view"
 
         my_model_relation = relation_from_name(project.adapter, "my_model")
-        grant_log_line = f"grant select on {my_model_relation} to {test_users[0]};"
+        grant_log_line = format_grant_log_line(my_model_relation, test_users[0])
         assert grant_log_line in log_output
 
         # validate actual grants in database
@@ -87,16 +110,42 @@ class TestModelGrants:
         diff = BaseContext.diff_of_two_dicts(expected, actual_grants)
         assert diff == {}
 
-        # Switch to a different user, still view materialization
+        # View materialization, change select grant user
         write_file(user2_model_schema_yml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
-        log_output = read_file(logs_dir, "dbt.log")
-        grant_log_line = f"grant select on {my_model_relation} to {test_users[1]};"
+        grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
         assert grant_log_line in log_output
-        assert "revoke select" not in log_output
+        assert "revoke" not in log_output
 
         expected = {"select": [get_test_users[1]]}
         actual_grants = self.get_grants_on_relation(project, "my_model")
         diff = BaseContext.diff_of_two_dicts(expected, actual_grants)
+        assert diff == {}
+
+        # Table materialization, single select grant
+        write_file(table_model_schema_yml, project.project_root, "models", "schema.yml")
+        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        assert len(results) == 1
+        grant_log_line = format_grant_log_line(my_model_relation, test_users[0])
+        assert grant_log_line in log_output
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_id]
+        model.config.materialized == "table"
+        actual_grants = self.get_grants_on_relation(project, "my_model")
+        diff = BaseContext.diff_of_two_dicts({"select": [test_users[0]]}, actual_grants)
+        assert diff == {}
+
+        # Table materialization, change select grant user
+        write_file(user2_table_model_schema_yml, project.project_root, "models", "schema.yml")
+        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        assert len(results) == 1
+        grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
+        assert grant_log_line in log_output
+        assert "revoke" not in log_output  # table was replaced
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_id]
+        model.config.materialized == "table"
+        actual_grants = self.get_grants_on_relation(project, "my_model")
+        diff = BaseContext.diff_of_two_dicts({"select": [test_users[1]]}, actual_grants)
         assert diff == {}
