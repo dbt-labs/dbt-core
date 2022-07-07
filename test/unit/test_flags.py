@@ -250,3 +250,16 @@ class TestFlags(TestCase):
         os.environ.pop('DBT_CACHE_SELECTED_ONLY')
         delattr(self.args, 'cache_selected_only')
         self.user_config.cache_selected_only = False
+
+        # target_path/log_path
+        flags.set_from_args(self.args, self.user_config)
+        self.assertIsNone(flags.LOG_PATH)
+        os.environ['DBT_LOG_PATH'] = 'a/b/c'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.LOG_PATH, 'a/b/c')
+        setattr(self.args, 'log_path', 'd/e/f')
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.LOG_PATH, 'd/e/f')
+        # cleanup
+        os.environ.pop('DBT_LOG_PATH')
+        delattr(self.args, 'log_path')
