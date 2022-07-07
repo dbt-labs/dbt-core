@@ -651,6 +651,22 @@ def _add_common_arguments(*subparsers):
             settings in profiles.yml.
             """,
         )
+        sub.add_argument(
+            "--target-path",
+            required=False,
+            help="""
+            Configure the 'target-path'. Only applies this setting for the
+            current run. Overrides the 'DBT_TARGET_PATH' if it is set.
+            """,
+        )
+        sub.add_argument(
+            "--log-path",
+            required=False,
+            help="""
+            Configure the 'log-path'. Only applies this setting for the
+            current run. Overrides the 'DBT_LOG_PATH' if it is set.
+            """,
+        )
         _add_version_check(sub)
 
 
