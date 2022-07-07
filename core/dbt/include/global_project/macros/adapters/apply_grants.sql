@@ -71,7 +71,7 @@
                 {% set needs_granting = diff_of_two_dicts(grant_config, current_grants_dict) %}
                 {% set needs_revoking = diff_of_two_dicts(current_grants_dict, grant_config) %}
                 {% if not (needs_granting or needs_revoking) %}
-                    {{ log('All grants are in place, no revocation or granting needed.')}}
+                    {{ log('On ' ~ relation ~': All grants are in place, no revocation or granting needed.')}}
                 {% endif %}
             {% else %}
                 {% set needs_revoking = {} %}
