@@ -3,7 +3,6 @@ import os
 from dbt.tests.util import (
     run_dbt_and_capture,
     get_manifest,
-    read_file,
     relation_from_name,
     write_file,
     get_connection,
@@ -54,6 +53,7 @@ models:
       grants:
         select: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
+
 
 def format_grant_log_line(relation, user_name):
     return f"grant select on {relation} to {user_name};"
