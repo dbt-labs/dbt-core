@@ -1,19 +1,19 @@
-{% macro are_grants_copied_over_when_replaced() %}
-    {{ return(adapter.dispatch('are_grants_copied_over_when_replaced', 'dbt')()) }}
+{% macro copy_grants() %}
+    {{ return(adapter.dispatch('copy_grants', 'dbt')()) }}
 {% endmacro %}
 
-{% macro default__are_grants_copied_over_when_replaced() %}
+{% macro default__copy_grants() %}
     {{ return(True) }}
 {% endmacro %}
 
-{% macro do_we_need_to_show_and_revoke_grants(existing_relation, full_refresh_mode=True) %}
+{% macro should_revoke(existing_relation, full_refresh_mode=True) %}
 
     {% if not existing_relation %}
         {#-- The table doesn't already exist, so no grants to copy over --#}
         {{ return(False) }}
     {% elif full_refresh_mode %}
         {#-- The object is being REPLACED -- whether grants are copied over depends on the value of user config --#}
-        {{ return(are_grants_copied_over_when_replaced()) }}
+        {{ return(copy_grants()) }}
     {% else %}
         {#-- The table is being merged/upserted/inserted -- grants will be carried over --#}
         {{ return(True) }}
@@ -26,7 +26,7 @@
 {% endmacro %}
 
 {% macro default__get_show_grant_sql(relation) %}
-    show grants on {{ relation.type }} {{ relation }}
+    show grants on {{ relation }} {{ relation }}
 {% endmacro %}
 
 {% macro get_grant_sql(relation, grant_config) %}
@@ -38,7 +38,7 @@
         {%- set grantees = grant_config[privilege] -%}
         {%- if grantees -%}
             {%- for grantee in grantees -%}
-                grant {{ privilege }} on {{ relation.type }} {{ relation }} to {{ grantee}};
+                grant {{ privilege }} on {{ relation }} {{ relation }} to {{ grantee}};
             {%- endfor -%}
         {%- endif -%}
     {%- endfor -%}
@@ -50,16 +50,10 @@
 
 {% macro default__get_revoke_sql(relation, grant_config) %}
     {%- for privilege in grant_config.keys() -%}
-        {%- set grantees = [] -%}
-        {%- set all_grantees = grant_config[privilege] -%}
-        {%- for grantee in all_grantees -%}
-            {%- if grantee != target.user -%}
-                {% do grantees.append(grantee) %}
-            {%- endif -%}
-        {% endfor -%}
+        {%- set grantees = grant[privilege] -%}
         {%- if grantees -%}
                 {%- for grantee in grantees -%}
-                    revoke {{ privilege }} on {{ relation.type }} {{ relation }} from {{ grantee }};
+                    revoke {{ privilege }} on {{ relation }} {{ relation }} from {{ grantee }};
                 {% endfor -%}
         {%- endif -%}
     {%- endfor -%}

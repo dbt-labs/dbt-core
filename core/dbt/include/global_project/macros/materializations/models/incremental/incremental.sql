@@ -61,7 +61,7 @@
       {% do to_drop.append(backup_relation) %}
   {% endif %}
 
-  {% set should_revoke = do_we_need_to_show_and_revoke_grants(existing_relation, full_refresh_mode) %}
+  {% set should_revoke = should_reovke(existing_relation, full_refresh_mode) %}
   {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {% do persist_docs(target_relation, model) %}
