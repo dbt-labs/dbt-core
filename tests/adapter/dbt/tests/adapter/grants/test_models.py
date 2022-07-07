@@ -116,7 +116,6 @@ class TestModelGrants:
         assert len(results) == 1
         grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
         assert grant_log_line in log_output
-        assert "revoke" not in log_output
 
         expected = {"select": [get_test_users[1]]}
         actual_grants = self.get_grants_on_relation(project, "my_model")
@@ -142,7 +141,6 @@ class TestModelGrants:
         assert len(results) == 1
         grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
         assert grant_log_line in log_output
-        assert "revoke" not in log_output  # table was replaced
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_id]
         model.config.materialized == "table"
