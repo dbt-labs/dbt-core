@@ -1,0 +1,4 @@
+from typing_extensions import Literal
+
+AnyDeserializationEngine = Literal[NamedTupleDeserializationEngine, DateTimeDeserializationEngine]
+AnySerializationEngine = NamedTupleSerializationEngine

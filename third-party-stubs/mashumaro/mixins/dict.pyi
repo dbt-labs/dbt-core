@@ -4,18 +4,9 @@ T = TypeVar("T", bound="DataClassDictMixin")
 
 class DataClassDictMixin:
     def __init_subclass__(cls, **kwargs): ...
-    def to_dict(
-        self, use_bytes: bool = ..., use_enum: bool = ..., use_datetime: bool = ..., **kwargs
-    ) -> dict: ...
+    def to_dict(self, **kwargs) -> dict: ...
     @classmethod
-    def from_dict(
-        cls,
-        d: Mapping,
-        use_bytes: bool = ...,
-        use_enum: bool = ...,
-        use_datetime: bool = ...,
-        **kwargs,
-    ) -> T: ...
+    def from_dict(cls, d: Mapping, **kwargs) -> T: ...
     @classmethod
     def __pre_deserialize__(cls, d: Dict[Any, Any]) -> Dict[Any, Any]: ...
     @classmethod
