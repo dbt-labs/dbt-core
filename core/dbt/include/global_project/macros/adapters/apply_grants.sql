@@ -66,9 +66,7 @@
 {%- endmacro -%}
 
 {% macro apply_grants(relation, grant_config, should_revoke) %}
-    {% if grant_config %}
-        {{ return(adapter.dispatch("apply_grants", "dbt")(relation, grant_config, should_revoke)) }}
-    {% endif %}
+    {{ return(adapter.dispatch("apply_grants", "dbt")(relation, grant_config, should_revoke)) }}
 {% endmacro %}
 
 {% macro default__apply_grants(relation, grant_config, should_revoke=True) %}
