@@ -212,18 +212,6 @@
         and table_name = '{{ relation.identifier }}'
 {%- endmacro -%}
 
-
-{%- macro postgres__get_grant_sql(relation, grant_config) -%}
-    {%- for privilege in grant_config.keys() -%}
-        {%- set grantees = grant_config[privilege] -%}
-        {%- if grantees -%}
-            {%- for grantee in grantees %}
-                grant {{ privilege }} on table {{ relation }} to {{ grantee }};
-            {% endfor -%}
-        {%- endif -%}
-    {%- endfor -%}
-{%- endmacro -%}
-
 {% macro postgres__are_grants_copied_over_when_replaced() %}
     {{ return(False) }}
 {% endmacro %}

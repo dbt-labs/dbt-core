@@ -25,7 +25,7 @@ models:
   - name: my_model
     config:
       grants:
-        select: ["dbt_test_user_1"]
+        select: ["{{ env_var('DBT_TEST_USER_1') }}"]
 """
 
 user2_model_schema_yml = """
@@ -34,7 +34,7 @@ models:
   - name: my_model
     config:
       grants:
-        select: ["dbt_test_user_2"]
+        select: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
 
 
@@ -78,7 +78,7 @@ class TestModelGrants:
         assert model.config.materialized == "view"
 
         my_model_relation = relation_from_name(project.adapter, "my_model")
-        grant_log_line = f"grant select on table {my_model_relation} to {test_users[0]};"
+        grant_log_line = f"grant select on {my_model_relation} to {test_users[0]};"
         assert grant_log_line in log_output
 
         # validate actual grants in database
@@ -94,11 +94,11 @@ class TestModelGrants:
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
         log_output = read_file(logs_dir, "dbt.log")
-        grant_log_line = f"grant select on table {my_model_relation} to {test_users[1]};"
+        grant_log_line = f"grant select on {my_model_relation} to {test_users[1]};"
         assert grant_log_line in log_output
         assert "revoke select" not in log_output
 
-        expected = {"select": ["dbt_test_user_2"]}
+        expected = {"select": [get_test_users[1]]}
         actual_grants = self.get_grants_on_relation(project, "my_model")
         diff = BaseContext.diff_of_two_dicts(expected, actual_grants)
         assert diff == {}

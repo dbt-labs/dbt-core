@@ -26,7 +26,7 @@
 {% endmacro %}
 
 {% macro default__get_show_grant_sql(relation) %}
-    show grants on {{ relation.type }} {{ relation }}
+    show grants on {{ relation }}
 {% endmacro %}
 
 {% macro get_grant_sql(relation, grant_config) %}
@@ -38,7 +38,7 @@
         {%- set grantees = grant_config[privilege] -%}
         {%- if grantees -%}
             {%- for grantee in grantees -%}
-                grant {{ privilege }} on {{ relation }} to {{ grantee}};
+                grant {{ privilege }} on {{ relation }} to {{ grantee }};
             {%- endfor -%}
         {%- endif -%}
     {%- endfor -%}
@@ -59,7 +59,7 @@
         {% endfor -%}
         {%- if grantees -%}
                 {%- for grantee in grantees -%}
-                    revoke {{ privilege }} on {{ relation.type }} {{ relation }} from {{ grantee }};
+                    revoke {{ privilege }} on {{ relation }} from {{ grantee }};
                 {% endfor -%}
         {%- endif -%}
     {%- endfor -%}
