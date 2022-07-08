@@ -547,17 +547,24 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Translate the result of `show grants` (or equivalent) to match the
         grants which a user would configure in their project.
 
-        If relevant -- filter down to grants made BY the current user role,
-        and filter OUT any grants TO the current user/role (e.g. OWNERSHIP).
+        Ideally, the SQL to show grants should also be filtering:
+        filter OUT any grants TO the current user/role (e.g. OWNERSHIP).
+        If that's not possible in SQL, it can be done in this method instead.
 
         :param grants_table: An agate table containing the query result of
             the SQL returned by get_show_grant_sql
         :return: A standardized dictionary matching the `grants` config
         :rtype: dict
         """
-        raise NotImplementedException(
-            "`standardize_grants_dict` is not implemented for this adapter!"
-        )
+        grants_dict = {}
+        for row in grants_table:
+            grantee = row["grantee"]
+            privilege = row["privilege_type"]
+            if privilege in grants_dict.keys():
+                grants_dict[privilege].append(grantee)
+            else:
+                grants_dict.update({privilege: [grantee]})
+        return grants_dict
 
     ###
     # Provided methods about relations
