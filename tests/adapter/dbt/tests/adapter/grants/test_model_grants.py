@@ -98,7 +98,7 @@ class BaseModelGrants(BaseGrants):
 
         # View materialization, change select grant user
         updated_yaml = self.interpolate_privilege_names(user2_model_schema_yml)
-        write_file(user2_model_schema_yml, project.project_root, "models", "schema.yml")
+        write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
 
