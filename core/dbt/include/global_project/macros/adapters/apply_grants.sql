@@ -34,13 +34,11 @@
 {% endmacro %}
 
 {%- macro default__get_grant_sql(relation, grant_config) -%}
-    {%- for privilege in grant_config.keys() -%}
+    {%- for privilege in grant_config.keys() %}
         {%- set grantees = grant_config[privilege] -%}
-        {%- if grantees -%}
-            {%- for grantee in grantees -%}
-                grant {{ privilege }} on {{ relation }} to {{ grantee }};
-            {%- endfor -%}
-        {%- endif -%}
+        {%- if grantees %}
+            grant {{ privilege }} on {{ relation }} to {{ grantees | join(', ') }};
+        {% endif -%}
     {%- endfor -%}
 {%- endmacro %}
 
@@ -50,12 +48,10 @@
 
 {% macro default__get_revoke_sql(relation, grant_config) %}
     {%- for privilege in grant_config.keys() -%}
-        {%- set grantees = grant[privilege] -%}
-        {%- if grantees -%}
-                {%- for grantee in grantees -%}
-                    revoke {{ privilege }} on {{ relation }} from {{ grantee }};
-                {% endfor -%}
-        {%- endif -%}
+        {%- set grantees = grant_config[privilege] -%}
+        {%- if grantees %}
+            revoke {{ privilege }} on {{ relation }} from {{ grantees | join(', ') }};
+        {% endif -%}
     {%- endfor -%}
 {%- endmacro -%}
 
