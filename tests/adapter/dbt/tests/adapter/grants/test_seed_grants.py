@@ -52,9 +52,10 @@ seeds:
 class BaseSeedGrants(BaseGrants):
     @pytest.fixture(scope="class")
     def seeds(self):
+        updated_schema = self.interpolate_privilege_names(schema_base_yml)
         return {
             "my_seed.csv": seeds__my_seed_csv,
-            "schema.yml": self.interpolate_privilege_names(schema_base_yml),
+            "schema.yml": updated_schema,
         }
 
     def test_seed_grants(self, project, get_test_users):

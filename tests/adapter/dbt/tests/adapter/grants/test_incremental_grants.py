@@ -37,9 +37,10 @@ models:
 class BaseIncrementalGrants(BaseGrants):
     @pytest.fixture(scope="class")
     def models(self):
+        updated_schema = self.interpolate_privilege_names(incremental_model_schema_yml)
         return {
             "my_incremental_model.sql": my_incremental_model_sql,
-            "schema.yml": self.interpolate_privilege_names(incremental_model_schema_yml),
+            "schema.yml": updated_schema,
         }
 
     def test_incremental_grants(self, project, get_test_users):

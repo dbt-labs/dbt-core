@@ -665,11 +665,37 @@ class BaseContext(metaclass=ContextMeta):
             dict_a: {'key_x': ['value_1', 'value_2'], 'key_y': ['value_3']}
             dict_b: {'key_x': ['value_1'], 'key_z': ['value_4']}
         Return the same dictionary representation of dict_a MINUS dict_b
+
+        All keys returned will be lower case.
         """
 
         dict_diff = {}
         dict_a = {k.lower(): v for k, v in dict_a.items()}
         dict_b = {k.lower(): v for k, v in dict_b.items()}
+        for k in dict_a:
+            if k in dict_b:
+                a_lowered = map(lambda x: x.lower(), dict_a[k])
+                b_lowered = map(lambda x: x.lower(), dict_b[k])
+                diff = list(set(a_lowered) - set(b_lowered))
+                if diff:
+                    dict_diff.update({k: diff})
+            else:
+                dict_diff.update({k: dict_a[k]})
+        return dict_diff
+
+    @contextmember
+    @staticmethod
+    def diff_of_two_dicts_no_lower(dict_a, dict_b):
+        """
+        Given two dictionaries:
+            dict_a: {'key_x': ['value_1', 'value_2'], 'key_y': ['value_3']}
+            dict_b: {'key_x': ['value_1'], 'key_z': ['value_4']}
+        Return the same dictionary representation of dict_a MINUS dict_b
+
+        No modifications to dict values.
+        """
+
+        dict_diff = {}
         for k in dict_a:
             if k in dict_b:
                 a_lowered = map(lambda x: x.lower(), dict_a[k])
