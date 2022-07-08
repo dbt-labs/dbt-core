@@ -31,6 +31,23 @@ seeds:
         select: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
 
+ignore_grants_yml = """
+version: 2
+seeds:
+  - name: my_seed
+    config:
+      grants: {}
+"""
+
+zero_grants_yml = """
+version: 2
+seeds:
+  - name: my_seed
+    config:
+      grants:
+        select: []
+"""
+
 
 class BaseSeedGrants(BaseGrants):
     @pytest.fixture(scope="class")
@@ -67,6 +84,38 @@ class BaseSeedGrants(BaseGrants):
         (results, log_output) = run_dbt_and_capture(["seed"])
         assert len(results) == 1
         expected = {select_privilege_name: [test_users[1]]}
+        self.assert_expected_grants_match_actual(project, "my_seed", expected)
+
+        # change config to 'grants: {}' -- should be completely ignored
+        updated_yaml = self.interpolate_privilege_names(ignore_grants_yml)
+        write_file(updated_yaml, project.project_root, "seeds", "schema.yml")
+        (results, log_output) = run_dbt_and_capture(["seed"])
+        assert len(results) == 1
+        assert "revoke " not in log_output
+        assert "grant " not in log_output
+        manifest = get_manifest(project.project_root)
+        seed_id = "seed.test.my_seed"
+        seed = manifest.nodes[seed_id]
+        expected_config = {}
+        expected_actual = {select_privilege_name: [test_users[1]]}
+        assert seed.config.grants == expected_config
+        # ACTUAL grants will NOT match expected grants
+        self.assert_expected_grants_match_actual(project, "my_seed", expected_actual)
+
+        # now run with ZERO grants -- all grants should be removed
+        updated_yaml = self.interpolate_privilege_names(zero_grants_yml)
+        write_file(updated_yaml, project.project_root, "seeds", "schema.yml")
+        (results, log_output) = run_dbt_and_capture(["seed"])
+        assert len(results) == 1
+        assert "revoke " in log_output
+        expected = {}
+        self.assert_expected_grants_match_actual(project, "my_seed", expected)
+
+        # run it again -- dbt shouldn't try to grant or revoke anything
+        (results, log_output) = run_dbt_and_capture(["seed"])
+        assert len(results) == 1
+        assert "revoke " not in log_output
+        assert "grant " not in log_output
         self.assert_expected_grants_match_actual(project, "my_seed", expected)
 
 

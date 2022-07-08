@@ -35,9 +35,10 @@ class BaseInvalidGrants(BaseGrants):
     def models(self):
         return {
             "my_invalid_model.sql": my_invalid_model_sql,
-            "schema.yml": self.interpolate_privilege_names(invalid_user_table_model_schema_yml),
         }
 
+    # adapters will need to reimplement these methods with the specific
+    # language of their database
     def grantee_does_not_exist_error(self):
         return "does not exist"
 
@@ -46,15 +47,17 @@ class BaseInvalidGrants(BaseGrants):
 
     def test_nonexistent_grantee(self, project, get_test_users, logs_dir):
         # failure when grant to a user/role that doesn't exist
+        yaml_file = self.interpolate_privilege_names(invalid_user_table_model_schema_yml)
         write_file(
-            invalid_user_table_model_schema_yml, project.project_root, "models", "schema.yml"
+            yaml_file, project.project_root, "models", "schema.yml"
         )
         (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
         assert self.grantee_does_not_exist_error() in log_output
 
         # failure when grant to a privilege that doesn't exist
+        yaml_file = self.interpolate_privilege_names(invalid_privilege_table_model_schema_yml)
         write_file(
-            invalid_privilege_table_model_schema_yml, project.project_root, "models", "schema.yml"
+            yaml_file, project.project_root, "models", "schema.yml"
         )
         (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
         assert self.privilege_does_not_exist_error() in log_output
