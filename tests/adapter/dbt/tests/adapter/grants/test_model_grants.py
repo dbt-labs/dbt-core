@@ -9,7 +9,6 @@ from dbt.tests.util import (
 )
 
 from dbt.context.base import BaseContext  # diff_of_two_dicts only
-from dbt.exceptions import CompilationException
 
 TEST_USER_ENV_VARS = ["DBT_TEST_USER_1", "DBT_TEST_USER_2", "DBT_TEST_USER_3"]
 
@@ -75,11 +74,12 @@ models:
         my_select: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
 
+
 def format_grant_log_line(relation, user_name):
     return f"grant select on {relation} to {user_name};"
 
 
-class TestModelGrants:
+class BaseModelGrants:
     @pytest.fixture(scope="class")
     def models(self):
         return {"my_model.sql": my_model_sql, "schema.yml": model_schema_yml}
@@ -169,21 +169,18 @@ class TestModelGrants:
         assert diff == {}
 
         # failure when grant to a user/role that doesn't exist
-        write_file(invalid_user_table_model_schema_yml, project.project_root, "models", "schema.yml")
+        write_file(
+            invalid_user_table_model_schema_yml, project.project_root, "models", "schema.yml"
+        )
         (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
         assert "does not exist" in log_output
 
         # failure when grant to a privilege that doesn't exist
-        write_file(invalid_privilege_table_model_schema_yml, project.project_root, "models", "schema.yml")
+        write_file(
+            invalid_privilege_table_model_schema_yml, project.project_root, "models", "schema.yml"
+        )
         (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
         assert "unrecognized privilege" in log_output
-
-
-        # Test model incremental materialization, with and without full refresh
-
-        # Test seed grants
-
-        # Test snapshot grants
 
         # Test that grants: {'select': []} revokes all grants
 
@@ -191,3 +188,5 @@ class TestModelGrants:
         # counting grant and revoke statements in logs
 
 
+class TestModelGrants(BaseModelGrants):
+    pass
