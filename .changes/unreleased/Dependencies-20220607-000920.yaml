@@ -1,5 +1,5 @@
 kind: Dependencies
-body: "Bump mashumaro from 2.9 to 3.0.2 in /core"
+body: "Bump mashumaro from 2.9 to 3.0.3 in /core"
 time: 2022-06-07T00:09:21.000000-05:00
 custom:
   Author: dependabot[bot]
