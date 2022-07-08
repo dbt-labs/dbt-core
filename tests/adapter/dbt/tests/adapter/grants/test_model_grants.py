@@ -1,9 +1,7 @@
 import pytest
-import os
 from dbt.tests.util import (
     run_dbt_and_capture,
     get_manifest,
-    relation_from_name,
     write_file,
 )
 from dbt.tests.adapter.grants.base_grants import BaseGrants
@@ -71,15 +69,20 @@ models:
         insert: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
 
-    
+
 class BaseModelGrants(BaseGrants):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": my_model_sql, "schema.yml": model_schema_yml}
+        return {
+            "my_model.sql": my_model_sql,
+            "schema.yml": self.interpolate_privilege_names(model_schema_yml),
+        }
 
-    def test_view_grants(self, project, get_test_users):
+    def test_view_table_grants(self, project, get_test_users):
         # we want the test to fail, not silently skip
         test_users = get_test_users
+        select_privilege_name = self.privilege_names()["select"]
+        insert_privilege_name = self.privilege_names()["insert"]
         assert len(test_users) == 3
 
         # View materialization, single select grant
@@ -88,69 +91,63 @@ class BaseModelGrants(BaseGrants):
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
         model = manifest.nodes[model_id]
-        expected = {"select": [test_users[0]]}
+        expected = {select_privilege_name: [test_users[0]]}
         assert model.config.grants == expected
         assert model.config.materialized == "view"
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # View materialization, change select grant user
+        updated_yaml = self.interpolate_privilege_names(user2_model_schema_yml)
         write_file(user2_model_schema_yml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
-        #grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
-        #assert grant_log_line in log_output
 
-        expected = {"select": [get_test_users[1]]}
+        expected = {select_privilege_name: [get_test_users[1]]}
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
-    def test_table_grants(self, project, get_test_users):
-        # we want the test to fail, not silently skip
-        test_users = get_test_users
-        assert len(test_users) == 3
-        
         # Table materialization, single select grant
-        write_file(table_model_schema_yml, project.project_root, "models", "schema.yml")
+        updated_yaml = self.interpolate_privilege_names(table_model_schema_yml)
+        write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
-        #grant_log_line = format_grant_log_line(my_model_relation, test_users[0])
-        #assert grant_log_line in log_output
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
         model = manifest.nodes[model_id]
         assert model.config.materialized == "table"
-        expected = {"select": [test_users[0]]}
+        expected = {select_privilege_name: [test_users[0]]}
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, change select grant user
-        write_file(user2_table_model_schema_yml, project.project_root, "models", "schema.yml")
+        updated_yaml = self.interpolate_privilege_names(user2_table_model_schema_yml)
+        write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
-        #grant_log_line = format_grant_log_line(my_model_relation, test_users[1])
-        #assert grant_log_line in log_output
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_id]
         assert model.config.materialized == "table"
-        expected = {"select": [test_users[1]]}
+        expected = {select_privilege_name: [test_users[1]]}
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, multiple grantees
-        write_file(multiple_users_table_model_schema_yml, project.project_root, "models", "schema.yml")
+        updated_yaml = self.interpolate_privilege_names(multiple_users_table_model_schema_yml)
+        write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_id]
         assert model.config.materialized == "table"
-        expected = {"select": [test_users[0], test_users[1]]}
+        expected = {select_privilege_name: [test_users[0], test_users[1]]}
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, multiple privileges
-        write_file(multiple_privileges_table_model_schema_yml, project.project_root, "models", "schema.yml")
+        updated_yaml = self.interpolate_privilege_names(multiple_privileges_table_model_schema_yml)
+        write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_id]
         assert model.config.materialized == "table"
-        expected = {"select": [test_users[0]], "insert": [test_users[1]]}
+        expected = {select_privilege_name: [test_users[0]], insert_privilege_name: [test_users[1]]}
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
 

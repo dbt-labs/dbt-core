@@ -1,21 +1,18 @@
 import pytest
-import os
 from dbt.tests.util import (
     run_dbt_and_capture,
-    get_manifest,
-    relation_from_name,
     write_file,
 )
 from dbt.tests.adapter.grants.base_grants import BaseGrants
 
-my_model_sql = """
+my_invalid_model_sql = """
   select 1 as fun
 """
 
 invalid_user_table_model_schema_yml = """
 version: 2
 models:
-  - name: my_model
+  - name: my_invalid_model
     config:
       materialized: table
       grants:
@@ -25,25 +22,28 @@ models:
 invalid_privilege_table_model_schema_yml = """
 version: 2
 models:
-  - name: my_model
+  - name: my_invalid_model
     config:
       materialized: table
       grants:
-        my_select: ["{{ env_var('DBT_TEST_USER_2') }}"]
+        fake_privilege: ["{{ env_var('DBT_TEST_USER_2') }}"]
 """
 
 
 class BaseInvalidGrants(BaseGrants):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": my_model_sql, "schema.yml": invalid_user_table_model_schema_yml}
-    
+        return {
+            "my_invalid_model.sql": my_invalid_model_sql,
+            "schema.yml": self.interpolate_privilege_names(invalid_user_table_model_schema_yml),
+        }
+
     def grantee_does_not_exist_error(self):
         return "does not exist"
-        
+
     def privilege_does_not_exist_error(self):
         return "unrecognized privilege"
-    
+
     def test_nonexistent_grantee(self, project, get_test_users, logs_dir):
         # failure when grant to a user/role that doesn't exist
         write_file(

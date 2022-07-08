@@ -1,22 +1,30 @@
 import pytest
 import os
 from dbt.tests.util import (
-    run_dbt_and_capture,
-    get_manifest,
     relation_from_name,
-    write_file,
     get_connection,
 )
 from dbt.context.base import BaseContext  # diff_of_two_dicts only
 
 TEST_USER_ENV_VARS = ["DBT_TEST_USER_1", "DBT_TEST_USER_2", "DBT_TEST_USER_3"]
 
+
+def replace_all(text, dic):
+    for i, j in dic.items():
+        text = text.replace(i, j)
+    return text
+
+
 class BaseGrants:
-    
-    # TODO: this will be different on different adapters
-    def format_grant_log_line(relation, user_name):
-        return f"grant select on {relation} to {user_name};"
-    
+    def privilege_names(self):
+        # these privilege names are valid on most databases, but not all!
+        # looking at you, BigQuery
+        # optionally use this to map from select --> other_select_name, insert --> ...
+        return {"select": "select", "insert": "insert", "fake_privilege": "fake_privilege"}
+
+    def interpolate_privilege_names(self, yaml_text):
+        return replace_all(yaml_text, self.privilege_names())
+
     @pytest.fixture(scope="class", autouse=True)
     def get_test_users(self, project):
         test_users = []
@@ -35,7 +43,7 @@ class BaseGrants:
             _, grant_table = adapter.execute(show_grant_sql, fetch=True)
             actual_grants = adapter.standardize_grants_dict(grant_table)
         return actual_grants
-        
+
     def assert_expected_grants_match_actual(self, project, relation_name, expected_grants):
         actual_grants = self.get_grants_on_relation(project, relation_name)
         # need a case-insensitive comparison
