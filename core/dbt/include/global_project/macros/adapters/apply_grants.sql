@@ -37,12 +37,12 @@
     {%- set grant_statements = [] -%}
     {%- for privilege in grant_config.keys() %}
         {%- set grantees = grant_config[privilege] -%}
-        {%- if grantees %}
+        {%- for grantee in grantees -%}
             {% set grant_sql -%}
-                grant {{ privilege }} on {{ relation }} to {{ grantees | join(', ') }}
+                grant {{ privilege }} on {{ relation }} to {{ grantee }}
             {%- endset %}
             {%- do grant_statements.append(grant_sql) -%}
-        {% endif -%}
+        {% endfor -%}
     {%- endfor -%}
     {{ return(grant_statements) }}
 {%- endmacro %}
@@ -51,19 +51,19 @@
     {{ return(adapter.dispatch("get_revoke_sql", "dbt")(relation, grant_config)) }}
 {% endmacro %}
 
-{% macro default__get_revoke_sql(relation, grant_config) %}
+{%- macro default__get_revoke_sql(relation, grant_config) -%}
     {%- set revoke_statements = [] -%}
-    {%- for privilege in grant_config.keys() -%}
+    {%- for privilege in grant_config.keys() %}
         {%- set grantees = grant_config[privilege] -%}
-        {%- if grantees %}
-            {% set revoke_sql -%}
-                revoke {{ privilege }} on {{ relation }} from {{ grantees | join(', ') }}
+        {%- for grantee in grantees -%}
+            {% set grant_sql -%}
+                revoke {{ privilege }} on {{ relation }} from {{ grantee }}
             {%- endset %}
-            {%- do revoke_statements.append(revoke_sql) -%}
-        {% endif -%}
+            {%- do revoke_statements.append(grant_sql) -%}
+        {% endfor -%}
     {%- endfor -%}
     {{ return(revoke_statements) }}
-{%- endmacro -%}
+{%- endmacro %}
 
 
 {% macro call_grant_revoke_statement_list(grant_and_revoke_statement_list) %}
