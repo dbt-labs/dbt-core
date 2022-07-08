@@ -10,7 +10,6 @@ from dbt.adapters.postgres import PostgresRelation
 from dbt.dataclass_schema import dbtClassMixin, ValidationError
 import dbt.exceptions
 import dbt.utils
-import agate
 
 
 # note that this isn't an adapter macro, so just a single underscore
