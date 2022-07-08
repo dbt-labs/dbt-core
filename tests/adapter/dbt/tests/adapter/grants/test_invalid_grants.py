@@ -49,13 +49,13 @@ class BaseInvalidGrants(BaseGrants):
         # failure when grant to a user/role that doesn't exist
         yaml_file = self.interpolate_privilege_names(invalid_user_table_model_schema_yml)
         write_file(yaml_file, project.project_root, "models", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
+        (results, log_output) = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
         assert self.grantee_does_not_exist_error() in log_output
 
         # failure when grant to a privilege that doesn't exist
         yaml_file = self.interpolate_privilege_names(invalid_privilege_table_model_schema_yml)
         write_file(yaml_file, project.project_root, "models", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
+        (results, log_output) = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
         assert self.privilege_does_not_exist_error() in log_output
 
 

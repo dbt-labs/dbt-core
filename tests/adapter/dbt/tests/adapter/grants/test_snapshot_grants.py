@@ -56,7 +56,7 @@ class BaseSnapshotGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_snapshot", expected)
 
         # run it again, nothing should have changed
-        (results, log_output) = run_dbt_and_capture(["snapshot"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "snapshot"])
         assert len(results) == 1
         assert "revoke " not in log_output
         assert "grant " not in log_output
@@ -65,7 +65,7 @@ class BaseSnapshotGrants(BaseGrants):
         # change the grantee, assert it updates
         updated_yaml = self.interpolate_privilege_names(user2_snapshot_schema_yml)
         write_file(updated_yaml, project.project_root, "snapshots", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["snapshot"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "snapshot"])
         assert len(results) == 1
         expected = {select_privilege_name: [test_users[1]]}
         self.assert_expected_grants_match_actual(project, "my_snapshot", expected)

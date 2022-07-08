@@ -72,7 +72,7 @@ class BaseSeedGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_seed", expected)
 
         # run it again, nothing should have changed
-        (results, log_output) = run_dbt_and_capture(["seed"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "seed"])
         assert len(results) == 1
         assert "revoke " not in log_output
         assert "grant " not in log_output
@@ -81,15 +81,19 @@ class BaseSeedGrants(BaseGrants):
         # change the grantee, assert it updates
         updated_yaml = self.interpolate_privilege_names(user2_schema_base_yml)
         write_file(updated_yaml, project.project_root, "seeds", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["seed"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "seed"])
         assert len(results) == 1
         expected = {select_privilege_name: [test_users[1]]}
+        self.assert_expected_grants_match_actual(project, "my_seed", expected)
+
+        # run it again, with --full-refresh, grants should be the same
+        run_dbt(["seed", "--full-refresh"])
         self.assert_expected_grants_match_actual(project, "my_seed", expected)
 
         # change config to 'grants: {}' -- should be completely ignored
         updated_yaml = self.interpolate_privilege_names(ignore_grants_yml)
         write_file(updated_yaml, project.project_root, "seeds", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["seed"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "seed"])
         assert len(results) == 1
         assert "revoke " not in log_output
         assert "grant " not in log_output
@@ -105,14 +109,14 @@ class BaseSeedGrants(BaseGrants):
         # now run with ZERO grants -- all grants should be removed
         updated_yaml = self.interpolate_privilege_names(zero_grants_yml)
         write_file(updated_yaml, project.project_root, "seeds", "schema.yml")
-        (results, log_output) = run_dbt_and_capture(["seed"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "seed"])
         assert len(results) == 1
         assert "revoke " in log_output
         expected = {}
         self.assert_expected_grants_match_actual(project, "my_seed", expected)
 
         # run it again -- dbt shouldn't try to grant or revoke anything
-        (results, log_output) = run_dbt_and_capture(["seed"])
+        (results, log_output) = run_dbt_and_capture(["--debug", "seed"])
         assert len(results) == 1
         assert "revoke " not in log_output
         assert "grant " not in log_output

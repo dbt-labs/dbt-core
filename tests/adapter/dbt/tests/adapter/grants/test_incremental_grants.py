@@ -1,8 +1,11 @@
 import pytest
 from dbt.tests.util import (
+    run_dbt,
     run_dbt_and_capture,
     get_manifest,
     write_file,
+    relation_from_name,
+    get_connection,
 )
 from dbt.tests.adapter.grants.base_grants import BaseGrants
 
@@ -48,8 +51,6 @@ class BaseIncrementalGrants(BaseGrants):
         # Incremental materialization, single select grant
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
-        # grant_log_line = format_grant_log_line(my_incremental_model_relation, test_users[0])
-        # assert grant_log_line in log_output
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_incremental_model"
         model = manifest.nodes[model_id]
@@ -69,13 +70,30 @@ class BaseIncrementalGrants(BaseGrants):
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
-        # grant_log_line = format_grant_log_line(my_incremental_model_relation, test_users[1])
-        # assert grant_log_line in log_output
         assert "revoke " in log_output
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_id]
         assert model.config.materialized == "incremental"
         expected = {select_privilege_name: [test_users[1]]}
+        self.assert_expected_grants_match_actual(project, "my_incremental_model", expected)
+
+        # Incremental materialization, same config, now with --full-refresh
+        run_dbt(["--debug", "run", "--full-refresh"])
+        assert len(results) == 1
+        # whether grants or revokes happened will vary by adapter
+        self.assert_expected_grants_match_actual(project, "my_incremental_model", expected)
+
+        # Now drop the schema (with the table in it)
+        adapter = project.adapter
+        relation = relation_from_name(adapter, "my_incremental_model")
+        with get_connection(adapter):
+            adapter.drop_schema(relation)
+
+        # Incremental materialization, same config, rebuild now that table is missing
+        (results, log_output) = run_dbt_and_capture(["--debug", "run"])
+        assert len(results) == 1
+        assert "grant " in log_output
+        assert "revoke " not in log_output
         self.assert_expected_grants_match_actual(project, "my_incremental_model", expected)
 
 
