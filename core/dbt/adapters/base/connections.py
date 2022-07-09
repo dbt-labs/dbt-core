@@ -178,6 +178,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     ) -> Connection:
         """Given a Connection, set its handle by calling Connection.credentials.acquire_handle.
 
+        The acquire_handle method call will be retried up to retry_limit times to deal
+        with transient connection errors. By default, retry_limit is set to 1, however, only
+        exceptions in exception_handlers will be retried unless retry_all is also set to True.
+
         :param Connection connection: An instance of a Connection that
             needs a handle to be set, usually when attempting to open it.
         :param AdapterLogger logger: A logger to emit messages on retry
