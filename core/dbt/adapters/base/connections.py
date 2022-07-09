@@ -227,18 +227,12 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 if is_expected:
                     logger.debug(
                         "Got an error when attempting to open a "
-                        "{conn_type} connection. Retrying due to "
+                        f"{cls.TYPE} connection. Retrying due to "
                         "either retry configuration set to true."
                         "This was attempt number: {attempt} of "
-                        "{max_attempts}. "
-                        "Retrying in {timeout} "
-                        "seconds. Error: '{error}'".format(
-                            conn_type=cls.TYPE,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            timeout=timeout,
-                            error=e,
-                        )
+                        f"{max_attempts}. "
+                        f"Retrying in {timeout} "
+                        f"seconds. Error: '{e}'"
                     )
 
                     exc_handler = exception_handlers.get(type(e), None)
@@ -251,28 +245,20 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 if retry_all is True:
                     logger.warning(
                         "Got unexpected an error when attempting to open a "
-                        "{conn_type} connection. Retrying due to "
+                        f"{cls.TYPE} connection. Retrying due to "
                         "'retry_all' configuration set to true."
-                        "This was attempt number: {attempt} of "
-                        "{max_attempts}. "
-                        "Retrying in {timeout} "
-                        "seconds. Error: '{error}'".format(
-                            conn_type=cls.TYPE,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            timeout=timeout,
-                            error=e,
-                        )
+                        f"This was attempt number: {attempt} of "
+                        f"{max_attempts}. "
+                        f"Retrying in {timeout} "
+                        f"seconds. Error: '{e}'"
                     )
                     sleep(timeout)
                     continue
 
                 logger.warning(
                     "Got unexpected an error when attempting to open a "
-                    "{conn_type} connection. This was attempt number: "
-                    "{attempt} of {max_attempts}. Error: '{error}'".format(
-                        conn_type=cls.TYPE, attempt=attempt, max_attempts=max_attempts, error=e
-                    )
+                    f"{cls.TYPE} connection. This was attempt number: "
+                    f"{attempt} of {max_attempts}. Error: '{e}'"
                 )
                 break
 
