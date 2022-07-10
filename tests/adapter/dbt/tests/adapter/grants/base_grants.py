@@ -16,14 +16,19 @@ def replace_all(text, dic):
 
 
 class BaseGrants:
-    def privilege_names(self):
-        # these privilege names are valid on most databases, but not all!
+    def privilege_grantee_name_overrides(self):
+        # these privilege and grantee names are valid on most databases, but not all!
         # looking at you, BigQuery
-        # optionally use this to map from select --> other_select_name, insert --> ...
-        return {"select": "select", "insert": "insert", "fake_privilege": "fake_privilege"}
+        # optionally use this to map from "select" --> "other_select_name", "insert" --> ...
+        return {
+            "select": "select",
+            "insert": "insert",
+            "fake_privilege": "fake_privilege",
+            "invalid_user": "invalid_user",
+        }
 
-    def interpolate_privilege_names(self, yaml_text):
-        return replace_all(yaml_text, self.privilege_names())
+    def interpolate_name_overrides(self, yaml_text):
+        return replace_all(yaml_text, self.privilege_grantee_name_overrides())
 
     @pytest.fixture(scope="class", autouse=True)
     def get_test_users(self, project):

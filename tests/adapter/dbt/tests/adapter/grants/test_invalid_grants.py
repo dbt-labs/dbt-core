@@ -31,13 +31,18 @@ models:
 
 
 class BaseInvalidGrants(BaseGrants):
+    # The purpose of this test is to understand the user experience when providing
+    # an invalid 'grants' configuration. dbt will *not* try to intercept or interpret
+    # the database's own error at runtime -- it will just return those error messages.
+    # Hopefully they're helpful!
+
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "my_invalid_model.sql": my_invalid_model_sql,
         }
 
-    # adapters will need to reimplement these methods with the specific
+    # Adapters will need to reimplement these methods with the specific
     # language of their database
     def grantee_does_not_exist_error(self):
         return "does not exist"
@@ -45,15 +50,15 @@ class BaseInvalidGrants(BaseGrants):
     def privilege_does_not_exist_error(self):
         return "unrecognized privilege"
 
-    def test_nonexistent_grantee(self, project, get_test_users, logs_dir):
+    def test_invalid_grants(self, project, get_test_users, logs_dir):
         # failure when grant to a user/role that doesn't exist
-        yaml_file = self.interpolate_privilege_names(invalid_user_table_model_schema_yml)
+        yaml_file = self.interpolate_name_overrides(invalid_user_table_model_schema_yml)
         write_file(yaml_file, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
         assert self.grantee_does_not_exist_error() in log_output
 
         # failure when grant to a privilege that doesn't exist
-        yaml_file = self.interpolate_privilege_names(invalid_privilege_table_model_schema_yml)
+        yaml_file = self.interpolate_name_overrides(invalid_privilege_table_model_schema_yml)
         write_file(yaml_file, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"], expect_pass=False)
         assert self.privilege_does_not_exist_error() in log_output

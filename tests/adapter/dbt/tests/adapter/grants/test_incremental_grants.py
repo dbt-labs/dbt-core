@@ -37,7 +37,7 @@ models:
 class BaseIncrementalGrants(BaseGrants):
     @pytest.fixture(scope="class")
     def models(self):
-        updated_schema = self.interpolate_privilege_names(incremental_model_schema_yml)
+        updated_schema = self.interpolate_name_overrides(incremental_model_schema_yml)
         return {
             "my_incremental_model.sql": my_incremental_model_sql,
             "schema.yml": updated_schema,
@@ -46,7 +46,7 @@ class BaseIncrementalGrants(BaseGrants):
     def test_incremental_grants(self, project, get_test_users):
         # we want the test to fail, not silently skip
         test_users = get_test_users
-        select_privilege_name = self.privilege_names()["select"]
+        select_privilege_name = self.privilege_grantee_name_overrides()["select"]
         assert len(test_users) == 3
 
         # Incremental materialization, single select grant
@@ -67,7 +67,7 @@ class BaseIncrementalGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_incremental_model", expected)
 
         # Incremental materialization, change select grant user
-        updated_yaml = self.interpolate_privilege_names(user2_incremental_model_schema_yml)
+        updated_yaml = self.interpolate_name_overrides(user2_incremental_model_schema_yml)
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1

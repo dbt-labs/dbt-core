@@ -73,7 +73,7 @@ models:
 class BaseModelGrants(BaseGrants):
     @pytest.fixture(scope="class")
     def models(self):
-        updated_schema = self.interpolate_privilege_names(model_schema_yml)
+        updated_schema = self.interpolate_name_overrides(model_schema_yml)
         return {
             "my_model.sql": my_model_sql,
             "schema.yml": updated_schema,
@@ -82,8 +82,8 @@ class BaseModelGrants(BaseGrants):
     def test_view_table_grants(self, project, get_test_users):
         # we want the test to fail, not silently skip
         test_users = get_test_users
-        select_privilege_name = self.privilege_names()["select"]
-        insert_privilege_name = self.privilege_names()["insert"]
+        select_privilege_name = self.privilege_grantee_name_overrides()["select"]
+        insert_privilege_name = self.privilege_grantee_name_overrides()["insert"]
         assert len(test_users) == 3
 
         # View materialization, single select grant
@@ -98,7 +98,7 @@ class BaseModelGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # View materialization, change select grant user
-        updated_yaml = self.interpolate_privilege_names(user2_model_schema_yml)
+        updated_yaml = self.interpolate_name_overrides(user2_model_schema_yml)
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
@@ -107,7 +107,7 @@ class BaseModelGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, single select grant
-        updated_yaml = self.interpolate_privilege_names(table_model_schema_yml)
+        updated_yaml = self.interpolate_name_overrides(table_model_schema_yml)
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
@@ -119,7 +119,7 @@ class BaseModelGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, change select grant user
-        updated_yaml = self.interpolate_privilege_names(user2_table_model_schema_yml)
+        updated_yaml = self.interpolate_name_overrides(user2_table_model_schema_yml)
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
@@ -130,7 +130,7 @@ class BaseModelGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, multiple grantees
-        updated_yaml = self.interpolate_privilege_names(multiple_users_table_model_schema_yml)
+        updated_yaml = self.interpolate_name_overrides(multiple_users_table_model_schema_yml)
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
@@ -141,7 +141,7 @@ class BaseModelGrants(BaseGrants):
         self.assert_expected_grants_match_actual(project, "my_model", expected)
 
         # Table materialization, multiple privileges
-        updated_yaml = self.interpolate_privilege_names(multiple_privileges_table_model_schema_yml)
+        updated_yaml = self.interpolate_name_overrides(multiple_privileges_table_model_schema_yml)
         write_file(updated_yaml, project.project_root, "models", "schema.yml")
         (results, log_output) = run_dbt_and_capture(["--debug", "run"])
         assert len(results) == 1
