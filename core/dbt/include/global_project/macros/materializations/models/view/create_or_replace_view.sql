@@ -18,7 +18,7 @@
   {%- set target_relation = api.Relation.create(
       identifier=identifier, schema=schema, database=database,
       type='view') -%}
-  {% set  grant_config = config.get('grants') %}
+  {% set grant_config = config.get('grants') %}
 
   {{ run_hooks(pre_hooks) }}
 

@@ -21,7 +21,7 @@
   {%- set preexisting_intermediate_relation = load_cached_relation(intermediate_relation)-%}
   {%- set preexisting_backup_relation = load_cached_relation(backup_relation) -%}
    -- grab current tables grants config for comparision later on
-  {% set  grant_config = config.get('grants') %}
+  {% set grant_config = config.get('grants') %}
   {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
   {{ drop_relation_if_exists(preexisting_backup_relation) }}
 
