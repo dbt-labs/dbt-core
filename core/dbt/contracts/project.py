@@ -1,4 +1,4 @@
-from dbt.contracts.util import Replaceable, Mergeable, list_str
+from dbt.contracts.util import Replaceable, Mergeable, list_str, Identifier
 from dbt.contracts.connection import QueryComment, UserConfigContract
 from dbt.helper_types import NoValue
 from dbt.dataclass_schema import (
@@ -7,7 +7,6 @@ from dbt.dataclass_schema import (
     HyphenatedDbtClassMixin,
     ExtensibleDbtClassMixin,
     register_pattern,
-    ValidatedStringMixin,
 )
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any
@@ -17,25 +16,6 @@ PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
 )
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
-
-
-class Name(ValidatedStringMixin):
-    ValidationRegex = r"^[^\d\W]\w*$"
-
-    @classmethod
-    def is_valid(cls, value: Any) -> bool:
-        if not isinstance(value, str):
-            return False
-
-        try:
-            cls.validate(value)
-        except ValidationError:
-            return False
-
-        return True
-
-
-register_pattern(Name, r"^[^\d\W]\w*$")
 
 
 class SemverString(str, SerializableType):
@@ -182,7 +162,7 @@ BANNED_PROJECT_NAMES = {
 
 @dataclass
 class Project(HyphenatedDbtClassMixin, Replaceable):
-    name: Name
+    name: Identifier
     version: Union[SemverString, float]
     config_version: int
     project_root: Optional[str] = None

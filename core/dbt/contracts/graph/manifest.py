@@ -183,6 +183,39 @@ class RefableLookup(dbtClassMixin):
         return manifest.nodes[unique_id]
 
 
+class MetricLookup(dbtClassMixin):
+    def __init__(self, manifest: "Manifest"):
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_metric(self, metric: ParsedMetric):
+        if metric.search_name not in self.storage:
+            self.storage[metric.search_name] = {}
+
+        self.storage[metric.search_name][metric.package_name] = metric.unique_id
+
+    def populate(self, manifest):
+        for metric in manifest.metrics.values():
+            if hasattr(metric, "name"):
+                self.add_metric(metric)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ParsedMetric:
+        if unique_id not in manifest.metrics:
+            raise dbt.exceptions.InternalException(
+                f"Metric {unique_id} found in cache but not found in manifest"
+            )
+        return manifest.metrics[unique_id]
+
+
 # This handles both models/seeds/snapshots and sources
 class DisabledLookup(dbtClassMixin):
     def __init__(self, manifest: "Manifest"):
@@ -431,6 +464,9 @@ class Disabled(Generic[D]):
     target: D
 
 
+MaybeMetricNode = Optional[ParsedMetric]
+
+
 MaybeDocumentation = Optional[ParsedDocumentation]
 
 
@@ -590,6 +626,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _ref_lookup: Optional[RefableLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
+    _metric_lookup: Optional[MetricLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _disabled_lookup: Optional[DisabledLookup] = field(
@@ -837,6 +876,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._ref_lookup = RefableLookup(self)
         return self._ref_lookup
 
+    @property
+    def metric_lookup(self) -> MetricLookup:
+        if self._metric_lookup is None:
+            self._metric_lookup = MetricLookup(self)
+        return self._metric_lookup
+
     def rebuild_ref_lookup(self):
         self._ref_lookup = RefableLookup(self)
 
@@ -910,6 +955,22 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         if disabled:
             return Disabled(disabled[0])
+        return None
+
+    def resolve_metric(
+        self,
+        target_metric_name: str,
+        target_metric_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeMetricNode:
+        metric: Optional[ParsedMetric] = None
+
+        candidates = _search_packages(current_project, node_package, target_metric_package)
+        for pkg in candidates:
+            metric = self.metric_lookup.find(target_metric_name, pkg, self)
+            if metric is not None:
+                return metric
         return None
 
     # Called by DocsRuntimeContext.doc
@@ -1076,6 +1137,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
+            self._metric_lookup,
             self._disabled_lookup,
             self._analysis_lookup,
         )
@@ -1095,7 +1157,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 5)
+@schema_version("manifest", 6)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1141,7 +1203,7 @@ class WritableManifest(ArtifactMixin):
 
     @classmethod
     def compatible_previous_versions(self):
-        return [("manifest", 4)]
+        return [("manifest", 4), ("manifest", 5)]
 
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():

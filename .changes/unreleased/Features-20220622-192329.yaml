@@ -1,0 +1,8 @@
+kind: Features
+body: 'Allow customizing `target-path` and `log-path` through
+  environment variables and CLI flags.'
+time: 2022-06-22T19:23:29.748577478+03:00
+custom:
+  Author: isidentical
+  Issue: "5399"
+  PR: "5402"

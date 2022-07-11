@@ -142,6 +142,7 @@ def main(args=None):
             exit_code = e.code
 
         except BaseException as e:
+            traceback.print_exc()
             fire_event(MainEncounteredError(e=str(e)))
             fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
             exit_code = ExitCodes.UnhandledError.value
@@ -649,6 +650,22 @@ def _add_common_arguments(*subparsers):
             help="""
             Specify number of threads to use while executing models. Overrides
             settings in profiles.yml.
+            """,
+        )
+        sub.add_argument(
+            "--target-path",
+            required=False,
+            help="""
+            Configure the 'target-path'. Only applies this setting for the
+            current run. Overrides the 'DBT_TARGET_PATH' if it is set.
+            """,
+        )
+        sub.add_argument(
+            "--log-path",
+            required=False,
+            help="""
+            Configure the 'log-path'. Only applies this setting for the
+            current run. Overrides the 'DBT_LOG_PATH' if it is set.
             """,
         )
         _add_version_check(sub)
