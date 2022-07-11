@@ -10,7 +10,6 @@ from dbt.adapters.postgres import PostgresRelation
 from dbt.dataclass_schema import dbtClassMixin, ValidationError
 import dbt.exceptions
 import dbt.utils
-import agate
 
 
 # note that this isn't an adapter macro, so just a single underscore
@@ -85,18 +84,6 @@ class PostgresAdapter(SQLAdapter):
     @available
     def parse_index(self, raw_index: Any) -> Optional[PostgresIndexConfig]:
         return PostgresIndexConfig.parse(raw_index)
-
-    @available
-    def standardize_grants_dict(self, grants_table: agate.Table) -> dict:
-        grants_dict = {}
-        for row in grants_table:
-            grantee = row["grantee"]
-            privilege = row["privilege_type"]
-            if privilege in grants_dict.keys():
-                grants_dict[privilege].append(grantee)
-            else:
-                grants_dict.update({privilege: [grantee]})
-        return grants_dict
 
     def _link_cached_database_relations(self, schemas: Set[str]):
         """

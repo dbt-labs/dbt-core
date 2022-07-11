@@ -205,7 +205,7 @@
 
 {%- macro postgres__get_show_grant_sql(relation) -%}
   select grantee, privilege_type
-  from information_schema.role_table_grants
+  from {{ relation.information_schema('role_table_grants') }}
       where grantor = current_role
         and grantee != current_role
         and table_schema = '{{ relation.schema }}'
