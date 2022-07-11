@@ -40,7 +40,6 @@
 - [@b-per](https://github.com/b-per) ([#5446](https://github.com/dbt-labs/dbt-core/pull/5446))
 - [@callum-mcdata](https://github.com/callum-mcdata) ([#5027](https://github.com/dbt-labs/dbt-core/pull/5027), [#5446](https://github.com/dbt-labs/dbt-core/pull/5446))
 - [@darin-reify](https://github.com/darin-reify) ([#5394](https://github.com/dbt-labs/dbt-core/pull/5394))
-- [@dependabot[bot]](https://github.com/dependabot[bot]) ([#5337](https://github.com/dbt-labs/dbt-core/pull/5337), [#5388](https://github.com/dbt-labs/dbt-core/pull/5388), [#5420](https://github.com/dbt-labs/dbt-core/pull/5420))
 - [@drewbanin](https://github.com/drewbanin) ([#5027](https://github.com/dbt-labs/dbt-core/pull/5027), [#5446](https://github.com/dbt-labs/dbt-core/pull/5446), [#5446](https://github.com/dbt-labs/dbt-core/pull/5446), [#5446](https://github.com/dbt-labs/dbt-core/pull/5446))
 - [@fivetran-joemarkiewicz](https://github.com/fivetran-joemarkiewicz) ([#5370](https://github.com/dbt-labs/dbt-core/pull/5370))
 - [@isidentical](https://github.com/isidentical) ([#5402](https://github.com/dbt-labs/dbt-core/pull/5402))
