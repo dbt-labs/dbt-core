@@ -16,10 +16,10 @@ FROM --platform=$build_for python:3.10.5-slim-bullseye as base
 
 ARG dbt_core_ref=dbt-core@v1.2.0rc1
 ARG dbt_postgres_ref=dbt-core@v1.2.0rc1
-ARG dbt_redshift_ref=dbt-redshift@v1.0.0
-ARG dbt_bigquery_ref=dbt-bigquery@v1.0.0
-ARG dbt_snowflake_ref=dbt-snowflake@v1.0.0
-ARG dbt_spark_ref=dbt-spark@v1.0.0
+ARG dbt_redshift_ref=dbt-redshift@v1.2.0rc1
+ARG dbt_bigquery_ref=dbt-bigquery@v1.2.0rc1
+ARG dbt_snowflake_ref=dbt-snowflake@v1.2.0rc1
+ARG dbt_spark_ref=dbt-spark@v1.2.0rc1
 # special case args
 ARG dbt_spark_version=all
 ARG dbt_third_party
