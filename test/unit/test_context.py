@@ -199,6 +199,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "modules",
         "flags",
         "print",
+        "diff_of_two_dicts"
     }
 )
 

@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set
+from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
 
 from dbt import flags
 from dbt import tracking
@@ -656,6 +656,35 @@ class BaseContext(metaclass=ContextMeta):
         if not flags.NO_PRINT:
             print(msg)
         return ""
+
+    @contextmember
+    @staticmethod
+    def diff_of_two_dicts(
+        dict_a: Dict[str, List[str]], dict_b: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        """
+        Given two dictionaries of type Dict[str, List[str]]:
+            dict_a = {'key_x': ['value_1', 'VALUE_2'], 'KEY_Y': ['value_3']}
+            dict_b = {'key_x': ['value_1'], 'key_z': ['value_4']}
+        Return the same dictionary representation of dict_a MINUS dict_b,
+        performing a case-insensitive comparison between the strings in each.
+        All keys returned will be in the original case of dict_a.
+            returns {'key_x': ['VALUE_2'], 'KEY_Y': ['value_3']}
+        """
+
+        dict_diff = {}
+        dict_b_lowered = {k.casefold(): [x.casefold() for x in v] for k, v in dict_b.items()}
+        for k in dict_a:
+            if k.casefold() in dict_b_lowered.keys():
+                diff = []
+                for v in dict_a[k]:
+                    if v.casefold() not in dict_b_lowered[k.casefold()]:
+                        diff.append(v)
+                if diff:
+                    dict_diff.update({k: diff})
+            else:
+                dict_diff.update({k: dict_a[k]})
+        return dict_diff
 
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:
