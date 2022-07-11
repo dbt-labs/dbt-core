@@ -13,7 +13,7 @@ my_snapshot_sql = """
         check_cols='all', unique_key='id', strategy='check',
         target_database=database, target_schema=schema
     ) }}
-    select 1 as id, 'blue' as color
+    select 1 as id, cast('blue' as {{ type_string() }}) as color
 {% endsnapshot %}
 """.strip()
 
