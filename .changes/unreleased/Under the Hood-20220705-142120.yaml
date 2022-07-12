@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Bump manifest version to v6
-time: 2022-07-05T14:21:20.66768-04:00
-custom:
-  Author: leahwicz
-  Issue: "5417"
-  PR: "5430"

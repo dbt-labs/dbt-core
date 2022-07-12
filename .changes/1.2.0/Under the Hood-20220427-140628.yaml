@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Converted dbt list tests to pytest
-time: 2022-04-27T14:06:28.882908-05:00
-custom:
-  Author: stu-k
-  Issue: "5049"
-  PR: "5178"
