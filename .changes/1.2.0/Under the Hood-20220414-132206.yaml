@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Move package deprecation check outside of package cache
-time: 2022-04-14T13:22:06.157579-05:00
-custom:
-  Author: emmyoop
-  Issue: "5068"
-  PR: "5069"

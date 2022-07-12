@@ -1,8 +1,0 @@
-kind: Fixes
-body: Fix column comparison in snapshot_check_all_get_existing_columns for check-strategy
-  snapshots with explicit check_cols defined
-time: 2022-05-09T13:00:21.649028+02:00
-custom:
-  Author: jtcohen6
-  Issue: "5222"
-  PR: "5223"

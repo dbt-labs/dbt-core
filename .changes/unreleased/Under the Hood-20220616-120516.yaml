@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: 'Add annotation to render_value method reimplemented in #5334'
-time: 2022-06-16T12:05:16.474078+02:00
-custom:
-  Author: jtcohen6
-  Issue: "4796"
-  PR: "5382"

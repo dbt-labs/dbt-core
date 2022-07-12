@@ -1,7 +1,0 @@
-kind: Fixes
-body: Remove duplicate dbt script entry
-time: 2022-06-01T08:13:14.067001+10:00
-custom:
-  Author: groodt
-  Issue: "5314"
-  PR: "5304"
