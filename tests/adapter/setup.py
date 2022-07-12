@@ -20,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-tests-adapter"
-package_version = "1.2.0b1"
+package_version = "1.3.0a1"
 description = """The dbt adapter tests for adapter plugins"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
