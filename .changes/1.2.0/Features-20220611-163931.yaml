@@ -1,7 +1,0 @@
-kind: Features
-body: Prettify duration message at the end of execution
-time: 2022-06-11T16:39:31.725960083+01:00
-custom:
-  Author: jared-rimmer
-  Issue: "5253"
-  PR: "5364"

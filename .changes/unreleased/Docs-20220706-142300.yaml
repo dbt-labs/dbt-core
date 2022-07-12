@@ -1,7 +1,0 @@
-kind: Docs
-body: Run build and tests in CI checks
-time: 2022-07-06T14:23:00.842859-05:00
-custom:
-  Author: drewbanin
-  Issue: "5255"
-  PR: "5446"

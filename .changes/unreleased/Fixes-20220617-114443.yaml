@@ -1,7 +1,0 @@
-kind: Fixes
-body: Properly use quotes for Snowflake snapshots when checking all columns
-time: 2022-06-17T11:44:43.978834+02:00
-custom:
-  Author: pquadri
-  Issue: "2975"
-  PR: "5389"

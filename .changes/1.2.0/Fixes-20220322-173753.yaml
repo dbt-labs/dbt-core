@@ -1,8 +1,0 @@
-kind: Fixes
-body: Truncate relation names when appending a suffix that will result in len > 63
-  characters using make_temp_relation and make_backup_relation macros
-time: 2022-03-22T17:37:53.320082-07:00
-custom:
-  Author: epapineau
-  Issue: "2869"
-  PR: "4921"

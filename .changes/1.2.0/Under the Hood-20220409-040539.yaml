@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Migrating 005_simple_seed to the new test framework.
-time: 2022-04-09T04:05:39.20045-07:00
-custom:
-  Author: versusfacit
-  Issue: "200"
-  PR: "5013"

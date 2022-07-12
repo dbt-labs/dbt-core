@@ -1,7 +1,0 @@
-kind: Features
-body: Move type_* macros from dbt-utils into dbt-core, with tests
-time: 2022-06-30T13:54:52.165139+02:00
-custom:
-  Author: jtcohen6
-  Issue: "5317"
-  PR: "5428"
