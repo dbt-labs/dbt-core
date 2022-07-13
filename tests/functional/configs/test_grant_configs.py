@@ -57,11 +57,10 @@ class TestGrantConfigs:
         return dbt_project_yml
 
     def test_model_grant_config(self, project, logs_dir):
-        # This test uses "my_select" instead of "select", so that when
-        # actual granting of permissions happens, it won't break this
-        # test.
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        # This test uses "my_select" instead of "select", so we need
+        # use "parse" instead of "run" because we will get compilation
+        # errors for the grants.
+        run_dbt(["parse"])
 
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
@@ -77,7 +76,7 @@ class TestGrantConfigs:
 
         # add model grant with clobber
         write_file(my_model_clobber_sql, project.project_root, "models", "my_model.sql")
-        results = run_dbt(["run"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config
 
@@ -86,7 +85,7 @@ class TestGrantConfigs:
 
         # change model to extend grants
         write_file(my_model_extend_sql, project.project_root, "models", "my_model.sql")
-        results = run_dbt(["run"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config
 
@@ -95,8 +94,7 @@ class TestGrantConfigs:
 
         # add schema file with extend
         write_file(append_schema_yml, project.project_root, "models", "schema.yml")
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        run_dbt(["parse"])
 
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config
@@ -106,8 +104,7 @@ class TestGrantConfigs:
 
         # change model file to have string instead of list
         write_file(my_model_extend_string_sql, project.project_root, "models", "my_model.sql")
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        run_dbt(["parse"])
 
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config
@@ -117,8 +114,7 @@ class TestGrantConfigs:
 
         # change model file to have string instead of list
         write_file(my_model_extend_twice_sql, project.project_root, "models", "my_model.sql")
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        run_dbt(["parse"])
 
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config
@@ -135,8 +131,7 @@ class TestGrantConfigs:
             "log-path": logs_dir,
         }
         write_config_file(config, project.project_root, "dbt_project.yml")
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        run_dbt(["parse"])
 
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config
@@ -146,8 +141,7 @@ class TestGrantConfigs:
 
         # Remove my_model config, leaving only schema file
         write_file(my_model_base_sql, project.project_root, "models", "my_model.sql")
-        results = run_dbt(["run"])
-        assert len(results) == 1
+        run_dbt(["parse"])
 
         manifest = get_manifest(project.project_root)
         model_config = manifest.nodes[model_id].config

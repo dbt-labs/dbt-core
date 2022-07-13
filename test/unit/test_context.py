@@ -199,6 +199,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "modules",
         "flags",
         "print",
+        "diff_of_two_dicts"
     }
 )
 
@@ -218,6 +219,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "load_agate_table",
     "ref",
     "source",
+    "metric",
     "config",
     "execute",
     "exceptions",

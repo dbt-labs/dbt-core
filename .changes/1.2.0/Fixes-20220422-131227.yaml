@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix retry logic to return values after initial try
-time: 2022-04-22T13:12:27.239055-05:00
-custom:
-  Author: emmyoop
-  Issue: "5023"
-  PR: "5137"

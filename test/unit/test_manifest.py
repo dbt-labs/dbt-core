@@ -12,6 +12,7 @@ import pytest
 import dbt.flags
 import dbt.version
 from dbt import tracking
+from dbt.adapters.base.plugin import AdapterPlugin
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.parsed import (
@@ -36,11 +37,11 @@ from dbt.events.functions import get_invocation_id
 from dbt.node_types import NodeType
 import freezegun
 
-from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMaterialization, MockGenerateMacro
+from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMaterialization, MockGenerateMacro, inject_plugin
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
-    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'meta',
+    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
@@ -118,6 +119,7 @@ class ManifestTest(unittest.TestCase):
                 depends_on=DependsOn(nodes=['model.root.multi']),
                 refs=[['multi']],
                 sources=[],
+                metrics=[],
                 fqn=['root', 'my_metric'],
                 unique_id='metric.root.my_metric',
                 package_name='root',
@@ -139,6 +141,7 @@ class ManifestTest(unittest.TestCase):
                 package_name='snowplow',
                 refs=[],
                 sources=[],
+                metrics=[],
                 depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
@@ -160,6 +163,7 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 refs=[],
                 sources=[],
+                metrics=[],
                 depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
@@ -181,6 +185,7 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 refs=[['events']],
                 sources=[],
+                metrics=[],
                 depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
@@ -202,6 +207,7 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 refs=[['events']],
                 sources=[],
+                metrics=[],
                 depends_on=DependsOn(nodes=['model.root.dep']),
                 config=self.model_config,
                 tags=[],
@@ -223,6 +229,7 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 refs=[['events']],
                 sources=[],
+                metrics=[],
                 depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
@@ -244,6 +251,7 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 refs=[['events']],
                 sources=[],
+                metrics=[],
                 depends_on=DependsOn(nodes=['model.root.nested', 'model.root.sibling']),
                 config=self.model_config,
                 tags=[],
@@ -311,7 +319,7 @@ class ManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v5.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v6.json',
                     'dbt_version': dbt.version.__version__,
                     'env': {ENV_KEY_NAME: 'value'},
                     'invocation_id': invocation_id,
@@ -462,7 +470,7 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v5.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v6.json',
                     'dbt_version': dbt.version.__version__,
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -708,7 +716,7 @@ class MixedManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v5.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v6.json',
                     'dbt_version': dbt.version.__version__,
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                     'env': {ENV_KEY_NAME: 'value'},
@@ -1005,6 +1013,27 @@ FindMaterializationSpec = namedtuple('FindMaterializationSpec', 'macros,adapter_
 
 
 def _materialization_parameter_sets():
+    # inject the plugins used for materialization parameter tests
+    with mock.patch('dbt.adapters.base.plugin.project_name_from_path') as get_name:
+        get_name.return_value = 'foo'
+        FooPlugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path='/path/to/root/plugin',
+        )
+        FooPlugin.adapter.type.return_value = 'foo'
+        inject_plugin(FooPlugin)
+
+        get_name.return_value = 'bar'
+        BarPlugin = AdapterPlugin(
+            adapter=mock.MagicMock(),
+            credentials=mock.MagicMock(),
+            include_path='/path/to/root/plugin',
+            dependencies=['foo'],
+        )
+        BarPlugin.adapter.type.return_value = 'bar'
+        inject_plugin(BarPlugin)
+
     sets = [
         FindMaterializationSpec(macros=[], adapter_type='foo', expected=None),
     ]
@@ -1077,6 +1106,22 @@ def _materialization_parameter_sets():
             expected=('dep', 'foo'),
         ),
     ])
+
+    # inherit from parent adapter
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='foo')],
+            adapter_type='bar',
+            expected=(project, 'foo'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='foo'), MockMaterialization(project, adapter_type='bar')],
+            adapter_type='bar',
+            expected=(project, 'bar'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
 
     return sets
 

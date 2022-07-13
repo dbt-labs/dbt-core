@@ -31,9 +31,9 @@ class VersionSpecification(dbtClassMixin):
 
 
 _MATCHERS = r"(?P<matcher>\>=|\>|\<|\<=|=)?"
-_NUM_NO_LEADING_ZEROS = r"(0|[1-9][0-9]*)"
+_NUM_NO_LEADING_ZEROS = r"(0|[1-9]\d*)"
 _ALPHA = r"[0-9A-Za-z-]*"
-_ALPHA_NO_LEADING_ZEROS = r"(0|[1-9A-Za-z-][0-9A-Za-z-]*)"
+_ALPHA_NO_LEADING_ZEROS = r"(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)"
 
 _BASE_VERSION_REGEX = r"""
 (?P<major>{num_no_leading_zeros})\.
@@ -95,7 +95,7 @@ class VersionSpecifier(VersionSpecification):
 
         if not match:
             raise dbt.exceptions.SemverException(
-                'Could not parse version "{}"'.format(version_string)
+                f'"{version_string}" is not a valid semantic version.'
             )
 
         matched = {k: v for k, v in match.groupdict().items() if v is not None}

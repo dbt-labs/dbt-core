@@ -221,7 +221,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
     model_raw_sql = read_file_replace_returns(model_sql_path).rstrip("\r\n")
 
     return {
-        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v5.json",
+        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v6.json",
         "dbt_version": dbt.version.__version__,
         "nodes": {
             "model.test.model": {
@@ -243,6 +243,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "unique_id": "model.test.model",
                 "fqn": ["test", "model"],
+                "metrics": [],
                 "tags": [],
                 "meta": {},
                 "config": model_config,
@@ -323,6 +324,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "unique_id": "model.test.second_model",
                 "fqn": ["test", "second_model"],
+                "metrics": [],
                 "tags": [],
                 "meta": {},
                 "config": second_config,
@@ -405,6 +407,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {"nodes": [], "macros": []},
                 "unique_id": "seed.test.seed",
                 "fqn": ["test", "seed"],
+                "metrics": [],
                 "tags": [],
                 "meta": {},
                 "schema": my_schema_name,
@@ -481,6 +484,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "description": "",
                 "file_key_name": "models.model",
                 "fqn": ["test", "not_null_model_id"],
+                "metrics": [],
                 "name": "not_null_model_id",
                 "original_file_path": model_schema_yml_path,
                 "package_name": "test",
@@ -533,6 +537,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "extra_ctes": [],
                 "extra_ctes_injected": True,
                 "fqn": ["test", "snapshot_seed", "snapshot_seed"],
+                "metrics": [],
                 "meta": {},
                 "name": "snapshot_seed",
                 "original_file_path": snapshot_path,
@@ -575,6 +580,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "description": "",
                 "file_key_name": "models.model",
                 "fqn": ["test", "test_nothing_model_"],
+                "metrics": [],
                 "name": "test_nothing_model_",
                 "original_file_path": model_schema_yml_path,
                 "package_name": "test",
@@ -624,6 +630,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "description": "",
                 "file_key_name": "models.model",
                 "fqn": ["test", "unique_model_id"],
+                "metrics": [],
                 "name": "unique_model_id",
                 "original_file_path": model_schema_yml_path,
                 "package_name": "test",
@@ -829,7 +836,7 @@ def expected_references_manifest(project):
     alternate_schema = project.test_schema + "_test"
 
     return {
-        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v5.json",
+        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v6.json",
         "dbt_version": dbt.version.__version__,
         "nodes": {
             "model.test.ephemeral_copy": {
@@ -845,6 +852,7 @@ def expected_references_manifest(project):
                 "description": "",
                 "docs": {"show": True},
                 "fqn": ["test", "ephemeral_copy"],
+                "metrics": [],
                 "name": "ephemeral_copy",
                 "original_file_path": ephemeral_copy_path,
                 "package_name": "test",
@@ -897,6 +905,7 @@ def expected_references_manifest(project):
                 "description": "A summmary table of the ephemeral copy of the seed data",
                 "docs": {"show": True},
                 "fqn": ["test", "ephemeral_summary"],
+                "metrics": [],
                 "name": "ephemeral_summary",
                 "original_file_path": ephemeral_summary_path,
                 "package_name": "test",
@@ -951,6 +960,7 @@ def expected_references_manifest(project):
                 "description": "A view of the summary of the ephemeral copy of the seed data",
                 "docs": {"show": True},
                 "fqn": ["test", "view_summary"],
+                "metrics": [],
                 "name": "view_summary",
                 "original_file_path": view_summary_path,
                 "package_name": "test",
@@ -1027,6 +1037,7 @@ def expected_references_manifest(project):
                 "description": "The test seed",
                 "docs": {"show": True},
                 "fqn": ["test", "seed"],
+                "metrics": [],
                 "name": "seed",
                 "original_file_path": seed_path,
                 "package_name": "test",
@@ -1067,6 +1078,7 @@ def expected_references_manifest(project):
                 "extra_ctes": [],
                 "extra_ctes_injected": True,
                 "fqn": ["test", "snapshot_seed", "snapshot_seed"],
+                "metrics": [],
                 "meta": {},
                 "name": "snapshot_seed",
                 "original_file_path": snapshot_path,

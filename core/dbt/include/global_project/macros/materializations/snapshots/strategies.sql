@@ -133,7 +133,7 @@
     {%- set intersection = [] -%}
     {%- for col in query_columns -%}
         {%- if col in existing_cols -%}
-            {%- do intersection.append(col) -%}
+            {%- do intersection.append(adapter.quote(col)) -%}
         {%- else -%}
             {% set ns.column_added = true %}
         {%- endif -%}

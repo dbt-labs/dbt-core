@@ -691,6 +691,22 @@ class TestUnparsedMetric(ContractTestCase):
             },
         }
 
+    def get_ok_expression_dict(self):
+        return {
+            'name': 'arpc',
+            'label': 'revenue per customer',
+            'description': '',
+            'type': 'expression',
+            'sql': "{{ metric('revenue') }} / {{ metric('customers') }}",
+            'time_grains': ['day', 'week', 'month'],
+            'dimensions': [],
+            'filters': [],
+            'tags': [],
+            'meta': {
+                'is_okr': True
+            },
+        }
+
     def test_ok(self):
         metric = self.ContractType(
             name='new_customers',
@@ -703,13 +719,31 @@ class TestUnparsedMetric(ContractTestCase):
             time_grains=['day', 'week', 'month'],
             dimensions=['plan', 'country'],
             filters=[MetricFilter(
-               field="is_paying",
-               value='True',
-               operator="=",
+                field="is_paying",
+                value='True',
+                operator="=",
             )],
             meta={'is_okr': True},
         )
         dct = self.get_ok_dict()
+        self.assert_symmetric(metric, dct)
+        pickle.loads(pickle.dumps(metric))
+
+    def test_ok_metric_no_model(self):
+        # Expression metrics do not have model properties
+        metric = self.ContractType(
+            name='arpc',
+            label='revenue per customer',
+            model=None,
+            description="",
+            type='expression',
+            sql="{{ metric('revenue') }} / {{ metric('customers') }}",
+            timestamp=None,
+            time_grains=['day', 'week', 'month'],
+            dimensions=[],
+            meta={'is_okr': True},
+        )
+        dct = self.get_ok_expression_dict()
         self.assert_symmetric(metric, dct)
         pickle.loads(pickle.dumps(metric))
 
@@ -720,7 +754,9 @@ class TestUnparsedMetric(ContractTestCase):
 
     def test_bad_metric_no_model(self):
         tst = self.get_ok_dict()
+        # Metrics with type='expression' do not have model props
         tst['model'] = None
+        tst['type'] = 'sum'
         self.assert_fails_validation(tst)
 
     def test_bad_filter_missing_things(self):

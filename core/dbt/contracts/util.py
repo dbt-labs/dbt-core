@@ -9,6 +9,13 @@ from dbt.version import __version__
 from dbt.events.functions import get_invocation_id
 from dbt.dataclass_schema import dbtClassMixin
 
+from dbt.dataclass_schema import (
+    ValidatedStringMixin,
+    ValidationError,
+    register_pattern,
+)
+
+
 SourceKey = Tuple[str, str]
 
 
@@ -250,3 +257,22 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
         super().validate(data)
         if cls.dbt_schema_version is None:
             raise InternalException("Cannot call from_dict with no schema version!")
+
+
+class Identifier(ValidatedStringMixin):
+    ValidationRegex = r"^[^\d\W]\w*$"
+
+    @classmethod
+    def is_valid(cls, value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+
+        try:
+            cls.validate(value)
+        except ValidationError:
+            return False
+
+        return True
+
+
+register_pattern(Identifier, r"^[^\d\W]\w*$")

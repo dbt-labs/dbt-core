@@ -159,6 +159,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         - convert_datetime_type
         - convert_date_type
         - convert_time_type
+        - standardize_grants_dict
 
     Macros:
         - get_catalog
@@ -434,12 +435,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Abstract methods for database-specific values, attributes, and types
     ###
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
         raise NotImplementedException("`date_function` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def is_cancelable(cls) -> bool:
         raise NotImplementedException("`is_cancelable` is not implemented for this adapter!")
 
@@ -535,6 +538,33 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException(
             "`list_relations_without_caching` is not implemented for this " "adapter!"
         )
+
+    ###
+    # Methods about grants
+    ###
+    @available
+    def standardize_grants_dict(self, grants_table: agate.Table) -> dict:
+        """Translate the result of `show grants` (or equivalent) to match the
+        grants which a user would configure in their project.
+
+        Ideally, the SQL to show grants should also be filtering:
+        filter OUT any grants TO the current user/role (e.g. OWNERSHIP).
+        If that's not possible in SQL, it can be done in this method instead.
+
+        :param grants_table: An agate table containing the query result of
+            the SQL returned by get_show_grant_sql
+        :return: A standardized dictionary matching the `grants` config
+        :rtype: dict
+        """
+        grants_dict: Dict[str, List[str]] = {}
+        for row in grants_table:
+            grantee = row["grantee"]
+            privilege = row["privilege_type"]
+            if privilege in grants_dict.keys():
+                grants_dict[privilege].append(grantee)
+            else:
+                grants_dict.update({privilege: [grantee]})
+        return grants_dict
 
     ###
     # Provided methods about relations
@@ -734,7 +764,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
 
     @available
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
         raise NotImplementedException("`quote` is not implemented for this adapter!")
@@ -780,7 +811,8 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Conversions: These must be implemented by concrete implementations, for
     # converting agate types into their sql equivalents.
     ###
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Text
         type for the given agate table and column index.
@@ -791,7 +823,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_text_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Number
         type for the given agate table and column index.
@@ -802,7 +835,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_number_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
         type for the given agate table and column index.
@@ -815,7 +849,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             "`convert_boolean_type` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.DateTime
         type for the given agate table and column index.
@@ -828,7 +863,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             "`convert_datetime_type` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Date
         type for the given agate table and column index.
@@ -839,7 +875,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_date_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the
         agate.TimeDelta type for the given agate table and column index.
