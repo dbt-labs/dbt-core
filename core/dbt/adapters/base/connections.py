@@ -5,14 +5,24 @@ from time import sleep
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
 from threading import get_ident
-from typing import Dict, Tuple, Hashable, Optional, ContextManager, List, Callable, Type
+from typing import (
+    Dict,
+    Tuple,
+    Hashable,
+    Optional,
+    ContextManager,
+    List,
+    Type,
+    Union,
+    Iterable,
+    Callable,
+)
 
 import agate
 
 import dbt.exceptions
 from dbt.contracts.connection import (
     Connection,
-    Credentials,
     Identifier,
     ConnectionState,
     AdapterRequiredConfig,
@@ -36,6 +46,8 @@ from dbt.events.types import (
     RollbackFailed,
 )
 from dbt import flags
+
+SleepTime = Union[int, float]
 
 
 class BaseConnectionManager(metaclass=abc.ABCMeta):
@@ -168,57 +180,55 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         connection: Connection,
         logger: AdapterLogger,
         retry_limit: int = 1,
-        retry_all: bool = False,
-        timeout: int = 5,
-        exception_handlers: Optional[
-            Dict[Type[Exception], Optional[Callable[[Exception], None]]]
-        ] = None,
-        credentials: Optional[Credentials] = None,
+        timeout: Union[Callable[[int, int], SleepTime], SleepTime] = 3,
+        retry_on_exceptions: Optional[Iterable[Type[Exception]]] = None,
+        not_retry_on_exceptions: Optional[Iterable[Type[Exception]]] = None,
         **kwargs,
     ) -> Connection:
         """Given a Connection, set its handle by calling Connection.credentials.acquire_handle.
 
-        The acquire_handle method call will be retried up to retry_limit times to deal
-        with transient connection errors. By default, retry_limit is set to 1, however, only
-        exceptions in exception_handlers will be retried unless retry_all is also set to True.
+        The acquire_handle method call will be retried up to retry_limit times to deal with
+        transient connection errors. By default, one retry will be attempted if retry_on_exceptions
+        or not_retry_on_exceptions are set.
 
-        :param Connection connection: An instance of a Connection that
-            needs a handle to be set, usually when attempting to open it.
-        :param AdapterLogger logger: A logger to emit messages on retry
-            attempts or errors. When handling expected errors, we call
-            debug, and call warning on unexpected errors or when all
-            retry attempts have been exhausted.
-        :param int retry_limit: How many times to retry the call to
-            acquire_handle. If this limit is exceeded before a successful
-            call, a FailedToConnectException will be raised.
-        :param bool retry_all: Retry on all errors, regardless if they have
-            handlers defined in exception_handlers or not.
-        :param int timeout: How many seconds to wait between attempts to
-            acquire_handle.
-        :param dict exception_handlers: A mapping of exception classes
-            that should be retried to functions to run upon catching them.
-            The values may be set to None if no handling is required before
-            retrying.
-        :param Credentials credentials: A subclass of Credentials that implements
-            acquire_handle to override credentials in connection.
+        :param Connection connection: An instance of a Connection that needs a handle to be set,
+            usually when attempting to open it.
+        :param AdapterLogger logger: A logger to emit messages on retry attempts or errors. When
+            handling expected errors, we call debug, and call warning on unexpected errors or when
+            all retry attempts have been exhausted.
+        :param int retry_limit: How many times to retry the call to acquire_handle. If this limit
+            is exceeded before a successful call, a FailedToConnectException will be raised.
+        :param int timeout: Time to wait between attempts to acquire_handle. Can also take a
+            Callable that takes the attempt number and the max number of attempts and returns an
+            int or float to be passed to time.sleep.
+        :param Iterable retry_on_exceptions: An iterable of exception classes that if raised by
+            acquire_handle should trigger a retry. If None (default) and not_retry_on_exceptions is
+            also None, no exceptions will trigger a retry.
+        :param Iterable not_retry_on_exceptions: An iterable of exception classes that if raised by
+            acquire_handle should not trigger a retry. An empty iterable may be used to retry on
+            all exceptions. This argument is ignored if retry_on_exceptions is not None.
         :param kwargs: Optional additional keyword arguments to be passed to
             Connection.credentials.acquire_handle.
-        :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry
-            attempts without successfully acquiring a handle, or upon the first
-            non-expected Exception if retry_all is set to False.
-        :return: The given connection with its appropriate state and handle attributes
-            set depending on whether we successfully acquired a handle or not.
+        :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry attempts without
+            successfully acquiring a handle, or upon the first non-expected Exception if retry_all
+            is set to False.
+        :return: The given connection with its appropriate state and handle attributes set
+            depending on whether we successfully acquired a handle or not.
         """
         attempt = 1
         latest_exc = None
-        expected_exceptions = exception_handlers.keys() if exception_handlers else ()
-        exception_handlers = exception_handlers if exception_handlers else {}
+        is_inclusive = True
+
+        if retry_on_exceptions is not None:
+            exception_iter = retry_on_exceptions
+        elif not_retry_on_exceptions is not None:
+            exception_iter = not_retry_on_exceptions
+            is_inclusive = False
+        else:
+            exception_iter = ()
+
         max_attempts = 1 + retry_limit
-        acquire_handle = (
-            credentials.acquire_handle
-            if credentials is not None
-            else connection.credentials.acquire_handle
-        )
+        acquire_handle = connection.credentials.acquire_handle
 
         while attempt <= max_attempts:
             try:
@@ -227,36 +237,20 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             except Exception as e:
                 latest_exc = e
 
-                is_expected = any(issubclass(type(e), exc) for exc in expected_exceptions)
-                if is_expected:
+                if any(issubclass(type(e), exc) for exc in exception_iter) is is_inclusive:
                     logger.debug(
                         "Got an error when attempting to open a "
                         f"{cls.TYPE} connection. Retrying due to "
-                        "either retry configuration set to true."
+                        "exception subclass found in retry_on_exceptions"
+                        "or not present in not_retry_on_exceptions"
                         "This was attempt number: {attempt} of "
                         f"{max_attempts}. "
                         f"Retrying in {timeout} "
                         f"seconds. Error: '{e}'"
                     )
 
-                    exc_handler = exception_handlers.get(type(e), None)
-                    if exc_handler is not None:
-                        exc_handler(e)
-
-                    sleep(timeout)
-                    continue
-
-                if retry_all is True:
-                    logger.warning(
-                        "Got unexpected an error when attempting to open a "
-                        f"{cls.TYPE} connection. Retrying due to "
-                        "'retry_all' configuration set to true."
-                        f"This was attempt number: {attempt} of "
-                        f"{max_attempts}. "
-                        f"Retrying in {timeout} "
-                        f"seconds. Error: '{e}'"
-                    )
-                    sleep(timeout)
+                    timeout_secs = timeout(attempt, max_attempts) if callable(timeout) else timeout
+                    sleep(timeout_secs)
                     continue
 
                 logger.warning(
