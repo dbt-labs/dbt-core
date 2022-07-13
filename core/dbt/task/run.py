@@ -122,7 +122,6 @@ def track_model_run(index, num_nodes, run_model_result):
             "model_id": utils.get_hash(run_model_result.node),
             "hashed_contents": utils.get_hashed_contents(run_model_result.node),
             "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
-            "language": str(run_model_result.node.config.language),
         }
     )
 
