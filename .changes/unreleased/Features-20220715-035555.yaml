@@ -1,0 +1,8 @@
+kind: Features
+body: Support retrying Postgres (and Redshift!) connection attempts in the prescence
+  of transient network issues
+time: 2022-07-15T03:55:55.270637265+02:00
+custom:
+  Author: tomasfarias
+  Issue: "5022"
+  PR: "5432"
