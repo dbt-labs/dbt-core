@@ -324,6 +324,60 @@ class BaseConnectionManagerTest(unittest.TestCase):
         assert is_value_err_handled is True
         assert attempts == 3
 
+    def test_retry_connection_retry_limit(self):
+        """Test retry_connection raises an exception with a negative retry limit."""
+        conn = self.postgres_connection
+        attempts = 0
+
+        def connect():
+            nonlocal attempts
+            attempts += 1
+            return True
+
+        with self.assertRaisesRegex(
+            dbt.exceptions.FailedToConnectException, "retry_limit cannot be negative"
+        ):
+            BaseConnectionManager.retry_connection(
+                conn,
+                connect,
+                self.logger,
+                retry_timeout=0,
+                retryable_exceptions=(ValueError,),
+                retry_limit=-2,
+            )
+
+        assert conn.state == "fail"
+        assert conn.handle is None
+        assert attempts == 0
+
+    def test_retry_connection_retry_timeout(self):
+        """Test retry_connection raises an exception with a negative timeout."""
+        conn = self.postgres_connection
+        attempts = 0
+
+        def connect():
+            nonlocal attempts
+            attempts += 1
+            return True
+
+        for retry_timeout in [-10, -2.5, lambda _: -100, lambda _: -10.1]:
+            with self.assertRaisesRegex(
+                dbt.exceptions.FailedToConnectException,
+                "retry_timeout cannot be negative or return a negative time",
+            ):
+                BaseConnectionManager.retry_connection(
+                    conn,
+                    connect,
+                    self.logger,
+                    retry_timeout=-10,
+                    retryable_exceptions=(ValueError,),
+                    retry_limit=2,
+                )
+
+        assert conn.state == "init"
+        assert conn.handle is None
+        assert attempts == 0
+
 
 class PostgresConnectionManagerTest(unittest.TestCase):
     def setUp(self):
