@@ -24,7 +24,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         self.logger = AdapterLogger("test")
         self.postgres_connection = Connection("postgres", None, self.postgres_credentials)
 
-    def test_set_connection_handle(self):
+    def test_retry_connection(self):
         """Test a dummy handle is set on a connection on the first attempt.
 
         This test uses a Connection populated with test PostgresCredentials values, and
@@ -36,92 +36,98 @@ class BaseConnectionManagerTest(unittest.TestCase):
         conn = self.postgres_connection
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal attempts
             attempts += 1
             return True
 
-        conn.credentials.acquire_handle = acquire_handle
-
-        conn = BaseConnectionManager.set_connection_handle(conn, self.logger)
+        conn = BaseConnectionManager.retry_connection(
+            conn,
+            connect,
+            self.logger,
+            retryable_exceptions=[],
+        )
 
         assert conn.state == "open"
         assert conn.handle is True
         assert attempts == 1
 
-    def test_set_connection_handle_fails_unhandled(self):
+    def test_retry_connection_fails_unhandled(self):
         """Test setting a handle fails upon raising a non-handled exception.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a ValueError to be raised by a mock acquire_handle function. As a
+        expects a ValueError to be raised by a mock connect function. As a
         result:
         * The Connection state should be "fail" and the handle None.
         * The resulting attempt count should be 1 as we are not explicitly configured to handle a
           ValueError.
-        * set_connection_handle should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectException with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal attempts
             attempts += 1
             raise ValueError("Something went horribly wrong")
-
-        conn.credentials.acquire_handle = acquire_handle
 
         with self.assertRaisesRegex(
             dbt.exceptions.FailedToConnectException, "Something went horribly wrong"
         ):
 
-            BaseConnectionManager.set_connection_handle(
+            BaseConnectionManager.retry_connection(
                 conn,
+                connect,
                 self.logger,
                 retry_limit=1,
-                timeout=lambda attempt, max_attempts: 0,
+                retry_timeout=lambda attempt: 0,
+                retryable_exceptions=(TypeError,),
             )
 
         assert conn.state == "fail"
         assert conn.handle is None
         assert attempts == 1
 
-    def test_set_connection_handle_fails_handled(self):
+    def test_retry_connection_fails_handled(self):
         """Test setting a handle fails upon raising a handled exception.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a ValueError to be raised by a mock acquire_handle function.
+        expects a ValueError to be raised by a mock connect function.
         As a result:
         * The Connection state should be "fail" and the handle None.
         * The resulting attempt count should be 2 as we are configured to handle a ValueError.
-        * set_connection_handle should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectException with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal attempts
             attempts += 1
             raise ValueError("Something went horribly wrong")
-
-        conn.credentials.acquire_handle = acquire_handle
 
         with self.assertRaisesRegex(
             dbt.exceptions.FailedToConnectException, "Something went horribly wrong"
         ):
 
-            BaseConnectionManager.set_connection_handle(
-                conn, self.logger, timeout=0, retry_on_exceptions=(ValueError,), retry_limit=1,
+            BaseConnectionManager.retry_connection(
+                conn,
+                connect,
+                self.logger,
+                retry_timeout=0,
+                retryable_exceptions=(ValueError,),
+                retry_limit=1,
             )
 
         assert conn.state == "fail"
         assert conn.handle is None
 
-    def test_set_connection_handle_passes_handled(self):
+    def test_retry_connection_passes_handled(self):
         """Test setting a handle fails upon raising a handled exception.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a ValueError to be raised by a mock acquire_handle function only the first
-        time is called. Upon handling the exception once, acquire_handle should return.
+        expects a ValueError to be raised by a mock connect function only the first
+        time is called. Upon handling the exception once, connect should return.
         As a result:
         * The Connection state should be "open" and the handle True.
         * The resulting attempt count should be 2 as we are configured to handle a ValueError.
@@ -130,7 +136,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         is_handled = False
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal is_handled
             nonlocal attempts
 
@@ -142,10 +148,13 @@ class BaseConnectionManagerTest(unittest.TestCase):
             is_handled = True
             raise ValueError("Something went horribly wrong")
 
-        conn.credentials.acquire_handle = acquire_handle
-
-        conn = BaseConnectionManager.set_connection_handle(
-            conn, self.logger, timeout=0, retry_on_exceptions=(ValueError,), retry_limit=1
+        conn = BaseConnectionManager.retry_connection(
+            conn,
+            connect,
+            self.logger,
+            retry_timeout=0,
+            retryable_exceptions=(ValueError,),
+            retry_limit=1,
         )
 
         assert conn.state == "open"
@@ -153,35 +162,34 @@ class BaseConnectionManagerTest(unittest.TestCase):
         assert is_handled is True
         assert attempts == 2
 
-    def test_set_connection_handle_attempts(self):
+    def test_retry_connection_attempts(self):
         """Test setting a handle fails upon raising a handled exception multiple times.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a ValueError to be raised by a mock acquire_handle function. As a result:
-        * The Connection state should be "fail" and the handle None, as acquire_handle
+        expects a ValueError to be raised by a mock connect function. As a result:
+        * The Connection state should be "fail" and the handle None, as connect
           never returns.
         * The resulting attempt count should be 11 as we are configured to handle a ValueError.
-        * set_connection_handle should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectException with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal attempts
             attempts += 1
 
             raise ValueError("Something went horribly wrong")
 
-        conn.credentials.acquire_handle = acquire_handle
-
         with self.assertRaisesRegex(
             dbt.exceptions.FailedToConnectException, "Something went horribly wrong"
         ):
-            BaseConnectionManager.set_connection_handle(
+            BaseConnectionManager.retry_connection(
                 conn,
+                connect,
                 self.logger,
-                timeout=0,
-                retry_on_exceptions=(ValueError,),
+                retry_timeout=0,
+                retryable_exceptions=(ValueError,),
                 retry_limit=10,
             )
 
@@ -189,36 +197,34 @@ class BaseConnectionManagerTest(unittest.TestCase):
         assert conn.handle is None
         assert attempts == 11
 
-    def test_set_connection_handle_fails_handling_all_exceptions(self):
+    def test_retry_connection_fails_handling_all_exceptions(self):
         """Test setting a handle fails after exhausting all attempts.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a TypeError to be raised by a mock acquire_handle function. As a result:
-        * The Connection state should be "fail" and the handle None, as acquire_handle
+        expects a TypeError to be raised by a mock connect function. As a result:
+        * The Connection state should be "fail" and the handle None, as connect
           never returns.
-        * The resulting attempt count should be 11 as we are configured to handle everything
-          via an empty list to not_retry_on_exception.
-        * set_connection_handle should raise a FailedToConnectException with the Exception message.
+        * The resulting attempt count should be 11 as we are configured to handle all Exceptions.
+        * retry_connection should raise a FailedToConnectException with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal attempts
             attempts += 1
 
             raise TypeError("An unhandled thing went horribly wrong")
 
-        conn.credentials.acquire_handle = acquire_handle
-
         with self.assertRaisesRegex(
             dbt.exceptions.FailedToConnectException, "An unhandled thing went horribly wrong"
         ):
-            BaseConnectionManager.set_connection_handle(
+            BaseConnectionManager.retry_connection(
                 conn,
+                connect,
                 self.logger,
-                timeout=0,
-                not_retry_on_exceptions=[],
+                retry_timeout=0,
+                retryable_exceptions=[Exception],
                 retry_limit=15,
             )
 
@@ -226,13 +232,13 @@ class BaseConnectionManagerTest(unittest.TestCase):
         assert conn.handle is None
         assert attempts == 16
 
-    def test_set_connection_handle_passes_multiple_handled(self):
+    def test_retry_connection_passes_multiple_handled(self):
         """Test setting a handle passes upon handling multiple exceptions.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a mock acquire_handle to raise a ValueError in the first invocation and a
+        expects a mock connect to raise a ValueError in the first invocation and a
         TypeError in the second invocation. As a result:
-        * The Connection state should be "open" and the handle True, as acquire_handle
+        * The Connection state should be "open" and the handle True, as connect
           returns after both exceptions have been handled.
         * The resulting attempt count should be 3.
         """
@@ -241,7 +247,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         is_type_err_handled = False
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal is_value_err_handled
             nonlocal is_type_err_handled
             nonlocal attempts
@@ -257,13 +263,12 @@ class BaseConnectionManagerTest(unittest.TestCase):
                 is_type_err_handled = True
                 raise TypeError("An unhandled thing went horribly wrong")
 
-        conn.credentials.acquire_handle = acquire_handle
-
-        conn = BaseConnectionManager.set_connection_handle(
+        conn = BaseConnectionManager.retry_connection(
             conn,
+            connect,
             self.logger,
-            timeout=0,
-            retry_on_exceptions=(ValueError, TypeError),
+            retry_timeout=0,
+            retryable_exceptions=(ValueError, TypeError),
             retry_limit=2,
         )
 
@@ -273,13 +278,13 @@ class BaseConnectionManagerTest(unittest.TestCase):
         assert is_value_err_handled is True
         assert attempts == 3
 
-    def test_set_connection_handle_passes_none_excluded(self):
+    def test_retry_connection_passes_none_excluded(self):
         """Test setting a handle passes upon handling multiple exceptions.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a mock acquire_handle to raise a ValueError in the first invocation and a
+        expects a mock connect to raise a ValueError in the first invocation and a
         TypeError in the second invocation. As a result:
-        * The Connection state should be "open" and the handle True, as acquire_handle
+        * The Connection state should be "open" and the handle True, as connect
           returns after both exceptions have been handled.
         * The resulting attempt count should be 3.
         """
@@ -288,7 +293,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         is_type_err_handled = False
         attempts = 0
 
-        def acquire_handle():
+        def connect():
             nonlocal is_value_err_handled
             nonlocal is_type_err_handled
             nonlocal attempts
@@ -304,13 +309,12 @@ class BaseConnectionManagerTest(unittest.TestCase):
                 is_type_err_handled = True
                 raise TypeError("An unhandled thing went horribly wrong")
 
-        conn.credentials.acquire_handle = acquire_handle
-
-        conn = BaseConnectionManager.set_connection_handle(
+        conn = BaseConnectionManager.retry_connection(
             conn,
+            connect,
             self.logger,
-            timeout=0,
-            retry_on_exceptions=(ValueError, TypeError),
+            retry_timeout=0,
+            retryable_exceptions=(ValueError, TypeError),
             retry_limit=2,
         )
 
@@ -338,16 +342,16 @@ class PostgresConnectionManagerTest(unittest.TestCase):
         """Test opening a Postgres Connection with failures in the first 3 attempts.
 
         This test uses a Connection populated with test PostgresCredentials values, and
-        expects a mock acquire_handle to raise a psycopg2.errors.ConnectionFailuer
+        expects a mock connect to raise a psycopg2.errors.ConnectionFailuer
         in the first 3 invocations, after which the mock should return True. As a result:
-        * The Connection state should be "open" and the handle True, as acquire_handle
+        * The Connection state should be "open" and the handle True, as connect
           returns in the 4th attempt.
         * The resulting attempt count should be 4.
         """
         conn = self.connection
         attempt = 0
 
-        def acquire_handle(*args, **kwargs):
+        def connect(*args, **kwargs):
             nonlocal attempt
             attempt += 1
 
@@ -356,9 +360,10 @@ class PostgresConnectionManagerTest(unittest.TestCase):
 
             return True
 
-        conn.credentials.acquire_handle = acquire_handle
+        with mock.patch("psycopg2.connect", wraps=connect) as mock_connect:
+            PostgresConnectionManager.open(conn)
 
-        PostgresConnectionManager.open(conn)
+            assert mock_connect.call_count == 3
 
         assert attempt == 3
         assert conn.state == "open"

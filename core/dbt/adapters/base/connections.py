@@ -6,6 +6,7 @@ from time import sleep
 from multiprocessing.synchronize import RLock
 from threading import get_ident
 from typing import (
+    Any,
     Dict,
     Tuple,
     Hashable,
@@ -47,7 +48,8 @@ from dbt.events.types import (
 )
 from dbt import flags
 
-SleepTime = Union[int, float]
+SleepTime = Union[int, float]  # As taken by time.sleep.
+AdapterHandle = Any  # Adapter connection handle objects can be any class.
 
 
 class BaseConnectionManager(metaclass=abc.ABCMeta):
@@ -175,101 +177,86 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         return conn
 
     @classmethod
-    def set_connection_handle(
+    def retry_connection(
         cls,
         connection: Connection,
+        connect: Callable[[], AdapterHandle],
         logger: AdapterLogger,
+        retryable_exceptions: Iterable[Type[Exception]],
         retry_limit: int = 1,
-        timeout: Union[Callable[[int, int], SleepTime], SleepTime] = 3,
-        retry_on_exceptions: Optional[Iterable[Type[Exception]]] = None,
-        not_retry_on_exceptions: Optional[Iterable[Type[Exception]]] = None,
-        **kwargs,
+        retry_timeout: Union[Callable[[int], SleepTime], SleepTime] = 1,
     ) -> Connection:
-        """Given a Connection, set its handle by calling Connection.credentials.acquire_handle.
+        """Given a Connection, set its handle by calling connect.
 
-        The acquire_handle method call will be retried up to retry_limit times to deal with
-        transient connection errors. By default, one retry will be attempted if retry_on_exceptions
-        or not_retry_on_exceptions are set.
+        The calls to connect will be retried up to retry_limit times to deal with transient
+        connection errors. By default, one retry will be attempted if retryable_exceptions is set.
 
         :param Connection connection: An instance of a Connection that needs a handle to be set,
             usually when attempting to open it.
+        :param connect: A callable that returns the appropiate connection handle for a
+            given adapter. This callable will be retried retry_limit times if a subclass of any
+            Exception in retryable_exceptions is raised by connect.
+        :type connect: Callable[[], AdapterHandle]
         :param AdapterLogger logger: A logger to emit messages on retry attempts or errors. When
             handling expected errors, we call debug, and call warning on unexpected errors or when
             all retry attempts have been exhausted.
-        :param int retry_limit: How many times to retry the call to acquire_handle. If this limit
+        :param retryable_exceptions: An iterable of exception classes that if raised by
+            connect should trigger a retry.
+        :type retryable_exceptions: Iterable[Type[Exception]]
+        :param int retry_limit: How many times to retry the call to connect. If this limit
             is exceeded before a successful call, a FailedToConnectException will be raised.
-        :param int timeout: Time to wait between attempts to acquire_handle. Can also take a
-            Callable that takes the attempt number and the max number of attempts and returns an
-            int or float to be passed to time.sleep.
-        :param Iterable retry_on_exceptions: An iterable of exception classes that if raised by
-            acquire_handle should trigger a retry. If None (default) and not_retry_on_exceptions is
-            also None, no exceptions will trigger a retry.
-        :param Iterable not_retry_on_exceptions: An iterable of exception classes that if raised by
-            acquire_handle should not trigger a retry. An empty iterable may be used to retry on
-            all exceptions. This argument is ignored if retry_on_exceptions is not None.
-        :param kwargs: Optional additional keyword arguments to be passed to
-            Connection.credentials.acquire_handle.
+            Must be non-negative.
+        :param retry_timeout: Time to wait between attempts to connect. Can also take a
+            Callable that takes the number of retries remaining  and returns an int or float to be
+            passed to time.sleep.
+        :type retry_timeout: Union[Callable[[int], SleepTime], SleepTime] = 1
         :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry attempts without
-            successfully acquiring a handle, or upon the first non-expected Exception if retry_all
-            is set to False.
+            successfully acquiring a handle.
         :return: The given connection with its appropriate state and handle attributes set
             depending on whether we successfully acquired a handle or not.
         """
-        attempt = 1
-        latest_exc = None
-        is_inclusive = True
+        timeout = retry_timeout(retry_limit) if callable(retry_timeout) else retry_timeout
+        if timeout < 0:
+            raise dbt.exceptions.FailedToConnectException(
+                "retry_timeout cannot be negative or return a negative time."
+            )
 
-        if retry_on_exceptions is not None:
-            exception_iter = retry_on_exceptions
-        elif not_retry_on_exceptions is not None:
-            exception_iter = not_retry_on_exceptions
-            is_inclusive = False
-        else:
-            exception_iter = ()
+        if retry_limit < 0:
+            connection.handle = None
+            connection.state = ConnectionState.FAIL
+            raise dbt.exceptions.FailedToConnectException("retry_limit cannot be negative")
 
-        max_attempts = 1 + retry_limit
-        acquire_handle = connection.credentials.acquire_handle
-
-        while attempt <= max_attempts:
-            try:
-                handle = acquire_handle(**kwargs)
-
-            except Exception as e:
-                latest_exc = e
-
-                if any(issubclass(type(e), exc) for exc in exception_iter) is is_inclusive:
-                    logger.debug(
-                        "Got an error when attempting to open a "
-                        f"{cls.TYPE} connection. Retrying due to "
-                        "exception subclass found in retry_on_exceptions"
-                        "or not present in not_retry_on_exceptions"
-                        "This was attempt number: {attempt} of "
-                        f"{max_attempts}. "
-                        f"Retrying in {timeout} "
-                        f"seconds. Error: '{e}'"
-                    )
-
-                    timeout_secs = timeout(attempt, max_attempts) if callable(timeout) else timeout
-                    sleep(timeout_secs)
-                    continue
-
-                logger.warning(
-                    "Got unexpected an error when attempting to open a "
-                    f"{cls.TYPE} connection. This was attempt number: "
-                    f"{attempt} of {max_attempts}. Error: '{e}'"
-                )
-                break
-
-            finally:
-                attempt += 1
-
-            connection.handle = handle
+        try:
+            connection.handle = connect()
             connection.state = ConnectionState.OPEN
             return connection
 
-        connection.handle = None
-        connection.state = ConnectionState.FAIL
-        raise dbt.exceptions.FailedToConnectException(str(latest_exc))
+        except tuple(retryable_exceptions) as e:
+            if retry_limit <= 0:
+                connection.handle = None
+                connection.state = ConnectionState.FAIL
+                raise dbt.exceptions.FailedToConnectException(str(e))
+
+            logger.debug(
+                f"Got a retryable error when attempting to open a {cls.TYPE} connection.\n"
+                f"{retry_limit} attempts remaining. Retrying in {retry_timeout} seconds.\n"
+                f"Error:\n{e}"
+            )
+
+            sleep(timeout)
+            return cls.retry_connection(
+                connection=connection,
+                connect=connect,
+                logger=logger,
+                retry_limit=retry_limit - 1,
+                retry_timeout=retry_timeout,
+                retryable_exceptions=retryable_exceptions,
+            )
+
+        except Exception as e:
+            connection.handle = None
+            connection.state = ConnectionState.FAIL
+            raise dbt.exceptions.FailedToConnectException(str(e))
 
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:

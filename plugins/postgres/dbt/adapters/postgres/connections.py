@@ -138,21 +138,33 @@ class PostgresConnectionManager(SQLConnectionManager):
         if credentials.application_name:
             kwargs["application_name"] = credentials.application_name
 
-        retry_on_exceptions = [
+        def connect():
+            handle = psycopg2.connect(
+                dbname=credentials.database,
+                user=credentials.user,
+                host=credentials.host,
+                password=credentials.password,
+                port=credentials.port,
+                connect_timeout=credentials.connect_timeout,
+                **kwargs,
+            )
+            if credentials.role:
+                handle.cursor().execute("set role {}".format(credentials.role))
+            return handle
+
+        retryable_exceptions = [
             # OperationalError is subclassed by all psycopg2 Connection Exceptions
             # and it's raised by generic connection errors without an error code.
             psycopg2.errors.OperationalError,
         ]
 
-        connection = cls.set_connection_handle(
+        return cls.retry_connection(
             connection,
+            connect=connect,
             logger=logger,
             retry_limit=credentials.retries,
-            retry_on_exceptions=retry_on_exceptions,
-            **kwargs,
+            retryable_exceptions=retryable_exceptions,
         )
-
-        return connection
 
     def cancel(self, connection):
         connection_name = connection.name
