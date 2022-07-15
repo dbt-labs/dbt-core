@@ -474,19 +474,17 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def try_set(value: Iterable[Any]) -> Set[Any]:
-        """The `try_set` context method can be used to convert any iterable
+    def set_strict(value: Iterable[Any]) -> Set[Any]:
+        """The `set_strict` context method can be used to convert any iterable
         to a sequence of iterable elements that are unique (a set). The
-        difference to the `set` context method is that the `try_set` method
+        difference to the `set` context method is that the `set_strict` method
         will raise an exception on a TypeError.
 
         :param value: The iterable
-        :param default: A default value to return if the `value` argument
-            is not an iterable
 
         Usage:
             {% set my_list = [1, 2, 2, 3] %}
-            {% set my_set = try_set(my_list) %}
+            {% set my_set = set_strict(my_list) %}
             {% do log(my_set) %}  {# {1, 2, 3} #}
         """
         try:
@@ -497,7 +495,7 @@ class BaseContext(metaclass=ContextMeta):
     @contextmember("zip")
     @staticmethod
     def _zip(*args: Iterable[Any], default: Any = None) -> Optional[Iterable[Any]]:
-        """The `try_zip` context method can be used to used to return
+        """The `zip` context method can be used to used to return
         an iterator of tuples, where the i-th tuple contains the i-th
         element from each of the argument iterables.
 
@@ -518,21 +516,19 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def try_zip(*args: Iterable[Any]) -> Iterable[Any]:
-        """The `try_zip` context method can be used to used to return
+    def zip_strict(*args: Iterable[Any]) -> Iterable[Any]:
+        """The `zip_strict` context method can be used to used to return
         an iterator of tuples, where the i-th tuple contains the i-th
         element from each of the argument iterables. The difference to the
-        `zip` context method is that the `try_zip` method will raise an
+        `zip` context method is that the `zip_strict` method will raise an
         exception on a TypeError.
 
         :param *args: Any number of iterables
-        :param default: A default value to return if `*args` is not
-            iterable
 
         Usage:
             {% set my_list_a = [1, 2] %}
             {% set my_list_b = ['alice', 'bob'] %}
-            {% set my_zip = try_zip(my_list_a, my_list_b) | list %}
+            {% set my_zip = zip_strict(my_list_a, my_list_b) | list %}
             {% do log(my_set) %}  {# [(1, 'alice'), (2, 'bob')] #}
         """
         try:
