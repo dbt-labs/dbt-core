@@ -29,8 +29,10 @@ class BaseConnectionManagerTest(unittest.TestCase):
 
         This test uses a Connection populated with test PostgresCredentials values, and
         expects the Connection.handle attribute to be set to True and it's state to
-        "open". Moreover, this must happen in the first attempt as no exception would
-        be raised for retrying. A mock acquire_handle is set to simulate a real connection
+        "open", after calling retry_connection.
+
+        Moreover, the attribute should be set in the first attempt as no exception would
+        be raised for retrying. A mock connect function is used to simulate a real connection
         passing on the first attempt.
         """
         conn = self.postgres_connection
