@@ -178,9 +178,6 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
             )
         return dct
 
-    def acquire_handle(self, **kwargs):
-        raise NotImplementedError
-
 
 class UserConfigContract(Protocol):
     send_anonymous_usage_stats: bool
