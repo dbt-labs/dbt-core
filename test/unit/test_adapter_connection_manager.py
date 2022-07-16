@@ -1,5 +1,6 @@
 import unittest
 from unittest import mock
+import sys
 
 import dbt.exceptions
 
@@ -377,6 +378,33 @@ class BaseConnectionManagerTest(unittest.TestCase):
                 )
 
         assert conn.state == "init"
+        assert conn.handle is None
+        assert attempts == 0
+
+    def test_retry_connection_exceeds_recursion_limit(self):
+        """Test retry_connection raises an exception with retries that exceed recursion limit."""
+        conn = self.postgres_connection
+        attempts = 0
+
+        def connect():
+            nonlocal attempts
+            attempts += 1
+            return True
+
+        with self.assertRaisesRegex(
+            dbt.exceptions.FailedToConnectException,
+            "retry_limit cannot be negative",
+        ):
+            BaseConnectionManager.retry_connection(
+                conn,
+                connect,
+                self.logger,
+                retry_timeout=2,
+                retryable_exceptions=(ValueError,),
+                retry_limit=sys.getrecursionlimit() + 1,
+            )
+
+        assert conn.state == "fail"
         assert conn.handle is None
         assert attempts == 0
 

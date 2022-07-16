@@ -1,6 +1,7 @@
 import abc
 import os
 from time import sleep
+import sys
 
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
@@ -221,7 +222,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 "retry_timeout cannot be negative or return a negative time."
             )
 
-        if retry_limit < 0:
+        if retry_limit < 0 or retry_limit > sys.getrecursionlimit():
+            # This guard is not perfect others may add to the recursion limit (e.g. built-ins).
             connection.handle = None
             connection.state = ConnectionState.FAIL
             raise dbt.exceptions.FailedToConnectException("retry_limit cannot be negative")
