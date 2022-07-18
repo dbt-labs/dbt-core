@@ -1,0 +1,81 @@
+
+## Related Repos
+[dbt-labs/actions](https://github.com/dbt-labs/actions/) is a central repository of actions and workflows dbt uses across repositories
+
+## Standards
+
+### permissions
+- default to least permissions
+- there are a lot of permission.  [Read up on them](https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs) if you're unsure what to use.
+
+### using on_merge?
+- TODO: what was the security hole related to this?
+    
+### Secrets
+- When to use a PAT vs the GITHUB_TOKEN generated for the action?
+
+    If you expect the resulting commit to add a changelog should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow).
+
+### General Formatting
+- Add a description of what your workflow does at the top in this format
+
+```
+# **what?**
+# Describe what the action does.  
+
+# **why?**
+# Why does this action exist?
+
+# **when?**
+# How/when will it be triggered?
+```
+- Leave blank lines bewteen steps and jobs
+
+```yaml
+jobs:
+  dependency_changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Get File Name Timestamp
+      id: filename_time
+      uses: nanzm/get-time-action@v1.1
+      with:
+        format: 'YYYYMMDD-HHmmss'
+
+    - name: Get File Content Timestamp
+      id: file_content_time
+      uses: nanzm/get-time-action@v1.1
+      with:
+        format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
+
+    - name: Generate Filepath
+      id: fp
+      run: |
+        FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
+        echo "::set-output name=FILEPATH::$FILEPATH"
+```
+
+### Actions from the Marketplace
+- Don’t use external actions for things that can easily be accomplished manually.
+- Always read through what an external action does before using it!  Often an action in the GitHub Actions Marketplace can be replaced with a few lines in bash.  This is much more maintainable (and won’t change under us) and clear as to what’s actually happing
+- Pin actions _we don't control_ to tags. 
+
+### Connecting to AWS
+1. Authenticate with the aws managed workflow
+```      
+- name: Configure AWS credentials from Test account
+  uses: aws-actions/configure-aws-credentials@v1
+  with:
+    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    aws-region: us-east-1
+```
+2. Then access with the aws command that comes installed on the action runner machines
+```
+- name: Copy Artifacts from S3 via CLI
+  run: aws s3 cp ${{ env.s3_bucket }} . --recursive 
+```
+
+### Context
+- The GitHub cli is available in the default runners
