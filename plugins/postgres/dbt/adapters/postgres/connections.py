@@ -153,8 +153,11 @@ class PostgresConnectionManager(SQLConnectionManager):
             return handle
 
         retryable_exceptions = [
-            # OperationalError is subclassed by all psycopg2 Connection Exceptions
-            # and it's raised by generic connection errors without an error code.
+            # OperationalError is subclassed by all psycopg2 Connection Exceptions and it's raised
+            # by generic connection timeouts without an error code. This is a limitation of
+            # psycopg2 which doesn't provide subclasses for errors without a SQLSTATE error code.
+            # The limitation has been known for a while and there are no efforts to tackle it.
+            # See: https://github.com/psycopg/psycopg2/issues/682
             psycopg2.errors.OperationalError,
         ]
 
