@@ -1,3 +1,4 @@
+import re
 from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
@@ -203,7 +204,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @staticmethod
     def add_ephemeral_prefix(name: str):
-        return f"__dbt__cte__{name}"
+        return re.sub(r"\W+", "", f"__dbt__cte__{name}")
 
     @classmethod
     def create_ephemeral_from_node(
@@ -211,8 +212,8 @@ class BaseRelation(FakeAPIObject, Hashable):
         config: HasQuoting,
         node: Union[ParsedNode, CompiledNode],
     ) -> Self:
-        # Note that ephemeral models are based on the name.
-        identifier = cls.add_ephemeral_prefix(node.name)
+        # Note that ephemeral models are based on the alias to avoid issues with illegal characters in name (like dots)
+        identifier = cls.add_ephemeral_prefix(node.alias)
         return cls.create(
             type=cls.CTE,
             identifier=identifier,
