@@ -55,22 +55,6 @@ class PostgresCredentials(Credentials):
             "sslmode",
         )
 
-    def acquire_handle(self, **kwargs):
-        """Acquire a handle for a Postgres connection with the given credentials."""
-        handle = psycopg2.connect(
-            dbname=self.database,
-            user=self.user,
-            host=self.host,
-            password=self.password,
-            port=self.port,
-            connect_timeout=self.connect_timeout,
-            **kwargs,
-        )
-
-        if self.role:
-            handle.cursor().execute("set role {}".format(self.role))
-        return handle
-
 
 class PostgresConnectionManager(SQLConnectionManager):
     TYPE = "postgres"
