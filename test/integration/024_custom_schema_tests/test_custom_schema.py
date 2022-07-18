@@ -36,7 +36,7 @@ class TestCustomSchema(DBTIntegrationTest):
 
         self.assertTablesEqual("seed", "view_1")
         self.assertTablesEqual("seed", "view_2", schema, self.v2_schema())
-        self.assertTablesEqual("agg", "view_3", schema, self.xf_schema())
+        self.assertTablesEqual("agg", "view_5", schema, self.xf_schema())
 
 
 class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):

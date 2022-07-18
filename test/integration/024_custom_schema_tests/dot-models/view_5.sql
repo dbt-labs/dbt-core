@@ -14,11 +14,19 @@ v2 as (
 
 ),
 
+v3 as (
+
+    select * from {{ ref('second_schema.view_3') }}
+
+),
+
 combined as (
 
     select last_name from v1
     union all
     select last_name from v2
+    union all
+    select last_name from v3
 
 )
 
