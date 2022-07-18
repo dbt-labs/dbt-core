@@ -186,6 +186,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         retryable_exceptions: Iterable[Type[Exception]],
         retry_limit: int = 1,
         retry_timeout: Union[Callable[[int], SleepTime], SleepTime] = 1,
+        _attempts: int = 0,
     ) -> Connection:
         """Given a Connection, set its handle by calling connect.
 
@@ -208,15 +209,18 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             is exceeded before a successful call, a FailedToConnectException will be raised.
             Must be non-negative.
         :param retry_timeout: Time to wait between attempts to connect. Can also take a
-            Callable that takes the number of retries remaining  and returns an int or float to be
-            passed to time.sleep.
+            Callable that takes the number of attempts so far, beginning at 0, and returns an int
+            or float to be passed to time.sleep.
         :type retry_timeout: Union[Callable[[int], SleepTime], SleepTime] = 1
+        :param int _attempts: Parameter used to keep track of the number of attempts in calling the
+            connect function across recursive calls. Passed as an argument to retry_timeout if it
+            is a Callable. This parameter should not be set by the initial caller.
         :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry attempts without
             successfully acquiring a handle.
         :return: The given connection with its appropriate state and handle attributes set
             depending on whether we successfully acquired a handle or not.
         """
-        timeout = retry_timeout(retry_limit) if callable(retry_timeout) else retry_timeout
+        timeout = retry_timeout(_attempts) if callable(retry_timeout) else retry_timeout
         if timeout < 0:
             raise dbt.exceptions.FailedToConnectException(
                 "retry_timeout cannot be negative or return a negative time."
@@ -241,7 +245,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
             logger.debug(
                 f"Got a retryable error when attempting to open a {cls.TYPE} connection.\n"
-                f"{retry_limit} attempts remaining. Retrying in {retry_timeout} seconds.\n"
+                f"{retry_limit} attempts remaining. Retrying in {timeout} seconds.\n"
                 f"Error:\n{e}"
             )
 
@@ -253,6 +257,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 retry_limit=retry_limit - 1,
                 retry_timeout=retry_timeout,
                 retryable_exceptions=retryable_exceptions,
+                _attempts=_attempts + 1,
             )
 
         except Exception as e:

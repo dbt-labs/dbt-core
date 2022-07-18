@@ -408,6 +408,46 @@ class BaseConnectionManagerTest(unittest.TestCase):
         assert conn.handle is None
         assert attempts == 0
 
+    def test_retry_connection_with_exponential_backoff_timeout(self):
+        """Test retry_connection with an exponential backoff timeout.
+
+        We assert the provided exponential backoff function gets passed the right attempt number
+        and produces the expected timeouts.
+        """
+        conn = self.postgres_connection
+        attempts = 0
+        timeouts = []
+
+        def connect():
+            nonlocal attempts
+            attempts += 1
+
+            if attempts < 12:
+                raise ValueError("Keep trying!")
+            return True
+
+        def exp_backoff(n):
+            nonlocal timeouts
+            computed = 2**n
+            # We store the computed values to ensure they match the expected backoff...
+            timeouts.append((n, computed))
+            # but we return 0 as we don't want the test to go on forever.
+            return 0
+
+        conn = BaseConnectionManager.retry_connection(
+            conn,
+            connect,
+            self.logger,
+            retry_timeout=exp_backoff,
+            retryable_exceptions=(ValueError,),
+            retry_limit=12,
+        )
+
+        assert conn.state == "open"
+        assert conn.handle is True
+        assert attempts == 12
+        assert timeouts == [(n, 2**n) for n in range(12)]
+
 
 class PostgresConnectionManagerTest(unittest.TestCase):
     def setUp(self):
