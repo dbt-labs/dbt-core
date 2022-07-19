@@ -1203,9 +1203,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         macro_function = MacroGenerator(macro, macro_context)
         return macro_function
 
-    def validate_incremental_strategy(self):
-        return ["append", "delete+insert"]
-
 
 COLUMNS_EQUAL_SQL = """
 with diff_count as (
