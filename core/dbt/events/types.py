@@ -1664,7 +1664,7 @@ class SQLCompiledPath(InfoLevel):
     code: str = "Z026"
 
     def message(self) -> str:
-        return f"  compiled SQL at {self.path}"
+        return f"  compiled Code at {self.path}"
 
 
 @dataclass

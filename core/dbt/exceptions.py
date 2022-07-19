@@ -203,7 +203,7 @@ class DatabaseException(RuntimeException):
         lines = []
 
         if hasattr(self.node, "build_path") and self.node.build_path:
-            lines.append("compiled SQL at {}".format(self.node.build_path))
+            lines.append("compiled Code at {}".format(self.node.build_path))
 
         return lines + RuntimeException.process_stack(self)
 
