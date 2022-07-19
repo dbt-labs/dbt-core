@@ -1284,7 +1284,7 @@ class ModelContext(ProviderContext):
             # and self.model.config.language == ModelLanguage.sql  # type: ignore[union-attr]
         ):
             # TODO CT-211
-            return self.model.compiled_sql  # type: ignore[union-attr]
+            return self.model.compiled_code  # type: ignore[union-attr]
         return None
 
     @contextproperty

@@ -390,6 +390,7 @@ class Compiler:
             self.config.quoting = original_quoting
 
         else:
+            context = self._create_node_context(compiled_node, manifest, extra_context)
             compiled_node.compiled_code = jinja.get_rendered(
                 node.raw_code,
                 context,
