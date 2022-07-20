@@ -1166,7 +1166,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return ["append", "delete+insert"]
 
     @available.parse_none
-    def get_incremental_strategy_macro(self, strategy: str):
+    def get_incremental_strategy_macro(self, model_context, strategy: str):
         # Construct macro_name from strategy name
         if strategy is None:
             strategy = "default"
@@ -1182,26 +1182,16 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         strategy = strategy.replace("+", "_")
         macro_name = f"get_incremental_{strategy}_sql"
-        # get a macro and return it
-        manifest = self._macro_manifest
-        macro = manifest.find_macro_by_name(macro_name, self.config.project_name, None)
-        if not macro:
+        # The model_context should have MacroGenerator callable objects for all macros
+        if macro_name not in model_context:
             raise RuntimeException(
                 'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(
                     macro_name, self.config.project_name
                 )
             )
 
-        from dbt.context.providers import generate_runtime_macro_context
-
-        macro_context = generate_runtime_macro_context(
-            macro=macro,
-            config=self.config,
-            manifest=manifest,  # type: ignore[arg-type]
-            package_name=self.config.project_name,
-        )
-        macro_function = MacroGenerator(macro, macro_context)
-        return macro_function
+        # This returns a callable macro
+        return model_context[macro_name]
 
 
 COLUMNS_EQUAL_SQL = """
