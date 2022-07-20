@@ -1,7 +1,7 @@
 import enum
 from dataclasses import dataclass, field
 from itertools import chain, islice
-from mashumaro import DataClassMessagePackMixin
+from mashumaro.mixins.msgpack import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
     Dict,
