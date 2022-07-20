@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Update mashumaro to 3.0.3
+time: 2022-07-20T11:52:26.210876-04:00
+custom:
+  Author: gshank
+  Issue: "4940"
+  PR: "5118"

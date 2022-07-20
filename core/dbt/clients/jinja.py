@@ -161,7 +161,7 @@ def quoted_native_concat(nodes):
 
 
 class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
-    environment_class = NativeSandboxEnvironment
+    environment_class = NativeSandboxEnvironment  # type: ignore
 
     def render(self, *args, **kwargs):
         """Render the template to produce a native Python type. If the

@@ -38,6 +38,7 @@ jobs:
     name: code-quality
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out the repository
@@ -65,6 +66,7 @@ jobs:
     name: unit test / python ${{ matrix.python-version }}
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     strategy:
       fail-fast: false
@@ -109,6 +111,7 @@ jobs:
     name: integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
