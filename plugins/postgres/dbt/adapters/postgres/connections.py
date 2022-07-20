@@ -150,6 +150,8 @@ class PostgresConnectionManager(SQLConnectionManager):
             connect=connect,
             logger=logger,
             retry_limit=credentials.retries,
+            # exponential backoff
+            retry_timeout=lambda x: x * x,
             retryable_exceptions=retryable_exceptions,
         )
 
