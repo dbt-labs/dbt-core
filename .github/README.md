@@ -1,15 +1,15 @@
 ## What are GitHub Actions?
 
-GitHub actions are used for many different purposes.  We use them to run tests in CI, validate PRs are in an expected state (), and automate processes.
+GitHub actions are used for many different purposes.  We use them to run tests in CI, validate PRs are in an expected state, and automate processes.
 
 - [Overview of GitHub Actions](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions)
 - [What's a workflow?](https://docs.github.com/en/actions/using-workflows/about-workflows)
 - [GitHub Actions guides](https://docs.github.com/en/actions/guides)
 
 ## dbt Labs Action Repo
-[dbt-labs/actions](https://github.com/dbt-labs/actions/) is a central repository of actions and workflows dbt uses across repositories
+[dbt-labs/actions](https://github.com/dbt-labs/actions/) is a central repository of actions and workflows dbt uses across repositories.
 
-## Standards
+## General Standards
 
 ### Permissions
 - default to least permissions
@@ -22,6 +22,33 @@ GitHub actions are used for many different purposes.  We use them to run tests i
 - When to use a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) vs the [GITHUB_TOKEN](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) generated for the action?
 
     If you expect the resulting commit to add a changelog should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow) for a more detailed explanation.
+
+### Triggers
+You can configure your workflows to run when specific activity on GitHub happens, at a scheduled time, or when an event outside of GitHub occurs.  Read more details in the [GitHub docs](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows).
+
+These triggers are under the `on` key of the workflow and more than one can be listed.
+
+```yaml
+on:
+  push:
+    branches:
+      - "main"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
+    # catch when the PR is opened with the label or when the label is added
+    types: [opened, labeled]
+  workflow_dispatch:
+```
+
+Some triggers of note that we use:
+
+- `push` - Runs your workflow when you push a commit or tag.
+- `pull_request` - Runs your workflow when activity on a pull request in the workflow's repository occurs.  Takes in a list of activity types (opened, labeled, etc) if appropriate.
+- `pull_request_target` - Same as `pull_request` but runs in the context of the PR target branch.
+- `workflow_call` - used with reusable workflows.  Triggered by another workflow calling it.
+- `workflow_dispatch` - Gives the ability to manually trigger a workflow from the GitHub API, GitHub CLI, or GitHub browser interface.
+
 
 ### General Formatting
 - Add a description of what your workflow does at the top in this format
@@ -89,7 +116,7 @@ GitHub actions are used for many different purposes.  We use them to run tests i
 - Pin actions _we don't control_ to tags. 
 
 ### Connecting to AWS
-1. Authenticate with the aws managed workflow
+- Authenticate with the aws managed workflow
 
   ```yaml
   - name: Configure AWS credentials from Test account
@@ -100,9 +127,17 @@ GitHub actions are used for many different purposes.  We use them to run tests i
       aws-region: us-east-1
   ```
 
-2. Then access with the aws command that comes installed on the action runner machines
+- Then access with the aws command that comes installed on the action runner machines
 
   ```yaml
   - name: Copy Artifacts from S3 via CLI
     run: aws s3 cp ${{ env.s3_bucket }} . --recursive 
   ```
+
+### Testing
+
+- Depending on what your action does, you may be able to use [act](https://github.com/nektos/act) to test the action locally.  Some features of GitHub actions do not work with act, among those are reusable workflows.  If you can't use act, you'll have to push your changes up before being able to test.  This can be slow.
+
+- View _all_ action output from the [actions](https://github.com/dbt-labs/dbt-core/actions) tab.  Workflow results last 1 year.
+
+- View the action output for your PR in the **Checks** tab of the PR.  This only shows the most recent run.
