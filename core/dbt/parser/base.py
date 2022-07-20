@@ -291,6 +291,11 @@ class ConfiguredParser(
         if "meta" in config_dict and config_dict["meta"]:
             parsed_node.meta = config_dict["meta"]
 
+        # If we have docs in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if "docs" in config_dict and config_dict["docs"]:
+            parsed_node.docs = config_dict["docs"]
+
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
         parsed_node.unrendered_config = config.build_config_dict(rendered=False)
