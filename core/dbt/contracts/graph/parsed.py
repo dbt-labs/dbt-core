@@ -157,7 +157,6 @@ class ParsedNodeMixins(dbtClassMixin):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
-        self.docs = patch.docs
 
     def get_materialization(self):
         return self.config.materialized
@@ -203,7 +202,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
-    docs: Docs = field(default_factory=Docs)
+    docs: Dict[str, Any] = field(default_factory=dict)
     patch_path: Optional[str] = None
     compiled_path: Optional[str] = None
     build_path: Optional[str] = None
