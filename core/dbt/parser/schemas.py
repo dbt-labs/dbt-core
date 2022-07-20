@@ -808,6 +808,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 if self.key != "macros":
                     # macros don't have the 'config' key support yet
                     self.normalize_meta_attribute(data, path)
+                    self.normalize_docs_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
@@ -815,21 +816,27 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
             else:
                 yield node
 
-    # We want to raise an error if 'meta' is in two places, and move 'meta'
+    # We want to raise an error if some attributes are in two places, and move them
     # from toplevel to config if necessary
-    def normalize_meta_attribute(self, data, path):
-        if "meta" in data:
-            if "config" in data and "meta" in data["config"]:
+    def normalize_attribute(self, data, path, attribute):
+        if attribute in data:
+            if "config" in data and attribute in data["config"]:
                 raise ParsingException(
                     f"""
-                    In {path}: found meta dictionary in 'config' dictionary and as top-level key.
+                    In {path}: found {attribute} dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
                 """.strip()
                 )
             else:
                 if "config" not in data:
                     data["config"] = {}
-                data["config"]["meta"] = data.pop("meta")
+                data["config"][attribute] = data.pop(attribute)
+
+    def normalize_meta_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "meta")
+
+    def normalize_docs_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "docs")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
