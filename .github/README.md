@@ -1,10 +1,17 @@
+## What are GitHub Actions?
 
-## Related Repos
+GitHub actions are used for many different purposes.  We use them to run tests in CI, validate PRs are in an expected state (), and automate processes.
+
+- [Overview of GitHub Actions](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions)
+- [What's a workflow?](https://docs.github.com/en/actions/using-workflows/about-workflows)
+- [GitHub Actions guides](https://docs.github.com/en/actions/guides)
+
+## dbt Labs Action Repo
 [dbt-labs/actions](https://github.com/dbt-labs/actions/) is a central repository of actions and workflows dbt uses across repositories
 
 ## Standards
 
-### permissions
+### Permissions
 - default to least permissions
 - there are a lot of permission.  [Read up on them](https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs) if you're unsure what to use.
 
@@ -12,49 +19,63 @@
 - TODO: what was the security hole related to this?
     
 ### Secrets
-- When to use a PAT vs the GITHUB_TOKEN generated for the action?
+- When to use a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) vs the [GITHUB_TOKEN](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) generated for the action?
 
-    If you expect the resulting commit to add a changelog should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow).
+    If you expect the resulting commit to add a changelog should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow) for a more detailed explanation.
 
 ### General Formatting
 - Add a description of what your workflow does at the top in this format
 
-```
-# **what?**
-# Describe what the action does.  
+  ```
+  # **what?**
+  # Describe what the action does.  
 
-# **why?**
-# Why does this action exist?
+  # **why?**
+  # Why does this action exist?
 
-# **when?**
-# How/when will it be triggered?
-```
-- Leave blank lines bewteen steps and jobs
+  # **when?**
+  # How/when will it be triggered?
+  ```
 
-```yaml
-jobs:
-  dependency_changelog:
-    runs-on: ubuntu-latest
+- Leave blank lines between steps and jobs
 
-    steps:
-    - name: Get File Name Timestamp
-      id: filename_time
-      uses: nanzm/get-time-action@v1.1
-      with:
-        format: 'YYYYMMDD-HHmmss'
+  ```yaml
+  jobs:
+    dependency_changelog:
+      runs-on: ubuntu-latest
 
-    - name: Get File Content Timestamp
-      id: file_content_time
-      uses: nanzm/get-time-action@v1.1
-      with:
-        format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
+      steps:
+      - name: Get File Name Timestamp
+        id: filename_time
+        uses: nanzm/get-time-action@v1.1
+        with:
+          format: 'YYYYMMDD-HHmmss'
 
-    - name: Generate Filepath
-      id: fp
-      run: |
-        FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
-        echo "::set-output name=FILEPATH::$FILEPATH"
-```
+      - name: Get File Content Timestamp
+        id: file_content_time
+        uses: nanzm/get-time-action@v1.1
+        with:
+          format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
+
+      - name: Generate Filepath
+        id: fp
+        run: |
+          FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
+          echo "::set-output name=FILEPATH::$FILEPATH"
+  ```
+
+- Print out all input variables as the first step of a job.  This allows for easier debugging.
+
+  ```yaml
+  - name: Print variables
+    run: |
+        echo The last commit sha in the release: ${{ inputs.sha }}
+        echo The release version number: ${{ inputs.version_number }}
+        echo The changelog_path: ${{ inputs.changelog_path }}
+        echo The build_script_path: ${{ inputs.build_script_path }}
+        echo The s3_bucket_name: ${{ inputs.s3_bucket_name }}
+        echo The package_test_command: ${{ inputs.package_test_command }}
+  ```
 
 ## Tips
 
@@ -69,16 +90,19 @@ jobs:
 
 ### Connecting to AWS
 1. Authenticate with the aws managed workflow
-```      
-- name: Configure AWS credentials from Test account
-  uses: aws-actions/configure-aws-credentials@v1
-  with:
-    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    aws-region: us-east-1
-```
+
+  ```yaml
+  - name: Configure AWS credentials from Test account
+    uses: aws-actions/configure-aws-credentials@v1
+    with:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      aws-region: us-east-1
+  ```
+
 2. Then access with the aws command that comes installed on the action runner machines
-```
-- name: Copy Artifacts from S3 via CLI
-  run: aws s3 cp ${{ env.s3_bucket }} . --recursive 
-```
+
+  ```yaml
+  - name: Copy Artifacts from S3 via CLI
+    run: aws s3 cp ${{ env.s3_bucket }} . --recursive 
+  ```
