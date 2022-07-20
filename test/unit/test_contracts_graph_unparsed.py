@@ -23,7 +23,7 @@ class TestUnparsedMacro(ContractTestCase):
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
+            'raw_code': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
         }
@@ -45,7 +45,7 @@ class TestUnparsedMacro(ContractTestCase):
             'original_file_path': '/root/path.sql',
             # 'package_name': 'test',
             'language': 'sql',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
+            'raw_code': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
         }
@@ -57,7 +57,7 @@ class TestUnparsedMacro(ContractTestCase):
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
+            'raw_code': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'extra': 'extra',
             'resource_type': 'macro',
@@ -77,7 +77,7 @@ class TestUnparsedNode(ContractTestCase):
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': 'select * from {{ ref("thing") }}',
+            'raw_code': 'select * from {{ ref("thing") }}',
         }
         node = self.ContractType(
             package_name='test',
@@ -105,7 +105,7 @@ class TestUnparsedNode(ContractTestCase):
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': '  \n',
+            'raw_code': '  \n',
         }
         node = UnparsedNode(
             package_name='test',
@@ -132,7 +132,7 @@ class TestUnparsedNode(ContractTestCase):
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': 'select * from {{ ref("thing") }}',
+            'raw_code': 'select * from {{ ref("thing") }}',
         }
         self.assert_fails_validation(node_dict)
 
@@ -149,7 +149,7 @@ class TestUnparsedRunHook(ContractTestCase):
             'original_file_path': '/root/dbt_project.yml',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': 'GRANT select on dbt_postgres',
+            'raw_code': 'GRANT select on dbt_postgres',
             'index': 4
         }
         node = self.ContractType(
@@ -176,7 +176,7 @@ class TestUnparsedRunHook(ContractTestCase):
             'original_file_path': '/root/dbt_project.yml',
             'package_name': 'test',
             'language': 'sql',
-            'raw_sql': 'GRANT select on dbt_postgres',
+            'raw_code': 'GRANT select on dbt_postgres',
             'index': 4
         }
         self.assert_fails_validation(node_dict)

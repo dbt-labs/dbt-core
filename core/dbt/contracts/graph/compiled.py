@@ -47,16 +47,16 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
     relation_name: Optional[str] = None
     _pre_injected_sql: Optional[str] = None
 
-    @classmethod
-    def _custom_schema(cls, schema):
-        schema = super()._custom_schema(schema)
-        if "allOf" not in schema:
-            schema["allOf"] = []
-        schema["allOf"].append(
-            {"oneOf": [{"required": ["compiled_code"]}, {"required": ["compiled_sql"]}]}
-        )
-        schema["properties"]["compiled_sql"] = schema["properties"]["compiled_code"]
-        return schema
+    # @classmethod
+    # def _custom_schema(cls, schema):
+    #     schema = super()._custom_schema(schema)
+    #     if "allOf" not in schema:
+    #         schema["allOf"] = []
+    #     schema["allOf"].append(
+    #         {"oneOf": [{"required": ["compiled_code"]}, {"required": ["compiled_sql"]}]}
+    #     )
+    #     schema["properties"]["compiled_sql"] = schema["properties"]["compiled_code"]
+    #     return schema
 
     def set_cte(self, cte_id: str, sql: str):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
@@ -70,20 +70,20 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
     def __post_serialize__(self, dct):
-        if self.language == ModelLanguage.sql and "compiled_code" in dct:
-            dct["compiled_sql"] = dct.pop("compiled_code")
+        # if self.language == ModelLanguage.sql and "compiled_code" in dct:
+        #     dct["compiled_sql"] = dct.pop("compiled_code")
         dct = super().__post_serialize__(dct)
         if "_pre_injected_sql" in dct:
             del dct["_pre_injected_sql"]
         return dct
 
-    @classmethod
-    def __pre_deserialize__(cls, data):
+    # @classmethod
+    # def __pre_deserialize__(cls, data):
 
-        if "compiled_sql" in data:
-            data["compiled_code"] = data.pop("compiled_sql")
-        data = super().__pre_deserialize__(data)
-        return data
+    #     if "compiled_sql" in data:
+    #         data["compiled_code"] = data.pop("compiled_sql")
+    #     data = super().__pre_deserialize__(data)
+    #     return data
 
 
 @dataclass

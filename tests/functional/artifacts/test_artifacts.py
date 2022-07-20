@@ -338,7 +338,6 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
     manifest_path = os.path.join(project.project_root, "target", "manifest.json")
     assert os.path.exists(manifest_path)
     manifest = get_artifact(manifest_path)
-
     # Verify that manifest jsonschema from WritableManifest works
     manifest_schema = WritableManifest.json_schema()
     validate(manifest_schema, manifest)

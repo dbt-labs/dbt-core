@@ -31,34 +31,34 @@ class HasCode(dbtClassMixin):
     raw_code: str
     language: str
 
-    @classmethod
-    def _custom_schema(cls, schema):
-        schema = super()._custom_schema(schema)
-        if "allOf" not in schema:
-            schema["allOf"] = []
-        schema["allOf"].append({"oneOf": [{"required": ["raw_code"]}, {"required": ["raw_sql"]}]})
-        schema["properties"]["raw_sql"] = schema["properties"]["raw_code"]
-        schema["required"].remove("raw_code")
-        return schema
+    # @classmethod
+    # def _custom_schema(cls, schema):
+    #     schema = super()._custom_schema(schema)
+    #     if "allOf" not in schema:
+    #         schema["allOf"] = []
+    #     schema["allOf"].append({"oneOf": [{"required": ["raw_code"]}, {"required": ["raw_sql"]}]})
+    #     schema["properties"]["raw_sql"] = schema["properties"]["raw_code"]
+    #     schema["required"].remove("raw_code")
+    #     return schema
 
     @property
     def empty(self):
         return not self.raw_code.strip()
 
-    @classmethod
-    def __pre_deserialize__(cls, data):
-        if "raw_sql" in data:
-            data["raw_code"] = data.pop("raw_sql")
-        if "language" not in data:
-            data.language = "sql"
-        return data
+    # @classmethod
+    # def __pre_deserialize__(cls, data):
+    #     if "raw_sql" in data:
+    #         data["raw_code"] = data.pop("raw_sql")
+    #     if "language" not in data:
+    #         data.language = "sql"
+    #     return data
 
-    def __post_serialize__(self, dct):
-        # breakpoint()
-        if self.language == ModelLanguage.sql:
-            dct["raw_sql"] = dct.pop("raw_code")
+    # def __post_serialize__(self, dct):
+    #     # breakpoint()
+    #     if self.language == ModelLanguage.sql:
+    #         dct["raw_sql"] = dct.pop("raw_code")
 
-        return dct
+    #     return dct
 
 
 @dataclass

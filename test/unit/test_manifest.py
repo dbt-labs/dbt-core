@@ -43,13 +43,13 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
-    'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql', 'language',
+    'package_name', 'root_path', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
     'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict',
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
-    'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
+    'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_code',
     'relation_name'
 })
 

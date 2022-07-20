@@ -194,19 +194,15 @@ def assert_from_dict(obj, dct, cls=None):
     if cls is None:
         cls = obj.__class__
     cls.validate(dct)
-    try:
-        obj_from_dict = cls.from_dict(dct)
-    except:
-        breakpoint()
+
+    obj_from_dict = cls.from_dict(dct)
+
     if hasattr(obj, 'created_at'):
         obj_from_dict.created_at = 1
         obj.created_at = 1
-    try:
-        assert obj_from_dict == obj
-    except:
-        # print(obj_from_dict.keys())
-        # print(obj_from_dict.keys())
-        breakpoint()
+
+    assert obj_from_dict == obj
+
 
 def assert_to_dict(obj, dct):
     obj_to_dict = obj.to_dict(omit_none=True)

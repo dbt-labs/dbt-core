@@ -338,7 +338,6 @@ class Compiler:
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
         model.validate(model.to_dict(omit_none=True))
-
         manifest.update_node(model)
 
         return model, prepended_ctes
