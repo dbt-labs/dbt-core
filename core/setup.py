@@ -69,6 +69,7 @@ setup(
         "requests<3.0.0",
         "idna>=2.5,<4",
         "cffi>=1.9,<2.0.0",
+        "pyyaml>=6.0",
     ],
     zip_safe=False,
     classifiers=[
