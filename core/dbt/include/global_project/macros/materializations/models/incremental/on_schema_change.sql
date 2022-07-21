@@ -119,7 +119,7 @@
                 - set the `on_schema_change` config to either append_new_columns or sync_all_columns, depending on your situation.
                 - Re-run the incremental model with `full_refresh: True` to update the target schema.
                 - update the schema manually and re-run the process.
-               
+
               Extra info for easy anomaly detection:
                  Source columns not in target: {{ schema_changes_dict['source_not_in_target'] }}
                  Target columns not in source: {{ schema_changes_dict['target_not_in_source'] }}
