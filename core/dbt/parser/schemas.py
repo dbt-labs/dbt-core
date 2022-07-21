@@ -306,8 +306,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
         except CompilationException as exc:
             context = _trimmed(str(target))
-            msg = "Invalid generic test configuration given in {}:" "\n{}\n\t@: {}".format(
-                target.original_file_path, exc.msg, context
+            msg = (
+                "Invalid generic test configuration given in "
+                f"{target.original_file_path}: \n{exc.msg}\n\t@: {context}"
             )
             raise CompilationException(msg) from exc
 
