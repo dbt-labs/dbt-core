@@ -31,6 +31,7 @@ def get_rendered_model_config(**updates):
         "meta": {},
         "unique_key": None,
         "grants": {},
+        "incremental_strategy": None,
     }
     result.update(updates)
     return result
@@ -59,6 +60,7 @@ def get_rendered_seed_config(**updates):
         "meta": {},
         "unique_key": None,
         "grants": {},
+        "incremental_strategy": None,
     }
     result.update(updates)
     return result
@@ -91,6 +93,7 @@ def get_rendered_snapshot_config(**updates):
         "target_schema": None,
         "meta": {},
         "grants": {},
+        "incremental_strategy": None,
     }
     result.update(updates)
     return result
