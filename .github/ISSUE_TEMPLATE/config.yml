@@ -5,7 +5,7 @@ contact_links:
     about: Need help troubleshooting? Check out our guide on how to ask
   - name: Contact dbt Cloud support
     url: mailto:support@getdbt.com
-    about: Contact dbt Cloud support
+    about: Are you using dbt Cloud? Contact our support team for help!
   - name: Participate in Discussions
     url: https://github.com/dbt-labs/dbt-core/discussions
     about: Do you have a Big Idea for dbt? Read open discussions, or start a new one
