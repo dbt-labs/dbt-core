@@ -145,11 +145,15 @@ class PostgresConnectionManager(SQLConnectionManager):
             psycopg2.errors.OperationalError,
         ]
 
+        def exponential_backoff(attempt: int):
+            return attempt * attempt
+
         return cls.retry_connection(
             connection,
             connect=connect,
             logger=logger,
             retry_limit=credentials.retries,
+            retry_timeout=exponential_backoff,
             retryable_exceptions=retryable_exceptions,
         )
 
