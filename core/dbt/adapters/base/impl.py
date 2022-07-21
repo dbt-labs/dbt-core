@@ -1162,6 +1162,43 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return sql
 
+    def valid_incremental_strategies(self):
+        """The set of standard builtin strategies which this adapter supports out-of-the-box.
+        Not used to validate custom strategies defined by end users.
+        """
+        return ["append"]
+
+    def builtin_incremental_strategies(self):
+        return ["append", "delete+insert", "merge", "insert_overwrite"]
+
+    @available.parse_none
+    def get_incremental_strategy_macro(self, model_context, strategy: str):
+        # Construct macro_name from strategy name
+        if strategy is None:
+            strategy = "default"
+
+        # validate strategies for this adapter
+        valid_strategies = self.valid_incremental_strategies()
+        valid_strategies.append("default")
+        builtin_strategies = self.builtin_incremental_strategies()
+        if strategy in builtin_strategies and strategy not in valid_strategies:
+            raise RuntimeException(
+                f"The incremental strategy '{strategy}' is not valid for this adapter"
+            )
+
+        strategy = strategy.replace("+", "_")
+        macro_name = f"get_incremental_{strategy}_sql"
+        # The model_context should have MacroGenerator callable objects for all macros
+        if macro_name not in model_context:
+            raise RuntimeException(
+                'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(
+                    macro_name, self.config.project_name
+                )
+            )
+
+        # This returns a callable macro
+        return model_context[macro_name]
+
 
 COLUMNS_EQUAL_SQL = """
 with diff_count as (
