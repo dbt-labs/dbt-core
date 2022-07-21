@@ -9,7 +9,7 @@ body:
         Thanks for taking the time to fill out this regression report!
   - type: checkboxes
     attributes:
-      label: Is this a net-new regression in a recent version of dbt-core?
+      label: Is this a regression in a recent version of dbt-core?
       description: >
         A regression is when documented functionality works as expected in an older version of dbt-core,
         and no longer works after upgrading to a newer version of dbt-core
@@ -23,13 +23,13 @@ body:
       label: Current Behavior
       description: A concise description of what you're experiencing.
     validations:
-      required: false
+      required: true
   - type: textarea
     attributes:
       label: Expected/Previous Behavior
       description: A concise description of what you expected to happen.
     validations:
-      required: false
+      required: true
   - type: textarea
     attributes:
       label: Steps To Reproduce
@@ -40,7 +40,7 @@ body:
         3. Run '...'
         4. See error...
     validations:
-      required: false
+      required: true
   - type: textarea
     id: logs
     attributes:
@@ -57,14 +57,16 @@ body:
         examples:
           - **OS**: Ubuntu 20.04
           - **Python**: 3.9.12 (`python3 --version`)
-          - **dbt-core**: 1.1.1 (`dbt --version`)
+          - **dbt-core (working version)**: 1.1.1 (`dbt --version`)
+          - **dbt-core (regression version)**: 1.2.0 (`dbt --version`)
       value: |
         - OS:
         - Python:
-        - dbt:
+        - dbt (working version):
+        - dbt (regression version):
       render: markdown
     validations:
-      required: false
+      required: true
   - type: dropdown
     id: database
     attributes:
