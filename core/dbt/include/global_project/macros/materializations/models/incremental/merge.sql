@@ -86,17 +86,18 @@
 {%- endmacro %}
 
 
-{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates) -%}
-  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates) }}
+{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
+  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates, include_sql_header) }}
 {%- endmacro %}
 
-{% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates) -%}
+{% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header) -%}
+    {#-- The only time include_sql_header is True: --#}
+    {#-- BigQuery + insert_overwrite strategy + "static" partitions config --#}
+    {#-- We should consider including the sql header at the materialization level instead --#}
+
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
     {%- set sql_header = config.get('sql_header', none) -%}
-    {#-- The only time include_sql_header = True: --#}
-    {#-- BigQuery + insert_overwrite strategy + "static" partitions config --#}
-    {%- set include_sql_header = config.get('include_sql_header', false) -%}
 
     {{ sql_header if sql_header is not none and include_sql_header }}
 
