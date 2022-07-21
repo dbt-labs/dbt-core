@@ -11,12 +11,16 @@ body:
     attributes:
       label: Is this a new bug in dbt-core?
       description: >
-        Issues aren't the right place for requesting help or troubleshooting code in your own dbt project.
-        Bugs in adapter plugins should be opened in that adapter's repository.
-        Bugs in dbt Cloud should be reported to [support](mailto:support@getdbt.com).
+        In other words, is this an error, flaw, failure or fault in our software?
+        
+        If this is a bug that broke existing functionality that used to work, please open a regression issue.
+        If this is a bug in an adapter plugin, please open an issue in the adapter's repository.
+        If this is a bug experienced while using dbt Cloud, please report to [support](mailto:support@getdbt.com).
+        If this is a request for help or troubleshooting code in your own dbt project, please join our [dbt Community Slack](https://www.getdbt.com/community/join-the-community/) or open a [Discussion question](https://github.com/dbt-labs/docs.getdbt.com/discussions).
+        
         Please search to see if an issue already exists for the bug you encountered.
       options:
-        - label: I believe this is a bug in dbt-core
+        - label: I believe this is a new bug in dbt-core
           required: true
         - label: I have searched the existing issues, and I could not find an existing issue for this bug
           required: true
@@ -25,13 +29,13 @@ body:
       label: Current Behavior
       description: A concise description of what you're experiencing.
     validations:
-      required: false
+      required: true
   - type: textarea
     attributes:
       label: Expected Behavior
       description: A concise description of what you expected to happen.
     validations:
-      required: false
+      required: true
   - type: textarea
     attributes:
       label: Steps To Reproduce
@@ -42,7 +46,7 @@ body:
         3. Run '...'
         4. See error...
     validations:
-      required: false
+      required: true
   - type: textarea
     id: logs
     attributes:
