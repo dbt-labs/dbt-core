@@ -1166,7 +1166,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """The set of standard builtin strategies which this adapter supports out-of-the-box.
         Not used to validate custom strategies defined by end users.
         """
-        return ["append", "delete+insert"]
+        return ["append"]
 
     def builtin_incremental_strategies(self):
         return ["append", "delete+insert", "merge", "insert_overwrite"]
