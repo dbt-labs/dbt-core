@@ -19,7 +19,7 @@ def test_basic(project):
     assert len(results) == 1
 
     manifest = get_manifest(project.project_root)
-    model = manifest.nodes['model.test.my_model']
+    model = manifest.nodes["model.test.my_model"]
 
     # Normally the context will be provided by the macro that calls the
     # get_incrmental_strategy_macro method, but for testing purposes

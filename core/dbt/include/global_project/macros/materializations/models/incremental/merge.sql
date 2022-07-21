@@ -94,7 +94,8 @@
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
     {%- set sql_header = config.get('sql_header', none) -%}
-    {# The following is only true in BigQuery #}
+    {#-- The only time include_sql_header = True: --#}
+    {#-- BigQuery + insert_overwrite strategy + "static" partitions config --#}
     {%- set include_sql_header = config.get('include_sql_header', false) -%}
 
     {{ sql_header if sql_header is not none and include_sql_header }}

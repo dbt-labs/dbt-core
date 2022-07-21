@@ -1163,7 +1163,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         return sql
 
     def valid_incremental_strategies(self):
+        """The set of standard builtin strategies which this adapter supports out-of-the-box.
+        Not used to validate custom strategies defined by end users.
+        """
         return ["append", "delete+insert"]
+
+    def builtin_incremental_strategies(self):
+        return ["append", "delete+insert", "merge", "insert_overwrite"]
 
     @available.parse_none
     def get_incremental_strategy_macro(self, model_context, strategy: str):
@@ -1174,7 +1180,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         # validate strategies for this adapter
         valid_strategies = self.valid_incremental_strategies()
         valid_strategies.append("default")
-        builtin_strategies = ["append", "delete+insert", "merge", "insert_overwrite"]
+        builtin_strategies = self.builtin_incremental_strategies()
         if strategy in builtin_strategies and strategy not in valid_strategies:
             raise RuntimeException(
                 f"The incremental strategy '{strategy}' is not valid for this adapter"
