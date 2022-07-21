@@ -1,0 +1,7 @@
+kind: Features
+body: add exponential backoff to connection retries on Postgres (and Redshift)
+time: 2022-07-20T17:12:57.486949-04:00
+custom:
+  Author: nathaniel-may
+  Issue: "5502"
+  PR: "5503"
