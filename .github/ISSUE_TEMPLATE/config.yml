@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Ask the community for help
-    url: https://docs.getdbt.com/guides/legacy/getting-help
+    url: https://github.com/dbt-labs/docs.getdbt.com/discussions
     about: Need help troubleshooting? Check out our guide on how to ask
   - name: Contact dbt Cloud support
     url: mailto:support@getdbt.com
