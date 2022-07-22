@@ -17,7 +17,6 @@ from dbt.clients.system import write_file
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.node_types import ModelLanguage
 from dbt.logger import (
     DbtProcessState,
     TextOnly,
@@ -47,7 +46,6 @@ from dbt.exceptions import (
     NotImplementedException,
     RuntimeException,
     FailFastException,
-    raise_compiler_error,
     warn_or_error,
 )
 
@@ -82,26 +80,7 @@ class ManifestTask(ConfiguredTask):
 
     def load_manifest(self):
         self.manifest = ManifestLoader.get_full_manifest(self.config)
-        self._validate_manifest(self.manifest)
         self.write_manifest()
-
-    def _validate_manifest(self, manifest):
-        for node in self.manifest.nodes.values():
-            # TODO this will be modified when we update the internal representation for python model
-            if (
-                node.config
-                and hasattr(node.config, "language")
-                and node.config.language == ModelLanguage.python
-            ):
-                if (
-                    node.config.materialized
-                    not in self.adapter.valid_python_model_materialization()
-                ):
-                    raise_compiler_error(
-                        f"'{node.config.materialized}' is not a supported materialization of python model for the current adapter,\n"
-                        f"current adapter support {self.adapter.valid_python_model_materialization()}",
-                        node,
-                    )
 
     def compile_manifest(self):
         if self.manifest is None:

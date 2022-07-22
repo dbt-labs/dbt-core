@@ -1139,10 +1139,6 @@ class BaseAdapter(metaclass=AdapterMeta):
     def submit_python_job(self, parsed_model: dict, compiled_code: str):
         raise NotImplementedException("`submit_python_job` is not implemented for this adapter!")
 
-    def valid_python_model_materialization(self):
-        """The valid materialization an adapter should have for python model"""
-        return ["table"]
-
 
 COLUMNS_EQUAL_SQL = """
 with diff_count as (
