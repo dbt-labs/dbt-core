@@ -147,7 +147,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
     def parse_python_model(self, node, config, context):
         try:
-            tree = ast.parse(node.raw_sql)
+            tree = ast.parse(node.raw_sql, filename=node.original_file_path)
         except SyntaxError as exc:
             msg = validator_error_message(exc)
             raise ParsingException(msg, node=node) from exc
