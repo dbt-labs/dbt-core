@@ -10,7 +10,7 @@ import dbt.flags
 import dbt.parser
 from dbt import tracking
 from dbt.context.context_config import ContextConfig
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 from dbt.parser import (
     ModelParser, MacroParser, SingularTestParser, GenericTestParser,
     SchemaParser, SnapshotParser, AnalysisParser
@@ -538,7 +538,7 @@ class ModelParserTest(BaseParserTest):
     
     def test_parse_python_file(self):
         py_code = """
-def model( dbt):
+def model(dbt, session):
     dbt.config(
         materialized='table',
         packages = ['sklearn==0.1.0']
@@ -586,6 +586,34 @@ def model( dbt):
         file_id = 'snowplow://' + normalize('models/nested/py_model.py')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.py_model'])
+
+    def test_wrong_python_model_def_miss_session(self):
+        py_code = """
+def model(dbt):
+    dbt.config(
+        materialized='table',
+    )
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
+    
+    def test_wrong_python_model_def_wrong_arg(self):
+        """ First argument for python model should be dbt
+        """
+        py_code = """
+def model(dat, session):
+    dbt.config(
+        materialized='table',
+    )
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
 
     def test_parse_error(self):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
