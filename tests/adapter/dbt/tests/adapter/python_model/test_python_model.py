@@ -11,7 +11,7 @@ select 1 as id union all
 select 1 as id
 """
 basic_python = """
-def model(dbt):
+def model(dbt, session):
     dbt.config(
         materialized='table',
     )

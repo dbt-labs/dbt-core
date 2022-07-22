@@ -28,8 +28,24 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # New for Python models :p
 import ast
+
 from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import ParsingException, validator_error_message, UndefinedMacroException
+
+
+class PythonValidationVisitor(ast.NodeVisitor):
+    def __init__(self):
+        super().__init__()
+        self.dbt_errors = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node.name == "model":
+            if not node.args.args[0].arg == "dbt":
+                self.dbt_errors.append("'dbt' not provided for model as the first argument")
+            if len(node.args.args) != 2:
+                self.dbt_errors.append(
+                    "model function should have two args, `dbt` and a session to current warehouse"
+                )
 
 
 class PythonParseVisitor(ast.NodeVisitor):
@@ -77,21 +93,20 @@ class PythonParseVisitor(ast.NodeVisitor):
 
         return arg_literals, kwarg_literals
 
-    def visit_Call(self, node):
+    def visit_Call(self, node: ast.Call) -> None:
 
         func_name = self._flatten_attr(node.func)
         if func_name in ["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"]:
             # drop the dot-dbt prefix
             func_name = func_name.split(".")[-1]
-
             args, kwargs = self._get_call_literals(node)
             self.dbt_function_calls.append((func_name, args, kwargs))
 
-    def visit_Import(self, node: ast.Import) -> Any:
+    def visit_Import(self, node: ast.Import) -> None:
         for n in node.names:
             self.packages.append(n.name.split(".")[0])
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module:
             self.packages.append(node.module.split(".")[0])
 
@@ -132,10 +147,17 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
     def parse_python_model(self, node, config, context):
         try:
-            tree = ast.parse(node.raw_sql)
+            tree = ast.parse(node.raw_sql, filename=node.original_file_path)
         except SyntaxError as exc:
             msg = validator_error_message(exc)
-            raise ParsingException(msg, node=node) from exc
+            raise ParsingException(f"{msg}\n{exc.text}", node=node) from exc
+
+        # We are doing a validator and a parser because visit_FunctionDef in parser
+        # would actually make the parser not doing the visit_Calls any more
+        dbtValidator = PythonValidationVisitor()
+        dbtValidator.visit(tree)
+        if len(dbtValidator.dbt_errors) != 0:
+            raise ParsingException("\n".join(dbtValidator.dbt_errors), node=node)
 
         dbtParser = PythonParseVisitor(node)
         dbtParser.visit(tree)
