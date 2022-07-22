@@ -787,6 +787,26 @@ class NewConnectionOpening(DebugLevel):
 
 
 @dataclass
+class CodeExecution(DebugLevel):
+    conn_name: Optional[str]
+    code_content: str
+    code: str = "E038"
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: {self.code_content}"
+
+
+@dataclass
+class CodeExecutionStatus(DebugLevel):
+    status: str
+    elapsed: Optional[float]
+    code: str = "E039"
+
+    def message(self) -> str:
+        return f"Execution status: {self.status} in {self.elapsed} seconds"
+
+
+@dataclass
 class TimingInfoCollected(DebugLevel):
     code: str = "Z010"
 
@@ -2513,6 +2533,8 @@ if 1 == 0:
     ConnectionUsed(conn_type="", conn_name="")
     SQLQuery(conn_name="", sql="")
     SQLQueryStatus(status="", elapsed=0.1)
+    CodeExecution(conn_name="", code_content="")
+    CodeExecutionStatus(status="", elapsed=0.1)
     SQLCommit(conn_name="")
     ColTypeChange(
         orig_type="", new_type="", table=_ReferenceKey(database="", schema="", identifier="")
