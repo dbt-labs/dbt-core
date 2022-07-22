@@ -150,7 +150,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             tree = ast.parse(node.raw_sql, filename=node.original_file_path)
         except SyntaxError as exc:
             msg = validator_error_message(exc)
-            raise ParsingException(msg, node=node) from exc
+            raise ParsingException(f"{msg}\n{exc.text}", node=node) from exc
 
         # We are doing a validator and a parser because visit_FunctionDef in parser
         # would actually make the parser not doing the visit_Calls any more
