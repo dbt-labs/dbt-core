@@ -170,9 +170,8 @@ class ModelRunner(CompileRunner):
         return str(relation)
 
     def describe_node(self):
-        return "{} model {}".format(
-            self.node.get_materialization(), self.get_node_representation()
-        )
+        # TODO CL 'language' will be moved to node level when we change representation
+        return f"{self.node.config.get('language', 'sql')} {self.node.get_materialization()} model {self.get_node_representation()}"
 
     def print_start_line(self):
         fire_event(
