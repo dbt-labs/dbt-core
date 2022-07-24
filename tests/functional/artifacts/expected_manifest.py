@@ -33,6 +33,8 @@ def get_rendered_model_config(**updates):
         "grants": {},
         "language": "sql",
         "packages": [],
+        "incremental_strategy": None,
+
     }
     result.update(updates)
     return result
@@ -63,6 +65,7 @@ def get_rendered_seed_config(**updates):
         "grants": {},
         "language": "sql",
         "packages": [],
+        "incremental_strategy": None,
     }
     result.update(updates)
     return result
@@ -97,6 +100,7 @@ def get_rendered_snapshot_config(**updates):
         "grants": {},
         "language": "sql",
         "packages": [],
+        "incremental_strategy": None,
     }
     result.update(updates)
     return result

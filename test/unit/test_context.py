@@ -190,15 +190,16 @@ REQUIRED_BASE_KEYS = frozenset(
         "fromyaml",
         "toyaml",
         "set",
-        "try_set",
+        "set_strict",
         "zip",
-        "try_zip",
+        "zip_strict",
         "log",
         "run_started_at",
         "invocation_id",
         "modules",
         "flags",
         "print",
+        "diff_of_two_dicts"
     }
 )
 

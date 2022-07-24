@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Fix pip upgrade step in CI for Windows
-time: 2022-06-01T10:52:45.872931-04:00
-custom:
-  Author: gshank
-  Issue: "5321"
-  PR: "5320"

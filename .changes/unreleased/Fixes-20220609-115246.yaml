@@ -1,7 +1,0 @@
-kind: Fixes
-body: Improve pluralizations for Documentation and SqlOperation NodeTypes
-time: 2022-06-09T11:52:46.578469-05:00
-custom:
-  Author: pdebelak
-  Issue: "5352"
-  PR: "5356"

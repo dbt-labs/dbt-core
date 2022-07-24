@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Fix unit test test_graph_selection
-time: 2022-06-01T11:26:48.725831-04:00
-custom:
-  Author: gshank
-  Issue: "5323"
-  PR: "5324"

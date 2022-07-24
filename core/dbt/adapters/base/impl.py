@@ -160,6 +160,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         - convert_datetime_type
         - convert_date_type
         - convert_time_type
+        - standardize_grants_dict
 
     Macros:
         - get_catalog
@@ -538,6 +539,33 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException(
             "`list_relations_without_caching` is not implemented for this " "adapter!"
         )
+
+    ###
+    # Methods about grants
+    ###
+    @available
+    def standardize_grants_dict(self, grants_table: agate.Table) -> dict:
+        """Translate the result of `show grants` (or equivalent) to match the
+        grants which a user would configure in their project.
+
+        Ideally, the SQL to show grants should also be filtering:
+        filter OUT any grants TO the current user/role (e.g. OWNERSHIP).
+        If that's not possible in SQL, it can be done in this method instead.
+
+        :param grants_table: An agate table containing the query result of
+            the SQL returned by get_show_grant_sql
+        :return: A standardized dictionary matching the `grants` config
+        :rtype: dict
+        """
+        grants_dict: Dict[str, List[str]] = {}
+        for row in grants_table:
+            grantee = row["grantee"]
+            privilege = row["privilege_type"]
+            if privilege in grants_dict.keys():
+                grants_dict[privilege].append(grantee)
+            else:
+                grants_dict.update({privilege: [grantee]})
+        return grants_dict
 
     ###
     # Provided methods about relations
@@ -1135,9 +1163,47 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return sql
 
+
     @available.parse_none
     def submit_python_job(self, parsed_model: dict, compiled_code: str):
         raise NotImplementedException("`submit_python_job` is not implemented for this adapter!")
+
+    def valid_incremental_strategies(self):
+        """The set of standard builtin strategies which this adapter supports out-of-the-box.
+        Not used to validate custom strategies defined by end users.
+        """
+        return ["append"]
+
+    def builtin_incremental_strategies(self):
+        return ["append", "delete+insert", "merge", "insert_overwrite"]
+
+    @available.parse_none
+    def get_incremental_strategy_macro(self, model_context, strategy: str):
+        # Construct macro_name from strategy name
+        if strategy is None:
+            strategy = "default"
+
+        # validate strategies for this adapter
+        valid_strategies = self.valid_incremental_strategies()
+        valid_strategies.append("default")
+        builtin_strategies = self.builtin_incremental_strategies()
+        if strategy in builtin_strategies and strategy not in valid_strategies:
+            raise RuntimeException(
+                f"The incremental strategy '{strategy}' is not valid for this adapter"
+            )
+
+        strategy = strategy.replace("+", "_")
+        macro_name = f"get_incremental_{strategy}_sql"
+        # The model_context should have MacroGenerator callable objects for all macros
+        if macro_name not in model_context:
+            raise RuntimeException(
+                'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(
+                    macro_name, self.config.project_name
+                )
+            )
+
+        # This returns a callable macro
+        return model_context[macro_name]
 
 
 COLUMNS_EQUAL_SQL = """

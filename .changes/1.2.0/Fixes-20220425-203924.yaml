@@ -1,7 +1,0 @@
-kind: Fixes
-body: Scrub secret env vars from CommandError in exception stacktrace
-time: 2022-04-25T20:39:24.365495+02:00
-custom:
-  Author: jtcohen6
-  Issue: "5151"
-  PR: "5152"

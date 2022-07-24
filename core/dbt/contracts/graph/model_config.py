@@ -433,6 +433,7 @@ class NodeConfig(NodeAndTestConfig):
     # Note: if any new fields are added with MergeBehavior, also update the
     # 'mergebehavior' dictionary
     materialized: str = "view"
+    incremental_strategy: Optional[str] = None
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,

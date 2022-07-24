@@ -31,7 +31,7 @@ custom:
 footerFormat: |
   {{- $contributorDict := dict }}
   {{- /* any names added to this list should be all lowercase for later matching purposes */}}
-  {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "dependabot" }}
+  {{- $core_team := list "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "dependabot[bot]" "snyk-bot" }}
   {{- range $change := .Changes }}
     {{- $authorList := splitList " " $change.Custom.Author }}
     {{- /* loop through all authors for a PR */}}

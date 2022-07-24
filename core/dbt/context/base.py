@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set
+from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
 
 from dbt import flags
 from dbt import tracking
@@ -474,19 +474,17 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def try_set(value: Iterable[Any]) -> Set[Any]:
-        """The `try_set` context method can be used to convert any iterable
+    def set_strict(value: Iterable[Any]) -> Set[Any]:
+        """The `set_strict` context method can be used to convert any iterable
         to a sequence of iterable elements that are unique (a set). The
-        difference to the `set` context method is that the `try_set` method
+        difference to the `set` context method is that the `set_strict` method
         will raise an exception on a TypeError.
 
         :param value: The iterable
-        :param default: A default value to return if the `value` argument
-            is not an iterable
 
         Usage:
             {% set my_list = [1, 2, 2, 3] %}
-            {% set my_set = try_set(my_list) %}
+            {% set my_set = set_strict(my_list) %}
             {% do log(my_set) %}  {# {1, 2, 3} #}
         """
         try:
@@ -497,7 +495,7 @@ class BaseContext(metaclass=ContextMeta):
     @contextmember("zip")
     @staticmethod
     def _zip(*args: Iterable[Any], default: Any = None) -> Optional[Iterable[Any]]:
-        """The `try_zip` context method can be used to used to return
+        """The `zip` context method can be used to used to return
         an iterator of tuples, where the i-th tuple contains the i-th
         element from each of the argument iterables.
 
@@ -518,21 +516,19 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def try_zip(*args: Iterable[Any]) -> Iterable[Any]:
-        """The `try_zip` context method can be used to used to return
+    def zip_strict(*args: Iterable[Any]) -> Iterable[Any]:
+        """The `zip_strict` context method can be used to used to return
         an iterator of tuples, where the i-th tuple contains the i-th
         element from each of the argument iterables. The difference to the
-        `zip` context method is that the `try_zip` method will raise an
+        `zip` context method is that the `zip_strict` method will raise an
         exception on a TypeError.
 
         :param *args: Any number of iterables
-        :param default: A default value to return if `*args` is not
-            iterable
 
         Usage:
             {% set my_list_a = [1, 2] %}
             {% set my_list_b = ['alice', 'bob'] %}
-            {% set my_zip = try_zip(my_list_a, my_list_b) | list %}
+            {% set my_zip = zip_strict(my_list_a, my_list_b) | list %}
             {% do log(my_set) %}  {# [(1, 'alice'), (2, 'bob')] #}
         """
         try:
@@ -656,6 +652,35 @@ class BaseContext(metaclass=ContextMeta):
         if not flags.NO_PRINT:
             print(msg)
         return ""
+
+    @contextmember
+    @staticmethod
+    def diff_of_two_dicts(
+        dict_a: Dict[str, List[str]], dict_b: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        """
+        Given two dictionaries of type Dict[str, List[str]]:
+            dict_a = {'key_x': ['value_1', 'VALUE_2'], 'KEY_Y': ['value_3']}
+            dict_b = {'key_x': ['value_1'], 'key_z': ['value_4']}
+        Return the same dictionary representation of dict_a MINUS dict_b,
+        performing a case-insensitive comparison between the strings in each.
+        All keys returned will be in the original case of dict_a.
+            returns {'key_x': ['VALUE_2'], 'KEY_Y': ['value_3']}
+        """
+
+        dict_diff = {}
+        dict_b_lowered = {k.casefold(): [x.casefold() for x in v] for k, v in dict_b.items()}
+        for k in dict_a:
+            if k.casefold() in dict_b_lowered.keys():
+                diff = []
+                for v in dict_a[k]:
+                    if v.casefold() not in dict_b_lowered[k.casefold()]:
+                        diff.append(v)
+                if diff:
+                    dict_diff.update({k: diff})
+            else:
+                dict_diff.update({k: dict_a[k]})
+        return dict_diff
 
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:

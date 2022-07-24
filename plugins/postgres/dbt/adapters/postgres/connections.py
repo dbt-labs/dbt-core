@@ -31,6 +31,7 @@ class PostgresCredentials(Credentials):
     sslkey: Optional[str] = None
     sslrootcert: Optional[str] = None
     application_name: Optional[str] = "dbt"
+    retries: int = 1
 
     _ALIASES = {"dbname": "database", "pass": "password"}
 
@@ -121,7 +122,7 @@ class PostgresConnectionManager(SQLConnectionManager):
         if credentials.application_name:
             kwargs["application_name"] = credentials.application_name
 
-        try:
+        def connect():
             handle = psycopg2.connect(
                 dbname=credentials.database,
                 user=credentials.user,
@@ -131,23 +132,30 @@ class PostgresConnectionManager(SQLConnectionManager):
                 connect_timeout=credentials.connect_timeout,
                 **kwargs,
             )
-
             if credentials.role:
                 handle.cursor().execute("set role {}".format(credentials.role))
+            return handle
 
-            connection.handle = handle
-            connection.state = "open"
-        except psycopg2.Error as e:
-            logger.debug(
-                "Got an error when attempting to open a postgres " "connection: '{}'".format(e)
-            )
+        retryable_exceptions = [
+            # OperationalError is subclassed by all psycopg2 Connection Exceptions and it's raised
+            # by generic connection timeouts without an error code. This is a limitation of
+            # psycopg2 which doesn't provide subclasses for errors without a SQLSTATE error code.
+            # The limitation has been known for a while and there are no efforts to tackle it.
+            # See: https://github.com/psycopg/psycopg2/issues/682
+            psycopg2.errors.OperationalError,
+        ]
 
-            connection.handle = None
-            connection.state = "fail"
+        def exponential_backoff(attempt: int):
+            return attempt * attempt
 
-            raise dbt.exceptions.FailedToConnectException(str(e))
-
-        return connection
+        return cls.retry_connection(
+            connection,
+            connect=connect,
+            logger=logger,
+            retry_limit=credentials.retries,
+            retry_timeout=exponential_backoff,
+            retryable_exceptions=retryable_exceptions,
+        )
 
     def cancel(self, connection):
         connection_name = connection.name

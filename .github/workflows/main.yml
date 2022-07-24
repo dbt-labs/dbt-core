@@ -38,6 +38,7 @@ jobs:
     name: code-quality
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out the repository
@@ -65,6 +66,7 @@ jobs:
     name: unit test / python ${{ matrix.python-version }}
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     strategy:
       fail-fast: false
@@ -109,6 +111,7 @@ jobs:
     name: integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
@@ -125,6 +128,9 @@ jobs:
       TOXENV: integration
       PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
       DBT_INVOCATION_ENV: github-actions
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
 
     steps:
       - name: Check out the repository

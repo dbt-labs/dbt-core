@@ -25,6 +25,8 @@
   {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
   -- as above, the backup_relation should not already exist
   {%- set preexisting_backup_relation = load_cached_relation(backup_relation) -%}
+  -- grab current tables grants config for comparision later on
+  {% set grant_config = config.get('grants') %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -46,6 +48,9 @@
     {{ adapter.rename_relation(existing_relation, backup_relation) }}
   {% endif %}
   {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+
+  {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {% do persist_docs(target_relation, model) %}
 

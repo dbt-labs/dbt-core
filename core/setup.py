@@ -48,7 +48,7 @@ setup(
         ],
     },
     install_requires=[
-        "Jinja2==2.11.3",
+        "Jinja2==3.1.2",
         "MarkupSafe>=0.23,<2.1",
         "agate>=1.6,<1.6.4",
         "click>=7.0,<9",
@@ -56,7 +56,7 @@ setup(
         "hologram>=0.0.14,<=0.0.15",
         "isodate>=0.6,<0.7",
         "logbook>=1.5,<1.6",
-        "mashumaro==2.9",
+        "mashumaro[msgpack]==3.0.3",
         "minimal-snowplow-tracker==0.0.2",
         "networkx>=2.3,<2.8.1;python_version<'3.8'",
         "networkx>=2.3,<3;python_version>='3.8'",
@@ -69,6 +69,7 @@ setup(
         "requests<3.0.0",
         "idna>=2.5,<4",
         "cffi>=1.9,<2.0.0",
+        "pyyaml>=6.0",
     ],
     zip_safe=False,
     classifiers=[
