@@ -1157,7 +1157,12 @@ class ProviderContext(ManifestContext):
 
     @contextproperty("model")
     def ctx_model(self) -> Dict[str, Any]:
-        return self.model.to_dict(omit_none=True)
+        ret = self.model.to_dict(omit_none=True)
+        # Maintain direct use of compiled_sql
+        # TODO add depreciation logic[CT-934]
+        if getattr(self.model, "language", "") == ModelLanguage.sql:
+            ret["compiled_sql"] = ret["compiled_code"]
+        return ret
 
     @contextproperty
     def pre_hooks(self) -> Optional[List[Dict[str, Any]]]:
