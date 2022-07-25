@@ -18,7 +18,7 @@ from dbt.contracts.graph.parsed import (
     TestConfig,
     same_seeds,
 )
-from dbt.node_types import NodeType, ModelLanguage
+from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
 
 from dbt.dataclass_schema import dbtClassMixin
