@@ -1,8 +1,0 @@
-kind: Features
-body: Allow users to define grants as a reasonable default in the dbt_project.yml
-  or within each model sql or yml file combined.
-time: 2022-07-11T11:15:14.695386-05:00
-custom:
-  Author: McKnight-42
-  Issue: "5263"
-  PR: "5369"

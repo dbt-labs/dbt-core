@@ -1,7 +1,0 @@
-kind: Fixes
-body: Remove docs file from manifest when removing doc node
-time: 2022-05-18T13:46:10.167143-04:00
-custom:
-  Author: gshank
-  Issue: "4146"
-  PR: "5270"

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Add tests for SQL grants
-time: 2022-07-06T21:50:01.498562-04:00
-custom:
-  Author: gshank
-  Issue: "5437"
-  PR: "5447"

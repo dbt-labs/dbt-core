@@ -1,7 +1,0 @@
-kind: Dependencies
-body: "Bump black from 22.3.0 to 22.6.0"
-time: 2022-06-29T00:08:31.000000-05:00
-custom:
-  Author: dependabot[bot]
-  Issue: "4904"
-  PR: "5420"
