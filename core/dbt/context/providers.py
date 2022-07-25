@@ -1160,7 +1160,7 @@ class ProviderContext(ManifestContext):
         ret = self.model.to_dict(omit_none=True)
         # Maintain direct use of compiled_sql
         # TODO add depreciation logic[CT-934]
-        if getattr(self.model, "language", "") == ModelLanguage.sql:
+        if "compiled_code" in ret:
             ret["compiled_sql"] = ret["compiled_code"]
         return ret
 
