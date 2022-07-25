@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import requests
 import stat
 from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
 from pathspec import PathSpec  # type: ignore
@@ -23,6 +22,7 @@ from dbt.events.types import (
     SystemStdErrMsg,
     SystemReportReturnCode,
 )
+from dbt.clients.http import http
 import dbt.exceptions
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
@@ -464,7 +464,7 @@ def download(
 ) -> None:
     path = convert_path(path)
     connection_timeout = timeout or float(os.getenv("DBT_HTTP_TIMEOUT", 10))
-    response = requests.get(url, timeout=connection_timeout)
+    response = http.get_response(url, timeout=connection_timeout)
     with open(path, "wb") as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)

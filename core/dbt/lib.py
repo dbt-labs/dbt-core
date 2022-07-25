@@ -74,7 +74,7 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     runtime_args = RuntimeArgs(
         project_dir=project_dir,
         profiles_dir=profiles_dir,
-        single_threaded=single_threaded,
+        single_threaded=single_threaded or flags.IS_PYODIDE,
         profile=getattr(args, "profile", None),
         target=getattr(args, "target", None),
     )

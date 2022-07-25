@@ -2,7 +2,8 @@ import enum
 from dataclasses import dataclass, field
 from itertools import chain, islice
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
-from multiprocessing.synchronize import Lock
+from dbt.clients.parallel import Lock
+
 from typing import (
     Dict,
     List,
@@ -642,10 +643,19 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default_factory=ParsingInfo,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
-    _lock: Lock = field(
-        default_factory=flags.MP_CONTEXT.Lock,
-        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
-    )
+    if flags.IS_PYODIDE:
+        # Not sure how to avoid this change
+        # Fails with this error:
+        # mashumaro.exceptions.UnserializableDataError: <built-in function allocate_lock> as a field type is not supported by mashumaro
+        _lock: Callable = field(
+            default_factory=flags.MP_CONTEXT.Lock,
+            metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+        )
+    else:
+        _lock: Lock = field(
+            default_factory=flags.MP_CONTEXT.Lock,
+            metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+        )
 
     def __pre_serialize__(self):
         # serialization won't work with anything except an empty source_patches because

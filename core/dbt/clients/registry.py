@@ -1,6 +1,7 @@
 import functools
 from typing import Any, Dict, List
 import requests
+from dbt.clients.http import http
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     RegistryProgressGETRequest,
@@ -40,7 +41,7 @@ def _get(package_name, registry_base_url=None):
     url = _get_url(package_name, registry_base_url)
     fire_event(RegistryProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here
-    resp = requests.get(url, timeout=30)
+    resp = http.get_response(url, timeout=30)
     fire_event(RegistryProgressGETResponse(url=url, resp_code=resp.status_code))
     resp.raise_for_status()
 
@@ -164,7 +165,7 @@ def _get_index(registry_base_url=None):
     url = _get_url("index", registry_base_url)
     fire_event(RegistryIndexProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here
-    resp = requests.get(url, timeout=30)
+    resp = http.get_response(url, timeout=30)
     fire_event(RegistryIndexProgressGETResponse(url=url, resp_code=resp.status_code))
     resp.raise_for_status()
 

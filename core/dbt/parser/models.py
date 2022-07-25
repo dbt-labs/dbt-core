@@ -20,12 +20,15 @@ from dbt.parser.search import FileBlock
 from dbt.clients.jinja import get_rendered
 import dbt.tracking as tracking
 from dbt import utils
-from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 from functools import reduce
 from itertools import chain
 import random
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
-
+# No support for compiled dependencies on pyodide
+if flags.IS_PYODIDE:
+    pass
+else:
+    from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 # New for Python models :p
 import ast
 from dbt.dataclass_schema import ValidationError
@@ -284,12 +287,15 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 exp_sample_node = deepcopy(node)
                 exp_sample_config = deepcopy(config)
                 model_parser_copy.populate(exp_sample_node, exp_sample_config, experimental_sample)
-        # use the experimental parser exclusively if the flag is on
-        if flags.USE_EXPERIMENTAL_PARSER:
-            statically_parsed = self.run_experimental_parser(node)
-        # run the stable static parser unless it is explicitly turned off
+        if flags.IS_PYODIDE:
+            pass
         else:
-            statically_parsed = self.run_static_parser(node)
+            # use the experimental parser exclusively if the flag is on
+            if flags.USE_EXPERIMENTAL_PARSER:
+                statically_parsed = self.run_experimental_parser(node)
+            # run the stable static parser unless it is explicitly turned off
+            else:
+                statically_parsed = self.run_static_parser(node)
 
         # if the static parser succeeded, extract some data in easy-to-compare formats
         if isinstance(statically_parsed, dict):

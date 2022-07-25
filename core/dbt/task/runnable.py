@@ -5,7 +5,6 @@ from pathlib import Path
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
-from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
 
 from .printer import (
@@ -13,6 +12,7 @@ from .printer import (
     print_run_end_messages,
 )
 
+from dbt.clients.parallel import ThreadPool
 from dbt.clients.system import write_file
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
@@ -267,7 +267,7 @@ class GraphRunnableTask(ManifestTask):
 
         This does still go through the callback path for result collection.
         """
-        if self.config.args.single_threaded:
+        if self.config.args.single_threaded or flags.IS_PYODIDE:
             callback(self.call_runner(*args))
         else:
             pool.apply_async(self.call_runner, args=args, callback=callback)

@@ -1,10 +1,6 @@
 import os
-import multiprocessing
-
-if os.name != "nt":
-    # https://bugs.python.org/issue41567
-    import multiprocessing.popen_spawn_posix  # type: ignore
 from pathlib import Path
+import sys
 from typing import Optional
 
 # PROFILES_DIR must be set before the other flags
@@ -45,6 +41,7 @@ NO_PRINT = None
 CACHE_SELECTED_ONLY = None
 TARGET_PATH = None
 LOG_PATH = None
+IS_PYODIDE = "pyodide" in sys.modules # whether dbt is running via pyodide
 
 _NON_BOOLEAN_FLAGS = [
     "LOG_FORMAT",
@@ -117,13 +114,22 @@ ARTIFACT_STATE_PATH = env_set_path("DBT_ARTIFACT_STATE_PATH")
 ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
 
 
-def _get_context():
-    # TODO: change this back to use fork() on linux when we have made that safe
-    return multiprocessing.get_context("spawn")
-
-
 # This is not a flag, it's a place to store the lock
-MP_CONTEXT = _get_context()
+if IS_PYODIDE:
+    from typing import NamedTuple
+    from threading import Lock as PyodideLock
+    from threading import RLock as PyodideRLock
+    class PyodideContext(NamedTuple):
+        Lock = PyodideLock
+        RLock = PyodideRLock
+    MP_CONTEXT = PyodideContext()
+else:
+    import multiprocessing
+    if os.name != "nt":
+        # https://bugs.python.org/issue41567
+        import multiprocessing.popen_spawn_posix  # type: ignore
+    # TODO: change this back to use fork() on linux when we have made that safe
+    MP_CONTEXT = multiprocessing.get_context("spawn")
 
 
 def set_from_args(args, user_config):

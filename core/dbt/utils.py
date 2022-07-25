@@ -531,7 +531,7 @@ class HasThreadingConfig(Protocol):
 
 
 def executor(config: HasThreadingConfig) -> ConnectingExecutor:
-    if config.args.single_threaded:
+    if config.args.single_threaded or flags.IS_PYODIDE:
         return SingleThreadedExecutor()
     else:
         return MultiThreadedExecutor(max_workers=config.threads)

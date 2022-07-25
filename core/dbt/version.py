@@ -10,6 +10,7 @@ import requests
 import dbt.exceptions
 import dbt.semver
 
+from dbt.clients.http import http
 from dbt.ui import green, red, yellow
 from dbt import flags
 
@@ -45,8 +46,7 @@ def get_latest_version(
     version_url: str = PYPI_VERSION_URL,
 ) -> Optional[dbt.semver.VersionSpecifier]:
     try:
-        resp = requests.get(version_url)
-        data = resp.json()
+        data = http.get_json(version_url)
         version_string = data["info"]["version"]
     except (json.JSONDecodeError, KeyError, requests.RequestException):
         return None

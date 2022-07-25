@@ -1,0 +1,7 @@
+kind: Features
+body: Run dbt on WebAssembly using Pyodide
+time: 2022-09-09T15:47:22.228524-04:00
+custom:
+  Author: arieldbt
+  Issue: "1970"
+  PR: "5803"
