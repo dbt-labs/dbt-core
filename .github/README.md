@@ -28,9 +28,6 @@ permissions:
   contents: read
   pull-requests: write
 ```
-
-### using on_merge?
-- TODO: what was the security hole related to this?
     
 ### Secrets
 - When to use a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) vs the [GITHUB_TOKEN](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) generated for the action?
