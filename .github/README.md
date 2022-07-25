@@ -6,14 +6,28 @@ GitHub Actions are used for many different purposes.  We use them to run tests i
 - [What's a workflow?](https://docs.github.com/en/actions/using-workflows/about-workflows)
 - [GitHub Actions guides](https://docs.github.com/en/actions/guides)
 
-## dbt Labs Action Repo
-[dbt-labs/actions](https://github.com/dbt-labs/actions/) is a central repository of actions and workflows dbt uses across repositories.
+## Where do actions and workflows live
+
+We try to maintain actions that are shared across repositories in a single place so that necesary changes can be made in a single place.
+
+[dbt-labs/actions](https://github.com/dbt-labs/actions/) is the central repository of actions and workflows we use across repositories.
+
+GitHub Actions also live locally within a repository.  The workflows can be found at `.github/workflows` from the root of the repository.  These should be specific to that code base.
+
+Note: We are actively moving actions into the central Action repository so there is currently some duplication across repositories.
 
 ## General Standards
 
 ### Permissions
-- Default to least permissions.
+- By default, workflows have read permissions in the repository for the contents scope only when no permissions are explicitly set.
+- It is best practice to always define the permissions explicitly.  This will allow actions to continue to work when the default permissions on the repository are changed.  It also allows explicit grants of the least permissions possible.
 - There are a lot of permissions available.  [Read up on them](https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs) if you're unsure what to use.
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+```
 
 ### using on_merge?
 - TODO: what was the security hole related to this?
@@ -21,7 +35,11 @@ GitHub Actions are used for many different purposes.  We use them to run tests i
 ### Secrets
 - When to use a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) vs the [GITHUB_TOKEN](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) generated for the action?
 
-    If you expect the resulting commit to add a changelog should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow) for a more detailed explanation.
+    The `GITHUB_TOKEN` is used by default.  In most cases it is sufficient for what you need.
+    
+    If you expect the workflow to result in a commit to that should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow) for a more detailed explanation.
+
+    For example, we must use a PAT in our workflow to commit a new changelog yaml file for bot PRs.  Once the file has been committed to the branch, it should retrigger the check to validate that a changelog exists on the PR.  Otherwise, it would stay in a failed state since the check would never retrigger.
 
 ### Triggers
 You can configure your workflows to run when specific activity on GitHub happens, at a scheduled time, or when an event outside of GitHub occurs.  Read more details in the [GitHub docs](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows).
