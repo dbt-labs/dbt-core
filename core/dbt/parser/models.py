@@ -180,8 +180,6 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
                 self.update_parsed_node_config(node, config, context=context)
-                # TODO 'language' should be a top-level node property, not 'config'
-                node.config.language = ModelLanguage.python
                 node.language = ModelLanguage.python
 
             except ValidationError as exc:

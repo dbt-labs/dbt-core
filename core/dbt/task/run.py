@@ -122,7 +122,7 @@ def track_model_run(index, num_nodes, run_model_result):
             "model_id": utils.get_hash(run_model_result.node),
             "hashed_contents": utils.get_hashed_contents(run_model_result.node),
             "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
-            "language": str(run_model_result.node.config.language),
+            "language": str(run_model_result.node.language),
         }
     )
 
@@ -172,7 +172,7 @@ class ModelRunner(CompileRunner):
 
     def describe_node(self):
         # TODO CL 'language' will be moved to node level when we change representation
-        return f"{self.node.config.get('language', 'sql')} {self.node.get_materialization()} model {self.get_node_representation()}"
+        return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
 
     def print_start_line(self):
         fire_event(

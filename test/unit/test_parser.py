@@ -574,7 +574,7 @@ def model(dbt, session):
             package_name='snowplow',
             original_file_path=normalize('models/nested/py_model.py'),
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
-            config=NodeConfig(materialized='table', language=ModelLanguage.python, packages=python_packages),
+            config=NodeConfig(materialized='table', packages=python_packages),
             # config.packages = ['textblob']
             path=normalize('nested/py_model.py'),
             language='python',

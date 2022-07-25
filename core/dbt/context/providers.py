@@ -61,7 +61,7 @@ from dbt.exceptions import (
     disallow_secret_env_var,
 )
 from dbt.config import IsFQNResource
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 
 from dbt.utils import merge, AttrDict, MultiDict
 
@@ -1281,7 +1281,7 @@ class ModelContext(ProviderContext):
         # only doing this in sql model for backward compatible
         if (
             getattr(self.model, "extra_ctes_injected", None)
-            # and self.model.config.language == ModelLanguage.sql  # type: ignore[union-attr]
+            and self.model.language == ModelLanguage.sql  # type: ignore[union-attr]
         ):
             # TODO CT-211
             return self.model.compiled_code  # type: ignore[union-attr]

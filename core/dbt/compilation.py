@@ -368,7 +368,7 @@ class Compiler:
         )
         compiled_node = _compiled_type_for(node).from_dict(data)
 
-        if compiled_node.config.get("language") == ModelLanguage.python:
+        if compiled_node.language == ModelLanguage.python:
             # TODO could we also 'minify' this code at all? just aesthetic, not functional
 
             # quoating seems like something very specific to sql so far
@@ -454,7 +454,7 @@ class Compiler:
         # test1
         #
         # Produce the following graph:
-        # model1 --> model2 --> model3
+        # model1 --> model2 --> model
         #   |       /\    |      /\ /\
         #   |       |    \/      |  |
         #  \/       |  test2 ----|  |
