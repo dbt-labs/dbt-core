@@ -43,13 +43,13 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
-    'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
+    'package_name', 'root_path', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
     'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict',
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
-    'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
+    'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_code',
     'relation_name'
 })
 
@@ -149,7 +149,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='events.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.events': ParsedModelNode(
@@ -171,7 +172,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='events.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.dep': ParsedModelNode(
@@ -193,7 +195,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.nested': ParsedModelNode(
@@ -215,7 +218,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.sibling': ParsedModelNode(
@@ -237,7 +241,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.multi': ParsedModelNode(
@@ -259,7 +264,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
         }
@@ -319,7 +325,7 @@ class ManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v6.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v7.json',
                     'dbt_version': dbt.version.__version__,
                     'env': {ENV_KEY_NAME: 'value'},
                     'invocation_id': invocation_id,
@@ -470,7 +476,7 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v6.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v7.json',
                     'dbt_version': dbt.version.__version__,
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -507,7 +513,8 @@ class ManifestTest(unittest.TestCase):
             path='seed.csv',
             original_file_path='seed.csv',
             root_path='',
-            raw_sql='-- csv --',
+            language='sql',
+            raw_code='-- csv --',
             checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
@@ -573,10 +580,11 @@ class MixedManifestTest(unittest.TestCase):
                 path='events.sql',
                 original_file_path='events.sql',
                 root_path='',
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 meta={},
                 compiled=True,
-                compiled_sql='also does not matter',
+                compiled_code='also does not matter',
                 extra_ctes_injected=True,
                 relation_name='"dbt"."analytics"."events"',
                 extra_ctes=[],
@@ -599,10 +607,11 @@ class MixedManifestTest(unittest.TestCase):
                 path='events.sql',
                 original_file_path='events.sql',
                 root_path='',
-                raw_sql='does not matter',
+                raw_code='does not matter',
                 meta={},
                 compiled=True,
-                compiled_sql='also does not matter',
+                compiled_code='also does not matter',
+                language='sql',
                 extra_ctes_injected=True,
                 relation_name='"dbt"."analytics"."events"',
                 extra_ctes=[],
@@ -626,7 +635,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.nested': ParsedModelNode(
@@ -647,7 +657,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.sibling': ParsedModelNode(
@@ -668,7 +679,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
             'model.root.multi': ParsedModelNode(
@@ -689,7 +701,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter',
+                language='sql',
+                raw_code='does not matter',
                 checksum=FileHash.empty(),
             ),
         }
@@ -716,7 +729,7 @@ class MixedManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v6.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v7.json',
                     'dbt_version': dbt.version.__version__,
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                     'env': {ENV_KEY_NAME: 'value'},

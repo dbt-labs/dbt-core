@@ -54,7 +54,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             blocks: List[jinja.BlockTag] = [
                 t
                 for t in jinja.extract_toplevel_blocks(
-                    base_node.raw_sql,
+                    base_node.raw_code,
                     allowed_blocks={"macro", "materialization", "test"},
                     collect_raw_data=False,
                 )
@@ -101,9 +101,10 @@ class MacroParser(BaseParser[ParsedMacro]):
             path=original_file_path,
             original_file_path=original_file_path,
             package_name=self.project.project_name,
-            raw_sql=source_file.contents,
+            raw_code=source_file.contents,
             root_path=self.project.project_root,
             resource_type=NodeType.Macro,
+            language="sql",
         )
 
         for node in self.parse_unparsed_macros(base_node):

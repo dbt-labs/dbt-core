@@ -122,9 +122,9 @@ class RuntimeException(RuntimeError, Exception):
 
         result.update(
             {
-                "raw_sql": self.node.raw_sql,
+                "raw_code": self.node.raw_code,
                 # the node isn't always compiled, but if it is, include that!
-                "compiled_sql": getattr(self.node, "compiled_sql", None),
+                "compiled_code": getattr(self.node, "compiled_code", None),
             }
         )
         return result
@@ -203,7 +203,7 @@ class DatabaseException(RuntimeException):
         lines = []
 
         if hasattr(self.node, "build_path") and self.node.build_path:
-            lines.append("compiled SQL at {}".format(self.node.build_path))
+            lines.append("compiled Code at {}".format(self.node.build_path))
 
         return lines + RuntimeException.process_stack(self)
 

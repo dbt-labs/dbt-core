@@ -95,8 +95,8 @@ class TestDeferState(DBTIntegrationTest):
 
         # with state it should work though
         results = self.run_dbt(['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'])
-        assert self.other_schema not in results[0].node.compiled_sql
-        assert self.unique_schema() in results[0].node.compiled_sql
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
 
         with open('target/manifest.json') as fp:
             data = json.load(fp)
@@ -147,8 +147,8 @@ class TestDeferState(DBTIntegrationTest):
         assert len(results) == 2
 
         # because the seed now exists in our schema, we shouldn't defer it
-        assert self.other_schema not in results[0].node.compiled_sql
-        assert self.unique_schema() in results[0].node.compiled_sql
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
 
     def run_defer_deleted_upstream(self):
         results = self.run_dbt(['seed'])
@@ -169,8 +169,8 @@ class TestDeferState(DBTIntegrationTest):
 
         # despite deferral, test should use models just created in our schema
         results = self.run_dbt(['test', '--state', 'state', '--defer'])
-        assert self.other_schema not in results[0].node.compiled_sql
-        assert self.unique_schema() in results[0].node.compiled_sql
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
 
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):

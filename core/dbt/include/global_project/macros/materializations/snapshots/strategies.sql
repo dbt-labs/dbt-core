@@ -113,12 +113,12 @@
     {%- set target_relation = adapter.get_relation(database=node.database, schema=node.schema, identifier=node.alias) -%}
 
     {% if check_cols_config == 'all' %}
-        {%- set query_columns = get_columns_in_query(node['compiled_sql']) -%}
+        {%- set query_columns = get_columns_in_query(node['compiled_code']) -%}
 
     {% elif check_cols_config is iterable and (check_cols_config | length) > 0 %}
         {#-- query for proper casing/quoting, to support comparison below --#}
         {%- set select_check_cols_from_target -%}
-          select {{ check_cols_config | join(', ') }} from ({{ node['compiled_sql'] }}) subq
+          select {{ check_cols_config | join(', ') }} from ({{ node['compiled_code'] }}) subq
         {%- endset -%}
         {% set query_columns = get_columns_in_query(select_check_cols_from_target) %}
 

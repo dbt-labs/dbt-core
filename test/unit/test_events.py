@@ -151,7 +151,7 @@ def MockNode():
         }),
         tags=[],
         path='model_one.sql',
-        raw_sql='',
+        raw_code='',
         description='',
         columns={},
         checksum=FileHash.from_contents(''),

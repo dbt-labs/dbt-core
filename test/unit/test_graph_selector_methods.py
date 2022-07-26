@@ -78,7 +78,8 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         depends_on_nodes.append(src.unique_id)
 
     return ParsedModelNode(
-        raw_sql=sql,
+        language='sql',
+        raw_code=sql,
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -118,7 +119,8 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
 
     fqn = [pkg] + fqn_extras + [name]
     return ParsedSeedNode(
-        raw_sql='',
+        language='sql',
+        raw_code='',
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -217,7 +219,7 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
     if column_name is not None:
         args_name += '_' + column_name
     node_name = f'{test_name}_{args_name}'
-    raw_sql = '{{ config(severity="ERROR") }}{{ test_' + \
+    raw_code = '{{ config(severity="ERROR") }}{{ test_' + \
         test_name + '(**dbt_schema_test_kwargs) }}'
     name_parts = test_name.split('.')
 
@@ -250,7 +252,8 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
         depends_on_nodes.append(source.unique_id)
 
     return ParsedGenericTestNode(
-        raw_sql=raw_sql,
+        language='sql',
+        raw_code=raw_code,
         test_metadata=TestMetadata(
             namespace=namespace,
             name=test_name,
@@ -306,7 +309,8 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
         depends_on_nodes.append(src.unique_id)
 
     return ParsedSingularTestNode(
-        raw_sql=sql,
+        language='sql',
+        raw_code=sql,
         database='dbt',
         schema='dbt_schema',
         name=name,
@@ -865,7 +869,7 @@ def test_select_state_added_model(manifest, previous_state):
 
 
 def test_select_state_changed_model_sql(manifest, previous_state, view_model):
-    change_node(manifest, view_model.replace(raw_sql='select 1 as id'))
+    change_node(manifest, view_model.replace(raw_code='select 1 as id'))
     method = statemethod(manifest, previous_state)
     
     # both of these

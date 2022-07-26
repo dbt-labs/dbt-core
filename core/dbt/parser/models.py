@@ -28,7 +28,6 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # New for Python models :p
 import ast
-
 from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import ParsingException, validator_error_message, UndefinedMacroException
 
@@ -121,11 +120,11 @@ def verify_python_model_code(node):
     # TODO: add a test for this
     try:
         rendered_python = get_rendered(
-            node.raw_sql,
+            node.raw_code,
             {},
             node,
         )
-        if rendered_python != node.raw_sql:
+        if rendered_python != node.raw_code:
             raise ParsingException("")
     except (UndefinedMacroException, ParsingException):
         raise ParsingException("No jinja in python model code is allowed", node=node)
@@ -147,7 +146,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
     def parse_python_model(self, node, config, context):
         try:
-            tree = ast.parse(node.raw_sql, filename=node.original_file_path)
+            tree = ast.parse(node.raw_code, filename=node.original_file_path)
         except SyntaxError as exc:
             msg = validator_error_message(exc)
             raise ParsingException(f"{msg}\n{exc.text}", node=node) from exc
@@ -181,8 +180,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
                 self.update_parsed_node_config(node, config, context=context)
-                # TODO 'language' should be a top-level node property, not 'config'
-                node.config.language = ModelLanguage.python
+                node.language = ModelLanguage.python
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
@@ -335,7 +333,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # run the stable static parser and return the results
         try:
-            statically_parsed = py_extract_from_source(node.raw_sql)
+            statically_parsed = py_extract_from_source(node.raw_code)
             fire_event(StaticParserSuccess(path=node.path))
             return _shift_sources(statically_parsed)
         # if we want information on what features are barring the static
@@ -361,7 +359,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # for now, this line calls the stable static parser since there are no
             # experimental features. Change `py_extract_from_source` to the new
             # experimental call when we add additional features.
-            experimentally_parsed = py_extract_from_source(node.raw_sql)
+            experimentally_parsed = py_extract_from_source(node.raw_code)
             fire_event(ExperimentalParserSuccess(path=node.path))
             return _shift_sources(experimentally_parsed)
         # if we want information on what features are barring the experimental

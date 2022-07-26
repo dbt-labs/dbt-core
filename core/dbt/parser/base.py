@@ -157,11 +157,7 @@ class ConfiguredParser(
                 config[key] = [hooks.get_hook_dict(h) for h in config[key]]
 
     def _create_error_node(
-        self,
-        name: str,
-        path: str,
-        original_file_path: str,
-        raw_sql: str,
+        self, name: str, path: str, original_file_path: str, raw_code: str, language: str = "sql"
     ) -> UnparsedNode:
         """If we hit an error before we've actually parsed a node, provide some
         level of useful information by attaching this to the exception.
@@ -175,7 +171,8 @@ class ConfiguredParser(
             original_file_path=original_file_path,
             root_path=self.project.project_root,
             package_name=self.project.project_name,
-            raw_sql=raw_sql,
+            raw_code=raw_code,
+            language=language,
         )
 
     def _create_parsetime_node(
@@ -204,7 +201,8 @@ class ConfiguredParser(
             "path": path,
             "original_file_path": block.path.original_file_path,
             "package_name": self.project.project_name,
-            "raw_sql": block.contents,
+            "raw_code": block.contents,
+            "language": "sql",
             "unique_id": self.generate_unique_id(name),
             "config": self.config_dict(config),
             "checksum": block.file.checksum.to_dict(omit_none=True),
@@ -220,7 +218,7 @@ class ConfiguredParser(
                 name=block.name,
                 path=path,
                 original_file_path=block.path.original_file_path,
-                raw_sql=block.contents,
+                raw_code=block.contents,
             )
             raise ParsingException(msg, node=node)
 
@@ -235,7 +233,7 @@ class ConfiguredParser(
 
         # this goes through the process of rendering, but just throws away
         # the rendered result. The "macro capture" is the point?
-        get_rendered(parsed_node.raw_sql, context, parsed_node, capture_macros=True)
+        get_rendered(parsed_node.raw_code, context, parsed_node, capture_macros=True)
         return context
 
     # This is taking the original config for the node, converting it to a dict,

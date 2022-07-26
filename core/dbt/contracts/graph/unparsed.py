@@ -26,26 +26,27 @@ class UnparsedBaseNode(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class HasSQL:
-    raw_sql: str
+class HasCode(dbtClassMixin):
+    raw_code: str
+    language: str
 
     @property
     def empty(self):
-        return not self.raw_sql.strip()
+        return not self.raw_code.strip()
 
 
 @dataclass
-class UnparsedMacro(UnparsedBaseNode, HasSQL):
+class UnparsedMacro(UnparsedBaseNode, HasCode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
-class UnparsedGenericTest(UnparsedBaseNode, HasSQL):
+class UnparsedGenericTest(UnparsedBaseNode, HasCode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
-class UnparsedNode(UnparsedBaseNode, HasSQL):
+class UnparsedNode(UnparsedBaseNode, HasCode):
     name: str
     resource_type: NodeType = field(
         metadata={

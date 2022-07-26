@@ -28,7 +28,7 @@ select 1 as id
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 6
+    CURRENT_EXPECTED_MANIFEST_VERSION = 7
 
     @pytest.fixture(scope="class")
     def models(self):

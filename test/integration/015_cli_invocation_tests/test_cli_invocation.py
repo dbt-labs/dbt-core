@@ -199,7 +199,7 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
         # make sure the test runs against `custom_schema`
         for test_result in res:
-            self.assertTrue(self.custom_schema, test_result.node.compiled_sql)
+            self.assertTrue(self.custom_schema, test_result.node.compiled_code)
 
 
 class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):

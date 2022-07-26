@@ -505,8 +505,8 @@ class ModelParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'models')
 
     def test_basic(self):
-        raw_sql = '{{ config(materialized="table") }}select 1 as id'
-        block = self.file_block_for(raw_sql, 'nested/model_1.sql')
+        raw_code = '{{ config(materialized="table") }}select 1 as id'
+        block = self.file_block_for(raw_code, 'nested/model_1.sql')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
@@ -524,7 +524,8 @@ class ModelParserTest(BaseParserTest):
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
             config=NodeConfig(materialized='table'),
             path=normalize('nested/model_1.sql'),
-            raw_sql=raw_sql,
+            language='sql',
+            raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table'},
             config_call_dict={
@@ -560,7 +561,7 @@ def model(dbt, session):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
-
+        # we decided to not detect and auto supply for now since import name doesn't always match library name
         python_packages = ['sklearn==0.1.0']
         expected = ParsedModelNode(
             alias='py_model',
@@ -573,10 +574,11 @@ def model(dbt, session):
             package_name='snowplow',
             original_file_path=normalize('models/nested/py_model.py'),
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
-            config=NodeConfig(materialized='table', language=ModelLanguage.python, packages=python_packages),
+            config=NodeConfig(materialized='table', packages=python_packages),
             # config.packages = ['textblob']
             path=normalize('nested/py_model.py'),
-            raw_sql=py_code,
+            language='python',
+            raw_code=py_code,
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table', 'packages':python_packages},
             config_call_dict={'materialized': 'table', 'packages':python_packages},
@@ -649,8 +651,8 @@ class StaticModelParserTest(BaseParserTest):
             macro_sql='{% macro ref(model_name) %}{% set x = raise("boom") %}{% endmacro %}',
         )
 
-        raw_sql = '{{ config(materialized="table") }}select 1 as id'
-        block = self.file_block_for(raw_sql, 'nested/model_1.sql')
+        raw_code = '{{ config(materialized="table") }}select 1 as id'
+        block = self.file_block_for(raw_code, 'nested/model_1.sql')
         node = ParsedModelNode(
             alias='model_1',
             name='model_1',
@@ -664,7 +666,8 @@ class StaticModelParserTest(BaseParserTest):
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
             config=NodeConfig(materialized='table'),
             path=normalize('nested/model_1.sql'),
-            raw_sql=raw_sql,
+            language='sql',
+            raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table'},
         )
@@ -699,7 +702,8 @@ class StaticModelParserUnitTest(BaseParserTest):
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
             config=NodeConfig(materialized='table'),
             path=normalize('nested/model_1.sql'),
-            raw_sql='{{ config(materialized="table") }}select 1 as id',
+            language='sql',
+            raw_code='{{ config(materialized="table") }}select 1 as id',
             checksum=None,
             unrendered_config={'materialized': 'table'},
         )
@@ -851,7 +855,7 @@ class SnapshotParserTest(BaseParserTest):
             self.parser.parse_file(block)
 
     def test_single_block(self):
-        raw_sql = '''{{
+        raw_code = '''{{
                 config(unique_key="id", target_schema="analytics",
                        target_database="dbt", strategy="timestamp",
                        updated_at="last_update")
@@ -859,7 +863,7 @@ class SnapshotParserTest(BaseParserTest):
             select 1 as id, now() as last_update'''
         full_file = '''
         {{% snapshot foo %}}{}{{% endsnapshot %}}
-        '''.format(raw_sql)
+        '''.format(raw_code)
         block = self.file_block_for(full_file, 'nested/snap_1.sql')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
@@ -886,7 +890,8 @@ class SnapshotParserTest(BaseParserTest):
                 materialized='snapshot',
             ),
             path=normalize('nested/snap_1.sql'),
-            raw_sql=raw_sql,
+            language='sql',
+            raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={
                 'unique_key': 'id',
@@ -954,7 +959,8 @@ class SnapshotParserTest(BaseParserTest):
                 materialized='snapshot',
             ),
             path=normalize('nested/snap_1.sql'),
-            raw_sql=raw_1,
+            language='sql',
+            raw_code=raw_1,
             checksum=block.file.checksum,
             unrendered_config={
                 'unique_key': 'id',
@@ -991,7 +997,8 @@ class SnapshotParserTest(BaseParserTest):
                 materialized='snapshot',
             ),
             path=normalize('nested/snap_1.sql'),
-            raw_sql=raw_2,
+            language='sql',
+            raw_code=raw_2,
             checksum=block.file.checksum,
             unrendered_config={
                 'unique_key': 'id',
@@ -1028,8 +1035,8 @@ class MacroParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'macros')
 
     def test_single_block(self):
-        raw_sql = '{% macro foo(a, b) %}a ~ b{% endmacro %}'
-        block = self.file_block_for(raw_sql, 'macro.sql')
+        raw_code = '{% macro foo(a, b) %}a ~ b{% endmacro %}'
+        block = self.file_block_for(raw_code, 'macro.sql')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assertEqual(len(self.parser.manifest.macros), 1)
@@ -1042,7 +1049,7 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize('macros/macro.sql'),
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
             path=normalize('macros/macro.sql'),
-            macro_sql=raw_sql,
+            macro_sql=raw_code,
         )
         assertEqualNodes(macro, expected)
         file_id = 'snowplow://' + normalize('macros/macro.sql')
@@ -1050,8 +1057,8 @@ class MacroParserTest(BaseParserTest):
         self.assertEqual(self.parser.manifest.files[file_id].macros, ['macro.snowplow.foo'])
 
     def test_multiple_blocks(self):
-        raw_sql = '{% macro foo(a, b) %}a ~ b{% endmacro %}\n{% macro bar(c, d) %}c + d{% endmacro %}'
-        block = self.file_block_for(raw_sql, 'macro.sql')
+        raw_code = '{% macro foo(a, b) %}a ~ b{% endmacro %}\n{% macro bar(c, d) %}c + d{% endmacro %}'
+        block = self.file_block_for(raw_code, 'macro.sql')
         print(f"--- test_multiple_blocks block: {block}")
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
@@ -1100,8 +1107,8 @@ class SingularTestParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'tests')
 
     def test_basic(self):
-        raw_sql = 'select * from {{ ref("blah") }} limit 0'
-        block = self.file_block_for(raw_sql, 'test_1.sql')
+        raw_code = 'select * from {{ ref("blah") }} limit 0'
+        block = self.file_block_for(raw_code, 'test_1.sql')
         self.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
@@ -1121,7 +1128,8 @@ class SingularTestParserTest(BaseParserTest):
             config=TestConfig(severity='ERROR'),
             tags=[],
             path=normalize('test_1.sql'),
-            raw_sql=raw_sql,
+            language='sql',
+            raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={},
         )
@@ -1144,8 +1152,8 @@ class GenericTestParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'tests/generic')
 
     def test_basic(self):
-        raw_sql = '{% test not_null(model, column_name) %}select * from {{ model }} where {{ column_name }} is null {% endtest %}'
-        block = self.file_block_for(raw_sql, 'test_1.sql')
+        raw_code = '{% test not_null(model, column_name) %}select * from {{ model }} where {{ column_name }} is null {% endtest %}'
+        block = self.file_block_for(raw_code, 'test_1.sql')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         node = list(self.parser.manifest.macros.values())[0]
@@ -1157,7 +1165,7 @@ class GenericTestParserTest(BaseParserTest):
             original_file_path=normalize('tests/generic/test_1.sql'),
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
             path=normalize('tests/generic/test_1.sql'),
-            macro_sql=raw_sql,
+            macro_sql=raw_code,
         )
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' + normalize('tests/generic/test_1.sql')
@@ -1178,8 +1186,8 @@ class AnalysisParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'analyses')
 
     def test_basic(self):
-        raw_sql = 'select 1 as id'
-        block = self.file_block_for(raw_sql, 'nested/analysis_1.sql')
+        raw_code = 'select 1 as id'
+        block = self.file_block_for(raw_code, 'nested/analysis_1.sql')
         self.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
@@ -1198,7 +1206,8 @@ class AnalysisParserTest(BaseParserTest):
             depends_on=DependsOn(),
             config=NodeConfig(),
             path=normalize('analysis/nested/analysis_1.sql'),
-            raw_sql=raw_sql,
+            language='sql',
+            raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={},
         )

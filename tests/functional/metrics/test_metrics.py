@@ -416,7 +416,7 @@ class TestExpressionMetric:
 
         # actually compile
         results = run_dbt(["compile", "--select", "downstream_model"])
-        compiled_sql = results[0].node.compiled_sql
+        compiled_code = results[0].node.compiled_code
 
         # make sure all these metrics properties show up in compiled SQL
         for metric_name in manifest.metrics:
@@ -432,4 +432,4 @@ class TestExpressionMetric:
                 "filters",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
-                assert f"{property}: {expected_value}" in compiled_sql
+                assert f"{property}: {expected_value}" in compiled_code
