@@ -1203,7 +1203,7 @@ class WritableManifest(ArtifactMixin):
 
     @classmethod
     def compatible_previous_versions(self):
-        return [("manifest", 4), ("manifest", 5)]
+        return [("manifest", 4), ("manifest", 5), ("manifest", 6)]
 
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():
