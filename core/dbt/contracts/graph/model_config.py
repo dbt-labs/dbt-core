@@ -7,7 +7,7 @@ from dbt.dataclass_schema import (
     ValidationError,
     register_pattern,
 )
-from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
+from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
 from dbt.contracts.graph.utils import validate_color
 from dbt.exceptions import InternalException, CompilationException
 from dbt.contracts.util import Replaceable, list_str
@@ -466,15 +466,16 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=list,
         metadata=MergeBehavior.Append.meta(),
     )
-    docs: Dict[str, Any] = field(
-        default_factory=dict,
+
+    docs: Docs = field(
+        default_factory=lambda: Docs(show=True),
         metadata=MergeBehavior.Update.meta(),
     )
 
     # we validate that node_color has a suitable value to prevent dbt-docs from crashing
     def __post_init__(self):
-        if self.docs.get("node_color"):
-            node_color = self.docs.get("node_color")
+        if self.docs.node_color:
+            node_color = self.docs.node_color
             if not validate_color(node_color):
                 raise ValidationError(
                     f"Invalid color name for docs.node_color: {node_color}. "
