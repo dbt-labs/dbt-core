@@ -4,6 +4,7 @@ from dbt import ui
 from dbt.helper_types import Lazy
 from dbt.events.base_types import (
     Event,
+    NoFile,
     DebugLevel,
     InfoLevel,
     WarnLevel,
@@ -1352,8 +1353,10 @@ class NodeConnectionReleaseError(ShowException, DebugLevel):
         return "Error releasing connection for node {}: {!s}".format(self.node_name, self.exc)
 
 
+# We don't write "clean" events to the log, because the clean command
+# may have removed the log directory.
 @dataclass
-class CheckCleanPath(InfoLevel):
+class CheckCleanPath(InfoLevel, NoFile):
     path: str
     code: str = "Z012"
 
@@ -1362,7 +1365,7 @@ class CheckCleanPath(InfoLevel):
 
 
 @dataclass
-class ConfirmCleanPath(InfoLevel):
+class ConfirmCleanPath(InfoLevel, NoFile):
     path: str
     code: str = "Z013"
 
@@ -1371,7 +1374,7 @@ class ConfirmCleanPath(InfoLevel):
 
 
 @dataclass
-class ProtectedCleanPath(InfoLevel):
+class ProtectedCleanPath(InfoLevel, NoFile):
     path: str
     code: str = "Z014"
 
@@ -1380,7 +1383,7 @@ class ProtectedCleanPath(InfoLevel):
 
 
 @dataclass
-class FinishedCleanPaths(InfoLevel):
+class FinishedCleanPaths(InfoLevel, NoFile):
     code: str = "Z015"
 
     def message(self) -> str:

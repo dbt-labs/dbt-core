@@ -218,7 +218,7 @@ def create_log_line(e: T_Event, file_output=False) -> Optional[str]:
         return create_info_text_log_line(e)  # console output
 
 
-# allows for resuse of this obnoxious if else tree.
+# allows for reuse of this obnoxious if else tree.
 # do not use for exceptions, it doesn't pass along exc_info, stack_info, or extra
 def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
     if not log_line:
