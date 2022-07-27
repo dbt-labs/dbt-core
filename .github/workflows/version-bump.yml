@@ -62,7 +62,7 @@ jobs:
           brew install pre-commit
           pre-commit run trailing-whitespace --files .bumpversion.cfg
           git status
-          
+
       - name: Run changie
         run: |
           brew tap miniscruff/changie https://github.com/miniscruff/changie
@@ -75,7 +75,7 @@ jobs:
             echo $version --- $prerelease
             changie batch $version  --move-dir "$version" --prerelease "$prerelease"
           else
-            changie batch ${{ github.event.inputs.version_number }}  --move-dir '${{ github.event.inputs.version_number }}' --remove-prereleases 
+            changie batch ${{ github.event.inputs.version_number }}  --move-dir '${{ github.event.inputs.version_number }}' --remove-prereleases
           fi
           changie merge
           git status
