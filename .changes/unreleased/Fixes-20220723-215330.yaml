@@ -1,0 +1,7 @@
+kind: Fixes
+body: Ignore empty strings passed in as secrets
+time: 2022-07-23T21:53:30.907759094+02:00
+custom:
+  Author: Goodkat
+  Issue: "5312"
+  PR: "5518"
