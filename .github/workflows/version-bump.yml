@@ -75,7 +75,7 @@ jobs:
             echo $version --- $prerelease
             changie batch $version  --move-dir "$version" --prerelease "$prerelease"
           else
-            changie batch ${{ github.event.inputs.version_number }}  --move-dir '${{ github.event.inputs.version_number }}' --remove-prereleases
+            changie batch ${{ github.event.inputs.version_number }}  --include '${{ github.event.inputs.version_number }}' --remove-prereleases
           fi
           changie merge
           git status
