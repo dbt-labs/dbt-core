@@ -6,7 +6,7 @@
 
 # **why?**
 # This is to aid in releasing dbt and making sure we have updated
-# the versions and changelog all places.
+# the version in all places and generated the changelog.
 
 # **when?**
 # This is triggered manually
