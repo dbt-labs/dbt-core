@@ -94,7 +94,7 @@ jobs:
         with:
           author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
           base: ${{github.ref}}
-          title: 'Bumping version to ${{ github.event.inputs.version_number }}'
+          title: 'Bumping version to ${{ github.event.inputs.version_number }} and generate changelog'
           branch: 'bumping-version/${{ github.event.inputs.version_number }}_${{GITHUB.RUN_ID}}'
           labels: |
             Skip Changelog
