@@ -85,7 +85,7 @@ jobs:
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Bumping version to ${{ github.event.inputs.version_number }}'
+          message: 'Bumping version to ${{ github.event.inputs.version_number }} and generate CHANGELOG'
           branch: 'bumping-version/${{ github.event.inputs.version_number }}_${{GITHUB.RUN_ID}}'
           push: 'origin origin/bumping-version/${{ github.event.inputs.version_number }}_${{GITHUB.RUN_ID}}'
 
