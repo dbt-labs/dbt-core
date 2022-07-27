@@ -17,6 +17,7 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     test_context_models,
     name_collision,
     dupe_tests_collide,
+    custom_generic_test_config_custom_macros,
     custom_generic_test_names,
     custom_generic_test_names_alt_format,
     test_context_where_subq_macros,
@@ -674,6 +675,21 @@ class TestGenericTestsCollide:
         with pytest.raises(CompilationException) as exc:
             run_dbt()
         assert "dbt found two tests with the name" in str(exc)
+
+
+class TestGenericTestsConfigCustomMacros:
+    @pytest.fixture(scope="class")
+    def models(self, custom_generic_test_config_custom_macros):  # noqa: F811
+        return custom_generic_test_config_custom_macros
+
+    def test_generic_test_config_custom_macros(
+        self,
+        project,
+    ):
+        """This test has a reference to a custom macro its configs"""
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
+        assert "Invalid generic test configuration" in str(exc)
 
 
 class TestGenericTestsCustomNames:

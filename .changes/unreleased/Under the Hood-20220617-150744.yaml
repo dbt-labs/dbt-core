@@ -1,0 +1,8 @@
+kind: Fixes
+body: Add context to compilation errors generated while rendering generic test configuration
+  values.
+time: 2022-06-17T15:07:44.751037-04:00
+custom:
+  Author: nicholasyager
+  Issue: "5294"
+  PR: "5393"

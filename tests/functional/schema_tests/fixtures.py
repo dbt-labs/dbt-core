@@ -442,6 +442,24 @@ SELECT 'NOT_NULL' AS id
 """
 
 
+custom_generic_test_config_custom_macro__schema_yml = """
+version: 2
+models:
+- name: model_a
+  columns:
+  - name: id
+    tests:
+    - not_null:
+        config:
+          where: "id = (select id from {{ ref('model_a') }} limit 1)"
+
+"""
+
+custom_generic_test_config_custom_macro__model_a = """
+SELECT 1 AS id
+"""
+
+
 custom_generic_test_names__schema_yml = """
 version: 2
 models:
@@ -1338,6 +1356,14 @@ def dupe_tests_collide():
     return {
         "schema.yml": dupe_generic_tests_collide__schema_yml,
         "model_a.sql": dupe_generic_tests_collide__model_a,
+    }
+
+
+@pytest.fixture(scope="class")
+def custom_generic_test_config_custom_macros():
+    return {
+        "schema.yml": custom_generic_test_config_custom_macro__schema_yml,
+        "model_a.sql": custom_generic_test_config_custom_macro__model_a,
     }
 
 
