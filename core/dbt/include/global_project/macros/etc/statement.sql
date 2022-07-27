@@ -1,9 +1,6 @@
 {#--
-TODO:  Only certian adapters need to support python models so this should probably be
-moved to an override I.E. `spark__statement`  but for some reason it wasn't picking up that change
-when implemented in dbt-spark/dbt/include/spark/macros/adapters.sql
+The macro override naming method (spark__statement) only works for macros which are called with adapter.dispatch. For macros called directly, you can just redefine them.
 --#}
-
 {%- macro statement(name=None, fetch_result=False, auto_begin=True, language='sql') -%}
   {%- if execute: -%}
     {%- set compiled_code = caller() -%}

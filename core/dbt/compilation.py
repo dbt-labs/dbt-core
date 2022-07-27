@@ -454,7 +454,7 @@ class Compiler:
         # test1
         #
         # Produce the following graph:
-        # model1 --> model2 --> model
+        # model1 --> model2 --> model3
         #   |       /\    |      /\ /\
         #   |       |    \/      |  |
         #  \/       |  test2 ----|  |
