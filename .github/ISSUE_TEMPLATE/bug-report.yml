@@ -12,12 +12,12 @@ body:
       label: Is this a new bug in dbt-core?
       description: >
         In other words, is this an error, flaw, failure or fault in our software?
-        
+
         If this is a bug that broke existing functionality that used to work, please open a regression issue.
         If this is a bug in an adapter plugin, please open an issue in the adapter's repository.
         If this is a bug experienced while using dbt Cloud, please report to [support](mailto:support@getdbt.com).
         If this is a request for help or troubleshooting code in your own dbt project, please join our [dbt Community Slack](https://www.getdbt.com/community/join-the-community/) or open a [Discussion question](https://github.com/dbt-labs/docs.getdbt.com/discussions).
-        
+
         Please search to see if an issue already exists for the bug you encountered.
       options:
         - label: I believe this is a new bug in dbt-core
