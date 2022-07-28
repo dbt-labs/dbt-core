@@ -5,7 +5,6 @@ from dbt.tests.adapter.basic.files import (
     generic_test_seed_yml,
     base_view_sql,
     base_table_sql,
-    base_table_py,
     schema_base_yml,
     generic_test_view_yml,
     generic_test_table_yml,
@@ -29,7 +28,6 @@ class BaseGenericTests:
         return {
             "view_model.sql": base_view_sql,
             "table_model.sql": base_table_sql,
-            "table_model.py": base_table_py,
             "schema.yml": schema_base_yml,
             "schema_view.yml": generic_test_view_yml,
             "schema_table.yml": generic_test_table_yml,
