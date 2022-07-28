@@ -1,0 +1,7 @@
+kind: Docs
+body: Update dependency webpack-dev-server from ^3.1.11 to ^4.9.3
+time: 2022-07-28T14:04:49.637369-07:00
+custom:
+  Author: emmyoop
+  Issue: "5574"
+  PR: "5577"

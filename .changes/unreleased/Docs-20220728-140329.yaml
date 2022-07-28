@@ -1,0 +1,7 @@
+kind: Docs
+body: Update dependency jest from ^26.2.2 to ^28.1.3
+time: 2022-07-28T14:03:29.837274-07:00
+custom:
+  Author: emmyoop
+  Issue: "5574"
+  PR: "5577"
