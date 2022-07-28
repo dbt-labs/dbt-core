@@ -202,7 +202,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
-    docs: Docs = field(default_factory=lambda: Docs(show=True))
+    docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     compiled_path: Optional[str] = None
     build_path: Optional[str] = None
