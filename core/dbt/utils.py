@@ -261,7 +261,7 @@ def get_hash(model):
 
 
 def get_hashed_contents(model):
-    return hashlib.md5(model.raw_sql.encode("utf-8")).hexdigest()
+    return hashlib.md5(model.raw_code.encode("utf-8")).hexdigest()
 
 
 def flatten_nodes(dep_list):

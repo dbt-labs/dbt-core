@@ -218,7 +218,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         tags: List[str],
         fqn: List[str],
         name: str,
-        raw_sql: str,
+        raw_code: str,
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
@@ -253,7 +253,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             "path": path,
             "original_file_path": target.original_file_path,
             "package_name": self.project.project_name,
-            "raw_sql": raw_sql,
+            "raw_code": raw_code,
+            "language": "sql",
             "unique_id": self.generate_unique_id(name, test_hash),
             "config": self.config_dict(config),
             "test_metadata": test_metadata,
@@ -272,7 +273,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 name=target.name,
                 path=path,
                 original_file_path=target.original_file_path,
-                raw_sql=raw_sql,
+                raw_code=raw_code,
             )
             raise ParsingException(msg, node=node) from exc
 
@@ -347,7 +348,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             fqn=fqn,
             tags=tags,
             name=builder.fqn_name,
-            raw_sql=builder.build_raw_sql(),
+            raw_code=builder.build_raw_code(),
             column_name=column_name,
             test_metadata=metadata,
             file_key_name=file_key_name,
@@ -411,7 +412,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 # values. That happens in compilation.
                 add_rendered_test_kwargs(context, node, capture_macros=True)
                 # the parsed node is not rendered in the native context.
-                get_rendered(node.raw_sql, context, node, capture_macros=True)
+                get_rendered(node.raw_code, context, node, capture_macros=True)
                 self.update_parsed_node_config(node, config)
                 # env_vars should have been updated in the context env_var method
             except ValidationError as exc:
@@ -456,7 +457,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         add_rendered_test_kwargs(context, node, capture_macros=True)
 
         # the parsed node is not rendered in the native context.
-        get_rendered(node.raw_sql, context, node, capture_macros=True)
+        get_rendered(node.raw_code, context, node, capture_macros=True)
 
     def parse_test(
         self,

@@ -31,6 +31,7 @@ def get_rendered_model_config(**updates):
         "meta": {},
         "unique_key": None,
         "grants": {},
+        "packages": [],
         "incremental_strategy": None,
     }
     result.update(updates)
@@ -60,6 +61,7 @@ def get_rendered_seed_config(**updates):
         "meta": {},
         "unique_key": None,
         "grants": {},
+        "packages": [],
         "incremental_strategy": None,
     }
     result.update(updates)
@@ -93,6 +95,7 @@ def get_rendered_snapshot_config(**updates):
         "target_schema": None,
         "meta": {},
         "grants": {},
+        "packages": [],
         "incremental_strategy": None,
     }
     result.update(updates)
@@ -218,10 +221,10 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
 
     compiled_model_path = os.path.join("target", "compiled", "test", "models")
 
-    model_raw_sql = read_file_replace_returns(model_sql_path).rstrip("\r\n")
+    model_raw_code = read_file_replace_returns(model_sql_path).rstrip("\r\n")
 
     return {
-        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v6.json",
+        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v7.json",
         "dbt_version": dbt.version.__version__,
         "nodes": {
             "model.test.model": {
@@ -237,7 +240,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "path": "model.sql",
                 "original_file_path": model_sql_path,
                 "package_name": "test",
-                "raw_sql": LineIndifferent(model_raw_sql),
+                "raw_code": LineIndifferent(model_raw_code),
+                "language": "sql",
                 "refs": [["seed"]],
                 "sources": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
@@ -297,7 +301,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "patch_path": "test://" + model_schema_yml_path,
                 "docs": {"show": False},
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "checksum": checksum_file(model_sql_path),
@@ -316,9 +320,10 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "path": "second_model.sql",
                 "original_file_path": second_model_sql_path,
                 "package_name": "test",
-                "raw_sql": LineIndifferent(
+                "raw_code": LineIndifferent(
                     read_file_replace_returns(second_model_sql_path).rstrip("\r\n")
                 ),
+                "language": "sql",
                 "refs": [["seed"]],
                 "sources": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
@@ -378,7 +383,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "patch_path": "test://" + model_schema_yml_path,
                 "docs": {"show": False},
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "checksum": checksum_file(second_model_sql_path),
@@ -389,7 +394,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "build_path": None,
                 "created_at": ANY,
                 "compiled": True,
-                "compiled_sql": "",
+                "compiled_code": "",
                 "config": seed_config,
                 "patch_path": "test://" + seed_schema_yml_path,
                 "path": "seed.csv",
@@ -399,7 +404,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     project.database, my_schema_name, "seed"
                 ),
                 "resource_type": "seed",
-                "raw_sql": "",
+                "raw_code": "",
+                "language": "sql",
                 "package_name": "test",
                 "original_file_path": seed_path,
                 "refs": [],
@@ -459,7 +465,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 },
                 "docs": {"show": True},
                 "compiled": True,
-                "compiled_sql": "",
+                "compiled_code": "",
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "checksum": checksum_file(seed_path),
@@ -490,7 +496,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "package_name": "test",
                 "patch_path": None,
                 "path": "not_null_model_id.sql",
-                "raw_sql": "{{ test_not_null(**_dbt_generic_test_kwargs) }}",
+                "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}",
+                "language": "sql",
                 "refs": [["model"]],
                 "relation_name": None,
                 "resource_type": "test",
@@ -502,7 +509,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unique_id": "test.test.not_null_model_id.d01cc630e6",
                 "docs": {"show": True},
                 "compiled": True,
-                "compiled_sql": AnyStringWith("where id is null"),
+                "compiled_code": AnyStringWith("where id is null"),
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "test_metadata": {
@@ -524,7 +531,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "checksum": checksum_file(snapshot_path),
                 "columns": {},
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "config": snapshot_config,
                 "database": project.database,
                 "deferred": False,
@@ -544,11 +551,12 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "package_name": "test",
                 "patch_path": None,
                 "path": "snapshot_seed.sql",
-                "raw_sql": LineIndifferent(
+                "raw_code": LineIndifferent(
                     read_file_replace_returns(snapshot_path)
                     .replace("{% snapshot snapshot_seed %}", "")
                     .replace("{% endsnapshot %}", "")
                 ),
+                "language": "sql",
                 "refs": [["seed"]],
                 "relation_name": relation_name_node_format.format(
                     project.database, alternate_schema, "snapshot_seed"
@@ -586,7 +594,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "package_name": "test",
                 "patch_path": None,
                 "path": "test_nothing_model_.sql",
-                "raw_sql": "{{ test.test_nothing(**_dbt_generic_test_kwargs) }}",
+                "raw_code": "{{ test.test_nothing(**_dbt_generic_test_kwargs) }}",
+                "language": "sql",
                 "refs": [["model"]],
                 "relation_name": None,
                 "resource_type": "test",
@@ -598,7 +607,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unique_id": "test.test.test_nothing_model_.5d38568946",
                 "docs": {"show": True},
                 "compiled": True,
-                "compiled_sql": AnyStringWith("select 0"),
+                "compiled_code": AnyStringWith("select 0"),
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "test_metadata": {
@@ -636,7 +645,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "package_name": "test",
                 "patch_path": None,
                 "path": "unique_model_id.sql",
-                "raw_sql": "{{ test_unique(**_dbt_generic_test_kwargs) }}",
+                "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}",
+                "language": "sql",
                 "refs": [["model"]],
                 "relation_name": None,
                 "resource_type": "test",
@@ -648,7 +658,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unique_id": "test.test.unique_model_id.67b76558ff",
                 "docs": {"show": True},
                 "compiled": True,
-                "compiled_sql": AnyStringWith("count(*)"),
+                "compiled_code": AnyStringWith("count(*)"),
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "test_metadata": {
@@ -836,7 +846,7 @@ def expected_references_manifest(project):
     alternate_schema = project.test_schema + "_test"
 
     return {
-        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v6.json",
+        "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v7.json",
         "dbt_version": dbt.version.__version__,
         "nodes": {
             "model.test.ephemeral_copy": {
@@ -858,7 +868,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "patch_path": None,
                 "path": "ephemeral_copy.sql",
-                "raw_sql": LineIndifferent(ephemeral_copy_sql),
+                "raw_code": LineIndifferent(ephemeral_copy_sql),
+                "language": "sql",
                 "refs": [],
                 "relation_name": None,
                 "resource_type": "model",
@@ -869,7 +880,7 @@ def expected_references_manifest(project):
                 "meta": {},
                 "unique_id": "model.test.ephemeral_copy",
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "checksum": checksum_file(ephemeral_copy_path),
@@ -911,7 +922,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "patch_path": "test://" + os.path.join("models", "schema.yml"),
                 "path": "ephemeral_summary.sql",
-                "raw_sql": LineIndifferent(ephemeral_summary_sql),
+                "raw_code": LineIndifferent(ephemeral_summary_sql),
+                "language": "sql",
                 "refs": [["ephemeral_copy"]],
                 "relation_name": '"{0}"."{1}".ephemeral_summary'.format(
                     model_database, my_schema_name
@@ -924,7 +936,7 @@ def expected_references_manifest(project):
                 "meta": {},
                 "unique_id": "model.test.ephemeral_summary",
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "extra_ctes_injected": True,
                 "extra_ctes": [ANY],
                 "checksum": checksum_file(ephemeral_summary_path),
@@ -966,7 +978,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "patch_path": "test://" + schema_yml_path,
                 "path": "view_summary.sql",
-                "raw_sql": LineIndifferent(view_summary_sql),
+                "raw_code": LineIndifferent(view_summary_sql),
+                "language": "sql",
                 "refs": [["ephemeral_summary"]],
                 "relation_name": '"{0}"."{1}".view_summary'.format(model_database, my_schema_name),
                 "resource_type": "model",
@@ -977,7 +990,7 @@ def expected_references_manifest(project):
                 "meta": {},
                 "unique_id": "model.test.view_summary",
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "checksum": checksum_file(view_summary_path),
@@ -1043,7 +1056,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "patch_path": "test://" + os.path.join("seeds", "schema.yml"),
                 "path": "seed.csv",
-                "raw_sql": "",
+                "raw_code": "",
+                "language": "sql",
                 "refs": [],
                 "relation_name": '"{0}"."{1}".seed'.format(model_database, my_schema_name),
                 "resource_type": "seed",
@@ -1054,7 +1068,7 @@ def expected_references_manifest(project):
                 "meta": {},
                 "unique_id": "seed.test.seed",
                 "compiled": True,
-                "compiled_sql": "",
+                "compiled_code": "",
                 "extra_ctes_injected": True,
                 "extra_ctes": [],
                 "checksum": checksum_file(seed_path),
@@ -1068,7 +1082,7 @@ def expected_references_manifest(project):
                 "checksum": checksum_file(snapshot_path),
                 "columns": {},
                 "compiled": True,
-                "compiled_sql": ANY,
+                "compiled_code": ANY,
                 "config": get_rendered_snapshot_config(target_schema=alternate_schema),
                 "database": model_database,
                 "deferred": False,
@@ -1085,7 +1099,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "patch_path": None,
                 "path": "snapshot_seed.sql",
-                "raw_sql": ANY,
+                "raw_code": ANY,
+                "language": "sql",
                 "refs": [["seed"]],
                 "relation_name": '"{0}"."{1}".snapshot_seed'.format(
                     model_database, alternate_schema

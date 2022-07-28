@@ -234,6 +234,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         return self.to_dict()
 
     def __post_serialize__(self, dct):
+        dct = super().__post_serialize__(dct)
         if "_event_status" in dct:
             del dct["_event_status"]
         return dct
@@ -281,7 +282,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         return False
 
     def same_body(self: T, other: T) -> bool:
-        return self.raw_sql == other.raw_sql
+        return self.raw_code == other.raw_code
 
     def same_persisted_description(self: T, other: T) -> bool:
         # the check on configs will handle the case where we have different

@@ -61,7 +61,7 @@ from dbt.exceptions import (
     disallow_secret_env_var,
 )
 from dbt.config import IsFQNResource
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 
 from dbt.utils import merge, AttrDict, MultiDict
 
@@ -1157,7 +1157,12 @@ class ProviderContext(ManifestContext):
 
     @contextproperty("model")
     def ctx_model(self) -> Dict[str, Any]:
-        return self.model.to_dict(omit_none=True)
+        ret = self.model.to_dict(omit_none=True)
+        # Maintain direct use of compiled_sql
+        # TODO add depreciation logic[CT-934]
+        if "compiled_code" in ret:
+            ret["compiled_sql"] = ret["compiled_code"]
+        return ret
 
     @contextproperty
     def pre_hooks(self) -> Optional[List[Dict[str, Any]]]:
@@ -1278,9 +1283,20 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def sql(self) -> Optional[str]:
+        # only doing this in sql model for backward compatible
+        if (
+            getattr(self.model, "extra_ctes_injected", None)
+            and self.model.language == ModelLanguage.sql  # type: ignore[union-attr]
+        ):
+            # TODO CT-211
+            return self.model.compiled_code  # type: ignore[union-attr]
+        return None
+
+    @contextproperty
+    def compiled_code(self) -> Optional[str]:
         if getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
-            return self.model.compiled_sql  # type: ignore[union-attr]
+            return self.model.compiled_code  # type: ignore[union-attr]
         return None
 
     @contextproperty

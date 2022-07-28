@@ -63,3 +63,8 @@ class NodeType(StrEnum):
 class RunHookType(StrEnum):
     Start = "on-run-start"
     End = "on-run-end"
+
+
+class ModelLanguage(StrEnum):
+    python = "python"
+    sql = "sql"

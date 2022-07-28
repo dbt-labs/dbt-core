@@ -2,6 +2,7 @@ import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
+import time
 from itertools import chain
 from typing import (
     Optional,
@@ -42,7 +43,12 @@ from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
 from dbt.events.functions import fire_event
-from dbt.events.types import CacheMiss, ListRelations
+from dbt.events.types import (
+    CacheMiss,
+    ListRelations,
+    CodeExecution,
+    CodeExecutionStatus,
+)
 from dbt.utils import filter_null_values, executor
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
@@ -284,7 +290,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             from dbt.parser.manifest import ManifestLoader
 
             manifest = ManifestLoader.load_macros(
-                self.config, self.connections.set_query_header, base_macros_only=base_macros_only
+                self.config,
+                self.connections.set_query_header,
+                base_macros_only=base_macros_only,
             )
             # TODO CT-211
             self._macro_manifest_lazy = manifest  # type: ignore[assignment]
@@ -303,7 +311,11 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         if (database, schema) not in self.cache:
             fire_event(
-                CacheMiss(conn_name=self.nice_connection_name(), database=database, schema=schema)
+                CacheMiss(
+                    conn_name=self.nice_connection_name(),
+                    database=database,
+                    schema=schema,
+                )
             )
             return False
         else:
@@ -381,7 +393,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.cache.update_schemas(cache_update)
 
     def set_relations_cache(
-        self, manifest: Manifest, clear: bool = False, required_schemas: Set[BaseRelation] = None
+        self,
+        manifest: Manifest,
+        clear: bool = False,
+        required_schemas: Set[BaseRelation] = None,
     ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
@@ -670,7 +685,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             return self.cache.get_relations(database, schema)
 
         schema_relation = self.Relation.create(
-            database=database, schema=schema, identifier="", quote_policy=self.config.quoting
+            database=database,
+            schema=schema,
+            identifier="",
+            quote_policy=self.config.quoting,
         ).without_identifier()
 
         # we can't build the relations cache because we don't have a
@@ -678,7 +696,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         relations = self.list_relations_without_caching(schema_relation)
         fire_event(
             ListRelations(
-                database=database, schema=schema, relations=[_make_key(x) for x in relations]
+                database=database,
+                schema=schema,
+                relations=[_make_key(x) for x in relations],
             )
         )
 
@@ -1162,6 +1182,10 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return sql
 
+    @available.parse_none
+    def submit_python_job(self, parsed_model: dict, compiled_code: str):
+        raise NotImplementedException("`submit_python_job` is not implemented for this adapter!")
+
     def valid_incremental_strategies(self):
         """The set of standard builtin strategies which this adapter supports out-of-the-box.
         Not used to validate custom strategies defined by end users.
@@ -1250,3 +1274,24 @@ def catch_as_completed(
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions
+
+
+def log_code_execution(code_execution_function):
+    # decorator to log code and execution time
+    if code_execution_function.__name__ != "submit_python_job":
+        raise ValueError("this should be only used to log submit_python_job now")
+
+    def execution_with_log(*args):
+        self = args[0]
+        connection_name = self.connections.get_thread_connection().name
+        fire_event(CodeExecution(conn_name=connection_name, code_content=args[2]))
+        start_time = time.time()
+        response = code_execution_function(*args)
+        fire_event(
+            CodeExecutionStatus(
+                status=response._message, elapsed=round((time.time() - start_time), 2)
+            )
+        )
+        return response
+
+    return execution_with_log

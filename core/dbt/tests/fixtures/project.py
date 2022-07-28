@@ -267,7 +267,7 @@ def write_project_files(project_root, dir_name, file_dict):
 def write_project_files_recursively(path, file_dict):
     if type(file_dict) is not dict:
         raise TestProcessingException(f"File dict is not a dict: '{file_dict}' for path '{path}'")
-    suffix_list = [".sql", ".csv", ".md", ".txt"]
+    suffix_list = [".sql", ".csv", ".md", ".txt", ".py"]
     for name, value in file_dict.items():
         if name.endswith(".yml") or name.endswith(".yaml"):
             if isinstance(value, str):

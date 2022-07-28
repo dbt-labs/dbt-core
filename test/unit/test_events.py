@@ -151,7 +151,7 @@ def MockNode():
         }),
         tags=[],
         path='model_one.sql',
-        raw_sql='',
+        raw_code='',
         description='',
         columns={},
         checksum=FileHash.from_contents(''),
@@ -204,6 +204,8 @@ sample_values = [
     ConnectionUsed(conn_type="", conn_name=""),
     SQLQuery(conn_name="", sql=""),
     SQLQueryStatus(status="", elapsed=0.1),
+    CodeExecution(conn_name="", code_content=""),
+    CodeExecutionStatus(status="", elapsed=0.1),
     SQLCommit(conn_name=""),
     ColTypeChange(
         orig_type="", new_type="",

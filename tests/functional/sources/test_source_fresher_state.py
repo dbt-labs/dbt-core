@@ -56,14 +56,14 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
             "source": project.adapter.quote("source"),
             "quoted_columns": quoted_columns,
         }
-        raw_sql = """INSERT INTO {schema}.{source}
+        raw_code = """INSERT INTO {schema}.{source}
             ({quoted_columns})
         VALUES (
             'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
         )""".format(
             **kwargs
         )
-        project.run_sql(raw_sql)
+        project.run_sql(raw_code)
         pytest.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     def assertBetween(self, timestr, start, end=None):

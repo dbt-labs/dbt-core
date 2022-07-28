@@ -430,7 +430,7 @@ class TestMacros(BasePPTest):
         self.assertEqual(len(results), 2)
         # type_one_model_a_
         self.assertEqual(results[0].status, TestStatus.Fail)
-        self.assertRegex(results[0].node.compiled_sql, r'union all')
+        self.assertRegex(results[0].node.compiled_code, r'union all')
         # type_two_model_a_
         self.assertEqual(results[1].status, TestStatus.Warn)
         self.assertEqual(results[1].node.config.severity, 'WARN')

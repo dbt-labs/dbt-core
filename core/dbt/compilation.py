@@ -29,7 +29,7 @@ from dbt.exceptions import (
 from dbt.graph import Graph
 from dbt.events.functions import fire_event
 from dbt.events.types import FoundStats, CompilingNode, WritingInjectedSQLForNode
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
 import dbt.tracking
 
@@ -271,7 +271,7 @@ class Compiler:
         are rolled up into the models that refer to them by
         inserting CTEs into the SQL.
         """
-        if model.compiled_sql is None:
+        if model.compiled_code is None:
             raise RuntimeException("Cannot inject ctes into an unparsed node", model)
         if model.extra_ctes_injected:
             return (model, model.extra_ctes)
@@ -324,29 +324,28 @@ class Compiler:
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
             new_cte_name = self.add_ephemeral_prefix(cte_model.name)
-            rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_sql
+            rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
         injected_sql = self._inject_ctes_into_sql(
-            model.compiled_sql,
+            model.compiled_code,
             prepended_ctes,
         )
-        model._pre_injected_sql = model.compiled_sql
-        model.compiled_sql = injected_sql
+        model._pre_injected_sql = model.compiled_code
+        model.compiled_code = injected_sql
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
         model.validate(model.to_dict(omit_none=True))
-
         manifest.update_node(model)
 
         return model, prepended_ctes
 
     # creates a compiled_node from the ManifestNode passed in,
     # creates a "context" dictionary for jinja rendering,
-    # and then renders the "compiled_sql" using the node, the
-    # raw_sql and the context.
+    # and then renders the "compiled_code" using the node, the
+    # raw_code and the context.
     def _compile_node(
         self,
         node: ManifestNode,
@@ -362,20 +361,40 @@ class Compiler:
         data.update(
             {
                 "compiled": False,
-                "compiled_sql": None,
+                "compiled_code": None,
                 "extra_ctes_injected": False,
                 "extra_ctes": [],
             }
         )
         compiled_node = _compiled_type_for(node).from_dict(data)
 
-        context = self._create_node_context(compiled_node, manifest, extra_context)
+        if compiled_node.language == ModelLanguage.python:
+            # TODO could we also 'minify' this code at all? just aesthetic, not functional
 
-        compiled_node.compiled_sql = jinja.get_rendered(
-            node.raw_sql,
-            context,
-            node,
-        )
+            # quoating seems like something very specific to sql so far
+            # for all python implementations we are seeing there's no quating.
+            # TODO try to find better way to do this, given that
+            original_quoting = self.config.quoting
+            self.config.quoting = {key: False for key in original_quoting.keys()}
+            context = self._create_node_context(compiled_node, manifest, extra_context)
+
+            postfix = jinja.get_rendered(
+                "{{ py_script_postfix(model) }}",
+                context,
+                node,
+            )
+            # we should NOT jinja render the python model's 'raw code'
+            compiled_node.compiled_code = f"{node.raw_code}\n\n{postfix}"
+            # restore quoting settings in the end since context is lazy evaluated
+            self.config.quoting = original_quoting
+
+        else:
+            context = self._create_node_context(compiled_node, manifest, extra_context)
+            compiled_node.compiled_code = jinja.get_rendered(
+                node.raw_code,
+                context,
+                node,
+            )
 
         compiled_node.relation_name = self._get_relation_name(node)
 
@@ -487,15 +506,15 @@ class Compiler:
 
         return Graph(linker.graph)
 
-    # writes the "compiled_sql" into the target/compiled directory
+    # writes the "compiled_code" into the target/compiled directory
     def _write_node(self, node: NonSourceCompiledNode) -> ManifestNode:
         if not node.extra_ctes_injected or node.resource_type == NodeType.Snapshot:
             return node
         fire_event(WritingInjectedSQLForNode(unique_id=node.unique_id))
 
-        if node.compiled_sql:
+        if node.compiled_code:
             node.compiled_path = node.write_node(
-                self.config.target_path, "compiled", node.compiled_sql
+                self.config.target_path, "compiled", node.compiled_code
             )
         return node
 

@@ -461,6 +461,10 @@ class NodeConfig(NodeAndTestConfig):
     grants: Dict[str, Any] = field(
         default_factory=dict, metadata=MergeBehavior.DictKeyAppend.meta()
     )
+    packages: List[str] = field(
+        default_factory=list,
+        metadata=MergeBehavior.Append.meta(),
+    )
 
     @classmethod
     def __pre_deserialize__(cls, data):
