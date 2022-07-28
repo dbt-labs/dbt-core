@@ -468,7 +468,7 @@ class NodeConfig(NodeAndTestConfig):
     )
 
     docs: Docs = field(
-        default_factory=lambda: Docs(show=True),
+        default_factory=Docs,
         metadata=MergeBehavior.Update.meta(),
     )
 
