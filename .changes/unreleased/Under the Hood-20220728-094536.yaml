@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add python incremental materialization test
+time: 2022-07-28T09:45:36.13608-05:00
+custom:
+  Author: stu-k
+  Issue: "0000"
+  PR: "5571"
