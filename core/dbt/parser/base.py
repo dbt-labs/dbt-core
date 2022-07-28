@@ -192,10 +192,10 @@ class ConfiguredParser(
             name = block.name
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
-        elif block.path.relative_path.endswith(".sql"):
-            language = ModelLanguage.sql
         else:
-            raise ParsingException("Received unexpected file type during parsing")
+            # this is not ideal but we have a lot of tests to adjust if don't do it
+            language = ModelLanguage.sql
+
         dct = {
             "alias": name,
             "schema": self.default_schema,
