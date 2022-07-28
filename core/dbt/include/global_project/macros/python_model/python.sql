@@ -76,7 +76,10 @@ class dbtObj:
         self.this = this()
         self.is_incremental = {{ is_incremental() }}
 
-
 # COMMAND ----------
-
+{{py_script_comment()}}
 {% endmacro %}
+
+{#-- entry point for add instuctions for running compiled_code --#}
+{%macro py_script_comment()%}
+{%endmacro%}

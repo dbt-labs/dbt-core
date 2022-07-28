@@ -20,7 +20,7 @@ from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.search import FileBlock
 
 # internally, the parser may store a less-restrictive type that will be
@@ -190,6 +190,12 @@ class ConfiguredParser(
         """
         if name is None:
             name = block.name
+        if block.path.relative_path.endswith(".py"):
+            language = ModelLanguage.python
+        elif block.path.relative_path.endswith(".sql"):
+            language = ModelLanguage.sql
+        else:
+            raise ParsingException("Received unexpected file type during parsing")
         dct = {
             "alias": name,
             "schema": self.default_schema,
@@ -202,7 +208,7 @@ class ConfiguredParser(
             "original_file_path": block.path.original_file_path,
             "package_name": self.project.project_name,
             "raw_code": block.contents,
-            "language": "sql",
+            "language": language,
             "unique_id": self.generate_unique_id(name),
             "config": self.config_dict(config),
             "checksum": block.file.checksum.to_dict(omit_none=True),

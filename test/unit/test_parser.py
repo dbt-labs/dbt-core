@@ -616,6 +616,63 @@ def model(dat, session):
         self.parser.manifest.files[block.file.file_id] = block.file
         with self.assertRaises(ParsingException):
             self.parser.parse_file(block)
+    
+    def test_wrong_python_model_def_multipe_model(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+    )
+    return df
+
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+    )
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
+    
+    def test_wrong_python_model_def_no_model(self):
+        py_code = """
+def model1(dbt, session):
+    dbt.config(
+        materialized='table',
+    )
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
+    
+    def test_wrong_python_model_def_mutiple_return(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+    )
+    return df1, df2
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
+    
+    def test_wrong_python_model_def_no_return(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+    )
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
 
     def test_parse_error(self):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')

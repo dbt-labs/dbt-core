@@ -36,15 +36,30 @@ class PythonValidationVisitor(ast.NodeVisitor):
     def __init__(self):
         super().__init__()
         self.dbt_errors = []
+        self.num_model_def = 0
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         if node.name == "model":
+            self.num_model_def += 1
             if not node.args.args[0].arg == "dbt":
                 self.dbt_errors.append("'dbt' not provided for model as the first argument")
             if len(node.args.args) != 2:
                 self.dbt_errors.append(
                     "model function should have two args, `dbt` and a session to current warehouse"
                 )
+            # check we have a return and only one
+            if not isinstance(node.body[-1], ast.Return) or not isinstance(
+                node.body[-1].value, ast.Name
+            ):
+                self.dbt_errors.append(
+                    "In current version, model function should return only one dataframe object"
+                )
+
+    def check_error(self, node):
+        if self.num_model_def != 1:
+            raise ParsingException("dbt only allow one model defined per python file", node=node)
+        if len(self.dbt_errors) != 0:
+            raise ParsingException("\n".join(self.dbt_errors), node=node)
 
 
 class PythonParseVisitor(ast.NodeVisitor):
@@ -155,8 +170,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # would actually make the parser not doing the visit_Calls any more
         dbtValidator = PythonValidationVisitor()
         dbtValidator.visit(tree)
-        if len(dbtValidator.dbt_errors) != 0:
-            raise ParsingException("\n".join(dbtValidator.dbt_errors), node=node)
+        dbtValidator.check_error(node)
 
         dbtParser = PythonParseVisitor(node)
         dbtParser.visit(tree)
@@ -174,13 +188,12 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
-        if node.path.endswith(".py"):
+        if node.language == ModelLanguage.python:
             try:
                 verify_python_model_code(node)
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
                 self.update_parsed_node_config(node, config, context=context)
-                node.language = ModelLanguage.python
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
