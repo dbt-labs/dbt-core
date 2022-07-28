@@ -10,7 +10,6 @@ from dbt.tests.adapter.basic.files import (
     seeds_base_csv,
     base_view_sql,
     base_table_sql,
-    base_table_py,
     base_materialized_var_sql,
     schema_base_yml,
 )
@@ -22,7 +21,6 @@ class BaseSimpleMaterializations:
         return {
             "view_model.sql": base_view_sql,
             "table_model.sql": base_table_sql,
-            "table_model.py": base_table_py,
             "swappable.sql": base_materialized_var_sql,
             "schema.yml": schema_base_yml,
         }
