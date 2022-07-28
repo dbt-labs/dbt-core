@@ -674,6 +674,18 @@ def model(dbt, session):
         with self.assertRaises(ParsingException):
             self.parser.parse_file(block)
 
+    def test_correct_python_model_def_return_function(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+    )
+    return pandas.dataframe([1,2])
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+
     def test_parse_error(self):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
         with self.assertRaises(CompilationException):

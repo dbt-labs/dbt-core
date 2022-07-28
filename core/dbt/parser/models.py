@@ -48,8 +48,8 @@ class PythonValidationVisitor(ast.NodeVisitor):
                     "model function should have two args, `dbt` and a session to current warehouse"
                 )
             # check we have a return and only one
-            if not isinstance(node.body[-1], ast.Return) or not isinstance(
-                node.body[-1].value, ast.Name
+            if not isinstance(node.body[-1], ast.Return) or isinstance(
+                node.body[-1].value, ast.Tuple
             ):
                 self.dbt_errors.append(
                     "In current version, model function should return only one dataframe object"
