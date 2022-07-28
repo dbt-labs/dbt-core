@@ -1,5 +1,5 @@
 name: ✨ Feature
-description: Suggest an idea for dbt
+description: Propose a straightforward extension of dbt functionality
 title: "[Feature] <title>"
 labels: ["enhancement", "triage"]
 body:
@@ -9,18 +9,24 @@ body:
         Thanks for taking the time to fill out this feature request!
   - type: checkboxes
     attributes:
-      label: Is there an existing feature request for this?
-      description: Please search to see if an issue already exists for the feature you would like.
-      options:
-        - label: I have searched the existing issues
-          required: true
-      label: Is this your first time opening an issue?
+      label: Is this your first time submitting a feature request?
+      description: >
+        We want to make sure that features are distinct and discoverable,
+        so that other members of the community can find them and offer their thoughts.
+
+        Issues are the right place to request straightforward extensions of existing dbt functionality.
+        For "big ideas" about future capabilities of dbt, we ask that you open a
+        [discussion](https://github.com/dbt-labs/dbt-core/discussions) in the "Ideas" category instead.
       options:
         - label: I have read the [expectations for open source contributors](https://docs.getdbt.com/docs/contributing/oss-expectations)
           required: true
+        - label: I have searched the existing issues, and I could not find an existing issue for this feature
+          required: true
+        - label: I am requesting a straightforward extension of existing dbt functionality, rather than a Big Idea better suited to a discussion
+          required: true
   - type: textarea
     attributes:
-      label: Describe the Feature
+      label: Describe the feature
       description: A clear and concise description of what you want to happen.
     validations:
       required: true

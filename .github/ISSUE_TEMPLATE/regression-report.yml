@@ -1,28 +1,22 @@
-name: 🐞 Bug
-description: Report a bug or an issue you've found with dbt
-title: "[Bug] <title>"
-labels: ["bug", "triage"]
+name: ☣️ Regression
+description: Report a regression you've observed in a newer version of dbt
+title: "[Regression] <title>"
+labels: ["bug", "regression", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report!
+        Thanks for taking the time to fill out this regression report!
   - type: checkboxes
     attributes:
-      label: Is this a new bug in dbt-core?
+      label: Is this a regression in a recent version of dbt-core?
       description: >
-        In other words, is this an error, flaw, failure or fault in our software?
-
-        If this is a bug that broke existing functionality that used to work, please open a regression issue.
-        If this is a bug in an adapter plugin, please open an issue in the adapter's repository.
-        If this is a bug experienced while using dbt Cloud, please report to [support](mailto:support@getdbt.com).
-        If this is a request for help or troubleshooting code in your own dbt project, please join our [dbt Community Slack](https://www.getdbt.com/community/join-the-community/) or open a [Discussion question](https://github.com/dbt-labs/docs.getdbt.com/discussions).
-
-        Please search to see if an issue already exists for the bug you encountered.
+        A regression is when documented functionality works as expected in an older version of dbt-core,
+        and no longer works after upgrading to a newer version of dbt-core
       options:
-        - label: I believe this is a new bug in dbt-core
+        - label: I believe this is a regression in dbt-core functionality
           required: true
-        - label: I have searched the existing issues, and I could not find an existing issue for this bug
+        - label: I have searched the existing issues, and I could not find an existing issue for this regression
           required: true
   - type: textarea
     attributes:
@@ -32,7 +26,7 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Expected Behavior
+      label: Expected/Previous Behavior
       description: A concise description of what you expected to happen.
     validations:
       required: true
@@ -63,19 +57,21 @@ body:
         examples:
           - **OS**: Ubuntu 20.04
           - **Python**: 3.9.12 (`python3 --version`)
-          - **dbt-core**: 1.1.1 (`dbt --version`)
+          - **dbt-core (working version)**: 1.1.1 (`dbt --version`)
+          - **dbt-core (regression version)**: 1.2.0 (`dbt --version`)
       value: |
         - OS:
         - Python:
-        - dbt:
+        - dbt (working version):
+        - dbt (regression version):
       render: markdown
     validations:
-      required: false
+      required: true
   - type: dropdown
     id: database
     attributes:
       label: Which database adapter are you using with dbt?
-      description: If the bug is specific to the database or adapter, please open the issue in that adapter's repository instead
+      description: If the regression is specific to the database or adapter, please open the issue in that adapter's repository instead
       multiple: true
       options:
         - postgres
