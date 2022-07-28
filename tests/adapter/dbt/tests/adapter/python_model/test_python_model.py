@@ -54,8 +54,8 @@ def model(dbt, session):
     dbt.config(materialized="incremental", unique_key='id')
     df = dbt.ref("m_1")
     if dbt.is_incremental:
-        # incremental runs should only apply to
-        df = df.filter(df.id >= 5)
+        # incremental runs should only apply to part of the data
+        df = df.filter(df.id > 5)
     return df
 """
 
@@ -72,9 +72,12 @@ class BasePythonIncrementalTests:
     def test_incremental(self, project):
         # create m_1 and run incremental model the first time
         run_dbt(["run"])
+        test_schema_relation = project.adapter.Relation.create(
+            database=project.database, schema=project.test_schema
+        )
         assert (
             project.run_sql(
-                f"select count(*) from {project.database}.{project.test_schema}.incremental",
+                f"select count(*) from {test_schema_relation}.incremental",
                 fetch="one",
             )[0]
             == 5
@@ -83,20 +86,18 @@ class BasePythonIncrementalTests:
         run_dbt(["run", "-s", "incremental"])
         assert (
             project.run_sql(
-                f"select count(*) from {project.database}.{project.test_schema}.incremental",
+                f"select count(*) from {test_schema_relation}.incremental",
                 fetch="one",
             )[0]
             == 5
         )
         # add 3 records with one supposed to be filtered out
-        project.run_sql(
-            f"insert into {project.database}.{project.test_schema}.m_1(id) values (0), (6), (7)"
-        )
+        project.run_sql(f"insert into {test_schema_relation}.m_1(id) values (0), (6), (7)")
         # validate that incremental model would correctly add 2 valid records to result model
         run_dbt(["run", "-s", "incremental"])
         assert (
             project.run_sql(
-                f"select count(*) from {project.database}.{project.test_schema}.incremental",
+                f"select count(*) from {test_schema_relation}.incremental",
                 fetch="one",
             )[0]
             == 7
