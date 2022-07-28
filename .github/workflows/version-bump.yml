@@ -1,18 +1,15 @@
 # **what?**
-# This workflow will take a version number and a dry run flag. With that
+# This workflow will take the new version number to bump to. With that
 # it will run versionbump to update the version number everywhere in the
-# code base and then generate an update Docker requirements file. If this
-# is a dry run, a draft PR will open with the changes. If this isn't a dry
-# run, the changes will be committed to the branch this is run on.
+# code base and then run changie to create the corresponding changelog.
+# A PR will be created with the changes that can be reviewed before committing.
 
 # **why?**
 # This is to aid in releasing dbt and making sure we have updated
-# the versions and Docker requirements in all places.
+# the version in all places and generated the changelog.
 
 # **when?**
-# This is triggered either manually OR
-# from the repository_dispatch event "version-bump" which is sent from
-# the dbt-release repo Action
+# This is triggered manually
 
 name: Version Bump
 
@@ -20,34 +17,20 @@ on:
   workflow_dispatch:
     inputs:
       version_number:
-       description: 'The version number to bump to'
+       description: 'The version number to bump to (ex. 1.2.0, 1.3.0b1)'
        required: true
-      is_dry_run:
-       description: 'Creates a draft PR to allow testing instead of committing to a branch'
-       required: true
-       default: 'true'
-  repository_dispatch:
-    types: [version-bump]
 
 jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
+      - name: "[DEBUG] Print Variables"
+        run: |
+          echo "all variables defined as inputs"
+          echo The version_number: ${{ github.event.inputs.version_number }}
+
       - name: Check out the repository
         uses: actions/checkout@v2
-
-      - name: Set version and dry run values
-        id: variables
-        env:
-          VERSION_NUMBER: "${{ github.event.client_payload.version_number == '' && github.event.inputs.version_number || github.event.client_payload.version_number }}"
-          IS_DRY_RUN: "${{ github.event.client_payload.is_dry_run == '' && github.event.inputs.is_dry_run || github.event.client_payload.is_dry_run }}"
-        run: |
-          echo Repository dispatch event version: ${{ github.event.client_payload.version_number }}
-          echo Repository dispatch event dry run: ${{ github.event.client_payload.is_dry_run }}
-          echo Workflow dispatch event version: ${{ github.event.inputs.version_number }}
-          echo Workflow dispatch event dry run: ${{ github.event.inputs.is_dry_run }}
-          echo ::set-output name=VERSION_NUMBER::$VERSION_NUMBER
-          echo ::set-output name=IS_DRY_RUN::$IS_DRY_RUN
 
       - uses: actions/setup-python@v2
         with:
@@ -59,53 +42,66 @@ jobs:
           source env/bin/activate
           pip install --upgrade pip
 
-      - name: Create PR branch
-        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'true' }}
-        run: |
-          git checkout -b bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_$GITHUB_RUN_ID
-          git push origin bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_$GITHUB_RUN_ID
-          git branch --set-upstream-to=origin/bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_$GITHUB_RUN_ID bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_$GITHUB_RUN_ID
+      - name: Audit Version and Parse Into Parts
+        id: semver
+        uses: dbt-labs/actions/parse-semver@v1
+        with:
+          version: ${{ github.event.inputs.version_number }}
 
-      # - name: Generate Docker requirements
-      #  run: |
-      #    source env/bin/activate
-      #    pip install -r requirements.txt
-      #    pip freeze -l > docker/requirements/requirements.txt
-      #    git status
+      - name: Set branch value
+        id: variables
+        run: |
+          echo "::set-output name=BRANCH_NAME::prep-release/${{ github.event.inputs.version_number }}_$GITHUB_RUN_ID"
+
+      - name: Create PR branch
+        run: |
+          git checkout -b ${{ steps.variables.outputs.BRANCH_NAME }}
+          git push origin ${{ steps.variables.outputs.BRANCH_NAME }}
+          git branch --set-upstream-to=origin/${{ steps.variables.outputs.BRANCH_NAME }} ${{ steps.variables.outputs.BRANCH_NAME }}
 
       - name: Bump version
         run: |
           source env/bin/activate
           pip install -r dev-requirements.txt
-          env/bin/bumpversion --allow-dirty --new-version ${{steps.variables.outputs.VERSION_NUMBER}} major
+          env/bin/bumpversion --allow-dirty --new-version ${{ github.event.inputs.version_number }} major
           git status
 
-      - name: Commit version bump directly
-        uses: EndBug/add-and-commit@v7
-        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'false' }}
-        with:
-          author_name: 'Github Build Bot'
-          author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Bumping version to ${{steps.variables.outputs.VERSION_NUMBER}}'
+      # this step will fail on whitespace errors but also correct them
+      - name: Format bumpversion file
+        continue-on-error: true
+        run: |
+          brew install pre-commit
+          pre-commit run trailing-whitespace --files .bumpversion.cfg
+          git status
+
+      - name: Run changie
+        run: |
+          brew tap miniscruff/changie https://github.com/miniscruff/changie
+          brew install changie
+          if [[ ${{ steps.semver.outputs.is-pre-release }} -eq 1 ]]
+          then
+            changie batch ${{ steps.semver.outputs.base-version }}  --move-dir '${{ steps.semver.outputs.base-version }}' --prerelease '${{ steps.semver.outputs.pre-release }}'
+          else
+            changie batch ${{ steps.semver.outputs.base-version }}  --include '${{ steps.semver.outputs.base-version }}' --remove-prereleases
+          fi
+          changie merge
+          git status
 
       - name: Commit version bump to branch
         uses: EndBug/add-and-commit@v7
-        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'true' }}
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Bumping version to ${{steps.variables.outputs.VERSION_NUMBER}}'
-          branch: 'bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_${{GITHUB.RUN_ID}}'
-          push: 'origin origin/bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_${{GITHUB.RUN_ID}}'
+          message: 'Bumping version to ${{ github.event.inputs.version_number }} and generate CHANGELOG'
+          branch: '${{ steps.variables.outputs.BRANCH_NAME }}'
+          push: 'origin origin/${{ steps.variables.outputs.BRANCH_NAME }}'
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
-        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'true' }}
         with:
           author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
-          draft: true
           base: ${{github.ref}}
-          title: 'Bumping version to ${{steps.variables.outputs.VERSION_NUMBER}}'
-          branch: 'bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_${{GITHUB.RUN_ID}}'
+          title: 'Bumping version to ${{ github.event.inputs.version_number }} and generate changelog'
+          branch: '${{ steps.variables.outputs.BRANCH_NAME }}'
           labels: |
             Skip Changelog
