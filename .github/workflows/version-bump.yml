@@ -41,16 +41,16 @@ jobs:
           python3 -m venv env
           source env/bin/activate
           pip install --upgrade pip
-          
-      - name: Audit Version and Parse Into Parts 
-        id: semver 
-        uses: dbt-labs/actions/parse-semver@v1 
-        with: 
+
+      - name: Audit Version and Parse Into Parts
+        id: semver
+        uses: dbt-labs/actions/parse-semver@v1
+        with:
           version: ${{ github.event.inputs.version_number }}
 
-      - name: Set branch value 
-        id: variables 
-        run: | 
+      - name: Set branch value
+        id: variables
+        run: |
           echo "::set-output name=BRANCH_NAME::prep-release/${{ github.event.inputs.version_number }}_$GITHUB_RUN_ID"
 
       - name: Create PR branch
