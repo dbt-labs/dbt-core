@@ -68,7 +68,6 @@ class ManifestTask(ConfiguredTask):
         super().__init__(args, config)
         self.manifest: Optional[Manifest] = None
         self.graph: Optional[Graph] = None
-        self.adapter = get_adapter(self.config)
 
     def write_manifest(self):
         if flags.WRITE_JSON:
@@ -85,7 +84,10 @@ class ManifestTask(ConfiguredTask):
     def compile_manifest(self):
         if self.manifest is None:
             raise InternalException("compile_manifest called before manifest was loaded")
-        compiler = self.adapter.get_compiler()
+
+        # we cannot get adapter in init since it will break rpc #5579
+        adapter = get_adapter(self.config)
+        compiler = adapter.get_compiler()
         self.graph = compiler.compile(self.manifest)
 
     def _runtime_initialize(self):
