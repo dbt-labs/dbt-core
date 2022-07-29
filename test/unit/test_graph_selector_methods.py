@@ -478,6 +478,19 @@ def table_model(ephemeral_model):
 
 
 @pytest.fixture
+def table_model_py(seed):
+    return make_model(
+        'pkg',
+        'table_model_py',
+        'select * from {{ ref("seed") }}',
+        config_kwargs={'materialized': 'table'},
+        refs=[seed],
+        tags=[],
+        path='subdirectory/table_model.py'
+    )
+
+
+@pytest.fixture
 def ext_source():
     return make_source(
         'ext',
@@ -537,7 +550,6 @@ def union_model(seed, ext_source):
         tags=['unions'],
     )
 
-
 @pytest.fixture
 def table_id_unique(table_model):
     return make_unique_test('pkg', table_model, 'id')
@@ -594,13 +606,12 @@ def namespaced_union_model(seed, ext_source):
         tags=['unions'],
     )
 
-
 @pytest.fixture
-def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source, ext_model, union_model, ext_source_2, 
+def manifest(seed, source, ephemeral_model, view_model, table_model, table_model_py, ext_source, ext_model, union_model, ext_source_2, 
     ext_source_other, ext_source_other_2, table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, 
     view_test_nothing, namespaced_seed, namespace_model, namespaced_union_model, macro_test_unique, macro_default_test_unique,
     macro_test_not_null, macro_default_test_not_null):
-    nodes = [seed, ephemeral_model, view_model, table_model, union_model, ext_model,
+    nodes = [seed, ephemeral_model, view_model, table_model, table_model_py, union_model, ext_model,
              table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, view_test_nothing,
              namespaced_seed, namespace_model, namespaced_union_model]
     sources = [source, ext_source, ext_source_2,
@@ -638,7 +649,7 @@ def test_select_fqn(manifest):
     assert not search_manifest_using_method(manifest, method, 'ext.unions')
     # sources don't show up, because selection pretends they have no FQN. Should it?
     assert search_manifest_using_method(manifest, method, 'pkg') == {
-        'union_model', 'table_model', 'view_model', 'ephemeral_model', 'seed',
+        'union_model', 'table_model', 'table_model_py', 'view_model', 'ephemeral_model', 'seed',
         'mynamespace.union_model', 'mynamespace.ephemeral_model', 'mynamespace.seed'}
     assert search_manifest_using_method(
         manifest, method, 'ext') == {'ext_model'}
@@ -718,9 +729,13 @@ def test_select_file(manifest):
     assert search_manifest_using_method(
         manifest, method, 'table_model.sql') == {'table_model'}
     assert search_manifest_using_method(
+        manifest, method, 'table_model.py') == {'table_model_py'}
+    assert search_manifest_using_method(
         manifest, method, 'union_model.sql') == {'union_model', 'mynamespace.union_model'}
     assert not search_manifest_using_method(
         manifest, method, 'missing.sql')
+    assert not search_manifest_using_method(
+        manifest, method, 'missing.py')
 
 
 def test_select_package(manifest):
@@ -729,7 +744,7 @@ def test_select_package(manifest):
     assert isinstance(method, PackageSelectorMethod)
     assert method.arguments == []
 
-    assert search_manifest_using_method(manifest, method, 'pkg') == {'union_model', 'table_model', 'view_model', 'ephemeral_model',
+    assert search_manifest_using_method(manifest, method, 'pkg') == {'union_model', 'table_model', 'table_model_py', 'view_model', 'ephemeral_model',
                                                                      'seed', 'raw.seed', 'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'view_test_nothing',
                                                                      'mynamespace.seed', 'mynamespace.ephemeral_model', 'mynamespace.union_model',
                                                                      }
@@ -748,7 +763,7 @@ def test_select_config_materialized(manifest):
     assert search_manifest_using_method(manifest, method, 'view') == {
         'view_model', 'ext_model'}
     assert search_manifest_using_method(manifest, method, 'table') == {
-        'table_model', 'union_model', 'mynamespace.union_model'}
+        'table_model', 'table_model_py', 'union_model', 'mynamespace.union_model'}
 
 
 def test_select_test_name(manifest):
