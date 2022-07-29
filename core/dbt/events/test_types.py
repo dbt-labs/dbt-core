@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from .types import InfoLevel, DebugLevel, WarnLevel, ErrorLevel, ShowException, NoFile
+from dbt.events.types import InfoLevel, DebugLevel, WarnLevel, ErrorLevel, ShowException
+from dbt.events.base_types import NoFile
 
 
 # Keeping log messages for testing separate since they are used for debugging.

@@ -94,7 +94,7 @@ class AdapterEventError(ErrorLevel, AdapterEventBase, ShowException):
 
 
 @dataclass
-class MainKeyboardInterrupt(InfoLevel, NoFile):
+class MainKeyboardInterrupt(InfoLevel):
     code: str = "Z001"
 
     def message(self) -> str:
@@ -102,7 +102,7 @@ class MainKeyboardInterrupt(InfoLevel, NoFile):
 
 
 @dataclass
-class MainEncounteredError(ErrorLevel, NoFile):
+class MainEncounteredError(ErrorLevel):
     e: BaseException
     code: str = "Z002"
 
@@ -111,7 +111,7 @@ class MainEncounteredError(ErrorLevel, NoFile):
 
 
 @dataclass
-class MainStackTrace(DebugLevel, NoFile):
+class MainStackTrace(ErrorLevel):
     stack_trace: str
     code: str = "Z003"
 
@@ -1353,6 +1353,8 @@ class NodeConnectionReleaseError(ShowException, DebugLevel):
         return "Error releasing connection for node {}: {!s}".format(self.node_name, self.exc)
 
 
+# We don't write "clean" events to the log, because the clean command
+# may have removed the log directory.
 @dataclass
 class CheckCleanPath(InfoLevel, NoFile):
     path: str
@@ -2382,7 +2384,7 @@ class SendEventFailure(DebugLevel):
 
 
 @dataclass
-class FlushEvents(DebugLevel, NoFile):
+class FlushEvents(DebugLevel):
     code: str = "Z042"
 
     def message(self) -> str:
@@ -2390,7 +2392,7 @@ class FlushEvents(DebugLevel, NoFile):
 
 
 @dataclass
-class FlushEventsFailure(DebugLevel, NoFile):
+class FlushEventsFailure(DebugLevel):
     code: str = "Z043"
 
     def message(self) -> str:

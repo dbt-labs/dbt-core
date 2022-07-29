@@ -105,6 +105,8 @@ class ErrorLevel(EventSerialization, Event):
 
 
 # prevents an event from going to the file
+# This should rarely be used in core code. It is currently
+# only used in integration tests and for the 'clean' command.
 class NoFile:
     pass
 
