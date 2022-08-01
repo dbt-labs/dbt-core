@@ -1,0 +1,8 @@
+kind: Docs
+body: Searches no longer require perfect matches, and instead consider each word individually.
+  `my model` or `model my` will now find `my_model`, without the need for underscores
+time: 2022-07-28T14:06:20.371364-07:00
+custom:
+  Author: joellabes
+  Issue: "5574"
+  PR: "5577"

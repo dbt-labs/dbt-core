@@ -1,7 +1,9 @@
 import pytest
 
 from dbt.tests.util import run_dbt
+from dbt.tests.fixtures.project import write_project_files
 
+from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
 from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 
@@ -26,16 +28,13 @@ def run_schema_and_assert(project, include, exclude, expected_tests):
 
 
 class TestSchemaTestGraphSelection(SelectionFixtures):
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root, dbt_integration_project):  # noqa: F811
+        write_project_files(project_root, "dbt_integration_project", dbt_integration_project)
+
     @pytest.fixture(scope="class")
     def packages(self):
-        return {
-            "packages": [
-                {
-                    "git": "https://github.com/dbt-labs/dbt-integration-project",
-                    "revision": "dbt/1.0.0",
-                }
-            ]
-        }
+        return {"packages": [{"local": "dbt_integration_project"}]}
 
     def test_schema_tests_no_specifiers(self, project):
         run_schema_and_assert(

@@ -1,0 +1,7 @@
+kind: Docs
+body: Update dependency underscore from ^1.9.0 to ^1.13.4
+time: 2022-07-28T14:03:51.123441-07:00
+custom:
+  Author: emmyoop
+  Issue: "5574"
+  PR: "5577"

@@ -1,0 +1,7 @@
+kind: Docs
+body: Support the renaming of SQL to code happening in dbt-core
+time: 2022-07-28T14:08:06.184934-07:00
+custom:
+  Author: jtcohen6 stu-k drewbanin ChenyuLInx
+  Issue: "5574"
+  PR: "5577"
