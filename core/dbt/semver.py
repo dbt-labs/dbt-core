@@ -280,7 +280,7 @@ class VersionRange:
     def reduce(self, other):
         start = None
 
-        if(self.start.is_exact and other.start.is_exact):
+        if (self.start.is_exact and other.start.is_exact):
             start = end = self._try_combine_exact(self.start, other.start)
 
         else:
@@ -408,9 +408,9 @@ def find_possible_versions(requested_range, available_versions):
     for version_string in available_versions:
         version = VersionSpecifier.from_version_string(version_string)
 
-        if(versions_compatible(version,
-                               requested_range.start,
-                               requested_range.end)):
+        if (versions_compatible(version,
+                                requested_range.start,
+                                requested_range.end)):
             possible_versions.append(version)
 
     sorted_versions = sorted(possible_versions, reverse=True)
@@ -424,7 +424,7 @@ def resolve_to_specific_version(requested_range, available_versions):
     for version_string in available_versions:
         version = VersionSpecifier.from_version_string(version_string)
 
-        if(versions_compatible(version,
+        if (versions_compatible(version,
            requested_range.start, requested_range.end) and
            (max_version is None or max_version.compare(version) < 0)):
             max_version = version
