@@ -27,6 +27,12 @@ select 1 as id
 
 """
 
+models__show_docs_false__model_sql = """
+{{ config(materialized='view', docs={"show": True}) }}
+
+select 1 as id
+"""
+
 models__custom_node_color__schema_yml = """
 version: 2
 
@@ -50,6 +56,7 @@ models:
     config:
       docs:
         node_color: {}
+        show: True
 """.format(
     CUSTOM_NODE_COLOR_SCHEMA_LEVEL
 )
@@ -61,9 +68,12 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         return {
             "models": {
                 "test": {
-                    "+docs": {"node_color": CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT},
+                    "+docs": {"node_color": CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT, "show": False},
                     "subdirectory": {
-                        "+docs": {"node_color": CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER},
+                        "+docs": {
+                            "node_color": CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER,
+                            "show": True,
+                        },
                     },
                 }
             }
@@ -88,11 +98,15 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         my_model_docs = manifest.nodes[model_id].docs
 
         node_color_actual_config = my_model_config["docs"].node_color
+        show_actual_config = my_model_config["docs"].show
         node_color_actual_docs = my_model_docs.node_color
+        show_actual_docs = my_model_docs.show
 
         # check node_color config is in the right spots for each model
         assert node_color_actual_config == CUSTOM_NODE_COLOR_MODEL_LEVEL
         assert node_color_actual_docs == CUSTOM_NODE_COLOR_MODEL_LEVEL
+        assert not show_actual_config
+        assert not show_actual_docs
 
     # validation that model level node_color configs supercede schema.yml
     def test__model_override_schema(
@@ -121,11 +135,15 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         my_model_docs = manifest.nodes[model_id].docs
 
         node_color_actual_config = my_model_config["docs"].node_color
+        show_actual_config = my_model_config["docs"].show
         node_color_actual_docs = my_model_docs.node_color
+        show_actual_docs = my_model_docs.show
 
         # check node_color config is in the right spots for each model
         assert node_color_actual_config == CUSTOM_NODE_COLOR_MODEL_LEVEL
         assert node_color_actual_docs == CUSTOM_NODE_COLOR_MODEL_LEVEL
+        assert not show_actual_config
+        assert not show_actual_docs
 
     # validation that node_color configured on subdirectories in dbt_project.yml supercedes project root
     def test__project_folder_override_project_root(
@@ -151,11 +169,16 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         my_model_docs = manifest.nodes[model_id].docs
 
         node_color_actual_config = my_model_config["docs"].node_color
+        show_actual_config = my_model_config["docs"].show
         node_color_actual_docs = my_model_docs.node_color
+        show_actual_docs = my_model_docs.show
 
         # check node_color config is in the right spots for each model
         assert node_color_actual_config == CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER
         assert node_color_actual_docs == CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER
+        # in this case show should be True since the dbt_project.yml overrides the root setting for /subdirectory
+        assert show_actual_config
+        assert show_actual_docs
 
     # validation that node_color configured in schema.yml supercedes dbt_project.yml
     def test__schema_override_project(
@@ -185,8 +208,45 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         my_model_docs = manifest.nodes[model_id].docs
 
         node_color_actual_config = my_model_config["docs"].node_color
+        show_actual_config = my_model_config["docs"].show
         node_color_actual_docs = my_model_docs.node_color
+        show_actual_docs = my_model_docs.show
 
         # check node_color config is in the right spots for each model
         assert node_color_actual_config == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
         assert node_color_actual_docs == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
+        # in this case show should be True since the schema.yml overrides the dbt_project.yml
+        assert show_actual_config
+        assert show_actual_docs
+
+    # validation that docs: show configured in model file supercedes dbt_project.yml
+    def test__model_show_overrides_dbt_project(
+        self,
+        project,
+    ):
+
+        write_file(
+            models__show_docs_false__model_sql,
+            project.project_root,
+            "models",
+            "show_docs_override_model.sql",
+        )
+
+        run_dbt(["compile"])
+        manifest = get_manifest(project.project_root)
+
+        model_id = "model.test.show_docs_override_model"
+        my_model_config = manifest.nodes[model_id].config
+        my_model_docs = manifest.nodes[model_id].docs
+
+        node_color_actual_config = my_model_config["docs"].node_color
+        show_actual_config = my_model_config["docs"].show
+        node_color_actual_docs = my_model_docs.node_color
+        show_actual_docs = my_model_docs.show
+
+        # check node_color config is in the right spots for each model
+        assert node_color_actual_config == CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT
+        assert node_color_actual_docs == CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT
+        # in this case show should be True since the schema.yml overrides the dbt_project.yml
+        assert show_actual_config
+        assert show_actual_docs
