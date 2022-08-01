@@ -74,7 +74,6 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
                             "node_color": CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER,
                             "show": True,
                         },
-                        "+docs": {"node_color": CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER},
                     },
                 }
             }
