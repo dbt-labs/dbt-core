@@ -18,7 +18,6 @@ from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.compiled import CompileResultNode
-from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus
@@ -407,36 +406,6 @@ class RunTask(CompileTask):
         fire_event(
             HookFinished(stat_line=stat_line, execution=execution, execution_time=execution_time)
         )
-
-    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
-        if not self.args.defer:
-            return None
-
-        state = self.previous_state
-        if state is None:
-            raise RuntimeException(
-                "Received a --defer argument, but no value was provided " "to --state"
-            )
-
-        if state.manifest is None:
-            raise RuntimeException(f'Could not find manifest in --state path: "{self.args.state}"')
-        return state.manifest
-
-    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
-        deferred_manifest = self._get_deferred_manifest()
-        if deferred_manifest is None:
-            return
-        if self.manifest is None:
-            raise InternalException(
-                "Expected to defer to manifest, but there is no runtime " "manifest to defer from!"
-            )
-        self.manifest.merge_from_artifact(
-            adapter=adapter,
-            other=deferred_manifest,
-            selected=selected_uids,
-        )
-        # TODO: is it wrong to write the manifest here? I think it's right...
-        self.write_manifest()
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):

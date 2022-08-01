@@ -47,6 +47,25 @@ class TestDeferState(DBTIntegrationTest):
         os.makedirs('state')
         shutil.copyfile('target/manifest.json', 'state/manifest.json')
 
+    def run_and_compile_defer(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+        assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['test'])
+        assert len(results) == 2
+
+        # copy files
+        self.copy_state()
+
+        # defer test, it succeeds
+        results, success = self.run_dbt_and_check(['compile', '--state', 'state', '--defer'])
+        self.assertEqual(len(results.results), 6)
+        self.assertEqual(results.results[0].node.name, "seed")
+        self.assertTrue(success)        
+
     def run_and_snapshot_defer(self):
         results = self.run_dbt(['seed'])
         assert len(results) == 1
@@ -195,3 +214,7 @@ class TestDeferState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_state_snapshot_defer(self):
         self.run_and_snapshot_defer()
+
+    @use_profile('postgres')
+    def test_postgres_state_compile_defer(self):
+        self.run_and_compile_defer()
