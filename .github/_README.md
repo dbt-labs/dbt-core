@@ -1,3 +1,7 @@
+<!-- GitHub will publish this readme on the main repo page if the name is `README.md` so we've added the leading underscore to prevent this -->
+<!-- Do not rename this file `README.md` -->
+<!-- See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes -->
+
 ## What are GitHub Actions?
 
 GitHub Actions are used for many different purposes.  We use them to run tests in CI, validate PRs are in an expected state, and automate processes.
