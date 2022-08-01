@@ -1212,6 +1212,13 @@ class ProviderContext(ManifestContext):
             # If this is compiling, do not save because it's irrelevant to parsing.
             if self.model and not hasattr(self.model, "compiled"):
                 self.manifest.env_vars[var] = return_value
+
+                # TODO: fix logic - hack for now to check if this is where to store it
+                # if var in os.environ:
+                #     self.manifest.env_vars[var] = return_value
+                # elif default is not None:
+                #     self.manifest.env_vars[var] = "DEFAULT"  # to fix partial parsing bug, add details
+
                 # hooks come from dbt_project.yml which doesn't have a real file_id
                 if self.model.file_id in self.manifest.files:
                     source_file = self.manifest.files[self.model.file_id]
@@ -1535,7 +1542,14 @@ class TestContext(ProviderContext):
         if return_value is not None:
             # Save the env_var value in the manifest and the var name in the source_file
             if self.model:
-                self.manifest.env_vars[var] = return_value
+                # self.manifest.env_vars[var] = return_value
+                # TODO: fix logic - hack for now to check if this is where to store it
+                if var in os.environ:
+                    self.manifest.env_vars[var] = return_value
+                elif default is not None:
+                    self.manifest.env_vars[
+                        var
+                    ] = "DEFAULT"  # to fix partial parsing bug, add details
                 # the "model" should only be test nodes, but just in case, check
                 # TODO CT-211
                 if self.model.resource_type == NodeType.Test and self.model.file_key_name:  # type: ignore[union-attr] # noqa

@@ -957,10 +957,13 @@ class PartialParsing:
         delete_vars = []
         # Check whether the env_var has changed and add it to
         # an unchanged or changed list
+        breakpoint()
         for env_var in self.saved_manifest.env_vars:
             prev_value = self.saved_manifest.env_vars[env_var]
+            # TODO: how can we access if this has a default ?
             current_value = os.getenv(env_var)
             if current_value is None:
+                # TODO: check if there's a default
                 # env_var no longer set, remove from manifest
                 delete_vars.append(env_var)
             if prev_value == current_value:

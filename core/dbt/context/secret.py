@@ -43,7 +43,13 @@ class SecretContext(BaseContext):
             # if it's a 'secret' env var, we shouldn't even get here
             # but just to be safe — don't save secrets
             if not var.startswith(SECRET_ENV_PREFIX):
-                self.env_vars[var] = return_value
+                # self.env_vars[var] = return_value
+
+                # TODO: fix logic - hack for now to check if this is where to store it
+                if var in os.environ:
+                    self.env_vars[var] = return_value
+                elif default is not None:
+                    self.env_vars[var] = "DEFAULT"  # to fix partial parsing bug, add details
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"

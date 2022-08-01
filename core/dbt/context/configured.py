@@ -94,7 +94,16 @@ class SchemaYamlContext(ConfiguredContext):
 
         if return_value is not None:
             if self.schema_yaml_vars:
-                self.schema_yaml_vars.env_vars[var] = return_value
+                # self.schema_yaml_vars.env_vars[var] = return_value
+
+                # TODO: fix logic - hack for now to check if this is where to store it
+                if var in os.environ:
+                    self.schema_yaml_vars.env_vars[var] = return_value
+                elif default is not None:
+                    self.schema_yaml_vars.env_vars[
+                        var
+                    ] = "DEFAULT"  # to fix partial parsing bug, add details
+
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
