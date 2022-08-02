@@ -5,10 +5,15 @@ from dbt.tests.util import run_dbt, get_manifest, write_file
 
 from tests.functional.configs.fixtures import BaseConfigProject
 
+from hologram import ValidationError
+
+
 CUSTOM_NODE_COLOR_MODEL_LEVEL = "red"
 CUSTOM_NODE_COLOR_SCHEMA_LEVEL = "blue"
-CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT = "green"
+CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT = "#121212"
 CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER = "purple"
+CUSTOM_NODE_COLOR_INVALID_HEX = '"#xxx111"'
+CUSTOM_NODE_COLOR_INVALID_NAME = "notacolor"
 
 # F strings are a pain here so replacing XXX with the config above instead
 models__custom_node_color__model_sql = """
@@ -59,6 +64,43 @@ models:
         show: True
 """.format(
     CUSTOM_NODE_COLOR_SCHEMA_LEVEL
+)
+
+# To check that incorect configs are raising errors
+models__non_custom_node_color_invalid_config_docs__schema_yml = """
+version: 2
+
+models:
+  - name: non_custom_node_color
+    description: "This is a model description"
+    config:
+      docs:
+        node_color: {}
+        show: True
+""".format(
+    CUSTOM_NODE_COLOR_INVALID_HEX
+)
+
+
+models__non_custom_node_color_invalid_docs__schema_yml = """
+version: 2
+
+models:
+  - name: non_custom_node_color
+    description: "This is a model description"
+    docs:
+      node_color: {}
+      show: True
+""".format(
+    CUSTOM_NODE_COLOR_INVALID_NAME
+)
+
+models__custom_node_color_invalid_hex__model_sql = """
+{{ config(materialized='view', docs={"show": True, "node_color": XXX }) }}
+
+select 1 as id
+""".replace(
+    "XXX", CUSTOM_NODE_COLOR_INVALID_HEX
 )
 
 
@@ -350,3 +392,86 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         # check node_color config is in the right spots for each model
         assert node_color_actual_config == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
         assert node_color_actual_docs == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
+
+
+# validation than an incorrect color in dbt_project.yml raises an exception
+class TestCustomNodeColorIncorrectColorProject:
+    @pytest.fixture(scope="class")
+    def models(self):  # noqa: F811
+        return {"non_custom_node_color.sql": models__non_custom_node_color__model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "models": {
+                "test": {"+docs": {"node_color": CUSTOM_NODE_COLOR_INVALID_NAME, "show": False}}
+            }
+        }
+
+    def test_invalid_hex_project(
+        self,
+        project,
+    ):
+        with pytest.raises(ValidationError):
+            run_dbt(["compile"])
+
+
+# validatio than an incorrect color in the config block raises an exception
+class TestCustomNodeColorIncorrectColorModelConfig:
+    @pytest.fixture(scope="class")
+    def models(self):  # noqa: F811
+        return {
+            "custom_node_color_invalid_hex.sql": models__custom_node_color_invalid_hex__model_sql
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"+docs": {"node_color": "blue", "show": False}}}
+
+    def test_invalid_hex_config_block(
+        self,
+        project,
+    ):
+        with pytest.raises(ValidationError):
+            run_dbt(["compile"])
+
+
+# validatio than an incorrect color in the YML file raises an exception
+class TestCustomNodeColorIncorrectColorYMLConfig:
+    @pytest.fixture(scope="class")
+    def models(self):  # noqa: F811
+        return {"non_custom_node_color.sql": models__non_custom_node_color__model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"+docs": {"node_color": "blue", "show": False}}}
+
+    def test__docs_not_under_config(
+        self,
+        project,
+    ):
+
+        write_file(
+            models__non_custom_node_color_invalid_docs__schema_yml,
+            project.project_root,
+            "models",
+            "invalid_custom_color.yml",
+        )
+
+        with pytest.raises(ValidationError):
+            run_dbt(["compile"])
+
+    def test__docs_under_config(
+        self,
+        project,
+    ):
+
+        write_file(
+            models__non_custom_node_color_invalid_config_docs__schema_yml,
+            project.project_root,
+            "models",
+            "invalid_custom_color.yml",
+        )
+
+        with pytest.raises(ValidationError):
+            run_dbt(["compile"])
