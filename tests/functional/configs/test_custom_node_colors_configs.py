@@ -7,7 +7,6 @@ from tests.functional.configs.fixtures import BaseConfigProject
 
 from hologram import ValidationError
 
-
 CUSTOM_NODE_COLOR_MODEL_LEVEL = "red"
 CUSTOM_NODE_COLOR_SCHEMA_LEVEL = "blue"
 CUSTOM_NODE_COLOR_PROJECT_LEVEL_ROOT = "#121212"
@@ -80,7 +79,6 @@ models:
 """.format(
     CUSTOM_NODE_COLOR_INVALID_HEX
 )
-
 
 models__non_custom_node_color_invalid_docs__schema_yml = """
 version: 2
@@ -263,81 +261,9 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
 
     # validation that docs: show configured in model file supercedes dbt_project.yml
     def test__model_show_overrides_dbt_project(
-        node_color_actual_docs = my_model_docs.node_color
-
-        # check node_color config is in the right spots for each model
-        assert node_color_actual_config == CUSTOM_NODE_COLOR_MODEL_LEVEL
-        assert node_color_actual_docs == CUSTOM_NODE_COLOR_MODEL_LEVEL
-
-    # validation that model level node_color configs supercede schema.yml
-    def test__model_override_schema(
         self,
         project,
     ):
-
-        write_file(
-            models__custom_node_color__model_sql,
-            project.project_root,
-            "models",
-            "custom_color_model.sql",
-        )
-
-        write_file(
-            models__custom_node_color__schema_yml,
-            project.project_root,
-            "models",
-            "custom_color_schema.yml",
-        )
-
-        run_dbt(["compile"])
-        manifest = get_manifest(project.project_root)
-        model_id = "model.test.custom_color_model"
-        my_model_config = manifest.nodes[model_id].config
-        my_model_docs = manifest.nodes[model_id].docs
-
-        node_color_actual_config = my_model_config["docs"].node_color
-        node_color_actual_docs = my_model_docs.node_color
-
-        # check node_color config is in the right spots for each model
-        assert node_color_actual_config == CUSTOM_NODE_COLOR_MODEL_LEVEL
-        assert node_color_actual_docs == CUSTOM_NODE_COLOR_MODEL_LEVEL
-
-    # validation that node_color configured on subdirectories in dbt_project.yml supercedes project root
-    def test__project_folder_override_project_root(
-        self,
-        project,
-    ):
-
-        # create subdirectory for non custom color model to validate dbt_project.yml settings
-        if not os.path.exists("models/subdirectory"):
-            os.mkdir("models/subdirectory")
-
-        write_file(
-            models__non_custom_node_color__model_sql,
-            project.project_root,
-            "models/subdirectory",
-            "non_custom_color_model_subdirectory.sql",
-        )
-
-        run_dbt(["compile"])
-        manifest = get_manifest(project.project_root)
-        model_id = "model.test.non_custom_color_model_subdirectory"
-        my_model_config = manifest.nodes[model_id].config
-        my_model_docs = manifest.nodes[model_id].docs
-
-        node_color_actual_config = my_model_config["docs"].node_color
-        node_color_actual_docs = my_model_docs.node_color
-
-        # check node_color config is in the right spots for each model
-        assert node_color_actual_config == CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER
-        assert node_color_actual_docs == CUSTOM_NODE_COLOR_PROJECT_LEVEL_FOLDER
-
-    # validation that node_color configured in schema.yml supercedes dbt_project.yml
-    def test__schema_override_project(
-        self,
-        project,
-    ):
-        pass
 
         write_file(
             models__show_docs_false__model_sql,
@@ -364,34 +290,6 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         # in this case show should be True since the schema.yml overrides the dbt_project.yml
         assert show_actual_config
         assert show_actual_docs
-
-        write_file(
-            models__non_custom_node_color__model_sql,
-            project.project_root,
-            "models",
-            "non_custom_color_model.sql",
-        )
-
-        write_file(
-            models__non_custom_node_color__schema_yml,
-            project.project_root,
-            "models",
-            "non_custom_color_schema.yml",
-        )
-
-        run_dbt(["compile"])
-        manifest = get_manifest(project.project_root)
-
-        model_id = "model.test.non_custom_color_model"
-        my_model_config = manifest.nodes[model_id].config
-        my_model_docs = manifest.nodes[model_id].docs
-
-        node_color_actual_config = my_model_config["docs"].node_color
-        node_color_actual_docs = my_model_docs.node_color
-
-        # check node_color config is in the right spots for each model
-        assert node_color_actual_config == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
-        assert node_color_actual_docs == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
 
 
 # validation that an incorrect color in dbt_project.yml raises an exception
