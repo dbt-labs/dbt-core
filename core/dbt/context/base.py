@@ -14,7 +14,7 @@ from dbt.exceptions import (
     raise_parsing_error,
     disallow_secret_env_var,
 )
-from dbt.logger import SECRET_ENV_PREFIX
+from dbt.logger import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import MacroEventInfo, MacroEventDebug
 from dbt.version import __version__ as dbt_version
@@ -305,13 +305,14 @@ class BaseContext(metaclass=ContextMeta):
             return_value = default
 
         if return_value is not None:
-            # self.env_vars[var] = return_value
+            # If the environment variable is set from a default, store a string indicating
+            # that so we can skip partial parsing.  Otherwise the file will be scheduled for
+            # reparsing. If the default changes, the file will have been updated and therefore
+            # will be scheduled for reparsing anyways.
+            self.env_vars.env_vars[var] = (
+                return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+            )
 
-            # TODO: fix logic - hack for now to check if this is where to store it
-            if var in os.environ:
-                self.env_vars[var] = return_value
-            elif default is not None:
-                self.env_vars[var] = "DEFAULT"  # to fix partial parsing bug, add details
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
