@@ -394,7 +394,7 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         assert node_color_actual_docs == CUSTOM_NODE_COLOR_SCHEMA_LEVEL
 
 
-# validation than an incorrect color in dbt_project.yml raises an exception
+# validation that an incorrect color in dbt_project.yml raises an exception
 class TestCustomNodeColorIncorrectColorProject:
     @pytest.fixture(scope="class")
     def models(self):  # noqa: F811
@@ -408,7 +408,7 @@ class TestCustomNodeColorIncorrectColorProject:
             }
         }
 
-    def test_invalid_hex_project(
+    def test__invalid_color_project(
         self,
         project,
     ):
@@ -416,7 +416,7 @@ class TestCustomNodeColorIncorrectColorProject:
             run_dbt(["compile"])
 
 
-# validatio than an incorrect color in the config block raises an exception
+# validation that an incorrect color in the config block raises an exception
 class TestCustomNodeColorIncorrectColorModelConfig:
     @pytest.fixture(scope="class")
     def models(self):  # noqa: F811
@@ -428,7 +428,7 @@ class TestCustomNodeColorIncorrectColorModelConfig:
     def project_config_update(self):
         return {"models": {"+docs": {"node_color": "blue", "show": False}}}
 
-    def test_invalid_hex_config_block(
+    def test__invalid_color_config_block(
         self,
         project,
     ):
@@ -436,7 +436,7 @@ class TestCustomNodeColorIncorrectColorModelConfig:
             run_dbt(["compile"])
 
 
-# validatio than an incorrect color in the YML file raises an exception
+# validation that an incorrect color in the YML file raises an exception
 class TestCustomNodeColorIncorrectColorYMLConfig:
     @pytest.fixture(scope="class")
     def models(self):  # noqa: F811
@@ -446,7 +446,7 @@ class TestCustomNodeColorIncorrectColorYMLConfig:
     def project_config_update(self):
         return {"models": {"+docs": {"node_color": "blue", "show": False}}}
 
-    def test__docs_not_under_config(
+    def test__invalid_color_docs_not_under_config(
         self,
         project,
     ):
@@ -461,7 +461,7 @@ class TestCustomNodeColorIncorrectColorYMLConfig:
         with pytest.raises(ValidationError):
             run_dbt(["compile"])
 
-    def test__docs_under_config(
+    def test__invalid_color_docs_under_config(
         self,
         project,
     ):
