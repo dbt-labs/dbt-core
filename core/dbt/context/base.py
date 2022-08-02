@@ -309,9 +309,7 @@ class BaseContext(metaclass=ContextMeta):
             # that so we can skip partial parsing.  Otherwise the file will be scheduled for
             # reparsing. If the default changes, the file will have been updated and therefore
             # will be scheduled for reparsing anyways.
-            self.env_vars.env_vars[var] = (
-                return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
-            )
+            self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
 
             return return_value
         else:
