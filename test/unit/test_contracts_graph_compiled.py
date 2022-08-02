@@ -197,6 +197,7 @@ def basic_compiled_dict():
             'meta': {},
             'grants': {},
             'packages': [],
+            'docs': {'show': True},
         },
         'docs': {'show': True},
         'columns': {},
