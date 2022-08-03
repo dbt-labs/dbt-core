@@ -3,8 +3,8 @@ from typing import Any, Dict, Optional
 
 from .base import BaseContext, contextmember
 
+from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.exceptions import raise_parsing_error
-from dbt.logger import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 
 
 SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"

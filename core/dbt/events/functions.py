@@ -3,9 +3,10 @@ import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
 from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
 import dbt.flags as flags
+from dbt.constants import SECRET_ENV_PREFIX
 
 # TODO this will need to move eventually
-from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
+from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
 import json
 import io

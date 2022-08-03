@@ -21,7 +21,7 @@ from dbt.events.types import (
     PartialParsingDeletedExposure,
     PartialParsingDeletedMetric,
 )
-from dbt.logger import DEFAULT_ENV_PLACEHOLDER
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.node_types import NodeType
 
 

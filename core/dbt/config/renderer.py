@@ -3,13 +3,13 @@ import re
 import os
 
 from dbt.clients.jinja import get_rendered, catch_jinja
+from dbt.constants import SECRET_ENV_PREFIX
 from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.contracts.connection import HasCredentials
 from dbt.exceptions import DbtProjectError, CompilationException, RecursionException
 from dbt.utils import deep_map_render
-from dbt.logger import SECRET_ENV_PREFIX
 
 
 Keypath = Tuple[Union[str, int], ...]

@@ -22,7 +22,7 @@ from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
 from .context_config import ContextConfig
-from dbt.logger import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
+from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
