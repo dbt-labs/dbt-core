@@ -1,10 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
-from dbt.exceptions import ParsingException
-
-from tests.functional.metrics.fixture_metrics import mock_purchase_data_csv
-
+from dbt.contracts.graph.metrics import ResolvedMetricReference
 
 metrics__yml = """
 version: 2
@@ -63,6 +60,7 @@ union all
 select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
 """
 
+
 class TestMetricHelperFunctions:
     @pytest.fixture(scope="class")
     def models(self):
@@ -77,18 +75,16 @@ class TestMetricHelperFunctions:
     ):
 
         # initial parse
-        results = run_dbt(["compile"])
+        run_dbt(["compile"])
 
         # make sure all the metrics are in the manifest
         manifest = get_manifest(project.project_root)
-        testing_metric = manifest.metrics["metric.test.average_tenure_plus_one"]
-        full_metric_dependency = testing_metric.full_metric_dependency()
+        parsed_metric = manifest.metrics["metric.test.average_tenure_plus_one"]
+        testing_metric = ResolvedMetricReference(parsed_metric, manifest, None)
+        full_metric_dependency = set(testing_metric.full_metric_dependency())
 
-        expected_full_metric_dependency = [
-            "average_tenure_plus_one",
-            "average_tenure",
-            "collective_tenure",
-            "number_of_people"
-        ]
+        expected_full_metric_dependency = set(
+            ["average_tenure_plus_one", "average_tenure", "collective_tenure", "number_of_people"]
+        )
 
         assert full_metric_dependency == expected_full_metric_dependency
