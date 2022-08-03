@@ -6,6 +6,7 @@ from dbt import flags
 from dbt import tracking
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
+from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import (
     CompilationException,
@@ -14,7 +15,6 @@ from dbt.exceptions import (
     raise_parsing_error,
     disallow_secret_env_var,
 )
-from dbt.logger import SECRET_ENV_PREFIX
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import MacroEventInfo, MacroEventDebug
 from dbt.version import __version__ as dbt_version
@@ -305,7 +305,12 @@ class BaseContext(metaclass=ContextMeta):
             return_value = default
 
         if return_value is not None:
-            self.env_vars[var] = return_value
+            # If the environment variable is set from a default, store a string indicating
+            # that so we can skip partial parsing.  Otherwise the file will be scheduled for
+            # reparsing. If the default changes, the file will have been updated and therefore
+            # will be scheduled for reparsing anyways.
+            self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"

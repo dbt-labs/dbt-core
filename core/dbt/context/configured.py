@@ -1,8 +1,8 @@
 import os
 from typing import Any, Dict, Optional
 
+from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.connection import AdapterRequiredConfig
-from dbt.logger import SECRET_ENV_PREFIX
 from dbt.node_types import NodeType
 from dbt.utils import MultiDict
 
@@ -94,7 +94,14 @@ class SchemaYamlContext(ConfiguredContext):
 
         if return_value is not None:
             if self.schema_yaml_vars:
-                self.schema_yaml_vars.env_vars[var] = return_value
+                # If the environment variable is set from a default, store a string indicating
+                # that so we can skip partial parsing.  Otherwise the file will be scheduled for
+                # reparsing. If the default changes, the file will have been updated and therefore
+                # will be scheduled for reparsing anyways.
+                self.schema_yaml_vars.env_vars[var] = (
+                    return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
+                )
+
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
