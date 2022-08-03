@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   changelog:
-    uses: dbt-labs/actions/.github/workflows/changelog-existence.yml@er/changelog-check
+    uses: dbt-labs/actions/.github/workflows/changelog-existence.yml@main
     with:
       changelog_comment: 'Thank you for your pull request! We could not find a changelog entry for this change. For details on how to document a change, see [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md#adding-changelog-entry).'
       skip_label: 'Skip Changelog'
