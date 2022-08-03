@@ -1,9 +1,6 @@
 import pytest
-import os
 
-from dbt.tests.util import run_dbt, get_manifest, write_file
-
-from tests.functional.configs.fixtures import BaseConfigProject
+from dbt.tests.util import run_dbt, get_manifest
 
 from hologram import ValidationError
 
@@ -102,7 +99,7 @@ select 1 as id
 )
 
 
-class TestCustomNodeColorModelvsProject(BaseConfigProject):
+class BaseCustomNodeColorModelvsProject:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -119,17 +116,14 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
             }
         }
 
-    # validation that model level node_color configs supercede dbt_project.yml
-    def test__model_override_project(
-        self,
-        project,
-    ):
-        write_file(
-            models__custom_node_color__model_sql,
-            project.project_root,
-            "models",
-            "custom_color_model.sql",
-        )
+
+# validation that model level node_color configs supercede dbt_project.yml
+class TestModelLevelProjectColorConfigs(BaseCustomNodeColorModelvsProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"custom_color_model.sql": models__custom_node_color__model_sql}
+
+    def test__model_override_project(self, project):
 
         run_dbt(["compile"])
         manifest = get_manifest(project.project_root)
@@ -148,25 +142,17 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         assert not show_actual_config
         assert not show_actual_docs
 
-    # validation that model level node_color configs supercede schema.yml
-    def test__model_override_schema(
-        self,
-        project,
-    ):
 
-        write_file(
-            models__custom_node_color__model_sql,
-            project.project_root,
-            "models",
-            "custom_color_model.sql",
-        )
+# validation that model level node_color configs supercede schema.yml
+class TestModelLevelSchemaColorConfigs(BaseCustomNodeColorModelvsProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "custom_color_model.sql": models__custom_node_color__model_sql,
+            "custom_color_schema.yml": models__custom_node_color__schema_yml,
+        }
 
-        write_file(
-            models__custom_node_color__schema_yml,
-            project.project_root,
-            "models",
-            "custom_color_schema.yml",
-        )
+    def test__model_override_schema(self, project):
 
         run_dbt(["compile"])
         manifest = get_manifest(project.project_root)
@@ -185,23 +171,18 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         assert not show_actual_config
         assert not show_actual_docs
 
-    # validation that node_color configured on subdirectories in dbt_project.yml supercedes project root
-    def test__project_folder_override_project_root(
-        self,
-        project,
-    ):
 
-        # create subdirectory for non custom color model to validate dbt_project.yml settings
-        if not os.path.exists("models/subdirectory"):
-            os.mkdir("models/subdirectory")
+# validation that node_color configured on subdirectories in dbt_project.yml supercedes project root
+class TestSubdirectoryColorConfigs(BaseCustomNodeColorModelvsProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "subdirectory": {
+                "non_custom_color_model_subdirectory.sql": models__non_custom_node_color__model_sql
+            }
+        }
 
-        write_file(
-            models__non_custom_node_color__model_sql,
-            project.project_root,
-            "models/subdirectory",
-            "non_custom_color_model_subdirectory.sql",
-        )
-
+    def test__project_folder_override_project_root(self, project):
         run_dbt(["compile"])
         manifest = get_manifest(project.project_root)
         model_id = "model.test.non_custom_color_model_subdirectory"
@@ -220,25 +201,20 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         assert show_actual_config
         assert show_actual_docs
 
-    # validation that node_color configured in schema.yml supercedes dbt_project.yml
+
+# validation that node_color configured in schema.yml supercedes dbt_project.yml
+class TestSchemaOverProjectColorConfigs(BaseCustomNodeColorModelvsProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "non_custom_color_model.sql": models__non_custom_node_color__model_sql,
+            "non_custom_color_schema.yml": models__non_custom_node_color__schema_yml,
+        }
+
     def test__schema_override_project(
         self,
         project,
     ):
-
-        write_file(
-            models__non_custom_node_color__model_sql,
-            project.project_root,
-            "models",
-            "non_custom_color_model.sql",
-        )
-
-        write_file(
-            models__non_custom_node_color__schema_yml,
-            project.project_root,
-            "models",
-            "non_custom_color_schema.yml",
-        )
 
         run_dbt(["compile"])
         manifest = get_manifest(project.project_root)
@@ -259,18 +235,17 @@ class TestCustomNodeColorModelvsProject(BaseConfigProject):
         assert show_actual_config
         assert show_actual_docs
 
-    # validation that docs: show configured in model file supercedes dbt_project.yml
+
+# validation that docs: show configured in model file supercedes dbt_project.yml
+class TestModelOverProjectColorConfigs(BaseCustomNodeColorModelvsProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"show_docs_override_model.sql": models__show_docs_false__model_sql}
+
     def test__model_show_overrides_dbt_project(
         self,
         project,
     ):
-
-        write_file(
-            models__show_docs_false__model_sql,
-            project.project_root,
-            "models",
-            "show_docs_override_model.sql",
-        )
 
         run_dbt(["compile"])
         manifest = get_manifest(project.project_root)
@@ -317,7 +292,7 @@ class TestCustomNodeColorIncorrectColorProject:
 # validation that an incorrect color in the config block raises an exception
 class TestCustomNodeColorIncorrectColorModelConfig:
     @pytest.fixture(scope="class")
-    def models(self):  # noqa: F811
+    def models(self):
         return {
             "custom_node_color_invalid_hex.sql": models__custom_node_color_invalid_hex__model_sql
         }
@@ -335,10 +310,13 @@ class TestCustomNodeColorIncorrectColorModelConfig:
 
 
 # validation that an incorrect color in the YML file raises an exception
-class TestCustomNodeColorIncorrectColorYMLConfig:
+class TestCustomNodeColorIncorrectColorNameYMLConfig:
     @pytest.fixture(scope="class")
-    def models(self):  # noqa: F811
-        return {"non_custom_node_color.sql": models__non_custom_node_color__model_sql}
+    def models(self):
+        return {
+            "non_custom_node_color.sql": models__non_custom_node_color__model_sql,
+            "invalid_custom_color.yml": models__non_custom_node_color_invalid_docs__schema_yml,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -348,28 +326,21 @@ class TestCustomNodeColorIncorrectColorYMLConfig:
         self,
         project,
     ):
-
-        write_file(
-            models__non_custom_node_color_invalid_docs__schema_yml,
-            project.project_root,
-            "models",
-            "invalid_custom_color.yml",
-        )
-
         with pytest.raises(ValidationError):
             run_dbt(["compile"])
+
+
+class TestCustomNodeColorIncorrectColorHEXYMLConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "non_custom_node_color.sql": models__non_custom_node_color__model_sql,
+            "invalid_custom_color.yml": models__non_custom_node_color_invalid_config_docs__schema_yml,
+        }
 
     def test__invalid_color_docs_under_config(
         self,
         project,
     ):
-
-        write_file(
-            models__non_custom_node_color_invalid_config_docs__schema_yml,
-            project.project_root,
-            "models",
-            "invalid_custom_color.yml",
-        )
-
         with pytest.raises(ValidationError):
             run_dbt(["compile"])
