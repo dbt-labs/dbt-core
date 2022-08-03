@@ -143,19 +143,21 @@ Some triggers of note that we use:
 
 - Print out all variables you will reference as the first step of a job.  This allows for easier debugging.  The first job should log all inputs.  Subsequent jobs should reference outputs of other jobs, if present.
 
-  When possible, generate variables at the top of your workflow in a single place to reference later.  This is not always strictly possible since you may generate a value to be used lated mid-workflow.
+  When possible, generate variables at the top of your workflow in a single place to reference later.  This is not always strictly possible since you may generate a value to be used later mid-workflow.
+
+  Be sure to use quotes around these logs so special characters are not interpreted.
 
   ```yaml
   job1:
-    - name: [DEBUG] Print Variables
+    - name: "[DEBUG] Print Variables"
       run: |
         echo "all variables defined as inputs"
-        echo The last commit sha in the release: ${{ inputs.sha }}
-        echo The release version number:         ${{ inputs.version_number }}
-        echo The changelog_path:                 ${{ inputs.changelog_path }}
-        echo The build_script_path:              ${{ inputs.build_script_path }}
-        echo The s3_bucket_name:                 ${{ inputs.s3_bucket_name }}
-        echo The package_test_command:           ${{ inputs.package_test_command }}
+        echo "The last commit sha in the release: ${{ inputs.sha }}"
+        echo "The release version number:         ${{ inputs.version_number }}"
+        echo "The changelog_path:                 ${{ inputs.changelog_path }}"
+        echo "The build_script_path:              ${{ inputs.build_script_path }}"
+        echo "The s3_bucket_name:                 ${{ inputs.s3_bucket_name }}"
+        echo "The package_test_command:           ${{ inputs.package_test_command }}"
       
     # collect all the variables that need to be used in subsequent jobs
     - name: Set Variables
@@ -167,7 +169,7 @@ Some triggers of note that we use:
 
   job2:
     needs: [job1]
-      - name: '[DEBUG] Print Variables'
+      - name: "[DEBUG] Print Variables"
       run: |
         echo "all variables defined in job1 > Set Variables > outputs"
         echo "important_path: ${{ needs.job1.outputs.important_path }}"
