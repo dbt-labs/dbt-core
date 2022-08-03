@@ -1,0 +1,8 @@
+kind: Features
+body: Make `docs` configurable in `dbt_project.yml` and add a `node_color` attribute
+  to change the color of nodes in the DAG
+time: 2022-08-03T10:42:30.60624+02:00
+custom:
+  Author: matt-winkler sungchun12 b-per
+  Issue: "5333"
+  PR: "5397"

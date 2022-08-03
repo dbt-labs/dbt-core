@@ -17,7 +17,7 @@ from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
-from dbt.contracts.graph.unparsed import UnparsedNode
+from dbt.contracts.graph.unparsed import UnparsedNode, Docs
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
@@ -290,6 +290,22 @@ class ConfiguredParser(
         # compatibility with earlier node-only config.
         if "meta" in config_dict and config_dict["meta"]:
             parsed_node.meta = config_dict["meta"]
+
+        # If we have docs in the config, merge with the node level, for backwards
+        # compatibility with earlier node-only config.
+        if "docs" in config_dict and config_dict["docs"]:
+            # we set show at the value of the config if it is set, otherwize, inherit the value
+            docs_show = (
+                config_dict["docs"]["show"]
+                if "show" in config_dict["docs"]
+                else parsed_node.docs.show
+            )
+            if "node_color" in config_dict["docs"]:
+                parsed_node.docs = Docs(
+                    show=docs_show, node_color=config_dict["docs"]["node_color"]
+                )
+            else:
+                parsed_node.docs = Docs(show=docs_show)
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

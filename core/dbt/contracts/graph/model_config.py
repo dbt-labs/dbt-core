@@ -7,7 +7,8 @@ from dbt.dataclass_schema import (
     ValidationError,
     register_pattern,
 )
-from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
+from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
+from dbt.contracts.graph.utils import validate_color
 from dbt.exceptions import InternalException, CompilationException
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
@@ -285,7 +286,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
     # 'meta' moved here from node
     mergebehavior = {
         "append": ["pre-hook", "pre_hook", "post-hook", "post_hook", "tags"],
-        "update": ["quoting", "column_types", "meta"],
+        "update": ["quoting", "column_types", "meta", "docs"],
         "dict_key_append": ["grants"],
     }
 
@@ -465,6 +466,20 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=list,
         metadata=MergeBehavior.Append.meta(),
     )
+    docs: Docs = field(
+        default_factory=Docs,
+        metadata=MergeBehavior.Update.meta(),
+    )
+
+    # we validate that node_color has a suitable value to prevent dbt-docs from crashing
+    def __post_init__(self):
+        if self.docs.node_color:
+            node_color = self.docs.node_color
+            if not validate_color(node_color):
+                raise ValidationError(
+                    f"Invalid color name for docs.node_color: {node_color}. "
+                    "It is neither a valid HTML color name nor a valid HEX code."
+                )
 
     @classmethod
     def __pre_deserialize__(cls, data):

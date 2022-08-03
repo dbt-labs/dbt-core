@@ -33,6 +33,7 @@ def get_rendered_model_config(**updates):
         "grants": {},
         "packages": [],
         "incremental_strategy": None,
+        "docs": {"node_color": None, "show": True},
     }
     result.update(updates)
     return result
@@ -63,6 +64,7 @@ def get_rendered_seed_config(**updates):
         "grants": {},
         "packages": [],
         "incremental_strategy": None,
+        "docs": {"node_color": None, "show": True},
     }
     result.update(updates)
     return result
@@ -97,6 +99,7 @@ def get_rendered_snapshot_config(**updates):
         "grants": {},
         "packages": [],
         "incremental_strategy": None,
+        "docs": {"node_color": None, "show": True},
     }
     result.update(updates)
     return result
@@ -197,8 +200,10 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
 
     model_database = project.database
 
-    model_config = get_rendered_model_config()
-    second_config = get_rendered_model_config(schema="test")
+    model_config = get_rendered_model_config(docs={"node_color": None, "show": False})
+    second_config = get_rendered_model_config(
+        schema="test", docs={"node_color": None, "show": False}
+    )
 
     unrendered_model_config = get_unrendered_model_config(materialized="view")
 
@@ -299,7 +304,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     },
                 },
                 "patch_path": "test://" + model_schema_yml_path,
-                "docs": {"show": False},
+                "docs": {"node_color": None, "show": False},
                 "compiled": True,
                 "compiled_code": ANY,
                 "extra_ctes_injected": True,
@@ -381,7 +386,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     },
                 },
                 "patch_path": "test://" + model_schema_yml_path,
-                "docs": {"show": False},
+                "docs": {"node_color": None, "show": False},
                 "compiled": True,
                 "compiled_code": ANY,
                 "extra_ctes_injected": True,
@@ -463,7 +468,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "tags": [],
                     },
                 },
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "compiled": True,
                 "compiled_code": "",
                 "extra_ctes_injected": True,
@@ -507,7 +512,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "tags": [],
                 "meta": {},
                 "unique_id": "test.test.not_null_model_id.d01cc630e6",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "compiled": True,
                 "compiled_code": AnyStringWith("where id is null"),
                 "extra_ctes_injected": True,
@@ -540,7 +545,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "nodes": ["seed.test.seed"],
                 },
                 "description": "",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "extra_ctes": [],
                 "extra_ctes_injected": True,
                 "fqn": ["test", "snapshot_seed", "snapshot_seed"],
@@ -605,7 +610,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "tags": [],
                 "meta": {},
                 "unique_id": "test.test.test_nothing_model_.5d38568946",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "compiled": True,
                 "compiled_code": AnyStringWith("select 0"),
                 "extra_ctes_injected": True,
@@ -656,7 +661,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "tags": [],
                 "meta": {},
                 "unique_id": "test.test.unique_model_id.67b76558ff",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "compiled": True,
                 "compiled_code": AnyStringWith("count(*)"),
                 "extra_ctes_injected": True,
@@ -860,7 +865,7 @@ def expected_references_manifest(project):
                 "depends_on": {"macros": [], "nodes": ["source.test.my_source.my_table"]},
                 "deferred": False,
                 "description": "",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_copy"],
                 "metrics": [],
                 "name": "ephemeral_copy",
@@ -914,7 +919,7 @@ def expected_references_manifest(project):
                 "depends_on": {"macros": [], "nodes": ["model.test.ephemeral_copy"]},
                 "deferred": False,
                 "description": "A summmary table of the ephemeral copy of the seed data",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_summary"],
                 "metrics": [],
                 "name": "ephemeral_summary",
@@ -970,7 +975,7 @@ def expected_references_manifest(project):
                 "depends_on": {"macros": [], "nodes": ["model.test.ephemeral_summary"]},
                 "deferred": False,
                 "description": "A view of the summary of the ephemeral copy of the seed data",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "view_summary"],
                 "metrics": [],
                 "name": "view_summary",
@@ -1048,7 +1053,7 @@ def expected_references_manifest(project):
                 "depends_on": {"macros": [], "nodes": []},
                 "deferred": False,
                 "description": "The test seed",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "seed"],
                 "metrics": [],
                 "name": "seed",
@@ -1088,7 +1093,7 @@ def expected_references_manifest(project):
                 "deferred": False,
                 "depends_on": {"macros": [], "nodes": ["seed.test.seed"]},
                 "description": "",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "extra_ctes": [],
                 "extra_ctes_injected": True,
                 "fqn": ["test", "snapshot_seed", "snapshot_seed"],
@@ -1313,7 +1318,7 @@ def expected_references_manifest(project):
                 "depends_on": {"macros": []},
                 "created_at": ANY,
                 "description": "My custom test that I wrote that does nothing",
-                "docs": {"show": True},
+                "docs": {"node_color": None, "show": True},
                 "macro_sql": AnyStringWith("test nothing"),
                 "original_file_path": os.path.join("macros", "dummy_test.sql"),
                 "path": os.path.join("macros", "dummy_test.sql"),

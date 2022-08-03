@@ -74,6 +74,7 @@ def populated_node_config_dict():
         'meta': {},
         'grants': {},
         'packages': [],
+        'docs': {'show': True},
     }
 
 
@@ -156,6 +157,7 @@ def base_parsed_model_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'deferred': False,
@@ -256,6 +258,7 @@ def complex_parsed_model_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'docs': {'show': True},
@@ -455,6 +458,7 @@ def basic_parsed_seed_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'deferred': False,
@@ -557,6 +561,7 @@ def complex_parsed_seed_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'deferred': False,
@@ -817,6 +822,7 @@ def base_parsed_hook_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'docs': {'show': True},
@@ -895,6 +901,7 @@ def complex_parsed_hook_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'docs': {'show': True},
@@ -1246,6 +1253,7 @@ def basic_timestamp_snapshot_config_dict():
         'meta': {},
         'grants': {},
         'packages': [],
+        'docs': {'show': True},
     }
 
 
@@ -1281,6 +1289,7 @@ def complex_timestamp_snapshot_config_dict():
         'meta': {},
         'grants': {},
         'packages': [],
+        'docs': {'show': True},
     }
 
 
@@ -1340,6 +1349,7 @@ def basic_check_snapshot_config_dict():
         'meta': {},
         'grants': {},
         'packages': [],
+        'docs': {'show': True},
     }
 
 
@@ -1375,6 +1385,7 @@ def complex_set_snapshot_config_dict():
         'meta': {},
         'grants': {},
         'packages': [],
+        'docs': {'show': True},
     }
 
 
@@ -1484,6 +1495,7 @@ def basic_timestamp_snapshot_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'docs': {'show': True},
@@ -1626,6 +1638,7 @@ def basic_check_snapshot_dict():
             'on_schema_change': 'ignore',
             'meta': {},
             'grants': {},
+            'docs': {'show': True},
         'packages': [],
         },
         'docs': {'show': True},
