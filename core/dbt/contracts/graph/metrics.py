@@ -50,7 +50,7 @@ class ResolvedMetricReference(MetricReference):
     @classmethod
     def reverse_dag_parsing(cls, metric_node, manifest, metric_depth_count):
         if metric_node.type == "expression":
-            yield {metric_node.unique_id:metric_depth_count}
+            yield {metric_node.name:metric_depth_count}
             metric_depth_count = metric_depth_count+1
 
         for parent_unique_id in metric_node.depends_on.nodes:
