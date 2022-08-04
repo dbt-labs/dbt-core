@@ -1,0 +1,7 @@
+kind: Features
+body: Adding ResolvedMetricReference helper functions and tests
+time: 2022-08-04T12:09:36.202919-04:00
+custom:
+  Author: callum-mcdata
+  Issue: "5567"
+  PR: "5607"
