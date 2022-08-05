@@ -69,6 +69,8 @@ class SchemaYamlRenderer(BaseRenderer):
         elif self.key == "metrics":
             if keypath[0] == "sql":
                 return False
+            elif self._is_norender_key(keypath[0:]):
+                return False
         else:  # models, seeds, snapshots, analyses
             if self._is_norender_key(keypath[0:]):
                 return False
