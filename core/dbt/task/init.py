@@ -264,15 +264,15 @@ class InitTask(BaseTask):
         internal_package_names = {GLOBAL_PROJECT_NAME}
         available_adapters = list(_get_adapter_plugin_names())
         for adapter_name in available_adapters:
-            try:            
+            try:
                 internal_package_names.add(get_adapter_package_names(adapter_name))
-            except:
+            except dbt.exceptions.InternalException:
                 pass
         while not ProjectName.is_valid(name) or name in internal_package_names:
             if name:
                 click.echo(name + " is not a valid project name.")
             name = click.prompt("Enter a name for your project (letters, digits, underscore)")
-        
+
         return name
 
     def run(self):
