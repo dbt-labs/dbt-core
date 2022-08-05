@@ -101,3 +101,25 @@ class TestYamlRendering(unittest.TestCase):
         dct = renderer.render_data(dct)
         self.assertEqual(dct, expected)
 
+    def test__metrics(self):
+        context = {
+            "my_time_grains": "[day]"
+        }
+        renderer = SchemaYamlRenderer(context, 'metrics')
+
+        dct = {
+            "name": "my_source",
+            "description": "{{ docs('my_doc') }}",
+            "sql": "select {{ var('my_var') }} from my_table",
+            "time_grains": "{{ my_time_grains }}",
+        }
+        # We expect the sql and description will not be rendered, but
+        # other fields will be
+        expected = {
+            "name": "my_source",
+            "description": "{{ docs('my_doc') }}",
+            "sql": "select {{ var('my_var') }} from my_table",
+            "time_grains": "[day]"
+        }
+        dct = renderer.render_data(dct)
+        self.assertEqual(dct, expected)

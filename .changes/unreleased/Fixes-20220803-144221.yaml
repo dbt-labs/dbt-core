@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix error rendering docs block in metrics description
+time: 2022-08-03T14:42:21.386265-04:00
+custom:
+  Author: gshank
+  Issue: "5585"
+  PR: "5603"
