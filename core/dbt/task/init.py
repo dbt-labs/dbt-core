@@ -265,7 +265,7 @@ class InitTask(BaseTask):
         available_adapters = list(_get_adapter_plugin_names())
         for adapter_name in available_adapters:
             try:
-                internal_package_names.add(get_adapter_package_names(adapter_name))
+                internal_package_names.update(get_adapter_package_names(adapter_name))
             except dbt.exceptions.InternalException:
                 pass
         while not ProjectName.is_valid(name) or name in internal_package_names:
