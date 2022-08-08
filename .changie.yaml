@@ -39,7 +39,6 @@ custom:
 - key: PR
   label: GitHub Pull Request Number
   type: int
-  optional: true
   minInt: 1
 
 footerFormat: |
