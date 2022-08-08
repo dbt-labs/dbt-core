@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sys
 from typing import Optional
 
 import yaml
@@ -302,7 +303,7 @@ class InitTask(BaseTask):
         available_adapters = list(_get_adapter_plugin_names())
         if not len(available_adapters):
             print("No adapters available. Go to https://docs.getdbt.com/docs/available-adapters")
-            exit(1)
+            sys.exit(1)
         project_name = self.get_valid_project_name()
         project_path = Path(project_name)
         if project_path.exists():
