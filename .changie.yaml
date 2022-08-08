@@ -54,7 +54,7 @@ footerFormat: |
       {{- /* we only want to include non-core team contributors */}}
       {{- if not (has $authorLower $core_team)}}
         {{- /* Docs kinds link back to dbt-docs instead of dbt-core PRs */}}
-        {{- if $change.Kind == 'Docs'}}
+        {{- if eq $change.Kind "Docs" }}
           {{- $prLink := "[dbt-docs/#{{ $change.Custom.PR }}](https://github.com/dbt-labs/dbt-docs/pull/{{$change.Custom.PR}}) }}"
         {{- else }}
           {{- $prLink := "[#{{ $change.Custom.PR }}](https://github.com/dbt-labs/dbt-core/pull/{{$change.Custom.PR}}) }}"
