@@ -7,14 +7,28 @@ versionExt: md
 versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
 changeFormat: '- {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), [#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+kindConfig:
+  - label: Docs
+    changeFormat: '- {{.Body}} custom docs formatting enabled!'
+  - label: Dependencies
+    changeFormat: '- {{.Body}} custom deps formatting enabled!'
+  - label: Security
+    changeFormat: '- {{.Body}} custom Security formatting enabled!'
+
 kinds:
-- label: Breaking Changes
-- label: Features
-- label: Fixes
-- label: Docs
-- label: Under the Hood
-- label: Dependencies
-- label: Security
+  - label: Breaking Changes
+  - label: Features
+  - label: Fixes
+  - label: Docs
+  - label: Under the Hood
+  - label: Dependencies
+  - label: Security
+newlines:
+  afterChangelogHeader: 1
+  afterKind: 1
+  afterChangelogVersion: 1
+  beforeKind: 1
+  endOfVersion: 1
 custom:
 - key: Author
   label: GitHub Username(s) (separated by a single space if multiple)
@@ -23,11 +37,11 @@ custom:
 - key: Issue
   label: GitHub Issue Number
   type: int
-  minLength: 4
+  minInt: 1
 - key: PR
   label: GitHub Pull Request Number
   type: int
-  minLength: 4
+  minInt: 1
 footerFormat: |
   {{- $contributorDict := dict }}
   {{- /* any names added to this list should be all lowercase for later matching purposes */}}
