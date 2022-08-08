@@ -13,7 +13,7 @@ kinds:
   - label: Features
   - label: Fixes
   - label: Docs
-    changeFormat: '- {{.Body}} ([dbt-docs/#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-docs/issues/{{.Custom.Issue}}), [#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-docs/pull/{{.Custom.PR}}))'
+    changeFormat: '- {{.Body}} ([dbt-docs/#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-docs/issues/{{.Custom.Issue}}), [dbt-docs/#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-docs/pull/{{.Custom.PR}}))'
   - label: Under the Hood
   - label: Dependencies
     changeFormat: '- {{.Body}} ([#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
@@ -38,8 +38,8 @@ custom:
   minInt: 1
 - key: PR
   label: GitHub Pull Request Number
-  optional: true
   type: int
+  optional: true
   minInt: 1
 
 footerFormat: |
@@ -53,11 +53,12 @@ footerFormat: |
       {{- $authorLower := lower $author }}
       {{- /* we only want to include non-core team contributors */}}
       {{- if not (has $authorLower $core_team)}}
-        {{- /* Docs kinds link back to dbt-docs instead of dbt-core PRs */}}
+        {{- /* Docs kind link back to dbt-docs instead of dbt-core PRs */}}
+        {{- $prLink := $change.Kind }}
         {{- if eq $change.Kind "Docs" }}
-          {{- $prLink := "[dbt-docs/#{{ $change.Custom.PR }}](https://github.com/dbt-labs/dbt-docs/pull/{{$change.Custom.PR}}) }}"
+          {{- $prLink = "[dbt-docs/#pr](https://github.com/dbt-labs/dbt-docs/pull/pr)" | replace "pr" $change.Custom.PR }}
         {{- else }}
-          {{- $prLink := "[#{{ $change.Custom.PR }}](https://github.com/dbt-labs/dbt-core/pull/{{$change.Custom.PR}}) }}"
+          {{- $prLink = "[#pr](https://github.com/dbt-labs/dbt-core/pull/pr)" | replace "pr" $change.Custom.PR }}
         {{- end }}
         {{- /* check if this contributor has other PRs associated with them already */}}
         {{- if hasKey $contributorDict $author }}
@@ -65,7 +66,7 @@ footerFormat: |
           {{- $prList = append $prList $prLink  }}
           {{- $contributorDict := set $contributorDict $author $prList }}
         {{- else }}
-          {{- $prList := list $change.Custom.PR }}
+          {{- $prList := list $prLink }}
           {{- $contributorDict := set $contributorDict $author $prList }}
         {{- end }}
       {{- end}}
