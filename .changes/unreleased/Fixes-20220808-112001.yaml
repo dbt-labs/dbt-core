@@ -1,0 +1,7 @@
+kind: Fixes
+body: Use sys.exit instead of exit
+time: 2022-08-08T11:20:01.838171926-04:00
+custom:
+  Author: varun-dc
+  Issue: "5621"
+  PR: "5627"
