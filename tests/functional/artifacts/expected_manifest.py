@@ -205,9 +205,13 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
         schema="test", docs={"node_color": None, "show": False}
     )
 
-    unrendered_model_config = get_unrendered_model_config(materialized="view")
+    unrendered_model_config = get_unrendered_model_config(
+        materialized="view", docs={"show": False}
+    )
 
-    unrendered_second_config = get_unrendered_model_config(schema="test", materialized="view")
+    unrendered_second_config = get_unrendered_model_config(
+        schema="test", materialized="view", docs={"show": False}
+    )
 
     seed_config = get_rendered_seed_config()
     unrendered_seed_config = get_unrendered_seed_config()
