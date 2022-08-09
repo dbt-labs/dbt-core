@@ -16,9 +16,9 @@ kinds:
     changeFormat: '- {{.Body}} ([dbt-docs/#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-docs/issues/{{.Custom.Issue}}), [dbt-docs/#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-docs/pull/{{.Custom.PR}}))'
   - label: Under the Hood
   - label: Dependencies
-    changeFormat: '- {{.Body}} ([#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+    changeFormat: '- {{.Body}} ({{if ne .Custom.Issue ""}}[#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), {{end}}[#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
   - label: Security
-    changeFormat: '- {{.Body}} ([#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+    changeFormat: '- {{.Body}} ({{if ne .Custom.Issue ""}}[#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), {{end}}[#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
 
 newlines:
   afterChangelogHeader: 1
