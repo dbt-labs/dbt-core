@@ -207,17 +207,23 @@ class TestSchemaFileConfigs:
         check_relations_equal(project.adapter, ["some_seed", "model"])
 
         # Remove materialized config from model
-        write_file(models_no_materialized__model_sql, project.project_root, "models", "tagged", "model.sql")
+        write_file(
+            models_no_materialized__model_sql,
+            project.project_root,
+            "models",
+            "tagged",
+            "model.sql",
+        )
         results = run_dbt(["run"])
+        assert len(results) == 2
         manifest = get_manifest(project.project_root)
         model_node = manifest.nodes[model_id]
 
         assert model_node.config.materialized == "view"
         model_unrendered_config = {
             "materialized": "view",
-            "meta": {'my_attr': 'TESTING', 'owner': 'Julie Smith'},
-            "tags": ["tag_1_in_model",
-                     "tag_2_in_model"],
+            "meta": {"my_attr": "TESTING", "owner": "Julie Smith"},
+            "tags": ["tag_1_in_model", "tag_2_in_model"],
         }
         assert model_node.unrendered_config == model_unrendered_config
 
