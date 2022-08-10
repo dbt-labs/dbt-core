@@ -36,8 +36,6 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
-from dbt.adapters.factory import get_adapter_package_names
-
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
 SLACK_URL = "https://community.getdbt.com/"
 
