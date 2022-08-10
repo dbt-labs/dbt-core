@@ -264,11 +264,7 @@ class InitTask(BaseTask):
         internal_package_names = {GLOBAL_PROJECT_NAME}
         available_adapters = list(_get_adapter_plugin_names())
         for adapter_name in available_adapters:
-            try:
-                internal_package_names.update(get_adapter_package_names(adapter_name))
-            # When no adapter plugins found
-            except dbt.exceptions.InternalException:
-                pass
+            internal_package_names.update(f"dbt_{adapter_name}")
         while not ProjectName.is_valid(name) or name in internal_package_names:
             if name:
                 click.echo(name + " is not a valid project name.")
