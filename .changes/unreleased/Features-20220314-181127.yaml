@@ -1,0 +1,7 @@
+kind: Features
+body: Add `--defer` flag to dbt compile & dbt docs generate
+time: 2022-03-14T18:11:27.783107864+01:00
+custom:
+  Author: kadero
+  Issue: "4110"
+  PR: "4514"

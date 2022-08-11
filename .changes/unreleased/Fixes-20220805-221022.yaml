@@ -1,0 +1,7 @@
+kind: Fixes
+body: Extended validations for the project names
+time: 2022-08-05T22:10:22.746830854+02:00
+custom:
+  Author: Goodkat
+  Issue: "5379"
+  PR: "5620"

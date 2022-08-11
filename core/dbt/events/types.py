@@ -94,7 +94,7 @@ class AdapterEventError(ErrorLevel, AdapterEventBase, ShowException):
 
 
 @dataclass
-class MainKeyboardInterrupt(InfoLevel, NoFile):
+class MainKeyboardInterrupt(InfoLevel):
     code: str = "Z001"
 
     def message(self) -> str:
@@ -102,7 +102,7 @@ class MainKeyboardInterrupt(InfoLevel, NoFile):
 
 
 @dataclass
-class MainEncounteredError(ErrorLevel, NoFile):
+class MainEncounteredError(ErrorLevel):
     e: BaseException
     code: str = "Z002"
 
@@ -111,7 +111,7 @@ class MainEncounteredError(ErrorLevel, NoFile):
 
 
 @dataclass
-class MainStackTrace(DebugLevel, NoFile):
+class MainStackTrace(ErrorLevel):
     stack_trace: str
     code: str = "Z003"
 
@@ -787,6 +787,26 @@ class NewConnectionOpening(DebugLevel):
 
 
 @dataclass
+class CodeExecution(DebugLevel):
+    conn_name: Optional[str]
+    code_content: str
+    code: str = "E038"
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: {self.code_content}"
+
+
+@dataclass
+class CodeExecutionStatus(DebugLevel):
+    status: str
+    elapsed: Optional[float]
+    code: str = "E039"
+
+    def message(self) -> str:
+        return f"Execution status: {self.status} in {self.elapsed} seconds"
+
+
+@dataclass
 class TimingInfoCollected(DebugLevel):
     code: str = "Z010"
 
@@ -1353,6 +1373,8 @@ class NodeConnectionReleaseError(ShowException, DebugLevel):
         return "Error releasing connection for node {}: {!s}".format(self.node_name, self.exc)
 
 
+# We don't write "clean" events to the log, because the clean command
+# may have removed the log directory.
 @dataclass
 class CheckCleanPath(InfoLevel, NoFile):
     path: str
@@ -1501,10 +1523,11 @@ class HooksRunning(InfoLevel):
 class HookFinished(InfoLevel):
     stat_line: str
     execution: str
+    execution_time: float
     code: str = "E040"
 
     def message(self) -> str:
-        return f"Finished running {self.stat_line}{self.execution}."
+        return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
 
 
 @dataclass
@@ -1663,7 +1686,7 @@ class SQLCompiledPath(InfoLevel):
     code: str = "Z026"
 
     def message(self) -> str:
-        return f"  compiled SQL at {self.path}"
+        return f"  compiled Code at {self.path}"
 
 
 @dataclass
@@ -2381,7 +2404,7 @@ class SendEventFailure(DebugLevel):
 
 
 @dataclass
-class FlushEvents(DebugLevel, NoFile):
+class FlushEvents(DebugLevel):
     code: str = "Z042"
 
     def message(self) -> str:
@@ -2389,7 +2412,7 @@ class FlushEvents(DebugLevel, NoFile):
 
 
 @dataclass
-class FlushEventsFailure(DebugLevel, NoFile):
+class FlushEventsFailure(DebugLevel):
     code: str = "Z043"
 
     def message(self) -> str:
@@ -2512,6 +2535,8 @@ if 1 == 0:
     ConnectionUsed(conn_type="", conn_name="")
     SQLQuery(conn_name="", sql="")
     SQLQueryStatus(status="", elapsed=0.1)
+    CodeExecution(conn_name="", code_content="")
+    CodeExecutionStatus(status="", elapsed=0.1)
     SQLCommit(conn_name="")
     ColTypeChange(
         orig_type="", new_type="", table=_ReferenceKey(database="", schema="", identifier="")
@@ -2620,7 +2645,7 @@ if 1 == 0:
     DatabaseErrorRunning(hook_type="")
     EmptyLine()
     HooksRunning(num_hooks=0, hook_type="")
-    HookFinished(stat_line="", execution="")
+    HookFinished(stat_line="", execution="", execution_time=0)
     WriteCatalogFailure(num_exceptions=0)
     CatalogWritten(path="")
     CannotGenerateDocs()

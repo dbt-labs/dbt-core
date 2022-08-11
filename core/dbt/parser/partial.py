@@ -21,6 +21,7 @@ from dbt.events.types import (
     PartialParsingDeletedExposure,
     PartialParsingDeletedMetric,
 )
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.node_types import NodeType
 
 
@@ -961,6 +962,13 @@ class PartialParsing:
             prev_value = self.saved_manifest.env_vars[env_var]
             current_value = os.getenv(env_var)
             if current_value is None:
+                # This will be true when depending on the default value.
+                # We store env vars set by defaults as a static string so we can recognize they have
+                # defaults.  We depend on default changes triggering reparsing by file change. If
+                # the file has not changed we can assume the default has not changed.
+                if prev_value == DEFAULT_ENV_PLACEHOLDER:
+                    unchanged_vars.append(env_var)
+                    continue
                 # env_var no longer set, remove from manifest
                 delete_vars.append(env_var)
             if prev_value == current_value:

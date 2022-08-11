@@ -1,0 +1,13 @@
+from typing import Any
+
+PY_36: Any
+PY_37: Any
+PY_38: Any
+PY_39: Any
+PY_310: Any
+PY_37_MIN: Any
+PY_38_MIN: Any
+PY_39_MIN: Any
+PY_310_MIN = PY_310
+PEP_585_COMPATIBLE = PY_39_MIN
+PEP_586_COMPATIBLE = PY_38_MIN

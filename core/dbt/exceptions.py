@@ -122,9 +122,9 @@ class RuntimeException(RuntimeError, Exception):
 
         result.update(
             {
-                "raw_sql": self.node.raw_sql,
+                "raw_code": self.node.raw_code,
                 # the node isn't always compiled, but if it is, include that!
-                "compiled_sql": getattr(self.node, "compiled_sql", None),
+                "compiled_code": getattr(self.node, "compiled_code", None),
             }
         )
         return result
@@ -203,7 +203,7 @@ class DatabaseException(RuntimeException):
         lines = []
 
         if hasattr(self.node, "build_path") and self.node.build_path:
-            lines.append("compiled SQL at {}".format(self.node.build_path))
+            lines.append("compiled Code at {}".format(self.node.build_path))
 
         return lines + RuntimeException.process_stack(self)
 
@@ -520,6 +520,12 @@ def ref_invalid_args(model, args) -> NoReturn:
     raise_compiler_error("ref() takes at most two arguments ({} given)".format(len(args)), model)
 
 
+def metric_invalid_args(model, args) -> NoReturn:
+    raise_compiler_error(
+        "metric() takes at most two arguments ({} given)".format(len(args)), model
+    )
+
+
 def ref_bad_context(model, args) -> NoReturn:
     ref_args = ", ".join("'{}'".format(a) for a in args)
     ref_string = "{{{{ ref({}) }}}}".format(ref_args)
@@ -648,6 +654,23 @@ def source_target_not_found(
 ) -> NoReturn:
     msg = get_source_not_found_or_disabled_msg(model, target_name, target_table_name, disabled)
     raise_compiler_error(msg, model)
+
+
+def get_metric_not_found_msg(
+    model,
+    target_name: str,
+    target_package: Optional[str],
+) -> str:
+    reason = "was not found"
+    return _get_target_failure_msg(
+        model, target_name, target_package, include_path=True, reason=reason, target_kind="metric"
+    )
+
+
+def metric_target_not_found(metric, target_name: str, target_package: Optional[str]) -> NoReturn:
+    msg = get_metric_not_found_msg(metric, target_name, target_package)
+
+    raise_compiler_error(msg, metric)
 
 
 def dependency_not_found(model, target_model_name):

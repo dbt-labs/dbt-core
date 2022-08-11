@@ -2,6 +2,7 @@ import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
+import time
 from itertools import chain
 from typing import (
     Optional,
@@ -42,7 +43,12 @@ from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
 from dbt.events.functions import fire_event
-from dbt.events.types import CacheMiss, ListRelations
+from dbt.events.types import (
+    CacheMiss,
+    ListRelations,
+    CodeExecution,
+    CodeExecutionStatus,
+)
 from dbt.utils import filter_null_values, executor
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
@@ -159,6 +165,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         - convert_datetime_type
         - convert_date_type
         - convert_time_type
+        - standardize_grants_dict
 
     Macros:
         - get_catalog
@@ -283,7 +290,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             from dbt.parser.manifest import ManifestLoader
 
             manifest = ManifestLoader.load_macros(
-                self.config, self.connections.set_query_header, base_macros_only=base_macros_only
+                self.config,
+                self.connections.set_query_header,
+                base_macros_only=base_macros_only,
             )
             # TODO CT-211
             self._macro_manifest_lazy = manifest  # type: ignore[assignment]
@@ -302,7 +311,11 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         if (database, schema) not in self.cache:
             fire_event(
-                CacheMiss(conn_name=self.nice_connection_name(), database=database, schema=schema)
+                CacheMiss(
+                    conn_name=self.nice_connection_name(),
+                    database=database,
+                    schema=schema,
+                )
             )
             return False
         else:
@@ -380,7 +393,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.cache.update_schemas(cache_update)
 
     def set_relations_cache(
-        self, manifest: Manifest, clear: bool = False, required_schemas: Set[BaseRelation] = None
+        self,
+        manifest: Manifest,
+        clear: bool = False,
+        required_schemas: Set[BaseRelation] = None,
     ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
@@ -434,12 +450,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Abstract methods for database-specific values, attributes, and types
     ###
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
         raise NotImplementedException("`date_function` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def is_cancelable(cls) -> bool:
         raise NotImplementedException("`is_cancelable` is not implemented for this adapter!")
 
@@ -535,6 +553,33 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException(
             "`list_relations_without_caching` is not implemented for this " "adapter!"
         )
+
+    ###
+    # Methods about grants
+    ###
+    @available
+    def standardize_grants_dict(self, grants_table: agate.Table) -> dict:
+        """Translate the result of `show grants` (or equivalent) to match the
+        grants which a user would configure in their project.
+
+        Ideally, the SQL to show grants should also be filtering:
+        filter OUT any grants TO the current user/role (e.g. OWNERSHIP).
+        If that's not possible in SQL, it can be done in this method instead.
+
+        :param grants_table: An agate table containing the query result of
+            the SQL returned by get_show_grant_sql
+        :return: A standardized dictionary matching the `grants` config
+        :rtype: dict
+        """
+        grants_dict: Dict[str, List[str]] = {}
+        for row in grants_table:
+            grantee = row["grantee"]
+            privilege = row["privilege_type"]
+            if privilege in grants_dict.keys():
+                grants_dict[privilege].append(grantee)
+            else:
+                grants_dict.update({privilege: [grantee]})
+        return grants_dict
 
     ###
     # Provided methods about relations
@@ -640,7 +685,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             return self.cache.get_relations(database, schema)
 
         schema_relation = self.Relation.create(
-            database=database, schema=schema, identifier="", quote_policy=self.config.quoting
+            database=database,
+            schema=schema,
+            identifier="",
+            quote_policy=self.config.quoting,
         ).without_identifier()
 
         # we can't build the relations cache because we don't have a
@@ -648,7 +696,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         relations = self.list_relations_without_caching(schema_relation)
         fire_event(
             ListRelations(
-                database=database, schema=schema, relations=[_make_key(x) for x in relations]
+                database=database,
+                schema=schema,
+                relations=[_make_key(x) for x in relations],
             )
         )
 
@@ -734,7 +784,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
 
     @available
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
         raise NotImplementedException("`quote` is not implemented for this adapter!")
@@ -780,7 +831,8 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Conversions: These must be implemented by concrete implementations, for
     # converting agate types into their sql equivalents.
     ###
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Text
         type for the given agate table and column index.
@@ -791,7 +843,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_text_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Number
         type for the given agate table and column index.
@@ -802,7 +855,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_number_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
         type for the given agate table and column index.
@@ -815,7 +869,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             "`convert_boolean_type` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.DateTime
         type for the given agate table and column index.
@@ -828,7 +883,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             "`convert_datetime_type` is not implemented for this adapter!"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Date
         type for the given agate table and column index.
@@ -839,7 +895,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         raise NotImplementedException("`convert_date_type` is not implemented for this adapter!")
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the
         agate.TimeDelta type for the given agate table and column index.
@@ -1125,6 +1182,47 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return sql
 
+    @available.parse_none
+    def submit_python_job(self, parsed_model: dict, compiled_code: str):
+        raise NotImplementedException("`submit_python_job` is not implemented for this adapter!")
+
+    def valid_incremental_strategies(self):
+        """The set of standard builtin strategies which this adapter supports out-of-the-box.
+        Not used to validate custom strategies defined by end users.
+        """
+        return ["append"]
+
+    def builtin_incremental_strategies(self):
+        return ["append", "delete+insert", "merge", "insert_overwrite"]
+
+    @available.parse_none
+    def get_incremental_strategy_macro(self, model_context, strategy: str):
+        # Construct macro_name from strategy name
+        if strategy is None:
+            strategy = "default"
+
+        # validate strategies for this adapter
+        valid_strategies = self.valid_incremental_strategies()
+        valid_strategies.append("default")
+        builtin_strategies = self.builtin_incremental_strategies()
+        if strategy in builtin_strategies and strategy not in valid_strategies:
+            raise RuntimeException(
+                f"The incremental strategy '{strategy}' is not valid for this adapter"
+            )
+
+        strategy = strategy.replace("+", "_")
+        macro_name = f"get_incremental_{strategy}_sql"
+        # The model_context should have MacroGenerator callable objects for all macros
+        if macro_name not in model_context:
+            raise RuntimeException(
+                'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(
+                    macro_name, self.config.project_name
+                )
+            )
+
+        # This returns a callable macro
+        return model_context[macro_name]
+
 
 COLUMNS_EQUAL_SQL = """
 with diff_count as (
@@ -1176,3 +1274,24 @@ def catch_as_completed(
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions
+
+
+def log_code_execution(code_execution_function):
+    # decorator to log code and execution time
+    if code_execution_function.__name__ != "submit_python_job":
+        raise ValueError("this should be only used to log submit_python_job now")
+
+    def execution_with_log(*args):
+        self = args[0]
+        connection_name = self.connections.get_thread_connection().name
+        fire_event(CodeExecution(conn_name=connection_name, code_content=args[2]))
+        start_time = time.time()
+        response = code_execution_function(*args)
+        fire_event(
+            CodeExecutionStatus(
+                status=response._message, elapsed=round((time.time() - start_time), 2)
+            )
+        )
+        return response
+
+    return execution_with_log

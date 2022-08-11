@@ -561,6 +561,7 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
         Do not run "dbt compile" as part of docs generation
         """,
     )
+    _add_defer_argument(generate_sub)
     return generate_sub
 
 
@@ -649,6 +650,22 @@ def _add_common_arguments(*subparsers):
             help="""
             Specify number of threads to use while executing models. Overrides
             settings in profiles.yml.
+            """,
+        )
+        sub.add_argument(
+            "--target-path",
+            required=False,
+            help="""
+            Configure the 'target-path'. Only applies this setting for the
+            current run. Overrides the 'DBT_TARGET_PATH' if it is set.
+            """,
+        )
+        sub.add_argument(
+            "--log-path",
+            required=False,
+            help="""
+            Configure the 'log-path'. Only applies this setting for the
+            current run. Overrides the 'DBT_LOG_PATH' if it is set.
             """,
         )
         _add_version_check(sub)
@@ -1150,7 +1167,7 @@ def parse_args(args, cls=DBTArgumentParser):
     # list_sub sets up its own arguments.
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
-    _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub)
+    _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub, compile_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub, build_sub)
 

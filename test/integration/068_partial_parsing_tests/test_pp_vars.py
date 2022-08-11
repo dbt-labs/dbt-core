@@ -1,8 +1,8 @@
 from dbt.exceptions import CompilationException, ParsingException
+from dbt.constants import SECRET_ENV_PREFIX
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
-from dbt.logger import SECRET_ENV_PREFIX
 from dbt.parser.partial import special_override_macros
 from test.integration.base import DBTIntegrationTest, use_profile, normalize, get_manifest
 import shutil

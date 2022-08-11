@@ -5,6 +5,8 @@
 
   {%- set strategy_name = config.get('strategy') -%}
   {%- set unique_key = config.get('unique_key') %}
+  -- grab current tables grants config for comparision later on
+  {%- set grant_config = config.get('grants') -%}
 
   {% set target_relation_exists, target_relation = get_or_create_relation(
           database=model.database,
@@ -26,7 +28,7 @@
 
   {% if not target_relation_exists %}
 
-      {% set build_sql = build_snapshot_table(strategy, model['compiled_sql']) %}
+      {% set build_sql = build_snapshot_table(strategy, model['compiled_code']) %}
       {% set final_sql = create_table_as(False, target_relation, build_sql) %}
 
   {% else %}
@@ -72,6 +74,9 @@
   {% call statement('main') %}
       {{ final_sql }}
   {% endcall %}
+
+  {% set should_revoke = should_revoke(target_relation_exists, full_refresh_mode=False) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {% do persist_docs(target_relation, model) %}
 

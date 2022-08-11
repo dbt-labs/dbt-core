@@ -30,8 +30,8 @@ class RemoteResult(VersionedSchema):
 
 @dataclass
 class RemoteCompileResultMixin(RemoteResult):
-    raw_sql: str
-    compiled_sql: str
+    raw_code: str
+    compiled_code: str
     node: CompileResultNode
     timing: List[TimingInfo]
 

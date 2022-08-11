@@ -1,0 +1,7 @@
+kind: Features
+body: use MethodName.File when value ends with .csv
+time: 2022-07-29T17:32:31.395677157+02:00
+custom:
+  Author: Goodkat
+  Issue: "5578"
+  PR: "5581"

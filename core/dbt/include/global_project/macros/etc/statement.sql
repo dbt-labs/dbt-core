@@ -1,13 +1,24 @@
-{% macro statement(name=None, fetch_result=False, auto_begin=True) -%}
+{#--
+The macro override naming method (spark__statement) only works for macros which are called with adapter.dispatch. For macros called directly, you can just redefine them.
+--#}
+{%- macro statement(name=None, fetch_result=False, auto_begin=True, language='sql') -%}
   {%- if execute: -%}
-    {%- set sql = caller() -%}
+    {%- set compiled_code = caller() -%}
 
     {%- if name == 'main' -%}
-      {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}
-      {{ write(sql) }}
+      {{ log('Writing runtime {} for node "{}"'.format(language, model['unique_id'])) }}
+      {{ write(compiled_code) }}
+    {%- endif -%}
+    {%- if language == 'sql'-%}
+      {%- set res, table = adapter.execute(compiled_code, auto_begin=auto_begin, fetch=fetch_result) -%}
+    {%- elif language == 'python' -%}
+      {%- set res = adapter.submit_python_job(model, compiled_code) -%}
+      {#-- TODO: What should table be for python models? --#}
+      {%- set table = None -%}
+    {%- else -%}
+      {% do exceptions.raise_compiler_error("statement macro didn't get supported language") %}
     {%- endif -%}
 
-    {%- set res, table = adapter.execute(sql, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- if name is not none -%}
       {{ store_result(name, response=res, agate_table=table) }}
     {%- endif -%}

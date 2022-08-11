@@ -1,10 +1,10 @@
-black==22.3.0
+black==22.6.0
 bumpversion
 flake8
 flaky
 freezegun==0.3.12
 ipdb
-mypy==0.942
+mypy==0.971
 pip-tools
 pre-commit
 pytest

@@ -13,6 +13,7 @@ from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
 import colorama
 import logbook
+from dbt.constants import SECRET_ENV_PREFIX
 from dbt.dataclass_schema import dbtClassMixin
 
 # Colorama is needed for colored logs on Windows because we're using logger.info
@@ -30,8 +31,6 @@ STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = (
     "{record.time:%Y-%m-%d %H:%M:%S.%f%z} " "({record.thread_name}): " "{record.message}"
 )
-
-SECRET_ENV_PREFIX = "DBT_ENV_SECRET_"
 
 
 def get_secret_env() -> List[str]:

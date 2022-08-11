@@ -1,0 +1,7 @@
+kind: Docs
+body: Update dependency inline-source from ^6.1.5 to ^7.2.0
+time: 2022-07-28T14:02:58.441963-07:00
+custom:
+  Author: emmyoop
+  Issue: "299"
+  PR: "291"

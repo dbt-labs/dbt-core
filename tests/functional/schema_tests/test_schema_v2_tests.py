@@ -3,6 +3,8 @@ import os
 import re
 
 from dbt.tests.util import run_dbt, write_file
+from dbt.tests.fixtures.project import write_project_files
+from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
 from tests.functional.schema_tests.fixtures import (  # noqa: F401
     wrong_specification_block,
     test_context_where_subq_models,
@@ -17,6 +19,7 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     test_context_models,
     name_collision,
     dupe_tests_collide,
+    custom_generic_test_config_custom_macros,
     custom_generic_test_names,
     custom_generic_test_names_alt_format,
     test_context_where_subq_macros,
@@ -386,7 +389,8 @@ class TestHooksForWhich:
 
 class TestCustomSchemaTests:
     @pytest.fixture(scope="class", autouse=True)
-    def setUp(self, project):
+    def setUp(self, project, project_root, dbt_integration_project):  # noqa: F811
+        write_project_files(project_root, "dbt_integration_project", dbt_integration_project)
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
     @pytest.fixture(scope="class")
@@ -397,8 +401,7 @@ class TestCustomSchemaTests:
                     "local": "./local_dependency",
                 },
                 {
-                    "git": "https://github.com/dbt-labs/dbt-integration-project",
-                    "revision": "dbt/1.0.0",
+                    "local": "./dbt_integration_project",
                 },
             ]
         }
@@ -573,10 +576,10 @@ class TestSchemaTestContext:
         # dispatch_model_c_
         assert results[1].status == TestStatus.Fail
         # my_datediff
-        assert re.search(r"1000", results[2].node.compiled_sql)
+        assert re.search(r"1000", results[2].node.compiled_code)
         # type_one_model_a_
         assert results[3].status == TestStatus.Fail
-        assert re.search(r"union all", results[3].node.compiled_sql)
+        assert re.search(r"union all", results[3].node.compiled_code)
         # type_two_model_a_
         assert results[4].status == TestStatus.Warn
         assert results[4].node.config.severity == "WARN"
@@ -629,7 +632,7 @@ class TestSchemaTestContextWithMacroNamespace:
         assert results[1].status == TestStatus.Fail
         # type_one_model_a_
         assert results[2].status == TestStatus.Fail
-        assert re.search(r"union all", results[2].node.compiled_sql)
+        assert re.search(r"union all", results[2].node.compiled_code)
         # type_two_model_a_
         assert results[3].status == TestStatus.Warn
         assert results[3].node.config.severity == "WARN"
@@ -674,6 +677,21 @@ class TestGenericTestsCollide:
         with pytest.raises(CompilationException) as exc:
             run_dbt()
         assert "dbt found two tests with the name" in str(exc)
+
+
+class TestGenericTestsConfigCustomMacros:
+    @pytest.fixture(scope="class")
+    def models(self, custom_generic_test_config_custom_macros):  # noqa: F811
+        return custom_generic_test_config_custom_macros
+
+    def test_generic_test_config_custom_macros(
+        self,
+        project,
+    ):
+        """This test has a reference to a custom macro its configs"""
+        with pytest.raises(CompilationException) as exc:
+            run_dbt()
+        assert "Invalid generic test configuration" in str(exc)
 
 
 class TestGenericTestsCustomNames:

@@ -3,8 +3,8 @@ from typing import Any, Dict, Optional
 
 from .base import BaseContext, contextmember
 
+from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.exceptions import raise_parsing_error
-from dbt.logger import SECRET_ENV_PREFIX
 
 
 SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"
@@ -43,7 +43,11 @@ class SecretContext(BaseContext):
             # if it's a 'secret' env var, we shouldn't even get here
             # but just to be safe — don't save secrets
             if not var.startswith(SECRET_ENV_PREFIX):
-                self.env_vars[var] = return_value
+                # If the environment variable is set from a default, store a string indicating
+                # that so we can skip partial parsing.  Otherwise the file will be scheduled for
+                # reparsing. If the default changes, the file will have been updated and therefore
+                # will be scheduled for reparsing anyways.
+                self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"

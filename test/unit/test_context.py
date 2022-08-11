@@ -61,7 +61,8 @@ class TestVar(unittest.TestCase):
             ),
             tags=[],
             path="model_one.sql",
-            raw_sql="",
+            language='sql',
+            raw_code="",
             description="",
             columns={},
             checksum=FileHash.from_contents(""),
@@ -190,15 +191,16 @@ REQUIRED_BASE_KEYS = frozenset(
         "fromyaml",
         "toyaml",
         "set",
-        "try_set",
+        "set_strict",
         "zip",
-        "try_zip",
+        "zip_strict",
         "log",
         "run_started_at",
         "invocation_id",
         "modules",
         "flags",
         "print",
+        "diff_of_two_dicts"
     }
 )
 
@@ -218,6 +220,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "load_agate_table",
     "ref",
     "source",
+    "metric",
     "config",
     "execute",
     "exceptions",
@@ -236,7 +239,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "adapter_macro",
     "selected_resources",
 }
-REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this"}
+REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code",}
 MAYBE_KEYS = frozenset({"debug"})
 
 
@@ -295,7 +298,8 @@ def model():
         ),
         tags=[],
         path="model_one.sql",
-        raw_sql="",
+        language='sql',
+        raw_code="",
         description="",
         columns={},
     )
@@ -357,7 +361,8 @@ def mock_model():
         ),
         tags=[],
         path="model_one.sql",
-        raw_sql="",
+        language='sql',
+        raw_code="",
         description="",
         columns={},
     )

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix handling of top-level exceptions
+time: 2022-07-26T11:36:36.824979-04:00
+custom:
+  Author: gshank
+  Issue: "5564"
+  PR: "5560"

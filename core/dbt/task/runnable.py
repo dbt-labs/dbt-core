@@ -84,6 +84,8 @@ class ManifestTask(ConfiguredTask):
     def compile_manifest(self):
         if self.manifest is None:
             raise InternalException("compile_manifest called before manifest was loaded")
+
+        # we cannot get adapter in init since it will break rpc #5579
         adapter = get_adapter(self.config)
         compiler = adapter.get_compiler()
         self.graph = compiler.compile(self.manifest)

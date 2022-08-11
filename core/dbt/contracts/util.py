@@ -4,10 +4,21 @@ from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
-from dbt.exceptions import InternalException, RuntimeException, IncompatibleSchemaException
+from dbt.exceptions import (
+    InternalException,
+    RuntimeException,
+    IncompatibleSchemaException,
+)
 from dbt.version import __version__
 from dbt.events.functions import get_invocation_id
 from dbt.dataclass_schema import dbtClassMixin
+
+from dbt.dataclass_schema import (
+    ValidatedStringMixin,
+    ValidationError,
+    register_pattern,
+)
+
 
 SourceKey = Tuple[str, str]
 
@@ -189,6 +200,23 @@ def schema_version(name: str, version: int):
     return inner
 
 
+def get_manifest_schema_version(dct: dict) -> int:
+    schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
+    if not schema_version:
+        raise ValueError("Manifest doesn't have schema version")
+    return int(schema_version.split(".")[-2][-1])
+
+
+def upgrade_manifest_json(manifest: dict) -> dict:
+    for node_content in manifest.get("nodes", {}).values():
+        if "raw_sql" in node_content:
+            node_content["raw_code"] = node_content.pop("raw_sql")
+        if "compiled_sql" in node_content:
+            node_content["compiled_code"] = node_content.pop("compiled_sql")
+        node_content["language"] = "sql"
+    return manifest
+
+
 # This is used in the ArtifactMixin and RemoteResult classes
 @dataclasses.dataclass
 class VersionedSchema(dbtClassMixin):
@@ -200,6 +228,14 @@ class VersionedSchema(dbtClassMixin):
         if not embeddable:
             result["$id"] = str(cls.dbt_schema_version)
         return result
+
+    @classmethod
+    def is_compatible_version(cls, schema_version):
+        compatible_versions = [str(cls.dbt_schema_version)]
+        if hasattr(cls, "compatible_previous_versions"):
+            for name, version in cls.compatible_previous_versions():
+                compatible_versions.append(str(SchemaVersion(name, version)))
+        return str(schema_version) in compatible_versions
 
     @classmethod
     def read_and_check_versions(cls, path: str):
@@ -217,11 +253,13 @@ class VersionedSchema(dbtClassMixin):
             if "metadata" in data and "dbt_schema_version" in data["metadata"]:
                 previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
-                if str(cls.dbt_schema_version) != previous_schema_version:
+                if not cls.is_compatible_version(previous_schema_version):
                     raise IncompatibleSchemaException(
-                        expected=str(cls.dbt_schema_version), found=previous_schema_version
+                        expected=str(cls.dbt_schema_version),
+                        found=previous_schema_version,
                     )
-
+        if get_manifest_schema_version(data) <= 6:
+            data = upgrade_manifest_json(data)
         return cls.from_dict(data)  # type: ignore
 
 
@@ -242,3 +280,22 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
         super().validate(data)
         if cls.dbt_schema_version is None:
             raise InternalException("Cannot call from_dict with no schema version!")
+
+
+class Identifier(ValidatedStringMixin):
+    ValidationRegex = r"^[^\d\W]\w*$"
+
+    @classmethod
+    def is_valid(cls, value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+
+        try:
+            cls.validate(value)
+        except ValidationError:
+            return False
+
+        return True
+
+
+register_pattern(Identifier, r"^[^\d\W]\w*$")

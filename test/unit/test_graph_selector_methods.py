@@ -78,7 +78,8 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         depends_on_nodes.append(src.unique_id)
 
     return ParsedModelNode(
-        raw_sql=sql,
+        language='sql',
+        raw_code=sql,
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -118,7 +119,8 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
 
     fqn = [pkg] + fqn_extras + [name]
     return ParsedSeedNode(
-        raw_sql='',
+        language='sql',
+        raw_code='',
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -217,7 +219,7 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
     if column_name is not None:
         args_name += '_' + column_name
     node_name = f'{test_name}_{args_name}'
-    raw_sql = '{{ config(severity="ERROR") }}{{ test_' + \
+    raw_code = '{{ config(severity="ERROR") }}{{ test_' + \
         test_name + '(**dbt_schema_test_kwargs) }}'
     name_parts = test_name.split('.')
 
@@ -250,7 +252,8 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
         depends_on_nodes.append(source.unique_id)
 
     return ParsedGenericTestNode(
-        raw_sql=raw_sql,
+        language='sql',
+        raw_code=raw_code,
         test_metadata=TestMetadata(
             namespace=namespace,
             name=test_name,
@@ -306,7 +309,8 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
         depends_on_nodes.append(src.unique_id)
 
     return ParsedSingularTestNode(
-        raw_sql=sql,
+        language='sql',
+        raw_code=sql,
         database='dbt',
         schema='dbt_schema',
         name=name,
@@ -474,6 +478,30 @@ def table_model(ephemeral_model):
 
 
 @pytest.fixture
+def table_model_py(seed):
+    return make_model(
+        'pkg',
+        'table_model_py',
+        'select * from {{ ref("seed") }}',
+        config_kwargs={'materialized': 'table'},
+        refs=[seed],
+        tags=[],
+        path='subdirectory/table_model.py'
+    )
+
+@pytest.fixture
+def table_model_csv(seed):
+    return make_model(
+        'pkg',
+        'table_model_csv',
+        'select * from {{ ref("seed") }}',
+        config_kwargs={'materialized': 'table'},
+        refs=[seed],
+        tags=[],
+        path='subdirectory/table_model.csv'
+    )
+
+@pytest.fixture
 def ext_source():
     return make_source(
         'ext',
@@ -533,7 +561,6 @@ def union_model(seed, ext_source):
         tags=['unions'],
     )
 
-
 @pytest.fixture
 def table_id_unique(table_model):
     return make_unique_test('pkg', table_model, 'id')
@@ -590,13 +617,12 @@ def namespaced_union_model(seed, ext_source):
         tags=['unions'],
     )
 
-
 @pytest.fixture
-def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source, ext_model, union_model, ext_source_2, 
+def manifest(seed, source, ephemeral_model, view_model, table_model, table_model_py, table_model_csv, ext_source, ext_model, union_model, ext_source_2, 
     ext_source_other, ext_source_other_2, table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, 
     view_test_nothing, namespaced_seed, namespace_model, namespaced_union_model, macro_test_unique, macro_default_test_unique,
     macro_test_not_null, macro_default_test_not_null):
-    nodes = [seed, ephemeral_model, view_model, table_model, union_model, ext_model,
+    nodes = [seed, ephemeral_model, view_model, table_model, table_model_py, table_model_csv, union_model, ext_model,
              table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, view_test_nothing,
              namespaced_seed, namespace_model, namespaced_union_model]
     sources = [source, ext_source, ext_source_2,
@@ -634,7 +660,7 @@ def test_select_fqn(manifest):
     assert not search_manifest_using_method(manifest, method, 'ext.unions')
     # sources don't show up, because selection pretends they have no FQN. Should it?
     assert search_manifest_using_method(manifest, method, 'pkg') == {
-        'union_model', 'table_model', 'view_model', 'ephemeral_model', 'seed',
+        'union_model', 'table_model', 'table_model_py', 'table_model_csv', 'view_model', 'ephemeral_model', 'seed',
         'mynamespace.union_model', 'mynamespace.ephemeral_model', 'mynamespace.seed'}
     assert search_manifest_using_method(
         manifest, method, 'ext') == {'ext_model'}
@@ -714,9 +740,15 @@ def test_select_file(manifest):
     assert search_manifest_using_method(
         manifest, method, 'table_model.sql') == {'table_model'}
     assert search_manifest_using_method(
+        manifest, method, 'table_model.py') == {'table_model_py'}
+    assert search_manifest_using_method(
+        manifest, method, 'table_model.csv') == {'table_model_csv'}
+    assert search_manifest_using_method(
         manifest, method, 'union_model.sql') == {'union_model', 'mynamespace.union_model'}
     assert not search_manifest_using_method(
         manifest, method, 'missing.sql')
+    assert not search_manifest_using_method(
+        manifest, method, 'missing.py')
 
 
 def test_select_package(manifest):
@@ -725,7 +757,7 @@ def test_select_package(manifest):
     assert isinstance(method, PackageSelectorMethod)
     assert method.arguments == []
 
-    assert search_manifest_using_method(manifest, method, 'pkg') == {'union_model', 'table_model', 'view_model', 'ephemeral_model',
+    assert search_manifest_using_method(manifest, method, 'pkg') == {'union_model', 'table_model', 'table_model_py', 'table_model_csv', 'view_model', 'ephemeral_model',
                                                                      'seed', 'raw.seed', 'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'view_test_nothing',
                                                                      'mynamespace.seed', 'mynamespace.ephemeral_model', 'mynamespace.union_model',
                                                                      }
@@ -744,7 +776,7 @@ def test_select_config_materialized(manifest):
     assert search_manifest_using_method(manifest, method, 'view') == {
         'view_model', 'ext_model'}
     assert search_manifest_using_method(manifest, method, 'table') == {
-        'table_model', 'union_model', 'mynamespace.union_model'}
+        'table_model', 'table_model_py', 'table_model_csv', 'union_model', 'mynamespace.union_model'}
 
 
 def test_select_test_name(manifest):
@@ -865,7 +897,7 @@ def test_select_state_added_model(manifest, previous_state):
 
 
 def test_select_state_changed_model_sql(manifest, previous_state, view_model):
-    change_node(manifest, view_model.replace(raw_sql='select 1 as id'))
+    change_node(manifest, view_model.replace(raw_code='select 1 as id'))
     method = statemethod(manifest, previous_state)
     
     # both of these

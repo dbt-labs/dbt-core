@@ -889,7 +889,7 @@
 #             expected_calls_A
 #         )
 
-#         # the model here has a raw_sql that contains the schema, which changes
+#         # the model here has a raw_code that contains the schema, which changes
 #         expected_contexts = [
 #             self.build_context('snapshot', 'start'),
 #             self.load_context(),

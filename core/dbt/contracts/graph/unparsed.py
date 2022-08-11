@@ -1,15 +1,11 @@
 from dbt.node_types import NodeType
-from dbt.contracts.util import (
-    AdditionalPropertiesMixin,
-    Mergeable,
-    Replaceable,
-)
+from dbt.contracts.util import AdditionalPropertiesMixin, Mergeable, Replaceable
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException, ParsingException
 
-from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
+from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -30,26 +26,27 @@ class UnparsedBaseNode(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class HasSQL:
-    raw_sql: str
+class HasCode(dbtClassMixin):
+    raw_code: str
+    language: str
 
     @property
     def empty(self):
-        return not self.raw_sql.strip()
+        return not self.raw_code.strip()
 
 
 @dataclass
-class UnparsedMacro(UnparsedBaseNode, HasSQL):
+class UnparsedMacro(UnparsedBaseNode, HasCode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
-class UnparsedGenericTest(UnparsedBaseNode, HasSQL):
+class UnparsedGenericTest(UnparsedBaseNode, HasCode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
-class UnparsedNode(UnparsedBaseNode, HasSQL):
+class UnparsedNode(UnparsedBaseNode, HasCode):
     name: str
     resource_type: NodeType = field(
         metadata={
@@ -80,6 +77,7 @@ class UnparsedRunHook(UnparsedNode):
 @dataclass
 class Docs(dbtClassMixin, Replaceable):
     show: bool = True
+    node_color: Optional[str] = None
 
 
 @dataclass
@@ -448,12 +446,15 @@ class MetricFilter(dbtClassMixin, Replaceable):
 
 @dataclass
 class UnparsedMetric(dbtClassMixin, Replaceable):
-    model: str
+    # TODO : verify that this disallows metric names with spaces
+    # TODO: fix validation that you broke :p
+    # name: Identifier
     name: str
     label: str
     type: str
+    model: Optional[str] = None
     description: str = ""
-    sql: Optional[str] = None
+    sql: Union[str, int] = ""
     timestamp: Optional[str] = None
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
@@ -463,6 +464,15 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
     @classmethod
     def validate(cls, data):
+        # super().validate(data)
+        # TODO: putting this back for now to get tests passing.  Do we want to implement name: Identifier?
         super(UnparsedMetric, cls).validate(data)
         if "name" in data and " " in data["name"]:
             raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
+
+        # TODO: Expressions _cannot_ have `model` properties
+        if data.get("model") is None and data.get("type") != "expression":
+            raise ValidationError("Non-expression metrics require a 'model' property")
+
+        if data.get("model") is not None and data.get("type") == "expression":
+            raise ValidationError("Expression metrics cannot have a 'model' property")

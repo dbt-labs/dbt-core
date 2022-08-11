@@ -1,7 +1,0 @@
-kind: Dependencies
-body: "Bumping hologram version"
-time: 2022-05-06T16:09:07.000000-05:00
-custom:
-  Author: leahwicz
-  Issue: "5219"
-  PR: "5218"

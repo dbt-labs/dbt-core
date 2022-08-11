@@ -73,6 +73,7 @@ from dbt.exceptions import (
     ref_target_not_found,
     get_target_not_found_or_disabled_msg,
     source_target_not_found,
+    metric_target_not_found,
     get_source_not_found_or_disabled_msg,
     warn_or_error,
 )
@@ -389,6 +390,7 @@ class ManifestLoader:
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
+            self.process_metrics(self.root_project)
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -634,7 +636,9 @@ class ManifestLoader:
         if not flags.PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
-        path = os.path.join(self.root_project.target_path, PARTIAL_PARSE_FILE_NAME)
+        path = os.path.join(
+            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
+        )
 
         reparse_reason = None
 
@@ -833,6 +837,21 @@ class ManifestLoader:
                 continue
             _process_refs_for_metric(self.manifest, current_project, metric)
 
+    # Takes references in 'metrics' array of nodes and exposures, finds the target
+    # node, and updates 'depends_on.nodes' with the unique id
+    def process_metrics(self, config: RuntimeConfig):
+        current_project = config.project_name
+        for node in self.manifest.nodes.values():
+            if node.created_at < self.started_at:
+                continue
+            _process_metrics_for_node(self.manifest, current_project, node)
+        for metric in self.manifest.metrics.values():
+            # TODO: Can we do this if the metric is derived & depends on
+            # some other metric for its definition? Maybe....
+            if metric.created_at < self.started_at:
+                continue
+            _process_metrics_for_node(self.manifest, current_project, metric)
+
     # nodes: node and column descriptions
     # sources: source and table descriptions, column descriptions
     # macros: macro argument descriptions
@@ -934,6 +953,19 @@ def invalid_source_fail_unless_test(node, target_name, target_table_name, disabl
             warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
         source_target_not_found(node, target_name, target_table_name, disabled=disabled)
+
+
+def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_package):
+
+    if node.resource_type == NodeType.Test:
+        msg = get_target_not_found_or_disabled_msg(node, target_metric_name, target_metric_package)
+        warn_or_error(msg, log_fmt=warning_tag("{}"))
+    else:
+        metric_target_not_found(
+            node,
+            target_metric_name,
+            target_metric_package,
+        )
 
 
 def _check_resource_uniqueness(
@@ -1039,6 +1071,11 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: ParsedMetric) -> 
     metric.description = get_rendered(metric.description, context)
 
 
+# TODO: this isn't actually referenced anywhere?
+def _process_derived_metrics(context: Dict[str, Any], metric: ParsedMetric) -> None:
+    metric.description = get_rendered(metric.description, context)
+
+
 def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposure: ParsedExposure):
     """Given a manifest and exposure in that manifest, process its refs"""
     for ref in exposure.refs:
@@ -1119,6 +1156,48 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
 
         metric.depends_on.nodes.append(target_model_id)
         manifest.update_metric(metric)
+
+
+def _process_metrics_for_node(
+    manifest: Manifest, current_project: str, node: Union[ManifestNode, ParsedMetric]
+):
+    """Given a manifest and a node in that manifest, process its metrics"""
+    for metric in node.metrics:
+        target_metric: Optional[ParsedMetric] = None
+        target_metric_name: str
+        target_metric_package: Optional[str] = None
+
+        if len(metric) == 1:
+            target_metric_name = metric[0]
+        elif len(metric) == 2:
+            target_metric_package, target_metric_name = metric
+        else:
+            raise dbt.exceptions.InternalException(
+                f"Metric references should always be 1 or 2 arguments - got {len(metric)}"
+            )
+
+        # Resolve_ref
+        target_metric = manifest.resolve_metric(
+            target_metric_name,
+            target_metric_package,
+            current_project,
+            node.package_name,
+        )
+
+        if target_metric is None:
+            # This may raise. Even if it doesn't, we don't want to add
+            # this node to the graph b/c there is no destination node
+            invalid_metric_fail_unless_test(
+                node,
+                target_metric_name,
+                target_metric_package,
+            )
+
+            continue
+
+        target_metric_id = target_metric.unique_id
+
+        node.depends_on.nodes.append(target_metric_id)
 
 
 def _process_refs_for_node(manifest: Manifest, current_project: str, node: ManifestNode):

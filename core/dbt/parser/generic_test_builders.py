@@ -21,7 +21,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate,
     UnparsedExposure,
 )
-from dbt.exceptions import raise_compiler_error, raise_parsing_error
+from dbt.exceptions import raise_compiler_error, raise_parsing_error, UndefinedMacroException
 from dbt.parser.search import FileBlock
 
 
@@ -257,7 +257,28 @@ class TestBuilder(Generic[Testable]):
             if not value and "config" in self.args:
                 value = self.args["config"].pop(key, None)
             if isinstance(value, str):
-                value = get_rendered(value, render_ctx, native=True)
+
+                try:
+                    value = get_rendered(value, render_ctx, native=True)
+                except UndefinedMacroException as e:
+
+                    # Generic tests do not include custom macros in the Jinja
+                    # rendering context, so this will almost always fail. As it
+                    # currently stands, the error message is inscrutable, which
+                    # has caused issues for some projects migrating from
+                    # pre-0.20.0 to post-0.20.0.
+                    # See https://github.com/dbt-labs/dbt-core/issues/4103
+                    # and https://github.com/dbt-labs/dbt-core/issues/5294
+                    raise_compiler_error(
+                        f"The {self.target.name}.{column_name} column's "
+                        f'"{self.name}" test references an undefined '
+                        f"macro in its {key} configuration argument. "
+                        f"The macro {e.msg}.\n"
+                        "Please note that the generic test configuration parser "
+                        "currently does not support using custom macros to "
+                        "populate configuration values"
+                    )
+
             if value is not None:
                 self.config[key] = value
 
@@ -456,9 +477,9 @@ class TestBuilder(Generic[Testable]):
         else:
             return ""
 
-    # this is the 'raw_sql' that's used in 'render_update' and execution
+    # this is the 'raw_code' that's used in 'render_update' and execution
     # of the test macro
-    def build_raw_sql(self) -> str:
+    def build_raw_code(self) -> str:
         return ("{{{{ {macro}(**{kwargs_name}) }}}}{config}").format(
             macro=self.macro_name(),
             config=self.construct_config(),

@@ -1,8 +1,8 @@
 import pytest
 import os
 
+from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture
-from dbt.logger import SECRET_ENV_PREFIX
 
 
 context_sql = """
@@ -36,6 +36,8 @@ select
     '{{ invocation_id }}'  as invocation_id,
 
     '{{ env_var("DBT_TEST_ENV_VAR") }}' as env_var,
+    '{{ env_var("DBT_TEST_IGNORE_DEFAULT", "ignored_default_val") }}' as env_var_ignore_default,
+    '{{ env_var("DBT_TEST_USE_DEFAULT", "use_my_default_val") }}' as env_var_use_default,
     'secret_variable' as env_var_secret, -- make sure the value itself is scrubbed from the logs
     '{{ env_var("DBT_TEST_NOT_SECRET") }}' as env_var_not_secret
 
@@ -54,11 +56,13 @@ class TestEnvVars:
         os.environ["DBT_TEST_PASS"] = "password"
         os.environ[SECRET_ENV_PREFIX + "SECRET"] = "secret_variable"
         os.environ["DBT_TEST_NOT_SECRET"] = "regular_variable"
+        os.environ["DBT_TEST_IGNORE_DEFAULT"] = "ignored_default"
         yield
         del os.environ["DBT_TEST_ENV_VAR"]
         del os.environ["DBT_TEST_USER"]
         del os.environ[SECRET_ENV_PREFIX + "SECRET"]
         del os.environ["DBT_TEST_NOT_SECRET"]
+        del os.environ["DBT_TEST_IGNORE_DEFAULT"]
 
     @pytest.fixture(scope="class")
     def profiles_config_update(self, unique_schema):
@@ -129,7 +133,12 @@ class TestEnvVars:
         ctx = self.get_ctx_vars(project)
 
         manifest = get_manifest(project.project_root)
-        expected = {"DBT_TEST_ENV_VAR": "1", "DBT_TEST_NOT_SECRET": "regular_variable"}
+        expected = {
+            "DBT_TEST_ENV_VAR": "1",
+            "DBT_TEST_NOT_SECRET": "regular_variable",
+            "DBT_TEST_IGNORE_DEFAULT": "ignored_default",
+            "DBT_TEST_USE_DEFAULT": DEFAULT_ENV_PLACEHOLDER,
+        }
         assert manifest.env_vars == expected
 
         this = '"{}"."{}"."context"'.format(project.database, project.test_schema)

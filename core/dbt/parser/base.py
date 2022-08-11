@@ -17,10 +17,10 @@ from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
-from dbt.contracts.graph.unparsed import UnparsedNode
+from dbt.contracts.graph.unparsed import UnparsedNode, Docs
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.search import FileBlock
 
 # internally, the parser may store a less-restrictive type that will be
@@ -112,7 +112,8 @@ class ConfiguredParser(
             manifest=manifest, config=root_project, component="alias"
         )
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def get_compiled_path(cls, block: ConfiguredBlockType) -> str:
         pass
 
@@ -156,11 +157,7 @@ class ConfiguredParser(
                 config[key] = [hooks.get_hook_dict(h) for h in config[key]]
 
     def _create_error_node(
-        self,
-        name: str,
-        path: str,
-        original_file_path: str,
-        raw_sql: str,
+        self, name: str, path: str, original_file_path: str, raw_code: str, language: str = "sql"
     ) -> UnparsedNode:
         """If we hit an error before we've actually parsed a node, provide some
         level of useful information by attaching this to the exception.
@@ -174,7 +171,8 @@ class ConfiguredParser(
             original_file_path=original_file_path,
             root_path=self.project.project_root,
             package_name=self.project.project_name,
-            raw_sql=raw_sql,
+            raw_code=raw_code,
+            language=language,
         )
 
     def _create_parsetime_node(
@@ -192,6 +190,12 @@ class ConfiguredParser(
         """
         if name is None:
             name = block.name
+        if block.path.relative_path.endswith(".py"):
+            language = ModelLanguage.python
+        else:
+            # this is not ideal but we have a lot of tests to adjust if don't do it
+            language = ModelLanguage.sql
+
         dct = {
             "alias": name,
             "schema": self.default_schema,
@@ -203,7 +207,8 @@ class ConfiguredParser(
             "path": path,
             "original_file_path": block.path.original_file_path,
             "package_name": self.project.project_name,
-            "raw_sql": block.contents,
+            "raw_code": block.contents,
+            "language": language,
             "unique_id": self.generate_unique_id(name),
             "config": self.config_dict(config),
             "checksum": block.file.checksum.to_dict(omit_none=True),
@@ -219,7 +224,7 @@ class ConfiguredParser(
                 name=block.name,
                 path=path,
                 original_file_path=block.path.original_file_path,
-                raw_sql=block.contents,
+                raw_code=block.contents,
             )
             raise ParsingException(msg, node=node)
 
@@ -234,7 +239,7 @@ class ConfiguredParser(
 
         # this goes through the process of rendering, but just throws away
         # the rendered result. The "macro capture" is the point?
-        get_rendered(parsed_node.raw_sql, context, parsed_node, capture_macros=True)
+        get_rendered(parsed_node.raw_code, context, parsed_node, capture_macros=True)
         return context
 
     # This is taking the original config for the node, converting it to a dict,
@@ -286,9 +291,27 @@ class ConfiguredParser(
         if "meta" in config_dict and config_dict["meta"]:
             parsed_node.meta = config_dict["meta"]
 
+        # If we have docs in the config, merge with the node level, for backwards
+        # compatibility with earlier node-only config.
+        if "docs" in config_dict and config_dict["docs"]:
+            # we set show at the value of the config if it is set, otherwize, inherit the value
+            docs_show = (
+                config_dict["docs"]["show"]
+                if "show" in config_dict["docs"]
+                else parsed_node.docs.show
+            )
+            if "node_color" in config_dict["docs"]:
+                parsed_node.docs = Docs(
+                    show=docs_show, node_color=config_dict["docs"]["node_color"]
+                )
+            else:
+                parsed_node.docs = Docs(show=docs_show)
+
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
-        parsed_node.unrendered_config = config.build_config_dict(rendered=False)
+        parsed_node.unrendered_config = config.build_config_dict(
+            rendered=False, patch_config_dict=patch_config_dict
+        )
 
         parsed_node.config_call_dict = config._config_call_dict
 

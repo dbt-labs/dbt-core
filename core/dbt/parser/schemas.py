@@ -57,6 +57,7 @@ from dbt.exceptions import (
     InternalException,
     raise_duplicate_source_patch_name,
     warn_or_error,
+    CompilationException,
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
@@ -217,7 +218,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         tags: List[str],
         fqn: List[str],
         name: str,
-        raw_sql: str,
+        raw_code: str,
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
@@ -252,7 +253,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             "path": path,
             "original_file_path": target.original_file_path,
             "package_name": self.project.project_name,
-            "raw_sql": raw_sql,
+            "raw_code": raw_code,
+            "language": "sql",
             "unique_id": self.generate_unique_id(name, test_hash),
             "config": self.config_dict(config),
             "test_metadata": test_metadata,
@@ -271,7 +273,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 name=target.name,
                 path=path,
                 original_file_path=target.original_file_path,
-                raw_sql=raw_sql,
+                raw_code=raw_code,
             )
             raise ParsingException(msg, node=node) from exc
 
@@ -302,6 +304,15 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 target.original_file_path, exc.msg, context
             )
             raise ParsingException(msg) from exc
+
+        except CompilationException as exc:
+            context = _trimmed(str(target))
+            msg = (
+                "Invalid generic test configuration given in "
+                f"{target.original_file_path}: \n{exc.msg}\n\t@: {context}"
+            )
+            raise CompilationException(msg) from exc
+
         original_name = os.path.basename(target.original_file_path)
         compiled_path = get_pseudo_test_path(builder.compiled_name, original_name)
 
@@ -337,7 +348,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             fqn=fqn,
             tags=tags,
             name=builder.fqn_name,
-            raw_sql=builder.build_raw_sql(),
+            raw_code=builder.build_raw_code(),
             column_name=column_name,
             test_metadata=metadata,
             file_key_name=file_key_name,
@@ -401,7 +412,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 # values. That happens in compilation.
                 add_rendered_test_kwargs(context, node, capture_macros=True)
                 # the parsed node is not rendered in the native context.
-                get_rendered(node.raw_sql, context, node, capture_macros=True)
+                get_rendered(node.raw_code, context, node, capture_macros=True)
                 self.update_parsed_node_config(node, config)
                 # env_vars should have been updated in the context env_var method
             except ValidationError as exc:
@@ -446,7 +457,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         add_rendered_test_kwargs(context, node, capture_macros=True)
 
         # the parsed node is not rendered in the native context.
-        get_rendered(node.raw_sql, context, node, capture_macros=True)
+        get_rendered(node.raw_code, context, node, capture_macros=True)
 
     def parse_test(
         self,
@@ -797,6 +808,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 if self.key != "macros":
                     # macros don't have the 'config' key support yet
                     self.normalize_meta_attribute(data, path)
+                    self.normalize_docs_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
@@ -804,21 +816,27 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
             else:
                 yield node
 
-    # We want to raise an error if 'meta' is in two places, and move 'meta'
+    # We want to raise an error if some attributes are in two places, and move them
     # from toplevel to config if necessary
-    def normalize_meta_attribute(self, data, path):
-        if "meta" in data:
-            if "config" in data and "meta" in data["config"]:
+    def normalize_attribute(self, data, path, attribute):
+        if attribute in data:
+            if "config" in data and attribute in data["config"]:
                 raise ParsingException(
                     f"""
-                    In {path}: found meta dictionary in 'config' dictionary and as top-level key.
+                    In {path}: found {attribute} dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
                 """.strip()
                 )
             else:
                 if "config" not in data:
                     data["config"] = {}
-                data["config"]["meta"] = data.pop("meta")
+                data["config"][attribute] = data.pop(attribute)
+
+    def normalize_meta_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "meta")
+
+    def normalize_docs_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "docs")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
@@ -1029,7 +1047,7 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label,
             type=unparsed.type,
-            sql=unparsed.sql,
+            sql=str(unparsed.sql),
             timestamp=unparsed.timestamp,
             dimensions=unparsed.dimensions,
             time_grains=unparsed.time_grains,
@@ -1044,8 +1062,17 @@ class MetricParser(YamlReader):
             self.schema_parser.manifest,
             package_name,
         )
-        model_ref = "{{ " + unparsed.model + " }}"
-        get_rendered(model_ref, ctx, parsed, capture_macros=True)
+
+        if parsed.model is not None:
+            model_ref = "{{ " + parsed.model + " }}"
+            get_rendered(model_ref, ctx, parsed)
+
+        parsed.sql = get_rendered(
+            parsed.sql,
+            ctx,
+            node=parsed,
+        )
+
         return parsed
 
     def parse(self) -> Iterable[ParsedMetric]:

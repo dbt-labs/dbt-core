@@ -261,7 +261,7 @@ def get_hash(model):
 
 
 def get_hashed_contents(model):
-    return hashlib.md5(model.raw_sql.encode("utf-8")).hexdigest()
+    return hashlib.md5(model.raw_code.encode("utf-8")).hexdigest()
 
 
 def flatten_nodes(dep_list):
@@ -315,6 +315,13 @@ def timestring() -> str:
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
     return datetime.datetime.utcnow().isoformat() + "Z"
+
+
+def humanize_execution_time(execution_time: int) -> str:
+    minutes, seconds = divmod(execution_time, 60)
+    hours, minutes = divmod(minutes, 60)
+
+    return f" in {int(hours)} hours {int(minutes)} minutes and {seconds:0.2f} seconds"
 
 
 class JSONEncoder(json.JSONEncoder):
