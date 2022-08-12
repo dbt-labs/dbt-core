@@ -199,7 +199,7 @@ model_ephemeral = """
 """
 
 incremental_not_schema_change_sql = """
-{{ config(materialized="incremental", unique_key="user_id_current_time") }}
+{{ config(materialized="incremental", unique_key="user_id_current_time",on_schema_change="sync_all_columns") }}
 select
     1 || '-' || current_timestamp as user_id_current_time,
     {% if is_incremental() %}
