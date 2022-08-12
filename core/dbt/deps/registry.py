@@ -3,6 +3,8 @@ import functools
 from typing import List
 
 from dbt import semver
+from dbt import flags
+from dbt.version import get_installed_version
 from dbt.clients import registry, system
 from dbt.contracts.project import (
     RegistryPackageMetadata,
@@ -125,10 +127,14 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
             new_msg = "Version error for package {}: {}".format(self.name, e)
             raise DependencyException(new_msg) from e
 
-        available = registry.get_available_versions(self.package)
+        should_version_check = bool(flags.VERSION_CHECK)
+        dbt_version = get_installed_version()
+        compatible_versions = registry.get_compatible_versions(
+            self.package, dbt_version, should_version_check
+        )
         prerelease_version_specified = any(bool(version.prerelease) for version in self.versions)
         installable = semver.filter_installable(
-            available, self.install_prerelease or prerelease_version_specified
+            compatible_versions, self.install_prerelease or prerelease_version_specified
         )
         available_latest = installable[-1]
 

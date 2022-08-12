@@ -14,6 +14,7 @@ from dbt.events.types import (
 )
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
 from dbt import deprecations
+from dbt import semver
 import os
 
 if os.getenv("DBT_PACKAGE_HUB_URL"):
@@ -125,10 +126,46 @@ def package_version(package_name, version, registry_base_url=None) -> Dict[str, 
     return response[version]
 
 
-def get_available_versions(package_name) -> List["str"]:
+def is_compatible_version(package_spec, dbt_version) -> bool:
+    works_with = package_spec.get("works_with")
+    if not works_with:
+        # if version requirements are missing or empty, assume it's compatible
+        return True
+    else:
+        # determine whether dbt_version satisfies this package's require-dbt-version config
+        if isinstance(works_with, list):
+            require_dbt_version = [str(v) for v in works_with]
+        elif works_with:
+            require_dbt_version = [works_with]
+        supported_versions = [
+            semver.VersionSpecifier.from_version_string(v) for v in require_dbt_version
+        ]
+        supported_range = semver.reduce_versions(*supported_versions)
+        return semver.versions_compatible(dbt_version, supported_range.start, supported_range.end)
+
+
+def get_compatible_versions(package_name, dbt_version, should_version_check) -> List["str"]:
     # returns a list of all available versions of a package
     response = package(package_name)
-    return list(response)
+
+    # if the user doesn't care about installing compatible versions, just return them all
+    if not should_version_check:
+        return list(response)
+
+    # otherwise, only return versions that are compatible with the installed version of dbt-core
+    else:
+        compatible_versions = [
+            pkg_version
+            for pkg_version, info in response.items()
+            if is_compatible_version(info, dbt_version)
+        ]
+
+        if not compatible_versions:
+            raise Exception(
+                f"No compatible versions of {package_name} found for dbt-core version {dbt_version}"
+            )
+
+        return compatible_versions
 
 
 def _get_index(registry_base_url=None):
