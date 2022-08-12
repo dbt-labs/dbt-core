@@ -198,6 +198,17 @@ model_ephemeral = """
   select * from {{ ref('ephemeral') }}
 """
 
+incremental_not_schema_change_sql = """
+{{ config(materialized="incremental", unique_key="user_id_current_time",on_schema_change="sync_all_columns") }}
+select
+    1 || '-' || current_timestamp as user_id_current_time,
+    {% if is_incremental() %}
+        'thisis18characters' as platform
+    {% else %}
+        'okthisis20characters' as platform
+    {% endif %}
+"""
+
 base_materialized_var_sql = config_materialized_var + model_base
 base_table_sql = config_materialized_table + model_base
 base_view_sql = config_materialized_view + model_base
