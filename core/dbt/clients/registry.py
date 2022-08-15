@@ -127,16 +127,14 @@ def package_version(package_name, version, registry_base_url=None) -> Dict[str, 
 
 
 def is_compatible_version(package_spec, dbt_version) -> bool:
-    works_with = package_spec.get("works_with")
-    if not works_with:
-        # if version requirements are missing or empty, assume it's compatible
+    require_dbt_version = package_spec.get("require_dbt_version")
+    if not require_dbt_version:
+        # if version requirements are missing or empty, assume any version is compatible
         return True
     else:
         # determine whether dbt_version satisfies this package's require-dbt-version config
-        if isinstance(works_with, list):
-            require_dbt_version = [str(v) for v in works_with]
-        elif works_with:
-            require_dbt_version = [works_with]
+        if not isinstance(require_dbt_version, list):
+            require_dbt_version = [require_dbt_version]
         supported_versions = [
             semver.VersionSpecifier.from_version_string(v) for v in require_dbt_version
         ]

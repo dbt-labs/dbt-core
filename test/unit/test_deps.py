@@ -581,7 +581,7 @@ class TestPackageSpec(unittest.TestCase):
                         'blahblah': 'asdfas',
                     },
                     # this one shouldn't be picked!
-                    'works_with': require_next_version,
+                    'require_dbt_version': require_next_version,
                     'downloads': {
                         'tarball': 'https://example.com/invalid-url!',
                         'extra': 'field',
