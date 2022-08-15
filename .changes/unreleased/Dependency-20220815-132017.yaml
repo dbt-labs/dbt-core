@@ -1,0 +1,8 @@
+kind: Dependency
+body: "Bump freezegun from 0.3.12 to 1.2.2"
+time: 2022-08-15T13:20:17.00000Z
+custom:
+  Author: dependabot[bot]
+  Issue: 4904
+  PR: 5653
+
