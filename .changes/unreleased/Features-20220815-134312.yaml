@@ -1,0 +1,7 @@
+kind: Features
+body: Check dbt-core version requirements when installing Hub packages
+time: 2022-08-15T13:43:12.965143+01:00
+custom:
+  Author: jtcohen6
+  Issue: "5648"
+  PR: "5651"
