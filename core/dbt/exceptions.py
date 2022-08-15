@@ -778,9 +778,10 @@ def package_not_found(package_name):
 
 def package_version_not_found(package_name, version_range, available_versions):
     base_msg = (
-        "Could not find a matching version for package {}\n"
+        "Could not find a matching compatible version for package {}\n"
         "  Requested range: {}\n"
-        "  Available versions: {}"
+        "  Compatible versions: {}\n"
+        "  (Not shown: versions incompatible with installed version of dbt-core)"
     )
     raise_dependency_error(base_msg.format(package_name, version_range, available_versions))
 
