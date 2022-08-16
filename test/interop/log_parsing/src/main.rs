@@ -166,69 +166,97 @@ fn deserialized_input(log_lines: &[String]) -> serde_json::Result<Vec<LogLine>> 
         .collect()
 }
 
-// turn a String into a LogLine and back into a String returning both Strings so
-// they can be compared
-fn deserialize_serialize_loop(
-    log_lines: &[String],
-) -> serde_json::Result<Vec<(String, String)>> {
-    log_lines
-        .into_iter()
-        .map(|log_line| {
-            serde_json::from_str::<LogLine>(log_line).and_then(|parsed| {
-                serde_json::to_string(&parsed).map(|json| (log_line.clone(), json))
-            })
-        })
-        .collect()
+// Take a json string, deserialize it, serialize it, then deserialize it again.
+// return the two json values so their values can be compared.
+// this helps to check if the deserialize-serialize loop drops necessary information, or adds unexpected information.
+//
+// This function is used as a helper to check every json logline that dbt outputs for expected values.
+// In practice, this often returns an Err value if the logs have unexpected non-json values such as logged
+// exceptions, warnings, or printed statements.
+//
+// We can't compare the two serialized strings because the original logline will contain many
+// fields that aren't yet modeled in this deserializer. We aren't checking that everything matches up,
+// just these modeled fields, so we have to deserialize twice.
+fn deserialize_twice<'a, T : Serialize + Deserialize<'a>>(
+    json_str: &'a str,
+) -> Result<(serde_json::Value, serde_json::Value), String> {
+    // deserialize the string into a JSON value with no knowledge of T's structure
+    let deserialized_json = serde_json::from_str::<serde_json::Value>(json_str)
+        .map_err(|_| json_str)?;
+
+    // deserialize the string into a T
+    let deserialized_t = serde_json::from_str::<'a, T>(json_str)
+        .map_err(|_| json_str)?;
+
+    // serialize the T value into a string again
+    let serialized_t = serde_json::to_string(&deserialized_t)
+        .map_err(|_| json_str)?;
+
+    // deserialize the string into a JSON value
+    let deserialized_t_json = serde_json::from_str::<serde_json::Value>(&serialized_t)
+        .map_err(|_| json_str)?;
+
+    Ok((deserialized_json, deserialized_t_json))
+}
+
+// This is only used to make more useful error messages and avoid assert statements that say that two massive
+// json objects are not the same. this will dig into the values to find an inner json value where they differ.
+fn compare_json(x: &serde_json::Value, y: &serde_json::Value) -> Result<(), serde_json::Value> {
+    if x == y {
+        return Ok(())
+    }
+
+    match (x, y) {
+        // check for object key mismatches
+        (serde_json::Value::Object(mx), serde_json::Value::Object(my)) => {
+            // check if the second map is missing keys from the first
+            for (xk, xv) in mx {
+                if !my.contains_key(xk) {
+                    let mut m_err = serde_json::Map::new();
+                    m_err.insert(xk.clone(), xv.clone());
+                    return Err(serde_json::Value::Object(m_err));
+                }
+            }
+
+            // check if the first map is missing keys from the second
+            for (yk, yv) in my {
+                if !mx.contains_key(yk) {
+                    let mut m_err = serde_json::Map::new();
+                    m_err.insert(yk.clone(), yv.clone());
+                    return Err(serde_json::Value::Object(m_err));
+                }
+            }
+
+            // all the keys are the same, so compare each value recursively.
+            for k in mx.keys() {
+                // unwrapping (which panics) since we know all these keys exist in both maps.
+                let xv = mx.get(k).unwrap();
+                let yv = my.get(k).unwrap();
+
+                compare_json(xv, yv)?;
+            }
+
+            // only reaches here if all the keys are the same and all of the values are the same
+            // and the top-level equality check on the map failed.
+            Ok(())
+        },
+
+        // must be a non-object json value. since there are no keys to specify, return the first value.
+        (x, _) => Err(x.clone())
+    }
 }
 
 // make sure when we read a string in then output it back to a string the two strings
 // contain all the same key-value pairs.
 fn test_deserialize_serialize_is_unchanged(lines: &[String]) {
-    let objects: Result<Vec<(serde_json::Value, serde_json::Value)>, serde_json::Error> =
-        deserialize_serialize_loop(lines).and_then(|v| {
-            v.into_iter()
-                .map(|(s0, s1)| {
-                    serde_json::from_str::<serde_json::Value>(&s0).and_then(|s0v| {
-                        serde_json::from_str::<serde_json::Value>(&s1).map(|s1v| (s0v, s1v))
-                    })
-                })
-                .collect()
-        });
-
-    match objects {
-        Err(e) => assert!(false, "{}", e),
-        Ok(v) => {
-            for pair in v {
-                match pair {
-                    (
-                        serde_json::Value::Object(original),
-                        serde_json::Value::Object(looped),
-                    ) => {
-                        // looping through each key of each json value gives us meaningful failure messages
-                        // instead of "this big string" != "this other big string"
-                        for (key, value) in original.clone() {
-                            let looped_val = looped.get(&key);
-                            assert_eq!(
-                                looped_val,
-                                Some(&value),
-                                "original key value ({}, {}) expected in re-serialized result",
-                                key,
-                                value
-                            )
-                        }
-                        for (key, value) in looped.clone() {
-                            let original_val = original.get(&key);
-                            assert_eq!(
-                                original_val,
-                                Some(&value),
-                                "looped key value ({}, {}) not found in original result",
-                                key,
-                                value
-                            )
-                        }
-                    }
-                    _ => assert!(false, "not comparing json objects"),
-                }
+    for line in lines {
+        match deserialize_twice::<LogLine>(line) {
+            // error if there are not two values to compare
+            Err(log_line) => assert!(false, "Logline cannot be deserialized into a json LogLine twice for value comparison:\n{}\n", log_line),
+            // if there are two values to compare, assert they are the same or find the key-value pair where they differ.
+            Ok((x, y)) => match compare_json(&x, &y) {
+                Err(json_value) => assert!(false, "LogLine values were inconsistent.\nSpecific difference:\n{}\nWhole log line:\n{}", json_value, line),
+                Ok(()) => ()
             }
         }
     }
