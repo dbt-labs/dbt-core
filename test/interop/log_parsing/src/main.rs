@@ -184,17 +184,13 @@ fn deserialized_input(log_lines: &[String]) -> serde_json::Result<Vec<LogLine>> 
         .collect()
 }
 
-// Take a json string, deserialize it, serialize it, then deserialize it again.
-// return the two json values so their values can be compared.
-// this helps to check if the deserialize-serialize loop drops necessary information, or adds unexpected information.
+// Take a json string, deserialize it to a known value, and a generic json value.
+// return the two json values so they can be compared.
+// this helps to check if the deserialize-serialize loop for the known value drops necessary information.
 //
 // This function is used as a helper to check every json logline that dbt outputs for expected values.
 // In practice, this often returns an Err value if the logs have unexpected non-json values such as logged
 // exceptions, warnings, or printed statements.
-//
-// We can't compare the two serialized strings because the original logline will contain many
-// fields that aren't yet modeled in this deserializer. We aren't checking that everything matches up,
-// just these modeled fields, so we have to deserialize twice.
 fn deserialize_twice<'a, T: Serialize + Deserialize<'a>>(
     json_str: &'a str,
 ) -> Result<(serde_json::Value, serde_json::Value), String> {
