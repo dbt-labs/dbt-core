@@ -37,6 +37,10 @@ from dbt.exceptions import (
     UndefinedMacroException,
 )
 from dbt import flags
+from dbt.node_types import ModelLanguage
+
+
+SUPPORTED_LANG_ARG = jinja2.nodes.Name("supported_languages", "param")
 
 
 def _linecache_inject(source, write):
@@ -364,8 +368,19 @@ class MaterializationExtension(jinja2.ext.Extension):
                 value = parser.parse_expression()
                 adapter_name = value.value
 
+            elif target.name == "supported_languages":
+                target.set_ctx("param")
+                node.args.append(target)
+                parser.stream.expect("assign")
+                languages = parser.parse_expression()
+                node.defaults.append(languages)
+
             else:
                 invalid_materialization_argument(materialization_name, target.name)
+
+        if SUPPORTED_LANG_ARG not in node.args:
+            node.args.append(SUPPORTED_LANG_ARG)
+            node.defaults.append(jinja2.nodes.List([jinja2.nodes.Const("sql")]))
 
         node.name = get_materialization_macro_name(materialization_name, adapter_name)
 
@@ -632,3 +647,17 @@ def add_rendered_test_kwargs(
     # when the test node was created in _parse_generic_test.
     kwargs = deep_map_render(_convert_function, node.test_metadata.kwargs)
     context[GENERIC_TEST_KWARGS_NAME] = kwargs
+
+
+def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
+    no_args = not node.args or not node.defaults
+    dif_args_and_defaults = len(node.args) != len(node.defaults)
+    no_langs_found = SUPPORTED_LANG_ARG not in node.args
+
+    # TODO: should this throw on differing arg and default lengths?
+    if no_args or dif_args_and_defaults or no_langs_found:
+        return []
+
+    lang_idx = node.args.index(SUPPORTED_LANG_ARG)
+
+    return [ModelLanguage[item.value] for item in node.defaults[lang_idx].items]

@@ -41,7 +41,7 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
 from dbt import flags
-from dbt.node_types import NodeType
+from dbt.node_types import ModelLanguage, NodeType
 
 
 from .model_config import (
@@ -516,6 +516,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
+    supported_languages: Optional[List[ModelLanguage]] = None
 
     def patch(self, patch: ParsedMacroPatch):
         self.patch_path: Optional[str] = patch.file_id

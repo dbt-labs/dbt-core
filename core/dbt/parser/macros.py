@@ -80,13 +80,18 @@ class MacroParser(BaseParser[ParsedMacro]):
                     f"Found multiple macros in {block.full_block}, expected 1", node=base_node
                 )
 
-            macro_name = macro_nodes[0].name
+            macro = macro_nodes[0]
 
-            if not macro_name.startswith(MACRO_PREFIX):
+            if not macro.name.startswith(MACRO_PREFIX):
                 continue
 
-            name: str = macro_name.replace(MACRO_PREFIX, "")
+            name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
+
+            supported_languages = jinja.get_supported_languages(macro)
+            if supported_languages:
+                node.supported_languages = supported_languages
+
             yield node
 
     def parse_file(self, block: FileBlock):

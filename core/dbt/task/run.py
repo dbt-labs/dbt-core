@@ -25,6 +25,7 @@ from dbt.exceptions import (
     CompilationException,
     InternalException,
     RuntimeException,
+    ValidationException,
     missing_materialization,
 )
 from dbt.events.functions import fire_event, get_invocation_id
@@ -265,6 +266,15 @@ class ModelRunner(CompileRunner):
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
         context_config = context["config"]
+
+        mat_has_supported_langs = hasattr(materialization_macro, "supported_languages")
+        model_lang_supported = model.language in materialization_macro.supported_languages
+        if mat_has_supported_langs and not model_lang_supported:
+            str_langs = [str(lang) for lang in materialization_macro.supported_languages]
+            raise ValidationException(
+                f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
+                f'got "{model.language}"'
+            )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
         try:
