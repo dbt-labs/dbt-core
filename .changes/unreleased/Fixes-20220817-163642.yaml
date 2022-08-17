@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix Unexpected behavior when chaining methods on dbt-ref'ed/sourced dataframes
+time: 2022-08-17T16:36:42.678275-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "5646"
+  PR: "5677"
