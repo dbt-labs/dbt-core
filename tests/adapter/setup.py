@@ -35,7 +35,7 @@ setup(
     long_description_content_type="text/markdown",
     author="dbt Labs",
     author_email="info@dbtlabs.com",
-    url="https://github.com/dbt-labs/dbt-tests-adapter",
+    url="https://github.com/dbt-labs/dbt-core/tree/main/tests/adapter",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     install_requires=[
         "dbt-core=={}".format(package_version),
