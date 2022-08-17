@@ -549,9 +549,14 @@ def model(dbt, session):
     from torch import b
     import textblob.text
     import sklearn
-    df = dbt.ref("my_sql_model")
-    df = dbt.ref("my_sql_model")
-    df = dbt.ref("my_sql_model_2")
+    df0 = pandas(dbt.ref("a_model"))
+    df1 = dbt.ref("my_sql_model").task.limit(2)
+    df2 = dbt.ref("my_sql_model_1")
+    df3 = dbt.ref("my_sql_model_2")
+    df4 = dbt.source("test", 'table1').limit(max = [max(dbt.ref('something'))])
+    df5 = [dbt.ref('test1')]
+    a_dict = {'test2' : dbt.ref('test2')}
+    df5 = anotherfunction({'test2' : dbt.ref('test3')})
 
     df = df.limit(2)
     return df   
@@ -582,7 +587,8 @@ def model(dbt, session):
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table', 'packages':python_packages},
             config_call_dict={'materialized': 'table', 'packages':python_packages},
-            refs=[['my_sql_model'], ['my_sql_model'], ['my_sql_model_2']]
+            refs=[['a_model'], ['my_sql_model'], ['my_sql_model_1'], ['my_sql_model_2'], ['something'], ['test1'], ['test2'], ['test3']],
+            sources = [['test', 'table1']],
         )
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' + normalize('models/nested/py_model.py')
