@@ -70,8 +70,8 @@ class this:
 
 class dbtObj:
     def __init__(self, load_df_function) -> None:
-        self.source = lambda x: source(x, dbt_load_df_function=load_df_function)
-        self.ref = lambda x: ref(x, dbt_load_df_function=load_df_function)
+        self.source = lambda *args: source(*args, dbt_load_df_function=load_df_function)
+        self.ref = lambda *args: ref(*args, dbt_load_df_function=load_df_function)
         self.config = config
         self.this = this()
         self.is_incremental = {{ is_incremental() }}
