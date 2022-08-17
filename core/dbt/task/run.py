@@ -407,6 +407,35 @@ class RunTask(CompileTask):
             HookFinished(stat_line=stat_line, execution=execution, execution_time=execution_time)
         )
 
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        if not self.args.defer:
+            return None
+
+        state = self.previous_state
+        if state is None:
+            raise RuntimeException(
+                "Received a --defer argument, but no value was provided " "to --state"
+            )
+
+        if state.manifest is None:
+            raise RuntimeException(f'Could not find manifest in --state path: "{self.args.state}"')
+        return state.manifest
+
+    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
+        deferred_manifest = self._get_deferred_manifest()
+        if deferred_manifest is None:
+            return
+        if self.manifest is None:
+            raise InternalException(
+                "Expected to defer to manifest, but there is no runtime " "manifest to defer from!"
+            )
+        self.manifest.merge_from_artifact(
+            adapter=adapter,
+            other=deferred_manifest,
+            selected=selected_uids,
+            favor_state=self.args.favor_state,
+        )
+
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
             required_schemas = self.get_model_schemas(adapter, selected_uids)

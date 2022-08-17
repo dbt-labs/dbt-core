@@ -999,6 +999,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter,
         other: "WritableManifest",
         selected: AbstractSet[UniqueID],
+        favor_state: bool,
     ) -> None:
         """Given the selected unique IDs and a writable manifest, update this
         manifest by replacing any unselected nodes with their counterpart.
@@ -1013,7 +1014,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 node.resource_type in refables
                 and not node.is_ephemeral
                 and unique_id not in selected
-                and not adapter.get_relation(current.database, current.schema, current.identifier)
+                and (
+                    not adapter.get_relation(current.database, current.schema, current.identifier)
+                    or favor_state
+                )
             ):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
