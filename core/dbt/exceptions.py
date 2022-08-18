@@ -787,8 +787,8 @@ def package_version_not_found(
     addendum = (
         (
             "\n"
-            "  Not shown: package versions incompatible with installed version of dbt-core"
-            "  Update your requested range, or run 'dbt --no-version-check deps'"
+            "  Not shown: package versions incompatible with installed version of dbt-core\n"
+            "  To include them, run 'dbt --no-version-check deps'"
         )
         if should_version_check
         else ""
