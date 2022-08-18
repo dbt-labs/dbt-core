@@ -1,3 +1,4 @@
+import re
 import threading
 from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
@@ -413,9 +414,24 @@ class RelationsCache:
         :raises InternalError: If the new key is already present.
         """
         if new_key in self.relations:
+            # Tell user when collision caused by model names truncated during
+            # materialization.
+            match = re.search("__dbt_backup|__dbt_tmp$", new_key.identifier)
+            if match:
+                truncated_model_name_prefix = new_key.identifier[: match.start()]
+                message_addendum = (
+                    "\n\nName collisions can occur when the length of two "
+                    "models' names approach your database's builtin limit. "
+                    "Try restructuring your project such that no two models "
+                    "share the prefix '{}'.".format(truncated_model_name_prefix)
+                    + " Then, clean your warehouse of any removed models."
+                )
+            else:
+                message_addendum = ""
+
             dbt.exceptions.raise_cache_inconsistent(
-                "in rename, new key {} already in cache: {}".format(
-                    new_key, list(self.relations.keys())
+                "in rename, new key {} already in cache: {}{}".format(
+                    new_key, list(self.relations.keys()), message_addendum
                 )
             )
 
