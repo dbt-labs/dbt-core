@@ -1,0 +1,7 @@
+kind: Features
+body: Enable use of incremental_predicates config for incremental merge strategy models
+time: 2022-08-18T11:11:00.939357+01:00
+custom:
+  Author: NiallRees
+  Issue: "5680"
+  PR: "5679"
