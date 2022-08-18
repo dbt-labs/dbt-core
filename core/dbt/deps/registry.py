@@ -136,15 +136,17 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
         installable = semver.filter_installable(
             compatible_versions, self.install_prerelease or prerelease_version_specified
         )
-        latest_compatible = installable[-1]
-
-        # for now, pick a version and then recurse. later on,
-        # we'll probably want to traverse multiple options
-        # so we can match packages. not going to make a difference
-        # right now.
-        target = semver.resolve_to_specific_version(range_, installable)
+        if installable:
+            # for now, pick a version and then recurse. later on,
+            # we'll probably want to traverse multiple options
+            # so we can match packages. not going to make a difference
+            # right now.
+            target = semver.resolve_to_specific_version(range_, installable)
+        else:
+            target = None
         if not target:
-            package_version_not_found(self.package, range_, installable)
+            package_version_not_found(self.package, range_, installable, should_version_check)
+        latest_compatible = installable[-1]
         return RegistryPinnedPackage(
             package=self.package, version=target, version_latest=latest_compatible
         )

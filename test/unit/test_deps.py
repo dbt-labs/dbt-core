@@ -239,8 +239,7 @@ class TestHubPackage(unittest.TestCase):
         msg = (
             "Could not find a matching compatible version for package "
             "dbt-labs-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
-            "Compatible versions: ['0.1.2', '0.1.3']\n  "
-            "(Not shown: versions incompatible with installed version of dbt-core)"
+            "Compatible versions: ['0.1.2', '0.1.3']\n"
         )
         self.assertEqual(msg, str(exc.exception))
 

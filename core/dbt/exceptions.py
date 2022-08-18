@@ -776,14 +776,25 @@ def package_not_found(package_name):
     raise_dependency_error("Package {} was not found in the package index".format(package_name))
 
 
-def package_version_not_found(package_name, version_range, available_versions):
+def package_version_not_found(
+    package_name, version_range, available_versions, should_version_check
+):
     base_msg = (
         "Could not find a matching compatible version for package {}\n"
         "  Requested range: {}\n"
         "  Compatible versions: {}\n"
-        "  (Not shown: versions incompatible with installed version of dbt-core)"
     )
-    raise_dependency_error(base_msg.format(package_name, version_range, available_versions))
+    addendum = (
+        (
+            "\n"
+            "  Not shown: package versions incompatible with installed version of dbt-core"
+            "  Update your requested range, or run 'dbt --no-version-check deps'"
+        )
+        if should_version_check
+        else ""
+    )
+    msg = base_msg.format(package_name, version_range, available_versions) + addendum
+    raise_dependency_error(msg)
 
 
 def invalid_materialization_argument(name, argument):

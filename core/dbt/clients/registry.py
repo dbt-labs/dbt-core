@@ -138,8 +138,7 @@ def is_compatible_version(package_spec, dbt_version) -> bool:
         supported_versions = [
             semver.VersionSpecifier.from_version_string(v) for v in require_dbt_version
         ]
-        supported_range = semver.reduce_versions(*supported_versions)
-        return semver.versions_compatible(dbt_version, supported_range.start, supported_range.end)
+        return semver.versions_compatible(dbt_version, *supported_versions)
 
 
 def get_compatible_versions(package_name, dbt_version, should_version_check) -> List["str"]:
@@ -157,12 +156,6 @@ def get_compatible_versions(package_name, dbt_version, should_version_check) -> 
             for pkg_version, info in response.items()
             if is_compatible_version(info, dbt_version)
         ]
-
-        if not compatible_versions:
-            raise Exception(
-                f"No compatible versions of {package_name} found for dbt-core version {dbt_version}"
-            )
-
         return compatible_versions
 
 
