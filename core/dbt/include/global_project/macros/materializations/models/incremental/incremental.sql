@@ -50,9 +50,14 @@
 
     {#-- Get the incremental_strategy, the macro to use for the strategy, and build the sql --#}
     {% set incremental_strategy = config.get('incremental_strategy') or 'default' %}
-    {% set incremental_predicates = config.get('incremental_predicates', none) %}
+    {% set incremental_predicates = config.get('incremental_predicates', []) %}
+    {% set predicates = [] %}
+    {% for predicate in incremental_predicates %}
+      {#-- Wrap predicates in parentheses to ensure correct evaluation when later anded --#}
+      {% do predicates.append('(' ~ predicate ~ ')') %}
+    {% endfor %}
     {% set strategy_sql_macro_func = adapter.get_incremental_strategy_macro(context, incremental_strategy) %}
-    {% set strategy_arg_dict = ({'target_relation': target_relation, 'temp_relation': temp_relation, 'unique_key': unique_key, 'dest_columns': dest_columns, 'predicates': incremental_predicates }) %}
+    {% set strategy_arg_dict = ({'target_relation': target_relation, 'temp_relation': temp_relation, 'unique_key': unique_key, 'dest_columns': dest_columns, 'predicates': predicates }) %}
     {% set build_sql = strategy_sql_macro_func(strategy_arg_dict) %}
 
   {% endif %}
