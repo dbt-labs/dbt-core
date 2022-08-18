@@ -241,7 +241,7 @@ class TestHubPackage(unittest.TestCase):
             "dbt-labs-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
             "Compatible versions: ['0.1.2', '0.1.3']\n"
         )
-        self.assertEqual(msg, str(exc.exception))
+        assert msg in str(exc.exception)
 
     def test_resolve_conflict(self):
         a_contract = RegistryPackage(
