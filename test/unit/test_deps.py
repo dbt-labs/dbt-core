@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import unittest
 from unittest import mock
 
@@ -6,6 +8,7 @@ import dbt.exceptions
 from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.clients.registry import is_compatible_version
 from dbt.deps.resolver import resolve_packages
 from dbt.contracts.project import (
     LocalPackage,
@@ -15,6 +18,7 @@ from dbt.contracts.project import (
 
 from dbt.contracts.project import PackageConfig
 from dbt.semver import VersionSpecifier
+from dbt.version import get_installed_version
 
 from dbt.dataclass_schema import ValidationError
 
@@ -114,13 +118,13 @@ class TestHubPackage(unittest.TestCase):
         self.patcher = mock.patch('dbt.deps.registry.registry')
         self.registry = self.patcher.start()
         self.index_cached = self.registry.index_cached
-        self.get_available_versions = self.registry.get_available_versions
+        self.get_compatible_versions = self.registry.get_compatible_versions
         self.package_version = self.registry.package_version
 
         self.index_cached.return_value = [
             'dbt-labs-test/a',
         ]
-        self.get_available_versions.return_value = [
+        self.get_compatible_versions.return_value = [
             '0.1.2', '0.1.3', '0.1.4a1'
         ]
         self.package_version.return_value = {
@@ -235,11 +239,11 @@ class TestHubPackage(unittest.TestCase):
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
             a.resolved()
         msg = (
-            "Could not find a matching version for package "
+            "Could not find a matching compatible version for package "
             "dbt-labs-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
-            "Available versions: ['0.1.2', '0.1.3']"
+            "Compatible versions: ['0.1.2', '0.1.3']\n"
         )
-        self.assertEqual(msg, str(exc.exception))
+        assert msg in str(exc.exception)
 
     def test_resolve_conflict(self):
         a_contract = RegistryPackage(
@@ -509,12 +513,19 @@ class MockRegistry:
     def index_cached(self, registry_base_url=None):
         return sorted(self.packages)
 
-    def get_available_versions(self, name):
+    def package(self, package_name, registry_base_url=None):
         try:
-            pkg = self.packages[name]
+            pkg = self.packages[package_name]
         except KeyError:
             return []
-        return list(pkg)
+        return pkg
+
+    def get_compatible_versions(self, package_name, dbt_version, should_version_check):
+        packages = self.package(package_name)
+        return [
+            pkg_version for pkg_version, info in packages.items()
+            if is_compatible_version(info, dbt_version)
+        ]
 
     def package_version(self, name, version):
         try:
@@ -524,7 +535,13 @@ class MockRegistry:
 
 
 class TestPackageSpec(unittest.TestCase):
-    def setUp(self):
+    def setUp(self):    
+        dbt_version = get_installed_version()
+        next_version = deepcopy(dbt_version)
+        next_version.minor = str(int(next_version.minor) + 1)
+        next_version.prerelease = None
+        require_next_version = ">" + next_version.to_version_string()
+        
         self.patcher = mock.patch('dbt.deps.registry.registry')
         self.registry = self.patcher.start()
         self.mock_registry = MockRegistry(packages={
@@ -556,6 +573,36 @@ class TestPackageSpec(unittest.TestCase):
                         'extra': 'field',
                     },
                     'newfield': ['another', 'value'],
+                },
+                '0.1.4a1': {
+                    'id': 'dbt-labs-test/a/0.1.3a1',
+                    'name': 'a',
+                    'version': '0.1.4a1',
+                    'packages': [],
+                    '_source': {
+                        'blahblah': 'asdfas',
+                    },
+                    'downloads': {
+                        'tarball': 'https://example.com/invalid-url!',
+                        'extra': 'field',
+                    },
+                    'newfield': ['another', 'value'],
+                },
+                '0.2.0': {
+                    'id': 'dbt-labs-test/a/0.2.0',
+                    'name': 'a',
+                    'version': '0.2.0',
+                    'packages': [],
+                    '_source': {
+                        'blahblah': 'asdfas',
+                    },
+                    # this one shouldn't be picked!
+                    'require_dbt_version': require_next_version,
+                    'downloads': {
+                        'tarball': 'https://example.com/invalid-url!',
+                        'extra': 'field',
+                    },
+                    'newfield': ['another', 'value'],
                 }
             },
             'dbt-labs-test/b': {
@@ -577,7 +624,7 @@ class TestPackageSpec(unittest.TestCase):
         })
 
         self.registry.index_cached.side_effect = self.mock_registry.index_cached
-        self.registry.get_available_versions.side_effect = self.mock_registry.get_available_versions
+        self.registry.get_compatible_versions.side_effect = self.mock_registry.get_compatible_versions
         self.registry.package_version.side_effect = self.mock_registry.package_version
 
     def tearDown(self):
@@ -596,3 +643,14 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[0].version, '0.1.3')
         self.assertEqual(resolved[1].name, 'dbt-labs-test/b')
         self.assertEqual(resolved[1].version, '0.2.1')
+
+    def test_dependency_resolution_allow_prerelease(self):
+        package_config = PackageConfig.from_dict({
+            'packages': [
+                {'package': 'dbt-labs-test/a', 'version': '>0.1.2', 'install_prerelease': True},
+                {'package': 'dbt-labs-test/b', 'version': '0.2.1'},
+            ],
+        })
+        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
+        self.assertEqual(resolved[0].name, 'dbt-labs-test/a')
+        self.assertEqual(resolved[0].version, '0.1.4a1')
