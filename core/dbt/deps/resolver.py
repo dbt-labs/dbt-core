@@ -120,7 +120,6 @@ def resolve_packages(
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
-
     renderer = DbtProjectYamlRenderer(config, config.cli_vars)
 
     while pending:
