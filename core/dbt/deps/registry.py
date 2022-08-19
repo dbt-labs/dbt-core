@@ -145,6 +145,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
         else:
             target = None
         if not target:
+            # raise an exception if no installable target version is found
             package_version_not_found(self.package, range_, installable, should_version_check)
         latest_compatible = installable[-1]
         return RegistryPinnedPackage(
