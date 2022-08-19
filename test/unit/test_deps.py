@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import unittest
 from unittest import mock
 
@@ -535,7 +537,7 @@ class MockRegistry:
 class TestPackageSpec(unittest.TestCase):
     def setUp(self):    
         dbt_version = get_installed_version()
-        next_version = dbt_version
+        next_version = deepcopy(dbt_version)
         next_version.minor = str(int(next_version.minor) + 1)
         next_version.prerelease = None
         require_next_version = ">" + next_version.to_version_string()
@@ -562,6 +564,20 @@ class TestPackageSpec(unittest.TestCase):
                     'id': 'dbt-labs-test/a/0.1.3',
                     'name': 'a',
                     'version': '0.1.3',
+                    'packages': [],
+                    '_source': {
+                        'blahblah': 'asdfas',
+                    },
+                    'downloads': {
+                        'tarball': 'https://example.com/invalid-url!',
+                        'extra': 'field',
+                    },
+                    'newfield': ['another', 'value'],
+                },
+                '0.1.4a1': {
+                    'id': 'dbt-labs-test/a/0.1.3a1',
+                    'name': 'a',
+                    'version': '0.1.4a1',
                     'packages': [],
                     '_source': {
                         'blahblah': 'asdfas',
@@ -627,3 +643,14 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[0].version, '0.1.3')
         self.assertEqual(resolved[1].name, 'dbt-labs-test/b')
         self.assertEqual(resolved[1].version, '0.2.1')
+
+    def test_dependency_resolution_allow_prerelease(self):
+        package_config = PackageConfig.from_dict({
+            'packages': [
+                {'package': 'dbt-labs-test/a', 'version': '>0.1.2', 'install_prerelease': True},
+                {'package': 'dbt-labs-test/b', 'version': '0.2.1'},
+            ],
+        })
+        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
+        self.assertEqual(resolved[0].name, 'dbt-labs-test/a')
+        self.assertEqual(resolved[0].version, '0.1.4a1')
