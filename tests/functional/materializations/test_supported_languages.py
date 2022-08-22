@@ -1,6 +1,5 @@
 import pytest
 from dbt.tests.util import run_dbt
-from dbt.exceptions import ValidationException
 
 
 custom_mat_tmpl = """
@@ -24,18 +23,21 @@ def model(dbt, session):
     return
 """
 
+
 class SupportedLanguageBase:
     model_map = {
-        'sql': ('sql_model.sql', models__sql_model),
-        'python': ('py_model.py', models__py_model),
+        "sql": ("sql_model.sql", models__sql_model),
+        "python": ("py_model.py", models__py_model),
     }
 
     @pytest.fixture(scope="class")
     def macros(self):
         custom_mat = custom_mat_tmpl.replace("{}", "")
 
-        if hasattr(self, 'supported_langs'):
-            custom_mat = custom_mat_tmpl.replace("{}", f", supported_languages=[{self.lang_list()}]")
+        if hasattr(self, "supported_langs"):
+            custom_mat = custom_mat_tmpl.replace(
+                "{}", f", supported_languages=[{self.lang_list()}]"
+            )
         return {"custom_mat.sql": custom_mat}
 
     @pytest.fixture(scope="class")
@@ -51,39 +53,46 @@ class SupportedLanguageBase:
 
 
 class TestSupportedLanguages_SupportsDefault_UsingSql(SupportedLanguageBase):
-    use_lang = 'sql'
+    use_lang = "sql"
     expect_pass = True
+
 
 class TestSupportedLanguages_SupportsDefault_UsingPython(SupportedLanguageBase):
-    use_lang = 'python'
+    use_lang = "python"
     expect_pass = False
+
 
 class TestSupportedLanguages_SupportsSql_UsingSql(SupportedLanguageBase):
-    supported_langs = ['sql']
-    use_lang = 'sql'
+    supported_langs = ["sql"]
+    use_lang = "sql"
     expect_pass = True
+
 
 class TestSupportedLanguages_SuppotsSql_UsingPython(SupportedLanguageBase):
-    supported_langs = ['sql']
-    use_lang = 'python'
+    supported_langs = ["sql"]
+    use_lang = "python"
     expect_pass = False
+
 
 class TestSupportedLanguages_SuppotsPython_UsingSql(SupportedLanguageBase):
-    supported_langs = ['python']
-    use_lang = 'sql'
+    supported_langs = ["python"]
+    use_lang = "sql"
     expect_pass = False
 
+
 class TestSupportedLanguages_SuppotsPython_UsingPython(SupportedLanguageBase):
-    supported_langs = ['python']
-    use_lang = 'python'
+    supported_langs = ["python"]
+    use_lang = "python"
     expect_pass = True
+
 
 class TestSupportedLanguages_SuppotsSqlAndPython_UsingSql(SupportedLanguageBase):
-    supported_langs = ['sql', 'python']
-    use_lang = 'sql'
+    supported_langs = ["sql", "python"]
+    use_lang = "sql"
     expect_pass = True
 
+
 class TestSupportedLanguages_SuppotsSqlAndPython_UsingPython(SupportedLanguageBase):
-    supported_langs = ['sql', 'python']
-    use_lang = 'python'
+    supported_langs = ["sql", "python"]
+    use_lang = "python"
     expect_pass = True
