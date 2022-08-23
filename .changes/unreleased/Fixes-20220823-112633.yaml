@@ -1,0 +1,8 @@
+kind: Fixes
+body: Include py.typed in MANIFEST.in. This enables packages that install dbt-core
+  from pypi to use mypy.
+time: 2022-08-23T11:26:33.8415455-07:00
+custom:
+  Author: panasenco
+  Issue: "5703"
+  PR: "5703"
