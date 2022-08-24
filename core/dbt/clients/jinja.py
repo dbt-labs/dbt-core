@@ -37,6 +37,10 @@ from dbt.exceptions import (
     UndefinedMacroException,
 )
 from dbt import flags
+from dbt.node_types import ModelLanguage
+
+
+SUPPORTED_LANG_ARG = jinja2.nodes.Name("supported_languages", "param")
 
 
 def _linecache_inject(source, write):
@@ -364,8 +368,19 @@ class MaterializationExtension(jinja2.ext.Extension):
                 value = parser.parse_expression()
                 adapter_name = value.value
 
+            elif target.name == "supported_languages":
+                target.set_ctx("param")
+                node.args.append(target)
+                parser.stream.expect("assign")
+                languages = parser.parse_expression()
+                node.defaults.append(languages)
+
             else:
                 invalid_materialization_argument(materialization_name, target.name)
+
+        if SUPPORTED_LANG_ARG not in node.args:
+            node.args.append(SUPPORTED_LANG_ARG)
+            node.defaults.append(jinja2.nodes.List([jinja2.nodes.Const("sql")]))
 
         node.name = get_materialization_macro_name(materialization_name, adapter_name)
 
@@ -632,3 +647,21 @@ def add_rendered_test_kwargs(
     # when the test node was created in _parse_generic_test.
     kwargs = deep_map_render(_convert_function, node.test_metadata.kwargs)
     context[GENERIC_TEST_KWARGS_NAME] = kwargs
+
+
+def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
+    if "materialization" not in node.name:
+        raise_compiler_error("Only materialization macros can be used with this function")
+
+    no_kwargs = not node.defaults
+    no_langs_found = SUPPORTED_LANG_ARG not in node.args
+
+    if no_kwargs or no_langs_found:
+        raise_compiler_error(f"No supported_languages found in materialization macro {node.name}")
+
+    lang_idx = node.args.index(SUPPORTED_LANG_ARG)
+    # indexing defaults from the end
+    # since supported_languages is a kwarg, and kwargs are at always after args
+    return [
+        ModelLanguage[item.value] for item in node.defaults[-(len(node.args) - lang_idx)].items
+    ]
