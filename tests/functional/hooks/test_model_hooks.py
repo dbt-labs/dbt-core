@@ -213,7 +213,11 @@ class TestHookRefs(BaseTestPrePost):
 class TestPrePostModelHooksOnSeeds(object):
     @pytest.fixture(scope="class")
     def seeds(self):
-        return {"example_seed.csv": seeds__example_seed_csv, "schema.yml": properties__seed_models}
+        return {"example_seed.csv": seeds__example_seed_csv}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": properties__seed_models}
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
