@@ -49,7 +49,9 @@ class SupportedLanguageBase:
         return ", ".join([f"'{l}'" for l in self.supported_langs])
 
     def test_language(self, project):
-        run_dbt(["run"], expect_pass=self.expect_pass)
+        result = run_dbt(["run"], expect_pass=self.expect_pass)
+        if not self.expect_pass:
+            assert "only supports languages" in result.results[0].message
 
 
 class TestSupportedLanguages_SupportsDefault_UsingSql(SupportedLanguageBase):

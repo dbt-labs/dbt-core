@@ -1335,6 +1335,7 @@ def expected_references_manifest(project):
                 "unique_id": "macro.test.test_nothing",
                 "tags": [],
                 "root_path": project.project_root,
+                "supported_languages": None,
                 "arguments": [
                     {
                         "name": "model",
