@@ -650,14 +650,18 @@ def add_rendered_test_kwargs(
 
 
 def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
-    no_args = not node.args or not node.defaults
-    dif_args_and_defaults = len(node.args) != len(node.defaults)
+    if "materialization" not in node.name:
+        raise_compiler_error("Only materialization macros can be used with this function")
+
+    no_kwargs = not node.defaults
     no_langs_found = SUPPORTED_LANG_ARG not in node.args
 
-    # TODO: should this throw on differing arg and default lengths?
-    if no_args or dif_args_and_defaults or no_langs_found:
-        return []
+    if no_kwargs or no_langs_found:
+        raise_compiler_error(f"No supported_languages found in materialization macro {node.name}")
 
     lang_idx = node.args.index(SUPPORTED_LANG_ARG)
-
-    return [ModelLanguage[item.value] for item in node.defaults[lang_idx].items]
+    # indexing defaults from the end
+    # since supported_languages is a kwarg, and kwargs are at always after args
+    return [
+        ModelLanguage[item.value] for item in node.defaults[-(len(node.args) - lang_idx)].items
+    ]

@@ -87,11 +87,9 @@ class MacroParser(BaseParser[ParsedMacro]):
 
             name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
-
-            supported_languages = jinja.get_supported_languages(macro)
-            if supported_languages:
-                node.supported_languages = supported_languages
-
+            # get supported_languages for materialization macro
+            if "materialization" in name:
+                node.supported_languages = jinja.get_supported_languages(macro)
             yield node
 
     def parse_file(self, block: FileBlock):
