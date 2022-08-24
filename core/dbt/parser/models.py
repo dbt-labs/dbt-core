@@ -32,6 +32,10 @@ from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import ParsingException, validator_error_message, UndefinedMacroException
 
 
+dbt_function_key_words = set(["ref", "source", "config", "get"])
+dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
+
+
 class PythonValidationVisitor(ast.NodeVisitor):
     def __init__(self):
         super().__init__()
@@ -108,13 +112,40 @@ class PythonParseVisitor(ast.NodeVisitor):
         return arg_literals, kwarg_literals
 
     def visit_Call(self, node: ast.Call) -> None:
+        # check weather the current call could be a dbt function call
+        if isinstance(node.func, ast.Attribute) and node.func.attr in dbt_function_key_words:
+            func_name = self._flatten_attr(node.func)
+            # check weather the current call really is a dbt function call
+            if func_name in dbt_function_full_names:
+                # drop the dot-dbt prefix
+                func_name = func_name.split(".")[-1]
+                args, kwargs = self._get_call_literals(node)
+                self.dbt_function_calls.append((func_name, args, kwargs))
 
-        func_name = self._flatten_attr(node.func)
-        if func_name in ["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"]:
-            # drop the dot-dbt prefix
-            func_name = func_name.split(".")[-1]
-            args, kwargs = self._get_call_literals(node)
-            self.dbt_function_calls.append((func_name, args, kwargs))
+        # no matter what happened above, we should keep visiting the rest of the tree
+        # visit args and kwargs to see if there's call in it
+        for obj in node.args + [kwarg.value for kwarg in node.keywords]:
+            if isinstance(obj, ast.Call):
+                self.visit_Call(obj)
+            # support dbt.ref in list args, kwargs
+            elif isinstance(obj, ast.List) or isinstance(obj, ast.Tuple):
+                for el in obj.elts:
+                    if isinstance(el, ast.Call):
+                        self.visit_Call(el)
+            # support dbt.ref in dict args, kwargs
+            elif isinstance(obj, ast.Dict):
+                for value in obj.values:
+                    if isinstance(value, ast.Call):
+                        self.visit_Call(value)
+        # visit node.func.value if we are at an call attr
+        if isinstance(node.func, ast.Attribute):
+            self.attribute_helper(node.func)
+
+    def attribute_helper(self, node: ast.Attribute) -> None:
+        while isinstance(node, ast.Attribute):
+            node = node.value  # type: ignore
+        if isinstance(node, ast.Call):
+            self.visit_Call(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         for n in node.names:
