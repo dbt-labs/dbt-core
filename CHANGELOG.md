@@ -114,4 +114,3 @@ For information on prior major and minor releases, see their changelogs:
 * [0.13](https://github.com/dbt-labs/dbt-core/blob/0.13.latest/CHANGELOG.md)
 * [0.12](https://github.com/dbt-labs/dbt-core/blob/0.12.latest/CHANGELOG.md)
 * [0.11 and earlier](https://github.com/dbt-labs/dbt-core/blob/0.11.latest/CHANGELOG.md)
-
