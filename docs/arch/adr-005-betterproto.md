@@ -33,4 +33,3 @@ You can use the google protobuf package to generate Python "classes", using the 
 Implementing
 
 # Consequences
-
