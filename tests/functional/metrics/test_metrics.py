@@ -80,7 +80,11 @@ class TestSimpleMetrics:
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = ["metric.test.number_of_people", "metric.test.collective_tenure", "metric.test.collective_window"]
+        expected_metric_ids = [
+            "metric.test.number_of_people",
+            "metric.test.collective_tenure",
+            "metric.test.collective_window",
+        ]
         assert metric_ids == expected_metric_ids
 
 
@@ -445,7 +449,7 @@ class TestExpressionMetric:
                 "time_grains",
                 "dimensions",
                 "filters",
-                "window"
+                "window",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code

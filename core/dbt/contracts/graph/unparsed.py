@@ -452,7 +452,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     name: str
     label: str
     type: str
-    timestamp: str 
+    timestamp: str
     model: Optional[str] = None
     description: str = ""
     sql: Union[str, int] = ""
