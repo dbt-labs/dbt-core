@@ -38,7 +38,7 @@
       {{ adapter.rename_relation(existing_relation, backup_relation) }}
   {% endif %}
 
-  {{ adapter.rename_relation(intermediate_relation, target_relation) }}  
+  {{ adapter.rename_relation(intermediate_relation, target_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
