@@ -1,0 +1,7 @@
+kind: Fixes
+body: '[CT-37] [Bug] <Postgresql> Postgresql index creation improvement'
+time: 2022-08-31T09:25:45.300953721+02:00
+custom:
+  Author: Goodkat
+  Issue: "4567"
+  PR: "5746"
