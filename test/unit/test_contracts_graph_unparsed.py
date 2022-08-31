@@ -753,7 +753,7 @@ class TestUnparsedMetric(ContractTestCase):
             description="",
             type='expression',
             sql="{{ metric('revenue') }} / {{ metric('customers') }}",
-            timestamp=None,
+            timestamp='signup_date',
             time_grains=['day', 'week', 'month'],
             dimensions=[],
             window='',
