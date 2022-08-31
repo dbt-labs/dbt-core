@@ -31,7 +31,7 @@
     {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
   {%- endcall %}
 
-  {% do create_indexes(target_relation) %}
+    {% do create_indexes(intermediate_relation) %}
 
   -- cleanup
   {% if existing_relation is not none %}
