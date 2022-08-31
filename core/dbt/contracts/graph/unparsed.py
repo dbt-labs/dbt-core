@@ -458,7 +458,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     sql: Union[str, int] = ""
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
-    lookback: Optional[str] = ""
+    window: Optional[str] = ""
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)

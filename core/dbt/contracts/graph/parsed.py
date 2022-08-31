@@ -812,7 +812,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
-    lookback: Optional[str]
+    window: Optional[str]
     model: Optional[str] = None
     model_unique_id: Optional[str] = None
     resource_type: NodeType = NodeType.Metric
@@ -835,8 +835,8 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_model(self, old: "ParsedMetric") -> bool:
         return self.model == old.model
 
-    def same_lookback(self, old: "ParsedMetric") -> bool:
-        return self.lookback == old.lookback
+    def same_window(self, old: "ParsedMetric") -> bool:
+        return self.window == old.window
 
     def same_dimensions(self, old: "ParsedMetric") -> bool:
         return self.dimensions == old.dimensions
@@ -870,7 +870,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
 
         return (
             self.same_model(old)
-            and self.same_lookback(old)
+            and self.same_window(old)
             and self.same_dimensions(old)
             and self.same_filters(old)
             and self.same_description(old)

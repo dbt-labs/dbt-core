@@ -1050,7 +1050,7 @@ class MetricParser(YamlReader):
             sql=str(unparsed.sql),
             timestamp=unparsed.timestamp,
             dimensions=unparsed.dimensions,
-            lookback=unparsed.lookback,
+            window=unparsed.window,
             time_grains=unparsed.time_grains,
             filters=unparsed.filters,
             meta=unparsed.meta,
