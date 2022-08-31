@@ -32,6 +32,8 @@ Two new Product Managers dedicated to thinking about dbt Core full time!
 
 Cody, Florian, could you say a few words of introduction? What brought you to dbt Labs? What are some things you're excited about doing here?
 
+> Cody: Hello! My name is Cody, or [@lostmygithubaccount](https://github.com/lostmygithubaccount). The first programming language I learned was Python, my background is in electrical engineering and data science, and my previous experience as a product manager centered around operationalizing machine learning systems (MLOps). I'm excited about empowering you to build intelligent systems, the role dbt Labs has to play in converging the data & AI stacks while breaking down organizational silos, and to work on open-source software with an awesome community supporting! 
+
 (Jeremy again.) It's been a lot of fun to bring both of you into the fold over the past few months. The music does slow down when we add new chairs—there are processes that have become muscle memory for me, and turning those into collective endeavors takes time—but it's a thing worth doing. I can already say that our conversations have given me a huge boost of energy and excitement, in terms of what we can build together. We're grappling with some big questions—the biggest question being, what is dbt, *really?*—that I have too long taken for granted. I hadn't appreciated that risk, that my old instinctive answers had calcified into constrained visions, a GitHub comment from 2019 into binding precedent. Now that dbt Core is safely stable, it's the right time to ask those questions again. To start developing answers, always from the same principled viewpoint; to refine and critique them together; and to follow the logic where it leads.
 
 # Commentary
