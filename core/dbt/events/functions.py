@@ -57,7 +57,11 @@ def setup_event_logger(log_path, level_override=None):
     EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
     make_log_dir_if_missing(log_path)
-    this.format_json = flags.LOG_FORMAT == "json"
+    # Flags is not set in the integration test suite but is by the environment.
+    # DBT_LOG_FORMAT is used in our test suite so checking for it's presence is key.
+    this.format_json = (
+        flags.LOG_FORMAT == "json" or os.environ.get("DBT_LOG_FORMAT", "json") == "json"
+    )
     # USE_COLORS can be None if the app just started and the cli flags
     # havent been applied yet
     this.format_color = True if flags.USE_COLORS else False
