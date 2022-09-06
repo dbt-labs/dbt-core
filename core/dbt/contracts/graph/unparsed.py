@@ -453,11 +453,11 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     label: str
     calculation_method: str
     timestamp: str
+    description: str = ""
     expression: Union[str, int] = ""
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
     model: Optional[str] = None
-    description: Optional[str] = None
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
