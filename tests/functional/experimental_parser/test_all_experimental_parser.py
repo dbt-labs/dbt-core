@@ -97,13 +97,13 @@ class BasicExperimentalParser:
 
 
 class TestBasicExperimentalParserFlag(BasicExperimentalParser):
-    def test_env_use_experimental_parser(self, project):
-        @pytest.fixture(scope="class", autouse=True)
-        def setup(self, project):
-            yield
-            del os.environ["DBT_USE_EXPERIMENTAL_PARSER"]
-
+    @pytest.fixture(scope="class", autouse=True)
+    def setup(self, project):
         os.environ["DBT_USE_EXPERIMENTAL_PARSER"] = "true"
+        yield
+        del os.environ["DBT_USE_EXPERIMENTAL_PARSER"]
+
+    def test_env_use_experimental_parser(self, project):
         _, log_output = run_dbt_and_capture(["--debug", "parse"])
 
         # successful stable static parsing
@@ -158,6 +158,8 @@ class TestBasicExperimentalParser(BasicExperimentalParser):
         assert node.config._extra == {"x": True}
         assert node.config.tags == ["hello", "world"]
 
+
+class TestBasicStaticParser(BasicExperimentalParser):
     # test that the static parser extracts some basic ref, source, and config calls by default
     # without the experimental flag and without rendering jinja
     def test_static_parser_basic(self, project):
@@ -181,6 +183,8 @@ class TestBasicExperimentalParser(BasicExperimentalParser):
         assert node.config._extra == {"x": True}
         assert node.config.tags == ["hello", "world"]
 
+
+class TestBasicNoStaticParser(BasicExperimentalParser):
     # test that the static parser doesn't run when the flag is set
     def test_static_parser_is_disabled(self, project):
         _, log_output = run_dbt_and_capture(["--debug", "--no-static-parser", "parse"])
