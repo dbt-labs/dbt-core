@@ -19,10 +19,6 @@ CI_FLAGS =\
 	LOG_DIR=./logs\
 	DBT_LOG_FORMAT=json
 
-ifeq ($(USE_CI_FLAGS),true)
-	COND_CI_FLAGS = $(CI_FLAGS)
-endif
-
 .PHONY: dev
 dev: ## Installs dbt-* packages in develop mode along with development dependencies.
 	@\
@@ -65,7 +61,7 @@ test: .env ## Runs unit tests with py and code checks against staged changes.
 .PHONY: integration
 integration: .env ## Runs postgres integration tests with py-integration
 	@\
-	$(COND_CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto
+	$(if $(USE_CI_FLAGS), $(CI_FLAGS)) $(DOCKER_CMD) tox -e py-integration -- -nauto
 
 .PHONY: integration-fail-fast
 integration-fail-fast: .env ## Runs postgres integration tests with py-integration in "fail fast" mode.
