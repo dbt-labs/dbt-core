@@ -11,7 +11,7 @@ LOGS_DIR := ./logs
 # Optional flag to invoke tests using our CI env.
 # But we always want these active for structured
 # log testing.
-CI_VARS =\
+CI_FLAGS =\
 	DBT_TEST_USER_1=dbt_test_user_1\
 	DBT_TEST_USER_2=dbt_test_user_2\
 	DBT_TEST_USER_3=dbt_test_user_3\
@@ -20,7 +20,7 @@ CI_VARS =\
 	DBT_LOG_FORMAT=json
 
 ifeq ($(USE_CI_FLAGS),true)
-	COND_CI_FLAGS = $(CI_VARS)
+	COND_CI_FLAGS = $(CI_FLAGS)
 endif
 
 .PHONY: dev
@@ -72,11 +72,11 @@ integration-fail-fast: .env ## Runs postgres integration tests with py-integrati
 	@\
 	$(DOCKER_CMD) tox -e py-integration -- -x -nauto
 
-.PHONY: structured-log-test
-structured-log-test: clean
+.PHONY: interop
+interop: clean
 	@\
 	mkdir $(LOGS_DIR) && \
-	$(CI_VARS) $(DOCKER_CMD) tox -e py-integration -- -nauto && \
+	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto && \
 	LOG_DIR=$(LOGS_DIR) cargo run --manifest-path test/interop/log_parsing/Cargo.toml
 
 .PHONY: setup-db
