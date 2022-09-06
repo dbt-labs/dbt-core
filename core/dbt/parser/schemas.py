@@ -1046,8 +1046,8 @@ class MetricParser(YamlReader):
             name=unparsed.name,
             description=unparsed.description,
             label=unparsed.label,
-            type=unparsed.type,
-            sql=str(unparsed.sql),
+            calculation_method=unparsed.calculation_method,
+            expression=str(unparsed.expression),
             timestamp=unparsed.timestamp,
             dimensions=unparsed.dimensions,
             time_grains=unparsed.time_grains,
@@ -1067,8 +1067,8 @@ class MetricParser(YamlReader):
             model_ref = "{{ " + parsed.model + " }}"
             get_rendered(model_ref, ctx, parsed)
 
-        parsed.sql = get_rendered(
-            parsed.sql,
+        parsed.expression = get_rendered(
+            parsed.expression,
             ctx,
             node=parsed,
         )

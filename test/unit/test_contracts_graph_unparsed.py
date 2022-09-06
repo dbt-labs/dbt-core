@@ -685,8 +685,8 @@ class TestUnparsedMetric(ContractTestCase):
             'label': 'New Customers',
             'model': 'ref("dim_customers")',
             'description': 'New customers',
-            'type': 'count',
-            'sql': 'user_id',
+            'calculation_method': 'count',
+            'expression': 'user_id',
             'timestamp': 'signup_date',
             'time_grains': ['day', 'week', 'month'],
             'dimensions': ['plan', 'country'],
@@ -708,8 +708,8 @@ class TestUnparsedMetric(ContractTestCase):
             'name': 'arpc',
             'label': 'revenue per customer',
             'description': '',
-            'type': 'expression',
-            'sql': "{{ metric('revenue') }} / {{ metric('customers') }}",
+            'calculation_method': 'derived',
+            'expression': "{{ metric('revenue') }} / {{ metric('customers') }}",
             'time_grains': ['day', 'week', 'month'],
             'dimensions': [],
             'filters': [],
@@ -725,8 +725,8 @@ class TestUnparsedMetric(ContractTestCase):
             label='New Customers',
             model='ref("dim_customers")',
             description="New customers",
-            type='count',
-            sql="user_id",
+            calculation_method='count',
+            expression="user_id",
             timestamp="signup_date",
             time_grains=['day', 'week', 'month'],
             dimensions=['plan', 'country'],
@@ -748,8 +748,8 @@ class TestUnparsedMetric(ContractTestCase):
             label='revenue per customer',
             model=None,
             description="",
-            type='expression',
-            sql="{{ metric('revenue') }} / {{ metric('customers') }}",
+            calculation_method='expression',
+            expression="{{ metric('revenue') }} / {{ metric('customers') }}",
             timestamp=None,
             time_grains=['day', 'week', 'month'],
             dimensions=[],
@@ -768,7 +768,7 @@ class TestUnparsedMetric(ContractTestCase):
         tst = self.get_ok_dict()
         # Metrics with type='expression' do not have model props
         tst['model'] = None
-        tst['type'] = 'sum'
+        tst['calculation_method'] = 'sum'
         self.assert_fails_validation(tst)
 
     def test_bad_filter_missing_things(self):
