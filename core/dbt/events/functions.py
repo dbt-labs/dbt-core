@@ -57,6 +57,7 @@ def setup_event_logger(log_path, level_override=None):
     EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
     make_log_dir_if_missing(log_path)
+
     this.format_json = flags.LOG_FORMAT == "json"
     # USE_COLORS can be None if the app just started and the cli flags
     # havent been applied yet
