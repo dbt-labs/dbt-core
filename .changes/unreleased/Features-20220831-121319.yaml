@@ -1,0 +1,7 @@
+kind: Features
+body: Adding the `window` parameter to the metric spec.
+time: 2022-08-31T12:13:19.48356-05:00
+custom:
+  Author: callum-mcdata
+  Issue: "5721"
+  PR: "5722"
