@@ -63,7 +63,7 @@ from dbt.exceptions import (
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
-from dbt.utils import merge, AttrDict, MultiDict
+from dbt.utils import merge, AttrDict, MultiDict, args_to_dict
 
 from dbt import selected_resources
 
@@ -709,6 +709,10 @@ class ProviderContext(ManifestContext):
             internal_packages,
             self.model,
         )
+
+    @contextproperty
+    def invocation_args_to_dict(self):
+        return args_to_dict(self.config.args)
 
     @contextproperty
     def _sql_results(self) -> Dict[str, AttrDict]:

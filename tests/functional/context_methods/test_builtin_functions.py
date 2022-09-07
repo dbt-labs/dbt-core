@@ -23,6 +23,12 @@ macros__validate_zip_sql = """
 {% endmacro %}
 """
 
+macros__validate_invocation_sql = """
+{% macro validate_invocation(my_variable) %}
+    {{ log("invocation_result: "~ invocation_args_to_dict) }}
+{% endmacro %}
+"""
+
 models__set_exception_sql = """
 {% set set_strict_result = set_strict(1) %}
 """
@@ -38,6 +44,7 @@ class TestContextBuiltins:
         return {
             "validate_set.sql": macros__validate_set_sql,
             "validate_zip.sql": macros__validate_zip_sql,
+            "validate_invocation.sql": macros__validate_invocation_sql,
         }
 
     def test_builtin_set_function(self, project):
@@ -54,6 +61,24 @@ class TestContextBuiltins:
         expected_zip = [(1, "foo"), (2, "bar")]
         assert f"zip_result: {expected_zip}" in log_output
         assert f"zip_strict_result: {expected_zip}" in log_output
+
+    def test_builtin_invocation_args_to_dict_function(self, project):
+        _, log_output = run_dbt_and_capture(
+            [
+                "--debug",
+                "run-operation",
+                "validate_invocation",
+                "--args",
+                "{my_variable: test_variable}",
+            ]
+        )
+        # Result is checked in two parts because profiles_dir is unique each test run
+
+        result = "invocation_result: {'debug': True, 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
+        assert result in log_output
+
+        second_result = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
+        assert second_result in log_output
 
 
 class TestContextBuiltinExceptions:
