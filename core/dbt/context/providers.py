@@ -711,7 +711,7 @@ class ProviderContext(ManifestContext):
         )
 
     @contextproperty
-    def invocation_args_to_dict(self):
+    def invocation_args_dict(self):
         return args_to_dict(self.config.args)
 
     @contextproperty

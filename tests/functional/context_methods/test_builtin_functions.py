@@ -25,7 +25,7 @@ macros__validate_zip_sql = """
 
 macros__validate_invocation_sql = """
 {% macro validate_invocation(my_variable) %}
-    {{ log("invocation_result: "~ invocation_args_to_dict) }}
+    {{ log("invocation_result: "~ invocation_args_dict) }}
 {% endmacro %}
 """
 
@@ -62,7 +62,7 @@ class TestContextBuiltins:
         assert f"zip_result: {expected_zip}" in log_output
         assert f"zip_strict_result: {expected_zip}" in log_output
 
-    def test_builtin_invocation_args_to_dict_function(self, project):
+    def test_builtin_invocation_args_dict_function(self, project):
         _, log_output = run_dbt_and_capture(
             [
                 "--debug",
