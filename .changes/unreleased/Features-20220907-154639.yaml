@@ -1,0 +1,7 @@
+kind: Features
+body: Support dbt-metrics compilation by rebuilding flat_graph
+time: 2022-09-07T15:46:39.937326-04:00
+custom:
+  Author: gshank
+  Issue: "5525"
+  PR: "5786"
