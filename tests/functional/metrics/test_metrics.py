@@ -38,6 +38,20 @@ metrics:
         operator: 'is'
         value: 'true'
 
+  - name: collective_window
+    label: "Collective window"
+    description: Testing window
+    model: "ref('people')"
+    type: sum
+    sql: tenure
+    timestamp: created_at
+    time_grains: [day]
+    window: 14 days
+    filters:
+      - field: loves_dbt
+        operator: 'is'
+        value: 'true'
+
 """
 
 models__people_sql = """
@@ -66,7 +80,11 @@ class TestSimpleMetrics:
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = ["metric.test.number_of_people", "metric.test.collective_tenure"]
+        expected_metric_ids = [
+            "metric.test.number_of_people",
+            "metric.test.collective_tenure",
+            "metric.test.collective_window",
+        ]
         assert metric_ids == expected_metric_ids
 
 
@@ -260,6 +278,7 @@ downstream_model_sql = """
         time_grains: {{ m.time_grains }}
         dimensions: {{ m.dimensions }}
         filters: {{ m.filters }}
+        window: {{ m.window }}
     {% endfor %}
 
 {% endif %}
@@ -430,6 +449,7 @@ class TestExpressionMetric:
                 "time_grains",
                 "dimensions",
                 "filters",
+                "window",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code
