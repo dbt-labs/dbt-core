@@ -1,0 +1,7 @@
+kind: Fixes
+body: Removal of all .coverage files when using make clean command
+time: 2022-09-03T15:54:09.741554082+01:00
+custom:
+  Author: jared-rimmer
+  Issue: "5633"
+  PR: "5759"

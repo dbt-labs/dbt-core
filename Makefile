@@ -96,6 +96,7 @@ endif
 clean: ## Resets development environment.
 	@echo 'cleaning repo...'
 	@rm -f .coverage
+	@rm -f .coverage.*
 	@rm -rf .eggs/
 	@rm -f .env
 	@rm -rf .tox/
