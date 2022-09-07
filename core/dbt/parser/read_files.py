@@ -148,23 +148,23 @@ def read_files(project, files, parser_files, saved_files):
     project_files = {}
 
     project_files["MacroParser"] = read_files_for_parser(
-        project, files, project.macro_paths, [".sql"], ParseFileType.Macro, saved_files
+        project, files, project.macro_paths, [".sql", ".jinja-sql"], ParseFileType.Macro, saved_files
     )
 
     project_files["ModelParser"] = read_files_for_parser(
-        project, files, project.model_paths, [".sql", ".py"], ParseFileType.Model, saved_files
+        project, files, project.model_paths, [".sql", ".jinja-sql", ".py"], ParseFileType.Model, saved_files
     )
 
     project_files["SnapshotParser"] = read_files_for_parser(
-        project, files, project.snapshot_paths, [".sql"], ParseFileType.Snapshot, saved_files
+        project, files, project.snapshot_paths, [".sql", ".jinja-sql"], ParseFileType.Snapshot, saved_files
     )
 
     project_files["AnalysisParser"] = read_files_for_parser(
-        project, files, project.analysis_paths, [".sql"], ParseFileType.Analysis, saved_files
+        project, files, project.analysis_paths, [".sql", ".jinja-sql"], ParseFileType.Analysis, saved_files
     )
 
     project_files["SingularTestParser"] = read_files_for_parser(
-        project, files, project.test_paths, [".sql"], ParseFileType.SingularTest, saved_files
+        project, files, project.test_paths, [".sql", ".jinja-sql"], ParseFileType.SingularTest, saved_files
     )
 
     # all generic tests within /tests must be nested under a /generic subfolder
