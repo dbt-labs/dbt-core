@@ -458,6 +458,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
     model: Optional[str] = None
+    window: Optional[str] = None
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)

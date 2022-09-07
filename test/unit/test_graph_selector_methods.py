@@ -380,6 +380,7 @@ def make_metric(pkg, name, path=None):
            value=True,
            operator="=",
         )],
+        window='',
         meta={'is_okr': True},
         tags=['okrs'],
     )

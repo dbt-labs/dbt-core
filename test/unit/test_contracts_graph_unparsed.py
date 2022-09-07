@@ -697,6 +697,7 @@ class TestUnparsedMetric(ContractTestCase):
                     "operator": "=",
                 }
             ],
+            'window': '14 days',
             'tags': [],
             'meta': {
                 'is_okr': True
@@ -714,6 +715,7 @@ class TestUnparsedMetric(ContractTestCase):
             'timestamp': 'signup_date',
             'dimensions': [],
             'filters': [],
+            'window': '',
             'tags': [],
             'meta': {
                 'is_okr': True
@@ -736,6 +738,7 @@ class TestUnparsedMetric(ContractTestCase):
                 value='True',
                 operator="=",
             )],
+            window="14 days",
             meta={'is_okr': True},
         )
         dct = self.get_ok_dict()
@@ -754,6 +757,7 @@ class TestUnparsedMetric(ContractTestCase):
             timestamp="signup_date",
             time_grains=['day', 'week', 'month'],
             dimensions=[],
+            window='',
             meta={'is_okr': True},
         )
         dct = self.get_ok_derived_dict()
