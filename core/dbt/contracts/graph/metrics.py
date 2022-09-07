@@ -55,7 +55,11 @@ class ResolvedMetricReference(MetricReference):
 
         for parent_unique_id in metric_node.depends_on.nodes:
             node = manifest.metrics.get(parent_unique_id)
-            if node and node.resource_type == NodeType.Metric and node.calculation_method == "derived":
+            if (
+                node
+                and node.resource_type == NodeType.Metric
+                and node.calculation_method == "derived"
+            ):
                 yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count)
 
     def full_metric_dependency(self):

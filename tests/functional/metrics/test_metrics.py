@@ -42,8 +42,8 @@ metrics:
     label: "Collective window"
     description: Testing window
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day]
     window: 14 days
