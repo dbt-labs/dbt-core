@@ -351,7 +351,7 @@ metrics:
     - name: average_order_value
       label: Average Order Value
 
-      calculation_method: expression
+      calculation_method: derived
       expression:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]

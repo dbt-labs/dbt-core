@@ -470,6 +470,9 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
         if "name" in data and " " in data["name"]:
             raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
 
+        if data.get("calculation_method") == "expression":
+            raise ValidationError("The metric calculation method expression has been deprecated and renamed to derived. Please update")
+
         if data.get("model") is None and data.get("calculation_method") != "derived":
             raise ValidationError("Non-derived metrics require a 'model' property")
 
