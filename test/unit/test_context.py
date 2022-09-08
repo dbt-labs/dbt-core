@@ -238,6 +238,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "sql_now",
     "adapter_macro",
     "selected_resources",
+    "invocation_args_dict",
 }
 REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code",}
 MAYBE_KEYS = frozenset({"debug"})
@@ -417,6 +418,22 @@ def test_macro_runtime_context(config_postgres, manifest_fx, get_adapter, get_in
     )
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
+def test_invocation_args_to_dict_in_macro_runtime_context(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    ctx = providers.generate_runtime_macro_context(
+        macro=manifest_fx.macros["macro.root.macro_a"],
+        config=config_postgres,
+        manifest=manifest_fx,
+        package_name="root",
+    )
+
+    # Comes from dbt/flags.py as they are the only values set that aren't None at default
+    assert ctx["invocation_args_dict"]["event_buffer_size"] == 100000
+    assert ctx["invocation_args_dict"]["printer_width"] == 80
+
+    # Comes from unit/utils.py config_from_parts_or_dicts method
+    assert ctx["invocation_args_dict"]["profile_dir"] == "/dev/null"
 
 def test_model_parse_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_parser_model_context(
