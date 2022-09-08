@@ -14,6 +14,9 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.parser.schema_renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfig,
+    BaseContextConfigGenerator,
+    ContextConfigGenerator,
+    UnrenderedConfigGenerator,
 )
 from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.context.providers import (
@@ -23,6 +26,7 @@ from dbt.context.providers import (
 )
 from dbt.context.macro_resolver import MacroResolver
 from dbt.contracts.files import FileHash, SchemaSourceFile
+from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ColumnInfo,
@@ -982,6 +986,25 @@ class ExposureParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        config = self._generate_exposure_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=True,
+        )
+
+        unrendered_config = self._generate_exposure_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=False,
+        )
+
+        if not isinstance(config, ExposureConfig):
+            raise InternalException(
+                f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
+            )
+
         parsed = ParsedExposure(
             package_name=package_name,
             root_path=self.project.project_root,
@@ -997,6 +1020,8 @@ class ExposureParser(YamlReader):
             description=unparsed.description,
             owner=unparsed.owner,
             maturity=unparsed.maturity,
+            config=config,
+            unrendered_config=unrendered_config,
         )
         ctx = generate_parse_exposure(
             parsed,
@@ -1008,6 +1033,33 @@ class ExposureParser(YamlReader):
         get_rendered(depends_on_jinja, ctx, parsed, capture_macros=True)
         # parsed now has a populated refs/sources
         return parsed
+
+    def _generate_exposure_config(
+        self, target: UnparsedExposure, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply exposure configs
+        precedence_configs.update(target.config)
+        # then overwite anything that is defined on exposure
+        # this is not quite complex enough for configs that can be set as top-level node keys, but
+        # it works while exposure configs can only include `enabled`.
+        # precedence_configs.update(target.config)
+
+        return generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Exposure,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
 
     def parse(self) -> Iterable[ParsedExposure]:
         for data in self.get_key_dicts():
@@ -1035,6 +1087,25 @@ class MetricParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        config = self._generate_metric_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=True,
+        )
+
+        unrendered_config = self._generate_metric_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=False,
+        )
+
+        if not isinstance(config, MetricConfig):
+            raise InternalException(
+                f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
+            )
+
         parsed = ParsedMetric(
             package_name=package_name,
             root_path=self.project.project_root,
@@ -1055,6 +1126,8 @@ class MetricParser(YamlReader):
             filters=unparsed.filters,
             meta=unparsed.meta,
             tags=unparsed.tags,
+            config=config,
+            unrendered_config=unrendered_config,
         )
 
         ctx = generate_parse_metrics(
@@ -1075,6 +1148,33 @@ class MetricParser(YamlReader):
         )
 
         return parsed
+
+    def _generate_metric_config(
+        self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply metric configs
+        precedence_configs.update(target.config)
+        # # then overwite anything that is defined on metric
+        # # this is not quite complex enough for configs that can be set as top-level node keys, but
+        # # it works while metric configs can only include `enabled`.
+        # precedence_configs.update(target.config)
+
+        return generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Metric,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
 
     def parse(self) -> Iterable[ParsedMetric]:
         for data in self.get_key_dicts():

@@ -1102,6 +1102,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
+            exposure.config.enabled = False
             invalid_ref_fail_unless_test(
                 exposure,
                 target_model_name,
@@ -1143,6 +1144,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
+            metric.config.enabled = False
             invalid_ref_fail_unless_test(
                 metric,
                 target_model_name,
@@ -1184,9 +1186,10 @@ def _process_metrics_for_node(
             node.package_name,
         )
 
-        if target_metric is None:
+        if target_metric is None or isinstance(target_metric, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node
+            node.config.enabled = False
             invalid_metric_fail_unless_test(
                 node,
                 target_metric_name,
@@ -1258,6 +1261,7 @@ def _process_sources_for_exposure(
             exposure.package_name,
         )
         if target_source is None or isinstance(target_source, Disabled):
+            exposure.config.enabled = False
             invalid_source_fail_unless_test(
                 exposure, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )
@@ -1277,6 +1281,7 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
             metric.package_name,
         )
         if target_source is None or isinstance(target_source, Disabled):
+            metric.config.enabled = False
             invalid_source_fail_unless_test(
                 metric, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )
