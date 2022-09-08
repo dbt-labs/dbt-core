@@ -95,13 +95,14 @@ class TestContextBuiltins:
         )
 
         assert result
-        
+
         # Result is checked in two parts because profiles_dir is unique each test run
         expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
         assert expected in str(result)
 
         expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
         assert expected in str(result)
+
 
 class TestContextBuiltinExceptions:
     # Assert compilation errors are raised with _strict equivalents
