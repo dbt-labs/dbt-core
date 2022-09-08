@@ -1022,6 +1022,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
 
+        # Rebuild the flat_graph, which powers the 'graph' context variable,
+        # now that we've deferred some nodes
+        self.build_flat_graph()
+
         # log up to 5 items
         sample = list(islice(merged, 5))
         fire_event(MergedFromState(nbr_merged=len(merged), sample=sample))
