@@ -444,6 +444,7 @@ class MetricFilter(dbtClassMixin, Replaceable):
 
 class MetricTimePeriod(StrEnum):
     day = "day"
+    week = "week"
     month = "month"
     year = "year"
 
