@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt.exceptions import CompilationException
@@ -66,20 +67,41 @@ class TestContextBuiltins:
         _, log_output = run_dbt_and_capture(
             [
                 "--debug",
+                "--log-format=json",
                 "run-operation",
                 "validate_invocation",
                 "--args",
                 "{my_variable: test_variable}",
             ]
         )
+
+        parsed_logs = []
+        for line in log_output.split("\n"):
+            try:
+                log = json.loads(line)
+            except ValueError:
+                continue
+
+            parsed_logs.append(log)
+
+        # Value of msg is a string
+        result = next(
+            (
+                item
+                for item in parsed_logs
+                if "invocation_result" in item["data"].get("msg", "msg")
+            ),
+            False,
+        )
+
+        assert result
+        
         # Result is checked in two parts because profiles_dir is unique each test run
+        expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
+        assert expected in str(result)
 
-        result = "invocation_result: {'debug': True, 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
-        assert result in log_output
-
-        second_result = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
-        assert second_result in log_output
-
+        expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
+        assert expected in str(result)
 
 class TestContextBuiltinExceptions:
     # Assert compilation errors are raised with _strict equivalents
