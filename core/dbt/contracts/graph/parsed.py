@@ -37,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
     ExposureType,
     MaturityType,
     MetricFilter,
+    MetricTime,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -812,7 +813,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
-    window: Optional[str]
+    window: Optional[MetricTime]
     model: Optional[str] = None
     model_unique_id: Optional[str] = None
     resource_type: NodeType = NodeType.Metric

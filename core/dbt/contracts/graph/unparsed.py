@@ -200,7 +200,6 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
     def __bool__(self):
         return bool(self.warn_after) or bool(self.error_after)
 
-
 @dataclass
 class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     _extra: Dict[str, Any] = field(default_factory=dict)
@@ -443,6 +442,21 @@ class MetricFilter(dbtClassMixin, Replaceable):
     # TODO : Can we make this Any?
     value: str
 
+class MetricTimePeriod(StrEnum):
+    day = "day"
+    month = "month"
+    year = "year"
+
+    def plural(self) -> str:
+        return str(self) + "s"
+
+@dataclass
+class MetricTime(dbtClassMixin, Mergeable):
+    count: Optional[int] = None
+    period: Optional[MetricTimePeriod] = None
+
+    def __bool__(self):
+        return self.count is not None and self.period is not None
 
 @dataclass
 class UnparsedMetric(dbtClassMixin, Replaceable):
@@ -458,7 +472,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     sql: Union[str, int] = ""
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
-    window: Optional[str] = None
+    window: Optional[MetricTime] = None
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
