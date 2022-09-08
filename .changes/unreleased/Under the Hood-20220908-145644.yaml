@@ -1,6 +1,6 @@
-kind: Features
+kind: Under the Hood
 body: Support dbt-metrics compilation by rebuilding flat_graph
-time: 2022-09-07T15:46:39.937326-04:00
+time: 2022-09-08T14:56:44.173322-04:00
 custom:
   Author: gshank
   Issue: "5525"
