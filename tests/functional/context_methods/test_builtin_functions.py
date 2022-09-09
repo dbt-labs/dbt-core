@@ -45,6 +45,28 @@ models__zip_exception_sql = """
 {% set zip_strict_result = zip_strict(1) %}
 """
 
+def parse_json_logs(json_log_output):
+    parsed_logs = []
+    for line in json_log_output.split("\n"):
+        try:
+            log = json.loads(line)
+        except ValueError:
+            continue
+
+        parsed_logs.append(log)
+
+    return parsed_logs
+
+def find_result_in_parsed_logs(parsed_logs, result_name):
+    return next(
+        (
+            item
+            for item in parsed_logs
+            if result_name in item["data"].get("msg", "msg")
+        ),
+        False,
+    )
+
 
 class TestContextBuiltins:
     @pytest.fixture(scope="class")
@@ -84,24 +106,8 @@ class TestContextBuiltins:
             ]
         )
 
-        parsed_logs = []
-        for line in log_output.split("\n"):
-            try:
-                log = json.loads(line)
-            except ValueError:
-                continue
-
-            parsed_logs.append(log)
-
-        # Value of msg is a string
-        result = next(
-            (
-                item
-                for item in parsed_logs
-                if "invocation_result" in item["data"].get("msg", "msg")
-            ),
-            False,
-        )
+        parsed_logs = parse_json_logs(log_output)
+        result = find_result_in_parsed_logs(parsed_logs, "invocation_result")
 
         assert result
 
@@ -130,28 +136,11 @@ class TestContextBuiltins:
             ]
         )
 
-        parsed_logs = []
-        for line in log_output.split("\n"):
-            try:
-                log = json.loads(line)
-            except ValueError:
-                continue
-
-            parsed_logs.append(log)
-
-        # Value of msg is a string
-        result = next(
-            (
-                item
-                for item in parsed_logs
-                if "dbt_metadata_envs_result" in item["data"].get("msg", "msg")
-            ),
-            False,
-        )
+        parsed_logs = parse_json_logs(log_output)
+        result = find_result_in_parsed_logs(parsed_logs, "dbt_metadata_envs_result")
 
         assert result
 
-        # Result is checked in two parts because profiles_dir is unique each test run
         expected = "dbt_metadata_envs_result:{\'RUN_ID\': 1234, \'JOB_ID\': 5678}"
         assert expected in str(result)
 
