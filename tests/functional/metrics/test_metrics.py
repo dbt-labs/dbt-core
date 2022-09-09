@@ -46,7 +46,9 @@ metrics:
     sql: tenure
     timestamp: created_at
     time_grains: [day]
-    window: 14 days
+    window:
+      count: 14
+      interval: day
     filters:
       - field: loves_dbt
         operator: 'is'

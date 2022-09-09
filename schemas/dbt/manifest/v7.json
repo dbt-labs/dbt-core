@@ -6343,6 +6343,12 @@
             "$ref": "#/definitions/MetricFilter"
           }
         },
+        "window": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MetricTime"
+          }
+        },
         "time_grains": {
           "type": "array",
           "items": {
@@ -6470,6 +6476,40 @@
       },
       "additionalProperties": false,
       "description": "MetricFilter(field: str, operator: str, value: str)"
+    },
+    "MetricTime": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "count": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "period": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "MetricTime(count: Optional[int] = None, period: Optional[dbt.contracts.graph.unparsed.MetricTimePeriod] = None)"
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",
