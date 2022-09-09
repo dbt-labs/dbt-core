@@ -444,6 +444,25 @@ class MetricFilter(dbtClassMixin, Replaceable):
     value: str
 
 
+class MetricTimePeriod(StrEnum):
+    day = "day"
+    week = "week"
+    month = "month"
+    year = "year"
+
+    def plural(self) -> str:
+        return str(self) + "s"
+
+
+@dataclass
+class MetricTime(dbtClassMixin, Mergeable):
+    count: Optional[int] = None
+    period: Optional[MetricTimePeriod] = None
+
+    def __bool__(self):
+        return self.count is not None and self.period is not None
+
+
 @dataclass
 class UnparsedMetric(dbtClassMixin, Replaceable):
     # TODO : verify that this disallows metric names with spaces
@@ -457,8 +476,8 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     expression: Union[str, int] = ""
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
+    window: Optional[MetricTime] = None
     model: Optional[str] = None
-    window: Optional[str] = None
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)

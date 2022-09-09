@@ -7,7 +7,7 @@ from dbt.contracts.graph.unparsed import (
     FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
     UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
-    ExposureType, UnparsedMetric, MetricFilter
+    ExposureType, UnparsedMetric, MetricFilter, MetricTime, MetricTimePeriod
 )
 from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
@@ -697,7 +697,11 @@ class TestUnparsedMetric(ContractTestCase):
                     "operator": "=",
                 }
             ],
-            'window': '14 days',
+            'window': {
+                    "count": 14,
+                    "period": "day"
+                }
+            ,
             'tags': [],
             'meta': {
                 'is_okr': True
@@ -715,8 +719,8 @@ class TestUnparsedMetric(ContractTestCase):
             'timestamp': 'signup_date',
             'dimensions': [],
             'filters': [],
-            'window': '',
             'tags': [],
+            'window': {},
             'meta': {
                 'is_okr': True
             },
@@ -738,7 +742,10 @@ class TestUnparsedMetric(ContractTestCase):
                 value='True',
                 operator="=",
             )],
-            window="14 days",
+            window=MetricTime(
+                count=14,
+                period=MetricTimePeriod.day
+            ),
             meta={'is_okr': True},
         )
         dct = self.get_ok_dict()
@@ -756,8 +763,8 @@ class TestUnparsedMetric(ContractTestCase):
             expression="{{ metric('revenue') }} / {{ metric('customers') }}",
             timestamp="signup_date",
             time_grains=['day', 'week', 'month'],
+            window=MetricTime(),
             dimensions=[],
-            window='',
             meta={'is_okr': True},
         )
         dct = self.get_ok_derived_dict()
