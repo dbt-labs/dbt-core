@@ -1,6 +1,6 @@
 import pytest
 import json
-import os 
+import os
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt.exceptions import CompilationException
@@ -45,6 +45,7 @@ models__zip_exception_sql = """
 {% set zip_strict_result = zip_strict(1) %}
 """
 
+
 def parse_json_logs(json_log_output):
     parsed_logs = []
     for line in json_log_output.split("\n"):
@@ -57,13 +58,10 @@ def parse_json_logs(json_log_output):
 
     return parsed_logs
 
+
 def find_result_in_parsed_logs(parsed_logs, result_name):
     return next(
-        (
-            item
-            for item in parsed_logs
-            if result_name in item["data"].get("msg", "msg")
-        ),
+        (item for item in parsed_logs if result_name in item["data"].get("msg", "msg")),
         False,
     )
 
@@ -76,7 +74,6 @@ class TestContextBuiltins:
             "validate_zip.sql": macros__validate_zip_sql,
             "validate_invocation.sql": macros__validate_invocation_sql,
             "validate_dbt_metadata_envs.sql": macros__validate_dbt_metadata_envs_sql,
-
         }
 
     def test_builtin_set_function(self, project):
@@ -123,17 +120,12 @@ class TestContextBuiltins:
             "DBT_ENV_CUSTOM_ENV_RUN_ID": 1234,
             "DBT_ENV_CUSTOM_ENV_JOB_ID": 5678,
             "DBT_ENV_RUN_ID": 91011,
-            "RANDOM_ENV": 121314
+            "RANDOM_ENV": 121314,
         }
-        monkeypatch.setattr(os, 'environ', envs)
+        monkeypatch.setattr(os, "environ", envs)
 
         _, log_output = run_dbt_and_capture(
-            [
-                "--debug",
-                "--log-format=json",
-                "run-operation",
-                "validate_dbt_metadata_envs"
-            ]
+            ["--debug", "--log-format=json", "run-operation", "validate_dbt_metadata_envs"]
         )
 
         parsed_logs = parse_json_logs(log_output)
@@ -141,7 +133,7 @@ class TestContextBuiltins:
 
         assert result
 
-        expected = "dbt_metadata_envs_result:{\'RUN_ID\': 1234, \'JOB_ID\': 5678}"
+        expected = "dbt_metadata_envs_result:{'RUN_ID': 1234, 'JOB_ID': 5678}"
         assert expected in str(result)
 
 
