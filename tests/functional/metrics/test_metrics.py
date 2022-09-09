@@ -48,7 +48,7 @@ metrics:
     time_grains: [day]
     window:
       count: 14
-      interval: day
+      period: day
     filters:
       - field: loves_dbt
         operator: 'is'
