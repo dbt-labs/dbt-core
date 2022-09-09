@@ -1236,7 +1236,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             parsed_model, self.connections.profile.credentials
         )
         submission_result = job_helper.submit(compiled_code)
-        # we don't really get any useful information back from the job submission other than success
+        # process submission result to generate adapter response
         return self.generate_python_submission_response(submission_result)
 
     def generate_python_submission_response(self, submission_result: Any) -> AdapterResponse:
