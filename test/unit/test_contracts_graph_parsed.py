@@ -2318,8 +2318,8 @@ def basic_parsed_metric_dict():
         'name': 'new_customers',
         'label': 'New Customers',
         'model': 'ref("dim_customers")',
-        'type': 'count',
-        'sql': 'user_id',
+        'calculation_method': 'count',
+        'expression': 'user_id',
         'timestamp': 'signup_date',
         'time_grains': ['day', 'week', 'month'],
         'dimensions': ['plan', 'country'],
@@ -2355,7 +2355,7 @@ def basic_parsed_metric_dict():
 def basic_parsed_metric_object():
     return ParsedMetric(
         name='my_metric',
-        type='count',
+        calculation_method='count',
         fqn=['test', 'metrics', 'my_metric'],
         unique_id='metric.test.my_metric',
         package_name='test',

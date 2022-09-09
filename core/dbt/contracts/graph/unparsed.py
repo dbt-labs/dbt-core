@@ -451,13 +451,13 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     # name: Identifier
     name: str
     label: str
-    type: str
+    calculation_method: str
     timestamp: str
-    model: Optional[str] = None
     description: str = ""
-    sql: Union[str, int] = ""
+    expression: Union[str, int] = ""
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
+    model: Optional[str] = None
     window: Optional[str] = None
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -471,9 +471,13 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
         if "name" in data and " " in data["name"]:
             raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
 
-        # TODO: Expressions _cannot_ have `model` properties
-        if data.get("model") is None and data.get("type") != "expression":
-            raise ValidationError("Non-expression metrics require a 'model' property")
+        if data.get("calculation_method") == "expression":
+            raise ValidationError(
+                "The metric calculation method expression has been deprecated and renamed to derived. Please update"
+            )
 
-        if data.get("model") is not None and data.get("type") == "expression":
-            raise ValidationError("Expression metrics cannot have a 'model' property")
+        if data.get("model") is None and data.get("calculation_method") != "derived":
+            raise ValidationError("Non-derived metrics require a 'model' property")
+
+        if data.get("model") is not None and data.get("calculation_method") == "derived":
+            raise ValidationError("Derived metrics cannot have a 'model' property")
