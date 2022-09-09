@@ -11,8 +11,8 @@ metrics:
     label: Some Metric
     model: ref('model_a')
 
-    type: count
-    sql: id
+    calculation_method: count
+    expression: id
 
     timestamp: ts
     time_grains: [day]
@@ -26,8 +26,8 @@ metrics:
     label: Some Metric
     model: ref('model_a')
 
-    type: count
-    sql: user_id
+    calculation_method: count
+    expression: user_id
 
     timestamp: ts
     time_grains: [day]
