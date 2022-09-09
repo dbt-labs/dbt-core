@@ -807,8 +807,8 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
     description: str
     label: str
-    type: str
-    sql: str
+    calculation_method: str
+    expression: str
     timestamp: Optional[str]
     filters: List[MetricFilter]
     time_grains: List[str]
@@ -851,11 +851,11 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_label(self, old: "ParsedMetric") -> bool:
         return self.label == old.label
 
-    def same_type(self, old: "ParsedMetric") -> bool:
-        return self.type == old.type
+    def same_calculation_method(self, old: "ParsedMetric") -> bool:
+        return self.calculation_method == old.calculation_method
 
-    def same_sql(self, old: "ParsedMetric") -> bool:
-        return self.sql == old.sql
+    def same_expression(self, old: "ParsedMetric") -> bool:
+        return self.expression == old.expression
 
     def same_timestamp(self, old: "ParsedMetric") -> bool:
         return self.timestamp == old.timestamp
@@ -876,8 +876,8 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_filters(old)
             and self.same_description(old)
             and self.same_label(old)
-            and self.same_type(old)
-            and self.same_sql(old)
+            and self.same_calculation_method(old)
+            and self.same_expression(old)
             and self.same_timestamp(old)
             and self.same_time_grains(old)
             and True

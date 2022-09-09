@@ -685,8 +685,8 @@ class TestUnparsedMetric(ContractTestCase):
             'label': 'New Customers',
             'model': 'ref("dim_customers")',
             'description': 'New customers',
-            'type': 'count',
-            'sql': 'user_id',
+            'calculation_method': 'count',
+            'expression': 'user_id',
             'timestamp': 'signup_date',
             'time_grains': ['day', 'week', 'month'],
             'dimensions': ['plan', 'country'],
@@ -708,15 +708,15 @@ class TestUnparsedMetric(ContractTestCase):
             },
         }
 
-    def get_ok_expression_dict(self):
+    def get_ok_derived_dict(self):
         return {
             'name': 'arpc',
             'label': 'revenue per customer',
             'description': '',
-            'type': 'expression',
-            'sql': "{{ metric('revenue') }} / {{ metric('customers') }}",
-            'timestamp': "signup_date",
+            'calculation_method': 'derived',
+            'expression': "{{ metric('revenue') }} / {{ metric('customers') }}",
             'time_grains': ['day', 'week', 'month'],
+            'timestamp': 'signup_date',
             'dimensions': [],
             'filters': [],
             'tags': [],
@@ -732,8 +732,8 @@ class TestUnparsedMetric(ContractTestCase):
             label='New Customers',
             model='ref("dim_customers")',
             description="New customers",
-            type='count',
-            sql="user_id",
+            calculation_method='count',
+            expression="user_id",
             timestamp="signup_date",
             time_grains=['day', 'week', 'month'],
             dimensions=['plan', 'country'],
@@ -753,34 +753,34 @@ class TestUnparsedMetric(ContractTestCase):
         pickle.loads(pickle.dumps(metric))
 
     def test_ok_metric_no_model(self):
-        # Expression metrics do not have model properties
+        # Derived metrics do not have model properties
         metric = self.ContractType(
             name='arpc',
             label='revenue per customer',
             model=None,
             description="",
-            type='expression',
-            sql="{{ metric('revenue') }} / {{ metric('customers') }}",
+            calculation_method='derived',
+            expression="{{ metric('revenue') }} / {{ metric('customers') }}",
             timestamp="signup_date",
             time_grains=['day', 'week', 'month'],
             window=MetricTime(),
             dimensions=[],
             meta={'is_okr': True},
         )
-        dct = self.get_ok_expression_dict()
+        dct = self.get_ok_derived_dict()
         self.assert_symmetric(metric, dct)
         pickle.loads(pickle.dumps(metric))
 
-    def test_bad_metric_no_type(self):
+    def test_bad_metric_no_calculation_method(self):
         tst = self.get_ok_dict()
-        del tst['type']
+        del tst['calculation_method']
         self.assert_fails_validation(tst)
 
     def test_bad_metric_no_model(self):
         tst = self.get_ok_dict()
-        # Metrics with type='expression' do not have model props
+        # Metrics with calculation_type='derived' do not have model props
         tst['model'] = None
-        tst['type'] = 'sum'
+        tst['calculation_method'] = 'sum'
         self.assert_fails_validation(tst)
 
     def test_bad_filter_missing_things(self):

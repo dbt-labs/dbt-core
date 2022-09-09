@@ -6,8 +6,8 @@ metrics:
     name: number_of_people
     description: Total count of people
     label: "Number of people"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -20,8 +20,8 @@ metrics:
     name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day]
     filters:
