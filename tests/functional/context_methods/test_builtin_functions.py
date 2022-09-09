@@ -1,5 +1,6 @@
 import pytest
 import json
+import os 
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt.exceptions import CompilationException
@@ -30,6 +31,12 @@ macros__validate_invocation_sql = """
 {% endmacro %}
 """
 
+macros__validate_dbt_metadata_envs_sql = """
+{% macro validate_dbt_metadata_envs() %}
+    {{ log("dbt_metadata_envs_result:"~ dbt_metadata_envs) }}
+{% endmacro %}
+"""
+
 models__set_exception_sql = """
 {% set set_strict_result = set_strict(1) %}
 """
@@ -46,6 +53,8 @@ class TestContextBuiltins:
             "validate_set.sql": macros__validate_set_sql,
             "validate_zip.sql": macros__validate_zip_sql,
             "validate_invocation.sql": macros__validate_invocation_sql,
+            "validate_dbt_metadata_envs.sql": macros__validate_dbt_metadata_envs_sql,
+
         }
 
     def test_builtin_set_function(self, project):
@@ -101,6 +110,49 @@ class TestContextBuiltins:
         assert expected in str(result)
 
         expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
+        assert expected in str(result)
+
+    def test_builtin_dbt_metadata_envs_function(self, project, monkeypatch):
+        envs = {
+            "DBT_ENV_CUSTOM_ENV_RUN_ID": 1234,
+            "DBT_ENV_CUSTOM_ENV_JOB_ID": 5678,
+            "DBT_ENV_RUN_ID": 91011,
+            "RANDOM_ENV": 121314
+        }
+        monkeypatch.setattr(os, 'environ', envs)
+
+        _, log_output = run_dbt_and_capture(
+            [
+                "--debug",
+                "--log-format=json",
+                "run-operation",
+                "validate_dbt_metadata_envs"
+            ]
+        )
+
+        parsed_logs = []
+        for line in log_output.split("\n"):
+            try:
+                log = json.loads(line)
+            except ValueError:
+                continue
+
+            parsed_logs.append(log)
+
+        # Value of msg is a string
+        result = next(
+            (
+                item
+                for item in parsed_logs
+                if "dbt_metadata_envs_result" in item["data"].get("msg", "msg")
+            ),
+            False,
+        )
+
+        assert result
+
+        # Result is checked in two parts because profiles_dir is unique each test run
+        expected = "dbt_metadata_envs_result:{\'RUN_ID\': 1234, \'JOB_ID\': 5678}"
         assert expected in str(result)
 
 
