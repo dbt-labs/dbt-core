@@ -973,15 +973,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         candidates = _search_packages(current_project, node_package, target_metric_package)
         for pkg in candidates:
-            # breakpoint()
             metric = self.metric_lookup.find(target_metric_name, pkg, self)
 
             if metric is not None and metric.config.enabled:
                 return metric
 
-            #     TODO: is this needed?
             # it's possible that the node is disabled
-            # breakpoint()
             if disabled is None:
                 disabled = self.disabled_lookup.find(f"{target_metric_name}", pkg)
         if disabled:

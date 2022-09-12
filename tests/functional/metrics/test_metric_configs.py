@@ -209,3 +209,6 @@ class TestMetricConfigsInheritence1(MetricConfigTests):
 
         assert isinstance(config_test_table, MetricConfig)
         assert config_test_table == pytest.expected_config
+
+
+# TODO: add test with model ref'ing disabled metric, expect error
