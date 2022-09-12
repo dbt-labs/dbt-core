@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: add missing test for escape single quotes
+time: 2022-09-12T13:53:40.902222+02:00
+custom:
+  Author: sdebruyn
+  Issue: "5811"
+  PR: "5810"
