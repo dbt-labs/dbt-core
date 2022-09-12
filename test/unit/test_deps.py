@@ -22,7 +22,6 @@ from dbt.version import get_installed_version
 
 from dbt.dataclass_schema import ValidationError
 
-
 class TestLocalPackage(unittest.TestCase):
     def test_init(self):
         a_contract = LocalPackage.from_dict({'local': '/path/to/package'})
@@ -242,6 +241,26 @@ class TestHubPackage(unittest.TestCase):
             "Could not find a matching compatible version for package "
             "dbt-labs-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
             "Compatible versions: ['0.1.2', '0.1.3']\n"
+        )
+        assert msg in str(exc.exception)
+
+    def test_validation_error_message_when_version_is_missing(self):
+
+        with self.assertRaises(ValidationError) as exc:
+            a = RegistryPackage(package='dbt-labs-test/a', version=None)
+
+        msg = (
+            "When installing from the Hub package index, version is a required property"
+        )
+        assert msg in str(exc.exception)
+
+    def test_validation_error_message_when_package_namespace_is_missing(self):
+
+        with self.assertRaises(ValidationError) as exc:
+            a = RegistryPackage(package='dbt-labs', version='0.1.3')
+
+        msg = (
+            "dbt-labs was not found in the package index. Packages on the index require a namespace, e.g dbt-labs/dbt_utils"
         )
         assert msg in str(exc.exception)
 
