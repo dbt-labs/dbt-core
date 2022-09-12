@@ -31,3 +31,7 @@ class BaseEscapeSingleQuotesBackslash(BaseUtils):
 
 class TestEscapeSingleQuotes(BaseEscapeSingleQuotesQuote):
     pass
+
+
+class TestEscapeSingleQuotesBackslash(BaseEscapeSingleQuotesBackslash):
+    pass
