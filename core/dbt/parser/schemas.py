@@ -1050,12 +1050,8 @@ class ExposureParser(YamlReader):
 
         # configs with precendence set
         precedence_configs = dict()
-        # first apply exposure configs
+        # apply exposure configs
         precedence_configs.update(target.config)
-        # then overwite anything that is defined on exposure
-        # this is not quite complex enough for configs that can be set as top-level node keys, but
-        # it works while exposure configs can only include `enabled`.
-        # precedence_configs.update(target.config)
 
         return generator.calculate_node_config(
             config_call_dict={},

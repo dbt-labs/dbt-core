@@ -359,7 +359,6 @@ class ManifestLoader:
             self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
-            # sources get added to manifest here
             parser_types = [SchemaParser]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -380,13 +379,12 @@ class ManifestLoader:
             self._perf_info.patch_sources_elapsed = time.perf_counter() - start_patch
 
             # We need to rebuild disabled in order to include disabled sources
-            # This is where disabled sources get removed from the manifest
             self.manifest.rebuild_disabled_lookup()
 
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
-            # update the refs, sources, docs and metrics  (TODO: exposures?)
+            # update the refs, sources, docs and metrics depends_on.nodes
             # These check the created_at time on the nodes to
             # determine whether they need processing.
             start_process = time.perf_counter()
@@ -1146,7 +1144,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
 
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
-            # this exposure to the graph b/c there is no destination exposure
+            # this metric to the graph b/c there is no destination metric
             metric.config.enabled = False
             invalid_ref_fail_unless_test(
                 metric,

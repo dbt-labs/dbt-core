@@ -49,7 +49,6 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("exposures")
         else:
             model_configs = unrendered.get("models")
-        # by the time it get here enabled should be false when set at project level
         if model_configs is None:
             return {}
         else:
