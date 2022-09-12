@@ -78,12 +78,14 @@ from dbt.ui import warning_tag
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
-UnparsedSchemaYaml = Union[
-    UnparsedSourceDefinition,
-    UnparsedNodeUpdate,
-    UnparsedAnalysisUpdate,
-    UnparsedMacroUpdate,
-]
+# TODO: is this used?
+# UnparsedSchemaYaml = Union[
+#     UnparsedSourceDefinition,
+#     UnparsedNodeUpdate,
+#     UnparsedAnalysisUpdate,
+#     UnparsedMacroUpdate,
+#     UnparsedMetric,
+# ]
 
 TestDef = Union[str, Dict[str, Any]]
 
@@ -95,6 +97,7 @@ schema_file_keys = (
     "macros",
     "analyses",
     "exposures",
+    "metrics",
 )
 
 
@@ -557,7 +560,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             if "metrics" in dct:
                 metric_parser = MetricParser(self, yaml_block)
                 for metric_node in metric_parser.parse():
-                    self.manifest.add_metric(yaml_block.file, metric_node)
+                    # metric_node may be None if it is disabled
+                    if metric_node:
+                        self.manifest.add_metric(yaml_block.file, metric_node)
 
 
 def check_format_version(file_path, yaml_dct) -> None:
@@ -1079,7 +1084,7 @@ class MetricParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_metric(self, unparsed: UnparsedMetric) -> ParsedMetric:
+    def parse_metric(self, unparsed: UnparsedMetric) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -1147,7 +1152,11 @@ class MetricParser(YamlReader):
             node=parsed,
         )
 
-        return parsed
+        # if the metric is disabled we do not want it included in the manifest, only in the diabled dict
+        if parsed.config.enabled:
+            return parsed
+        else:
+            self.manifest.add_disabled_nofile(parsed)
 
     def _generate_metric_config(
         self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool
@@ -1162,10 +1171,6 @@ class MetricParser(YamlReader):
         precedence_configs = dict()
         # first apply metric configs
         precedence_configs.update(target.config)
-        # # then overwite anything that is defined on metric
-        # # this is not quite complex enough for configs that can be set as top-level node keys, but
-        # # it works while metric configs can only include `enabled`.
-        # precedence_configs.update(target.config)
 
         return generator.calculate_node_config(
             config_call_dict={},

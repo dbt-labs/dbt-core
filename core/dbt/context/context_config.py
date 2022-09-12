@@ -43,9 +43,13 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("sources")
         elif resource_type == NodeType.Test:
             model_configs = unrendered.get("tests")
+        elif resource_type == NodeType.Metric:
+            model_configs = unrendered.get("metrics")
+        elif resource_type == NodeType.Exposure:
+            model_configs = unrendered.get("exposures")
         else:
             model_configs = unrendered.get("models")
-
+        # by the time it get here enabled should be false when set at project level
         if model_configs is None:
             return {}
         else:
@@ -65,6 +69,10 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.sources
         elif resource_type == NodeType.Test:
             model_configs = self.project.tests
+        elif resource_type == NodeType.Metric:
+            model_configs = self.project.metrics
+        elif resource_type == NodeType.Exposure:
+            model_configs = self.project.exposures
         else:
             model_configs = self.project.models
         return model_configs

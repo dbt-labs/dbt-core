@@ -350,7 +350,7 @@ class ManifestLoader:
                     project, project_parser_files[project.project_name], parser_types
                 )
 
-            # Now that we've loaded most of the nodes (except for schema tests and sources)
+            # Now that we've loaded most of the nodes (except for schema tests, sources, metrics)
             # load up the Lookup objects to resolve them by name, so the SourceFiles store
             # the unique_id instead of the name. Sources are loaded from yaml files, so
             # aren't in place yet
@@ -359,6 +359,7 @@ class ManifestLoader:
             self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
+            # sources get added to manifest here
             parser_types = [SchemaParser]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -377,13 +378,15 @@ class ManifestLoader:
             patcher.construct_sources()
             self.manifest.sources = patcher.sources
             self._perf_info.patch_sources_elapsed = time.perf_counter() - start_patch
+
             # We need to rebuild disabled in order to include disabled sources
+            # This is where disabled sources get removed from the manifest
             self.manifest.rebuild_disabled_lookup()
 
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
-            # update the refs, sources, and docs
+            # update the refs, sources, docs and metrics  (TODO: exposures?)
             # These check the created_at time on the nodes to
             # determine whether they need processing.
             start_process = time.perf_counter()
@@ -1178,7 +1181,6 @@ def _process_metrics_for_node(
                 f"Metric references should always be 1 or 2 arguments - got {len(metric)}"
             )
 
-        # Resolve_ref
         target_metric = manifest.resolve_metric(
             target_metric_name,
             target_metric_package,
