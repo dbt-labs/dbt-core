@@ -180,7 +180,7 @@ seeds__seed_csv = """id,first_name,last_name,email,gender,ip_address
 """
 
 seeds__update_csv = """id,first_name,last_name,email,gender,ip_address
-1,Michael, Perez,mperez0@chronoengine.com,Male,106.239.70.175
+1,Michael,Perez,mperez0@chronoengine.com,Male,106.239.70.175
 2,Shawn,Mccoy,smccoy1@reddit.com,Male,24.165.76.182
 3,Kathleen,Payne,kpayne2@cargocollective.com,Female,113.207.168.106
 4,Jimmy,Cooper,jcooper3@cargocollective.com,Male,198.24.63.114
