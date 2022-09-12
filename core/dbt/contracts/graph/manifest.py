@@ -466,6 +466,7 @@ class Disabled(Generic[D]):
 
 MaybeMetricNode = Optional[ParsedMetric]
 
+MaybeExposureNode = Optional[ParsedExposure]
 
 MaybeDocumentation = Optional[ParsedDocumentation]
 
@@ -959,6 +960,30 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return None
 
     # TODO: add resolve_exposure...
+    def resolve_exposure(
+        self,
+        target_exposure_name: str,
+        target_exposure_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeExposureNode:
+
+        exposure: Optional[ParsedExposure] = None
+        disabled: Optional[List[ParsedExposure]] = None
+
+        candidates = _search_packages(current_project, node_package, target_exposure_package)
+        for pkg in candidates:
+            exposure = self.exposure_lookup.find(target_exposure_name, pkg, self)
+
+            if exposure is not None and exposure.config.enabled:
+                return exposure
+
+            # it's possible that the node is disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(f"{target_exposure_name}", pkg)
+        if disabled:
+            return Disabled(disabled[0])
+        return None
 
     def resolve_metric(
         self,

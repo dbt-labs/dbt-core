@@ -21,8 +21,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -35,8 +35,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: "*"
     timestamp: created_at
     time_grains: [day]
     filters:
@@ -104,8 +104,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     config:
       enabled: False
     timestamp: created_at
@@ -120,8 +120,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: "*"
     timestamp: created_at
     time_grains: [day]
     filters:
@@ -132,7 +132,7 @@ metrics:
 """
 
 
-# Test enabled config at sources level in yml file
+# Test enabled config at metrics level in yml file
 class TestConfigYamlMetricLevel(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
@@ -157,8 +157,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     config:
       enabled: True
     timestamp: created_at
@@ -173,8 +173,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: "*"
     timestamp: created_at
     time_grains: [day]
     filters:
@@ -185,7 +185,7 @@ metrics:
 """
 
 # Test inheritence - set configs at project and metric level - expect metric level to win
-class TestMetricConfigsInheritence1(MetricConfigTests):
+class TestMetricConfigsInheritence(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -212,3 +212,59 @@ class TestMetricConfigsInheritence1(MetricConfigTests):
 
 
 # TODO: add test with model ref'ing disabled metric, expect error
+enabled_metric_level__schema_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    calculation_method: count
+    expression: "*"
+    config:
+      enabled: True
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+
+"""
+
+models__people_metrics_sql = """
+-- metric('number_of_people')
+
+select 1 as id
+"""
+
+class TestDisabledMetricRef(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models__people_sql,
+            "people_metrics.sql": models__people_metrics_sql,
+            "schema.yml": enabled_metric_level__schema_yml,
+        }
+
+
+    def test_metrics_all_configs(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "metric.test.number_of_people" in manifest.metrics
+
+        new_enabled_config = {
+            "metrics": {
+                "test": {
+                    "number_of_people": {
+                        "enabled": False,
+                    },
+                }
+            }
+        }
+
+        update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
+        run_dbt(["parse"], expect_pass=False)

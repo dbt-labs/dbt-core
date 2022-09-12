@@ -74,7 +74,8 @@ from dbt.exceptions import (
     get_target_not_found_or_disabled_msg,
     source_target_not_found,
     metric_target_not_found,
-    get_source_not_found_or_disabled_msg,
+    exposure_target_not_found,
+    get_not_found_or_disabled_msg,
     warn_or_error,
 )
 from dbt.parser.base import Parser
@@ -947,7 +948,12 @@ def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, 
 
 def invalid_source_fail_unless_test(node, target_name, target_table_name, disabled):
     if node.resource_type == NodeType.Test:
-        msg = get_source_not_found_or_disabled_msg(node, target_name, target_table_name, disabled)
+        msg = get_not_found_or_disabled_msg(
+            node=node,
+            target_name=f"{target_name}.{target_table_name}",
+            target_kind="source",
+            disabled=disabled
+        )
         if disabled:
             fire_event(InvalidDisabledSourceInTestNode(msg=msg))
         else:
@@ -966,6 +972,19 @@ def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_pack
             node,
             target_metric_name,
             target_metric_package,
+        )
+
+
+def invalid_exposure_fail_unless_test(node, target_exposure_name, target_exposure_package):
+
+    if node.resource_type == NodeType.Test:
+        msg = get_target_not_found_or_disabled_msg(node, target_exposure_name, target_exposure_package)
+        warn_or_error(msg, log_fmt=warning_tag("{}"))
+    else:
+        exposure_target_not_found(
+            node,
+            target_exposure_name,
+            target_exposure_package,
         )
 
 
@@ -1159,6 +1178,48 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
 
         metric.depends_on.nodes.append(target_model_id)
         manifest.update_metric(metric)
+
+
+def _process_exposures_for_node(
+    manifest: Manifest, current_project: str, node: Union[ManifestNode, ParsedExposure]
+):
+    """Given a manifest and a node in that manifest, process its exposures"""
+    for exposure in node.exposures:
+        target_exposure: Optional[ParsedExposure] = None
+        target_exposure_name: str
+        target_exposure_package: Optional[str] = None
+
+        if len(exposure) == 1:
+            target_exposure_name = exposure[0]
+        elif len(exposure) == 2:
+            target_exposure_package, target_exposure_name = exposure
+        else:
+            raise dbt.exceptions.InternalException(
+                f"Exposure references should always be 1 or 2 arguments - got {len(exposure)}"
+            )
+
+        target_exposure = manifest.resolve_exposure(
+            target_exposure_name,
+            target_exposure_package,
+            current_project,
+            node.package_name,
+        )
+
+        if target_exposure is None or isinstance(target_exposure, Disabled):
+            # This may raise. Even if it doesn't, we don't want to add
+            # this node to the graph b/c there is no destination node
+            node.config.enabled = False
+            invalid_exposure_fail_unless_test(
+                node,
+                target_exposure_name,
+                target_exposure_package,
+            )
+
+            continue
+
+        target_exposure_id = target_exposure.unique_id
+
+        node.depends_on.nodes.append(target_exposure_id)
 
 
 def _process_metrics_for_node(
