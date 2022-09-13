@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix warnings as errors during tests
+time: 2022-09-09T09:56:27.90654-05:00
+custom:
+  Author: stu-k
+  Issue: "5424"
+  PR: "5800"

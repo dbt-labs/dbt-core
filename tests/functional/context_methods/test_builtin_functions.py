@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt.exceptions import CompilationException
@@ -23,6 +24,12 @@ macros__validate_zip_sql = """
 {% endmacro %}
 """
 
+macros__validate_invocation_sql = """
+{% macro validate_invocation(my_variable) %}
+    {{ log("invocation_result: "~ invocation_args_dict) }}
+{% endmacro %}
+"""
+
 models__set_exception_sql = """
 {% set set_strict_result = set_strict(1) %}
 """
@@ -38,6 +45,7 @@ class TestContextBuiltins:
         return {
             "validate_set.sql": macros__validate_set_sql,
             "validate_zip.sql": macros__validate_zip_sql,
+            "validate_invocation.sql": macros__validate_invocation_sql,
         }
 
     def test_builtin_set_function(self, project):
@@ -54,6 +62,46 @@ class TestContextBuiltins:
         expected_zip = [(1, "foo"), (2, "bar")]
         assert f"zip_result: {expected_zip}" in log_output
         assert f"zip_strict_result: {expected_zip}" in log_output
+
+    def test_builtin_invocation_args_dict_function(self, project):
+        _, log_output = run_dbt_and_capture(
+            [
+                "--debug",
+                "--log-format=json",
+                "run-operation",
+                "validate_invocation",
+                "--args",
+                "{my_variable: test_variable}",
+            ]
+        )
+
+        parsed_logs = []
+        for line in log_output.split("\n"):
+            try:
+                log = json.loads(line)
+            except ValueError:
+                continue
+
+            parsed_logs.append(log)
+
+        # Value of msg is a string
+        result = next(
+            (
+                item
+                for item in parsed_logs
+                if "invocation_result" in item["data"].get("msg", "msg")
+            ),
+            False,
+        )
+
+        assert result
+
+        # Result is checked in two parts because profiles_dir is unique each test run
+        expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
+        assert expected in str(result)
+
+        expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
+        assert expected in str(result)
 
 
 class TestContextBuiltinExceptions:

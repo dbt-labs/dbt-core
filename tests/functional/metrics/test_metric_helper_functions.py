@@ -12,8 +12,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -26,8 +26,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day, week, month]
     filters:
@@ -38,16 +38,16 @@ metrics:
   - name: average_tenure
     label: "Average tenure"
     description: "The average tenure per person"
-    type: expression
-    sql: "{{metric('collective_tenure')}} / {{metric('number_of_people')}} "
+    calculation_method: derived
+    expression: "{{metric('collective_tenure')}} / {{metric('number_of_people')}} "
     timestamp: created_at
     time_grains: [day, week, month]
 
   - name: average_tenure_plus_one
     label: "Average tenure"
     description: "The average tenure per person"
-    type: expression
-    sql: "{{metric('average_tenure')}} + 1 "
+    calculation_method: derived
+    expression: "{{metric('average_tenure')}} + 1 "
     timestamp: created_at
     time_grains: [day, week, month]
 """

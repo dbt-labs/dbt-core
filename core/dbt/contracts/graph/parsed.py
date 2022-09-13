@@ -37,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
     ExposureType,
     MaturityType,
     MetricFilter,
+    MetricTime,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -806,12 +807,13 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
     description: str
     label: str
-    type: str
-    sql: str
+    calculation_method: str
+    expression: str
     timestamp: Optional[str]
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
+    window: Optional[MetricTime]
     model: Optional[str] = None
     model_unique_id: Optional[str] = None
     resource_type: NodeType = NodeType.Metric
@@ -834,6 +836,9 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_model(self, old: "ParsedMetric") -> bool:
         return self.model == old.model
 
+    def same_window(self, old: "ParsedMetric") -> bool:
+        return self.window == old.window
+
     def same_dimensions(self, old: "ParsedMetric") -> bool:
         return self.dimensions == old.dimensions
 
@@ -846,11 +851,11 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_label(self, old: "ParsedMetric") -> bool:
         return self.label == old.label
 
-    def same_type(self, old: "ParsedMetric") -> bool:
-        return self.type == old.type
+    def same_calculation_method(self, old: "ParsedMetric") -> bool:
+        return self.calculation_method == old.calculation_method
 
-    def same_sql(self, old: "ParsedMetric") -> bool:
-        return self.sql == old.sql
+    def same_expression(self, old: "ParsedMetric") -> bool:
+        return self.expression == old.expression
 
     def same_timestamp(self, old: "ParsedMetric") -> bool:
         return self.timestamp == old.timestamp
@@ -866,12 +871,13 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
 
         return (
             self.same_model(old)
+            and self.same_window(old)
             and self.same_dimensions(old)
             and self.same_filters(old)
             and self.same_description(old)
             and self.same_label(old)
-            and self.same_type(old)
-            and self.same_sql(old)
+            and self.same_calculation_method(old)
+            and self.same_expression(old)
             and self.same_timestamp(old)
             and self.same_time_grains(old)
             and True

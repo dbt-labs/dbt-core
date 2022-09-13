@@ -1,7 +1,0 @@
-version: 2
-snapshots:
-- name: example_snapshot
-  columns:
-  - name: new_col
-    tests:
-    - not_null

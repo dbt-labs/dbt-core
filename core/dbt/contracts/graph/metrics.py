@@ -49,13 +49,17 @@ class ResolvedMetricReference(MetricReference):
 
     @classmethod
     def reverse_dag_parsing(cls, metric_node, manifest, metric_depth_count):
-        if metric_node.type == "expression":
+        if metric_node.calculation_method == "derived":
             yield {metric_node.name: metric_depth_count}
             metric_depth_count = metric_depth_count + 1
 
         for parent_unique_id in metric_node.depends_on.nodes:
             node = manifest.metrics.get(parent_unique_id)
-            if node and node.resource_type == NodeType.Metric and node.type == "expression":
+            if (
+                node
+                and node.resource_type == NodeType.Metric
+                and node.calculation_method == "derived"
+            ):
                 yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count)
 
     def full_metric_dependency(self):
@@ -67,7 +71,7 @@ class ResolvedMetricReference(MetricReference):
 
         to_return = []
         for metric in in_scope_metrics:
-            if metric.type != "expression" and metric.name not in to_return:
+            if metric.calculation_method != "derived" and metric.name not in to_return:
                 to_return.append(metric.name)
 
         return to_return
@@ -77,7 +81,7 @@ class ResolvedMetricReference(MetricReference):
 
         to_return = []
         for metric in in_scope_metrics:
-            if metric.type == "expression" and metric.name not in to_return:
+            if metric.calculation_method == "derived" and metric.name not in to_return:
                 to_return.append(metric.name)
 
         return to_return
