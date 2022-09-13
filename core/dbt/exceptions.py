@@ -630,6 +630,7 @@ def ref_target_not_found(
     )
     raise_compiler_error(msg, model)
 
+
 def get_not_found_or_disabled_msg(
     node,
     target_name: str,
@@ -644,8 +645,14 @@ def get_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        node, target_name, target_package, include_path=True, reason=reason, target_kind=target_kind
+        node,
+        target_name,
+        target_package,
+        include_path=True,
+        reason=reason,
+        target_kind=target_kind,
     )
+
 
 def source_target_not_found(
     model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
@@ -654,40 +661,36 @@ def source_target_not_found(
         node=model,
         target_name=f"{target_name}.{target_table_name}",
         target_kind="source",
-        disabled=disabled
+        disabled=disabled,
     )
     raise_compiler_error(msg, model)
 
+
 def metric_target_not_found(
-    metric,
-    target_name: str,
-    target_package: Optional[str],
-    disabled: Optional[bool] = None
-    ) -> NoReturn:
-    
+    metric, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
+) -> NoReturn:
+
     msg = get_not_found_or_disabled_msg(
         node=metric,
         target_name=target_name,
         target_kind="metric",
         target_package=target_package,
-        disabled=disabled
+        disabled=disabled,
     )
 
     raise_compiler_error(msg, metric)
 
+
 def exposure_target_not_found(
-    exposure,
-    target_name: str,
-    target_package: Optional[str],
-    disabled: Optional[bool] = None
-    ) -> NoReturn:
-    
+    exposure, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
+) -> NoReturn:
+
     msg = get_not_found_or_disabled_msg(
         node=exposure,
         target_name=target_name,
         target_kind="exposure",
         target_package=target_package,
-        disabled=disabled
+        disabled=disabled,
     )
 
     raise_compiler_error(msg, exposure)

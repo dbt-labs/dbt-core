@@ -952,7 +952,7 @@ def invalid_source_fail_unless_test(node, target_name, target_table_name, disabl
             node=node,
             target_name=f"{target_name}.{target_table_name}",
             target_kind="source",
-            disabled=disabled
+            disabled=disabled,
         )
         if disabled:
             fire_event(InvalidDisabledSourceInTestNode(msg=msg))
@@ -978,7 +978,9 @@ def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_pack
 def invalid_exposure_fail_unless_test(node, target_exposure_name, target_exposure_package):
 
     if node.resource_type == NodeType.Test:
-        msg = get_target_not_found_or_disabled_msg(node, target_exposure_name, target_exposure_package)
+        msg = get_target_not_found_or_disabled_msg(
+            node, target_exposure_name, target_exposure_package
+        )
         warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
         exposure_target_not_found(
@@ -1180,54 +1182,12 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
         manifest.update_metric(metric)
 
 
-def _process_exposures_for_node(
-    manifest: Manifest, current_project: str, node: Union[ManifestNode, ParsedExposure]
-):
-    """Given a manifest and a node in that manifest, process its exposures"""
-    for exposure in node.exposures:
-        target_exposure: Optional[ParsedExposure] = None
-        target_exposure_name: str
-        target_exposure_package: Optional[str] = None
-
-        if len(exposure) == 1:
-            target_exposure_name = exposure[0]
-        elif len(exposure) == 2:
-            target_exposure_package, target_exposure_name = exposure
-        else:
-            raise dbt.exceptions.InternalException(
-                f"Exposure references should always be 1 or 2 arguments - got {len(exposure)}"
-            )
-
-        target_exposure = manifest.resolve_exposure(
-            target_exposure_name,
-            target_exposure_package,
-            current_project,
-            node.package_name,
-        )
-
-        if target_exposure is None or isinstance(target_exposure, Disabled):
-            # This may raise. Even if it doesn't, we don't want to add
-            # this node to the graph b/c there is no destination node
-            node.config.enabled = False
-            invalid_exposure_fail_unless_test(
-                node,
-                target_exposure_name,
-                target_exposure_package,
-            )
-
-            continue
-
-        target_exposure_id = target_exposure.unique_id
-
-        node.depends_on.nodes.append(target_exposure_id)
-
-
 def _process_metrics_for_node(
     manifest: Manifest, current_project: str, node: Union[ManifestNode, ParsedMetric]
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
     for metric in node.metrics:
-        target_metric: Optional[ParsedMetric] = None
+        target_metric: Optional[Union[Disabled, ParsedMetric]] = None
         target_metric_name: str
         target_metric_package: Optional[str] = None
 
