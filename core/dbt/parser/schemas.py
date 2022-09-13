@@ -553,16 +553,17 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             # parse exposures
             if "exposures" in dct:
                 exp_parser = ExposureParser(self, yaml_block)
-                for exposure_node in exp_parser.parse():
-                    self.manifest.add_exposure(yaml_block.file, exposure_node)
+                exp_parser.parse()
 
             # parse metrics
             if "metrics" in dct:
                 metric_parser = MetricParser(self, yaml_block)
-                for metric_node in metric_parser.parse():
-                    # metric_node may be None if it is disabled
-                    if metric_node:
-                        self.manifest.add_metric(yaml_block.file, metric_node)
+                metric_parser.parse()
+                # for metric_node in metric_parser.parse():
+                #     # metric_node may be None if it is disabled
+                #     if metric_node:
+                #         self.manifest.add_metric(yaml_block.file, metric_node)
+                # metric_parser.parse()
 
 
 def check_format_version(file_path, yaml_dct) -> None:
@@ -983,7 +984,7 @@ class ExposureParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_exposure(self, unparsed: UnparsedExposure) -> ParsedExposure:
+    def parse_exposure(self, unparsed: UnparsedExposure):
         package_name = self.project.project_name
         unique_id = f"{NodeType.Exposure}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -1037,7 +1038,11 @@ class ExposureParser(YamlReader):
         depends_on_jinja = "\n".join("{{ " + line + "}}" for line in unparsed.depends_on)
         get_rendered(depends_on_jinja, ctx, parsed, capture_macros=True)
         # parsed now has a populated refs/sources
-        return parsed
+
+        if parsed.config.enabled:
+            self.manifest.add_exposure(self.yaml.file, parsed)
+        else:
+            self.manifest.add_disabled_nofile(parsed)
 
     def _generate_exposure_config(
         self, target: UnparsedExposure, fqn: List[str], package_name: str, rendered: bool
@@ -1062,7 +1067,8 @@ class ExposureParser(YamlReader):
             patch_config_dict=precedence_configs,
         )
 
-    def parse(self) -> Iterable[ParsedExposure]:
+    # TODO: comment why this returns a TestBlock
+    def parse(self) -> List[TestBlock]:
         for data in self.get_key_dicts():
             try:
                 UnparsedExposure.validate(data)
@@ -1070,8 +1076,8 @@ class ExposureParser(YamlReader):
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise ParsingException(msg) from exc
-            parsed = self.parse_exposure(unparsed)
-            yield parsed
+            self.parse_exposure(unparsed)
+        return []
 
 
 class MetricParser(YamlReader):
@@ -1080,7 +1086,7 @@ class MetricParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
-    def parse_metric(self, unparsed: UnparsedMetric) -> None:
+    def parse_metric(self, unparsed: UnparsedMetric):
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -1148,9 +1154,9 @@ class MetricParser(YamlReader):
             node=parsed,
         )
 
-        # if the metric is disabled we do not want it included in the manifest, only in the diabled dict
+        # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
         if parsed.config.enabled:
-            return parsed
+            self.manifest.add_metric(self.yaml.file, parsed)
         else:
             self.manifest.add_disabled_nofile(parsed)
 
@@ -1177,12 +1183,15 @@ class MetricParser(YamlReader):
             patch_config_dict=precedence_configs,
         )
 
-    def parse(self) -> Iterable[ParsedMetric]:
+    # TODO: comment why this returns a TestBlock
+    def parse(self) -> List[TestBlock]:
         for data in self.get_key_dicts():
             try:
                 UnparsedMetric.validate(data)
                 unparsed = UnparsedMetric.from_dict(data)
+
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise ParsingException(msg) from exc
-            yield self.parse_metric(unparsed)
+            self.parse_metric(unparsed)
+        return []
