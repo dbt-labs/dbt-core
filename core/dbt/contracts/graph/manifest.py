@@ -616,7 +616,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     flat_graph: Dict[str, Any] = field(default_factory=dict)
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
-    # TODO: not sure this is the right move here?
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
 

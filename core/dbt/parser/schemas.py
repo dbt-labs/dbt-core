@@ -78,15 +78,6 @@ from dbt.ui import warning_tag
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
-# TODO: is this used?
-# UnparsedSchemaYaml = Union[
-#     UnparsedSourceDefinition,
-#     UnparsedNodeUpdate,
-#     UnparsedAnalysisUpdate,
-#     UnparsedMacroUpdate,
-#     UnparsedMetric,
-# ]
-
 TestDef = Union[str, Dict[str, Any]]
 
 schema_file_keys = (
@@ -559,11 +550,6 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             if "metrics" in dct:
                 metric_parser = MetricParser(self, yaml_block)
                 metric_parser.parse()
-                # for metric_node in metric_parser.parse():
-                #     # metric_node may be None if it is disabled
-                #     if metric_node:
-                #         self.manifest.add_metric(yaml_block.file, metric_node)
-                # metric_parser.parse()
 
 
 def check_format_version(file_path, yaml_dct) -> None:
@@ -1067,8 +1053,7 @@ class ExposureParser(YamlReader):
             patch_config_dict=precedence_configs,
         )
 
-    # TODO: comment why this returns a TestBlock
-    def parse(self) -> List[TestBlock]:
+    def parse(self):
         for data in self.get_key_dicts():
             try:
                 UnparsedExposure.validate(data)
@@ -1077,7 +1062,6 @@ class ExposureParser(YamlReader):
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise ParsingException(msg) from exc
             self.parse_exposure(unparsed)
-        return []
 
 
 class MetricParser(YamlReader):
@@ -1183,8 +1167,7 @@ class MetricParser(YamlReader):
             patch_config_dict=precedence_configs,
         )
 
-    # TODO: comment why this returns a TestBlock
-    def parse(self) -> List[TestBlock]:
+    def parse(self):
         for data in self.get_key_dicts():
             try:
                 UnparsedMetric.validate(data)
@@ -1194,4 +1177,3 @@ class MetricParser(YamlReader):
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise ParsingException(msg) from exc
             self.parse_metric(unparsed)
-        return []
