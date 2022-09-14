@@ -143,6 +143,7 @@ class BaseContextConfigGenerator(Generic[T]):
         # When schema files patch config, it has lower precedence than
         # config in the models (config_call_dict), so we add the patch_config_dict
         # before the config_call_dict
+        # breakpoint()
         if patch_config_dict:
             result = self._update_from_config(result, patch_config_dict)
 
@@ -327,6 +328,7 @@ class ContextConfig:
             # TODO CT-211
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
 
+        # breakpoint()
         return src.calculate_node_config_dict(
             config_call_dict=self._config_call_dict,
             fqn=self._fqn,

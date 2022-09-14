@@ -507,6 +507,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
             # NonSourceParser.parse(), TestablePatchParser is a variety of
             # NodePatchParser
+            # breakpoint()
             if "models" in dct:
                 parser = TestablePatchParser(self, yaml_block, "models")
                 for test_block in parser.parse():
@@ -777,7 +778,11 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 refs = ParserRef()
             # This adds the node_block to self.manifest
             # as a ParsedNodePatch or ParsedMacroPatch
-            self.parse_patch(node_block, refs)
+            breakpoint()
+            if node.config.get("enabled"):
+                self.parse_patch(node_block, refs)
+            else:
+                self.manifest.add_disabled_nofile(node)
         # This will always be empty if the node a macro or analysis
         return test_blocks
 
@@ -845,6 +850,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
+        # breakpoint()
         self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
 
 
@@ -911,6 +917,10 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             if patch.config:
                 self.patch_node_config(node, patch)
             node.patch(patch)
+
+            if not node.config.enabled:
+                # add to disabled dict
+                self.manifest.add_disabled_nofile(node)
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):

@@ -370,6 +370,7 @@ class ManifestLoader:
 
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
+            # breakpoint()
             # patch_sources converts the UnparsedSourceDefinitions in the
             # Manifest.sources to ParsedSourceDefinition via 'patch_source'
             # in SourcePatcher
@@ -463,11 +464,13 @@ class ManifestLoader:
             for file_id in parser_files[parser_name]:
                 block = FileBlock(self.manifest.files[file_id])
                 if isinstance(parser, SchemaParser):
+                    # breakpoint()
                     assert isinstance(block.file, SchemaSourceFile)
                     if self.partially_parsing:
                         dct = block.file.pp_dict
                     else:
                         dct = block.file.dict_from_yaml
+                    # this is where the schema file gets parsed
                     parser.parse_file(block, dct=dct)
                     # Came out of here with UnpatchedSourceDefinition containing configs at the source level
                     # and not configs at the table level (as expected)
@@ -829,6 +832,7 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
+            # breakpoint()
             _process_refs_for_node(self.manifest, current_project, node)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:

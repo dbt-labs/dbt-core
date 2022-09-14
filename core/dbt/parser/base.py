@@ -315,6 +315,9 @@ class ConfiguredParser(
 
         parsed_node.config_call_dict = config._config_call_dict
 
+        # breakpoint()
+        # self.manifest.add_disabled_nofile(node)
+
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config_dict(parsed_node, config_dict)
