@@ -55,7 +55,7 @@ class TestBasicExposures:
     def test_names_with_spaces(self, project):
         run_dbt(["run"])
         manifest = get_manifest(project.project_root)
-        exposure_ids = list(manifest.metrics.keys())
+        exposure_ids = list(manifest.exposures.keys())
         expected_exposure_ids = [
             "exposure.test.simple_exposure",
             "exposure.test.notebook_exposure",
