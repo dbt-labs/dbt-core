@@ -15,8 +15,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -29,10 +29,26 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day]
+    filters:
+      - field: loves_dbt
+        operator: 'is'
+        value: 'true'
+
+  - name: collective_window
+    label: "Collective window"
+    description: Testing window
+    model: "ref('people')"
+    calculation_method: sum
+    expression: tenure
+    timestamp: created_at
+    time_grains: [day]
+    window:
+      count: 14
+      period: day
     filters:
       - field: loves_dbt
         operator: 'is'
@@ -66,7 +82,11 @@ class TestSimpleMetrics:
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = ["metric.test.number_of_people", "metric.test.collective_tenure"]
+        expected_metric_ids = [
+            "metric.test.number_of_people",
+            "metric.test.collective_tenure",
+            "metric.test.collective_window",
+        ]
         assert metric_ids == expected_metric_ids
 
 
@@ -79,8 +99,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref(people)"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -93,8 +113,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref(people)"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day]
     filters:
@@ -132,8 +152,8 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -145,8 +165,8 @@ metrics:
   - name: collective_tenure
     label: "Collective tenure"
     description: Total number of years of team experience
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day]
     filters:
@@ -185,8 +205,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -199,8 +219,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day]
     filters:
@@ -254,12 +274,13 @@ downstream_model_sql = """
     {% for m in some_metrics %}
         name: {{ m.name }}
         label: {{ m.label }}
-        type: {{ m.type }}
-        sql: {{ m.sql }}
+        calculation_method: {{ m.calculation_method }}
+        expression: {{ m.expression }}
         timestamp: {{ m.timestamp }}
         time_grains: {{ m.time_grains }}
         dimensions: {{ m.dimensions }}
         filters: {{ m.filters }}
+        window: {{ m.window }}
     {% endfor %}
 
 {% endif %}
@@ -267,15 +288,15 @@ downstream_model_sql = """
 select 1 as id
 """
 
-invalid_expression_metric__contains_model_yml = """
+invalid_derived_metric__contains_model_yml = """
 version: 2
 metrics:
     - name: count_orders
       label: Count orders
       model: ref('mock_purchase_data')
 
-      type: count
-      sql: "*"
+      calculation_method: count
+      expression: "*"
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]
 
@@ -286,8 +307,8 @@ metrics:
       label: Total order revenue
       model: ref('mock_purchase_data')
 
-      type: sum
-      sql: "payment_total"
+      calculation_method: sum
+      expression: "payment_total"
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]
 
@@ -297,8 +318,8 @@ metrics:
     - name: average_order_value
       label: Average Order Value
 
-      type: expression
-      sql:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
+      calculation_method: derived
+      expression:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
       model: ref('mock_purchase_data')
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]
@@ -308,28 +329,28 @@ metrics:
 """
 
 
-class TestInvalidExpressionMetrics:
+class TestInvalidDerivedMetrics:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "expression_metric.yml": invalid_expression_metric__contains_model_yml,
+            "derived_metric.yml": invalid_derived_metric__contains_model_yml,
             "downstream_model.sql": downstream_model_sql,
         }
 
-    def test_invalid_expression_metrics(self, project):
+    def test_invalid_derived_metrics(self, project):
         with pytest.raises(ParsingException):
             run_dbt(["run"])
 
 
-expression_metric_yml = """
+derived_metric_yml = """
 version: 2
 metrics:
     - name: count_orders
       label: Count orders
       model: ref('mock_purchase_data')
 
-      type: count
-      sql: "*"
+      calculation_method: count
+      expression: "*"
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]
 
@@ -340,8 +361,8 @@ metrics:
       label: Total order revenue
       model: ref('mock_purchase_data')
 
-      type: sum
-      sql: "payment_total"
+      calculation_method: sum
+      expression: "payment_total"
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]
 
@@ -351,8 +372,8 @@ metrics:
     - name: average_order_value
       label: Average Order Value
 
-      type: expression
-      sql:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
+      calculation_method: derived
+      expression:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
       timestamp: purchased_at
       time_grains: [day, week, month, quarter, year]
 
@@ -361,11 +382,11 @@ metrics:
 """
 
 
-class TestExpressionMetric:
+class TestDerivedMetric:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "expression_metric.yml": expression_metric_yml,
+            "derived_metric.yml": derived_metric_yml,
             "downstream_model.sql": downstream_model_sql,
         }
 
@@ -378,7 +399,7 @@ class TestExpressionMetric:
             "mock_purchase_data.csv": mock_purchase_data_csv,
         }
 
-    def test_expression_metric(
+    def test_derived_metric(
         self,
         project,
     ):
@@ -407,9 +428,9 @@ class TestExpressionMetric:
         assert sorted(downstream_model.config["metric_names"]) == metric_names
 
         # make sure the 'expression' metric depends on the two upstream metrics
-        expression_metric = manifest.metrics["metric.test.average_order_value"]
-        assert sorted(expression_metric.metrics) == [["count_orders"], ["sum_order_revenue"]]
-        assert sorted(expression_metric.depends_on.nodes) == [
+        derived_metric = manifest.metrics["metric.test.average_order_value"]
+        assert sorted(derived_metric.metrics) == [["count_orders"], ["sum_order_revenue"]]
+        assert sorted(derived_metric.depends_on.nodes) == [
             "metric.test.count_orders",
             "metric.test.sum_order_revenue",
         ]
@@ -424,12 +445,13 @@ class TestExpressionMetric:
             for property in [
                 "name",
                 "label",
-                "type",
-                "sql",
+                "calculation_method",
+                "expression",
                 "timestamp",
                 "time_grains",
                 "dimensions",
                 "filters",
+                "window",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code

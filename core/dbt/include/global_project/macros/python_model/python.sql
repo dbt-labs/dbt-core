@@ -3,7 +3,7 @@
     {%- set ref_dict = {} -%}
     {%- for _ref in model.refs -%}
         {%- set resolved = ref(*_ref) -%}
-        {%- do ref_dict.update({_ref | join("."): resolved | string}) -%}
+        {%- do ref_dict.update({_ref | join("."): resolved.quote(database=False, schema=False, identifier=False) | string}) -%}
     {%- endfor -%}
 
 def ref(*args,dbt_load_df_function):
@@ -18,7 +18,7 @@ def ref(*args,dbt_load_df_function):
     {%- set source_dict = {} -%}
     {%- for _source in model.sources -%}
         {%- set resolved = source(*_source) -%}
-        {%- do source_dict.update({_source | join("."): resolved | string}) -%}
+        {%- do source_dict.update({_source | join("."): resolved.quote(database=False, schema=False, identifier=False) | string}) -%}
     {%- endfor -%}
 
 def source(*args, dbt_load_df_function):

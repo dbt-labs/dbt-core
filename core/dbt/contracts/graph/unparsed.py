@@ -444,6 +444,25 @@ class MetricFilter(dbtClassMixin, Replaceable):
     value: str
 
 
+class MetricTimePeriod(StrEnum):
+    day = "day"
+    week = "week"
+    month = "month"
+    year = "year"
+
+    def plural(self) -> str:
+        return str(self) + "s"
+
+
+@dataclass
+class MetricTime(dbtClassMixin, Mergeable):
+    count: Optional[int] = None
+    period: Optional[MetricTimePeriod] = None
+
+    def __bool__(self):
+        return self.count is not None and self.period is not None
+
+
 @dataclass
 class UnparsedMetric(dbtClassMixin, Replaceable):
     # TODO : verify that this disallows metric names with spaces
@@ -451,13 +470,14 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     # name: Identifier
     name: str
     label: str
-    type: str
-    model: Optional[str] = None
+    calculation_method: str
+    timestamp: str
     description: str = ""
-    sql: Union[str, int] = ""
-    timestamp: Optional[str] = None
+    expression: Union[str, int] = ""
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
+    window: Optional[MetricTime] = None
+    model: Optional[str] = None
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -470,9 +490,13 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
         if "name" in data and " " in data["name"]:
             raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
 
-        # TODO: Expressions _cannot_ have `model` properties
-        if data.get("model") is None and data.get("type") != "expression":
-            raise ValidationError("Non-expression metrics require a 'model' property")
+        if data.get("calculation_method") == "expression":
+            raise ValidationError(
+                "The metric calculation method expression has been deprecated and renamed to derived. Please update"
+            )
 
-        if data.get("model") is not None and data.get("type") == "expression":
-            raise ValidationError("Expression metrics cannot have a 'model' property")
+        if data.get("model") is None and data.get("calculation_method") != "derived":
+            raise ValidationError("Non-derived metrics require a 'model' property")
+
+        if data.get("model") is not None and data.get("calculation_method") == "derived":
+            raise ValidationError("Derived metrics cannot have a 'model' property")
