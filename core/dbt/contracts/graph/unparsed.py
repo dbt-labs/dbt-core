@@ -433,10 +433,10 @@ class ExposureOwner(dbtClassMixin, Replaceable):
 @dataclass
 class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
-    label: str
     type: ExposureType
     owner: ExposureOwner
     description: str = ""
+    label: Optional[str] = None
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
