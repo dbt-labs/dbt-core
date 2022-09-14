@@ -288,10 +288,7 @@ seeds__update_csv = """id,first_name,last_name,email,gender,ip_address
 class BaseConcurrency:
     @pytest.fixture(scope="class")
     def seeds(self):
-        return {
-            "seed.csv": seeds__seed_csv,
-            "update.csv": seeds__update_csv,
-        }
+        return {"seed.csv": seeds__seed_csv}
 
     @pytest.fixture(scope="class")
     def models(self):
