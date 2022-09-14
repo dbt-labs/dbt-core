@@ -741,6 +741,7 @@ class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 @dataclass
 class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
+    label: str
     type: ExposureType
     owner: ExposureOwner
     resource_type: NodeType = NodeType.Exposure
@@ -769,6 +770,9 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     def same_description(self, old: "ParsedExposure") -> bool:
         return self.description == old.description
+
+    def same_label(self, old: "ParsedExposure") -> bool:
+        return self.label == old.label
 
     def same_maturity(self, old: "ParsedExposure") -> bool:
         return self.maturity == old.maturity
@@ -801,6 +805,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_maturity(old)
             and self.same_url(old)
             and self.same_description(old)
+            and self.same_label(old)
             and self.same_depends_on(old)
             and self.same_config(old)
             and True
