@@ -216,10 +216,6 @@ def run_sql_with_adapter(adapter, sql, fetch=None):
     if sql.strip() == "":
         return
 
-    # make data type change if warehouse type is snowflake
-    if adapter.acquire_connection().type == "snowflake":
-        sql = sql.replace("BIGSERIAL", "BIGINT AUTOINCREMENT")
-
     # substitute schema and database in sql
     kwargs = {
         "schema": adapter.config.credentials.schema,
