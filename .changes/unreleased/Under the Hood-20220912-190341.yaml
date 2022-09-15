@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: remove key as reserved keyword from test_bool_or
+time: 2022-09-12T19:03:41.481601+02:00
+custom:
+  Author: sdebruyn
+  Issue: "5817"
+  PR: "5818"
