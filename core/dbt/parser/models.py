@@ -212,8 +212,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 continue
 
             context[func](*args, **kwargs)
-        # this is being used in macro build_config_dict
-        context["config"](config_get_keys=config_get_keys)
+        if config_get_keys:
+            # this is being used in macro build_config_dict
+            context["config"](config_get_keys=config_get_keys)
 
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
