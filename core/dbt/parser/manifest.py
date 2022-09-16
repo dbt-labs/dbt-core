@@ -367,6 +367,7 @@ class ManifestLoader:
                 self.parse_project(
                     project, project_parser_files[project.project_name], parser_types
                 )
+
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
             # patch_sources converts the UnparsedSourceDefinitions in the

@@ -508,7 +508,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             # NonSourceParser.parse(), TestablePatchParser is a variety of
             # NodePatchParser
             if "models" in dct:
-                # the models are already in the manifest as nodes when we reach this code
+                # the models are already in the manifest as nodes when we reach this code,
+                # even if they are disabled in the schema file
                 parser = TestablePatchParser(self, yaml_block, "models")
                 for test_block in parser.parse():
                     self.parse_tests(test_block)
@@ -779,7 +780,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
 
             # This adds the node_block to self.manifest
             # as a ParsedNodePatch or ParsedMacroPatch
-            # There's no unique_id on the node yet so cannot add to disabled dict yet
+            # There's no unique_id on the node yet so cannot add to disabled dict
             self.parse_patch(node_block, refs)
 
         # This will always be empty if the node a macro or analysis
