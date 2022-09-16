@@ -364,6 +364,16 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 
 
 @dataclass
+class MetricConfig(BaseConfig):
+    enabled: bool = True
+
+
+@dataclass
+class ExposureConfig(BaseConfig):
+    enabled: bool = True
+
+
+@dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
     # to be implmented to complete CT-201
@@ -613,6 +623,8 @@ class SnapshotConfig(EmptySnapshotConfig):
 
 
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
+    NodeType.Metric: MetricConfig,
+    NodeType.Exposure: ExposureConfig,
     NodeType.Source: SourceConfig,
     NodeType.Seed: SeedConfig,
     NodeType.Test: TestConfig,

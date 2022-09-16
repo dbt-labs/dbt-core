@@ -1641,6 +1641,15 @@ class RunResultWarning(WarnLevel):
 
 
 @dataclass
+class RunResultWarningMessage(WarnLevel):
+    msg: str
+    code: str = "Z049"
+
+    def message(self) -> str:
+        return f"  {self.msg}"
+
+
+@dataclass
 class RunResultFailure(ErrorLevel):
     resource_type: str
     node_name: str

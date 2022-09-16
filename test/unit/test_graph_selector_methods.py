@@ -23,7 +23,7 @@ from dbt.contracts.graph.parsed import (
     ColumnInfo,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.unparsed import ExposureType, ExposureOwner, MetricFilter
+from dbt.contracts.graph.unparsed import ExposureType, ExposureOwner, MetricFilter,MetricTime
 from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
@@ -370,8 +370,8 @@ def make_metric(pkg, name, path=None):
         label='New Customers',
         model='ref("multi")',
         description="New customers",
-        type='count',
-        sql="user_id",
+        calculation_method='count',
+        expression="user_id",
         timestamp="signup_date",
         time_grains=['day', 'week', 'month'],
         dimensions=['plan', 'country'],
@@ -380,6 +380,7 @@ def make_metric(pkg, name, path=None):
            value=True,
            operator="=",
         )],
+        window=MetricTime(),
         meta={'is_okr': True},
         tags=['okrs'],
     )

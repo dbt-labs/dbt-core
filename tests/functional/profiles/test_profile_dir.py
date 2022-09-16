@@ -155,11 +155,6 @@ class TestProfiles:
         _, stdout = self.dbt_debug(project_dir_cli_arg)
         assert f"Using profiles.yml file at {profiles_home_root}" in stdout
 
-        # create a profiles.yml in the dbt project root directory
-        write_profiles_yml(profiles_project_root, dbt_profile_data)
-        _, stdout = self.dbt_debug(project_dir_cli_arg)
-        assert f"Using profiles.yml file at {profiles_project_root}" in stdout
-
         # set DBT_PROFILES_DIR environment variable for the remainder of the cases
         env_vars = {"DBT_PROFILES_DIR": profiles_env_root}
         with environ(env_vars):
