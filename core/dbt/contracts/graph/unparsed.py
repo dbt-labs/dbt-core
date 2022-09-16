@@ -476,7 +476,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     calculation_method: str
     timestamp: str
     description: str = ""
-    expression: Union[str, int] = ""
+    expression: Union[str, int] = None
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
     window: Optional[MetricTime] = None
