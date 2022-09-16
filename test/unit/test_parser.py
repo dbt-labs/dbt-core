@@ -609,7 +609,7 @@ def model(dbt, session):
         
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
-        self.assertEqual(node.config.to_dict()["config_get_keys"], ["param_1", "param_2"])
+        self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
 
     def test_wrong_python_model_def_miss_session(self):
         py_code = """

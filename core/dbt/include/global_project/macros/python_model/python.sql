@@ -30,7 +30,7 @@ def source(*args, dbt_load_df_function):
 
 {% macro build_config_dict(model) %}
     {%- set config_dict = {} -%}
-    {%- for key in model.config.config_get_keys -%}
+    {%- for key in model.config.config_keys_used -%}
         {# weird type testing with enum, would be much easier to write this logic in Python! #}
         {%- if key == 'language' -%}
           {%- set value = 'python' -%}
