@@ -195,6 +195,7 @@ class TestInvalidMetricMissingModel:
         with pytest.raises(ParsingException):
             run_dbt(["run"])
 
+
 invalid_metrics__missing_expression_yml = """
 version: 2
 metrics:
