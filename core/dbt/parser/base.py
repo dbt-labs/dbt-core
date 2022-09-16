@@ -368,9 +368,6 @@ class ConfiguredParser(
             raise ParsingException(msg, node=node) from exc
 
     def add_result_node(self, block: FileBlock, node: ManifestNodes):
-        # TODO: this logic should be reworked to incorporate if models are diabled
-        # in the schema file.  Since we haven't parsed the yaml files yet here, we
-        # don't know if the config is disabled there or not
         if node.config.enabled:
             self.manifest.add_node(block.file, node)
         else:
