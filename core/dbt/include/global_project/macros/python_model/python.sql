@@ -57,7 +57,7 @@ class config:
 
     @staticmethod
     def get(key, default=None):
-        return config_dict.get(key, default=None)
+        return config_dict.get(key, default)
 
 class this:
     """dbt.this() or dbt.this.identifier"""
