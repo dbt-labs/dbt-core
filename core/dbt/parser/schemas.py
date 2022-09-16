@@ -929,7 +929,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 self.patch_node_config(node, patch)
 
             if node.config.enabled:
-                # This node may have been enabled via the schema file but was part of teh disabled
+                # This node may have been enabled via the schema file but was part of the disabled
                 # dict because it was disabled at the project level.  Go ahead and remove it from
                 # the disabled dict now.
                 if node.unique_id in self.manifest.disabled:
@@ -939,14 +939,13 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             else:
                 if node.unique_id in self.manifest.nodes:
                     # the node is already in the manifest.nodes because we process the models
-                    # before the sdchema files, remove it and rebuild refs not based on the
+                    # before the schema files, remove it and rebuild refs not based on the
                     # enabled config set in the yaml file
                     self.manifest.nodes.pop(node.unique_id)
                     self.manifest.rebuild_ref_lookup()
                 self.manifest.add_disabled_nofile(node)
 
     def remove_disabled(self, source_file: SchemaSourceFile, unique_id: str) -> None:
-        # This node is disabled. Find the node and remove it from disabled dictionary.
         for dis_index, dis_node in enumerate(self.manifest.disabled[unique_id]):
             if dis_node.file_id == source_file.file_id:
                 break
