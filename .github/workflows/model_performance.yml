@@ -1,0 +1,330 @@
+# **what?**
+# This workflow models the performance characteristics of a point in time in dbt.
+# It runs specific dbt commands on committed projects multiple times to create and
+# commit information about the distribution to the current branch. For more information
+# see the readme in the performance module at /performance/README.md.
+#
+# **why?**
+# When developing new features, we can take quick performance samples and compare
+# them against the commited baseline measurements produced by this workflow to detect
+# some performance regressions at development time before they reach users.
+#
+# **when?**
+# This is only run once directly after each release. If for some reason the results of
+# a run are not satisfactory, it can also be triggered manually.
+
+name: Model Performance Characteristics
+
+on:
+  # runs after non-prereleases are published.
+  release:
+    types: [released]
+  # run manually from the actions tab
+  workflow_dispatch:
+    inputs:
+      # if we ever want to model pre-releases, we would need to handle pre-release version numbers
+      # here and in the runner. Even if we use a semver library I suspect it will be rather difficult.
+      release_id:
+        description: '(^^ always run from main) dbt version to model (must be non-prerelease in Pypi)'
+        default: 9.9.9
+        required: true
+      open_prs:
+        description: Open PRs to main and release branch? (branch name inferred from provided version) (yes/no)
+        default: 'no'
+        required: true
+  pull_request: # TODO: remove, just for testing purposes
+
+env:
+  RUNNER_CACHE_PATH: performance/runner/target/release/runner
+
+# both jobs need to write
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  latest-runner:
+    name: Build or Fetch Runner
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    outputs:
+      cache_key: ${{ steps.variables.outputs.cache_key }}
+      release_id: ${{ steps.variables.outputs.release_id }}
+      open_prs: ${{ steps.variables.outputs.open_prs }}
+      release_branch: ${{ steps.variables.outputs.release_branch }}
+    steps:
+
+      # explicitly checkout the performance runner from main regardless of which
+      # version we are modeling.
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      # collect all the variables that need to be used in subsequent jobs
+      - name: Set Variables
+        id: variables
+        run: |
+          # create a cache key that will be used in the next job. without this the
+          # next job would have to checkout from main an hash the files itself.
+          echo "::set-output name=cache_key::${{ runner.os }}-${{ hashFiles('performance/runner/Cargo.toml')}}-${{ hashFiles('performance/runner/src/*') }}"
+
+          # this value gets used to create other values locally so it gets a local definition too.
+          local_release_id=''
+          # users are prompted to input with the correct format
+          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            echo "Workflow dispatch event detected"
+            local_release_id=${{github.event.inputs.release_id}}
+            echo "::set-output name=release_id::${{github.event.inputs.release_id}}"
+            echo "::set-output name=open_prs::${{github.event.inputs.open_prs}}"
+          # release.tag_name has a v prepended. we must remove it.
+          else
+            echo "release event detected"
+            with_v=${{github.event.release.tag_name}}
+            without_v=${with_v:1}
+            without_v=1.2.1 # TODO: just for testing
+            local_release_id=$without_v
+            echo "::set-output name=release_id::$without_v"
+            echo "::set-output name=open_prs::yes"
+          fi
+
+          # string manipulation to get the branch name. It can't be discovered from the github api
+          # for release triggers so we're stuck with this. If we change our branch naming strategy
+          # we have to update this code. example: 1.0.0 -> 1.0.latest. the sed command takes into
+          # account multiple digits like 1.0.999 -> 1.0.latest
+
+          no_patch=$(sed "s|\(.*\)\..*|\1|" <<< $local_release_id)
+          branch_name="${no_patch}.latest"
+          echo "::set-output name=release_branch::$branch_name"
+          echo "release branch is inferred to be ${branch_name}"
+
+      # attempts to access a previously cached runner
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: ${{ env.RUNNER_CACHE_PATH }}
+          key: ${{ steps.variables.outputs.cache_key }}
+
+      - name: Fetch Rust Toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Add fmt
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: rustup component add rustfmt
+
+      - name: Cargo fmt
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --manifest-path performance/runner/Cargo.toml --all -- --check
+
+      - name: Test
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path performance/runner/Cargo.toml
+
+      - name: Build (optimized)
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --manifest-path performance/runner/Cargo.toml
+      # the cache action automatically caches this binary at the end of the job
+
+  model:
+    # depends on `latest-runner` as a separate job so that failures in this job do not prevent
+    # a successfully tested and built binary from being cached.
+    needs: [latest-runner]
+    name: Model a release
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: '[DEBUG] print variables'
+        run: |
+          echo "all variables defined in latest-runner > Set Variables > outputs"
+          echo "cache_key:      ${{ needs.latest-runner.outputs.cache_key }}"
+          echo "release_id:     ${{ needs.latest-runner.outputs.release_id }}"
+          echo "open_prs:       ${{ needs.latest-runner.outputs.open_prs }}"
+          echo "release_branch: ${{ needs.latest-runner.outputs.release_branch }}"
+
+      - name: Setup Python
+        uses: actions/setup-python@v2.2.2
+        with:
+          python-version: "3.8"
+
+      - name: Install dbt
+        run: pip install dbt-postgres==${{ needs.latest-runner.outputs.release_id }}
+
+      - name: Install Hyperfine
+        run: wget https://github.com/sharkdp/hyperfine/releases/download/v1.11.0/hyperfine_1.11.0_amd64.deb && sudo dpkg -i hyperfine_1.11.0_amd64.deb
+
+      # explicitly checkout main to get the latest project definitions
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      # this was built in the previous job so it will be there.
+      - name: Fetch Runner
+        uses: actions/cache@v2
+        id: cache
+        with:
+          path: ${{ env.RUNNER_CACHE_PATH }}
+          key: ${{ needs.latest-runner.outputs.cache_key }}
+
+      - name: Move Runner
+        run: mv performance/runner/target/release/runner performance/app
+
+      - name: Change Runner Permissions
+        run: chmod +x ./performance/app
+
+      - name: '[DEBUG] ls baseline directory before run'
+        run: ls -R performance/baselines/
+
+      # `${{ github.workspace }}` is used to pass the absolute path
+      # TODO CHANGE NUMBER OF RUNS BEFORE MERGING
+      # TODO this isn't putting the baseline in the right directory. it's putting it one level up.
+      - name: Run Measurement
+        run: mkdir ${{ github.workspace }}/performance/tmp/ && mkdir -p performance/baselines/${{ needs.latest-runner.outputs.release_id }}/ && performance/app model -v ${{ needs.latest-runner.outputs.release_id }} -b ${{ github.workspace }}/performance/baselines/ -p ${{ github.workspace }}/performance/projects/ -t ${{ github.workspace }}/performance/tmp/ -n 2
+
+      - name: '[DEBUG] ls baseline directory after run'
+        run: ls -R performance/baselines/
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: baseline
+          path: performance/baselines/${{ needs.latest-runner.outputs.release_id }}/
+
+  pr-release-branch:
+    if: ${{ needs.latest-runner.outputs.open_prs == 'yes' && needs.latest-runner.outputs.release_branch != 'main' }}
+    # depends on `model` as a separate job so that the baseline can be committed to more than one branch
+    # i.e. release branch and main
+    needs: [latest-runner, model]
+    name: Open PR for release branch (if specified)
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: '[DEBUG] print variables'
+        run: |
+          echo "all variables defined in latest-runner > Set Variables > outputs"
+          echo "cache_key:      ${{ needs.latest-runner.outputs.cache_key }}"
+          echo "release_id:     ${{ needs.latest-runner.outputs.release_id }}"
+          echo "open_prs:       ${{ needs.latest-runner.outputs.open_prs }}"
+          echo "release_branch: ${{ needs.latest-runner.outputs.release_branch }}"
+
+
+      # explicitly checkout the branch specified during dispatch
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ needs.latest-runner.outputs.release_branch }}
+          
+      - name: Create PR branch
+        run: |
+          git checkout -b performance-bot/release_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}
+          git push origin performance-bot/release_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}
+          git branch --set-upstream-to=origin/performance-bot/release_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}} performance-bot/release_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}
+
+      - name: '[DEBUG] ls baselines before artifact download'
+        run: ls -R performance/baselines/
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: baseline
+          path: performance/baselines/${{ needs.latest-runner.outputs.release_id }}
+
+      - name: '[DEBUG] ls baselines after artifact download'
+        run: ls -R performance/baselines/
+
+      - name: Commit baseline
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: 'performance/baselines/*'
+          author_name: 'Github Build Bot'
+          author_email: 'buildbot@fishtownanalytics.com'
+          message: 'adding performance baseline for ${{ needs.latest-runner.outputs.release_id }}'
+          push: 'origin origin/performance-bot/release_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}'
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
+          draft: true
+          title: 'Adding performance modeling for ${{needs.latest-runner.outputs.release_id}}'
+          branch: 'performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}'
+          labels: |
+            Skip Changelog
+
+  pr-main-branch:
+    if: ${{ needs.latest-runner.outputs.open_prs == 'yes' }}
+    # depends on `model` as a separate job so that the baseline can be committed to more than one branch
+    # i.e. release branch and main
+    needs: [latest-runner, model]
+    name: Open PR for main (if specified)
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: '[DEBUG] print variables'
+        run: |
+          echo "all variables defined in latest-runner > Set Variables > outputs"
+          echo "cache_key:      ${{ needs.latest-runner.outputs.cache_key }}"
+          echo "release_id:     ${{ needs.latest-runner.outputs.release_id }}"
+          echo "open_prs:       ${{ needs.latest-runner.outputs.open_prs }}"
+          echo "release_branch: ${{ needs.latest-runner.outputs.release_branch }}"
+
+      # explicitly checkout main
+      - name: Checkout
+        uses: actions/checkout@v2
+          
+      - name: Create PR branch
+        run: |
+          git checkout -b performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}
+          git push origin performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}
+          git branch --set-upstream-to=origin/performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}} performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}
+
+      - name: '[DEBUG] ls baselines before artifact download'
+        run: ls -R performance/baselines/
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: baseline
+          path: performance/baselines/${{ needs.latest-runner.outputs.release_id }}
+
+      - name: '[DEBUG] ls baselines after artifact download'
+        run: ls -R performance/baselines/
+        
+      - name: '[DEBUG] git status'
+        run: |
+          git status
+          
+      - name: Commit baseline
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: 'performance/baselines/*'
+          author_name: 'Github Build Bot'
+          author_email: 'buildbot@fishtownanalytics.com'
+          message: 'adding performance baseline for ${{ needs.latest-runner.outputs.release_id }}'
+          branch: 'performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}'
+          push: 'origin origin/performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}'
+          
+      - name: '[DEBUG] git status'
+        run: git status
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
+          draft: true
+          title: 'Adding performance modeling for ${{needs.latest-runner.outputs.release_id}}'
+          branch: 'performance-bot/main_${{needs.latest-runner.outputs.release_id}}_${{GITHUB.RUN_ID}}'
+          labels: |
+            Skip Changelog
