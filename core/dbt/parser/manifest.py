@@ -367,10 +367,8 @@ class ManifestLoader:
                 self.parse_project(
                     project, project_parser_files[project.project_name], parser_types
                 )
-            # breakpoint()
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
-            # breakpoint()
             # patch_sources converts the UnparsedSourceDefinitions in the
             # Manifest.sources to ParsedSourceDefinition via 'patch_source'
             # in SourcePatcher
@@ -460,13 +458,10 @@ class ManifestLoader:
             parser_start_timer = time.perf_counter()
 
             # Parse the project files for this parser
-            # breakpoint()
             parser: Parser = parser_cls(project, self.manifest, self.root_project)
             for file_id in parser_files[parser_name]:
                 block = FileBlock(self.manifest.files[file_id])
-                # breakpoint()
                 if isinstance(parser, SchemaParser):
-                    # breakpoint()
                     assert isinstance(block.file, SchemaSourceFile)
                     if self.partially_parsing:
                         dct = block.file.pp_dict
@@ -477,7 +472,6 @@ class ManifestLoader:
                     # Came out of here with UnpatchedSourceDefinition containing configs at the source level
                     # and not configs at the table level (as expected)
                 else:
-                    # breakpoint()
                     parser.parse_file(block)
                 project_parsed_path_count += 1
 
@@ -1255,7 +1249,6 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             node.package_name,
         )
 
-        # breakpoint()
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node

@@ -1,11 +1,9 @@
-from asyncio import format_helpers
 import itertools
 import os
 import pathlib
 
 from abc import ABCMeta, abstractmethod
 from hashlib import md5
-from tkinter import DISABLED
 from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
@@ -509,11 +507,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
             # NonSourceParser.parse(), TestablePatchParser is a variety of
             # NodePatchParser
-            # breakpoint()
             if "models" in dct:
                 # the models are already in the manifest as nodes when we reach this code
                 parser = TestablePatchParser(self, yaml_block, "models")
-                # breakpoint()
                 for test_block in parser.parse():
                     self.parse_tests(test_block)
 
@@ -771,7 +767,6 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
         for node in self.get_unparsed_target():
             # node_block is a TargetBlock (Macro or Analysis)
             # or a TestBlock (all of the others)
-            # breakpoint()
             node_block = self.get_block(node)
             if isinstance(node_block, TestBlock):
                 # TestablePatchParser = models, seeds, snapshots
@@ -782,18 +777,11 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
             else:
                 refs = ParserRef()
 
-            # breakpoint()
-            # if node.config.get('enabled') == False:
-            #     # add to DISABLED
-            #     breakpoint()
-            #     unique_id = self.manifest.ref_lookup.get_unique_id(node.name, None)
-            #     self.manifest.add_disabled_nofile(node)
-            # else:
             # This adds the node_block to self.manifest
             # as a ParsedNodePatch or ParsedMacroPatch
-            # The enabled key could not exist (defaults to true later if 
-            # not explicitly set) or could be set to True explicitly
+            # There's no unique_id on the node yet so cannot add to disabled dict yet
             self.parse_patch(node_block, refs)
+
         # This will always be empty if the node a macro or analysis
         return test_blocks
 
@@ -861,7 +849,6 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
-        # breakpoint()
         self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
 
 
@@ -884,15 +871,12 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
         if patch.yaml_key in ["models", "seeds", "snapshots"]:
-            # breakpoint()
             unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
                     warn_invalid_patch(patch, resource_type)
                     return
-                if self.manifest.nodes[unique_id].config.get('enabled') == False:
-                    self.manifest.add_disabled_nofile(self.manifest.nodes[unique_id])
 
         elif patch.yaml_key == "analyses":
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
@@ -901,7 +885,6 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 f"Unexpected yaml_key {patch.yaml_key} for patch in "
                 f"file {source_file.path.original_file_path}"
             )
-        # breakpoint()
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
             found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
@@ -922,7 +905,6 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
         # patches can't be overwritten
         node = self.manifest.nodes.get(unique_id)
-        # breakpoint()
         if node:
             if node.patch_path:
                 package_name, existing_file_path = node.patch_path.split("://")
@@ -933,11 +915,11 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             # with the patch config
             if patch.config:
                 self.patch_node_config(node, patch)
-            node.patch(patch)
 
-        if block.target.config.enabled:
-            # add to disabled dict
-            self.manifest.add_disabled_nofile(node)
+            if not node.config.enabled:
+                self.manifest.add_disabled_nofile(node)
+
+            node.patch(patch)
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):

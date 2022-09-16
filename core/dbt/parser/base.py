@@ -273,7 +273,6 @@ class ConfiguredParser(
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
-
         # build_config_dict takes the config_call_dict in the ContextConfig object
         # and calls calculate_node_config to combine dbt_project configs and
         # config calls from SQL files, plus patch configs (from schema files)
@@ -314,9 +313,6 @@ class ConfiguredParser(
         )
 
         parsed_node.config_call_dict = config._config_call_dict
-
-        # breakpoint()
-        # self.manifest.add_disabled_nofile(node)
 
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
@@ -371,7 +367,7 @@ class ConfiguredParser(
             raise ParsingException(msg, node=node) from exc
 
     def add_result_node(self, block: FileBlock, node: ManifestNodes):
-        # since we haven't parsed the yaml files yet here, we don't know 
+        # since we haven't parsed the yaml files yet here, we don't know
         # if the config is disabled there or not!
         if node.config.enabled:
             self.manifest.add_node(block.file, node)
@@ -392,7 +388,6 @@ class ConfiguredParser(
         )
         self.render_update(node, config)
         result = self.transform(node)
-        # breakpoint()
         self.add_result_node(block, result)
         return result
 
