@@ -1244,6 +1244,11 @@ class ProviderContext(ManifestContext):
         """
         return selected_resources.SELECTED_RESOURCES
 
+    @contextmember
+    def submit_python_job(self):
+        # Check macro_stack and that the unique id is for a materialization macro
+        pass
+
 
 class MacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:

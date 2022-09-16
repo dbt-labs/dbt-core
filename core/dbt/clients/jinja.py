@@ -346,7 +346,7 @@ class MacroGenerator(BaseMacroGenerator):
             unique_id = self.macro.unique_id
             depth = self.stack.depth
             # only mark depth=0 as a dependency
-            if depth == 0:
+            if depth == 1:
                 self.node.depends_on.add_macro(unique_id)
             self.stack.push(unique_id)
 
