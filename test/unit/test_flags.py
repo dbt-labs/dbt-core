@@ -5,7 +5,7 @@ from argparse import Namespace
 from .utils import normalize
 from dbt import flags
 from dbt.contracts.project import UserConfig
-from dbt.config.profile import DEFAULT_PROFILES_DIR
+from dbt.flags import DEFAULT_PROFILES_DIR
 
 from dbt.graph.selector_spec import IndirectSelection
 
