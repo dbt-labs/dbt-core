@@ -59,16 +59,6 @@ _NON_BOOLEAN_FLAGS = [
 _NON_DBT_ENV_FLAGS = ["DO_NOT_TRACK"]
 
 
-def get_profiles_dir():
-    default_profiles_dir = DEFAULT_PROFILES_DIR
-
-    # Use the current working directory if there is a profiles.yml file present there
-    if os.path.exists(Path(os.getcwd()) / Path("profiles.yml")):
-        default_profiles_dir = os.getcwd()
-
-    return default_profiles_dir
-
-
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
 # Environment variables use the pattern 'DBT_{flag name}', like DBT_PROFILES_DIR
@@ -79,7 +69,7 @@ flag_defaults = {
     "WRITE_JSON": True,
     "PARTIAL_PARSE": True,
     "USE_COLORS": True,
-    "PROFILES_DIR": get_profiles_dir,
+    "PROFILES_DIR": DEFAULT_PROFILES_DIR,
     "DEBUG": False,
     "LOG_FORMAT": None,
     "VERSION_CHECK": True,
@@ -212,16 +202,7 @@ def _load_flag_value(flag, args, user_config):
     if user_config is not None and getattr(user_config, lc_flag, None) is not None:
         return getattr(user_config, lc_flag)
 
-    return _get_flag_default(flag)
-
-
-def _get_flag_default(flag):
-    default = flag_defaults[flag]
-
-    if callable(default):
-        return default()
-
-    return default
+    return flag_defaults[flag]
 
 
 def _get_flag_value_from_env(flag):
