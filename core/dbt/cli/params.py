@@ -161,18 +161,16 @@ profile = click.option(
 
 profiles_dir = click.option(
     "--profiles-dir",
-    help=f"Which directory to look in for the profiles.yml file. Default = {PurePath.joinpath(Path.home(), '.dbt')}",
-    default=PurePath.joinpath(Path.home(), ".dbt"),
-    type=click.Path(
-        exists=True,
-    ),
+    help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
+    default=None,
+    type=click.Path(),
 )
 
 project_dir = click.option(
     "--project-dir",
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
-    default=Path.cwd(),
-    type=click.Path(exists=True),
+    default=None,
+    type=click.Path(),
 )
 
 quiet = click.option(
