@@ -371,6 +371,8 @@ class ConfiguredParser(
             raise ParsingException(msg, node=node) from exc
 
     def add_result_node(self, block: FileBlock, node: ManifestNodes):
+        # since we haven't parsed the yaml files yet here, we don't know 
+        # if the config is disabled there or not!
         if node.config.enabled:
             self.manifest.add_node(block.file, node)
         else:
@@ -390,6 +392,7 @@ class ConfiguredParser(
         )
         self.render_update(node, config)
         result = self.transform(node)
+        # breakpoint()
         self.add_result_node(block, result)
         return result
 

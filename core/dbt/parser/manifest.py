@@ -367,7 +367,7 @@ class ManifestLoader:
                 self.parse_project(
                     project, project_parser_files[project.project_name], parser_types
                 )
-
+            # breakpoint()
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
             # breakpoint()
@@ -460,9 +460,11 @@ class ManifestLoader:
             parser_start_timer = time.perf_counter()
 
             # Parse the project files for this parser
+            # breakpoint()
             parser: Parser = parser_cls(project, self.manifest, self.root_project)
             for file_id in parser_files[parser_name]:
                 block = FileBlock(self.manifest.files[file_id])
+                # breakpoint()
                 if isinstance(parser, SchemaParser):
                     # breakpoint()
                     assert isinstance(block.file, SchemaSourceFile)
@@ -475,6 +477,7 @@ class ManifestLoader:
                     # Came out of here with UnpatchedSourceDefinition containing configs at the source level
                     # and not configs at the table level (as expected)
                 else:
+                    # breakpoint()
                     parser.parse_file(block)
                 project_parsed_path_count += 1
 
@@ -832,8 +835,9 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            # breakpoint()
-            _process_refs_for_node(self.manifest, current_project, node)
+            # if the node is disabled, no need to resolve the refs
+            if node.config.enabled:
+                _process_refs_for_node(self.manifest, current_project, node)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
@@ -1251,6 +1255,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             node.package_name,
         )
 
+        # breakpoint()
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node

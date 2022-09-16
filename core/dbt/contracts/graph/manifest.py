@@ -224,6 +224,7 @@ class DisabledLookup(dbtClassMixin):
         self.populate(manifest)
 
     def populate(self, manifest):
+        # breakpoint()
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 

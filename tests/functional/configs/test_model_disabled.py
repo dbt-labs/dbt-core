@@ -79,49 +79,48 @@ class TestSchemaDisabledConfigsFailure:
         with pytest.raises(CompilationException) as exc:
             run_dbt(["parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        breakpoint()
         expected_msg = "which is disabled"
         assert expected_msg in exc_str
 
 
 # ensure double disabled doesn't throw error when set in model configs
-class TestModelDisabledConfigs:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": my_model,
-            "my_model_2.sql": my_model_2_disabled,
-            "my_model_3.sql": my_model_3_disabled,
-        }
+# class TestModelDisabledConfigs:
+#     @pytest.fixture(scope="class")
+#     def models(self):
+#         return {
+#             "my_model.sql": my_model,
+#             "my_model_2.sql": my_model_2_disabled,
+#             "my_model_3.sql": my_model_3_disabled,
+#         }
 
-    # def test_disabled_config(self, project):
-    #     run_dbt(["parse"])
+#     def test_disabled_config(self, project):
+#         run_dbt(["parse"])
 
 
-# ensure double disabled doesn't throw error when set in project.yml
-class TestProjectFileDisabledConfigs:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": my_model,
-            "my_model_2.sql": my_model_2_enabled,
-            "my_model_3.sql": my_model_3_enabled,
-        }
+# # ensure double disabled doesn't throw error when set in project.yml
+# class TestProjectFileDisabledConfigs:
+#     @pytest.fixture(scope="class")
+#     def models(self):
+#         return {
+#             "my_model.sql": my_model,
+#             "my_model_2.sql": my_model_2_enabled,
+#             "my_model_3.sql": my_model_3_enabled,
+#         }
 
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "models": {
-                "test": {
-                    "my_model_2": {
-                        "enabled": False,
-                    },
-                    "my_model_3": {
-                        "enabled": False,
-                    },
-                },
-            }
-        }
+#     @pytest.fixture(scope="class")
+#     def project_config_update(self):
+#         return {
+#             "models": {
+#                 "test": {
+#                     "my_model_2": {
+#                         "enabled": False,
+#                     },
+#                     "my_model_3": {
+#                         "enabled": False,
+#                     },
+#                 },
+#             }
+#         }
 
-    # def test_disabled_config(self, project):
-    #     run_dbt(["parse"])
+#     def test_disabled_config(self, project):
+#         run_dbt(["parse"])
