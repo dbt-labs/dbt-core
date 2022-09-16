@@ -1098,7 +1098,7 @@ def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
+        fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
 
 
 def warn(msg, node=None):

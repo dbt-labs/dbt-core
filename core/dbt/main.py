@@ -142,7 +142,7 @@ def main(args=None):
             exit_code = e.code
 
         except BaseException as e:
-            fire_event(MainEncounteredError(e=str(e)))
+            fire_event(MainEncounteredError(exc=str(e)))
             fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
             exit_code = ExitCodes.UnhandledError.value
 
