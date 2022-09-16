@@ -112,6 +112,7 @@ models:
   - name: my_model_3
 """
 
+
 # ensure config set in project.yml can be overridden in yaml file
 class TestOverrideProjectConfigsInYaml:
     @pytest.fixture(scope="class")

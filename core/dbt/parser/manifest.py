@@ -830,9 +830,7 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            # if the node is disabled, no need to resolve the refs
-            if node.config.enabled:
-                _process_refs_for_node(self.manifest, current_project, node)
+            _process_refs_for_node(self.manifest, current_project, node)
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
