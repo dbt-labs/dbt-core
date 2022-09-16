@@ -19,7 +19,7 @@ from dbt.ui import green, red
 from dbt.events.format import pluralize
 from dbt.version import get_installed_version
 
-from dbt.task.base import BaseTask, move_to_nearest_project_dir
+from dbt.task.base import BaseTask, get_nearest_project_dir
 
 ONLY_PROFILE_MESSAGE = """
 A `dbt_project.yml` file was not found in this directory.
@@ -59,8 +59,10 @@ FILE_NOT_FOUND = "file not found"
 class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
+        self.profiles_dir = flags.PROFILES_DIR
+        self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
-            self.project_dir = move_to_nearest_project_dir(self.args)
+            self.project_dir = get_nearest_project_dir(self.args)
         except dbt.exceptions.Exception:
             # we probably couldn't find a project directory. Set project dir
             # to whatever was given, or default to the current directory.
@@ -68,8 +70,6 @@ class DebugTask(BaseTask):
                 self.project_dir = args.project_dir
             else:
                 self.project_dir = os.getcwd()
-        self.profiles_dir = flags.PROFILES_DIR
-        self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
         self.cli_vars = parse_cli_vars(getattr(self.args, "vars", "{}"))
 
