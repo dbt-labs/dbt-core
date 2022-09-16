@@ -455,3 +455,52 @@ class TestDerivedMetric:
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code
+
+
+derived_metric_old_attr_names_yml = """
+version: 2
+metrics:
+    - name: count_orders
+      label: Count orders
+      model: ref('mock_purchase_data')
+
+      type: count
+      sql: "*"
+      timestamp: purchased_at
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - payment_type
+
+    - name: sum_order_revenue
+      label: Total order revenue
+      model: ref('mock_purchase_data')
+
+      type: sum
+      sql: "payment_total"
+      timestamp: purchased_at
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - payment_type
+
+    - name: average_order_value
+      label: Average Order Value
+
+      type: expression
+      sql:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
+      timestamp: purchased_at
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - payment_type
+"""
+
+
+class TestDerivedMetricOldAttrNames(TestDerivedMetric):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "derived_metric.yml": derived_metric_old_attr_names_yml,
+            "downstream_model.sql": downstream_model_sql,
+        }
