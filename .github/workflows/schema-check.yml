@@ -21,6 +21,8 @@ on:
       - "*.latest"
       - "releases/*"
 
+# no permissions beyond the default needed here
+
 env:
   LATEST_SCHEMA_PATH: ${{ github.workspace }}/new_schemas
   SCHEMA_DIFF_ARTIFACT: ${{ github.workspace }}//schema_schanges.txt
