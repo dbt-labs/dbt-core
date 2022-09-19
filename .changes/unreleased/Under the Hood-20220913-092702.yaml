@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: convert 024 to a functional test
-time: 2022-09-13T09:27:02.955145-07:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "5732"
-  PR: "5828"

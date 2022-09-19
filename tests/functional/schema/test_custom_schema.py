@@ -200,7 +200,6 @@ class TestCustomSchemaWithCustomMacroFromModelName(BaseTestCustomSchema):
     ):
         project.run_sql(_VALIDATION_SQL)
         run_dbt(["seed"])
-        # run_dbt(["build"])
         results = run_dbt(["run"])
         assert len(results) == 3
         table_results = {r.node.name: r.node.schema for r in results.results}
