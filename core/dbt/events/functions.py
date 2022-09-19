@@ -1,7 +1,7 @@
 from colorama import Style
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
-from dbt.events.types import T_Event, MainReportVersion, EmptyLine
+from dbt.events.types import T_Event, MainReportVersion, EmptyLine, EventBufferFull
 import dbt.flags as flags
 from dbt.constants import SECRET_ENV_PREFIX
 
@@ -334,6 +334,9 @@ def add_to_event_history(event):
     if EVENT_HISTORY is None:
         reset_event_history()
     EVENT_HISTORY.append(event)
+    # We only set the EventBufferFull message for event buffers >= 10,000
+    if flags.EVENT_BUFFER_SIZE >= 10000 and len(EVENT_HISTORY) == (flags.EVENT_BUFFER_SIZE - 1):
+        fire_event(EventBufferFull())
 
 
 def reset_event_history():
