@@ -1,10 +1,91 @@
 # TODO: this file is one big TODO
+# from dataclasses import dataclass
+from dataclasses import dataclass
 import os
+from dbt.contracts.results import NodeStatus, RunningStatus, collect_timing_info
+from dbt.events.functions import fire_event
+from dbt.events.types import NodeCompiling, NodeExecuting
 from dbt.exceptions import RuntimeException
 from dbt import flags
-from collections import namedtuple
+from dbt.task.base import ExecutionContext
+from dbt.task.sql import SqlCompileRunner
+import time
 
-RuntimeArgs = namedtuple("RuntimeArgs", "project_dir profiles_dir single_threaded profile target")
+@dataclass
+class RuntimeArgs():
+    project_dir: str
+    profiles_dir: str
+    single_threaded: bool
+    profile: str
+    target: str
+
+class RuntimeSqlCompileRunner(SqlCompileRunner):
+    def compile_and_execute(self, manifest, ctx):
+        result = None
+        # with self.adapter.connection_for(self.node):
+        ctx.node._event_status["node_status"] = RunningStatus.Compiling
+        fire_event(
+            NodeCompiling(
+                node_info=ctx.node.node_info,
+                unique_id=ctx.node.unique_id,
+            )
+        )
+        with collect_timing_info("compile") as timing_info:
+            # if we fail here, we still have a compiled node to return
+            # this has the benefit of showing a build path for the errant
+            # model
+            ctx.node = self.compile(manifest)
+        ctx.timing.append(timing_info)
+
+        # for ephemeral nodes, we only want to compile, not run
+        if not ctx.node.is_ephemeral_model:
+            ctx.node._event_status["node_status"] = RunningStatus.Executing
+            fire_event(
+                NodeExecuting(
+                    node_info=ctx.node.node_info,
+                    unique_id=ctx.node.unique_id,
+                )
+            )
+            with collect_timing_info("execute") as timing_info:
+                result = self.run(ctx.node, manifest)
+                ctx.node = result.node
+
+            ctx.timing.append(timing_info)
+
+        return result
+    def safe_run(self, manifest):
+        test_env = os.environ.get('POD_NAME')
+        print('INSIDE INHERITED COMPILE_AND_EXECUTE: ', test_env)
+        started = time.time()
+        ctx = ExecutionContext(self.node)
+        error = None
+        result = None
+
+        try:
+            result = self.compile_and_execute(manifest, ctx)
+        except Exception as e:
+            error = self.handle_exception(e, ctx)
+        finally:
+            exc_str = self._safe_release_connection()
+
+            # if releasing failed and the result doesn't have an error yet, set
+            # an error
+            if (
+                exc_str is not None
+                and result is not None
+                and result.status != NodeStatus.Error
+                and error is None
+            ):
+                error = exc_str
+
+        if error is not None:
+            # we could include compile time for runtime errors here
+            result = self.error_result(ctx.node, error, started, [])
+        elif result is not None:
+            result = self.from_run_result(result, started, ctx.timing)
+        else:
+            result = self.ephemeral_result(ctx.node, started, ctx.timing)
+        return result
 
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):
@@ -70,10 +151,7 @@ def create_task(type, args, manifest, config):
     def no_op(*args, **kwargs):
         pass
 
-    # TODO: yuck, let's rethink tasks a little
     task = task(args, config)
-
-    # Wow! We can monkeypatch taskCls.load_manifest to return _our_ manifest
     task.load_manifest = no_op
     task.manifest = manifest
     return task
@@ -99,10 +177,10 @@ def _get_operation_node(manifest, project_path, sql):
 
 
 def compile_sql(manifest, project_path, sql):
-    from dbt.task.sql import SqlCompileRunner
+    # from dbt.task.sql import SqlCompileRunner
 
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
-    runner = SqlCompileRunner(config, adapter, node, 1, 1)
+    runner = RuntimeSqlCompileRunner(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
 
 
