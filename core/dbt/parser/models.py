@@ -205,16 +205,16 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         dbtParser = PythonParseVisitor(node)
         dbtParser.visit(tree)
-
+        config_keys_used = []
         for (func, args, kwargs) in dbtParser.dbt_function_calls:
-            # TODO decide what we want to do with detected packages
-            # if func == "config":
-            #     kwargs["detected_packages"] = dbtParser.packages
             if func == "get":
-                context["config"](utilized=args)
+                config_keys_used.append(args[0])
                 continue
 
             context[func](*args, **kwargs)
+        if config_keys_used:
+            # this is being used in macro build_config_dict
+            context["config"](config_keys_used=config_keys_used)
 
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1

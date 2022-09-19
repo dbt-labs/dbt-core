@@ -1,5 +1,10 @@
 from dbt.node_types import NodeType
-from dbt.contracts.util import AdditionalPropertiesMixin, Mergeable, Replaceable
+from dbt.contracts.util import (
+    AdditionalPropertiesMixin,
+    Mergeable,
+    Replaceable,
+    rename_metric_attr,
+)
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
@@ -483,14 +488,10 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
     @classmethod
     def validate(cls, data):
+        data = rename_metric_attr(data, raise_deprecation_warning=True)
         super(UnparsedMetric, cls).validate(data)
         if "name" in data and " " in data["name"]:
             raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
-
-        if data.get("calculation_method") == "expression":
-            raise ValidationError(
-                "The metric calculation method expression has been deprecated and renamed to derived. Please update"
-            )
 
         if data.get("model") is None and data.get("calculation_method") != "derived":
             raise ValidationError("Non-derived metrics require a 'model' property")

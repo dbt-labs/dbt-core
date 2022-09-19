@@ -30,8 +30,8 @@ def source(*args, dbt_load_df_function):
 
 {% macro build_config_dict(model) %}
     {%- set config_dict = {} -%}
-    {%- for key in model.config.utilized -%}
-        {# TODO: weird type testing with enum, would be much easier to write this logic in Python! #}
+    {%- for key in model.config.config_keys_used -%}
+        {# weird type testing with enum, would be much easier to write this logic in Python! #}
         {%- if key == 'language' -%}
           {%- set value = 'python' -%}
         {%- endif -%}
@@ -56,8 +56,8 @@ class config:
         pass
 
     @staticmethod
-    def get(key):
-        return config_dict.get(key)
+    def get(key, default=None):
+        return config_dict.get(key, default)
 
 class this:
     """dbt.this() or dbt.this.identifier"""

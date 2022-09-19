@@ -820,11 +820,11 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     label: str
     calculation_method: str
     expression: str
-    timestamp: Optional[str]
+    timestamp: str
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
-    window: Optional[MetricTime]
+    window: Optional[MetricTime] = None
     model: Optional[str] = None
     model_unique_id: Optional[str] = None
     resource_type: NodeType = NodeType.Metric
