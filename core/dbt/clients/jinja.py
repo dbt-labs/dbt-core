@@ -42,9 +42,6 @@ from dbt.node_types import ModelLanguage
 
 
 SUPPORTED_LANG_ARG = jinja2.nodes.Name("supported_languages", "param")
-SUBMIT_PYTHON_JOB = "submit_python_job"
-# name of the places to store functions that we want to allow at certain places in jinja
-FUNCTION_STORE = "_functions_should_not_be_called_in_jinja"
 
 
 def _linecache_inject(source, write):
@@ -276,17 +273,6 @@ class MacroStack(threading.local):
             raise InternalException(f"popped {got}, expected {name}")
 
 
-def raise_error_func(
-    func_name: str, error_location: Optional[str] = "(Hook, Operation, Macro, Test)"
-) -> Callable:
-    def raise_error(*args, **kwargs):
-        raise InternalException(
-            f"{func_name} is not intended to be called here, location: {error_location}."
-        )
-
-    return raise_error
-
-
 class MacroGenerator(BaseMacroGenerator):
     def __init__(
         self,
@@ -299,17 +285,6 @@ class MacroGenerator(BaseMacroGenerator):
         self.macro = macro
         self.node = node
         self.stack = stack
-
-        # remove submit python functions from the context but store it somewhere
-        if self.context and "adapter" in self.context:
-            if "materialization" in self.macro.unique_id:
-                self.context[FUNCTION_STORE] = {
-                    SUBMIT_PYTHON_JOB: self.context["adapter"].submit_python_job
-                }
-
-            self.context["adapter"].submit_python_job = raise_error_func(
-                "adapter.submit_python_job"
-            )
 
     def get_template(self):
         return template_cache.get_node_template(self.macro)
@@ -327,48 +302,22 @@ class MacroGenerator(BaseMacroGenerator):
             e.stack.append(self.macro)
             raise e
 
-    def _is_statement_under_materialization(self) -> bool:
-        return bool(
-            self.macro.unique_id == "macro.dbt.statement"
-            and self.stack
-            and self.stack.depth == 1
-            and self.context
-            and FUNCTION_STORE in self.context
-        )
-
     # This adds the macro's unique id to the node's 'depends_on'
     @contextmanager
     def track_call(self):
         # This is only called from __call__
-        if self.stack is None or self.node is None:
+        if self.stack is None:
             yield
         else:
             unique_id = self.macro.unique_id
             depth = self.stack.depth
             # only mark depth=0 as a dependency
-            if depth == 1:
+            if depth == 1 and self.node:
                 self.node.depends_on.add_macro(unique_id)
             self.stack.push(unique_id)
-
-            submit_python_func = None
-            if FUNCTION_STORE in self.context:
-                # remove this function compeltely from context for all other macros
-                submit_python_func = self.context[FUNCTION_STORE].pop(SUBMIT_PYTHON_JOB, None)
-
-            # put submit python functions back for statement macros
-            if self._is_statement_under_materialization():
-                self.context["adapter"].submit_python_job = submit_python_func
             try:
                 yield
             finally:
-                # we are done with statement macro, put remove submit python function from adapter
-                if self._is_statement_under_materialization():
-                    self.context["adapter"].submit_python_job = raise_error_func(
-                        "adapter.submit_python_job"
-                    )
-                # put submit python functions in context again for future macros
-                if submit_python_func:
-                    self.context[FUNCTION_STORE][SUBMIT_PYTHON_JOB] = submit_python_func
                 self.stack.pop(unique_id)
 
     # this makes MacroGenerator objects callable like functions
