@@ -38,33 +38,52 @@ class ResolvedMetricReference(MetricReference):
             if node and node.resource_type == NodeType.Metric:
                 yield from cls.parent_metrics(node, manifest)
 
-    def parent_models(self):
+    @classmethod
+    def parent_metrics_names(cls, metric_node, manifest):
+        yield metric_node.name
+
+        for parent_unique_id in metric_node.depends_on.nodes:
+            node = manifest.metrics.get(parent_unique_id)
+            if node and node.resource_type == NodeType.Metric:
+                yield from cls.parent_metrics_names(node, manifest)
+
+    @classmethod
+    def reverse_dag_parsing(cls, metric_node, manifest, metric_depth_count):
+        if metric_node.type == "expression":
+            yield {metric_node.name: metric_depth_count}
+            metric_depth_count = metric_depth_count + 1
+
+        for parent_unique_id in metric_node.depends_on.nodes:
+            node = manifest.metrics.get(parent_unique_id)
+            if node and node.resource_type == NodeType.Metric and node.type == "expression":
+                yield from cls.reverse_dag_parsing(node, manifest, metric_depth_count)
+
+    def full_metric_dependency(self):
+        to_return = list(set(self.parent_metrics_names(self.node, self.manifest)))
+        return to_return
+
+    def base_metric_dependency(self):
         in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
 
-        to_return = {
-            "base": [],
-            "derived": [],
-        }
+        to_return = []
         for metric in in_scope_metrics:
-            if metric.type == "expression":
-                to_return["derived"].append(
-                    {"metric_source": None, "metric": metric, "is_derived": True}
-                )
-            else:
-                for node_unique_id in metric.depends_on.nodes:
-                    node = self.manifest.nodes.get(node_unique_id)
-                    if node and node.resource_type in NodeType.refable():
-                        to_return["base"].append(
-                            {
-                                "metric_relation_node": node,
-                                "metric_relation": self.Relation.create(
-                                    database=node.database,
-                                    schema=node.schema,
-                                    identifier=node.alias,
-                                ),
-                                "metric": metric,
-                                "is_derived": False,
-                            }
-                        )
+            if metric.type != "expression" and metric.name not in to_return:
+                to_return.append(metric.name)
+
+        return to_return
+
+    def derived_metric_dependency(self):
+        in_scope_metrics = list(self.parent_metrics(self.node, self.manifest))
+
+        to_return = []
+        for metric in in_scope_metrics:
+            if metric.type == "expression" and metric.name not in to_return:
+                to_return.append(metric.name)
+
+        return to_return
+
+    def derived_metric_dependency_depth(self):
+        metric_depth_count = 1
+        to_return = list(self.reverse_dag_parsing(self.node, self.manifest, metric_depth_count))
 
         return to_return
