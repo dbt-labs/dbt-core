@@ -1,0 +1,7 @@
+kind: Breaking Changes
+body: Renaming Metric Spec Attributes
+time: 2022-09-06T15:45:21.2769-05:00
+custom:
+  Author: callum-mcdata
+  Issue: "5774"
+  PR: "5775"

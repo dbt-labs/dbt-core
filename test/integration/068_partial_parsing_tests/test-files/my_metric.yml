@@ -4,8 +4,8 @@ metrics:
     label: New Customers
     model: customers
     description: "The number of paid customers who are using the product"
-    type: count
-    sql: user_id
+    calculation_method: count
+    expression: user_id
     timestamp: signup_date
     time_grains: [day, week, month]
     dimensions:

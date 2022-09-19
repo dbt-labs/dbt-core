@@ -6,6 +6,19 @@ ifeq ($(USE_DOCKER),true)
 	DOCKER_CMD := docker-compose run --rm test
 endif
 
+LOGS_DIR := ./logs
+
+# Optional flag to invoke tests using our CI env.
+# But we always want these active for structured
+# log testing.
+CI_FLAGS =\
+	DBT_TEST_USER_1=dbt_test_user_1\
+	DBT_TEST_USER_2=dbt_test_user_2\
+	DBT_TEST_USER_3=dbt_test_user_3\
+	RUSTFLAGS="-D warnings"\
+	LOG_DIR=./logs\
+	DBT_LOG_FORMAT=json
+
 .PHONY: dev
 dev: ## Installs dbt-* packages in develop mode along with development dependencies.
 	@\
@@ -48,12 +61,19 @@ test: .env ## Runs unit tests with py and code checks against staged changes.
 .PHONY: integration
 integration: .env ## Runs postgres integration tests with py-integration
 	@\
-	$(DOCKER_CMD) tox -e py-integration -- -nauto
+	$(if $(USE_CI_FLAGS), $(CI_FLAGS)) $(DOCKER_CMD) tox -e py-integration -- -nauto
 
 .PHONY: integration-fail-fast
 integration-fail-fast: .env ## Runs postgres integration tests with py-integration in "fail fast" mode.
 	@\
 	$(DOCKER_CMD) tox -e py-integration -- -x -nauto
+
+.PHONY: interop
+interop: clean
+	@\
+	mkdir $(LOGS_DIR) && \
+	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto && \
+	LOG_DIR=$(LOGS_DIR) cargo run --manifest-path test/interop/log_parsing/Cargo.toml
 
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
@@ -76,6 +96,7 @@ endif
 clean: ## Resets development environment.
 	@echo 'cleaning repo...'
 	@rm -f .coverage
+	@rm -f .coverage.*
 	@rm -rf .eggs/
 	@rm -f .env
 	@rm -rf .tox/

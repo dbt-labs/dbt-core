@@ -549,9 +549,16 @@ def model(dbt, session):
     from torch import b
     import textblob.text
     import sklearn
-    df = dbt.ref("my_sql_model")
-    df = dbt.ref("my_sql_model")
-    df = dbt.ref("my_sql_model_2")
+    df0 = pandas(dbt.ref("a_model"))
+    df1 = dbt.ref("my_sql_model").task.limit(2)
+    df2 = dbt.ref("my_sql_model_1")
+    df3 = dbt.ref("my_sql_model_2")
+    df4 = dbt.source("test", 'table1').limit(max = [max(dbt.ref('something'))])
+    df5 = [dbt.ref('test1')]
+    
+    a_dict = {'test2' : dbt.ref('test2')}
+    df5 = anotherfunction({'test2' : dbt.ref('test3')})
+    df6 = [somethingelse.ref(dbt.ref("test4"))]
 
     df = df.limit(2)
     return df   
@@ -582,12 +589,27 @@ def model(dbt, session):
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table', 'packages':python_packages},
             config_call_dict={'materialized': 'table', 'packages':python_packages},
-            refs=[['my_sql_model'], ['my_sql_model'], ['my_sql_model_2']]
+            refs=[['a_model'], ['my_sql_model'], ['my_sql_model_1'], ['my_sql_model_2'], ['something'], ['test1'], ['test2'], ['test3'], ['test4']],
+            sources = [['test', 'table1']],
         )
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' + normalize('models/nested/py_model.py')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.py_model'])
+
+    def test_python_model_config_get(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config.get("param_1")
+    dbt.config.get("param_2")
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
 
     def test_wrong_python_model_def_miss_session(self):
         py_code = """

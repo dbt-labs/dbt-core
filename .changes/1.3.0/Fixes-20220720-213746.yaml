@@ -1,0 +1,7 @@
+kind: Fixes
+body: on_shchma_change fail verbosity enhancement
+time: 2022-07-20T21:37:46.474241+03:00
+custom:
+  Author: Ilanbenb
+  Issue: "5504"
+  PR: "5505"

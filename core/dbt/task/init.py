@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sys
 from typing import Optional
 
 import yaml
@@ -31,6 +32,8 @@ from dbt.events.types import (
 )
 
 from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
+
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
@@ -257,7 +260,11 @@ class InitTask(BaseTask):
     def get_valid_project_name(self) -> str:
         """Returns a valid project name, either from CLI arg or user prompt."""
         name = self.args.project_name
-        while not ProjectName.is_valid(name):
+        internal_package_names = {GLOBAL_PROJECT_NAME}
+        available_adapters = list(_get_adapter_plugin_names())
+        for adapter_name in available_adapters:
+            internal_package_names.update(f"dbt_{adapter_name}")
+        while not ProjectName.is_valid(name) or name in internal_package_names:
             if name:
                 click.echo(name + " is not a valid project name.")
             name = click.prompt("Enter a name for your project (letters, digits, underscore)")
@@ -302,7 +309,7 @@ class InitTask(BaseTask):
         available_adapters = list(_get_adapter_plugin_names())
         if not len(available_adapters):
             print("No adapters available. Go to https://docs.getdbt.com/docs/available-adapters")
-            exit(1)
+            sys.exit(1)
         project_name = self.get_valid_project_name()
         project_path = Path(project_name)
         if project_path.exists():

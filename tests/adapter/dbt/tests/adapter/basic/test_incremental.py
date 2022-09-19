@@ -1,10 +1,12 @@
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name
+from dbt.contracts.results import RunStatus
 from dbt.tests.adapter.basic.files import (
     seeds_base_csv,
     seeds_added_csv,
     schema_base_yml,
     incremental_sql,
+    incremental_not_schema_change_sql,
 )
 
 
@@ -58,5 +60,28 @@ class BaseIncremental:
         assert len(catalog.sources) == 1
 
 
+class BaseIncrementalNotSchemaChange:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"name": "incremental"}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"incremental_not_schema_change.sql": incremental_not_schema_change_sql}
+
+    def test_incremental_not_schema_change(self, project):
+        # Schema change is not evaluated on first run, so two are needed
+        run_dbt(["run", "--select", "incremental_not_schema_change"])
+        run_result = (
+            run_dbt(["run", "--select", "incremental_not_schema_change"]).results[0].status
+        )
+
+        assert run_result == RunStatus.Success
+
+
 class Testincremental(BaseIncremental):
+    pass
+
+
+class TestBaseIncrementalNotSchemaChange(BaseIncrementalNotSchemaChange):
     pass

@@ -69,7 +69,10 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 
     print("\n\nInvoking dbt with {}".format(args))
     res, success = handle_and_check(args)
-    assert success == expect_pass, "dbt exit state did not match expected"
+
+    if expect_pass is not None:
+        assert success == expect_pass, "dbt exit state did not match expected"
+
     return res
 
 
@@ -212,6 +215,7 @@ class TestProcessingException(Exception):
 def run_sql_with_adapter(adapter, sql, fetch=None):
     if sql.strip() == "":
         return
+
     # substitute schema and database in sql
     kwargs = {
         "schema": adapter.config.credentials.schema,

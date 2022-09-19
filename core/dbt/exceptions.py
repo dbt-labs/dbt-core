@@ -631,13 +631,13 @@ def ref_target_not_found(
     raise_compiler_error(msg, model)
 
 
-def get_source_not_found_or_disabled_msg(
-    model,
+def get_not_found_or_disabled_msg(
+    node,
     target_name: str,
-    target_table_name: str,
+    target_kind: str,
+    target_package: Optional[str] = None,
     disabled: Optional[bool] = None,
 ) -> str:
-    full_name = f"{target_name}.{target_table_name}"
     if disabled is None:
         reason = "was not found or is disabled"
     elif disabled is True:
@@ -645,32 +645,55 @@ def get_source_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        model, full_name, None, include_path=True, reason=reason, target_kind="source"
+        node,
+        target_name,
+        target_package,
+        include_path=True,
+        reason=reason,
+        target_kind=target_kind,
     )
 
 
 def source_target_not_found(
     model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
 ) -> NoReturn:
-    msg = get_source_not_found_or_disabled_msg(model, target_name, target_table_name, disabled)
+    msg = get_not_found_or_disabled_msg(
+        node=model,
+        target_name=f"{target_name}.{target_table_name}",
+        target_kind="source",
+        disabled=disabled,
+    )
     raise_compiler_error(msg, model)
 
 
-def get_metric_not_found_msg(
-    model,
-    target_name: str,
-    target_package: Optional[str],
-) -> str:
-    reason = "was not found"
-    return _get_target_failure_msg(
-        model, target_name, target_package, include_path=True, reason=reason, target_kind="metric"
+def metric_target_not_found(
+    metric, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
+) -> NoReturn:
+
+    msg = get_not_found_or_disabled_msg(
+        node=metric,
+        target_name=target_name,
+        target_kind="metric",
+        target_package=target_package,
+        disabled=disabled,
     )
 
-
-def metric_target_not_found(metric, target_name: str, target_package: Optional[str]) -> NoReturn:
-    msg = get_metric_not_found_msg(metric, target_name, target_package)
-
     raise_compiler_error(msg, metric)
+
+
+def exposure_target_not_found(
+    exposure, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
+) -> NoReturn:
+
+    msg = get_not_found_or_disabled_msg(
+        node=exposure,
+        target_name=target_name,
+        target_kind="exposure",
+        target_package=target_package,
+        disabled=disabled,
+    )
+
+    raise_compiler_error(msg, exposure)
 
 
 def dependency_not_found(model, target_model_name):
@@ -776,13 +799,25 @@ def package_not_found(package_name):
     raise_dependency_error("Package {} was not found in the package index".format(package_name))
 
 
-def package_version_not_found(package_name, version_range, available_versions):
+def package_version_not_found(
+    package_name, version_range, available_versions, should_version_check
+):
     base_msg = (
-        "Could not find a matching version for package {}\n"
+        "Could not find a matching compatible version for package {}\n"
         "  Requested range: {}\n"
-        "  Available versions: {}"
+        "  Compatible versions: {}\n"
     )
-    raise_dependency_error(base_msg.format(package_name, version_range, available_versions))
+    addendum = (
+        (
+            "\n"
+            "  Not shown: package versions incompatible with installed version of dbt-core\n"
+            "  To include them, run 'dbt --no-version-check deps'"
+        )
+        if should_version_check
+        else ""
+    )
+    msg = base_msg.format(package_name, version_range, available_versions) + addendum
+    raise_dependency_error(msg)
 
 
 def invalid_materialization_argument(name, argument):
