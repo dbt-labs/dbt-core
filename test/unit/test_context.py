@@ -239,7 +239,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "adapter_macro",
     "selected_resources",
     "invocation_args_dict",
-    "submit_python_job"
+    "submit_python_job",
     "dbt_metadata_envs"
 }
 REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code"}
