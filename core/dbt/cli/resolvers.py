@@ -19,6 +19,6 @@ def default_profiles_dir():
 
     # Use the current working directory if there is a profiles.yml file
     if (Path.cwd() / "profiles.yml").exists():
-        default_profiles_dir = Path.cwd() 
+        default_profiles_dir = Path.cwd()
 
     return default_profiles_dir
