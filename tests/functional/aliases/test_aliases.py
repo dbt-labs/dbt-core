@@ -1,5 +1,5 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
+from dbt.tests.util import run_dbt
 
 
 models_dupe_custom_database__schema_yml = """
@@ -209,63 +209,126 @@ but they are configured to be built in _different_ schemas
 """
 
 
-@pytest.fixture(scope="class")
-def models_dupe_custom_database():
-    return {
-        "schema.yml": models_dupe_custom_database__schema_yml,
-        "model_b.sql": models_dupe_custom_database__model_b_sql,
-        "model_a.sql": models_dupe_custom_database__model_a_sql,
-        "README.md": models_dupe_custom_database__README_md,
-    }
+class TestAliases:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "macro-paths": ["macros"],
+            "models": {
+                "test": {
+                    "alias_in_project": {
+                        "alias": "project_alias",
+                    },
+                    "alias_in_project_with_override": {
+                        "alias": "project_alias",
+                    },
+                }
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models__schema_yml,
+            "foo_alias.sql": models__foo_alias_sql,
+            "alias_in_project.sql": models__alias_in_project_sql,
+            "alias_in_project_with_override.sql": models__alias_in_project_with_override_sql,
+            "ref_foo_alias.sql": models__ref_foo_alias_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"cast.sql": macros__cast_sql, "expect_value.sql": macros__expect_value_sql}
+
+    def test_alias_model_name(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 4
+        run_dbt(["test"])
 
 
-@pytest.fixture(scope="class")
-def models_dupe():
-    return {
-        "model_b.sql": models_dupe__model_b_sql,
-        "model_a.sql": models_dupe__model_a_sql,
-        "README.md": models_dupe__README_md,
-    }
+class TestAliasErrors:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "macro-paths": ["macros"],
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"cast.sql": macros__cast_sql, "expect_value.sql": macros__expect_value_sql}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_b.sql": models_dupe__model_b_sql,
+            "model_a.sql": models_dupe__model_a_sql,
+            "README.md": models_dupe__README_md,
+        }
+
+    def test_alias_dupe_thorews_exeption(self, project):
+        message = ".*identical database representation.*"
+        with self.assertRaisesRegex(Exception, message):
+            run_dbt(["run"])
 
 
-@pytest.fixture(scope="class")
-def models():
-    return {
-        "schema.yml": models__schema_yml,
-        "foo_alias.sql": models__foo_alias_sql,
-        "alias_in_project.sql": models__alias_in_project_sql,
-        "alias_in_project_with_override.sql": models__alias_in_project_with_override_sql,
-        "ref_foo_alias.sql": models__ref_foo_alias_sql,
-    }
+class TestSameAliasDifferentSchemas:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "macro-paths": ["macros"],
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"cast.sql": macros__cast_sql, "expect_value.sql": macros__expect_value_sql}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_dupe_custom_schema__schema_yml,
+            "model_c.sql": models_dupe_custom_schema__model_c_sql,
+            "model_b.sql": models_dupe_custom_schema__model_b_sql,
+            "model_a.sql": models_dupe_custom_schema__model_a_sql,
+            "README.md": models_dupe_custom_schema__README_md,
+        }
+
+    def test_same_alias_succeeds_in_different_schemas(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+        res = run_dbt(["test"])
+        assert len(res) > 0
 
 
-@pytest.fixture(scope="class")
-def macros():
-    return {"cast.sql": macros__cast_sql, "expect_value.sql": macros__expect_value_sql}
+class TestSameAliasDifferentDatabases:
+    setup_alternate_db = True
 
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "macro-paths": ["macros"],
+            "models": {
+                "test": {
+                    "alias": "duped_alias",
+                    "model_b": {
+                        "database": self.alternate_db,
+                    },
+                },
+            },
+        }
 
-@pytest.fixture(scope="class")
-def models_dupe_custom_schema():
-    return {
-        "schema.yml": models_dupe_custom_schema__schema_yml,
-        "model_c.sql": models_dupe_custom_schema__model_c_sql,
-        "model_b.sql": models_dupe_custom_schema__model_b_sql,
-        "model_a.sql": models_dupe_custom_schema__model_a_sql,
-        "README.md": models_dupe_custom_schema__README_md,
-    }
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"cast.sql": macros__cast_sql, "expect_value.sql": macros__expect_value_sql}
 
-
-@pytest.fixture(scope="class")
-def project_files(
-    project_root,
-    models_dupe_custom_database,
-    models_dupe,
-    models,
-    macros,
-    models_dupe_custom_schema,
-):
-    write_project_files(project_root, "models-dupe-custom-database", models_dupe_custom_database)
-    write_project_files(project_root, "models-dupe", models_dupe)
-    write_project_files(project_root, "models", models)
-    write_project_files(project_root, "macros", macros)
-    write_project_files(project_root, "models-dupe-custom-schema", models_dupe_custom_schema)
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_dupe_custom_database__schema_yml,
+            "model_b.sql": models_dupe_custom_database__model_b_sql,
+            "model_a.sql": models_dupe_custom_database__model_a_sql,
+            "README.md": models_dupe_custom_database__README_md,
+        }
