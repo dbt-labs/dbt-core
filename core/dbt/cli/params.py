@@ -2,7 +2,7 @@ from pathlib import Path, PurePath
 
 import click
 from dbt.cli.option_types import YAML
-from dbt.cli.resolvers import get_nearest_project_dir, default_profiles_dir
+from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 
 
 # TODO:  The name (reflected in flags) is a correction!
@@ -228,7 +228,7 @@ project_dir = click.option(
     "--project-dir",
     envvar=None,
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
-    default=get_nearest_project_dir(suppress_exception=True),
+    default=default_project_dir(),
     type=click.Path(),
 )
 

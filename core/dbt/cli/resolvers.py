@@ -1,28 +1,15 @@
-import os
-import dbt.exceptions
-
 from pathlib import Path
 
 
-# TODO  Duplicated code with minimal changes from get_nearest_project_dir() within core/dbt/task/base.py
-# Uses os.path when it could be upgraded to Path instead
-# Decide whether to retain the error-raising portion of get_nearest_project_dir()
-# Uses os.path when it could be upgraded to Path instead
-def get_nearest_project_dir(suppress_exception=False):
-    root_path = os.path.abspath(os.sep)
-    cwd = os.getcwd()
+def default_project_dir():
+    cwd = Path.cwd()
+    root_path = Path(cwd.root)
 
     while cwd != root_path:
-        project_file = os.path.join(cwd, "dbt_project.yml")
-        if os.path.exists(project_file):
+        # Use the directory if there is a profiles.yml file
+        if (cwd / "dbt_project.yml").exists():
             return Path(cwd)
-        cwd = os.path.dirname(cwd)
-
-    if not suppress_exception:
-        raise dbt.exceptions.RuntimeException(
-            "fatal: Not a dbt project (or any of the parent directories). "
-            "Missing dbt_project.yml file"
-        )
+        cwd = cwd.parent
 
     return Path.cwd()
 
