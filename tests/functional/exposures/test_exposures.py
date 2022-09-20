@@ -16,7 +16,7 @@ version: 2
 
 exposures:
   - name: simple_exposure
-    label: simple exposure
+    label: simple exposure label
     type: dashboard
     depends_on:
       - ref('model')
@@ -60,3 +60,4 @@ class TestBasicExposures:
             "exposure.test.notebook_exposure",
         ]
         assert exposure_ids == expected_exposure_ids
+        assert manifest.exposures["exposure.test.simple_exposure"].label == "simple exposure label"
