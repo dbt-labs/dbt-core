@@ -88,9 +88,9 @@ class PythonParseVisitor(ast.NodeVisitor):
             return ast.literal_eval(node)
         except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError) as exc:
             msg = validator_error_message(
-                "In dbt python model, `dbt.ref`, `dbt.source`, `dbt.config` function args only support Python literal structures\n"
+                f"Run into the following error when trying to literal_eval an arg \n{exc}\n"
                 "https://docs.python.org/3/library/ast.html#ast.literal_eval\n"
-                f"Run into the following error when trying to literal_eval an arg \n{exc}"
+                "In dbt python model, `dbt.ref`, `dbt.source`, `dbt.config` function args only support Python literal structures"
             )
             raise ParsingException(msg, node=self.dbt_node) from exc
 
