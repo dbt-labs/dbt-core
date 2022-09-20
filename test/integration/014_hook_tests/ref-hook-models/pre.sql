@@ -1,1 +1,0 @@
-select 'start' as state

@@ -1,0 +1,7 @@
+kind: Docs
+body: Leverages `docs.node_color` from `dbt-core` to color nodes in the DAG
+time: 2022-08-04T13:41:38.669987-05:00
+custom:
+  Author: matt-winkler sungchun12 b-per
+  Issue: "44"
+  PR: "281"

@@ -67,7 +67,10 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         elif self.key == "metrics":
-            if keypath[0] == "sql":
+            # back compat: "expression" is new name, "sql" is old name
+            if keypath[0] in ("expression", "sql"):
+                return False
+            elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
             if self._is_norender_key(keypath[0:]):

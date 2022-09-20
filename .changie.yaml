@@ -7,14 +7,26 @@ versionExt: md
 versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
 changeFormat: '- {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), [#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+
 kinds:
-- label: Breaking Changes
-- label: Features
-- label: Fixes
-- label: Docs
-- label: Under the Hood
-- label: Dependencies
-- label: Security
+  - label: Breaking Changes
+  - label: Features
+  - label: Fixes
+  - label: Docs
+    changeFormat: '- {{.Body}} ([dbt-docs/#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-docs/issues/{{.Custom.Issue}}), [dbt-docs/#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-docs/pull/{{.Custom.PR}}))'
+  - label: Under the Hood
+  - label: Dependencies
+    changeFormat: '- {{.Body}} ({{if ne .Custom.Issue ""}}[#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), {{end}}[#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+  - label: Security
+    changeFormat: '- {{.Body}} ({{if ne .Custom.Issue ""}}[#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), {{end}}[#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+
+newlines:
+  afterChangelogHeader: 1
+  afterKind: 1
+  afterChangelogVersion: 1
+  beforeKind: 1
+  endOfVersion: 1
+
 custom:
 - key: Author
   label: GitHub Username(s) (separated by a single space if multiple)
@@ -23,11 +35,12 @@ custom:
 - key: Issue
   label: GitHub Issue Number
   type: int
-  minLength: 4
+  minInt: 1
 - key: PR
   label: GitHub Pull Request Number
   type: int
-  minLength: 4
+  minInt: 1
+
 footerFormat: |
   {{- $contributorDict := dict }}
   {{- /* any names added to this list should be all lowercase for later matching purposes */}}
@@ -39,14 +52,20 @@ footerFormat: |
       {{- $authorLower := lower $author }}
       {{- /* we only want to include non-core team contributors */}}
       {{- if not (has $authorLower $core_team)}}
-        {{- $pr := $change.Custom.PR }}
+        {{- /* Docs kind link back to dbt-docs instead of dbt-core PRs */}}
+        {{- $prLink := $change.Kind }}
+        {{- if eq $change.Kind "Docs" }}
+          {{- $prLink = "[dbt-docs/#pr](https://github.com/dbt-labs/dbt-docs/pull/pr)" | replace "pr" $change.Custom.PR }}
+        {{- else }}
+          {{- $prLink = "[#pr](https://github.com/dbt-labs/dbt-core/pull/pr)" | replace "pr" $change.Custom.PR }}
+        {{- end }}
         {{- /* check if this contributor has other PRs associated with them already */}}
         {{- if hasKey $contributorDict $author }}
           {{- $prList := get $contributorDict $author }}
-          {{- $prList = append $prList $pr  }}
+          {{- $prList = append $prList $prLink  }}
           {{- $contributorDict := set $contributorDict $author $prList }}
         {{- else }}
-          {{- $prList := list $change.Custom.PR }}
+          {{- $prList := list $prLink }}
           {{- $contributorDict := set $contributorDict $author $prList }}
         {{- end }}
       {{- end}}
@@ -56,6 +75,6 @@ footerFormat: |
   {{- if $contributorDict}}
   ### Contributors
   {{- range $k,$v := $contributorDict }}
-  - [@{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}[#{{$element}}](https://github.com/dbt-labs/dbt-core/pull/{{$element}}){{end}})
+  - [@{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}{{$element}}{{end}})
   {{- end }}
   {{- end }}

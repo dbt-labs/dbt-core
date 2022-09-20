@@ -233,7 +233,7 @@ class ConfiguredParser(
 
     def render_with_context(self, parsed_node: IntermediateNode, config: ContextConfig):
         # Given the parsed node and a ContextConfig to use during parsing,
-        # render the node's sql wtih macro capture enabled.
+        # render the node's sql with macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
         context = self._context_for(parsed_node, config)
 
@@ -309,7 +309,9 @@ class ConfiguredParser(
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
-        parsed_node.unrendered_config = config.build_config_dict(rendered=False)
+        parsed_node.unrendered_config = config.build_config_dict(
+            rendered=False, patch_config_dict=patch_config_dict
+        )
 
         parsed_node.config_call_dict = config._config_call_dict
 

@@ -146,7 +146,7 @@
       {% set suffix = suffix ~ dtstring %}
     {% endif %}
     {% set suffix_length = suffix|length %}
-    {% set relation_max_name_length = 63 %}
+    {% set relation_max_name_length = base_relation.relation_max_name_length() %}
     {% if suffix_length > relation_max_name_length %}
         {% do exceptions.raise_compiler_error('Relation suffix is too long (' ~ suffix_length ~ ' characters). Maximum length is ' ~ relation_max_name_length ~ ' characters.') %}
     {% endif %}

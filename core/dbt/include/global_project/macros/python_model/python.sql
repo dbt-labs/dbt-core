@@ -3,7 +3,7 @@
     {%- set ref_dict = {} -%}
     {%- for _ref in model.refs -%}
         {%- set resolved = ref(*_ref) -%}
-        {%- do ref_dict.update({_ref | join("."): resolved | string}) -%}
+        {%- do ref_dict.update({_ref | join("."): resolved.quote(database=False, schema=False, identifier=False) | string}) -%}
     {%- endfor -%}
 
 def ref(*args,dbt_load_df_function):
@@ -18,7 +18,7 @@ def ref(*args,dbt_load_df_function):
     {%- set source_dict = {} -%}
     {%- for _source in model.sources -%}
         {%- set resolved = source(*_source) -%}
-        {%- do source_dict.update({_source | join("."): resolved | string}) -%}
+        {%- do source_dict.update({_source | join("."): resolved.quote(database=False, schema=False, identifier=False) | string}) -%}
     {%- endfor -%}
 
 def source(*args, dbt_load_df_function):
@@ -30,8 +30,8 @@ def source(*args, dbt_load_df_function):
 
 {% macro build_config_dict(model) %}
     {%- set config_dict = {} -%}
-    {%- for key in model.config.utilized -%}
-        {# TODO: weird type testing with enum, would be much easier to write this logic in Python! #}
+    {%- for key in model.config.config_keys_used -%}
+        {# weird type testing with enum, would be much easier to write this logic in Python! #}
         {%- if key == 'language' -%}
           {%- set value = 'python' -%}
         {%- endif -%}
@@ -56,8 +56,8 @@ class config:
         pass
 
     @staticmethod
-    def get(key):
-        return config_dict.get(key)
+    def get(key, default=None):
+        return config_dict.get(key, default)
 
 class this:
     """dbt.this() or dbt.this.identifier"""
@@ -70,8 +70,8 @@ class this:
 
 class dbtObj:
     def __init__(self, load_df_function) -> None:
-        self.source = lambda x: source(x, dbt_load_df_function=load_df_function)
-        self.ref = lambda x: ref(x, dbt_load_df_function=load_df_function)
+        self.source = lambda *args: source(*args, dbt_load_df_function=load_df_function)
+        self.ref = lambda *args: ref(*args, dbt_load_df_function=load_df_function)
         self.config = config
         self.this = this()
         self.is_incremental = {{ is_incremental() }}

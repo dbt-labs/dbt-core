@@ -3,5 +3,5 @@ body: Update dependency webpack-cli from ^3.3.12 to ^4.7.0
 time: 2022-07-28T14:04:25.629638-07:00
 custom:
   Author: emmyoop
-  Issue: "5574"
-  PR: "5577"
+  Issue: "299"
+  PR: "291"

@@ -1,6 +1,6 @@
 # bool_or
 
-seeds__data_bool_or_csv = """key,val1,val2
+seeds__data_bool_or_csv = """key_column,val1,val2
 abc,1,1
 abc,1,0
 def,1,0
@@ -11,7 +11,7 @@ klm,1,
 """
 
 
-seeds__data_bool_or_expected_csv = """key,value
+seeds__data_bool_or_expected_csv = """key_column,value
 abc,true
 def,false
 hij,true
@@ -35,10 +35,10 @@ data_output as (
 calculate as (
 
     select
-        key,
+        key_column,
         {{ bool_or('val1 = val2') }} as value
     from data
-    group by key
+    group by key_column
 
 )
 
@@ -47,7 +47,7 @@ select
     data_output.value as expected
 from calculate
 left join data_output
-on calculate.key = data_output.key
+on calculate.key_column = data_output.key_column
 """
 
 

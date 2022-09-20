@@ -23,7 +23,7 @@ models:
         meta:
             owner: 'Julie Smith'
             my_attr: "{{ var('my_var') }}"
-        materialization: view
+        materialized: view
 
     columns:
       - name: id
@@ -56,6 +56,22 @@ models_alt__tagged__model_sql = """
 {{
     config(
         materialized='table',
+        tags=['tag_2_in_model'],
+    )
+}}
+
+select 4 as id, 2 as value
+"""
+
+models_no_materialized__model_sql = """
+{{
+    config(
+        tags=['tag_1_in_model'],
+    )
+}}
+
+{{
+    config(
         tags=['tag_2_in_model'],
     )
 }}
@@ -189,6 +205,27 @@ class TestSchemaFileConfigs:
         tables = project.get_tables_in_schema()
         assert tables["model"] == "table"
         check_relations_equal(project.adapter, ["some_seed", "model"])
+
+        # Remove materialized config from model
+        write_file(
+            models_no_materialized__model_sql,
+            project.project_root,
+            "models",
+            "tagged",
+            "model.sql",
+        )
+        results = run_dbt(["run"])
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model_node = manifest.nodes[model_id]
+
+        assert model_node.config.materialized == "view"
+        model_unrendered_config = {
+            "materialized": "view",
+            "meta": {"my_attr": "TESTING", "owner": "Julie Smith"},
+            "tags": ["tag_1_in_model", "tag_2_in_model"],
+        }
+        assert model_node.unrendered_config == model_unrendered_config
 
         # look for test meta
         schema_file_id = model_node.patch_path

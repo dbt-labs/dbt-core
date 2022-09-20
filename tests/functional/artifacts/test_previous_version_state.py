@@ -10,6 +10,20 @@ models__my_model_sql = """
 select 1 as id
 """
 
+# Use old attribute names (v1.0-1.2) to test forward/backward compatibility with the rename in v1.3
+models__metric_yml = """
+version: 2
+metrics:
+  - name: my_metric
+    label: Count records
+    model: ref('my_model')
+
+    type: count
+    sql: "*"
+    timestamp: updated_at
+    time_grains: [day]
+"""
+
 # SETUP: Using this project, we have run past minor versions of dbt
 # to generate each contracted version of `manifest.json`.
 
@@ -32,7 +46,7 @@ class TestPreviousVersionState:
 
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": models__my_model_sql}
+        return {"my_model.sql": models__my_model_sql, "metric.yml": models__metric_yml}
 
     # Use this method when generating a new manifest version for the first time.
     # Once generated, we shouldn't need to re-generate or modify the manifest.

@@ -20,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-tests-adapter"
-package_version = "1.3.0b1"
+package_version = "1.3.0b2"
 description = """The dbt adapter tests for adapter plugins"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -35,7 +35,7 @@ setup(
     long_description_content_type="text/markdown",
     author="dbt Labs",
     author_email="info@dbtlabs.com",
-    url="https://github.com/dbt-labs/dbt-tests-adapter",
+    url="https://github.com/dbt-labs/dbt-core/tree/main/tests/adapter",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     install_requires=[
         "dbt-core=={}".format(package_version),

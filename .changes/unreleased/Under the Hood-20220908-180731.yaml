@@ -1,0 +1,8 @@
+kind: Under the Hood
+body: Reworking the way we define the window attribute of metrics to match freshness
+  tests
+time: 2022-09-08T18:07:31.532608-05:00
+custom:
+  Author: callum-mcdata
+  Issue: "5722"
+  PR: "5793"
