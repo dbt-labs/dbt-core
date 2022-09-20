@@ -356,7 +356,10 @@ class ConfigSelectorMethod(SelectorMethod):
             except AttributeError:
                 continue
             else:
-                if selector == value:
+                # if the config is a bool then check against the strings "true"/"false"
+                if ((selector == value) or
+                   (value is True and CaseInsensitive(selector) == "true") or
+                   (value is False and CaseInsensitive(selector) == "false")):
                     yield node
 
 
