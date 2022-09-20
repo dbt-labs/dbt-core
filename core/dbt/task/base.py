@@ -170,6 +170,7 @@ def get_nearest_project_dir(args):
 def move_to_nearest_project_dir(args):
     nearest_project_dir = get_nearest_project_dir(args)
     os.chdir(nearest_project_dir)
+    return nearest_project_dir
 
 
 class ConfiguredTask(BaseTask):
