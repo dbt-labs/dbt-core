@@ -217,7 +217,7 @@ profile = click.option(
 profiles_dir = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",
-    help=f"Which directory to look in for the profiles.yml file. Default = {PurePath.joinpath(Path.home(), '.dbt')}",
+    help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
     default=PurePath.joinpath(Path.home(), ".dbt"),
     type=click.Path(
         exists=True,
