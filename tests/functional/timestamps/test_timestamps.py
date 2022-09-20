@@ -23,7 +23,5 @@ class TestCurrentTimestamps:
             expected_schema={
                 "current_timestamp": "timestamp with time zone",
                 "current_timestamp_in_utc": "timestamp without time zone",
-                "now_w_tz": "timestamp with time zone",
-                "now_no_tz": "timestamp with time zone",
             },
         )

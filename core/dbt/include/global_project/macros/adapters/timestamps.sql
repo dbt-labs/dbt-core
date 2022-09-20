@@ -40,14 +40,6 @@
     {%- endif -%}
 {%- endmacro -%}
 
-{%- macro now(tz=None) -%}
-    {%- if not source_tz -%}
-        {{ current_timestamp() }}
-     {%- else -%}
-        {{ convert_timezone(current_timestamp_in_utc(), tz) }}
-    {%- endif -%}
-{%- endmacro -%}
-
 
 ---------------------------------------------
 
