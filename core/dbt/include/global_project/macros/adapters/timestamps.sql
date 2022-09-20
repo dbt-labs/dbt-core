@@ -11,7 +11,8 @@
 {%- endmacro -%}
 
 {% macro default__current_timestamp_in_utc() %}
-    {{ default__current_timestamp() }} at time zone 'utc'
+    {{ convert_timezone(target_tz="UTC",
+        timestamp=current_timestamp())}}
 {% endmacro %}
 
 {%- macro snapshot_get_time() -%}
@@ -22,23 +23,58 @@
     {{ current_timestamp() }}
 {% endmacro %}
 
-{%- macro convert_timezone(timestamp,  target_tz, source_tz) -%}
+{%- macro convert_timezone(source_tz, target_tz, timestamp) -%}
     {%- if not target_tz is string -%}
         {{ exceptions.raise_compiler_error("'target_tz' must be a string") }}
     {%- else -%}
-        {{ adapter.dispatch('convert_timezone', 'dbt') (column, target_tz, source_tz) }}
+        {{ adapter.dispatch('convert_timezone', 'dbt') (source_tz, target_tz, timestamp) }}
     {%- endif -%}
 
 {%- endmacro -%}
 
-{%- macro default__convert_timezone(column, target_tz, source_tz) -%}
+{%- macro default__convert_timezone(source_tz, target_tz, timestamp) -%}
     {%- if not source_tz -%}
-        {{ column }} at time zone '{{ target_tz }}'
+        {{ timestamp }} at time zone '{{ target_tz }}'
     {%- else -%}
-        {{ column }} at time zone '{{ source_tz }}' at time zone '{{ target_tz }}'
+        {{ timestamp }} at time zone '{{ source_tz }}' at time zone '{{ target_tz }}'
     {%- endif -%}
 {%- endmacro -%}
 
 {%- macro now(tz=None) -%}
-{{ convert_timezone(current_timestamp_in_utc(), tz) }}
+    {%- if not source_tz -%}
+        {{ current_timestamp() }}
+     {%- else -%}
+        {{ convert_timezone(current_timestamp_in_utc(), tz) }}
+    {%- endif -%}
 {%- endmacro -%}
+
+
+---------------------------------------------
+
+/* {#
+    DEPRECATED: DO NOT USE IN NEW PROJECTS
+
+    This is ONLY to handle the fact that Snowflake + Postgres had functionally
+    different implementations of {{ dbt.current_timestamp }} + {{ dbt_utils.current_timestamp }}
+
+    If you had a project or package that called {{ dbt_utils.current_timestamp() }}, you should
+    continue to use this macro to guarantee identical behavior on those two databases.
+#} */
+
+{% macro current_timestamp_backcompat() %}
+    {{ return(adapter.dispatch('current_timestamp_backcompat', 'dbt')()) }}
+{% endmacro %}
+
+{% macro default__current_timestamp_backcompat() %}
+    {{ return(adapter.dispatch('current_timestamp', 'dbt')()) }}
+{% endmacro %}
+
+-- TODO move to dbt-postgres
+{% macro postgres__current_timestamp_backcompat() %}
+    current_timestamp::{{ type_timestamp() }}
+{% endmacro %}
+
+-- TODO move to dbt-snowflake
+{% macro snowflake__current_timestamp_backcompat() %}
+    current_timestamp::{{ type_timestamp() }}
+{% endmacro %}

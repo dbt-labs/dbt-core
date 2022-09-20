@@ -1,0 +1,35 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../dbt-utils"
+		},
+		{
+			"path": "../../../dbt-redshift"
+		},
+		{
+			"path": "../../../dbt-bigquery"
+		},
+		{
+			"path": "../../../dbt-snowflake"
+		},
+		{
+			"path": "../../../dbt-spark"
+		}
+	],
+	"settings": {
+		"makefile.extensionOutputFolder": "./.vscode",
+		"pytestersuits.pythonDefaultTestLibrary": "pytest",
+		"python.autoComplete.extraPaths": [],
+		"python.analysis.autoSearchPaths": true,
+		"python.analysis.extraPaths": [
+			"core",
+			"dbt-core/core"
+		],
+		"python.analysis.indexing": true,
+		"python.analysis.inlayHints.functionReturnTypes": true,
+		"python.analysis.inlayHints.variableTypes": true
+	}
+}
