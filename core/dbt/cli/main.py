@@ -1,11 +1,12 @@
 import inspect  # This is temporary for RAT-ing
-import sys
 from copy import copy
 from pprint import pformat as pf  # This is temporary for RAT-ing
 
 import click
+from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
+from dbt.profiler import profiler
 
 
 def cli_runner():
@@ -51,9 +52,19 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    if kwargs.get("version", False):
+    incomplete_flags = Flags()
+
+    # Profiling
+    if incomplete_flags.RECORD_TIMING_INFO:
+        ctx.with_resource(profiler(enable=True, outfile=incomplete_flags.RECORD_TIMING_INFO))
+
+    # Adapter management
+    ctx.with_resource(adapter_management())
+
+    # Version info
+    if incomplete_flags.VERSION:
         click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        sys.exit()
+        return
     else:
         del ctx.params["version"]
 

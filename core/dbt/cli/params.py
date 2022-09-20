@@ -243,7 +243,7 @@ record_timing_info = click.option(
     "-r",
     envvar=None,
     help="When this option is passed, dbt will output low-level timing stats to the specified file. Example: `--record-timing-info output.profile`",
-    is_flag=True,
+    type=click.Path(exists=False),
 )
 
 resource_type = click.option(
