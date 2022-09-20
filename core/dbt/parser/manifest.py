@@ -660,7 +660,7 @@ class ManifestLoader:
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
             except Exception as exc:
-                fire_event(ParsedFileLoadFailed(path=path, exc=exc))
+                fire_event(ParsedFileLoadFailed(path=path, exc=str(exc)))
                 reparse_reason = ReparseReason.load_file_failure
         else:
             fire_event(PartialParseSaveFileNotFound())

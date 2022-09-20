@@ -108,13 +108,13 @@ class BaseTask(metaclass=ABCMeta):
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
             fire_event(DbtProjectError())
-            fire_event(DbtProjectErrorException(exc=exc))
+            fire_event(DbtProjectErrorException(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
             fire_event(DbtProfileError())
-            fire_event(DbtProfileErrorException(exc=exc))
+            fire_event(DbtProfileErrorException(exc=str(exc)))
 
             all_profiles = read_profiles(flags.PROFILES_DIR).keys()
 
@@ -346,11 +346,11 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        fire_event(CatchableExceptionOnRun(exc=e))
+        fire_event(CatchableExceptionOnRun(exc=str(e)))
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        fire_event(InternalExceptionOnRun(build_path=self.node.build_path, exc=e))
+        fire_event(InternalExceptionOnRun(build_path=self.node.build_path, exc=str(e)))
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
@@ -358,7 +358,7 @@ class BaseRunner(metaclass=ABCMeta):
             GenericExceptionOnRun(
                 build_path=self.node.build_path,
                 unique_id=self.node.unique_id,
-                exc=str(e),  # TODO: unstring this when serialization is fixed
+                exc=str(e),
             )
         )
         fire_event(PrintDebugStackTrace())
@@ -414,7 +414,7 @@ class BaseRunner(metaclass=ABCMeta):
         try:
             self.adapter.release_connection()
         except Exception as exc:
-            fire_event(NodeConnectionReleaseError(node_name=self.node.name, exc=exc))
+            fire_event(NodeConnectionReleaseError(node_name=self.node.name, exc=str(exc)))
             return str(exc)
 
         return None

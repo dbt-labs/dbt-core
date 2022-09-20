@@ -236,6 +236,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     static_parser: Optional[bool] = None
     indirect_selection: Optional[str] = None
     cache_selected_only: Optional[bool] = None
+    event_buffer_size: Optional[int] = None
 
 
 @dataclass

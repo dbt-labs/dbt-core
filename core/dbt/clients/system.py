@@ -164,7 +164,7 @@ def write_file(path: str, contents: str = "") -> bool:
                 reason = "Path was possibly too long"
             # all our hard work and the path was still too long. Log and
             # continue.
-            fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=exc))
+            fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=str(exc)))
         else:
             raise
     return True
