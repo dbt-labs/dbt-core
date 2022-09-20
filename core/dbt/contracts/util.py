@@ -255,10 +255,10 @@ def rename_sql_attr(node_content: dict) -> dict:
 def upgrade_manifest_json(manifest: dict) -> dict:
     for node_content in manifest.get("nodes", {}).values():
         node_content = rename_sql_attr(node_content)
-    for disabled_unique_id in manifest.get("disabled", {}).values():
+    for disabled in manifest.get("disabled", {}).values():
         # There can be multiple disabled nodes for the same unique_id
         # so make sure all the nodes get the attr renamed
-        node_content = [rename_sql_attr(n) for n in disabled_unique_id]
+        disabled = [rename_sql_attr(n) for n in disabled]
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
