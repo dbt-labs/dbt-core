@@ -29,7 +29,8 @@ from dbt.contracts.graph.unparsed import (
     ExposureType,
     ExposureOwner,
     MaturityType,
-    MetricFilter
+    MetricFilter,
+    MetricTime
 )
 
 from dbt.contracts.graph.compiled import CompiledModelNode
@@ -103,8 +104,8 @@ class ManifestTest(unittest.TestCase):
                 label='New Customers',
                 model='ref("multi")',
                 description="New customers",
-                type='count',
-                sql="user_id",
+                calculation_method='count',
+                expression="user_id",
                 timestamp="signup_date",
                 time_grains=['day', 'week', 'month'],
                 dimensions=['plan', 'country'],
@@ -115,7 +116,7 @@ class ManifestTest(unittest.TestCase):
                 )],
                 meta={'is_okr': True},
                 tags=['okrs'],
-                window='',
+                window=MetricTime(),
                 resource_type=NodeType.Metric,
                 depends_on=DependsOn(nodes=['model.root.multi']),
                 refs=[['multi']],

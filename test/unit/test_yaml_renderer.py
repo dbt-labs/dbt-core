@@ -110,15 +110,15 @@ class TestYamlRendering(unittest.TestCase):
         dct = {
             "name": "my_source",
             "description": "{{ docs('my_doc') }}",
-            "sql": "select {{ var('my_var') }} from my_table",
+            "expression": "select {{ var('my_var') }} from my_table",
             "time_grains": "{{ my_time_grains }}",
         }
-        # We expect the sql and description will not be rendered, but
+        # We expect the expression and description will not be rendered, but
         # other fields will be
         expected = {
             "name": "my_source",
             "description": "{{ docs('my_doc') }}",
-            "sql": "select {{ var('my_var') }} from my_table",
+            "expression": "select {{ var('my_var') }} from my_table",
             "time_grains": "[day]"
         }
         dct = renderer.render_data(dct)
