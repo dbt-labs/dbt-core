@@ -87,6 +87,19 @@ def renamed_method(old_name: str, new_name: str):
     deprecations[dep.name] = dep
 
 
+class MetricAttributesRenamed(DBTDeprecation):
+    _name = "metric-attr-renamed"
+    _description = """\
+dbt-core v1.3 renamed attributes for metrics:
+\n  'sql'              -> 'expression'
+\n  'type'             -> 'calculation_method'
+\n  'type: expression' -> 'calculation_method: derived'
+\nThe old metric parameter names will be fully deprecated in v1.4.
+\nPlease remove them from the metric definition of metric '{metric_name}'
+\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849
+"""
+
+
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
@@ -105,6 +118,7 @@ deprecations_list: List[DBTDeprecation] = [
     ConfigDataPathDeprecation(),
     PackageInstallPathDeprecation(),
     PackageRedirectDeprecation(),
+    MetricAttributesRenamed(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

@@ -1,5 +1,10 @@
 from dbt.node_types import NodeType
-from dbt.contracts.util import AdditionalPropertiesMixin, Mergeable, Replaceable
+from dbt.contracts.util import (
+    AdditionalPropertiesMixin,
+    Mergeable,
+    Replaceable,
+    rename_metric_attr,
+)
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
@@ -434,6 +439,7 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -465,9 +471,6 @@ class MetricTime(dbtClassMixin, Mergeable):
 
 @dataclass
 class UnparsedMetric(dbtClassMixin, Replaceable):
-    # TODO : verify that this disallows metric names with spaces
-    # TODO: fix validation that you broke :p
-    # name: Identifier
     name: str
     label: str
     calculation_method: str
@@ -481,19 +484,14 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
-        # super().validate(data)
-        # TODO: putting this back for now to get tests passing.  Do we want to implement name: Identifier?
+        data = rename_metric_attr(data, raise_deprecation_warning=True)
         super(UnparsedMetric, cls).validate(data)
         if "name" in data and " " in data["name"]:
             raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
-
-        if data.get("calculation_method") == "expression":
-            raise ValidationError(
-                "The metric calculation method expression has been deprecated and renamed to derived. Please update"
-            )
 
         if data.get("model") is None and data.get("calculation_method") != "derived":
             raise ValidationError("Non-derived metrics require a 'model' property")

@@ -1,0 +1,7 @@
+kind: Features
+body: Add enabled config to exposures and metrics
+time: 2022-09-13T09:59:24.445918-05:00
+custom:
+  Author: emmyoop
+  Issue: "5422"
+  PR: "5815"

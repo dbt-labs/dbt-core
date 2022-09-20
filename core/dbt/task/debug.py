@@ -21,10 +21,6 @@ from dbt.version import get_installed_version
 
 from dbt.task.base import BaseTask, get_nearest_project_dir
 
-PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
-
-{open_cmd} {profiles_dir}"""
-
 ONLY_PROFILE_MESSAGE = """
 A `dbt_project.yml` file was not found in this directory.
 Using the only profile `{}`.

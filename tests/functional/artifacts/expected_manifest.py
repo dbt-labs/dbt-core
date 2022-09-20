@@ -744,6 +744,9 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "nodes": ["model.test.model", "model.test.second_model"],
                 },
                 "description": "A description of the complex exposure\n",
+                "config": {
+                    "enabled": True,
+                },
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
@@ -760,6 +763,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "type": "notebook",
                 "unique_id": "exposure.test.notebook_exposure",
                 "url": "http://example.com/notebook/1",
+                "unrendered_config": {},
             },
             "exposure.test.simple_exposure": {
                 "created_at": ANY,
@@ -768,6 +772,9 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "nodes": ["source.test.my_source.my_table", "model.test.model"],
                 },
                 "description": "",
+                "config": {
+                    "enabled": True,
+                },
                 "fqn": ["test", "simple_exposure"],
                 "name": "simple_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -787,6 +794,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "maturity": None,
                 "meta": {},
                 "tags": [],
+                "unrendered_config": {},
             },
         },
         "metrics": {},
@@ -1182,6 +1190,9 @@ def expected_references_manifest(project):
                 "created_at": ANY,
                 "depends_on": {"macros": [], "nodes": ["model.test.view_summary"]},
                 "description": "A description of the complex exposure",
+                "config": {
+                    "enabled": True,
+                },
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
@@ -1198,6 +1209,7 @@ def expected_references_manifest(project):
                 "type": "notebook",
                 "unique_id": "exposure.test.notebook_exposure",
                 "url": "http://example.com/notebook/1",
+                "unrendered_config": {},
             },
         },
         "metrics": {},

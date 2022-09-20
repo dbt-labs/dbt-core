@@ -215,6 +215,7 @@ class TestProcessingException(Exception):
 def run_sql_with_adapter(adapter, sql, fetch=None):
     if sql.strip() == "":
         return
+
     # substitute schema and database in sql
     kwargs = {
         "schema": adapter.config.credentials.schema,
