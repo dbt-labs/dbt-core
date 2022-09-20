@@ -207,7 +207,7 @@ REQUIRED_BASE_KEYS = frozenset(
 REQUIRED_TARGET_KEYS = REQUIRED_BASE_KEYS | {"target"}
 REQUIRED_DOCS_KEYS = REQUIRED_TARGET_KEYS | {"project_name"} | {"doc"}
 MACROS = frozenset({"macro_a", "macro_b", "root", "dbt"})
-REQUIRED_QUERY_HEADER_KEYS = REQUIRED_TARGET_KEYS | {"project_name"} | MACROS
+REQUIRED_QUERY_HEADER_KEYS = REQUIRED_TARGET_KEYS | {"project_name", "context_macro_stack"} | MACROS
 REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "_sql_results",
     "load_result",
@@ -239,8 +239,9 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "adapter_macro",
     "selected_resources",
     "invocation_args_dict",
+    "submit_python_job"
 }
-REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code",}
+REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code"}
 MAYBE_KEYS = frozenset({"debug"})
 
 

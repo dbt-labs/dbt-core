@@ -311,8 +311,8 @@ class MacroGenerator(BaseMacroGenerator):
         else:
             unique_id = self.macro.unique_id
             depth = self.stack.depth
-            # only mark depth=0 as a dependency
-            if depth == 1 and self.node:
+            # only mark depth=0 as a dependency, when creating this dependency we don't pass in stack
+            if depth == 0 and self.node:
                 self.node.depends_on.add_macro(unique_id)
             self.stack.push(unique_id)
             try:
