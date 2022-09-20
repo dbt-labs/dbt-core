@@ -474,11 +474,12 @@ def table_model(ephemeral_model):
          config_kwargs={
             'materialized': 'table',
             'meta': {
-            # Other properties to test in test_select_config_variations
-            'string_property': 'some_string',
-            'truthy_bool_property': True,
-            'falsy_bool_property': False,
-            'list_property': ['some_value', True, False]},
+                # Other properties to test in test_select_config_meta
+                'string_property': 'some_string',
+                'truthy_bool_property': True,
+                'falsy_bool_property': False,
+                'list_property': ['some_value', True, False]
+            },
         },
         refs=[ephemeral_model],
         tags=['uses_ephemeral'],
