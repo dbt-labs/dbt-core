@@ -12,7 +12,7 @@ The macro override naming method (spark__statement) only works for macros which 
     {%- if language == 'sql'-%}
       {%- set res, table = adapter.execute(compiled_code, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- elif language == 'python' -%}
-      {%- set res = adapter.submit_python_job(model, compiled_code) -%}
+      {%- set res = submit_python_job(model, compiled_code) -%}
       {#-- TODO: What should table be for python models? --#}
       {%- set table = None -%}
     {%- else -%}

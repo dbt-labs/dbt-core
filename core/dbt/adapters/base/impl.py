@@ -1220,7 +1220,6 @@ class BaseAdapter(metaclass=AdapterMeta):
     def default_python_submission_method(self) -> str:
         raise NotImplementedError("default_python_submission_method is not specified")
 
-    @available.parse_none
     @log_code_execution
     def submit_python_job(self, parsed_model: dict, compiled_code: str) -> AdapterResponse:
         submission_method = parsed_model["config"].get(
