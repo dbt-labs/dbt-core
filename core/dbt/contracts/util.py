@@ -243,13 +243,22 @@ and the up-to-date metric property '{}'. Please remove the deprecated property.
     return data
 
 
+def rename_sql_attr(node_content: dict) -> dict:
+    if "raw_sql" in node_content:
+        node_content["raw_code"] = node_content.pop("raw_sql")
+    if "compiled_sql" in node_content:
+        node_content["compiled_code"] = node_content.pop("compiled_sql")
+    node_content["language"] = "sql"
+    return node_content
+
+
 def upgrade_manifest_json(manifest: dict) -> dict:
     for node_content in manifest.get("nodes", {}).values():
-        if "raw_sql" in node_content:
-            node_content["raw_code"] = node_content.pop("raw_sql")
-        if "compiled_sql" in node_content:
-            node_content["compiled_code"] = node_content.pop("compiled_sql")
-        node_content["language"] = "sql"
+        node_content = rename_sql_attr(node_content)
+    for disabled in manifest.get("disabled", {}).values():
+        # There can be multiple disabled nodes for the same unique_id
+        # so make sure all the nodes get the attr renamed
+        disabled = [rename_sql_attr(n) for n in disabled]
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
