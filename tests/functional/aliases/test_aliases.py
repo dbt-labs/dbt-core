@@ -269,7 +269,8 @@ class TestAliasErrors:
 
     def test_alias_dupe_thorews_exeption(self, project):
         message = ".*identical database representation.*"
-        with self.assertRaisesRegex(Exception, message):
+        with pytest.raises(Exception) as exc:
+            assert message in exc
             run_dbt(["run"])
 
 
