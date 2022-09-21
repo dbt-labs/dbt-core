@@ -5,7 +5,6 @@ from threading import RLock as PyodideRLock
 if flags.IS_PYODIDE:
     pass  # multiprocessing doesn't work in pyodide
 else:
-    import multiprocessing
     from multiprocessing.dummy import Pool as MultiprocessingThreadPool
     from multiprocessing.synchronize import Lock as MultiprocessingLock
     from multiprocessing.synchronize import RLock as MultiprocessingRLock

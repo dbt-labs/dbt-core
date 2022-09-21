@@ -24,6 +24,7 @@ from functools import reduce
 from itertools import chain
 import random
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+
 # No support for compiled dependencies on pyodide
 if flags.IS_PYODIDE:
     pass

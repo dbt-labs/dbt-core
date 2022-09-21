@@ -41,7 +41,7 @@ NO_PRINT = None
 CACHE_SELECTED_ONLY = None
 TARGET_PATH = None
 LOG_PATH = None
-IS_PYODIDE = "pyodide" in sys.modules # whether dbt is running via pyodide
+IS_PYODIDE = "pyodide" in sys.modules  # whether dbt is running via pyodide
 
 _NON_BOOLEAN_FLAGS = [
     "LOG_FORMAT",
@@ -119,12 +119,15 @@ if IS_PYODIDE:
     from typing import NamedTuple
     from threading import Lock as PyodideLock
     from threading import RLock as PyodideRLock
+
     class PyodideContext(NamedTuple):
         Lock = PyodideLock
         RLock = PyodideRLock
+
     MP_CONTEXT = PyodideContext()
 else:
     import multiprocessing
+
     if os.name != "nt":
         # https://bugs.python.org/issue41567
         import multiprocessing.popen_spawn_posix  # type: ignore
