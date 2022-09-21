@@ -1,4 +1,5 @@
 from typing import Iterable, List
+import pathspec  # type: ignore
 
 import jinja2
 
@@ -23,6 +24,9 @@ class MacroParser(BaseParser[ParsedMacro]):
             project=self.project,
             relative_dirs=self.project.macro_paths,
             extension=".sql",
+            ignore_spec=pathspec.PathSpec.from_lines(
+                pathspec.patterns.GitWildMatchPattern, "".splitlines()
+            ),
         )
 
     @property

@@ -59,7 +59,7 @@ class GraphTest(unittest.TestCase):
 
         # Create file filesystem searcher
         self.filesystem_search = patch('dbt.parser.read_files.filesystem_search')
-        def mock_filesystem_search(project, relative_dirs, extension):
+        def mock_filesystem_search(project, relative_dirs, extension, ignore_spec):
             if 'sql' not in extension:
                 return []
             if 'models' not in relative_dirs:

@@ -161,7 +161,6 @@ def generate_dbt_ignore_spec(project_root):
 # the various projects? Is the root project always last? Do the
 # non-root projects need to be done separately in order?
 def read_files(project, files, parser_files, saved_files):
-
     dbt_ignore_spec = generate_dbt_ignore_spec(project.project_root)
     project_files = {}
 
