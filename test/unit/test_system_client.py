@@ -156,9 +156,6 @@ class TestFindMatching(unittest.TestCase):
                 self.base_dir,
                 [relative_path],
                 '*.sql',
-                pathspec.PathSpec.from_lines(
-                    pathspec.patterns.GitWildMatchPattern, "".splitlines()
-                )
             )
             expected_output = [{
                 'searched_path': relative_path,
@@ -175,10 +172,7 @@ class TestFindMatching(unittest.TestCase):
             out = dbt.clients.system.find_matching(
                 self.base_dir,
                 [relative_path],
-                '*.sql',
-                pathspec.PathSpec.from_lines(
-                    pathspec.patterns.GitWildMatchPattern, "".splitlines()
-                )
+                '*.sql'
             )
             expected_output = [{
                 'searched_path': relative_path,
@@ -195,10 +189,7 @@ class TestFindMatching(unittest.TestCase):
             out = dbt.clients.system.find_matching(
                 self.tempdir,
                 [''],
-                '*.sql',
-                pathspec.PathSpec.from_lines(
-                    pathspec.patterns.GitWildMatchPattern, "".splitlines()
-                )
+                '*.sql'
             )
             self.assertEqual(out, [])
     

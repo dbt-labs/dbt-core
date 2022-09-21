@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic
+from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic, Optional
 from pathspec import PathSpec  # type: ignore
 
 from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
@@ -63,7 +63,10 @@ class FullBlock(FileBlock):
 
 
 def filesystem_search(
-    project: Project, relative_dirs: List[str], extension: str, ignore_spec: PathSpec
+    project: Project,
+    relative_dirs: List[str],
+    extension: str,
+    ignore_spec: Optional[PathSpec] = None,
 ):
     ext = "[!.#~]*" + extension
     root = project.project_root

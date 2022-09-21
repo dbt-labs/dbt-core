@@ -146,13 +146,10 @@ def read_files_for_parser(project, files, dirs, extensions, parse_ft, saved_file
 def generate_dbt_ignore_spec(project_root):
     ignore_file_path = os.path.join(project_root, ".dbtignore")
 
+    ignore_spec = None
     if os.path.exists(ignore_file_path):
         with open(ignore_file_path) as f:
             ignore_spec = pathspec.PathSpec.from_lines(pathspec.patterns.GitWildMatchPattern, f)
-    else:
-        ignore_spec = pathspec.PathSpec.from_lines(
-            pathspec.patterns.GitWildMatchPattern, "".splitlines()
-        )
     return ignore_spec
 
 

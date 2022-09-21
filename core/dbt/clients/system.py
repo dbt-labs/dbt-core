@@ -37,7 +37,7 @@ def find_matching(
     root_path: str,
     relative_paths_to_search: List[str],
     file_pattern: str,
-    ignore_spec: PathSpec,
+    ignore_spec: Optional[PathSpec] = None,
 ) -> List[Dict[str, Any]]:
     """
     Given an absolute `root_path`, a list of relative paths to that
@@ -80,7 +80,9 @@ def find_matching(
                     modification_time = os.path.getmtime(absolute_path)
                 except OSError:
                     fire_event(SystemErrorRetrievingModTime(path=absolute_path))
-                if reobj.match(local_file) and not ignore_spec.match_file(relative_path_to_root):
+                if reobj.match(local_file) and (
+                    not ignore_spec or not ignore_spec.match_file(relative_path_to_root)
+                ):
                     matching.append(
                         {
                             "searched_path": relative_path_to_search,
