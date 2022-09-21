@@ -1,0 +1,7 @@
+kind: Features
+body: Support .dbtignore in project root to ignore certain files being read by dbt
+time: 2022-09-21T14:52:22.131627-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "5733"
+  PR: "5897"
