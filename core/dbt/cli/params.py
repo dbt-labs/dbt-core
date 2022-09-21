@@ -97,6 +97,7 @@ fail_fast = click.option(
 
 full_refresh = click.option(
     "--full-refresh",
+    "-fr",
     envvar="DBT_FULL_REFRESH",
     help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
     is_flag=True,
