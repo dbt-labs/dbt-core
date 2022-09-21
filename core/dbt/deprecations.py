@@ -35,6 +35,17 @@ class DBTDeprecation:
             active_deprecations.add(self.name)
 
 
+class ExposureNameDeprecation(DBTDeprecation):
+    _name = "exposure-name"
+    # todo: word this better - it's bad.  Also do we want to set a timeline for when
+    # this will become an error?
+    _description = """\
+    Exposure names may not contain spaces and can only contain letters, numbers and underscores.
+    {exposure} does not follow this pattern.  Please use the label attribute for more complex
+    names.
+    """
+
+
 class PackageRedirectDeprecation(DBTDeprecation):
     _name = "package-redirect"
     _description = """\
@@ -114,6 +125,7 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
+    ExposureNameDeprecation(),
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
     PackageInstallPathDeprecation(),

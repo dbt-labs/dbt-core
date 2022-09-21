@@ -1061,6 +1061,7 @@ class ExposureParser(YamlReader):
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise ParsingException(msg) from exc
+
             self.parse_exposure(unparsed)
 
 

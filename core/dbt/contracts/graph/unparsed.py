@@ -1,5 +1,6 @@
 import re
 
+from dbt import deprecations
 from dbt.node_types import NodeType
 from dbt.contracts.util import (
     AdditionalPropertiesMixin,
@@ -447,22 +448,10 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     @classmethod
     def validate(cls, data):
         super(UnparsedExposure, cls).validate(data)
-        # TODO: what do we actually want to rules to be?
         if "name" in data:
-            errors = []
-            if " " in data["name"]:
-                errors.append("cannot contain spaces")
-            if len(data["name"]) > 126:
-                errors.append("cannot contain more than 126 characters")
-            if not (re.match(r"^[A-Za-z]", data["name"])):
-                errors.append("must begin with a letter")
+            # name can only contain alphanumeric chars and underscores
             if not (re.match(r"[\w-]+$", data["name"])):
-                errors.append("must contain only letters, numbers and underscores")
-
-            if errors:
-                raise ParsingException(
-                    f"Exposure name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
-                )
+                deprecations.warn("exposure-name", exposure=data["name"])
 
 
 @dataclass
