@@ -489,8 +489,10 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
             errors = []
             if " " in data["name"]:
                 errors.append("cannot contain spaces")
-            if len(data["name"]) > 126:
-                errors.append("cannot contain more than 126 characters")
+            # This handles failing queries due to too long metric names.
+            # It only occurs in BigQuery and Snowflake (Postgres/Redshift truncate)
+            if len(data["name"]) > 250:
+                errors.append("cannot contain more than 250 characters")
             if not (re.match(r"^[A-Za-z]", data["name"])):
                 errors.append("must begin with a letter")
             if not (re.match(r"[\w-]+$", data["name"])):
@@ -498,7 +500,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
             if errors:
                 raise ParsingException(
-                    f"Metrics name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
+                    f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
 
         if data.get("calculation_method") == "expression":

@@ -301,7 +301,7 @@ version: 2
 
 metrics:
 
-  - name: this_name_is_going_to_contain_more_than_126_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen
+  - name: this_name_is_going_to_contain_more_than_250_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen_and_repeat_this_name_is_going_to_contain_more_than_250_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
@@ -326,10 +326,10 @@ class TestLongName:
             "people.sql": models__people_sql,
         }
 
-    def test_names_with_leading_number(self, project):
+    def test_long_name(self, project):
         with pytest.raises(ParsingException) as exc:
             run_dbt(["run"])
-        assert "cannot contain more than 126 characters" in str(exc.value)
+        assert "cannot contain more than 250 characters" in str(exc.value)
 
 
 downstream_model_sql = """
