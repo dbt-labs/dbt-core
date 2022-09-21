@@ -21,7 +21,8 @@ on:
       - "*.latest"
       - "releases/*"
 
-# no permissions beyond the default needed here
+# no special access is needed
+permissions: read-all
 
 env:
   LATEST_SCHEMA_PATH: ${{ github.workspace }}/new_schemas

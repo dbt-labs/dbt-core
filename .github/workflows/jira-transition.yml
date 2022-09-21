@@ -15,7 +15,8 @@ on:
   issues:
     types: [closed, deleted, reopened]
 
-# no permissions beyond the default needed here
+# no special access is needed
+permissions: read-all
 
 jobs:
   call-label-action:
