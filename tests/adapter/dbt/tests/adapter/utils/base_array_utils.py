@@ -1,4 +1,3 @@
-import pytest
 from dbt.tests.adapter.utils.base_utils import BaseUtils
 from dbt.tests.util import run_dbt, check_relations_equal, get_relation_columns
 
