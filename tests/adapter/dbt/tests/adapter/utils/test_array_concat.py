@@ -1,32 +1,18 @@
 import pytest
-from dbt.tests.adapter.utils.base_utils import BaseUtils
+from dbt.tests.adapter.utils.base_array_utils import BaseArrayUtils
 from dbt.tests.adapter.utils.fixture_array_concat import (
-    seeds__data_array_concat_csv,
-    models__test_array_concat_sql,
-    models__test_array_concat_yml,
-)
-from dbt.tests.adapter.utils.fixture_array_construct import (
-    seeds__data_array_construct_csv,
+    models__array_concat_actual_sql,
+    models__array_concat_expected_sql
 )
 
 
-class BaseArrayConcat(BaseUtils):
-    @pytest.fixture(scope="class")
-    def seeds(self):
-        return {
-            "data_array_concat.csv": seeds__data_array_concat_csv,
-            "data_array_construct.csv": seeds__data_array_construct_csv,
-        }
-
+class BaseArrayConcat(BaseArrayUtils):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "test_array_concat.yml": models__test_array_concat_yml,
-            "test_array_concat.sql": self.interpolate_macro_namespace(
-                models__test_array_concat_sql, "array_concat"
-            ),
+            "actual.sql": models__array_concat_actual_sql,
+            "expected.sql": models__array_concat_expected_sql,
         }
-
 
 class TestArrayConcat(BaseArrayConcat):
     pass
