@@ -304,8 +304,6 @@ class TestSameAliasDifferentSchemas:
 
 
 class TestSameAliasDifferentDatabases:
-    setup_alternate_db = True
-
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -315,7 +313,8 @@ class TestSameAliasDifferentDatabases:
                 "test": {
                     "alias": "duped_alias",
                     "model_b": {
-                        "database": self.alternate_db,
+                        # how to tap into a alternate database here? or is something like dbt_profile_target method required
+                        "database": self.alternate_database
                     },
                 },
             },
@@ -333,3 +332,8 @@ class TestSameAliasDifferentDatabases:
             "model_a.sql": models_dupe_custom_database__model_a_sql,
             "README.md": models_dupe_custom_database__README_md,
         }
+
+    def test_alias_model_name_diff_database(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2
+        run_dbt(["test"])
