@@ -3,6 +3,8 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.contracts.graph.metrics import ResolvedMetricReference
 
+from tests.functional.metrics.fixture_metrics import models__people_sql
+
 metrics__yml = """
 version: 2
 
@@ -50,14 +52,6 @@ metrics:
     expression: "{{metric('average_tenure')}} + 1 "
     timestamp: created_at
     time_grains: [day, week, month]
-"""
-
-models__people_sql = """
-select 1 as id, 'Drew' as first_name, 'Banin' as last_name, 'yellow' as favorite_color, true as loves_dbt, 5 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
 """
 
 
