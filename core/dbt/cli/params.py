@@ -218,16 +218,18 @@ profiles_dir = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",
     help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
-    default=None,
-    type=click.Path(),
+    default=PurePath.joinpath(Path.home(), ".dbt"),
+    type=click.Path(
+        exists=True,
+    ),
 )
 
 project_dir = click.option(
     "--project-dir",
     envvar=None,
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
-    default=None,
-    type=click.Path(),
+    default=Path.cwd(),
+    type=click.Path(exists=True),
 )
 
 quiet = click.option(
@@ -241,7 +243,7 @@ record_timing_info = click.option(
     "-r",
     envvar=None,
     help="When this option is passed, dbt will output low-level timing stats to the specified file. Example: `--record-timing-info output.profile`",
-    is_flag=True,
+    type=click.Path(exists=False),
 )
 
 resource_type = click.option(
