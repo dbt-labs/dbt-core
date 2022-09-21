@@ -1,0 +1,7 @@
+kind: Features
+body: add type_boolean as a data type macro
+time: 2022-09-19T23:14:14.9871+01:00
+custom:
+  Author: jpmmcneill
+  Issue: "5739"
+  PR: "5875"
