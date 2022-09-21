@@ -185,5 +185,5 @@ class TestExposureNameDeprecation:
         with pytest.raises(dbt.exceptions.CompilationException) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "Exposure names may not contain spaces and can only contain letters, numbers and underscores."
+        expected_msg = "Starting in v1.3, the 'name' of an exposure should contain only letters, numbers, and underscores."
         assert expected_msg in exc_str

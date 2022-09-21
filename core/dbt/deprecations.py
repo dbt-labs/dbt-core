@@ -35,17 +35,6 @@ class DBTDeprecation:
             active_deprecations.add(self.name)
 
 
-class ExposureNameDeprecation(DBTDeprecation):
-    _name = "exposure-name"
-    # todo: word this better - it's bad.  Also do we want to set a timeline for when
-    # this will become an error?
-    _description = """\
-    Exposure names may not contain spaces and can only contain letters, numbers and underscores.
-    {exposure} does not follow this pattern.  Please use the label attribute for more complex
-    names.
-    """
-
-
 class PackageRedirectDeprecation(DBTDeprecation):
     _name = "package-redirect"
     _description = """\
@@ -109,6 +98,17 @@ dbt-core v1.3 renamed attributes for metrics:
 \nPlease remove them from the metric definition of metric '{metric_name}'
 \nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849
 """
+
+
+class ExposureNameDeprecation(DBTDeprecation):
+    _name = "exposure-name"
+    _description = """\
+    Starting in v1.3, the 'name' of an exposure should contain only letters, numbers, and underscores.
+    Exposures support a new property, 'label', which may contain spaces, capital letters, and special characters.
+    {exposure} does not follow this pattern.
+    Please update the 'name', and use the 'label' property for a human-friendly title.
+    This will raise an error in a future version of dbt-core.
+    """
 
 
 def warn(name, *args, **kwargs):
