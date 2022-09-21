@@ -244,7 +244,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2022-09-12T20:41:53.793012Z"
+          "default": "2022-09-14T20:35:15.346636Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -255,7 +255,7 @@
               "type": "null"
             }
           ],
-          "default": "3e1f83a7-c7fd-44ed-bb2f-5e3fc9aee730"
+          "default": "c59a8269-533c-4b78-a709-5094045afd4d"
         },
         "env": {
           "type": "object",
@@ -523,7 +523,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.7976892
+          "default": 1663187715.3517282
         },
         "config_call_dict": {
           "type": "object",
@@ -1074,7 +1074,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.800915
+          "default": 1663187715.35441
         },
         "config_call_dict": {
           "type": "object",
@@ -1437,7 +1437,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.802708
+          "default": 1663187715.356541
         },
         "config_call_dict": {
           "type": "object",
@@ -1688,7 +1688,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.8044102
+          "default": 1663187715.3582149
         },
         "config_call_dict": {
           "type": "object",
@@ -1949,7 +1949,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.806144
+          "default": 1663187715.359935
         },
         "config_call_dict": {
           "type": "object",
@@ -2200,7 +2200,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.807632
+          "default": 1663187715.361423
         },
         "config_call_dict": {
           "type": "object",
@@ -2447,7 +2447,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.809396
+          "default": 1663187715.363411
         },
         "config_call_dict": {
           "type": "object",
@@ -2746,7 +2746,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.8124218
+          "default": 1663187715.366584
         },
         "config_call_dict": {
           "type": "object",
@@ -3162,7 +3162,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.814218
+          "default": 1663187715.3682182
         },
         "config_call_dict": {
           "type": "object",
@@ -3409,7 +3409,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.816299
+          "default": 1663187715.369675
         },
         "config_call_dict": {
           "type": "object",
@@ -3617,7 +3617,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.817742
+          "default": 1663187715.370925
         },
         "config_call_dict": {
           "type": "object",
@@ -3833,7 +3833,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.819065
+          "default": 1663187715.372257
         },
         "config_call_dict": {
           "type": "object",
@@ -4059,7 +4059,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.820469
+          "default": 1663187715.373705
         },
         "config_call_dict": {
           "type": "object",
@@ -4275,7 +4275,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.821846
+          "default": 1663187715.375131
         },
         "config_call_dict": {
           "type": "object",
@@ -4491,7 +4491,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.823106
+          "default": 1663187715.376405
         },
         "config_call_dict": {
           "type": "object",
@@ -4703,7 +4703,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.8250082
+          "default": 1663187715.3784761
         },
         "config_call_dict": {
           "type": "object",
@@ -4940,7 +4940,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.826428
+          "default": 1663187715.380325
         },
         "config_call_dict": {
           "type": "object",
@@ -5133,7 +5133,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.8290439
+          "default": 1663187715.3832462
         },
         "config_call_dict": {
           "type": "object",
@@ -5518,7 +5518,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.831739
+          "default": 1663187715.3854342
         }
       },
       "additionalProperties": false,
@@ -5633,7 +5633,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2022-09-12T20:41:53.788122Z"
+          "default": "2022-09-14T20:35:15.341700Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -5644,7 +5644,7 @@
               "type": "null"
             }
           ],
-          "default": "3e1f83a7-c7fd-44ed-bb2f-5e3fc9aee730"
+          "default": "c59a8269-533c-4b78-a709-5094045afd4d"
         },
         "env": {
           "type": "object",
@@ -6002,7 +6002,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.832941
+          "default": 1663187715.386226
         },
         "supported_languages": {
           "oneOf": [
@@ -6178,6 +6178,16 @@
           "type": "string",
           "default": ""
         },
+        "label": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "maturity": {
           "oneOf": [
             {
@@ -6253,11 +6263,11 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.834493
+          "default": 1663187715.3878772
         }
       },
       "additionalProperties": false,
-      "description": "ParsedExposure(fqn: List[str], unique_id: str, package_name: str, root_path: str, path: str, original_file_path: str, name: str, type: dbt.contracts.graph.unparsed.ExposureType, owner: dbt.contracts.graph.unparsed.ExposureOwner, resource_type: dbt.node_types.NodeType = <NodeType.Exposure: 'exposure'>, description: str = '', maturity: Union[dbt.contracts.graph.unparsed.MaturityType, NoneType] = None, meta: Dict[str, Any] = <factory>, tags: List[str] = <factory>, config: dbt.contracts.graph.model_config.ExposureConfig = <factory>, unrendered_config: Dict[str, Any] = <factory>, url: Union[str, NoneType] = None, depends_on: dbt.contracts.graph.parsed.DependsOn = <factory>, refs: List[List[str]] = <factory>, sources: List[List[str]] = <factory>, created_at: float = <factory>)"
+      "description": "ParsedExposure(fqn: List[str], unique_id: str, package_name: str, root_path: str, path: str, original_file_path: str, name: str, type: dbt.contracts.graph.unparsed.ExposureType, owner: dbt.contracts.graph.unparsed.ExposureOwner, resource_type: dbt.node_types.NodeType = <NodeType.Exposure: 'exposure'>, description: str = '', label: Union[str, NoneType] = None, maturity: Union[dbt.contracts.graph.unparsed.MaturityType, NoneType] = None, meta: Dict[str, Any] = <factory>, tags: List[str] = <factory>, config: dbt.contracts.graph.model_config.ExposureConfig = <factory>, unrendered_config: Dict[str, Any] = <factory>, url: Union[str, NoneType] = None, depends_on: dbt.contracts.graph.parsed.DependsOn = <factory>, refs: List[List[str]] = <factory>, sources: List[List[str]] = <factory>, created_at: float = <factory>)"
     },
     "ExposureOwner": {
       "type": "object",
@@ -6486,7 +6496,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1663015313.836148
+          "default": 1663187715.38939
         }
       },
       "additionalProperties": false,

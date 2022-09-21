@@ -17,6 +17,7 @@ models_trivial__model_sql = """
 select 1 as id
 """
 
+
 metrics_old_metric_names__yml = """
 version: 2
 metrics:
@@ -28,6 +29,18 @@ metrics:
     sql: "*"
     timestamp: updated_at
     time_grains: [day]
+"""
+
+bad_name_yaml = """
+version: 2
+
+exposures:
+  - name: simple exposure spaced!!
+    type: dashboard
+    depends_on:
+      - ref('model')
+    owner:
+      email: something@example.com
 """
 
 
@@ -151,4 +164,26 @@ class TestMetricAttrRenameDeprecation:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "renamed attributes for metrics"
+        assert expected_msg in exc_str
+
+
+class TestExposureNameDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": models_trivial__model_sql, "bad_name.yml": bad_name_yaml}
+
+    def test_exposure_name(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        run_dbt(["parse"])
+        expected = {"exposure-name"}
+        assert expected == deprecations.active_deprecations
+
+    def test_exposure_name_fail(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        with pytest.raises(dbt.exceptions.CompilationException) as exc:
+            run_dbt(["--warn-error", "--no-partial-parse", "parse"])
+        exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
+        expected_msg = "Starting in v1.3, the 'name' of an exposure should contain only letters, numbers, and underscores."
         assert expected_msg in exc_str

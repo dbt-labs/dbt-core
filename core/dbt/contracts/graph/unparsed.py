@@ -1,4 +1,6 @@
 import re
+
+from dbt import deprecations
 from dbt.node_types import NodeType
 from dbt.contracts.util import (
     AdditionalPropertiesMixin,
@@ -435,12 +437,21 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     type: ExposureType
     owner: ExposureOwner
     description: str = ""
+    label: Optional[str] = None
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedExposure, cls).validate(data)
+        if "name" in data:
+            # name can only contain alphanumeric chars and underscores
+            if not (re.match(r"[\w-]+$", data["name"])):
+                deprecations.warn("exposure-name", exposure=data["name"])
 
 
 @dataclass
