@@ -10,3 +10,9 @@
 {% macro postgres__snapshot_get_time() -%}
     {{ current_timestamp() }} :: TIMESTAMP without TIME ZONE
 {%- endmacro %}
+
+{% macro postgres__current_timestamp_backcompat() %}
+    current_timestamp::{{ type_timestamp() }}
+    
+{% endmacro %}
+
