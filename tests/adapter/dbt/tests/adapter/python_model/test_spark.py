@@ -19,8 +19,6 @@ def model(dbt, session):
     return df
 """
 PYSPARK_MODEL = """
-# models/pyspark_df.py
-
 def model(dbt, session):
     dbt.config(
         materialized="table",
