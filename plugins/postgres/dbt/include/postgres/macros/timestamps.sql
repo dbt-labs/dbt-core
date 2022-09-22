@@ -13,6 +13,5 @@
 
 {% macro postgres__current_timestamp_backcompat() %}
     current_timestamp::{{ type_timestamp() }}
-    
-{% endmacro %}
 
+{% endmacro %}

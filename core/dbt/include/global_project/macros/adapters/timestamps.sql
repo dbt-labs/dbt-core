@@ -12,7 +12,7 @@
 
 {% macro default__current_timestamp_in_utc() %}
     {{ convert_timezone(target_tz="UTC",
-        timestamp=current_timestamp())}}
+        source_timestamp=current_timestamp())}}
 {% endmacro %}
 
 {%- macro snapshot_get_time() -%}
@@ -23,20 +23,20 @@
     {{ current_timestamp() }}
 {% endmacro %}
 
-{%- macro convert_timezone(source_tz, target_tz, timestamp) -%}
+{%- macro convert_timezone(source_tz, target_tz, source_timestamp) -%}
     {%- if not target_tz is string -%}
         {{ exceptions.raise_compiler_error("'target_tz' must be a string") }}
     {%- else -%}
-        {{ adapter.dispatch('convert_timezone', 'dbt') (source_tz, target_tz, timestamp) }}
+        {{ adapter.dispatch('convert_timezone', 'dbt') (source_tz, target_tz, source_timestamp) }}
     {%- endif -%}
 
 {%- endmacro -%}
 
-{%- macro default__convert_timezone(source_tz, target_tz, timestamp) -%}
+{%- macro default__convert_timezone(source_tz, target_tz, source_timestamp) -%}
     {%- if not source_tz -%}
-        {{ timestamp }} at time zone '{{ target_tz }}'
+        {{ source_timestamp }} at time zone '{{ target_tz }}'
     {%- else -%}
-        {{ timestamp }} at time zone '{{ source_tz }}' at time zone '{{ target_tz }}'
+        {{ source_timestamp }} at time zone '{{ source_tz }}' at time zone '{{ target_tz }}'
     {%- endif -%}
 {%- endmacro -%}
 
