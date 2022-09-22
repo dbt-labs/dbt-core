@@ -4,11 +4,13 @@ import stat
 import unittest
 import tarfile
 import io
+import pathspec
 from pathlib import Path
 from tempfile import mkdtemp, NamedTemporaryFile
 
 from dbt.exceptions import ExecutableError, WorkingDirectoryError
 import dbt.clients.system
+
 
 
 class SystemClient(unittest.TestCase):
@@ -151,7 +153,9 @@ class TestFindMatching(unittest.TestCase):
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
             out = dbt.clients.system.find_matching(
-                self.base_dir, [relative_path], '*.sql'
+                self.base_dir,
+                [relative_path],
+                '*.sql',
             )
             expected_output = [{
                 'searched_path': relative_path,
@@ -166,7 +170,9 @@ class TestFindMatching(unittest.TestCase):
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
             out = dbt.clients.system.find_matching(
-                self.base_dir, [relative_path], '*.sql'
+                self.base_dir,
+                [relative_path],
+                '*.sql'
             )
             expected_output = [{
                 'searched_path': relative_path,
@@ -180,7 +186,25 @@ class TestFindMatching(unittest.TestCase):
         with NamedTemporaryFile(
             prefix='sql-files', suffix='.SQLT', dir=self.tempdir
         ):
-            out = dbt.clients.system.find_matching(self.tempdir, [''], '*.sql')
+            out = dbt.clients.system.find_matching(
+                self.tempdir,
+                [''],
+                '*.sql'
+            )
+            self.assertEqual(out, [])
+    
+    def test_ignore_spec(self):
+        with NamedTemporaryFile(
+            prefix='sql-files', suffix='.sql', dir=self.tempdir
+        ):
+            out = dbt.clients.system.find_matching(
+                self.tempdir,
+                [''],
+                '*.sql',
+                pathspec.PathSpec.from_lines(
+                    pathspec.patterns.GitWildMatchPattern, "sql-files*".splitlines()
+                )
+            )
             self.assertEqual(out, [])
 
     def tearDown(self):
