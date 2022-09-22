@@ -39,7 +39,6 @@ def model(dbt, session):
 """
 
 PANDAS_ON_SPARK_MODEL = """
-
 import pyspark.pandas as ps
 
 
