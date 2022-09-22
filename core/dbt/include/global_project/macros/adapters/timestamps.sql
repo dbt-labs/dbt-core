@@ -64,9 +64,10 @@
 -- TODO move to dbt-postgres
 {% macro postgres__current_timestamp_backcompat() %}
     current_timestamp::{{ type_timestamp() }}
+    
 {% endmacro %}
 
 -- TODO move to dbt-snowflake
 {% macro snowflake__current_timestamp_backcompat() %}
-    current_timestamp::{{ type_timestamp() }}
+    convert_timezone('UTC', {{current_timestamp()}})
 {% endmacro %}
