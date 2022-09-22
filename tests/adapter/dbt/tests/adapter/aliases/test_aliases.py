@@ -210,7 +210,7 @@ but they are configured to be built in _different_ schemas
 """
 
 
-class TestAliases:
+class BaseAliases:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -248,7 +248,7 @@ class TestAliases:
         run_dbt(["test"])
 
 
-class TestAliasErrors:
+class BaseAliasErrors:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -275,7 +275,7 @@ class TestAliasErrors:
             run_dbt(["run"])
 
 
-class TestSameAliasDifferentSchemas:
+class BaseSameAliasDifferentSchemas:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -304,7 +304,7 @@ class TestSameAliasDifferentSchemas:
         assert len(res) > 0
 
 
-class TestSameAliasDifferentDatabases:
+class BaseSameAliasDifferentDatabases:
     @pytest.fixture(scope="class", autouse=True)
     def setup(self, project):
         alternate_schema_name = project.test_schema + "_alt_test"
@@ -344,3 +344,19 @@ class TestSameAliasDifferentDatabases:
         results = run_dbt(["run"])
         assert len(results) == 2
         run_dbt(["test"])
+
+
+class TestAliases(BaseAliases):
+    pass
+
+
+class TestAliasErrors(BaseAliasErrors):
+    pass
+
+
+class TestSameAliasDifferentSchemas(BaseSameAliasDifferentSchemas):
+    pass
+
+
+class TestSameAliasDifferentDatabases(BaseSameAliasDifferentDatabases):
+    pass
