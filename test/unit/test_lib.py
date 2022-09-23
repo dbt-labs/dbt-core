@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest import mock
 from dbt.contracts.results import RunningStatus
-from dbt.lib import SqlCompileRunnerNoWarehouseConnection
+from dbt.lib import SqlCompileRunnerNoIntrospection
 
 class TestContext():
     node = mock.MagicMock()
@@ -13,7 +13,7 @@ class TestContext():
     timing = []
 
 
-class SqlCompileRunnerNoWarehouseConnectionTest(unittest.TestCase):
+class SqlCompileRunnerNoIntrospectionTest(unittest.TestCase):
     def setUp(self):
             self.ctx = TestContext()
             self.manifest = {'mock':'data'}
@@ -24,7 +24,7 @@ class SqlCompileRunnerNoWarehouseConnectionTest(unittest.TestCase):
         method should defer to the parent method.
         """
         with mock.patch('dbt.task.base.BaseRunner.compile_and_execute') as parent_compile:
-            runner = SqlCompileRunnerNoWarehouseConnection(None, None, None, 1, 1)
+            runner = SqlCompileRunnerNoIntrospection(None, None, None, 1, 1)
             runner.compile_and_execute(self.manifest, self.ctx)
             parent_compile.assert_called_once_with(self.manifest, self.ctx)
 
@@ -35,7 +35,7 @@ class SqlCompileRunnerNoWarehouseConnectionTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"__DBT_ALLOW_INTROSPECTION": "0"}):
             with mock.patch('dbt.task.base.BaseRunner.compile_and_execute') as mock_parent_compile:
                 with mock.patch('dbt.task.sql.GenericSqlRunner.compile') as mock_sql_compile:
-                    runner = SqlCompileRunnerNoWarehouseConnection(None, None, None, 1, 1)
+                    runner = SqlCompileRunnerNoIntrospection(None, None, None, 1, 1)
                     runner.compile_and_execute(self.manifest, self.ctx)
                     mock_parent_compile.assert_not_called()
                     mock_sql_compile.assert_called_once_with(self.manifest)
