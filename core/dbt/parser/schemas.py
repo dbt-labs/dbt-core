@@ -889,17 +889,11 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
             found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
-            # TODO: If there are multiple nodes with the same unique id, can we do anything or do we error?
-            if len(found_nodes) > 1:
-                # There might be multiple disabled nodes for this model
-                pass
-                # TODO: throw error
-            elif found_nodes:
+            if len(found_nodes) == 1:
                 node = found_nodes[0]
                 # If this yaml file is enabled but the project config is not, we need to move
                 # the node from disabled to manifest.nodes
-                # Is there a way to know it was disabled in the sql file and not the  project?  Could we loop through and compare the original file path?
-                breakpoint()
+                # Is there a way to know it was disabled in the sql file and not the project? Could we loop through and compare the original file path?
                 if patch.config.get("enabled"):
                     self.manifest.add_node(source_file, node)
                     self.manifest.rebuild_ref_lookup()
@@ -910,7 +904,14 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     # We're saving the patch_path because we need to schedule
                     # re-application of the patch in partial parsing.
                     node.patch_path = source_file.file_id
-
+            elif len(found_nodes) > 1:
+                # There are multiple disabled nodes for this model.  We have no way to know
+                msg = (
+                    f"Found {len(found_nodes)} matching disabled nodes for '{patch.name}'. "
+                    "Multiple nodes for thge same unique id cannot be disabled in the schema "
+                    "file. They must be disabled in `dbt_project.yml` or in the sql files."
+                )
+                raise ParsingException(msg)
             else:
                 msg = (
                     f"Did not find matching node for patch with name '{patch.name}' "

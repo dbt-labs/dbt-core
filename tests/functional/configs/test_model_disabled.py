@@ -223,7 +223,7 @@ class TestOverrideFalseYAMLConfigsInSQL:
         assert "model.test.my_model_3" in manifest.disabled
 
 
-# ensure true config set in yaml file can be overridden in sql file
+# ensure true config set in yaml file can be overridden by false in sql file
 class TestOverrideTrueYAMLConfigsInSQL:
     @pytest.fixture(scope="class")
     def models(self):
@@ -238,7 +238,7 @@ class TestOverrideTrueYAMLConfigsInSQL:
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "model.test.my_model_2" in manifest.nodes
-        assert "model.test.my_model_3" in manifest.nodes
+        assert "model.test.my_model_3" not in manifest.nodes
 
         assert "model.test.my_model_2" not in manifest.disabled
-        assert "model.test.my_model_3" not in manifest.disabled
+        assert "model.test.my_model_3" in manifest.disabled
