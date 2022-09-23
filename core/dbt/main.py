@@ -45,10 +45,10 @@ import dbt.tracking
 from dbt.utils import ExitCodes, args_to_dict
 from dbt.config.profile import read_user_config
 from dbt.exceptions import (
+    Exception as dbtException,
     InternalException,
     NotImplementedException,
     FailedToConnectException,
-    ParsingException,
 )
 
 
@@ -149,7 +149,7 @@ def main(args=None):
 
         except BaseException as e:
             fire_event(MainEncounteredError(exc=str(e)))
-            if not isinstance(e, ParsingException):
+            if not isinstance(e, dbtException):
                 fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
             exit_code = ExitCodes.UnhandledError.value
 
