@@ -1,0 +1,7 @@
+kind: Docs
+body: Refer to exposures by their label by default.
+time: 2022-09-20T15:20:40.652948-05:00
+custom:
+  Author: emmyoop
+  Issue: "306"
+  PR: "307"
