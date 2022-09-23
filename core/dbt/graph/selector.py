@@ -165,7 +165,8 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.exposures:
             return True
         elif unique_id in self.manifest.metrics:
-            return True
+            metric = self.manifest.metrics[unique_id]
+            return metric.config.enabled
         node = self.manifest.nodes[unique_id]
         return not node.empty and node.config.enabled
 

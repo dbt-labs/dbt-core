@@ -59,7 +59,7 @@ The TIMESTAMP_* variation associated with TIMESTAMP is specified by the TIMESTAM
     {{ return(api.Column.translate_type("float")) }}
 {% endmacro %}
 
-{# numeric  ------------------------------------------------     #}
+{# numeric  -------------------------------------------------     #}
 
 {%- macro type_numeric() -%}
   {{ return(adapter.dispatch('type_numeric', 'dbt')()) }}
@@ -115,3 +115,15 @@ the precision and scale explicitly.)
 
 -- returns 'int' everywhere, except BigQuery, where it returns 'int64'
 -- (but BigQuery also now accepts 'int' as a valid alias for 'int64')
+
+{# bool  -------------------------------------------------     #}
+
+{%- macro type_boolean() -%}
+  {{ return(adapter.dispatch('type_boolean', 'dbt')()) }}
+{%- endmacro -%}
+
+{%- macro default__type_boolean() -%}
+  {{ return(api.Column.translate_type("boolean")) }}
+{%- endmacro -%}
+
+-- returns 'boolean' everywhere. BigQuery accepts 'boolean' as a valid alias for 'bool'

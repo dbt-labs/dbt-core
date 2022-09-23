@@ -105,6 +105,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             query_comment=project.query_comment,
             sources=project.sources,
             tests=project.tests,
+            metrics=project.metrics,
+            exposures=project.exposures,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
@@ -274,6 +276,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "snapshots": self._get_config_paths(self.snapshots),
             "sources": self._get_config_paths(self.sources),
             "tests": self._get_config_paths(self.tests),
+            "metrics": self._get_config_paths(self.metrics),
+            "exposures": self._get_config_paths(self.exposures),
         }
 
     def get_unused_resource_config_paths(
@@ -477,6 +481,8 @@ class UnsetProfileConfig(RuntimeConfig):
                 "snapshots": self.snapshots,
                 "sources": self.sources,
                 "tests": self.tests,
+                "metrics": self.metrics,
+                "exposures": self.exposures,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "config-version": self.config_version,
@@ -537,6 +543,8 @@ class UnsetProfileConfig(RuntimeConfig):
             query_comment=project.query_comment,
             sources=project.sources,
             tests=project.tests,
+            metrics=project.metrics,
+            exposures=project.exposures,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,

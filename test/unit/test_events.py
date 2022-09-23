@@ -1,7 +1,7 @@
 from dbt.adapters.reference_keys import _ReferenceKey
 from dbt.events.test_types import UnitTestInfo
 from dbt.events import AdapterLogger
-from dbt.events.functions import event_to_serializable_dict
+from dbt.events.functions import event_to_serializable_dict, reset_event_history
 from dbt.events.base_types import NodeInfo
 from dbt.events.types import *
 from dbt.events.test_types import *
@@ -110,15 +110,10 @@ class TestEventBuffer(TestCase):
 
     # ensure events drop from the front of the buffer when buffer maxsize is reached
     def test_buffer_FIFOs(self):
+        reset_event_history()
         event_funcs.EVENT_HISTORY.clear()
-        for n in range(1,(flags.EVENT_BUFFER_SIZE + 1)):
+        for n in range(1,(flags.EVENT_BUFFER_SIZE + 2)):
             event_funcs.fire_event(UnitTestInfo(msg=f"Test Event {n}"))
-        
-        event_full = event_funcs.EVENT_HISTORY[-1]
-        self.assertEqual(event_full.code, 'Z048')
-        self.assertTrue(
-            event_funcs.EVENT_HISTORY.count(event_full) == 1
-        )
         self.assertTrue(
              event_funcs.EVENT_HISTORY.count(UnitTestInfo(msg='Test Event 1', code='T006')) == 0
          )
@@ -161,7 +156,7 @@ def MockNode():
 sample_values = [
     MainReportVersion(v=''),
     MainKeyboardInterrupt(),
-    MainEncounteredError(e=BaseException('')),
+    MainEncounteredError(exc=''),
     MainStackTrace(stack_trace=''),
     MainTrackingUserState(user_state=''),
     ParsingStart(),
@@ -241,7 +236,7 @@ sample_values = [
     DumpAfterAddGraph(Lazy.defer(lambda: dict())),
     DumpBeforeRenameSchema(Lazy.defer(lambda: dict())),
     DumpAfterRenameSchema(Lazy.defer(lambda: dict())),
-    AdapterImportError(exc=ModuleNotFoundError()),
+    AdapterImportError(exc=""),
     PluginLoadError(),
     SystemReportReturnCode(returncode=0),
     NewConnectionOpening(connection_state=''),
@@ -288,19 +283,19 @@ sample_values = [
     InvalidDisabledSourceInTestNode(msg=''),
     InvalidRefInTestNode(msg=''),
     RunningOperationCaughtError(exc=''),
-    RunningOperationUncaughtError(exc=Exception('')),
+    RunningOperationUncaughtError(exc=''),
     DbtProjectError(),
-    DbtProjectErrorException(exc=Exception('')),
+    DbtProjectErrorException(exc=''),
     DbtProfileError(),
-    DbtProfileErrorException(exc=Exception('')),
+    DbtProfileErrorException(exc=''),
     ProfileListTitle(),
     ListSingleProfile(profile=''),
     NoDefinedProfiles(),
     ProfileHelpMessage(),
-    CatchableExceptionOnRun(exc=Exception('')),
-    InternalExceptionOnRun(build_path='', exc=Exception('')),
+    CatchableExceptionOnRun(exc=''),
+    InternalExceptionOnRun(build_path='', exc=''),
     GenericExceptionOnRun(build_path='', unique_id='', exc=''),
-    NodeConnectionReleaseError(node_name='', exc=Exception('')),
+    NodeConnectionReleaseError(node_name='', exc=''),
     CheckCleanPath(path=''),
     ConfirmCleanPath(path=''),
     ProtectedCleanPath(path=''),
@@ -395,7 +390,7 @@ sample_values = [
     TrackingInitializeFailure(),
     RetryExternalCall(attempt=0, max=0),
     GeneralWarningMsg(msg='', log_fmt=''),
-    GeneralWarningException(exc=Exception(''), log_fmt=''),
+    GeneralWarningException(exc='', log_fmt=''),
     PartialParsingProfileEnvVarsChanged(),
     AdapterEventDebug(name='', base_msg='', args=()),
     AdapterEventInfo(name='', base_msg='', args=()),
@@ -412,7 +407,7 @@ sample_values = [
     RegistryResponseExtraNestedKeys(response=""),
     DepsUTD(),
     PartialParsingNotEnabled(),
-    SQlRunnerException(exc=Exception('')),
+    SQlRunnerException(exc=''),
     DropRelation(dropped=_ReferenceKey(database="", schema="", identifier="")),
     PartialParsingProjectEnvVarsChanged(),
     RegistryProgressGETResponse(url='', resp_code=1),
@@ -422,7 +417,7 @@ sample_values = [
     IntegrationTestError(msg=''),
     IntegrationTestException(msg=''),
     EventBufferFull(),
-    RecordRetryException(exc=Exception('')),
+    RecordRetryException(exc=''),
     UnitTestInfo(msg=''),
 ]
 

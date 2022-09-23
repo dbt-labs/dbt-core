@@ -55,11 +55,11 @@ class RunOperationTask(ManifestTask):
         try:
             self._run_unsafe()
         except dbt.exceptions.Exception as exc:
-            fire_event(RunningOperationCaughtError(exc=exc))
+            fire_event(RunningOperationCaughtError(exc=str(exc)))
             fire_event(PrintDebugStackTrace())
             success = False
         except Exception as exc:
-            fire_event(RunningOperationUncaughtError(exc=exc))
+            fire_event(RunningOperationUncaughtError(exc=str(exc)))
             fire_event(PrintDebugStackTrace())
             success = False
         else:

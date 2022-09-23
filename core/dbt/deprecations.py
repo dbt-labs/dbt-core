@@ -87,6 +87,30 @@ def renamed_method(old_name: str, new_name: str):
     deprecations[dep.name] = dep
 
 
+class MetricAttributesRenamed(DBTDeprecation):
+    _name = "metric-attr-renamed"
+    _description = """\
+dbt-core v1.3 renamed attributes for metrics:
+\n  'sql'              -> 'expression'
+\n  'type'             -> 'calculation_method'
+\n  'type: expression' -> 'calculation_method: derived'
+\nThe old metric parameter names will be fully deprecated in v1.4.
+\nPlease remove them from the metric definition of metric '{metric_name}'
+\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849
+"""
+
+
+class ExposureNameDeprecation(DBTDeprecation):
+    _name = "exposure-name"
+    _description = """\
+    Starting in v1.3, the 'name' of an exposure should contain only letters, numbers, and underscores.
+    Exposures support a new property, 'label', which may contain spaces, capital letters, and special characters.
+    {exposure} does not follow this pattern.
+    Please update the 'name', and use the 'label' property for a human-friendly title.
+    This will raise an error in a future version of dbt-core.
+    """
+
+
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
@@ -101,10 +125,12 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
+    ExposureNameDeprecation(),
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
     PackageInstallPathDeprecation(),
     PackageRedirectDeprecation(),
+    MetricAttributesRenamed(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

@@ -74,7 +74,8 @@ from dbt.exceptions import (
     get_target_not_found_or_disabled_msg,
     source_target_not_found,
     metric_target_not_found,
-    get_source_not_found_or_disabled_msg,
+    exposure_target_not_found,
+    get_not_found_or_disabled_msg,
     warn_or_error,
 )
 from dbt.parser.base import Parser
@@ -350,7 +351,7 @@ class ManifestLoader:
                     project, project_parser_files[project.project_name], parser_types
                 )
 
-            # Now that we've loaded most of the nodes (except for schema tests and sources)
+            # Now that we've loaded most of the nodes (except for schema tests, sources, metrics)
             # load up the Lookup objects to resolve them by name, so the SourceFiles store
             # the unique_id instead of the name. Sources are loaded from yaml files, so
             # aren't in place yet
@@ -377,13 +378,14 @@ class ManifestLoader:
             patcher.construct_sources()
             self.manifest.sources = patcher.sources
             self._perf_info.patch_sources_elapsed = time.perf_counter() - start_patch
+
             # We need to rebuild disabled in order to include disabled sources
             self.manifest.rebuild_disabled_lookup()
 
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
-            # update the refs, sources, and docs
+            # update the refs, sources, docs and metrics depends_on.nodes
             # These check the created_at time on the nodes to
             # determine whether they need processing.
             start_process = time.perf_counter()
@@ -658,7 +660,7 @@ class ManifestLoader:
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
             except Exception as exc:
-                fire_event(ParsedFileLoadFailed(path=path, exc=exc))
+                fire_event(ParsedFileLoadFailed(path=path, exc=str(exc)))
                 reparse_reason = ReparseReason.load_file_failure
         else:
             fire_event(PartialParseSaveFileNotFound())
@@ -946,7 +948,12 @@ def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, 
 
 def invalid_source_fail_unless_test(node, target_name, target_table_name, disabled):
     if node.resource_type == NodeType.Test:
-        msg = get_source_not_found_or_disabled_msg(node, target_name, target_table_name, disabled)
+        msg = get_not_found_or_disabled_msg(
+            node=node,
+            target_name=f"{target_name}.{target_table_name}",
+            target_kind="source",
+            disabled=disabled,
+        )
         if disabled:
             fire_event(InvalidDisabledSourceInTestNode(msg=msg))
         else:
@@ -965,6 +972,21 @@ def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_pack
             node,
             target_metric_name,
             target_metric_package,
+        )
+
+
+def invalid_exposure_fail_unless_test(node, target_exposure_name, target_exposure_package):
+
+    if node.resource_type == NodeType.Test:
+        msg = get_target_not_found_or_disabled_msg(
+            node, target_exposure_name, target_exposure_package
+        )
+        warn_or_error(msg, log_fmt=warning_tag("{}"))
+    else:
+        exposure_target_not_found(
+            node,
+            target_exposure_name,
+            target_exposure_package,
         )
 
 
@@ -1102,6 +1124,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
+            exposure.config.enabled = False
             invalid_ref_fail_unless_test(
                 exposure,
                 target_model_name,
@@ -1142,7 +1165,8 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
 
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
-            # this exposure to the graph b/c there is no destination exposure
+            # this metric to the graph b/c there is no destination metric
+            metric.config.enabled = False
             invalid_ref_fail_unless_test(
                 metric,
                 target_model_name,
@@ -1163,7 +1187,7 @@ def _process_metrics_for_node(
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
     for metric in node.metrics:
-        target_metric: Optional[ParsedMetric] = None
+        target_metric: Optional[Union[Disabled, ParsedMetric]] = None
         target_metric_name: str
         target_metric_package: Optional[str] = None
 
@@ -1176,7 +1200,6 @@ def _process_metrics_for_node(
                 f"Metric references should always be 1 or 2 arguments - got {len(metric)}"
             )
 
-        # Resolve_ref
         target_metric = manifest.resolve_metric(
             target_metric_name,
             target_metric_package,
@@ -1184,9 +1207,10 @@ def _process_metrics_for_node(
             node.package_name,
         )
 
-        if target_metric is None:
+        if target_metric is None or isinstance(target_metric, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node
+            node.config.enabled = False
             invalid_metric_fail_unless_test(
                 node,
                 target_metric_name,
@@ -1258,6 +1282,7 @@ def _process_sources_for_exposure(
             exposure.package_name,
         )
         if target_source is None or isinstance(target_source, Disabled):
+            exposure.config.enabled = False
             invalid_source_fail_unless_test(
                 exposure, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )
@@ -1277,6 +1302,7 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
             metric.package_name,
         )
         if target_source is None or isinstance(target_source, Disabled):
+            metric.config.enabled = False
             invalid_source_fail_unless_test(
                 metric, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )

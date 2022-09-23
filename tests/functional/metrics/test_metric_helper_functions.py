@@ -3,6 +3,8 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.contracts.graph.metrics import ResolvedMetricReference
 
+from tests.functional.metrics.fixture_metrics import models__people_sql
+
 metrics__yml = """
 version: 2
 
@@ -12,8 +14,8 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    type: count
-    sql: "*"
+    calculation_method: count
+    expression: "*"
     timestamp: created_at
     time_grains: [day, week, month]
     dimensions:
@@ -26,8 +28,8 @@ metrics:
     label: "Collective tenure"
     description: Total number of years of team experience
     model: "ref('people')"
-    type: sum
-    sql: tenure
+    calculation_method: sum
+    expression: tenure
     timestamp: created_at
     time_grains: [day, week, month]
     filters:
@@ -38,26 +40,18 @@ metrics:
   - name: average_tenure
     label: "Average tenure"
     description: "The average tenure per person"
-    type: expression
-    sql: "{{metric('collective_tenure')}} / {{metric('number_of_people')}} "
+    calculation_method: derived
+    expression: "{{metric('collective_tenure')}} / {{metric('number_of_people')}} "
     timestamp: created_at
     time_grains: [day, week, month]
 
   - name: average_tenure_plus_one
     label: "Average tenure"
     description: "The average tenure per person"
-    type: expression
-    sql: "{{metric('average_tenure')}} + 1 "
+    calculation_method: derived
+    expression: "{{metric('average_tenure')}} + 1 "
     timestamp: created_at
     time_grains: [day, week, month]
-"""
-
-models__people_sql = """
-select 1 as id, 'Drew' as first_name, 'Banin' as last_name, 'yellow' as favorite_color, true as loves_dbt, 5 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
 """
 
 

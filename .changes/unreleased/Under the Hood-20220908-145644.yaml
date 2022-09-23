@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Support dbt-metrics compilation by rebuilding flat_graph
+time: 2022-09-08T14:56:44.173322-04:00
+custom:
+  Author: gshank
+  Issue: "5525"
+  PR: "5786"

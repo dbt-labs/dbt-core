@@ -9,6 +9,7 @@ from dbt.contracts.graph.model_config import (
     TestConfig,
     SnapshotConfig,
     SourceConfig,
+    ExposureConfig,
     EmptySnapshotConfig,
     Hook,
 )
@@ -2177,6 +2178,10 @@ def basic_parsed_exposure_dict():
         'meta': {},
         'tags': [],
         'created_at': 1.0,
+        'config': {
+            'enabled': True,
+        },
+        'unrendered_config': {},
     }
 
 
@@ -2194,7 +2199,9 @@ def basic_parsed_exposure_object():
         owner=ExposureOwner(email='test@example.com'),
         description='',
         meta={},
-        tags=[]
+        tags=[],
+        config=ExposureConfig(),
+        unrendered_config={},
     )
 
 
@@ -2229,6 +2236,10 @@ def complex_parsed_exposure_dict():
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
+        'config': {
+            'enabled': True,
+        },
+        'unrendered_config': {},
     }
 
 
@@ -2250,6 +2261,8 @@ def complex_parsed_exposure_object():
         path='models/something.yml',
         root_path='/usr/src/app',
         original_file_path='models/something.yml',
+        config=ExposureConfig(),
+        unrendered_config={},
     )
 
 
@@ -2318,8 +2331,8 @@ def basic_parsed_metric_dict():
         'name': 'new_customers',
         'label': 'New Customers',
         'model': 'ref("dim_customers")',
-        'type': 'count',
-        'sql': 'user_id',
+        'calculation_method': 'count',
+        'expression': 'user_id',
         'timestamp': 'signup_date',
         'time_grains': ['day', 'week', 'month'],
         'dimensions': ['plan', 'country'],
@@ -2355,7 +2368,7 @@ def basic_parsed_metric_dict():
 def basic_parsed_metric_object():
     return ParsedMetric(
         name='my_metric',
-        type='count',
+        calculation_method='count',
         fqn=['test', 'metrics', 'my_metric'],
         unique_id='metric.test.my_metric',
         package_name='test',

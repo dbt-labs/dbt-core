@@ -1,0 +1,7 @@
+kind: Features
+body: add -fr flag shorthand
+time: 2022-09-19T11:29:03.774678-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "5878"
+  PR: "5879"

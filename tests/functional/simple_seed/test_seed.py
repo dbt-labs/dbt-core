@@ -6,6 +6,7 @@ from codecs import BOM_UTF8
 from pathlib import Path
 
 from dbt.tests.util import (
+    rm_file,
     run_dbt,
     read_file,
     check_relations_equal,
@@ -266,13 +267,15 @@ class TestSeedSpecificFormats(SeedConfigBase):
     def seeds(self, test_data_dir):
         seed_unicode = read_file(test_data_dir, "seed_unicode.csv")
         dotted_seed = read_file(test_data_dir, "seed.with.dots.csv")
-        big_seed = read_file(self._make_big_seed(test_data_dir))
+        big_seed_path = self._make_big_seed(test_data_dir)
+        big_seed = read_file(big_seed_path)
 
-        return {
+        yield {
             "big_seed.csv": big_seed,
             "seed.with.dots.csv": dotted_seed,
             "seed_unicode.csv": seed_unicode,
         }
+        rm_file(big_seed_path)
 
     def test_simple_seed(self, project):
         results = run_dbt(["seed"])

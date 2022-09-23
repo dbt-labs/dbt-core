@@ -10,7 +10,13 @@ from typing import Optional
 # PROFILES_DIR must be set before the other flags
 # It also gets set in main.py and in set_from_args because the rpc server
 # doesn't go through exactly the same main arg processing.
-DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser("~"), ".dbt")
+GLOBAL_PROFILES_DIR = os.path.join(os.path.expanduser("~"), ".dbt")
+LOCAL_PROFILES_DIR = os.getcwd()
+# Use the current working directory if there is a profiles.yml file present there
+if os.path.exists(Path(LOCAL_PROFILES_DIR) / Path("profiles.yml")):
+    DEFAULT_PROFILES_DIR = LOCAL_PROFILES_DIR
+else:
+    DEFAULT_PROFILES_DIR = GLOBAL_PROFILES_DIR
 PROFILES_DIR = os.path.expanduser(os.getenv("DBT_PROFILES_DIR", DEFAULT_PROFILES_DIR))
 
 STRICT_MODE = False  # Only here for backwards compatibility
@@ -51,6 +57,7 @@ _NON_BOOLEAN_FLAGS = [
 ]
 
 _NON_DBT_ENV_FLAGS = ["DO_NOT_TRACK"]
+
 
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
