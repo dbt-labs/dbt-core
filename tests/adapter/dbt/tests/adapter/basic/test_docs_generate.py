@@ -62,8 +62,6 @@ sources:
       - name: my_table
         description: "My table"
         identifier: seed
-        quoting:
-          identifier: True
         columns:
           - name: id
             description: "An ID field"
@@ -231,15 +229,10 @@ sources:
     description: "{{ doc('source_info') }}"
     loader: a_loader
     schema: "{{ var('test_schema') }}"
-    quoting:
-      database: False
-      identifier: False
     tables:
       - name: my_table
         description: "{{ doc('table_info') }}"
         identifier: seed
-        quoting:
-          identifier: True
         columns:
           - name: id
             description: "{{ doc('column_info') }}"
@@ -326,7 +319,9 @@ def verify_catalog(project, expected_catalog, start_time):
     # verify the catalog
     assert set(catalog) == {"errors", "metadata", "nodes", "sources"}
     verify_metadata(
-        catalog["metadata"], "https://schemas.getdbt.com/dbt/catalog/v1.json", start_time
+        catalog["metadata"],
+        "https://schemas.getdbt.com/dbt/catalog/v1.json",
+        start_time,
     )
     assert not catalog["errors"]
     for key in "nodes", "sources":
@@ -408,7 +403,6 @@ class BaseGenerateProject:
             "seeds": {
                 "quote_columns": True,
             },
-            "quoting": {"identifier": False},
         }
 
 

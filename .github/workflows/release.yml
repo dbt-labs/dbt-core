@@ -20,6 +20,9 @@ on:
        description: 'The release version number (i.e. 1.0.0b1)'
        required: true
 
+permissions:
+  contents: write # this is the permission that allows creating a new release
+
 defaults:
   run:
     shell: bash

@@ -379,8 +379,14 @@ class JaffleShopProject:
             "customers.sql": customers_sql,
             "docs.md": docs_md,
             "orders.sql": orders_sql,
+            "ignored_model1.sql": "select 1 as id",
+            "ignored_model2.sql": "select 1 as id",
             "overview.md": overview_md,
             "schema.yml": schema_yml,
+            "ignore_folder": {
+                "model1.sql": "select 1 as id",
+                "model2.sql": "select 1 as id",
+            },
             "staging": {
                 "schema.yml": staging_schema_yml,
                 "stg_customers.sql": staging_stg_customers_sql,

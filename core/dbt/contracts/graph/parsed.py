@@ -50,6 +50,8 @@ from .model_config import (
     SeedConfig,
     TestConfig,
     SourceConfig,
+    MetricConfig,
+    ExposureConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
 )
@@ -743,9 +745,12 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     owner: ExposureOwner
     resource_type: NodeType = NodeType.Exposure
     description: str = ""
+    label: Optional[str] = None
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    config: ExposureConfig = field(default_factory=ExposureConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
@@ -766,6 +771,9 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_description(self, old: "ParsedExposure") -> bool:
         return self.description == old.description
 
+    def same_label(self, old: "ParsedExposure") -> bool:
+        return self.label == old.label
+
     def same_maturity(self, old: "ParsedExposure") -> bool:
         return self.maturity == old.maturity
 
@@ -777,6 +785,12 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     def same_url(self, old: "ParsedExposure") -> bool:
         return self.url == old.url
+
+    def same_config(self, old: "ParsedExposure") -> bool:
+        return self.config.same_contents(
+            self.unrendered_config,
+            old.unrendered_config,
+        )
 
     def same_contents(self, old: Optional["ParsedExposure"]) -> bool:
         # existing when it didn't before is a change!
@@ -791,7 +805,9 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_maturity(old)
             and self.same_url(old)
             and self.same_description(old)
+            and self.same_label(old)
             and self.same_depends_on(old)
+            and self.same_config(old)
             and True
         )
 
@@ -809,16 +825,18 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     label: str
     calculation_method: str
     expression: str
-    timestamp: Optional[str]
+    timestamp: str
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
-    window: Optional[MetricTime]
+    window: Optional[MetricTime] = None
     model: Optional[str] = None
     model_unique_id: Optional[str] = None
     resource_type: NodeType = NodeType.Metric
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    config: MetricConfig = field(default_factory=MetricConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
@@ -863,6 +881,12 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_time_grains(self, old: "ParsedMetric") -> bool:
         return self.time_grains == old.time_grains
 
+    def same_config(self, old: "ParsedMetric") -> bool:
+        return self.config.same_contents(
+            self.unrendered_config,
+            old.unrendered_config,
+        )
+
     def same_contents(self, old: Optional["ParsedMetric"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
@@ -880,6 +904,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_expression(old)
             and self.same_timestamp(old)
             and self.same_time_grains(old)
+            and self.same_config(old)
             and True
         )
 

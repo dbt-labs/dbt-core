@@ -3,7 +3,7 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.exceptions import ParsingException
 
-from tests.functional.metrics.fixture_metrics import mock_purchase_data_csv
+from tests.functional.metrics.fixture_metrics import mock_purchase_data_csv, models__people_sql
 
 
 models__people_metrics_yml = """
@@ -54,14 +54,6 @@ metrics:
         operator: 'is'
         value: 'true'
 
-"""
-
-models__people_sql = """
-select 1 as id, 'Drew' as first_name, 'Banin' as last_name, 'yellow' as favorite_color, true as loves_dbt, 5 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
 """
 
 
@@ -215,19 +207,6 @@ metrics:
     meta:
         my_meta: 'testing'
 
-  - name: collective tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
 """
 
 
@@ -240,8 +219,117 @@ class TestNamesWithSpaces:
         }
 
     def test_names_with_spaces(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingException) as exc:
             run_dbt(["run"])
+        assert "cannot contain spaces" in str(exc.value)
+
+
+names_with_special_chars_metrics_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people!
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    calculation_method: count
+    expression: "*"
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+
+"""
+
+
+class TestNamesWithSpecialChar:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": names_with_special_chars_metrics_yml,
+            "people.sql": models__people_sql,
+        }
+
+    def test_names_with_special_char(self, project):
+        with pytest.raises(ParsingException) as exc:
+            run_dbt(["run"])
+        assert "must contain only letters, numbers and underscores" in str(exc.value)
+
+
+names_with_leading_numeric_metrics_yml = """
+version: 2
+
+metrics:
+
+  - name: 1_number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    calculation_method: count
+    expression: "*"
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+
+"""
+
+
+class TestNamesWithLeandingNumber:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": names_with_leading_numeric_metrics_yml,
+            "people.sql": models__people_sql,
+        }
+
+    def test_names_with_leading_number(self, project):
+        with pytest.raises(ParsingException) as exc:
+            run_dbt(["run"])
+        assert "must begin with a letter" in str(exc.value)
+
+
+long_name_metrics_yml = """
+version: 2
+
+metrics:
+
+  - name: this_name_is_going_to_contain_more_than_250_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen_and_repeat_this_name_is_going_to_contain_more_than_250_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    calculation_method: count
+    expression: "*"
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+
+"""
+
+
+class TestLongName:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": long_name_metrics_yml,
+            "people.sql": models__people_sql,
+        }
+
+    def test_long_name(self, project):
+        with pytest.raises(ParsingException) as exc:
+            run_dbt(["run"])
+        assert "cannot contain more than 250 characters" in str(exc.value)
 
 
 downstream_model_sql = """
@@ -455,3 +543,52 @@ class TestDerivedMetric:
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code
+
+
+derived_metric_old_attr_names_yml = """
+version: 2
+metrics:
+    - name: count_orders
+      label: Count orders
+      model: ref('mock_purchase_data')
+
+      type: count
+      sql: "*"
+      timestamp: purchased_at
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - payment_type
+
+    - name: sum_order_revenue
+      label: Total order revenue
+      model: ref('mock_purchase_data')
+
+      type: sum
+      sql: "payment_total"
+      timestamp: purchased_at
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - payment_type
+
+    - name: average_order_value
+      label: Average Order Value
+
+      type: expression
+      sql:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
+      timestamp: purchased_at
+      time_grains: [day, week, month, quarter, year]
+
+      dimensions:
+        - payment_type
+"""
+
+
+class TestDerivedMetricOldAttrNames(TestDerivedMetric):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "derived_metric.yml": derived_metric_old_attr_names_yml,
+            "downstream_model.sql": downstream_model_sql,
+        }

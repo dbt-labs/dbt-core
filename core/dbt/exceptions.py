@@ -631,13 +631,13 @@ def ref_target_not_found(
     raise_compiler_error(msg, model)
 
 
-def get_source_not_found_or_disabled_msg(
-    model,
+def get_not_found_or_disabled_msg(
+    node,
     target_name: str,
-    target_table_name: str,
+    target_kind: str,
+    target_package: Optional[str] = None,
     disabled: Optional[bool] = None,
 ) -> str:
-    full_name = f"{target_name}.{target_table_name}"
     if disabled is None:
         reason = "was not found or is disabled"
     elif disabled is True:
@@ -645,32 +645,55 @@ def get_source_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        model, full_name, None, include_path=True, reason=reason, target_kind="source"
+        node,
+        target_name,
+        target_package,
+        include_path=True,
+        reason=reason,
+        target_kind=target_kind,
     )
 
 
 def source_target_not_found(
     model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
 ) -> NoReturn:
-    msg = get_source_not_found_or_disabled_msg(model, target_name, target_table_name, disabled)
+    msg = get_not_found_or_disabled_msg(
+        node=model,
+        target_name=f"{target_name}.{target_table_name}",
+        target_kind="source",
+        disabled=disabled,
+    )
     raise_compiler_error(msg, model)
 
 
-def get_metric_not_found_msg(
-    model,
-    target_name: str,
-    target_package: Optional[str],
-) -> str:
-    reason = "was not found"
-    return _get_target_failure_msg(
-        model, target_name, target_package, include_path=True, reason=reason, target_kind="metric"
+def metric_target_not_found(
+    metric, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
+) -> NoReturn:
+
+    msg = get_not_found_or_disabled_msg(
+        node=metric,
+        target_name=target_name,
+        target_kind="metric",
+        target_package=target_package,
+        disabled=disabled,
     )
 
-
-def metric_target_not_found(metric, target_name: str, target_package: Optional[str]) -> NoReturn:
-    msg = get_metric_not_found_msg(metric, target_name, target_package)
-
     raise_compiler_error(msg, metric)
+
+
+def exposure_target_not_found(
+    exposure, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
+) -> NoReturn:
+
+    msg = get_not_found_or_disabled_msg(
+        node=exposure,
+        target_name=target_name,
+        target_kind="exposure",
+        target_package=target_package,
+        disabled=disabled,
+    )
+
+    raise_compiler_error(msg, exposure)
 
 
 def dependency_not_found(model, target_model_name):
@@ -1075,7 +1098,7 @@ def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
+        fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
 
 
 def warn(msg, node=None):

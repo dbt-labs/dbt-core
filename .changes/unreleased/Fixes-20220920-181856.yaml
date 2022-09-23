@@ -1,0 +1,7 @@
+kind: Fixes
+body: ConfigSelectorMethod should check for bools
+time: 2022-09-20T18:18:56.630628+01:00
+custom:
+  Author: danielcmessias
+  Issue: "5890"
+  PR: "5889"

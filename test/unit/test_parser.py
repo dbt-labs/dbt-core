@@ -597,6 +597,20 @@ def model(dbt, session):
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.py_model'])
 
+    def test_python_model_config_get(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config.get("param_1")
+    dbt.config.get("param_2")
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
+
     def test_wrong_python_model_def_miss_session(self):
         py_code = """
 def model(dbt):

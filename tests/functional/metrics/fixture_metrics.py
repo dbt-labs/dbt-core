@@ -13,3 +13,11 @@ mock_purchase_data_csv = """purchased_at,payment_type,payment_total
 2021-02-19 04:22:41,jcb,2834.96
 2021-02-19 13:28:50,china-unionpay,2440.98
 """.strip()
+
+models__people_sql = """
+select 1 as id, 'Drew' as first_name, 'Banin' as last_name, 'yellow' as favorite_color, true as loves_dbt, 5 as tenure, current_timestamp as created_at
+union all
+select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
+union all
+select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
+"""

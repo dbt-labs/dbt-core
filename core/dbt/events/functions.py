@@ -1,7 +1,7 @@
 from colorama import Style
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
-from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
+from dbt.events.types import T_Event, MainReportVersion, EmptyLine, EventBufferFull
 import dbt.flags as flags
 from dbt.constants import SECRET_ENV_PREFIX
 
@@ -22,24 +22,16 @@ import threading
 from typing import Any, Dict, List, Optional, Union
 from collections import deque
 
-global LOG_VERSION
 LOG_VERSION = 2
-
-# create the global event history buffer with the default max size (10k)
-# python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
-# TODO the flags module has not yet been resolved when this is created
-global EVENT_HISTORY
-EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
+EVENT_HISTORY = None
 
 # create the global file logger with no configuration
-global FILE_LOG
 FILE_LOG = logging.getLogger("default_file")
 null_handler = logging.NullHandler()
 FILE_LOG.addHandler(null_handler)
 
 # set up logger to go to stdout with defaults
 # setup_event_logger will be called once args have been parsed
-global STDOUT_LOG
 STDOUT_LOG = logging.getLogger("default_stdout")
 STDOUT_LOG.setLevel(logging.INFO)
 stdout_handler = logging.StreamHandler(sys.stdout)
@@ -52,10 +44,6 @@ invocation_id: Optional[str] = None
 
 
 def setup_event_logger(log_path, level_override=None):
-    # flags have been resolved, and log_path is known
-    global EVENT_HISTORY
-    EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
-
     make_log_dir_if_missing(log_path)
 
     this.format_json = flags.LOG_FORMAT == "json"
@@ -271,14 +259,7 @@ def fire_event(e: Event) -> None:
     if isinstance(e, Cache) and not flags.LOG_CACHE_EVENTS:
         return
 
-    # if and only if the event history deque will be completely filled by this event
-    # fire warning that old events are now being dropped
-    global EVENT_HISTORY
-    if len(EVENT_HISTORY) == (flags.EVENT_BUFFER_SIZE - 1):
-        EVENT_HISTORY.append(e)
-        fire_event(EventBufferFull())
-    else:
-        EVENT_HISTORY.append(e)
+    add_to_event_history(e)
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
     if flags.ENABLE_LEGACY_LOGGER:
@@ -344,3 +325,20 @@ def get_ts_rfc3339() -> str:
     ts = get_ts()
     ts_rfc3339 = ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return ts_rfc3339
+
+
+def add_to_event_history(event):
+    if flags.EVENT_BUFFER_SIZE == 0:
+        return
+    global EVENT_HISTORY
+    if EVENT_HISTORY is None:
+        reset_event_history()
+    EVENT_HISTORY.append(event)
+    # We only set the EventBufferFull message for event buffers >= 10,000
+    if flags.EVENT_BUFFER_SIZE >= 10000 and len(EVENT_HISTORY) == (flags.EVENT_BUFFER_SIZE - 1):
+        fire_event(EventBufferFull())
+
+
+def reset_event_history():
+    global EVENT_HISTORY
+    EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)

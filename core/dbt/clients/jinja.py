@@ -27,6 +27,7 @@ from dbt.utils import (
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
 from dbt.contracts.graph.compiled import CompiledGenericTestNode
 from dbt.contracts.graph.parsed import ParsedGenericTestNode
+
 from dbt.exceptions import (
     InternalException,
     raise_compiler_error,
@@ -305,13 +306,13 @@ class MacroGenerator(BaseMacroGenerator):
     @contextmanager
     def track_call(self):
         # This is only called from __call__
-        if self.stack is None or self.node is None:
+        if self.stack is None:
             yield
         else:
             unique_id = self.macro.unique_id
             depth = self.stack.depth
-            # only mark depth=0 as a dependency
-            if depth == 0:
+            # only mark depth=0 as a dependency, when creating this dependency we don't pass in stack
+            if depth == 0 and self.node:
                 self.node.depends_on.add_macro(unique_id)
             self.stack.push(unique_id)
             try:

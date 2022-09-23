@@ -23,8 +23,6 @@ from .renderer import ProfileRenderer
 
 DEFAULT_THREADS = 1
 
-DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser("~"), ".dbt")
-
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
 
@@ -44,7 +42,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
 """.format(
-    profiles_file=DEFAULT_PROFILES_DIR
+    profiles_file=flags.DEFAULT_PROFILES_DIR
 )
 
 
