@@ -1,16 +1,13 @@
 # TODO: this file is one big TODO
 # from dataclasses import dataclass
-from collections import namedtuple
 from dataclasses import dataclass
 import os
-from dbt.contracts.results import NodeStatus, RunningStatus, collect_timing_info
+from dbt.contracts.results import RunningStatus, collect_timing_info
 from dbt.events.functions import fire_event
 from dbt.events.types import NodeCompiling, NodeExecuting
 from dbt.exceptions import RuntimeException
 from dbt import flags
-from dbt.task.base import ExecutionContext
 from dbt.task.sql import SqlCompileRunner
-import time
 
 @dataclass
 class RuntimeArgs():
