@@ -52,7 +52,7 @@ class BasePPTest(DBTIntegrationTest):
 class MetricsTest(BasePPTest):
 
     @use_profile('postgres')
-    def test_postgres_env_vars_models(self):
+    def test_postgres_metrics(self):
         self.setup_directories()
         # initial run
         self.copy_file('test-files/people.sql', 'models/people.sql')
@@ -88,4 +88,19 @@ class MetricsTest(BasePPTest):
         self.assertEqual(metric_people.meta, expected_meta)
         expected_depends_on_nodes = ['model.test.people']
         self.assertEqual(metric_people.depends_on.nodes, expected_depends_on_nodes)
+
+        # Add model referring to metric
+        self.copy_file('test-files/metric_model_a.sql', 'models/metric_model_a.sql')
+        results = self.run_dbt(["run"])
+        manifest = get_manifest()
+        model_a = manifest.nodes['model.test.metric_model_a']
+        expected_depends_on_nodes = ['metric.test.number_of_people', 'metric.test.collective_tenure']
+        self.assertEqual(model_a.depends_on.nodes, expected_depends_on_nodes)
+
+        # Then delete a metric
+        self.copy_file('test-files/people_metrics3.yml', 'models/people_metrics.yml')
+        with self.assertRaises(CompilationException):
+            # We use "parse" here and not "run" because we're checking that the CompilationException
+            # occurs at parse time, not compilation
+            results = self.run_dbt(["parse"])
 
