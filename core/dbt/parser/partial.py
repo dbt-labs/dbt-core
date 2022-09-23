@@ -899,15 +899,17 @@ class PartialParsing:
                     schema_file.exposures.remove(unique_id)
                     fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
 
-    # metric are created only from schema files, so just delete
-    # the metric.
+    # metrics are created only from schema files, but also can be referred to by other nodes
     def delete_schema_metric(self, schema_file, metric_dict):
         metric_name = metric_dict["name"]
         metrics = schema_file.metrics.copy()
         for unique_id in metrics:
-            metric = self.saved_manifest.metrics[unique_id]
             if unique_id in self.saved_manifest.metrics:
+                metric = self.saved_manifest.metrics[unique_id]
                 if metric.name == metric_name:
+                    # Need to find everything that referenced this metric and schedule for parsing
+                    if unique_id in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
                     self.deleted_manifest.metrics[unique_id] = self.saved_manifest.metrics.pop(
                         unique_id
                     )
