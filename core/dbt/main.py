@@ -618,7 +618,7 @@ def _add_table_mutability_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
             "--full-refresh",
-            "-fr",
+            "-f",
             action="store_true",
             help="""
             If specified, dbt will drop incremental models and
