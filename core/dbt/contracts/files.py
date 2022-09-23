@@ -277,11 +277,13 @@ class SchemaSourceFile(BaseSourceFile):
             self.tests[key][name] = []
         self.tests[key][name].append(node_unique_id)
 
+    # this is only used in unit tests
     def remove_tests(self, yaml_key, name):
         if yaml_key in self.tests:
             if name in self.tests[yaml_key]:
                 del self.tests[yaml_key][name]
 
+    # this is only used in tests (unit + functional)
     def get_tests(self, yaml_key, name):
         if yaml_key in self.tests:
             if name in self.tests[yaml_key]:
