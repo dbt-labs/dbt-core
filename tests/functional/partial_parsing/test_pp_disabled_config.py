@@ -118,7 +118,7 @@ exposures:
 """
 
 
-class TestDocs:
+class TestDisabled:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -126,7 +126,7 @@ class TestDocs:
             "schema.yml": schema1_yml,
         }
 
-    def test_pp_docs(self, project):
+    def test_pp_disabled(self, project):
         expected_exposure = "exposure.test.proxy_for_dashboard"
         expected_metric = "metric.test.number_of_people"
 
