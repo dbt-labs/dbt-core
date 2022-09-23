@@ -245,6 +245,21 @@ class PartialParsing:
                 if "overrides" in source:
                     self.remove_source_override_target(source)
 
+    def delete_disabled(self, unique_id, file_id):
+        # This node/metric/exposure is disabled. Find it and remove it from disabled dictionary.
+        for dis_index, dis_node in enumerate(self.saved_manifest.disabled[unique_id]):
+            if dis_node.file_id == file_id:
+                node = dis_node
+                index = dis_index
+                break
+        if node:
+            # Remove node from disabled
+            del self.saved_manifest.disabled[unique_id][index]
+            # if all nodes were removed for the unique id, delete the unique_id
+            # from the disabled dict
+            if not self.saved_manifest.disabled[unique_id]:
+                self.saved_manifest.disabled.pop(unique_id)
+
     # Deletes for all non-schema files
     def delete_from_saved(self, file_id):
         # Look at all things touched by file, remove those
@@ -319,15 +334,7 @@ class PartialParsing:
             and unique_id in self.saved_manifest.disabled
         ):
             # This node is disabled. Find the node and remove it from disabled dictionary.
-            for dis_index, dis_node in enumerate(self.saved_manifest.disabled[unique_id]):
-                if dis_node.file_id == source_file.file_id:
-                    node = dis_node
-                    break
-            if dis_node:
-                # Remove node from disabled and unique_id from disabled dict if necessary
-                del self.saved_manifest.disabled[unique_id][dis_index]
-                if not self.saved_manifest.disabled[unique_id]:
-                    self.saved_manifest.disabled.pop(unique_id)
+            self.delete_disabled(unique_id, source_file.file_id)
         else:
             # Has already been deleted by another action
             return
@@ -885,34 +892,38 @@ class PartialParsing:
                 self.add_to_pp_files(self.saved_files[macro_file_id])
 
     # exposures are created only from schema files, so just delete
-    # the exposure.
+    # the exposure or the disabled exposure.
     def delete_schema_exposure(self, schema_file, exposure_dict):
         exposure_name = exposure_dict["name"]
         exposures = schema_file.exposures.copy()
         for unique_id in exposures:
-            exposure = self.saved_manifest.exposures[unique_id]
             if unique_id in self.saved_manifest.exposures:
+                exposure = self.saved_manifest.exposures[unique_id]
                 if exposure.name == exposure_name:
                     self.deleted_manifest.exposures[unique_id] = self.saved_manifest.exposures.pop(
                         unique_id
                     )
                     schema_file.exposures.remove(unique_id)
                     fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
+            if unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
 
     # metric are created only from schema files, so just delete
-    # the metric.
+    # the metric or the disabled metric.
     def delete_schema_metric(self, schema_file, metric_dict):
         metric_name = metric_dict["name"]
         metrics = schema_file.metrics.copy()
         for unique_id in metrics:
-            metric = self.saved_manifest.metrics[unique_id]
             if unique_id in self.saved_manifest.metrics:
+                metric = self.saved_manifest.metrics[unique_id]
                 if metric.name == metric_name:
                     self.deleted_manifest.metrics[unique_id] = self.saved_manifest.metrics.pop(
                         unique_id
                     )
                     schema_file.metrics.remove(unique_id)
                     fire_event(PartialParsingDeletedMetric(id=unique_id))
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
