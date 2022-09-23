@@ -17,7 +17,7 @@ class RuntimeArgs():
     profile: str
     target: str
 
-class SqlCompileRunnerNoWarehouseConnection(SqlCompileRunner):
+class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
     def compile_and_execute(self, manifest, ctx):
         """
         This version of this method does not connect to the data warehouse.
@@ -156,7 +156,7 @@ def compile_sql(manifest, project_path, sql):
     # from dbt.task.sql import SqlCompileRunner
 
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
-    runner = SqlCompileRunnerNoWarehouseConnection(config, adapter, node, 1, 1)
+    runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
 
 
