@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Validate exposure name and add label
+time: 2022-09-14T15:00:58.982982-05:00
+custom:
+  Author: emmyoop
+  Issue: "5606"
+  PR: "5844"

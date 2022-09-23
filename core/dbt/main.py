@@ -1,4 +1,5 @@
 from typing import List
+
 from dbt.logger import log_cache_events, log_manager
 
 import argparse
@@ -42,8 +43,13 @@ from dbt.adapters.factory import reset_adapters, cleanup_connections
 import dbt.tracking
 
 from dbt.utils import ExitCodes, args_to_dict
-from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
-from dbt.exceptions import InternalException, NotImplementedException, FailedToConnectException
+from dbt.config.profile import read_user_config
+from dbt.exceptions import (
+    Exception as dbtException,
+    InternalException,
+    NotImplementedException,
+    FailedToConnectException,
+)
 
 
 class DBTVersion(argparse.Action):
@@ -142,8 +148,9 @@ def main(args=None):
             exit_code = e.code
 
         except BaseException as e:
-            fire_event(MainEncounteredError(e=str(e)))
-            fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
+            fire_event(MainEncounteredError(exc=str(e)))
+            if not isinstance(e, dbtException):
+                fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
             exit_code = ExitCodes.UnhandledError.value
 
     sys.exit(exit_code)
@@ -201,7 +208,7 @@ def track_run(task):
         yield
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
     except (NotImplementedException, FailedToConnectException) as e:
-        fire_event(MainEncounteredError(e=str(e)))
+        fire_event(MainEncounteredError(exc=str(e)))
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
     except Exception:
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
@@ -258,10 +265,8 @@ def _build_base_subparser():
         dest="sub_profiles_dir",  # Main cli arg precedes subcommand
         type=str,
         help="""
-        Which directory to look in for the profiles.yml file. Default = {}
-        """.format(
-            DEFAULT_PROFILES_DIR
-        ),
+        Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/
+        """,
     )
 
     base_subparser.add_argument(
@@ -620,6 +625,7 @@ def _add_table_mutability_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
             "--full-refresh",
+            "-f",
             action="store_true",
             help="""
             If specified, dbt will drop incremental models and
@@ -1059,10 +1065,8 @@ def parse_args(args, cls=DBTArgumentParser):
         dest="profiles_dir",
         type=str,
         help="""
-        Which directory to look in for the profiles.yml file. Default = {}
-        """.format(
-            DEFAULT_PROFILES_DIR
-        ),
+        Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/
+        """,
     )
 
     p.add_argument(

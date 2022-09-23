@@ -97,6 +97,7 @@ fail_fast = click.option(
 
 full_refresh = click.option(
     "--full-refresh",
+    "-f",
     envvar="DBT_FULL_REFRESH",
     help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
     is_flag=True,
@@ -217,7 +218,7 @@ profile = click.option(
 profiles_dir = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",
-    help=f"Which directory to look in for the profiles.yml file. Default = {PurePath.joinpath(Path.home(), '.dbt')}",
+    help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
     default=PurePath.joinpath(Path.home(), ".dbt"),
     type=click.Path(
         exists=True,
@@ -243,7 +244,7 @@ record_timing_info = click.option(
     "-r",
     envvar=None,
     help="When this option is passed, dbt will output low-level timing stats to the specified file. Example: `--record-timing-info output.profile`",
-    is_flag=True,
+    type=click.Path(exists=False),
 )
 
 resource_type = click.option(

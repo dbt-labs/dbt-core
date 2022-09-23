@@ -745,6 +745,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     owner: ExposureOwner
     resource_type: NodeType = NodeType.Exposure
     description: str = ""
+    label: Optional[str] = None
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -769,6 +770,9 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     def same_description(self, old: "ParsedExposure") -> bool:
         return self.description == old.description
+
+    def same_label(self, old: "ParsedExposure") -> bool:
+        return self.label == old.label
 
     def same_maturity(self, old: "ParsedExposure") -> bool:
         return self.maturity == old.maturity
@@ -801,6 +805,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_maturity(old)
             and self.same_url(old)
             and self.same_description(old)
+            and self.same_label(old)
             and self.same_depends_on(old)
             and self.same_config(old)
             and True

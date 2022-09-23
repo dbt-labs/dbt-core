@@ -15,6 +15,9 @@ on:
   issues:
     types: [closed, deleted, reopened]
 
+# no special access is needed
+permissions: read-all
+
 jobs:
   call-label-action:
     uses: dbt-labs/jira-actions/.github/workflows/jira-transition.yml@main

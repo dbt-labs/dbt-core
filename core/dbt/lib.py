@@ -15,7 +15,7 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     if os.getenv("DBT_PROFILES_DIR"):
         profiles_dir = os.getenv("DBT_PROFILES_DIR")
     else:
-        profiles_dir = os.path.expanduser("~/.dbt")
+        profiles_dir = flags.DEFAULT_PROFILES_DIR
 
     profile = args.profile if hasattr(args, "profile") else None
     target = args.target if hasattr(args, "target") else None

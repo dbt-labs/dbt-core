@@ -471,12 +471,20 @@ def table_model(ephemeral_model):
         'pkg',
         'table_model',
         'select * from {{ ref("ephemeral_model") }}',
-        config_kwargs={'materialized': 'table'},
+         config_kwargs={
+            'materialized': 'table',
+            'meta': {
+                # Other properties to test in test_select_config_meta
+                'string_property': 'some_string',
+                'truthy_bool_property': True,
+                'falsy_bool_property': False,
+                'list_property': ['some_value', True, False]
+            },
+        },
         refs=[ephemeral_model],
         tags=['uses_ephemeral'],
         path='subdirectory/table_model.sql'
     )
-
 
 @pytest.fixture
 def table_model_py(seed):
@@ -779,6 +787,28 @@ def test_select_config_materialized(manifest):
     assert search_manifest_using_method(manifest, method, 'table') == {
         'table_model', 'table_model_py', 'table_model_csv', 'union_model', 'mynamespace.union_model'}
 
+def test_select_config_meta(manifest):
+    methods = MethodManager(manifest, None)
+
+    string_method = methods.get_method('config', ['meta', 'string_property'])
+    assert search_manifest_using_method(manifest, string_method, 'some_string') == {'table_model'}
+    assert not search_manifest_using_method(manifest, string_method, 'other_string') == {'table_model'}
+
+    truthy_bool_method = methods.get_method('config', ['meta', 'truthy_bool_property'])
+    assert search_manifest_using_method(manifest, truthy_bool_method, 'true') == {'table_model'}
+    assert not search_manifest_using_method(manifest, truthy_bool_method, 'false') == {'table_model'}
+    assert not search_manifest_using_method(manifest, truthy_bool_method, 'other') == {'table_model'}
+
+    falsy_bool_method = methods.get_method('config', ['meta', 'falsy_bool_property'])
+    assert search_manifest_using_method(manifest, falsy_bool_method, 'false') == {'table_model'}
+    assert not search_manifest_using_method(manifest, falsy_bool_method, 'true') == {'table_model'}
+    assert not search_manifest_using_method(manifest, falsy_bool_method, 'other') == {'table_model'}
+
+    list_method = methods.get_method('config', ['meta', 'list_property'])
+    assert search_manifest_using_method(manifest, list_method, 'some_value') == {'table_model'}
+    assert search_manifest_using_method(manifest, list_method, 'true') == {'table_model'}
+    assert search_manifest_using_method(manifest, list_method, 'false') == {'table_model'}
+    assert not search_manifest_using_method(manifest, list_method, 'other') == {'table_model'}
 
 def test_select_test_name(manifest):
     methods = MethodManager(manifest, None)

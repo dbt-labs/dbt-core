@@ -1,0 +1,7 @@
+kind: Features
+body: Add metadata env method to ProviderContext class
+time: 2022-09-09T20:46:43.889302+01:00
+custom:
+  Author: jared-rimmer
+  Issue: "5522"
+  PR: "5794"

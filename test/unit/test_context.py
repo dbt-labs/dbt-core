@@ -200,14 +200,14 @@ REQUIRED_BASE_KEYS = frozenset(
         "modules",
         "flags",
         "print",
-        "diff_of_two_dicts"
+        "diff_of_two_dicts",
     }
 )
 
 REQUIRED_TARGET_KEYS = REQUIRED_BASE_KEYS | {"target"}
 REQUIRED_DOCS_KEYS = REQUIRED_TARGET_KEYS | {"project_name"} | {"doc"}
 MACROS = frozenset({"macro_a", "macro_b", "root", "dbt"})
-REQUIRED_QUERY_HEADER_KEYS = REQUIRED_TARGET_KEYS | {"project_name"} | MACROS
+REQUIRED_QUERY_HEADER_KEYS = REQUIRED_TARGET_KEYS | {"project_name", "context_macro_stack"} | MACROS
 REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "_sql_results",
     "load_result",
@@ -239,8 +239,10 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "adapter_macro",
     "selected_resources",
     "invocation_args_dict",
+    "submit_python_job",
+    "dbt_metadata_envs"
 }
-REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code",}
+REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code"}
 MAYBE_KEYS = frozenset({"debug"})
 
 
@@ -499,3 +501,21 @@ def test_macro_namespace(config_postgres, manifest_fx):
         assert result["dbt"]["some_macro"].macro is pg_macro
         assert result["root"]["some_macro"].macro is package_macro
         assert result["some_macro"].macro is package_macro
+
+def test_dbt_metadata_envs(monkeypatch, config_postgres, manifest_fx, get_adapter, get_include_paths):
+    envs = {
+        "DBT_ENV_CUSTOM_ENV_RUN_ID": 1234,
+        "DBT_ENV_CUSTOM_ENV_JOB_ID": 5678,
+        "DBT_ENV_RUN_ID": 91011,
+        "RANDOM_ENV": 121314
+    }
+    monkeypatch.setattr(os, 'environ', envs)
+
+    ctx = providers.generate_runtime_macro_context(
+        macro=manifest_fx.macros["macro.root.macro_a"],
+        config=config_postgres,
+        manifest=manifest_fx,
+        package_name="root",
+    ) 
+
+    assert ctx["dbt_metadata_envs"] == {'JOB_ID': 5678, 'RUN_ID': 1234}

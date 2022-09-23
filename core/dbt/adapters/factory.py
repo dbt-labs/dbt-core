@@ -1,23 +1,17 @@
 import threading
-from pathlib import Path
+from contextlib import contextmanager
 from importlib import import_module
-from typing import Type, Dict, Any, List, Optional, Set
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Type
 
-from dbt.exceptions import RuntimeException, InternalException
-from dbt.include.global_project import (
-    PACKAGE_PATH as GLOBAL_PROJECT_PATH,
-    PROJECT_NAME as GLOBAL_PROJECT_NAME,
-)
+from dbt.adapters.base.plugin import AdapterPlugin
+from dbt.adapters.protocol import AdapterConfig, AdapterProtocol, RelationProtocol
+from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.events.functions import fire_event
 from dbt.events.types import AdapterImportError, PluginLoadError
-from dbt.contracts.connection import Credentials, AdapterRequiredConfig
-from dbt.adapters.protocol import (
-    AdapterProtocol,
-    AdapterConfig,
-    RelationProtocol,
-)
-from dbt.adapters.base.plugin import AdapterPlugin
-
+from dbt.exceptions import InternalException, RuntimeException
+from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 Adapter = AdapterProtocol
 
@@ -64,7 +58,7 @@ class AdapterContainer:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtime error
             if exc.name == "dbt.adapters." + name:
-                fire_event(AdapterImportError(exc=exc))
+                fire_event(AdapterImportError(exc=str(exc)))
                 raise RuntimeException(f"Could not find adapter type {name}!")
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
@@ -217,3 +211,12 @@ def get_adapter_package_names(name: Optional[str]) -> List[str]:
 
 def get_adapter_type_names(name: Optional[str]) -> List[str]:
     return FACTORY.get_adapter_type_names(name)
+
+
+@contextmanager
+def adapter_management():
+    reset_adapters()
+    try:
+        yield
+    finally:
+        cleanup_connections()
