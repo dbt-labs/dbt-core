@@ -889,22 +889,27 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
             found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
-            if found_nodes:
+            # TODO: If there are multiple nodes with the same unique id, can we do anything or do we error?
+            if len(found_nodes) > 1:
                 # There might be multiple disabled nodes for this model
-                for node in found_nodes:
-                    # If this yaml file is enabled but the project config is not, we need to move
-                    # the node from disabled to manifest.nodes
-                    if patch.config.get("enabled"):
-                        test_from = {"key": block.target.yaml_key, "name": block.target.name}
-                        self.manifest.add_node(source_file, node, test_from)
-                        self.manifest.rebuild_ref_lookup()
-                        unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
-                        if node.unique_id in self.manifest.disabled:
-                            self.remove_disabled(source_file, node.unique_id)
-                    else:
-                        # We're saving the patch_path because we need to schedule
-                        # re-application of the patch in partial parsing.
-                        node.patch_path = source_file.file_id
+                pass
+                # TODO: throw error
+            elif found_nodes:
+                node = found_nodes[0]
+                # If this yaml file is enabled but the project config is not, we need to move
+                # the node from disabled to manifest.nodes
+                # Is there a way to know it was disabled in the sql file and not the  project?  Could we loop through and compare the original file path?
+                breakpoint()
+                if patch.config.get("enabled"):
+                    self.manifest.add_node(source_file, node)
+                    self.manifest.rebuild_ref_lookup()
+                    unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
+                    if node.unique_id in self.manifest.disabled:
+                        self.remove_disabled(source_file, node.unique_id)
+                else:
+                    # We're saving the patch_path because we need to schedule
+                    # re-application of the patch in partial parsing.
+                    node.patch_path = source_file.file_id
 
             else:
                 msg = (

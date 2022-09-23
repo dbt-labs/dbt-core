@@ -42,6 +42,18 @@ models:
       enabled: false
 """
 
+schema_all_enabled_yml = """
+version: 2
+models:
+  - name: my_model
+  - name: my_model_2
+    config:
+      enabled: true
+  - name: my_model_3
+    config:
+      enabled: true
+"""
+
 
 # ensure double disabled doesn't throw error when set at schema level
 class TestSchemaDisabledConfigs:
@@ -100,6 +112,12 @@ class TestModelDisabledConfigs:
 
     def test_disabled_config(self, project):
         run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "model.test.my_model_2" not in manifest.nodes
+        assert "model.test.my_model_3" not in manifest.nodes
+
+        assert "model.test.my_model_2" in manifest.disabled
+        assert "model.test.my_model_3" in manifest.disabled
 
 
 schema_partial_enabled_yml = """
@@ -139,12 +157,13 @@ class TestOverrideProjectConfigsInYaml:
             }
         }
 
-    def test_override_config(self, project):
+    def test_override_project_yaml_config(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "model.test.my_model_2" in manifest.nodes
         assert "model.test.my_model_3" not in manifest.nodes
 
+        assert "model.test.my_model_2" not in manifest.disabled
         assert "model.test.my_model_3" in manifest.disabled
 
 
@@ -173,17 +192,18 @@ class TestOverrideProjectConfigsInSQL:
             }
         }
 
-    def test_override_config(self, project):
+    def test_override_project_sql_config(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "model.test.my_model_2" in manifest.nodes
         assert "model.test.my_model_3" not in manifest.nodes
 
+        assert "model.test.my_model_2" not in manifest.disabled
         assert "model.test.my_model_3" in manifest.disabled
 
 
-# ensure config set in yaml file can be overridden in sql file
-class TestOverrideYAMLConfigsInSQL:
+# ensure false config set in yaml file can be overridden in sql file
+class TestOverrideFalseYAMLConfigsInSQL:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -193,10 +213,32 @@ class TestOverrideYAMLConfigsInSQL:
             "my_model_3.sql": my_model_3,
         }
 
-    def test_override_config(self, project):
+    def test_override_yaml_sql_config(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert "model.test.my_model_2" in manifest.nodes
         assert "model.test.my_model_3" not in manifest.nodes
 
+        assert "model.test.my_model_2" not in manifest.disabled
         assert "model.test.my_model_3" in manifest.disabled
+
+
+# ensure true config set in yaml file can be overridden in sql file
+class TestOverrideTrueYAMLConfigsInSQL:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_all_enabled_yml,
+            "my_model.sql": my_model,
+            "my_model_2.sql": my_model_2_enabled,
+            "my_model_3.sql": my_model_3_disabled,
+        }
+
+    def test_override_yaml_sql_config(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "model.test.my_model_2" in manifest.nodes
+        assert "model.test.my_model_3" in manifest.nodes
+
+        assert "model.test.my_model_2" not in manifest.disabled
+        assert "model.test.my_model_3" not in manifest.disabled
