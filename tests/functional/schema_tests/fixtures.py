@@ -1245,6 +1245,35 @@ select 1 as "Id"
 
 """
 
+alt_local_utils__macros__type_timestamp_sql = """
+{%- macro type_timestamp() -%}
+    {{ return(adapter.dispatch('type_timestamp', 'local_utils')()) }}
+{%- endmacro -%}
+
+{% macro default__type_timestamp() %}
+    {{ return(adapter.dispatch('type_timestamp', 'dbt')()) }}
+{% endmacro %}
+"""
+
+macro_resolution_order_macros__my_custom_test_sql = """
+{% test my_custom_test(model) %}
+  select cast(current_timestamp as {{ dbt.type_timestamp() }})
+  limit 0
+{% endtest %}
+"""
+
+macro_resolution_order_models__my_model_sql = """
+select 1 as id
+"""
+
+macro_resolution_order_models__config_yml = """
+version: 2
+models:
+  - name: my_model
+    tests:
+      - my_custom_test
+"""
+
 
 @pytest.fixture(scope="class")
 def wrong_specification_block():
@@ -1463,6 +1492,16 @@ def local_utils():
 
 
 @pytest.fixture(scope="class")
+def alt_local_utils():
+    return {
+        "dbt_project.yml": local_utils__dbt_project_yml,
+        "macros": {
+            "datediff.sql": alt_local_utils__macros__type_timestamp_sql,
+        },
+    }
+
+
+@pytest.fixture(scope="class")
 def ephemeral():
     return {
         "schema.yml": ephemeral__schema_yml,
@@ -1481,6 +1520,21 @@ def quote_required_models():
 
 
 @pytest.fixture(scope="class")
+def macro_resolution_order_models():
+    return {
+        "schema.yml": macro_resolution_order_models__config_yml,
+        "my_model.sql": macro_resolution_order_models__my_model_sql,
+    }
+
+
+@pytest.fixture(scope="class")
+def macro_resolution_order_macros():
+    return {
+        "my_custom_test.sql": macro_resolution_order_macros__my_custom_test_sql,
+    }
+
+
+@pytest.fixture(scope="class")
 def project_files(
     project_root,
     test_utils,
@@ -1492,6 +1546,9 @@ def project_files(
     test_context_where_subq_macros,
     models,
     local_utils,
+    macro_resolution_order_macros,
+    macro_resolution_order_models,
+    alt_local_utils,
 ):
     write_project_files(project_root, "test_utils", test_utils)
     write_project_files(project_root, "local_dependency", local_dependency)
@@ -1506,3 +1563,10 @@ def project_files(
     )
     write_project_files(project_root, "models", models)
     write_project_files(project_root, "local_utils", local_utils)
+    write_project_files(
+        project_root, "macro_resolution_order_macros", macro_resolution_order_macros
+    )
+    write_project_files(
+        project_root, "macro_resolution_order_models", macro_resolution_order_models
+    )
+    write_project_files(project_root, "alt_local_utils", alt_local_utils)

@@ -30,6 +30,9 @@ from tests.functional.schema_tests.fixtures import (  # noqa: F401
     quote_required_models,
     project_files,
     case_sensitive_models__uppercase_SQL,
+    macro_resolution_order_macros,
+    macro_resolution_order_models,
+    alt_local_utils,
 )
 from dbt.exceptions import ParsingException, CompilationException
 from dbt.contracts.results import TestStatus
@@ -799,3 +802,32 @@ class TestSchemaTestContextWhereSubq:
 
         results = run_dbt(["test"])
         assert len(results) == 1
+
+
+class TestCustomSchemaTestMacroResolutionOrder:
+    @pytest.fixture(scope="class")
+    def models(self, macro_resolution_order_models):  # noqa: F811
+        return macro_resolution_order_models
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "macro-paths": ["macro_resolution_order_macros"],
+        }
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "alt_local_utils"}]}
+
+    def test_macro_resolution_test_namespace(
+        self,
+        project,
+    ):
+        # https://github.com/dbt-labs/dbt-core/issues/5720
+        # Previously, macros called as 'dbt.some_macro' would not correctly
+        # resolve to 'some_macro' from the 'dbt' namespace during static analysis,
+        # if 'some_macro' also existed in an installed package,
+        # leading to the macro being missing in the TestNamespace
+        run_dbt(["deps"])
+        run_dbt(["parse"])
