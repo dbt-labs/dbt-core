@@ -156,8 +156,6 @@ def _get_operation_node(manifest, project_path, sql):
 
 
 def compile_sql(manifest, project_path, sql):
-    # from dbt.task.sql import SqlCompileRunner
-
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
     runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
