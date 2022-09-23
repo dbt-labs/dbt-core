@@ -905,7 +905,7 @@ class PartialParsing:
                     )
                     schema_file.exposures.remove(unique_id)
                     fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
-            if unique_id in self.saved_manifest.disabled:
+            elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
     # metric are created only from schema files, so just delete
