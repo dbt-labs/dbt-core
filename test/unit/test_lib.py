@@ -4,6 +4,7 @@ from unittest import mock
 from dbt.contracts.results import RunningStatus
 from dbt.lib import SqlCompileRunnerNoIntrospection
 
+
 class TestContext():
     node = mock.MagicMock()
     node._event_status = {

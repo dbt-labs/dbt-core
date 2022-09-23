@@ -9,6 +9,7 @@ from dbt.exceptions import RuntimeException
 from dbt import flags
 from dbt.task.sql import SqlCompileRunner
 
+
 @dataclass
 class RuntimeArgs():
     project_dir: str
@@ -16,6 +17,7 @@ class RuntimeArgs():
     single_threaded: bool
     profile: str
     target: str
+
 
 class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
     def compile_and_execute(self, manifest, ctx):
@@ -63,6 +65,7 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
             ctx.timing.append(timing_info)
 
         return result
+
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):
     from dbt.config.runtime import RuntimeConfig
