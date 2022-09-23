@@ -12,14 +12,18 @@ class TestCurrentTimestamps:
     def models(self):
         return {"get_current_timestamp.sql": _MODEL_CURRENT_TIMESTAMP}
 
-    def test_current_timestamps(self, project, models):
+    @pytest.fixture(scope="class")
+    def expected_schema(self):
+        return {
+                "current_timestamp": "timestamp with time zone",
+                "current_timestamp_in_utc": "timestamp without time zone",
+            }
+
+    def test_current_timestamps(self, project, models, expected_schema):
         results = run_dbt(["run"])
         assert len(results) == 1
         check_relation_has_expected_schema(
             project.adapter,
             relation_name="get_current_timestamp",
-            expected_schema={
-                "current_timestamp": "timestamp with time zone",
-                "current_timestamp_in_utc": "timestamp without time zone",
-            },
+            expected_schema=expected_schema,
         )
