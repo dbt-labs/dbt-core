@@ -1,5 +1,6 @@
 # TODO: this file is one big TODO
 # from dataclasses import dataclass
+from collections import namedtuple
 from dataclasses import dataclass
 import os
 from dbt.contracts.results import NodeStatus, RunningStatus, collect_timing_info
@@ -19,8 +20,20 @@ class RuntimeArgs():
     profile: str
     target: str
 
-class RuntimeSqlCompileRunner(SqlCompileRunner):
+class SqlCompileRunnerNoWarehouseConnection(SqlCompileRunner):
     def compile_and_execute(self, manifest, ctx):
+        """
+        This version of this method does not connect to the data warehouse.
+        As a result, introspective queries at compilation will not be supported
+        and will throw an error.
+        """
+        allow_introspection = str(os.environ.get(
+            "__DBT_ALLOW_INTROSPECTION", "1"
+        )).lower() in ("true", "1", "on")
+
+        if allow_introspection:
+            return super().compile_and_execute(manifest, ctx)
+
         result = None
         # with self.adapter.connection_for(self.node):
         ctx.node._event_status["node_status"] = RunningStatus.Compiling
@@ -53,40 +66,6 @@ class RuntimeSqlCompileRunner(SqlCompileRunner):
             ctx.timing.append(timing_info)
 
         return result
-    def safe_run(self, manifest):
-        test_env = os.environ.get('POD_NAME')
-        print('INSIDE INHERITED COMPILE_AND_EXECUTE: ', test_env)
-        started = time.time()
-        ctx = ExecutionContext(self.node)
-        error = None
-        result = None
-
-        try:
-            result = self.compile_and_execute(manifest, ctx)
-        except Exception as e:
-            error = self.handle_exception(e, ctx)
-        finally:
-            exc_str = self._safe_release_connection()
-
-            # if releasing failed and the result doesn't have an error yet, set
-            # an error
-            if (
-                exc_str is not None
-                and result is not None
-                and result.status != NodeStatus.Error
-                and error is None
-            ):
-                error = exc_str
-
-        if error is not None:
-            # we could include compile time for runtime errors here
-            result = self.error_result(ctx.node, error, started, [])
-        elif result is not None:
-            result = self.from_run_result(result, started, ctx.timing)
-        else:
-            result = self.ephemeral_result(ctx.node, started, ctx.timing)
-        return result
-
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):
     from dbt.config.runtime import RuntimeConfig
@@ -180,7 +159,7 @@ def compile_sql(manifest, project_path, sql):
     # from dbt.task.sql import SqlCompileRunner
 
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
-    runner = RuntimeSqlCompileRunner(config, adapter, node, 1, 1)
+    runner = SqlCompileRunnerNoWarehouseConnection(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
 
 
