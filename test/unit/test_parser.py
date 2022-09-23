@@ -713,6 +713,24 @@ def model(dbt, session):
         with self.assertRaises(CompilationException):
             self.parser.parse_file(block)
 
+    def test_parse_ref_with_non_string(self):
+        py_code = """
+def model(dbt, session):
+
+    model_names = ["orders", "customers"]
+    models = []
+
+    for model_name in model_names:
+        models.extend(dbt.ref(model_name))
+
+    return models[0]
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)    
+    
+
 
 class StaticModelParserTest(BaseParserTest):
     def setUp(self):
