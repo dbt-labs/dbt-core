@@ -252,13 +252,14 @@ class PartialParsing:
                 node = dis_node
                 index = dis_index
                 break
-        if node:
-            # Remove node from disabled
-            del self.saved_manifest.disabled[unique_id][index]
-            # if all nodes were removed for the unique id, delete the unique_id
-            # from the disabled dict
-            if not self.saved_manifest.disabled[unique_id]:
-                self.saved_manifest.disabled.pop(unique_id)
+        # Remove node from disabled
+        del self.saved_manifest.disabled[unique_id][index]
+        # if all nodes were removed for the unique id, delete the unique_id
+        # from the disabled dict
+        if not self.saved_manifest.disabled[unique_id]:
+            self.saved_manifest.disabled.pop(unique_id)
+
+        return node
 
     # Deletes for all non-schema files
     def delete_from_saved(self, file_id):
@@ -334,7 +335,7 @@ class PartialParsing:
             and unique_id in self.saved_manifest.disabled
         ):
             # This node is disabled. Find the node and remove it from disabled dictionary.
-            self.delete_disabled(unique_id, source_file.file_id)
+            node = self.delete_disabled(unique_id, source_file.file_id)
         else:
             # Has already been deleted by another action
             return
