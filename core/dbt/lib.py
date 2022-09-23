@@ -27,8 +27,8 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
         project_dir=project_dir,
         profiles_dir=profiles_dir,
         single_threaded=single_threaded,
-        profile=getattr(args, 'profile', None),
-        target=getattr(args, 'target', None),
+        profile=getattr(args, "profile", None),
+        target=getattr(args, "target", None),
     )
 
     # Construct a RuntimeConfig from phony args
@@ -106,12 +106,7 @@ def _get_operation_node(manifest, project_path, sql, node_name):
 def compile_sql(manifest, project_path, sql, node_name="query"):
     from dbt.task.sql import SqlCompileRunner
 
-    config, node, adapter = _get_operation_node(
-        manifest,
-        project_path,
-        sql,
-        node_name
-    )
+    config, node, adapter = _get_operation_node(manifest, project_path, sql, node_name)
 
     runner = SqlCompileRunner(config, adapter, node, 1, 1)
 
@@ -121,12 +116,7 @@ def compile_sql(manifest, project_path, sql, node_name="query"):
 def execute_sql(manifest, project_path, sql, node_name="query"):
     from dbt.task.sql import SqlExecuteRunner
 
-    config, node, adapter = _get_operation_node(
-        manifest,
-        project_path,
-        sql,
-        node_name
-    )
+    config, node, adapter = _get_operation_node(manifest, project_path, sql, node_name)
 
     runner = SqlExecuteRunner(config, adapter, node, 1, 1)
 
