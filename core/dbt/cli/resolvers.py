@@ -2,23 +2,11 @@ from pathlib import Path
 
 
 def default_project_dir():
-    cwd = Path.cwd()
-    root_path = Path(cwd.root)
-
-    while cwd != root_path:
-        # Use the directory if there is a profiles.yml file
-        if (cwd / "dbt_project.yml").exists():
-            return Path(cwd)
-        cwd = cwd.parent
-
-    return Path.cwd()
+    paths = list(Path.cwd().parents)
+    paths.insert(0, Path.cwd())
+    return next((x for x in paths if (x / "dbt_project.yml").exists()), Path.cwd())
 
 
 def default_profiles_dir():
-    default_profiles_dir = Path.home() / ".dbt"
-
-    # Use the current working directory if there is a profiles.yml file
-    if (Path.cwd() / "profiles.yml").exists():
-        default_profiles_dir = Path.cwd()
-
-    return default_profiles_dir
+    print("default_profiles_dir()")
+    return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
