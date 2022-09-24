@@ -8,5 +8,4 @@ def default_project_dir():
 
 
 def default_profiles_dir():
-    print("default_profiles_dir()")
     return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
