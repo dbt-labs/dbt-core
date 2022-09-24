@@ -744,6 +744,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "nodes": ["model.test.model", "model.test.second_model"],
                 },
                 "description": "A description of the complex exposure\n",
+                "label": None,
                 "config": {
                     "enabled": True,
                 },
@@ -772,6 +773,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "nodes": ["source.test.my_source.my_table", "model.test.model"],
                 },
                 "description": "",
+                "label": None,
                 "config": {
                     "enabled": True,
                 },
@@ -1190,6 +1192,7 @@ def expected_references_manifest(project):
                 "created_at": ANY,
                 "depends_on": {"macros": [], "nodes": ["model.test.view_summary"]},
                 "description": "A description of the complex exposure",
+                "label": None,
                 "config": {
                     "enabled": True,
                 },

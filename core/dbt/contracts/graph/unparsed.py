@@ -1,3 +1,6 @@
+import re
+
+from dbt import deprecations
 from dbt.node_types import NodeType
 from dbt.contracts.util import (
     AdditionalPropertiesMixin,
@@ -434,12 +437,21 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     type: ExposureType
     owner: ExposureOwner
     description: str = ""
+    label: Optional[str] = None
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedExposure, cls).validate(data)
+        if "name" in data:
+            # name can only contain alphanumeric chars and underscores
+            if not (re.match(r"[\w-]+$", data["name"])):
+                deprecations.warn("exposure-name", exposure=data["name"])
 
 
 @dataclass
@@ -490,8 +502,23 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     def validate(cls, data):
         data = rename_metric_attr(data, raise_deprecation_warning=True)
         super(UnparsedMetric, cls).validate(data)
-        if "name" in data and " " in data["name"]:
-            raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
+        if "name" in data:
+            errors = []
+            if " " in data["name"]:
+                errors.append("cannot contain spaces")
+            # This handles failing queries due to too long metric names.
+            # It only occurs in BigQuery and Snowflake (Postgres/Redshift truncate)
+            if len(data["name"]) > 250:
+                errors.append("cannot contain more than 250 characters")
+            if not (re.match(r"^[A-Za-z]", data["name"])):
+                errors.append("must begin with a letter")
+            if not (re.match(r"[\w-]+$", data["name"])):
+                errors.append("must contain only letters, numbers and underscores")
+
+            if errors:
+                raise ParsingException(
+                    f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
+                )
 
         if data.get("model") is None and data.get("calculation_method") != "derived":
             raise ValidationError("Non-derived metrics require a 'model' property")

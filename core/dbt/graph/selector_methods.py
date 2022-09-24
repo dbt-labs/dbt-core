@@ -356,8 +356,21 @@ class ConfigSelectorMethod(SelectorMethod):
             except AttributeError:
                 continue
             else:
-                if selector == value:
-                    yield node
+                if isinstance(value, list):
+                    if (
+                        (selector in value)
+                        or (CaseInsensitive(selector) == "true" and True in value)
+                        or (CaseInsensitive(selector) == "false" and False in value)
+                    ):
+                        yield node
+                else:
+                    if (
+                        (selector == value)
+                        or (CaseInsensitive(selector) == "true" and value is True)
+                        or (CaseInsensitive(selector) == "false")
+                        and value is False
+                    ):
+                        yield node
 
 
 class ResourceTypeSelectorMethod(SelectorMethod):

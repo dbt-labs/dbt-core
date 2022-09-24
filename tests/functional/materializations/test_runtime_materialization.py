@@ -138,20 +138,20 @@ class TestRuntimeMaterialization:
         project,
     ):
         # initial full-refresh should have no effect
-        results = run_dbt(["run", "--full-refresh"])
+        results = run_dbt(["run", "-f"])
         assert len(results) == 3
 
         check_relations_equal(project.adapter, ["seed", "view", "incremental", "materialized"])
 
         # adds one record to the incremental model. full-refresh should truncate then re-run
         project.run_sql(invalidate_incremental_sql)
-        results = run_dbt(["run", "--full-refresh"])
+        results = run_dbt(["run", "-f"])
         assert len(results) == 3
         check_relations_equal(project.adapter, ["seed", "incremental"])
 
         project.run_sql(update_sql)
 
-        results = run_dbt(["run", "--full-refresh"])
+        results = run_dbt(["run", "-f"])
         assert len(results) == 3
 
         check_relations_equal(project.adapter, ["seed", "view", "incremental", "materialized"])
@@ -181,7 +181,7 @@ class TestRuntimeMaterialization:
         project.run_sql(create_incremental__dbt_tmp_sql)
         assert len(results) == 1
 
-        results = run_dbt(["run", "--model", "incremental", "--full-refresh"])
+        results = run_dbt(["run", "--model", "incremental", "-f"])
         assert len(results) == 1
 
         check_table_does_not_exist(project.adapter, "incremental__dbt_tmp")

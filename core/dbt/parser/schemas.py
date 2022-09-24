@@ -1010,6 +1010,7 @@ class ExposureParser(YamlReader):
             meta=unparsed.meta,
             tags=unparsed.tags,
             description=unparsed.description,
+            label=unparsed.label,
             owner=unparsed.owner,
             maturity=unparsed.maturity,
             config=config,
@@ -1028,7 +1029,7 @@ class ExposureParser(YamlReader):
         if parsed.config.enabled:
             self.manifest.add_exposure(self.yaml.file, parsed)
         else:
-            self.manifest.add_disabled_nofile(parsed)
+            self.manifest.add_disabled(self.yaml.file, parsed)
 
     def _generate_exposure_config(
         self, target: UnparsedExposure, fqn: List[str], package_name: str, rendered: bool
@@ -1061,6 +1062,7 @@ class ExposureParser(YamlReader):
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise ParsingException(msg) from exc
+
             self.parse_exposure(unparsed)
 
 
@@ -1142,7 +1144,7 @@ class MetricParser(YamlReader):
         if parsed.config.enabled:
             self.manifest.add_metric(self.yaml.file, parsed)
         else:
-            self.manifest.add_disabled_nofile(parsed)
+            self.manifest.add_disabled(self.yaml.file, parsed)
 
     def _generate_metric_config(
         self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool

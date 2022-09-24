@@ -1,4 +1,4 @@
-from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture
+from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture, write_file
 
 
 from tests.fixtures.jaffle_shop import JaffleShopProject
@@ -6,6 +6,8 @@ from tests.fixtures.jaffle_shop import JaffleShopProject
 
 class TestBasic(JaffleShopProject):
     def test_basic(self, project):
+        # test .dbtignore works
+        write_file("models/ignore*.sql\nignore_folder", project.project_root, ".dbtignore")
         # Create the data from seeds
         results = run_dbt(["seed"])
 

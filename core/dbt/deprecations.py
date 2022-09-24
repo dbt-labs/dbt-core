@@ -100,6 +100,17 @@ dbt-core v1.3 renamed attributes for metrics:
 """
 
 
+class ExposureNameDeprecation(DBTDeprecation):
+    _name = "exposure-name"
+    _description = """\
+    Starting in v1.3, the 'name' of an exposure should contain only letters, numbers, and underscores.
+    Exposures support a new property, 'label', which may contain spaces, capital letters, and special characters.
+    {exposure} does not follow this pattern.
+    Please update the 'name', and use the 'label' property for a human-friendly title.
+    This will raise an error in a future version of dbt-core.
+    """
+
+
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
@@ -114,6 +125,7 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
+    ExposureNameDeprecation(),
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
     PackageInstallPathDeprecation(),
