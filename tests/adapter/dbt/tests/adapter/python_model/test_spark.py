@@ -57,6 +57,25 @@ def model(dbt, session):
     return df
 """
 
+KOALAS_MODEL = """
+import databricks.koalas as ks
+
+
+def model(dbt, session):
+    dbt.config(
+        materialized="table",
+    )
+
+    df = ks.DataFrame(
+        {'City': ['Buenos Aires', 'Brasilia', 'Santiago', 'Bogota', 'Caracas'],
+        'Country': ['Argentina', 'Brazil', 'Chile', 'Colombia', 'Venezuela'],
+        'Latitude': [-34.58, -15.78, -33.45, 4.60, 10.48],
+        'Longitude': [-58.66, -47.91, -70.66, -74.08, -66.86]}
+        )
+
+    return df
+"""
+
 
 class BasePySparkTests:
     @pytest.fixture(scope="class")
@@ -65,9 +84,10 @@ class BasePySparkTests:
             "pandas_df.py": PANDAS_MODEL,
             "pyspark_df.py": PYSPARK_MODEL,
             "pandas_on_spark_df.py": PANDAS_ON_SPARK_MODEL,
+            "koalas_df.py": KOALAS_MODEL,
         }
 
     def test_different_dataframes(self, project):
         # test
         results = run_dbt(["run"])
-        assert len(results) == 3
+        assert len(results) == 4
