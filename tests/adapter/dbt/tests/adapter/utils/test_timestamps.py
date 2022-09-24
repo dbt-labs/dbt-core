@@ -15,9 +15,9 @@ class TestCurrentTimestamps:
     @pytest.fixture(scope="class")
     def expected_schema(self):
         return {
-                "current_timestamp": "timestamp with time zone",
-                "current_timestamp_in_utc": "timestamp without time zone",
-            }
+            "current_timestamp": "timestamp with time zone",
+            "current_timestamp_in_utc": "timestamp without time zone",
+        }
 
     def test_current_timestamps(self, project, models, expected_schema):
         results = run_dbt(["run"])
