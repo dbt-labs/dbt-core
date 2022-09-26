@@ -42,7 +42,7 @@ class TestSqlCompileRunnerNoIntrospection(unittest.TestCase):
     
     def test__compile_and_execute__without_connection(self):
         """
-        This tests only that the proper compile_and_execute is called if introspection is disabled
+        Ensure that compile is called but does not attempt warehouse connection
         """
         with mock.patch.dict(os.environ, {"__DBT_ALLOW_INTROSPECTION": "0"}):
             with mock.patch('dbt.task.sql.GenericSqlRunner.compile') as mock_compile:
