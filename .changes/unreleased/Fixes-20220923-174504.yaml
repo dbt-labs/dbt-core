@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix race condition when invoking dbt via lib.py concurrently
+time: 2022-09-23T17:45:04.405026-04:00
+custom:
+  Author: drewbanin
+  Issue: "5919"
+  PR: "5921"

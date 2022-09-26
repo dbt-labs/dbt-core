@@ -86,11 +86,12 @@ class PythonParseVisitor(ast.NodeVisitor):
     def _safe_eval(self, node):
         try:
             return ast.literal_eval(node)
-        except (SyntaxError, ValueError, TypeError) as exc:
-            msg = validator_error_message(exc)
-            raise ParsingException(msg, node=self.dbt_node) from exc
-        except (MemoryError, RecursionError) as exc:
-            msg = validator_error_message(exc)
+        except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError) as exc:
+            msg = validator_error_message(
+                f"Error when trying to literal_eval an arg to dbt.ref(), dbt.source(), dbt.config() or dbt.config.get() \n{exc}\n"
+                "https://docs.python.org/3/library/ast.html#ast.literal_eval\n"
+                "In dbt python model, `dbt.ref`, `dbt.source`, `dbt.config`, `dbt.config.get` function args only support Python literal structures"
+            )
             raise ParsingException(msg, node=self.dbt_node) from exc
 
     def _get_call_literals(self, node):
@@ -205,16 +206,16 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         dbtParser = PythonParseVisitor(node)
         dbtParser.visit(tree)
-
+        config_keys_used = []
         for (func, args, kwargs) in dbtParser.dbt_function_calls:
-            # TODO decide what we want to do with detected packages
-            # if func == "config":
-            #     kwargs["detected_packages"] = dbtParser.packages
             if func == "get":
-                context["config"](utilized=args)
+                config_keys_used.append(args[0])
                 continue
 
             context[func](*args, **kwargs)
+        if config_keys_used:
+            # this is being used in macro build_config_dict
+            context["config"](config_keys_used=config_keys_used)
 
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1

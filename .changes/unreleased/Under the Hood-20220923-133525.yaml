@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Reparse references to deleted metric
+time: 2022-09-23T13:35:25.681656-04:00
+custom:
+  Author: gshank
+  Issue: "5444"
+  PR: "5920"

@@ -41,6 +41,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
+from dbt.contracts.util import get_metadata_env
 from dbt.exceptions import (
     CompilationException,
     ParsingException,
@@ -711,6 +712,10 @@ class ProviderContext(ManifestContext):
         )
 
     @contextproperty
+    def dbt_metadata_envs(self) -> Dict[str, str]:
+        return get_metadata_env()
+
+    @contextproperty
     def invocation_args_dict(self):
         return args_to_dict(self.config.args)
 
@@ -1243,6 +1248,19 @@ class ProviderContext(ManifestContext):
         doesn't support `--select`.
         """
         return selected_resources.SELECTED_RESOURCES
+
+    @contextmember
+    def submit_python_job(self, parsed_model: Dict, compiled_code: str) -> AdapterResponse:
+        # Check macro_stack and that the unique id is for a materialization macro
+        if not (
+            self.context_macro_stack.depth == 2
+            and self.context_macro_stack.call_stack[1] == "macro.dbt.statement"
+            and "materialization" in self.context_macro_stack.call_stack[0]
+        ):
+            raise RuntimeException(
+                f"submit_python_job is not intended to be called here, at model {parsed_model['alias']}, with macro call_stack {self.context_macro_stack.call_stack}."
+            )
+        return self.adapter.submit_python_job(parsed_model, compiled_code)
 
 
 class MacroContext(ProviderContext):

@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Profiling and Adapter Management work with Click CLI
+time: 2022-09-20T14:48:42.070256-05:00
+custom:
+  Author: iknox-fa
+  Issue: "5531"
+  PR: "5892"

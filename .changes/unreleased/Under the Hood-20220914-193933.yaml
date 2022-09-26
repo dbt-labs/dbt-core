@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: remove source quoting setting in adapter tests
+time: 2022-09-14T19:39:33.688385+02:00
+custom:
+  Author: sdebruyn
+  Issue: "5836"
+  PR: "5839"

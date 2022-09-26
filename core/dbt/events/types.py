@@ -103,11 +103,11 @@ class MainKeyboardInterrupt(InfoLevel):
 
 @dataclass
 class MainEncounteredError(ErrorLevel):
-    e: BaseException
+    exc: str
     code: str = "Z002"
 
     def message(self) -> str:
-        return f"Encountered an error:\n{self.e}"
+        return f"Encountered an error:\n{self.exc}"
 
 
 @dataclass
@@ -382,7 +382,7 @@ class SystemErrorRetrievingModTime(ErrorLevel):
 class SystemCouldNotWrite(DebugLevel):
     path: str
     reason: str
-    exc: Exception
+    exc: str
     code: str = "Z005"
 
     def message(self) -> str:
@@ -762,7 +762,7 @@ class DumpAfterRenameSchema(DebugLevel, Cache):
 
 @dataclass
 class AdapterImportError(InfoLevel):
-    exc: Exception
+    exc: str
     code: str = "E035"
 
     def message(self) -> str:
@@ -1008,7 +1008,7 @@ class PartialParsingNotEnabled(DebugLevel):
 @dataclass
 class ParsedFileLoadFailed(ShowException, DebugLevel):
     path: str
-    exc: Exception
+    exc: str
     code: str = "I029"
 
     def message(self) -> str:
@@ -1223,7 +1223,7 @@ class InvalidRefInTestNode(DebugLevel):
 
 @dataclass
 class RunningOperationCaughtError(ErrorLevel):
-    exc: Exception
+    exc: str
     code: str = "Q001"
 
     def message(self) -> str:
@@ -1232,7 +1232,7 @@ class RunningOperationCaughtError(ErrorLevel):
 
 @dataclass
 class RunningOperationUncaughtError(ErrorLevel):
-    exc: Exception
+    exc: str
     code: str = "FF01"
 
     def message(self) -> str:
@@ -1249,7 +1249,7 @@ class DbtProjectError(ErrorLevel):
 
 @dataclass
 class DbtProjectErrorException(ErrorLevel):
-    exc: Exception
+    exc: str
     code: str = "A010"
 
     def message(self) -> str:
@@ -1266,7 +1266,7 @@ class DbtProfileError(ErrorLevel):
 
 @dataclass
 class DbtProfileErrorException(ErrorLevel):
-    exc: Exception
+    exc: str
     code: str = "A012"
 
     def message(self) -> str:
@@ -1313,7 +1313,7 @@ https://docs.getdbt.com/docs/configure-your-profile
 
 @dataclass
 class CatchableExceptionOnRun(ShowException, DebugLevel):
-    exc: Exception
+    exc: str
     code: str = "W002"
 
     def message(self) -> str:
@@ -1323,7 +1323,7 @@ class CatchableExceptionOnRun(ShowException, DebugLevel):
 @dataclass
 class InternalExceptionOnRun(DebugLevel):
     build_path: str
-    exc: Exception
+    exc: str
     code: str = "W003"
 
     def message(self) -> str:
@@ -1352,7 +1352,7 @@ class PrintDebugStackTrace(ShowException, DebugLevel):
 class GenericExceptionOnRun(ErrorLevel):
     build_path: Optional[str]
     unique_id: str
-    exc: Exception
+    exc: str
     code: str = "W004"
 
     def message(self) -> str:
@@ -1366,7 +1366,7 @@ class GenericExceptionOnRun(ErrorLevel):
 @dataclass
 class NodeConnectionReleaseError(ShowException, DebugLevel):
     node_name: str
-    exc: Exception
+    exc: str
     code: str = "W005"
 
     def message(self) -> str:
@@ -1700,7 +1700,7 @@ class SQLCompiledPath(InfoLevel):
 
 @dataclass
 class SQlRunnerException(ShowException, DebugLevel):
-    exc: Exception
+    exc: str
     code: str = "Q006"
 
     def message(self) -> str:
@@ -2458,7 +2458,7 @@ class GeneralWarningMsg(WarnLevel):
 
 @dataclass
 class GeneralWarningException(WarnLevel):
-    exc: Exception
+    exc: str
     log_fmt: str
     code: str = "Z047"
 
@@ -2479,7 +2479,7 @@ class EventBufferFull(WarnLevel):
 
 @dataclass
 class RecordRetryException(DebugLevel):
-    exc: Exception
+    exc: str
     code: str = "M021"
 
     def message(self) -> str:
@@ -2495,7 +2495,7 @@ class RecordRetryException(DebugLevel):
 if 1 == 0:
     MainReportVersion(v="")
     MainKeyboardInterrupt()
-    MainEncounteredError(e=BaseException(""))
+    MainEncounteredError(exc="")
     MainStackTrace(stack_trace="")
     MainTrackingUserState(user_state="")
     ParsingStart()
@@ -2524,7 +2524,7 @@ if 1 == 0:
     RegistryResponseMissingNestedKeys(response=""),
     RegistryResponseExtraNestedKeys(response=""),
     SystemErrorRetrievingModTime(path="")
-    SystemCouldNotWrite(path="", reason="", exc=Exception(""))
+    SystemCouldNotWrite(path="", reason="", exc="")
     SystemExecutingCmd(cmd=[""])
     SystemStdOutMsg(bmsg=b"")
     SystemStdErrMsg(bmsg=b"")
@@ -2580,7 +2580,7 @@ if 1 == 0:
     DumpAfterAddGraph(Lazy.defer(lambda: dict()))
     DumpBeforeRenameSchema(Lazy.defer(lambda: dict()))
     DumpAfterRenameSchema(Lazy.defer(lambda: dict()))
-    AdapterImportError(exc=Exception())
+    AdapterImportError(exc="")
     PluginLoadError()
     SystemReportReturnCode(returncode=0)
     NewConnectionOpening(connection_state="")
@@ -2603,7 +2603,7 @@ if 1 == 0:
     PartialParsingFailedBecauseNewProjectDependency()
     PartialParsingFailedBecauseHashChanged()
     PartialParsingDeletedMetric(id="")
-    ParsedFileLoadFailed(path="", exc=Exception(""))
+    ParsedFileLoadFailed(path="", exc="")
     PartialParseSaveFileNotFound()
     StaticParserCausedJinjaRendering(path="")
     UsingExperimentalParser(path="")
@@ -2626,20 +2626,20 @@ if 1 == 0:
     PartialParsingDeletedExposure(unique_id="")
     InvalidDisabledSourceInTestNode(msg="")
     InvalidRefInTestNode(msg="")
-    RunningOperationCaughtError(exc=Exception(""))
-    RunningOperationUncaughtError(exc=Exception(""))
+    RunningOperationCaughtError(exc="")
+    RunningOperationUncaughtError(exc="")
     DbtProjectError()
-    DbtProjectErrorException(exc=Exception(""))
+    DbtProjectErrorException(exc="")
     DbtProfileError()
-    DbtProfileErrorException(exc=Exception(""))
+    DbtProfileErrorException(exc="")
     ProfileListTitle()
     ListSingleProfile(profile="")
     NoDefinedProfiles()
     ProfileHelpMessage()
-    CatchableExceptionOnRun(exc=Exception(""))
-    InternalExceptionOnRun(build_path="", exc=Exception(""))
-    GenericExceptionOnRun(build_path="", unique_id="", exc=Exception(""))
-    NodeConnectionReleaseError(node_name="", exc=Exception(""))
+    CatchableExceptionOnRun(exc="")
+    InternalExceptionOnRun(build_path="", exc="")
+    GenericExceptionOnRun(build_path="", unique_id="", exc="")
+    NodeConnectionReleaseError(node_name="", exc="")
     CheckCleanPath(path="")
     ConfirmCleanPath(path="")
     ProtectedCleanPath(path="")
@@ -2847,6 +2847,6 @@ if 1 == 0:
     TrackingInitializeFailure()
     RetryExternalCall(attempt=0, max=0)
     GeneralWarningMsg(msg="", log_fmt="")
-    GeneralWarningException(exc=Exception(""), log_fmt="")
+    GeneralWarningException(exc="", log_fmt="")
     EventBufferFull()
-    RecordRetryException(exc=Exception(""))
+    RecordRetryException(exc="")

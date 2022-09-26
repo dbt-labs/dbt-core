@@ -6,6 +6,7 @@ import warnings
 from datetime import datetime
 from typing import List
 from contextlib import contextmanager
+from dbt.adapters.factory import Adapter
 
 from dbt.main import handle_and_check
 from dbt.logger import log_manager
@@ -309,7 +310,7 @@ def check_relation_types(adapter, relation_to_type):
 # by doing a separate call for each set of tables/relations.
 # Wraps check_relations_equal_with_relations by creating relations
 # from the list of names passed in.
-def check_relations_equal(adapter, relation_names, compare_snapshot_cols=False):
+def check_relations_equal(adapter, relation_names: List, compare_snapshot_cols=False):
     if len(relation_names) < 2:
         raise TestProcessingException(
             "Not enough relations to compare",
@@ -326,7 +327,9 @@ def check_relations_equal(adapter, relation_names, compare_snapshot_cols=False):
 #    adapter.get_columns_in_relation
 #    adapter.get_rows_different_sql
 #    adapter.execute
-def check_relations_equal_with_relations(adapter, relations, compare_snapshot_cols=False):
+def check_relations_equal_with_relations(
+    adapter: Adapter, relations: List, compare_snapshot_cols=False
+):
 
     with get_connection(adapter):
         basis, compares = relations[0], relations[1:]
@@ -335,12 +338,12 @@ def check_relations_equal_with_relations(adapter, relations, compare_snapshot_co
         # (unless comparing "dbt_" snapshot columns is explicitly enabled)
         column_names = [
             c.name
-            for c in adapter.get_columns_in_relation(basis)
+            for c in adapter.get_columns_in_relation(basis)  # type: ignore
             if not c.name.lower().startswith("dbt_") or compare_snapshot_cols
         ]
 
         for relation in compares:
-            sql = adapter.get_rows_different_sql(basis, relation, column_names=column_names)
+            sql = adapter.get_rows_different_sql(basis, relation, column_names=column_names)  # type: ignore
             _, tbl = adapter.execute(sql, fetch=True)
             num_rows = len(tbl)
             assert (

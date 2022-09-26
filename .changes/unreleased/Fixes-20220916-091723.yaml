@@ -1,0 +1,7 @@
+kind: Fixes
+body: Prevent event_history from holding references
+time: 2022-09-16T09:17:23.273847-04:00
+custom:
+  Author: gshank
+  Issue: "5848"
+  PR: "5858"

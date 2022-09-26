@@ -1,0 +1,7 @@
+kind: Fixes
+body: shorthand for full refresh should be one character
+time: 2022-09-22T08:39:26.948671-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "5878"
+  PR: "5908"

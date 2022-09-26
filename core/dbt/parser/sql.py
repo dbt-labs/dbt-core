@@ -43,7 +43,7 @@ class SqlBlockParser(SimpleSQLParser[ParsedSqlNode]):
         return os.path.join("sql", block.name)
 
     def parse_remote(self, sql: str, name: str) -> ParsedSqlNode:
-        source_file = SourceFile.remote(sql, self.project.project_name)
+        source_file = SourceFile.remote(sql, self.project.project_name, "sql")
         contents = SqlBlock(block_name=name, file=source_file)
         return self.parse_node(contents)
 
