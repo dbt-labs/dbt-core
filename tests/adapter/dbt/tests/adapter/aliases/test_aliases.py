@@ -343,7 +343,8 @@ class BaseSameAliasDifferentDatabases:
     def test_alias_model_name_diff_database(self, project):
         results = run_dbt(["run"])
         assert len(results) == 2
-        run_dbt(["test"])
+        res = run_dbt(["test"])
+        assert len(res) > 0
 
 
 class TestAliases(BaseAliases):
