@@ -920,7 +920,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 raise_duplicate_patch_name(patch, existing_file_path)
 
         if node:
-            source_file.append_patch(patch.yaml_key, unique_id)
+            source_file.append_patch(patch.yaml_key, node.unique_id)
             # If this patch has config changes, re-calculate the node config
             # with the patch config
             if patch.config:
