@@ -890,12 +890,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             # Node might be disabled. Following call returns list of matching disabled nodes
             found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
             if found_nodes:
-                if len(found_nodes) == 1:
-                    node = found_nodes[0]
-                    # We're saving the patch_path because we need to schedule
-                    # re-application of the patch in partial parsing.
-                    node.patch_path = source_file.file_id
-                elif patch.config.get("enabled"):
+                if len(found_nodes) > 1 and patch.config.get("enabled"):
                     # There are multiple disabled nodes for this model and the schema file wants to enable one.
                     # We have no way to know which one to enable.
                     msg = (
@@ -904,6 +899,11 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                         "file. They must be disabled in `dbt_project.yml` or in the sql files."
                     )
                     raise ParsingException(msg)
+
+                node = found_nodes[0]
+                # We're saving the patch_path because we need to schedule
+                # re-application of the patch in partial parsing.
+                node.patch_path = source_file.file_id
             else:
                 msg = (
                     f"Did not find matching node for patch with name '{patch.name}' "
@@ -926,24 +926,6 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             # with the patch config
             if patch.config:
                 self.patch_node_config(node, patch)
-
-            if node.config.enabled:
-                # This node may have been enabled via the schema file but was part of the disabled
-                # dict because it was disabled at the project level.  Go ahead and remove it from
-                # the disabled dict now.
-                if node.unique_id in self.manifest.disabled:
-                    self.remove_disabled(source_file, node.unique_id)
-                if node.unique_id not in self.manifest.nodes:
-                    self.manifest.add_node(source_file, node)
-
-            else:
-                if node.unique_id in self.manifest.nodes:
-                    # the node is already in the manifest.nodes because we process the models
-                    # before the schema files, remove it and rebuild refs not based on the
-                    # enabled config set in the yaml file
-                    self.manifest.nodes.pop(node.unique_id)
-                    self.manifest.rebuild_ref_lookup()
-                self.manifest.add_disabled_nofile(node)
 
             node.patch(patch)
 

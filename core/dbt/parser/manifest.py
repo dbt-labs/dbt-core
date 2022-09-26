@@ -368,6 +368,8 @@ class ManifestLoader:
                     project, project_parser_files[project.project_name], parser_types
                 )
 
+            self.process_nodes()
+
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
             # patch_sources converts the UnparsedSourceDefinitions in the
@@ -389,7 +391,6 @@ class ManifestLoader:
             # These check the created_at time on the nodes to
             # determine whether they need processing.
             start_process = time.perf_counter()
-            self.process_nodes(self.root_project.project_name)
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
@@ -928,14 +929,31 @@ class ManifestLoader:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
 
-    def process_nodes(self, current_project: str):
-        # TODO: process that everything is in the right place
-        pass
-        # for node in self.manifest.nodes.values():
-        #     breakpoint()
+    def process_nodes(self):
+        # make sure the nodes are in the manifest.nodes or the disabled dict
+        disable_nodes = []
+        for node in self.manifest.nodes:
+            if not node.config.enabled:
+                disable_nodes.append(node)
+        for node in disable_nodes:
+            self.manifest.nodes.pop(node.unique_id)
+            self.manifest.add_disabled_nofile(node)
 
-        # for node in self.manifest.disabled.values():
-        #     breakpoint()
+        enable_nodes = {}
+        for disabled in self.manifest.disabled:
+            for node in disabled:
+                if node.config.enabled:
+                    for dis_index, dis_node in enumerate(disabled):
+                        # Remove node from disabled and unique_id from disabled dict if necessary
+                        enable_nodes[dis_index] = dis_node
+        for index, node in enable_nodes.items():
+            del self.manifest.disabled[node.unique_id][index]
+            if not self.manifest.disabled[node.unique_id]:
+                self.manifest.disabled.pop(node.unique_id)
+
+            self.manifest.add_node_nofile(node)
+
+        self.manifest.rebuild_ref_lookup()
 
 
 def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, disabled):
