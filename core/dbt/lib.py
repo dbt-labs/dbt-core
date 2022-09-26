@@ -25,7 +25,6 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
         and will throw an error.
         """
         result = None
-        # with self.adapter.connection_for(self.node):
         ctx.node._event_status["node_status"] = RunningStatus.Compiling
         fire_event(
             NodeCompiling(
