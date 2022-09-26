@@ -32,9 +32,7 @@ class BaseCurrentTimestamp:
     def current_timestamp(self, project):
         run_dbt(["build"])
         relation = relation_from_name(project.adapter, "current_ts")
-        result = project.run_sql(
-            f"select current_ts_column from {relation}", fetch="one"
-        )
+        result = project.run_sql(f"select current_ts_column from {relation}", fetch="one")
         sql_timestamp = result[0] if result is not None else None
         return sql_timestamp
 
