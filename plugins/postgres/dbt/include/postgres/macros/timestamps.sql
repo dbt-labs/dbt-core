@@ -8,7 +8,7 @@
 {%- endmacro %}
 
 {% macro postgres__snapshot_get_time() -%}
-    {{ current_timestamp() }} :: TIMESTAMP without TIME ZONE
+  {{ current_timestamp() }}::timestamp without time zone
 {%- endmacro %}
 
 {% macro postgres__current_timestamp_backcompat() %}
