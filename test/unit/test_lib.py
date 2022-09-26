@@ -1,17 +1,11 @@
 import os
 import unittest
 from unittest import mock
-import dbt
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.model_config import NodeConfig
-from dbt.contracts.graph.parsed import ParsedModelNode
 from dbt.contracts.results import RunningStatus
-from dbt.lib import SqlCompileRunnerNoIntrospection, compile_sql
-from dbt.adapters.snowflake import Plugin
-from dbt.node_types import NodeType
+from dbt.lib import SqlCompileRunnerNoIntrospection
+from dbt.adapters.postgres import Plugin
 
-from test.unit.utils import clear_plugin, config_from_parts_or_dicts, inject_adapter
+from test.unit.utils import clear_plugin, inject_adapter
 
 
 class MockContext():
