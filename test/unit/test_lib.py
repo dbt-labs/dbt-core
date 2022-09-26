@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest import mock
 from dbt.contracts.results import RunningStatus
-from dbt.lib import SqlCompileRunnerNoIntrospection, compile_sql
+from dbt.lib import compile_sql
 from dbt.adapters.postgres import Plugin
 
 from test.unit.utils import clear_plugin, inject_adapter

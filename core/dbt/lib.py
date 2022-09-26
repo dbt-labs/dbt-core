@@ -1,6 +1,4 @@
 # TODO: this file is one big TODO
-# from dataclasses import dataclass
-from cProfile import run
 from dataclasses import dataclass
 import os
 from dbt.contracts.results import RunningStatus, collect_timing_info
@@ -151,9 +149,11 @@ def _get_operation_node(manifest, project_path, sql):
 
 def compile_sql(manifest, project_path, sql):
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
-    allow_introspection = str(os.environ.get(
-        "__DBT_ALLOW_INTROSPECTION", "1"
-    )).lower() in ("true", "1", "on")
+    allow_introspection = str(os.environ.get("__DBT_ALLOW_INTROSPECTION", "1")).lower() in (
+        "true",
+        "1",
+        "on",
+    )
 
     if allow_introspection:
         runner = SqlCompileRunner(config, adapter, node, 1, 1)
