@@ -327,7 +327,9 @@ def check_relation_has_expected_schema(adapter, relation_name, expected_schema: 
     relation = relation_from_name(adapter, relation_name)
     with get_connection(adapter):
         actual_columns = {c.name: c.data_type for c in adapter.get_columns_in_relation(relation)}
-    assert actual_columns == expected_schema
+    assert (
+        actual_columns == expected_schema
+    ), f"Actual schema did not match expected, actual: {json.dumps(actual_columns)}"
 
 
 # This can be used when checking relations in different schemas, by supplying
