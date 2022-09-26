@@ -305,24 +305,15 @@ class BaseSameAliasDifferentSchemas:
 
 
 class BaseSameAliasDifferentDatabases:
-    @pytest.fixture(scope="class", autouse=True)
-    def setup(self, project):
-        alternate_schema_name = project.test_schema + "_alt_test"
-        project.create_test_schema(schema_name=alternate_schema_name)
-
     @pytest.fixture(scope="class")
     def project_config_update(self, unique_schema):
-        alternate_schema = unique_schema + "_test"
         return {
             "config-version": 2,
             "macro-paths": ["macros"],
             "models": {
                 "test": {
                     "alias": "duped_alias",
-                    "model_b": {
-                        # how to tap into a alternate database here? or is something like dbt_profile_target method required
-                        "schema": alternate_schema
-                    },
+                    "model_b": {"schema": unique_schema + "_alt"},
                 },
             },
         }
