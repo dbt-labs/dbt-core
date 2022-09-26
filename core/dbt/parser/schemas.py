@@ -1029,7 +1029,7 @@ class ExposureParser(YamlReader):
         if parsed.config.enabled:
             self.manifest.add_exposure(self.yaml.file, parsed)
         else:
-            self.manifest.add_disabled_nofile(parsed)
+            self.manifest.add_disabled(self.yaml.file, parsed)
 
     def _generate_exposure_config(
         self, target: UnparsedExposure, fqn: List[str], package_name: str, rendered: bool
@@ -1144,7 +1144,7 @@ class MetricParser(YamlReader):
         if parsed.config.enabled:
             self.manifest.add_metric(self.yaml.file, parsed)
         else:
-            self.manifest.add_disabled_nofile(parsed)
+            self.manifest.add_disabled(self.yaml.file, parsed)
 
     def _generate_metric_config(
         self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool

@@ -1,0 +1,17 @@
+version: 2
+
+metrics:
+
+  - model: "ref('people')"
+    name: number_of_people
+    description: Total count of people
+    label: "Number of people"
+    calculation_method: count
+    expression: "*"
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'replaced'
