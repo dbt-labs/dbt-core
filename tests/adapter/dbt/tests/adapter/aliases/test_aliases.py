@@ -18,12 +18,12 @@ models:
 
 """
 
-MODELS_DUPE_CUSTOME_DATABASE__MODEL_B_SQL = """
+MODELS_DUPE_CUSTOM_DATABASE__MODEL_B_SQL = """
 select {{ string_literal(this.name) }} as tablename
 
 """
 
-MODELS_DUPE_CUSTOME_DATABASE__MODEL_A_SQL = """
+MODELS_DUPE_CUSTOM_DATABASE__MODEL_A_SQL = """
 select {{ string_literal(this.name) }} as tablename
 
 """
@@ -326,8 +326,8 @@ class BaseSameAliasDifferentDatabases:
     def models(self):
         return {
             "schema.yml": MODELS_DUPE_CUSTOM_DATABASE__SCHEMA_YML,
-            "model_b.sql": MODELS_DUPE_CUSTOME_DATABASE__MODEL_B_SQL,
-            "model_a.sql": MODELS_DUPE_CUSTOME_DATABASE__MODEL_A_SQL,
+            "model_b.sql": MODELS_DUPE_CUSTOM_DATABASE__MODEL_B_SQL,
+            "model_a.sql": MODELS_DUPE_CUSTOM_DATABASE__MODEL_A_SQL,
             "README.md": MODELS_DUPE_CUSTOM_DATABASE__README_MD,
         }
 
