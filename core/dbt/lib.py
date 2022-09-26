@@ -1,5 +1,6 @@
 # TODO: this file is one big TODO
 # from dataclasses import dataclass
+from cProfile import run
 from dataclasses import dataclass
 import os
 from dbt.contracts.results import RunningStatus, collect_timing_info
@@ -26,15 +27,6 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
         As a result, introspective queries at compilation will not be supported
         and will throw an error.
         """
-        allow_introspection = str(os.environ.get("__DBT_ALLOW_INTROSPECTION", "1")).lower() in (
-            "true",
-            "1",
-            "on",
-        )
-
-        if allow_introspection:
-            return super().compile_and_execute(manifest, ctx)
-
         result = None
         # with self.adapter.connection_for(self.node):
         ctx.node._event_status["node_status"] = RunningStatus.Compiling
@@ -159,7 +151,14 @@ def _get_operation_node(manifest, project_path, sql):
 
 def compile_sql(manifest, project_path, sql):
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
-    runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
+    allow_introspection = str(os.environ.get(
+        "__DBT_ALLOW_INTROSPECTION", "1"
+    )).lower() in ("true", "1", "on")
+
+    if allow_introspection:
+        runner = SqlCompileRunner(config, adapter, node, 1, 1)
+    else:
+        runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
 
 
