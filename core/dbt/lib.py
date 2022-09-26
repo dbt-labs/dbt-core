@@ -4,7 +4,6 @@ from dbt.events.functions import fire_event
 from dbt.events.types import NodeCompiling, NodeExecuting
 from dbt.exceptions import RuntimeException
 from dbt import flags
-from dbt.task.sql import SqlCompileRunner
 from dataclasses import dataclass
 
 
@@ -156,6 +155,7 @@ def compile_sql(manifest, project_path, sql, node_name="query"):
     )
 
     if allow_introspection:
+        from dbt.task.sql import SqlCompileRunner
         runner = SqlCompileRunner(config, adapter, node, 1, 1)
     else:
         runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
