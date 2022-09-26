@@ -778,8 +778,6 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
             else:
                 refs = ParserRef()
 
-            # This adds the node_block to self.manifest
-            # as a ParsedNodePatch or ParsedMacroPatch
             # There's no unique_id on the node yet so cannot add to disabled dict
             self.parse_patch(node_block, refs)
 
