@@ -597,6 +597,20 @@ def model(dbt, session):
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.py_model'])
 
+    def test_python_model_config_get(self):
+        py_code = """
+def model(dbt, session):
+    dbt.config.get("param_1")
+    dbt.config.get("param_2")
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
+
     def test_wrong_python_model_def_miss_session(self):
         py_code = """
 def model(dbt):
@@ -698,6 +712,24 @@ def model(dbt, session):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
         with self.assertRaises(CompilationException):
             self.parser.parse_file(block)
+
+    def test_parse_ref_with_non_string(self):
+        py_code = """
+def model(dbt, session):
+
+    model_names = ["orders", "customers"]
+    models = []
+
+    for model_name in model_names:
+        models.extend(dbt.ref(model_name))
+
+    return models[0]
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)    
+    
 
 
 class StaticModelParserTest(BaseParserTest):

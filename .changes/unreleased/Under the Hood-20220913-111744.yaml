@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Compatibiltiy for metric attribute renaming
+time: 2022-09-13T11:17:44.953536+02:00
+custom:
+  Author: jtcohen6 callum-mcdata
+  Issue: "5807"
+  PR: "5825"

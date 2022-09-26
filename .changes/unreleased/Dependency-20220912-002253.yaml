@@ -1,0 +1,7 @@
+kind: "Dependency"
+body: "Bump python from 3.10.6-slim-bullseye to 3.10.7-slim-bullseye in /docker"
+time: 2022-09-12T00:22:53.00000Z
+custom:
+  Author: dependabot[bot]
+  Issue: 4904
+  PR: 5805

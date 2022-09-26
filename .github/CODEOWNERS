@@ -16,25 +16,57 @@
 # Changes to GitHub configurations including Actions
 /.github/ @leahwicz
 
+### LANGUAGE
+
 # Language core modules
-/core/dbt/config/     @dbt-labs/core-language
-/core/dbt/context/    @dbt-labs/core-language
-/core/dbt/contracts/  @dbt-labs/core-language
-/core/dbt/deps/       @dbt-labs/core-language
-/core/dbt/parser/     @dbt-labs/core-language
+/core/dbt/config/               @dbt-labs/core-language
+/core/dbt/context/              @dbt-labs/core-language
+/core/dbt/contracts/            @dbt-labs/core-language
+/core/dbt/deps/                 @dbt-labs/core-language
+/core/dbt/events/               @dbt-labs/core-language  # structured logging
+/core/dbt/parser/               @dbt-labs/core-language
+
+# Language misc files
+/core/dbt/dataclass_schema.py   @dbt-labs/core-language
+/core/dbt/hooks.py              @dbt-labs/core-language
+/core/dbt/node_types.py         @dbt-labs/core-language
+/core/dbt/semver.py             @dbt-labs/core-language
+
+
+### EXECUTION
 
 # Execution core modules
-/core/dbt/events/     @dbt-labs/core-execution @dbt-labs/core-language # eventually remove language but they have knowledge here now
-/core/dbt/graph/      @dbt-labs/core-execution
-/core/dbt/task/       @dbt-labs/core-execution
+/core/dbt/graph/                @dbt-labs/core-execution
+/core/dbt/task/                 @dbt-labs/core-execution
 
-# Adapter interface, scaffold, Postgres plugin
-/core/dbt/adapters    @dbt-labs/core-adapters
-/core/scripts/create_adapter_plugin.py    @dbt-labs/core-adapters
-/plugins/             @dbt-labs/core-adapters
+# Execution misc files
+/core/dbt/compilation.py        @dbt-labs/core-execution
+/core/dbt/flags.py              @dbt-labs/core-execution
+/core/dbt/lib.py                @dbt-labs/core-execution
+/core/dbt/main.py               @dbt-labs/core-execution
+/core/dbt/profiler.py           @dbt-labs/core-execution
+/core/dbt/selected_resources.py @dbt-labs/core-execution
+/core/dbt/tracking.py           @dbt-labs/core-execution
+/core/dbt/version.py            @dbt-labs/core-execution
 
-# Global project: default macros, including generic tests + materializations
-/core/dbt/include/global_project    @dbt-labs/core-execution @dbt-labs/core-adapters
+
+### ADAPTERS
+
+# Adapter interface ("base" + "sql" adapter defaults, cache)
+/core/dbt/adapters              @dbt-labs/core-adapters
+
+# Global project (default macros + materializations), starter project
+/core/dbt/include               @dbt-labs/core-adapters
+
+# Postgres plugin
+/plugins/                       @dbt-labs/core-adapters
+
+# Functional tests for adapter plugins
+/tests/adapter                  @dbt-labs/core-adapters
+
+### TESTS
+
+# Overlapping ownership for vast majority of unit + functional tests
 
 # Perf regression testing framework
 # This excludes the test project files itself since those aren't specific

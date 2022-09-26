@@ -38,6 +38,9 @@ from dbt.contracts.graph.manifest import Manifest
 
 INITIAL_ROOT = os.getcwd()
 
+# Ensure dbt interal flags have been set from env vars.
+flags.set_from_args({}, {})
+
 
 def normalize(path):
     """On windows, neither is enough on its own:

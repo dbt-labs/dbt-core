@@ -95,6 +95,7 @@ venv/
 
 # vscode
 .vscode/
+*.code-workspace
 
 # poetry
 pyproject.toml

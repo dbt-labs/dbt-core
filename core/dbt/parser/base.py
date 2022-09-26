@@ -233,7 +233,7 @@ class ConfiguredParser(
 
     def render_with_context(self, parsed_node: IntermediateNode, config: ContextConfig):
         # Given the parsed node and a ContextConfig to use during parsing,
-        # render the node's sql wtih macro capture enabled.
+        # render the node's sql with macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
         context = self._context_for(parsed_node, config)
 

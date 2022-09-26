@@ -12,6 +12,7 @@ class Column:
         "TIMESTAMP": "TIMESTAMP",
         "FLOAT": "FLOAT",
         "INTEGER": "INT",
+        "BOOLEAN": "BOOLEAN",
     }
     column: str
     dtype: str
