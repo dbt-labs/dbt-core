@@ -269,7 +269,7 @@ class TestMultipleDisabledNodesSuccess:
         )
 
 
-# ensure error when enabling in schema file when multiple nodes exist within disabled
+# ensure overrides work when enabling in sql file when multiple nodes exist within disabled
 class TestMultipleDisabledNodesOverrideModel:
     @pytest.fixture(scope="class")
     def models(self):
@@ -324,3 +324,62 @@ class TestMultipleDisabledNodesOverrideModel:
             expected_disabled_file_path_3
             in manifest.disabled["model.test.my_model_3"][0].original_file_path
         )
+
+
+# ensure everything lands where it should when disabling multiple nodes with the same unique id
+class TestManyDisabledNodesSuccess:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model,
+            "folder_1": {
+                "my_model_2.sql": my_model_2,
+                "my_model_3.sql": my_model_3,
+            },
+            "folder_2": {
+                "my_model_2.sql": my_model_2,
+                "my_model_3.sql": my_model_3,
+            },
+            "folder_3": {
+                "my_model_2.sql": my_model_2,
+                "my_model_3.sql": my_model_3,
+            },
+            "folder_4": {
+                "my_model_2.sql": my_model_2,
+                "my_model_3.sql": my_model_3,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "models": {
+                "test": {
+                    "folder_1": {
+                        "enabled": False,
+                    },
+                    "folder_2": {
+                        "enabled": True,
+                    },
+                    "folder_3": {
+                        "enabled": False,
+                    },
+                    "folder_4": {
+                        "enabled": False,
+                    },
+                },
+            }
+        }
+
+    def test_many_disabled_config(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        assert "model.test.my_model_2" in manifest.nodes
+        assert "model.test.my_model_3" in manifest.nodes
+
+        expected_file_path = "models/folder_2"
+        assert expected_file_path in manifest.nodes["model.test.my_model_2"].original_file_path
+        assert expected_file_path in manifest.nodes["model.test.my_model_3"].original_file_path
+
+        assert len(manifest.disabled["model.test.my_model_2"]) == 3
+        assert len(manifest.disabled["model.test.my_model_3"]) == 3

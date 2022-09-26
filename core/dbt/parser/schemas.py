@@ -900,9 +900,9 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     )
                     raise ParsingException(msg)
 
-                node = found_nodes[0]
                 # We're saving the patch_path because we need to schedule
                 # re-application of the patch in partial parsing.
+                node = found_nodes[0]
                 node.patch_path = source_file.file_id
             else:
                 msg = (
@@ -912,9 +912,8 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 )
                 warn_or_error(msg, log_fmt=warning_tag("{}"))
                 return
-
-        # patches can't be overwritten
         else:
+            # patches can't be overwritten
             node = self.manifest.nodes.get(unique_id)
             if node.patch_path:
                 package_name, existing_file_path = node.patch_path.split("://")
@@ -928,16 +927,6 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 self.patch_node_config(node, patch)
 
             node.patch(patch)
-
-    def remove_disabled(self, source_file: SchemaSourceFile, unique_id: str) -> None:
-        for dis_index, dis_node in enumerate(self.manifest.disabled[unique_id]):
-            if dis_node.file_id == source_file.file_id:
-                break
-            if dis_node:
-                # Remove node from disabled and unique_id from disabled dict if necessary
-                del self.manifest.disabled[unique_id][dis_index]
-                if not self.manifest.disabled[unique_id]:
-                    self.manifest.disabled.pop(unique_id)
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
