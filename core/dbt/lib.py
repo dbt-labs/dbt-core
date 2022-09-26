@@ -11,7 +11,7 @@ from dbt.task.sql import SqlCompileRunner
 
 
 @dataclass
-class RuntimeArgs():
+class RuntimeArgs:
     project_dir: str
     profiles_dir: str
     single_threaded: bool
@@ -26,9 +26,11 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
         As a result, introspective queries at compilation will not be supported
         and will throw an error.
         """
-        allow_introspection = str(os.environ.get(
-            "__DBT_ALLOW_INTROSPECTION", "1"
-        )).lower() in ("true", "1", "on")
+        allow_introspection = str(os.environ.get("__DBT_ALLOW_INTROSPECTION", "1")).lower() in (
+            "true",
+            "1",
+            "on",
+        )
 
         if allow_introspection:
             return super().compile_and_execute(manifest, ctx)
