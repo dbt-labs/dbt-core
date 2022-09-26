@@ -14,7 +14,7 @@ from dbt.node_types import NodeType
 from test.unit.utils import clear_plugin, config_from_parts_or_dicts, inject_adapter
 
 
-class TestContext():
+class MockContext():
     node = mock.MagicMock()
     node._event_status = {
         "node_status": RunningStatus.Started
@@ -23,9 +23,9 @@ class TestContext():
     timing = []
 
 
-class SqlCompileRunnerNoIntrospectionTest(unittest.TestCase):
+class TestSqlCompileRunnerNoIntrospection(unittest.TestCase):
     def setUp(self):
-            self.ctx = TestContext()
+            self.ctx = MockContext()
             self.manifest = {'mock':'manifest'}
             self.adapter = Plugin.adapter({})
             self.adapter.connection_for = mock.MagicMock()
