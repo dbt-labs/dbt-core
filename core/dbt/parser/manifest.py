@@ -389,6 +389,7 @@ class ManifestLoader:
             # These check the created_at time on the nodes to
             # determine whether they need processing.
             start_process = time.perf_counter()
+            self.process_nodes(self.root_project.project_name)
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
@@ -926,6 +927,15 @@ class ManifestLoader:
             if exposure.created_at < self.started_at:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
+
+    def process_nodes(self, current_project: str):
+        # TODO: process that everything is in the right place
+        pass
+        # for node in self.manifest.nodes.values():
+        #     breakpoint()
+
+        # for node in self.manifest.disabled.values():
+        #     breakpoint()
 
 
 def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, disabled):
