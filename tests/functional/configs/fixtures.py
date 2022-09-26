@@ -105,6 +105,11 @@ my_model_2_enabled = """
 select * from {{ ref('my_model') }}
 """
 
+my_model_3_enabled = """
+{{ config(enabled=true) }}
+select * from {{ ref('my_model') }}
+"""
+
 schema_all_disabled_yml = """
 version: 2
 models:

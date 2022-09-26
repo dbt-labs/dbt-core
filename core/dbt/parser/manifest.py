@@ -930,9 +930,10 @@ class ManifestLoader:
             _process_sources_for_exposure(self.manifest, current_project, exposure)
 
     def process_nodes(self):
-        # make sure the nodes are in the manifest.nodes or the disabled dict
+        # make sure the nodes are in the manifest.nodes or the disabled dict,
+        # correctly now that the schema files are also aprsed
         disable_nodes = []
-        for node in self.manifest.nodes:
+        for node in self.manifest.nodes.values():
             if not node.config.enabled:
                 disable_nodes.append(node)
         for node in disable_nodes:
@@ -940,7 +941,7 @@ class ManifestLoader:
             self.manifest.add_disabled_nofile(node)
 
         enable_nodes = {}
-        for disabled in self.manifest.disabled:
+        for disabled in self.manifest.disabled.values():
             for node in disabled:
                 if node.config.enabled:
                     for dis_index, dis_node in enumerate(disabled):
