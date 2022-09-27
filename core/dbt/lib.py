@@ -23,6 +23,10 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
         This version of this method does not connect to the data warehouse.
         As a result, introspective queries at compilation will not be supported
         and will throw an error.
+
+        TODO: This is a temporary solution to more complex permissions requirements
+        for the semantic layer, and thus largely duplicates the code in the parent class
+        method. Once conditional credential usage is enabled, this should be removed.
         """
         result = None
         ctx.node._event_status["node_status"] = RunningStatus.Compiling
