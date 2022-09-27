@@ -201,6 +201,7 @@ version: 2
 metrics:
   - name: number_of_people
     label: "Number of people"
+    model: "ref(people)"
     description: Total count of people
     calculation_method: count
     timestamp: created_at
@@ -221,8 +222,7 @@ class TestInvalidMetricMissingExpression:
             "people.sql": models__people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
-    # the model name does not have quotes
+    # tests that we get a ParsingException with a missing expression
     def test_simple_metric(
         self,
         project,
