@@ -1,10 +1,64 @@
-# TODO: this file is one big TODO
 import os
+from dbt.contracts.results import RunningStatus, collect_timing_info
+from dbt.events.functions import fire_event
+from dbt.events.types import NodeCompiling, NodeExecuting
 from dbt.exceptions import RuntimeException
 from dbt import flags
-from collections import namedtuple
+from dbt.task.sql import SqlCompileRunner
+from dataclasses import dataclass
 
-RuntimeArgs = namedtuple("RuntimeArgs", "project_dir profiles_dir single_threaded profile target")
+
+@dataclass
+class RuntimeArgs:
+    project_dir: str
+    profiles_dir: str
+    single_threaded: bool
+    profile: str
+    target: str
+
+
+class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
+    def compile_and_execute(self, manifest, ctx):
+        """
+        This version of this method does not connect to the data warehouse.
+        As a result, introspective queries at compilation will not be supported
+        and will throw an error.
+
+        TODO: This is a temporary solution to more complex permissions requirements
+        for the semantic layer, and thus largely duplicates the code in the parent class
+        method. Once conditional credential usage is enabled, this should be removed.
+        """
+        result = None
+        ctx.node._event_status["node_status"] = RunningStatus.Compiling
+        fire_event(
+            NodeCompiling(
+                node_info=ctx.node.node_info,
+                unique_id=ctx.node.unique_id,
+            )
+        )
+        with collect_timing_info("compile") as timing_info:
+            # if we fail here, we still have a compiled node to return
+            # this has the benefit of showing a build path for the errant
+            # model
+            ctx.node = self.compile(manifest)
+        ctx.timing.append(timing_info)
+
+        # for ephemeral nodes, we only want to compile, not run
+        if not ctx.node.is_ephemeral_model:
+            ctx.node._event_status["node_status"] = RunningStatus.Executing
+            fire_event(
+                NodeExecuting(
+                    node_info=ctx.node.node_info,
+                    unique_id=ctx.node.unique_id,
+                )
+            )
+            with collect_timing_info("execute") as timing_info:
+                result = self.run(ctx.node, manifest)
+                ctx.node = result.node
+
+            ctx.timing.append(timing_info)
+
+        return result
 
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):
@@ -17,27 +71,30 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     else:
         profiles_dir = flags.DEFAULT_PROFILES_DIR
 
-    profile = args.profile if hasattr(args, "profile") else None
-    target = args.target if hasattr(args, "target") else None
-
-    # Construct a phony config
-    config = RuntimeConfig.from_args(
-        RuntimeArgs(project_dir, profiles_dir, single_threaded, profile, target)
+    runtime_args = RuntimeArgs(
+        project_dir=project_dir,
+        profiles_dir=profiles_dir,
+        single_threaded=single_threaded,
+        profile=getattr(args, "profile", None),
+        target=getattr(args, "target", None),
     )
-    # Clear previously registered adapters--
-    # this fixes cacheing behavior on the dbt-server
+
+    # Construct a RuntimeConfig from phony args
+    config = RuntimeConfig.from_args(runtime_args)
+
+    # Set global flags from arguments
     flags.set_from_args(args, config)
-    dbt.adapters.factory.reset_adapters()
-    # Load the relevant adapter
+
+    # This is idempotent, so we can call it repeatedly
     dbt.adapters.factory.register_adapter(config)
-    # Set invocation id
+
+    # Make sure we have a valid invocation_id
     dbt.events.functions.set_invocation_id()
 
     return config
 
 
 def get_task_by_type(type):
-    # TODO: we need to tell dbt-server what tasks are available
     from dbt.task.run import RunTask
     from dbt.task.list import ListTask
     from dbt.task.seed import SeedTask
@@ -70,16 +127,13 @@ def create_task(type, args, manifest, config):
     def no_op(*args, **kwargs):
         pass
 
-    # TODO: yuck, let's rethink tasks a little
     task = task(args, config)
-
-    # Wow! We can monkeypatch taskCls.load_manifest to return _our_ manifest
     task.load_manifest = no_op
     task.manifest = manifest
     return task
 
 
-def _get_operation_node(manifest, project_path, sql):
+def _get_operation_node(manifest, project_path, sql, node_name):
     from dbt.parser.manifest import process_node
     from dbt.parser.sql import SqlBlockParser
     import dbt.adapters.factory
@@ -92,26 +146,33 @@ def _get_operation_node(manifest, project_path, sql):
     )
 
     adapter = dbt.adapters.factory.get_adapter(config)
-    # TODO : This needs a real name?
-    sql_node = block_parser.parse_remote(sql, "name")
+    sql_node = block_parser.parse_remote(sql, node_name)
     process_node(config, manifest, sql_node)
     return config, sql_node, adapter
 
 
-def compile_sql(manifest, project_path, sql):
-    from dbt.task.sql import SqlCompileRunner
+def compile_sql(manifest, project_path, sql, node_name="query"):
+    config, node, adapter = _get_operation_node(manifest, project_path, sql, node_name)
+    allow_introspection = str(os.environ.get("__DBT_ALLOW_INTROSPECTION", "1")).lower() in (
+        "true",
+        "1",
+        "on",
+    )
 
-    config, node, adapter = _get_operation_node(manifest, project_path, sql)
-    runner = SqlCompileRunner(config, adapter, node, 1, 1)
+    if allow_introspection:
+        runner = SqlCompileRunner(config, adapter, node, 1, 1)
+    else:
+        runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
 
 
-def execute_sql(manifest, project_path, sql):
+def execute_sql(manifest, project_path, sql, node_name="query"):
     from dbt.task.sql import SqlExecuteRunner
 
-    config, node, adapter = _get_operation_node(manifest, project_path, sql)
+    config, node, adapter = _get_operation_node(manifest, project_path, sql, node_name)
+
     runner = SqlExecuteRunner(config, adapter, node, 1, 1)
-    # TODO: use same interface for runner
+
     return runner.safe_run(manifest)
 
 
@@ -128,5 +189,4 @@ def deserialize_manifest(manifest_msgpack):
 
 
 def serialize_manifest(manifest):
-    # TODO: what should this take as an arg?
     return manifest.to_msgpack()

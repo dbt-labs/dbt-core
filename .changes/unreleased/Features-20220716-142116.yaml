@@ -1,0 +1,7 @@
+kind: Features
+body: merge_exclude_columns for incremental materialization
+time: 2022-07-16T14:21:16.592519-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "5260"
+  PR: "5457"

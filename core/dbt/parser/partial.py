@@ -909,8 +909,7 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
-    # metric are created only from schema files, so just delete
-    # the metric or the disabled metric.
+    # metrics are created only from schema files, but also can be referred to by other nodes
     def delete_schema_metric(self, schema_file, metric_dict):
         metric_name = metric_dict["name"]
         metrics = schema_file.metrics.copy()
@@ -918,6 +917,9 @@ class PartialParsing:
             if unique_id in self.saved_manifest.metrics:
                 metric = self.saved_manifest.metrics[unique_id]
                 if metric.name == metric_name:
+                    # Need to find everything that referenced this metric and schedule for parsing
+                    if unique_id in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
                     self.deleted_manifest.metrics[unique_id] = self.saved_manifest.metrics.pop(
                         unique_id
                     )
