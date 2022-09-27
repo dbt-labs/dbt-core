@@ -1,5 +1,6 @@
 import betterproto
 from colorama import Style
+
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
 from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
 import dbt.flags as flags
