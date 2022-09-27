@@ -2,8 +2,9 @@ import pytest
 from dbt.tests.util import check_relation_has_expected_schema, run_dbt
 
 _MODEL_CURRENT_TIMESTAMP = """
-SELECT {{current_timestamp()}} as current_timestamp,
-       {{current_timestamp_in_utc()}} as current_timestamp_in_utc
+select {{ current_timestamp() }} as current_timestamp,
+       {{ current_timestamp_in_utc() }} as current_timestamp_in_utc,
+       {{ current_timestamp_backcompat() }} as current_timestamp_backcompat
 """
 
 
@@ -17,6 +18,7 @@ class TestCurrentTimestamps:
         return {
             "current_timestamp": "timestamp with time zone",
             "current_timestamp_in_utc": "timestamp without time zone",
+            "current_timestamp_backcompat": "timestamp without time zone",
         }
 
     def test_current_timestamps(self, project, models, expected_schema):
