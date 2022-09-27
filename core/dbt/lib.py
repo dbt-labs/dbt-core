@@ -1,6 +1,10 @@
 import os
+from dbt.contracts.results import RunningStatus, collect_timing_info
+from dbt.events.functions import fire_event
+from dbt.events.types import NodeCompiling, NodeExecuting
 from dbt.exceptions import RuntimeException
 from dbt import flags
+from dbt.task.sql import SqlCompileRunner
 from dataclasses import dataclass
 
 
@@ -11,6 +15,50 @@ class RuntimeArgs:
     single_threaded: bool
     profile: str
     target: str
+
+
+class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
+    def compile_and_execute(self, manifest, ctx):
+        """
+        This version of this method does not connect to the data warehouse.
+        As a result, introspective queries at compilation will not be supported
+        and will throw an error.
+
+        TODO: This is a temporary solution to more complex permissions requirements
+        for the semantic layer, and thus largely duplicates the code in the parent class
+        method. Once conditional credential usage is enabled, this should be removed.
+        """
+        result = None
+        ctx.node._event_status["node_status"] = RunningStatus.Compiling
+        fire_event(
+            NodeCompiling(
+                node_info=ctx.node.node_info,
+                unique_id=ctx.node.unique_id,
+            )
+        )
+        with collect_timing_info("compile") as timing_info:
+            # if we fail here, we still have a compiled node to return
+            # this has the benefit of showing a build path for the errant
+            # model
+            ctx.node = self.compile(manifest)
+        ctx.timing.append(timing_info)
+
+        # for ephemeral nodes, we only want to compile, not run
+        if not ctx.node.is_ephemeral_model:
+            ctx.node._event_status["node_status"] = RunningStatus.Executing
+            fire_event(
+                NodeExecuting(
+                    node_info=ctx.node.node_info,
+                    unique_id=ctx.node.unique_id,
+                )
+            )
+            with collect_timing_info("execute") as timing_info:
+                result = self.run(ctx.node, manifest)
+                ctx.node = result.node
+
+            ctx.timing.append(timing_info)
+
+        return result
 
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):
@@ -104,12 +152,17 @@ def _get_operation_node(manifest, project_path, sql, node_name):
 
 
 def compile_sql(manifest, project_path, sql, node_name="query"):
-    from dbt.task.sql import SqlCompileRunner
-
     config, node, adapter = _get_operation_node(manifest, project_path, sql, node_name)
+    allow_introspection = str(os.environ.get("__DBT_ALLOW_INTROSPECTION", "1")).lower() in (
+        "true",
+        "1",
+        "on",
+    )
 
-    runner = SqlCompileRunner(config, adapter, node, 1, 1)
-
+    if allow_introspection:
+        runner = SqlCompileRunner(config, adapter, node, 1, 1)
+    else:
+        runner = SqlCompileRunnerNoIntrospection(config, adapter, node, 1, 1)
     return runner.safe_run(manifest)
 
 
