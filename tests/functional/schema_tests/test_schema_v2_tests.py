@@ -5,31 +5,94 @@ import re
 from dbt.tests.util import run_dbt, write_file
 from dbt.tests.fixtures.project import write_project_files
 from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
-from tests.functional.schema_tests.fixtures import (  # noqa: F401
-    wrong_specification_block,
-    test_context_where_subq_models,
-    test_utils,
-    local_dependency,
-    case_sensitive_models,
-    test_context_macros,
-    test_context_models_namespaced,
-    macros_v2,
-    test_context_macros_namespaced,
-    seeds,
-    test_context_models,
-    name_collision,
-    dupe_tests_collide,
-    custom_generic_test_config_custom_macros,
-    custom_generic_test_names,
-    custom_generic_test_names_alt_format,
-    test_context_where_subq_macros,
-    invalid_schema_models,
-    all_models,
-    local_utils,
-    ephemeral,
-    quote_required_models,
-    project_files,
+from tests.functional.schema_tests.fixtures import (
+    wrong_specification_block__schema_yml,
+    test_context_where_subq_models__schema_yml,
+    test_context_where_subq_models__model_a_sql,
+    test_utils__dbt_project_yml,
+    test_utils__macros__current_timestamp_sql,
+    test_utils__macros__custom_test_sql,
+    local_dependency__dbt_project_yml,
+    local_dependency__macros__equality_sql,
+    case_sensitive_models__schema_yml,
+    case_sensitive_models__lowercase_sql,
+    test_context_macros__my_test_sql,
+    test_context_macros__test_my_datediff_sql,
+    test_context_macros__custom_schema_tests_sql,
+    test_context_models_namespaced__schema_yml,
+    test_context_models_namespaced__model_c_sql,
+    test_context_models_namespaced__model_b_sql,
+    test_context_models_namespaced__model_a_sql,
+    macros_v2__override_get_test_macros_fail__get_test_sql_sql,
+    macros_v2__macros__tests_sql,
+    macros_v2__custom_configs__test_sql,
+    macros_v2__override_get_test_macros__get_test_sql_sql,
+    test_context_macros_namespaced__my_test_sql,
+    test_context_macros_namespaced__custom_schema_tests_sql,
+    seeds__some_seed_csv,
+    test_context_models__schema_yml,
+    test_context_models__model_c_sql,
+    test_context_models__model_b_sql,
+    test_context_models__model_a_sql,
+    name_collision__schema_yml,
+    name_collision__base_sql,
+    name_collision__base_extension_sql,
+    dupe_generic_tests_collide__schema_yml,
+    dupe_generic_tests_collide__model_a,
+    custom_generic_test_config_custom_macro__schema_yml,
+    custom_generic_test_config_custom_macro__model_a,
+    custom_generic_test_names__schema_yml,
+    custom_generic_test_names__model_a,
+    custom_generic_test_names_alt_format__schema_yml,
+    custom_generic_test_names_alt_format__model_a,
+    test_context_where_subq_macros__custom_generic_test_sql,
+    invalid_schema_models__schema_yml,
+    invalid_schema_models__model_sql,
+    models_v2__models__schema_yml,
+    models_v2__models__table_summary_sql,
+    models_v2__models__table_failure_summary_sql,
+    models_v2__models__table_disabled_sql,
+    models_v2__models__table_failure_null_relation_sql,
+    models_v2__models__table_failure_copy_sql,
+    models_v2__models__table_copy_sql,
+    models_v2__limit_null__schema_yml,
+    models_v2__limit_null__table_warning_limit_null_sql,
+    models_v2__limit_null__table_limit_null_sql,
+    models_v2__limit_null__table_failure_limit_null_sql,
+    models_v2__override_get_test_models__schema_yml,
+    models_v2__override_get_test_models__my_model_warning_sql,
+    models_v2__override_get_test_models__my_model_pass_sql,
+    models_v2__override_get_test_models__my_model_failure_sql,
+    models_v2__override_get_test_models_fail__schema_yml,
+    models_v2__override_get_test_models_fail__my_model_sql,
+    models_v2__malformed__schema_yml,
+    models_v2__malformed__table_summary_sql,
+    models_v2__malformed__table_copy_sql,
+    models_v2__custom_configs__schema_yml,
+    models_v2__custom_configs__table_copy_another_one_sql,
+    models_v2__custom_configs__table_copy_sql,
+    models_v2__custom_configs__table_copy_with_dots_sql,
+    models_v2__custom__schema_yml,
+    models_v2__custom__table_copy_sql,
+    models_v2__render_test_cli_arg_models__schema_yml,
+    models_v2__render_test_cli_arg_models__model_sql,
+    models_v2__render_test_configured_arg_models__schema_yml,
+    models_v2__render_test_configured_arg_models__model_sql,
+    local_utils__dbt_project_yml,
+    local_utils__macros__datediff_sql,
+    local_utils__macros__current_timestamp_sql,
+    local_utils__macros__custom_test_sql,
+    ephemeral__schema_yml,
+    ephemeral__ephemeral_sql,
+    quote_required_models__schema_yml,
+    quote_required_models__model_again_sql,
+    quote_required_models__model_noquote_sql,
+    quote_required_models__model_sql,
     case_sensitive_models__uppercase_SQL,
+    macro_resolution_order_macros__my_custom_test_sql,
+    macro_resolution_order_models__config_yml,
+    macro_resolution_order_models__my_model_sql,
+    alt_local_utils__macros__type_timestamp_sql,
 )
 from dbt.exceptions import ParsingException, CompilationException
 from dbt.contracts.results import TestStatus
@@ -42,8 +105,16 @@ class TestSchemaTests:
         project.run_sql_file(os.path.join(project.test_data_dir, "seed_failure.sql"))
 
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["models"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__models__schema_yml,
+            "table_summary.sql": models_v2__models__table_summary_sql,
+            "table_failure_summary.sql": models_v2__models__table_failure_summary_sql,
+            "table_disabled.sql": models_v2__models__table_disabled_sql,
+            "table_failure_null_relation.sql": models_v2__models__table_failure_null_relation_sql,
+            "table_failure_copy.sql": models_v2__models__table_failure_copy_sql,
+            "table_copy.sql": models_v2__models__table_copy_sql,
+        }
 
     def assertTestFailed(self, result):
         assert result.status == "fail"
@@ -117,8 +188,13 @@ class TestLimitedSchemaTests:
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["limit_null"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__limit_null__schema_yml,
+            "table_warning_limit_null.sql": models_v2__limit_null__table_warning_limit_null_sql,
+            "table_limit_null.sql": models_v2__limit_null__table_limit_null_sql,
+            "table_failure_limit_null.sql": models_v2__limit_null__table_failure_limit_null_sql,
+        }
 
     def assertTestFailed(self, result):
         assert result.status == "fail"
@@ -163,8 +239,13 @@ class TestLimitedSchemaTests:
 class TestDefaultBoolType:
     # test with default True/False in get_test_sql macro
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["override_get_test_models"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__override_get_test_models__schema_yml,
+            "my_model_warning.sql": models_v2__override_get_test_models__my_model_warning_sql,
+            "my_model_pass.sql": models_v2__override_get_test_models__my_model_pass_sql,
+            "my_model_failure.sql": models_v2__override_get_test_models__my_model_failure_sql,
+        }
 
     def assertTestFailed(self, result):
         assert result.status == "fail"
@@ -207,10 +288,24 @@ class TestDefaultBoolType:
 
 
 class TestOtherBoolType:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        macros_v2_file = {
+            "override_get_test_macros": {
+                "get_test_sql.sql": macros_v2__override_get_test_macros__get_test_sql_sql
+            },
+        }
+        write_project_files(project_root, "macros-v2", macros_v2_file)
+
     # test with expected 0/1 in custom get_test_sql macro
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["override_get_test_models"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__override_get_test_models__schema_yml,
+            "my_model_warning.sql": models_v2__override_get_test_models__my_model_warning_sql,
+            "my_model_pass.sql": models_v2__override_get_test_models__my_model_pass_sql,
+            "my_model_failure.sql": models_v2__override_get_test_models__my_model_failure_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -260,10 +355,22 @@ class TestOtherBoolType:
 
 
 class TestNonBoolType:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        macros_v2_file = {
+            "override_get_test_macros_fail": {
+                "get_test_sql.sql": macros_v2__override_get_test_macros_fail__get_test_sql_sql
+            },
+        }
+        write_project_files(project_root, "macros-v2", macros_v2_file)
+
     # test with invalid 'x'/'y' in custom get_test_sql macro
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["override_get_test_models_fail"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__override_get_test_models_fail__schema_yml,
+            "my_model.sql": models_v2__override_get_test_models_fail__my_model_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -291,8 +398,12 @@ class TestMalformedSchemaTests:
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["malformed"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__malformed__schema_yml,
+            "table_summary.sql": models_v2__malformed__table_summary_sql,
+            "table_copy.sql": models_v2__malformed__table_copy_sql,
+        }
 
     def test_malformed_schema_will_break_run(
         self,
@@ -303,13 +414,21 @@ class TestMalformedSchemaTests:
 
 
 class TestCustomConfigSchemaTests:
-    @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["custom-configs"]
-
     @pytest.fixture(scope="class", autouse=True)
-    def setUp(self, project):
+    def setUp(self, project, project_root):
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
+
+        macros_v2_file = {"custom-configs": {"test.sql": macros_v2__custom_configs__test_sql}}
+        write_project_files(project_root, "macros-v2", macros_v2_file)
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models_v2__custom_configs__schema_yml,
+            "table_copy_another_one.sql": models_v2__custom_configs__table_copy_another_one_sql,
+            "table_copy.sql": models_v2__custom_configs__table_copy_sql,
+            "table.copy.with.dots.sql": models_v2__custom_configs__table_copy_with_dots_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -333,8 +452,11 @@ class TestCustomConfigSchemaTests:
 
 class TestHooksInTests:
     @pytest.fixture(scope="class")
-    def models(self, ephemeral):  # noqa: F811
-        return ephemeral
+    def models(self):
+        return {
+            "schema.yml": ephemeral__schema_yml,
+            "ephemeral.sql": ephemeral__ephemeral_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -359,8 +481,11 @@ class TestHooksInTests:
 
 class TestHooksForWhich:
     @pytest.fixture(scope="class")
-    def models(self, ephemeral):  # noqa: F811
-        return ephemeral
+    def models(self):
+        return {
+            "schema.yml": ephemeral__schema_yml,
+            "ephemeral.sql": ephemeral__ephemeral_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -393,6 +518,17 @@ class TestCustomSchemaTests:
         write_project_files(project_root, "dbt_integration_project", dbt_integration_project)
         project.run_sql_file(os.path.join(project.test_data_dir, "seed.sql"))
 
+        local_dependency_files = {
+            "dbt_project.yml": local_dependency__dbt_project_yml,
+            "macros": {"equality.sql": local_dependency__macros__equality_sql},
+        }
+        write_project_files(project_root, "local_dependency", local_dependency_files)
+
+        macros_v2_file = {
+            "macros": {"tests.sql": macros_v2__macros__tests_sql},
+        }
+        write_project_files(project_root, "macros-v2", macros_v2_file)
+
     @pytest.fixture(scope="class")
     def packages(self):
         return {
@@ -417,8 +553,11 @@ class TestCustomSchemaTests:
         }
 
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["custom"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__custom__schema_yml,
+            "table_copy.sql": models_v2__custom__table_copy_sql,
+        }
 
     def test_schema_tests(
         self,
@@ -443,8 +582,13 @@ class TestCustomSchemaTests:
 
 class TestQuotedSchemaTestColumns:
     @pytest.fixture(scope="class")
-    def models(self, quote_required_models):  # noqa: F811
-        return quote_required_models
+    def models(self):
+        return {
+            "schema.yml": quote_required_models__schema_yml,
+            "model_again.sql": quote_required_models__model_again_sql,
+            "model_noquote.sql": quote_required_models__model_noquote_sql,
+            "model.sql": quote_required_models__model_sql,
+        }
 
     def test_quote_required_column(
         self,
@@ -465,9 +609,19 @@ class TestQuotedSchemaTestColumns:
 
 
 class TestCliVarsSchemaTests:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        macros_v2_file = {
+            "macros": {"tests.sql": macros_v2__macros__tests_sql},
+        }
+        write_project_files(project_root, "macros-v2", macros_v2_file)
+
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["render_test_cli_arg_models"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__render_test_cli_arg_models__schema_yml,
+            "model.sql": models_v2__render_test_cli_arg_models__model_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -488,9 +642,19 @@ class TestCliVarsSchemaTests:
 
 
 class TestConfiguredVarsSchemaTests:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        macros_v2_file = {
+            "macros": {"tests.sql": macros_v2__macros__tests_sql},
+        }
+        write_project_files(project_root, "macros-v2", macros_v2_file)
+
     @pytest.fixture(scope="class")
-    def models(self, all_models):  # noqa: F811
-        return all_models["render_test_configured_arg_models"]
+    def models(self):
+        return {
+            "schema.yml": models_v2__render_test_configured_arg_models__schema_yml,
+            "model.sql": models_v2__render_test_configured_arg_models__model_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -512,8 +676,11 @@ class TestConfiguredVarsSchemaTests:
 
 class TestSchemaCaseInsensitive:
     @pytest.fixture(scope="class")
-    def models(self, case_sensitive_models):  # noqa: F811
-        return case_sensitive_models
+    def models(self):
+        return {
+            "schema.yml": case_sensitive_models__schema_yml,
+            "lowercase.sql": case_sensitive_models__lowercase_sql,
+        }
 
     @pytest.fixture(scope="class", autouse=True)
     def setUP(self, project):
@@ -541,9 +708,33 @@ class TestSchemaCaseInsensitive:
 
 
 class TestSchemaTestContext:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        local_utils_files = {
+            "dbt_project.yml": local_utils__dbt_project_yml,
+            "macros": {
+                "datediff.sql": local_utils__macros__datediff_sql,
+                "current_timestamp.sql": local_utils__macros__current_timestamp_sql,
+                "custom_test.sql": local_utils__macros__custom_test_sql,
+            },
+        }
+        write_project_files(project_root, "local_utils", local_utils_files)
+
+        test_context_macros_files = {
+            "my_test.sql": test_context_macros__my_test_sql,
+            "test_my_datediff.sql": test_context_macros__test_my_datediff_sql,
+            "custom_schema_tests.sql": test_context_macros__custom_schema_tests_sql,
+        }
+        write_project_files(project_root, "test-context-macros", test_context_macros_files)
+
     @pytest.fixture(scope="class")
-    def models(self, test_context_models):  # noqa: F811
-        return test_context_models
+    def models(self):
+        return {
+            "schema.yml": test_context_models__schema_yml,
+            "model_c.sql": test_context_models__model_c_sql,
+            "model_b.sql": test_context_models__model_b_sql,
+            "model_a.sql": test_context_models__model_a_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -557,10 +748,7 @@ class TestSchemaTestContext:
     def packages(self):
         return {"packages": [{"local": "local_utils"}]}
 
-    def test_test_context_tests(
-        self,
-        project,
-    ):
+    def test_test_context_tests(self, project):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
         run_dbt(["deps"])
@@ -586,9 +774,43 @@ class TestSchemaTestContext:
 
 
 class TestSchemaTestContextWithMacroNamespace:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        test_utils_files = {
+            "dbt_project.yml": test_utils__dbt_project_yml,
+            "macros": {
+                "current_timestamp.sql": test_utils__macros__current_timestamp_sql,
+                "custom_test.sql": test_utils__macros__custom_test_sql,
+            },
+        }
+        write_project_files(project_root, "test_utils", test_utils_files)
+
+        local_utils_files = {
+            "dbt_project.yml": local_utils__dbt_project_yml,
+            "macros": {
+                "datediff.sql": local_utils__macros__datediff_sql,
+                "current_timestamp.sql": local_utils__macros__current_timestamp_sql,
+                "custom_test.sql": local_utils__macros__custom_test_sql,
+            },
+        }
+        write_project_files(project_root, "local_utils", local_utils_files)
+
+        test_context_macros_namespaced_file = {
+            "my_test.sql": test_context_macros_namespaced__my_test_sql,
+            "custom_schema_tests.sql": test_context_macros_namespaced__custom_schema_tests_sql,
+        }
+        write_project_files(
+            project_root, "test-context-macros-namespaced", test_context_macros_namespaced_file
+        )
+
     @pytest.fixture(scope="class")
-    def models(self, test_context_models_namespaced):  # noqa: F811
-        return test_context_models_namespaced
+    def models(self):
+        return {
+            "schema.yml": test_context_models_namespaced__schema_yml,
+            "model_c.sql": test_context_models_namespaced__model_c_sql,
+            "model_b.sql": test_context_models_namespaced__model_b_sql,
+            "model_a.sql": test_context_models_namespaced__model_a_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -640,8 +862,12 @@ class TestSchemaTestContextWithMacroNamespace:
 
 class TestSchemaTestNameCollision:
     @pytest.fixture(scope="class")
-    def models(self, name_collision):  # noqa: F811
-        return name_collision
+    def models(self):
+        return {
+            "schema.yml": name_collision__schema_yml,
+            "base.sql": name_collision__base_sql,
+            "base_extension.sql": name_collision__base_extension_sql,
+        }
 
     def test_collision_test_names_get_hash(
         self,
@@ -666,8 +892,11 @@ class TestSchemaTestNameCollision:
 
 class TestGenericTestsCollide:
     @pytest.fixture(scope="class")
-    def models(self, dupe_tests_collide):  # noqa: F811
-        return dupe_tests_collide
+    def models(self):
+        return {
+            "schema.yml": dupe_generic_tests_collide__schema_yml,
+            "model_a.sql": dupe_generic_tests_collide__model_a,
+        }
 
     def test_generic_test_collision(
         self,
@@ -681,8 +910,11 @@ class TestGenericTestsCollide:
 
 class TestGenericTestsConfigCustomMacros:
     @pytest.fixture(scope="class")
-    def models(self, custom_generic_test_config_custom_macros):  # noqa: F811
-        return custom_generic_test_config_custom_macros
+    def models(self):
+        return {
+            "schema.yml": custom_generic_test_config_custom_macro__schema_yml,
+            "model_a.sql": custom_generic_test_config_custom_macro__model_a,
+        }
 
     def test_generic_test_config_custom_macros(
         self,
@@ -696,8 +928,11 @@ class TestGenericTestsConfigCustomMacros:
 
 class TestGenericTestsCustomNames:
     @pytest.fixture(scope="class")
-    def models(self, custom_generic_test_names):  # noqa: F811
-        return custom_generic_test_names
+    def models(self):
+        return {
+            "schema.yml": custom_generic_test_names__schema_yml,
+            "model_a.sql": custom_generic_test_names__model_a,
+        }
 
     # users can define custom names for specific instances of generic tests
     def test_generic_tests_with_custom_names(
@@ -723,8 +958,11 @@ class TestGenericTestsCustomNames:
 
 class TestGenericTestsCustomNamesAltFormat(TestGenericTestsCustomNames):
     @pytest.fixture(scope="class")
-    def models(self, custom_generic_test_names_alt_format):  # noqa: F811
-        return custom_generic_test_names_alt_format
+    def models(self):
+        return {
+            "schema.yml": custom_generic_test_names_alt_format__schema_yml,
+            "model_a.sql": custom_generic_test_names_alt_format__model_a,
+        }
 
     # exactly as above, just alternative format for yaml definition
     def test_collision_test_names_get_hash(
@@ -738,8 +976,11 @@ class TestGenericTestsCustomNamesAltFormat(TestGenericTestsCustomNames):
 
 class TestInvalidSchema:
     @pytest.fixture(scope="class")
-    def models(self, invalid_schema_models):  # noqa: F811
-        return invalid_schema_models
+    def models(self):
+        return {
+            "schema.yml": invalid_schema_models__schema_yml,
+            "model.sql": invalid_schema_models__model_sql,
+        }
 
     def test_invalid_schema_file(
         self,
@@ -752,8 +993,12 @@ class TestInvalidSchema:
 
 class TestWrongSpecificationBlock:
     @pytest.fixture(scope="class")
-    def models(self, wrong_specification_block):  # noqa: F811
-        return wrong_specification_block
+    def models(self):
+        return {"schema.yml": wrong_specification_block__schema_yml}
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"some_seed.csv": seeds__some_seed_csv}
 
     def test_wrong_specification_block(
         self,
@@ -777,9 +1022,21 @@ class TestWrongSpecificationBlock:
 
 
 class TestSchemaTestContextWhereSubq:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        test_context_where_subq_macros_file = {
+            "custom_generic_test.sql": test_context_where_subq_macros__custom_generic_test_sql
+        }
+        write_project_files(
+            project_root, "test-context-where-subq-macros", test_context_where_subq_macros_file
+        )
+
     @pytest.fixture(scope="class")
-    def models(self, test_context_where_subq_models):  # noqa: F811
-        return test_context_where_subq_models
+    def models(self):
+        return {
+            "schema.yml": test_context_where_subq_models__schema_yml,
+            "model_a.sql": test_context_where_subq_models__model_a_sql,
+        }
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -799,3 +1056,52 @@ class TestSchemaTestContextWhereSubq:
 
         results = run_dbt(["test"])
         assert len(results) == 1
+
+
+class TestCustomSchemaTestMacroResolutionOrder:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        alt_local_utils_file = {
+            "dbt_project.yml": local_utils__dbt_project_yml,
+            "macros": {
+                "datediff.sql": alt_local_utils__macros__type_timestamp_sql,
+            },
+        }
+        write_project_files(project_root, "alt_local_utils", alt_local_utils_file)
+
+        macros_resolution_order_file = {
+            "my_custom_test.sql": macro_resolution_order_macros__my_custom_test_sql,
+        }
+        write_project_files(
+            project_root, "macro_resolution_order_macros", macros_resolution_order_file
+        )
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": macro_resolution_order_models__config_yml,
+            "my_model.sql": macro_resolution_order_models__my_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "macro-paths": ["macro_resolution_order_macros"],
+        }
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "alt_local_utils"}]}
+
+    def test_macro_resolution_test_namespace(
+        self,
+        project,
+    ):
+        # https://github.com/dbt-labs/dbt-core/issues/5720
+        # Previously, macros called as 'dbt.some_macro' would not correctly
+        # resolve to 'some_macro' from the 'dbt' namespace during static analysis,
+        # if 'some_macro' also existed in an installed package,
+        # leading to the macro being missing in the TestNamespace
+        run_dbt(["deps"])
+        run_dbt(["parse"])
