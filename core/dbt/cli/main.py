@@ -8,6 +8,7 @@ from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
+from dbt.tracking import initialize_from_flags
 import logging
 
 
@@ -50,6 +51,9 @@ def cli_runner():
 @p.version_check
 @p.warn_error
 @p.write_json
+@p.profile
+@p.profiles_dir
+@p.project_dir
 def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
@@ -67,6 +71,9 @@ def cli(ctx, **kwargs):
 
     # Adapter management
     ctx.with_resource(adapter_management())
+
+    # tracking
+    initialize_from_flags()
 
     # Version info
     if flags.VERSION:
@@ -86,9 +93,6 @@ def cli(ctx, **kwargs):
 @p.indirect_selection
 @p.log_path
 @p.models
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.show
 @p.state
@@ -107,9 +111,6 @@ def build(ctx, **kwargs):
 # dbt clean
 @cli.command("clean")
 @click.pass_context
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.target
 @p.vars
 def clean(ctx, **kwargs):
@@ -133,9 +134,6 @@ def docs(ctx, **kwargs):
 @p.exclude
 @p.log_path
 @p.models
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.state
 @p.target
@@ -154,9 +152,6 @@ def docs_generate(ctx, **kwargs):
 @click.pass_context
 @p.browser
 @p.port
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.target
 @p.vars
 def docs_serve(ctx, **kwargs):
@@ -174,9 +169,6 @@ def docs_serve(ctx, **kwargs):
 @p.log_path
 @p.models
 @p.parse_only
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.state
 @p.target
@@ -194,9 +186,6 @@ def compile(ctx, **kwargs):
 @cli.command("debug")
 @click.pass_context
 @p.config_dir
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.target
 @p.vars
 @p.version_check
@@ -209,9 +198,6 @@ def debug(ctx, **kwargs):
 # dbt deps
 @cli.command("deps")
 @click.pass_context
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.target
 @p.vars
 def deps(ctx, **kwargs):
@@ -223,9 +209,6 @@ def deps(ctx, **kwargs):
 # dbt init
 @cli.command("init")
 @click.pass_context
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.skip_profile_setup
 @p.target
 @p.vars
@@ -243,9 +226,6 @@ def init(ctx, **kwargs):
 @p.models
 @p.output
 @p.output_keys
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.resource_type
 @p.selector
 @p.state
@@ -262,9 +242,6 @@ def list(ctx, **kwargs):
 @click.pass_context
 @p.compile_parse
 @p.log_path
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.target
 @p.target_path
 @p.threads
@@ -286,9 +263,6 @@ def parse(ctx, **kwargs):
 @p.full_refresh
 @p.log_path
 @p.models
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.state
 @p.target
@@ -306,9 +280,6 @@ def run(ctx, **kwargs):
 @cli.command("run-operation")
 @click.pass_context
 @p.args
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.target
 @p.vars
 def run_operation(ctx, **kwargs):
@@ -324,9 +295,6 @@ def run_operation(ctx, **kwargs):
 @p.full_refresh
 @p.log_path
 @p.models
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.show
 @p.state
@@ -347,9 +315,6 @@ def seed(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.models
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.state
 @p.target
@@ -374,9 +339,6 @@ def source(ctx, **kwargs):
 @p.exclude
 @p.models
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.state
 @p.target
@@ -397,9 +359,6 @@ def freshness(ctx, **kwargs):
 @p.indirect_selection
 @p.log_path
 @p.models
-@p.profile
-@p.profiles_dir
-@p.project_dir
 @p.selector
 @p.state
 @p.store_failures
