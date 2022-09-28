@@ -884,6 +884,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 f"Unexpected yaml_key {patch.yaml_key} for patch in "
                 f"file {source_file.path.original_file_path}"
             )
+        # handle disabled nodes
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
             found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
@@ -898,10 +899,16 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     )
                     raise ParsingException(msg)
 
-                # We're saving the patch_path because we need to schedule
-                # re-application of the patch in partial parsing.
-                node = found_nodes[0]
-                node.patch_path = source_file.file_id
+                # all nodes in the disabled dict have the same unique_id so just grab the first one
+                # to append with the uniqe id
+                source_file.append_patch(patch.yaml_key, found_nodes[0].unique_id)
+                for node in found_nodes:
+                    node.patch_path = source_file.file_id
+                    # re-calculate the node config with the patch config.  Always do this
+                    # for the case when no config is set to ensure the default of true gets captured
+                    self.patch_node_config(node, patch)
+
+                    node.patch(patch)
             else:
                 msg = (
                     f"Did not find matching node for patch with name '{patch.name}' "
@@ -910,19 +917,18 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 )
                 warn_or_error(msg, log_fmt=warning_tag("{}"))
                 return
-        else:
-            # patches can't be overwritten
-            node = self.manifest.nodes.get(unique_id)
+
+        # patches can't be overwritten
+        node = self.manifest.nodes.get(unique_id)
+        if node:
             if node.patch_path:
                 package_name, existing_file_path = node.patch_path.split("://")
                 raise_duplicate_patch_name(patch, existing_file_path)
 
-        if node:
             source_file.append_patch(patch.yaml_key, node.unique_id)
-            # If this patch has config changes, re-calculate the node config
-            # with the patch config
-            if patch.config:
-                self.patch_node_config(node, patch)
+            # re-calculate the node config with the patch config.  Always do this
+            # for the case when no config is set to ensure the default of true gets captured
+            self.patch_node_config(node, patch)
 
             node.patch(patch)
 
