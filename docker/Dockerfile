@@ -14,12 +14,12 @@ FROM --platform=$build_for python:3.10.7-slim-bullseye as base
 # N.B. The refs updated automagically every release via bumpversion
 # N.B. dbt-postgres is currently found in the core codebase so a value of dbt-core@<some_version> is correct
 
-ARG dbt_core_ref=dbt-core@v1.3.0b2
-ARG dbt_postgres_ref=dbt-core@v1.3.0b2
-ARG dbt_redshift_ref=dbt-redshift@v1.3.0b2
-ARG dbt_bigquery_ref=dbt-bigquery@v1.3.0b2
-ARG dbt_snowflake_ref=dbt-snowflake@v1.3.0b2
-ARG dbt_spark_ref=dbt-spark@v1.3.0b2
+ARG dbt_core_ref=dbt-core@v1.3.0rc1
+ARG dbt_postgres_ref=dbt-core@v1.3.0rc1
+ARG dbt_redshift_ref=dbt-redshift@v1.3.0rc1
+ARG dbt_bigquery_ref=dbt-bigquery@v1.3.0rc1
+ARG dbt_snowflake_ref=dbt-snowflake@v1.3.0rc1
+ARG dbt_spark_ref=dbt-spark@v1.3.0rc1
 # special case args
 ARG dbt_spark_version=all
 ARG dbt_third_party
