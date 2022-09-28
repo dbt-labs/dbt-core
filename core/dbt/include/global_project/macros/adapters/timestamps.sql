@@ -6,15 +6,6 @@
     current_timestamp
 {% endmacro %}
 
-{%- macro current_timestamp_in_utc() -%}
-    {{ adapter.dispatch('current_timestamp_in_utc', 'dbt')() }}
-{%- endmacro -%}
-
-{% macro default__current_timestamp_in_utc() %}
-    {{ convert_timezone(target_tz="UTC",
-        source_timestamp=current_timestamp())}}
-{% endmacro %}
-
 {%- macro snapshot_get_time() -%}
     {{ adapter.dispatch('snapshot_get_time', 'dbt')() }}
 {%- endmacro -%}
@@ -59,4 +50,12 @@
 
 {% macro default__current_timestamp_backcompat() %}
     {{ return(adapter.dispatch('current_timestamp', 'dbt')()) }}
+{% endmacro %}
+
+{% macro current_timestamp_in_utc_backcompat() %}
+    {{ return(adapter.dispatch('current_timestamp_backcompat', 'dbt')()) }}
+{% endmacro %}
+
+{% macro default__current_timestamp_in_utc_backcompat() %}
+    {{ return(adapter.dispatch('current_timestamp_backcompat', 'dbt')()) }}
 {% endmacro %}
