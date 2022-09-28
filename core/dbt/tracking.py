@@ -476,3 +476,11 @@ def initialize_from_flags():
         initialize_tracking(flags.PROFILES_DIR)
     else:
         do_not_track()
+
+
+def initialize_from_flags_click(flags):
+    # Setting these used to be in UserConfig, but had to be moved here
+    if flags.SEND_ANONYMOUS_USAGE_STATS:
+        initialize_tracking(flags.PROFILES_DIR)
+    else:
+        do_not_track()
