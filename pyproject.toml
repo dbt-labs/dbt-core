@@ -1,3 +1,5 @@
 [tool.black]
+# TODO: remove global exclusion of tests when testing overhaul is complete
+exclude = 'test'
 line-length = 99
 target-version = ['py38']
