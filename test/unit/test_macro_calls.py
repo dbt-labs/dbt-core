@@ -34,7 +34,7 @@ class MacroCalls(unittest.TestCase):
             ['get_snapshot_unique_id'],
             ['get_columns_in_query'],
             ['get_snapshot_unique_id'],
-            ['current_timestamp_backcompat()'],
+            ['current_timestamp_backcompat'],
             ['test_some_kind4', 'foo_utils4.test_some_kind4'],
             ['test_some_kind5', 'foo_utils5.test_some_kind5'],
         ]
