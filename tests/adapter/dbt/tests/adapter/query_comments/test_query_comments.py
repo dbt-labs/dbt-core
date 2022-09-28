@@ -6,7 +6,7 @@ from dbt.exceptions import RuntimeException
 from dbt.version import __version__ as dbt_version
 from dbt.logger import log_manager
 from dbt.tests.util import run_dbt_and_capture
-from dbt.tests.adapter.query_comments.fixtures import MODELS__X_SQL
+from dbt.tests.adapter.query_comments.fixtures import MACROS__MACRO_SQL, MODELS__X_SQL
 
 
 class BaseDefaultQueryComments:
@@ -30,6 +30,12 @@ class BaseDefaultQueryComments:
     def models(self):
         return {
             "x.sql": MODELS__X_SQL,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macro.sql": MACROS__MACRO_SQL,
         }
 
     @pytest.fixture(scope="class", autouse=True)
@@ -88,20 +94,18 @@ class BaseDefaultQueryComments:
 
 # Base setup to be inherited #
 class BaseQueryComments(BaseDefaultQueryComments):
-    def project_config(self):
-        cfg = super().project_config
-        cfg.update({"query-comment": "dbt\nrules!\n"})
-        return cfg
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"query-comment": "dbt\nrules!\n"}
 
     def matches_comment(self, msg) -> bool:
         return msg.startswith("/* dbt\nrules! */\n")
 
 
 class BaseMacroQueryComments(BaseDefaultQueryComments):
-    def project_config(self):
-        cfg = super().project_config
-        cfg.update({"query-comment": "{{ query_header_no_args() }}"})
-        return cfg
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"query-comment": "{{ query_header_no_args() }}"}
 
     def matches_comment(self, msg) -> bool:
         start_with = "/* dbt macros\nare pretty cool */\n"
@@ -109,12 +113,9 @@ class BaseMacroQueryComments(BaseDefaultQueryComments):
 
 
 class BaseMacroArgsQueryComments(BaseDefaultQueryComments):
-    def project_config(self):
-        cfg = super().project_config
-        cfg.update(
-            {"query-comment": "{{ return(ordered_to_json(query_header_args(target.name))) }}"}
-        )
-        return cfg
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"query-comment": "{{ return(ordered_to_json(query_header_args(target.name))) }}"}
 
     def matches_comment(self, msg) -> bool:
         expected_dct = {
@@ -128,10 +129,9 @@ class BaseMacroArgsQueryComments(BaseDefaultQueryComments):
 
 
 class BaseMacroInvalidQueryComments(BaseDefaultQueryComments):
-    def project_config(self):
-        cfg = super().project_config
-        cfg.update({"query-comment": "{{ invalid_query_header() }}"})
-        return cfg
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"query-comment": "{{ invalid_query_header() }}"}
 
     def run_assert_comments(self):
         with pytest.raises(RuntimeException):
@@ -139,20 +139,18 @@ class BaseMacroInvalidQueryComments(BaseDefaultQueryComments):
 
 
 class BaseNullQueryComments(BaseDefaultQueryComments):
-    def project_config(self):
-        cfg = super().project_config
-        cfg.update({"query-comment": ""})
-        return cfg
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"query-comment": ""}
 
     def matches_comment(self, msg) -> bool:
         return not ("/*" in msg or "*/" in msg)
 
 
 class BaseEmptyQueryComments(BaseDefaultQueryComments):
-    def project_config(self):
-        cfg = super().project_config
-        cfg.update({"query-comment": ""})
-        return cfg
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"query-comment": ""}
 
     def matches_comment(self, msg) -> bool:
         return not ("/*" in msg or "*/" in msg)

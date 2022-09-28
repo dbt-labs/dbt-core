@@ -66,14 +66,14 @@ class TestDefaultQueryComments(DBTIntegrationTest):
                 continue
 
             parsed_logs.append(log)
-        
+
         # empty lists evaluate as False
         self.assertTrue(parsed_logs)
         return parsed_logs
 
     def query_comment(self, model_name, log):
         # N.B: a temporary string replacement regex to strip the HH:MM:SS from the log line if present.
-        # TODO: make this go away when structured logging is stable 
+        # TODO: make this go away when structured logging is stable
         log_msg = re.sub("(?:[01]\d|2[0123]):(?:[012345]\d):(?:[012345]\d \| )", "", log['msg'])
         prefix = 'On {}: '.format(model_name)
         if log_msg.startswith(prefix):
