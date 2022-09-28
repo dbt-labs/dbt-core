@@ -14,24 +14,6 @@
     {{ current_timestamp() }}
 {% endmacro %}
 
-{%- macro convert_timezone(source_tz, target_tz, source_timestamp) -%}
-    {%- if not target_tz is string -%}
-        {{ exceptions.raise_compiler_error("'target_tz' must be a string") }}
-    {%- else -%}
-        {{ adapter.dispatch('convert_timezone', 'dbt') (source_tz, target_tz, source_timestamp) }}
-    {%- endif -%}
-
-{%- endmacro -%}
-
-{%- macro default__convert_timezone(source_tz, target_tz, source_timestamp) -%}
-    {%- if not source_tz -%}
-        {{ source_timestamp }} at time zone '{{ target_tz }}'
-    {%- else -%}
-        {{ source_timestamp }} at time zone '{{ source_tz }}' at time zone '{{ target_tz }}'
-    {%- endif -%}
-{%- endmacro -%}
-
-
 ---------------------------------------------
 
 /* {#
