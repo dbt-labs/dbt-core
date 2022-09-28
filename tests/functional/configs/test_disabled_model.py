@@ -251,14 +251,14 @@ class TestMultipleDisabledNodesSuccess:
         assert "model.test.my_model_2" in manifest.nodes
         assert "model.test.my_model_3" in manifest.nodes
 
-        expected_file_path = "models/folder_2"
+        expected_file_path = "folder_2"
         assert expected_file_path in manifest.nodes["model.test.my_model_2"].original_file_path
         assert expected_file_path in manifest.nodes["model.test.my_model_3"].original_file_path
 
         assert "model.test.my_model_2" in manifest.disabled
         assert "model.test.my_model_3" in manifest.disabled
 
-        expected_disabled_file_path = "models/folder_1"
+        expected_disabled_file_path = "folder_1"
         assert (
             expected_disabled_file_path
             in manifest.disabled["model.test.my_model_2"][0].original_file_path
@@ -306,20 +306,20 @@ class TestMultipleDisabledNodesOverrideModel:
         assert "model.test.my_model_2" in manifest.nodes
         assert "model.test.my_model_3" in manifest.nodes
 
-        expected_file_path_2 = "models/folder_1"
+        expected_file_path_2 = "folder_1"
         assert expected_file_path_2 in manifest.nodes["model.test.my_model_2"].original_file_path
-        expected_file_path_3 = "models/folder_2"
+        expected_file_path_3 = "folder_2"
         assert expected_file_path_3 in manifest.nodes["model.test.my_model_3"].original_file_path
 
         assert "model.test.my_model_2" in manifest.disabled
         assert "model.test.my_model_3" in manifest.disabled
 
-        expected_disabled_file_path_2 = "models/folder_2"
+        expected_disabled_file_path_2 = "folder_2"
         assert (
             expected_disabled_file_path_2
             in manifest.disabled["model.test.my_model_2"][0].original_file_path
         )
-        expected_disabled_file_path_3 = "models/folder_1"
+        expected_disabled_file_path_3 = "folder_1"
         assert (
             expected_disabled_file_path_3
             in manifest.disabled["model.test.my_model_3"][0].original_file_path
@@ -377,7 +377,7 @@ class TestManyDisabledNodesSuccess:
         assert "model.test.my_model_2" in manifest.nodes
         assert "model.test.my_model_3" in manifest.nodes
 
-        expected_file_path = "models/folder_2"
+        expected_file_path = "folder_2"
         assert expected_file_path in manifest.nodes["model.test.my_model_2"].original_file_path
         assert expected_file_path in manifest.nodes["model.test.my_model_3"].original_file_path
 
