@@ -894,8 +894,8 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     # We have no way to know which one to enable.
                     msg = (
                         f"Found {len(found_nodes)} matching disabled nodes for '{patch.name}'. "
-                        "Multiple nodes for the same unique id cannot be disabled in the schema "
-                        "file. They must be disabled in `dbt_project.yml` or in the sql files."
+                        "Multiple nodes for the same unique id cannot be enabled in the schema "
+                        "file. They must be enabled in `dbt_project.yml` or in the sql files."
                     )
                     raise ParsingException(msg)
 
@@ -906,7 +906,8 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     node.patch_path = source_file.file_id
                     # re-calculate the node config with the patch config.  Always do this
                     # for the case when no config is set to ensure the default of true gets captured
-                    self.patch_node_config(node, patch)
+                    if patch.config:
+                        self.patch_node_config(node, patch)
 
                     node.patch(patch)
             else:
@@ -928,7 +929,8 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             source_file.append_patch(patch.yaml_key, node.unique_id)
             # re-calculate the node config with the patch config.  Always do this
             # for the case when no config is set to ensure the default of true gets captured
-            self.patch_node_config(node, patch)
+            if patch.config:
+                self.patch_node_config(node, patch)
 
             node.patch(patch)
 
