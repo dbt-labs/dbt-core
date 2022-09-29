@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Adding validation for metric expression attribute
-time: 2022-09-16T15:47:12.799002-05:00
-custom:
-  Author: callum-mcdata
-  Issue: "5871"
-  PR: "5873"

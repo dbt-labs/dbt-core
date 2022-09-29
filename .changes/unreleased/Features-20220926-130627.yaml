@@ -1,9 +1,0 @@
-kind: Features
-body: This conditionally no-ops warehouse connection at compile depending on an env
-  var, disabling introspection/queries during compilation only. This is a temporary
-  solution to more complex permissions requirements for the semantic layer.
-time: 2022-09-26T13:06:27.591061-05:00
-custom:
-  Author: racheldaniel
-  Issue: "5936"
-  PR: "5926"
