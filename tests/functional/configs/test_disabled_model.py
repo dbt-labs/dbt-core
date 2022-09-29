@@ -210,7 +210,7 @@ class TestMultipleDisabledNodesForUniqueIDFailure:
         with pytest.raises(ParsingException) as exc:
             run_dbt(["parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "Found 3 matching disabled nodes for 'my_model_2'"
+        expected_msg = "Found 3 matching disabled nodes for model 'my_model_2'"
         assert expected_msg in exc_str
 
 

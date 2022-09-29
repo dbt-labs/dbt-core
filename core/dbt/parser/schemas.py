@@ -892,10 +892,12 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 if len(found_nodes) > 1 and patch.config.get("enabled"):
                     # There are multiple disabled nodes for this model and the schema file wants to enable one.
                     # We have no way to know which one to enable.
+                    resource_type = found_nodes[0].unique_id.split(".")[0]
                     msg = (
-                        f"Found {len(found_nodes)} matching disabled nodes for '{patch.name}'. "
-                        "Multiple nodes for the same unique id cannot be enabled in the schema "
-                        "file. They must be enabled in `dbt_project.yml` or in the sql files."
+                        f"Found {len(found_nodes)} matching disabled nodes for "
+                        f"{resource_type} '{patch.name}'. Multiple nodes for the same "
+                        "unique id cannot be enabled in the schema file. They must be enabled "
+                        "in `dbt_project.yml` or in the sql files."
                     )
                     raise ParsingException(msg)
 
