@@ -172,6 +172,26 @@ class ModelTest(BasePPTest):
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
 
+        # disable model three in the schema file
+        self.copy_file('test-files/models-schema4.yml', 'models/schema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 2)
+
+        # update enabled config to be true for model three in the schema file
+        self.copy_file('test-files/models-schema4b.yml', 'models/schema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
+        # disable model three in the schema file again
+        self.copy_file('test-files/models-schema4.yml', 'models/schema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 2)
+
+        # remove disabled config for model three in the schema file to check it gets enabled
+        self.copy_file('test-files/models-schema3.yml', 'models/schema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
         # Add a macro
         self.copy_file('test-files/my_macro.sql', 'macros/my_macro.sql')
         results = self.run_dbt(["--partial-parse", "run"])
