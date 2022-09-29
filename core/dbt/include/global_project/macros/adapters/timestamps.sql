@@ -35,7 +35,7 @@
 {% endmacro %}
 
 {% macro current_timestamp_in_utc_backcompat() %}
-    {{ return(adapter.dispatch('current_timestamp_backcompat', 'dbt')()) }}
+    {{ return(adapter.dispatch('current_timestamp_in_utc_backcompat', 'dbt')()) }}
 {% endmacro %}
 
 {% macro default__current_timestamp_in_utc_backcompat() %}
