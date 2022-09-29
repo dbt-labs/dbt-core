@@ -20,6 +20,7 @@ class TestCurrentTimestamps:
     def models(self):
         return {"get_current_timestamp.sql": _MODEL_CURRENT_TIMESTAMP}
 
+    # any adapters that don't want to check can set expected schema to None
     @pytest.fixture(scope="class")
     def expected_sql(self):
         return _MODEL_EXPECTED_SQL
@@ -41,7 +42,8 @@ class TestCurrentTimestamps:
             expected_schema=expected_schema,
         )
 
-        generated_sql = results.results[0].node.compiled_code
-        assert re.sub(r"\s+", "", generated_sql) == re.sub(
-            r"\s+", "", expected_sql
-        ), f"generated sql did not match expected: {generated_sql}"
+        if expected_sql:
+            generated_sql = results.results[0].node.compiled_code
+            assert re.sub(r"\s+", "", generated_sql) == re.sub(
+                r"\s+", "", expected_sql
+            ), f"generated sql did not match expected: {generated_sql}"
