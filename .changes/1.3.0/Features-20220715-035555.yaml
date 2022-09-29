@@ -1,8 +1,0 @@
-kind: Features
-body: Add reusable function for retrying adapter connections. Utilize said function
-  to add retries for Postgres (and Redshift).
-time: 2022-07-15T03:55:55.270637265+02:00
-custom:
-  Author: tomasfarias
-  Issue: "5022"
-  PR: "5432"
