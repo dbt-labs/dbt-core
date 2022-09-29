@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix typos of comments in core/dbt/adapters/
-time: 2022-08-22T19:42:38.593923+09:00
-custom:
-  Author: yoiki
-  Issue: "5690"
-  PR: "5693"
