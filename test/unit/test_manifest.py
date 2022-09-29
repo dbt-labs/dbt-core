@@ -547,6 +547,34 @@ class ManifestTest(unittest.TestCase):
         resource_fqns = manifest.get_resource_fqns()
         self.assertEqual(resource_fqns, expect)
 
+    def test__deepcopy_copies_flat_graph(self):
+        test_node = ParsedModelNode(
+                name='events',
+                database='dbt',
+                schema='analytics',
+                alias='events',
+                resource_type=NodeType.Model,
+                unique_id='model.snowplow.events',
+                fqn=['snowplow', 'events'],
+                package_name='snowplow',
+                refs=[],
+                sources=[],
+                metrics=[],
+                depends_on=DependsOn(),
+                config=self.model_config,
+                tags=[],
+                path='events.sql',
+                original_file_path='events.sql',
+                root_path='',
+                meta={},
+                language='sql',
+                raw_code='does not matter',
+                checksum=FileHash.empty())
+
+        original = make_manifest(nodes=[test_node])
+        original.build_flat_graph()
+        copy = original.deepcopy()
+        self.assertEqual(original.flat_graph, copy.flat_graph)
 
 class MixedManifestTest(unittest.TestCase):
     def setUp(self):
