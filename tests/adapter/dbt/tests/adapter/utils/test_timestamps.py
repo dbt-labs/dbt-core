@@ -44,6 +44,8 @@ class TestCurrentTimestamps:
 
         if expected_sql:
             generated_sql = results.results[0].node.compiled_code
-            assert re.sub(r"\s+", "", generated_sql) == re.sub(
-                r"\s+", "", expected_sql
+            generated_sql_check = re.sub(r"\s+", "", generated_sql).lower()
+            expected_sql_check = re.sub(r"\s+", "", expected_sql).lower()
+            assert (
+                expected_sql_check == generated_sql_check
             ), f"generated sql did not match expected: {generated_sql}"
