@@ -188,6 +188,42 @@ class TestInvalidMetricMissingModel:
             run_dbt(["run"])
 
 
+invalid_metrics__missing_expression_yml = """
+version: 2
+metrics:
+  - name: number_of_people
+    label: "Number of people"
+    model: "ref(people)"
+    description: Total count of people
+    calculation_method: count
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+"""
+
+
+class TestInvalidMetricMissingExpression:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metrics__missing_expression_yml,
+            "people.sql": models__people_sql,
+        }
+
+    # tests that we get a ParsingException with a missing expression
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingException):
+            run_dbt(["run"])
+
+
 names_with_spaces_metrics_yml = """
 version: 2
 

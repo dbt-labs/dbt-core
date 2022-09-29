@@ -109,9 +109,15 @@ class MacroResolver:
 
     def get_macro(self, local_package, macro_name):
         local_package_macros = {}
+        # If the macro is explicitly prefixed with an internal namespace
+        # (e.g. 'dbt.some_macro'), look there first
+        if local_package in self.internal_package_names:
+            local_package_macros = self.internal_packages[local_package]
+        # If the macro is explicitly prefixed with a different package name
+        # (e.g. 'dbt_utils.some_macro'), look there first
         if local_package not in self.internal_package_names and local_package in self.packages:
             local_package_macros = self.packages[local_package]
-        # First: search the local packages for this macro
+        # First: search the specified package for this macro
         if macro_name in local_package_macros:
             return local_package_macros[macro_name]
         # Now look up in the standard search order
