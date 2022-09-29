@@ -15,7 +15,7 @@ select now() as current_timestamp,
 """
 
 
-class TestCurrentTimestamps:
+class BaseCurrentTimestamps:
     @pytest.fixture(scope="class")
     def models(self):
         return {"get_current_timestamp.sql": _MODEL_CURRENT_TIMESTAMP}
@@ -49,3 +49,6 @@ class TestCurrentTimestamps:
             assert (
                 expected_sql_check == generated_sql_check
             ), f"generated sql did not match expected: {generated_sql}"
+
+class TestCurrentTimestamps(BaseCurrentTimestamps):
+    pass
