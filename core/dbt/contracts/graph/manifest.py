@@ -1088,8 +1088,13 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def add_node(self, source_file: AnySourceFile, node: ManifestNodes, test_from=None):
         self.add_node_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
-            assert test_from
-            source_file.add_test(node.unique_id, test_from)
+            if isinstance(node, ParsedGenericTestNode):
+                assert test_from
+                source_file.add_test(node.unique_id, test_from)
+            if isinstance(node, ParsedMetric):
+                source_file.metrics.append(node.unique_id)
+            if isinstance(node, ParsedExposure):
+                source_file.exposures.append(node.unique_id)
         else:
             source_file.nodes.append(node.unique_id)
 
