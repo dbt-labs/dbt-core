@@ -6,7 +6,7 @@ from dbt.exceptions import RuntimeException
 from dbt.version import __version__ as dbt_version
 from dbt.logger import log_manager
 from dbt.tests.util import run_dbt_and_capture
-from dbt.tests.adapter.query_comment.fixtures import MACROS__MACRO_SQL, MODELS__X_SQL
+from tests.functional.query_comment.fixtures import MACROS__MACRO_SQL, MODELS__X_SQL
 
 
 class BaseDefaultQueryComments:
