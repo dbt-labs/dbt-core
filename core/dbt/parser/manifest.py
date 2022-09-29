@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
@@ -931,28 +932,24 @@ class ManifestLoader:
 
     def process_nodes(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
-        # correctly now that the schema files are also aprsed
-        disable_nodes = []
-        for node in self.manifest.nodes.values():
+        # correctly now that the schema files are also parsed
+        disable_node_copy = deepcopy(self.manifest.nodes)
+        for node in disable_node_copy.values():
             if not node.config.enabled:
-                disable_nodes.append(node)
-        for node in disable_nodes:
-            self.manifest.nodes.pop(node.unique_id)
-            self.manifest.add_disabled_nofile(node)
+                self.manifest.nodes.pop(node.unique_id)
+                self.manifest.add_disabled_nofile(node)
 
-        enable_nodes = {}
-        for disabled in self.manifest.disabled.values():
+        disabled_copy = deepcopy(self.manifest.disabled)
+        for disabled in disabled_copy.values():
             for node in disabled:
                 if node.config.enabled:
                     for dis_index, dis_node in enumerate(disabled):
                         # Remove node from disabled and unique_id from disabled dict if necessary
-                        enable_nodes[dis_index] = dis_node
-        for index, node in enable_nodes.items():
-            del self.manifest.disabled[node.unique_id][index]
-            if not self.manifest.disabled[node.unique_id]:
-                self.manifest.disabled.pop(node.unique_id)
+                        del self.manifest.disabled[node.unique_id][dis_index]
+                        if not self.manifest.disabled[node.unique_id]:
+                            self.manifest.disabled.pop(node.unique_id)
 
-            self.manifest.add_node_nofile(node)
+                    self.manifest.add_node_nofile(node)
 
         self.manifest.rebuild_ref_lookup()
 
