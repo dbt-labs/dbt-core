@@ -933,11 +933,13 @@ class ManifestLoader:
     def process_nodes(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
         # correctly now that the schema files are also parsed
-        disable_node_copy = deepcopy(self.manifest.nodes)
-        for node in disable_node_copy.values():
+        disabled_nodes = []
+        for node in self.manifest.nodes.values():
             if not node.config.enabled:
-                self.manifest.nodes.pop(node.unique_id)
+                disabled_nodes.append(node.unique_id)
                 self.manifest.add_disabled_nofile(node)
+        for unique_id in disabled_nodes:
+            self.manifest.nodes.pop(unique_id)
 
         disabled_copy = deepcopy(self.manifest.disabled)
         for disabled in disabled_copy.values():
