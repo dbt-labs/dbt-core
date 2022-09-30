@@ -23,7 +23,7 @@ class MacroCalls(unittest.TestCase):
                     *
                     from {{ model }} )
                 {% endmacro %}""",
-            "{% macro test_my_test(model) %} select {{ dbt_utils.current_timestamp() }} {% endmacro %}",
+            "{% macro test_my_test(model) %} select {{ current_timestamp_backcompat() }} {% endmacro %}",
             "{% macro some_test(model) -%} {{ return(adapter.dispatch('test_some_kind4', 'foo_utils4')) }} {%- endmacro %}",
             "{% macro some_test(model) -%} {{ return(adapter.dispatch('test_some_kind5', macro_namespace = 'foo_utils5')) }} {%- endmacro %}",
         ]
@@ -34,7 +34,7 @@ class MacroCalls(unittest.TestCase):
             ['get_snapshot_unique_id'],
             ['get_columns_in_query'],
             ['get_snapshot_unique_id'],
-            ['dbt_utils.current_timestamp'],
+            ['current_timestamp_backcompat'],
             ['test_some_kind4', 'foo_utils4.test_some_kind4'],
             ['test_some_kind5', 'foo_utils5.test_some_kind5'],
         ]
