@@ -50,5 +50,6 @@ class BaseCurrentTimestamps:
                 expected_sql_check == generated_sql_check
             ), f"generated sql did not match expected: {generated_sql}"
 
+
 class TestCurrentTimestamps(BaseCurrentTimestamps):
     pass
