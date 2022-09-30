@@ -6,7 +6,9 @@ import click
 from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
+from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
+import logging
 
 
 def cli_runner():
@@ -52,17 +54,22 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    incomplete_flags = Flags()
+    flags = Flags(invoked_subcommand=globals()[ctx.invoked_subcommand])
+
+    # Logging
+    # N.B. Legacy logger is not supported
+    level_override = logging.WARN if ctx.invoked_subcommand in ("list", "ls") else None
+    setup_event_logger(flags.LOG_PATH or "logs", level_override)
 
     # Profiling
-    if incomplete_flags.RECORD_TIMING_INFO:
-        ctx.with_resource(profiler(enable=True, outfile=incomplete_flags.RECORD_TIMING_INFO))
+    if flags.RECORD_TIMING_INFO:
+        ctx.with_resource(profiler(enable=True, outfile=flags.RECORD_TIMING_INFO))
 
     # Adapter management
     ctx.with_resource(adapter_management())
 
     # Version info
-    if incomplete_flags.VERSION:
+    if flags.VERSION:
         click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
         return
     else:
