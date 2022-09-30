@@ -2,9 +2,10 @@
     {{ adapter.dispatch('current_timestamp', 'dbt')() }}
 {%- endmacro -%}
 
-{% macro default__current_timestamp() %}
-    current_timestamp
-{% endmacro %}
+{% macro default__current_timestamp() -%}
+  {{ exceptions.raise_not_implemented(
+    'current_timestamp macro not implemented for adapter ' + adapter.type()) }}
+{%- endmacro %}
 
 {%- macro snapshot_get_time() -%}
     {{ adapter.dispatch('snapshot_get_time', 'dbt')() }}
