@@ -35,6 +35,7 @@ from dbt.events.test_types import IntegrationTestDebug
 #   relation_from_name
 #   check_relation_types (table/view)
 #   check_relations_equal
+#   check_relation_has_expected_schema
 #   check_relations_equal_with_relations
 #   check_table_does_exist
 #   check_table_does_not_exist
