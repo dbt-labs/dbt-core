@@ -1,4 +1,5 @@
 import inspect  # This is temporary for RAT-ing
+import logging
 from copy import copy
 from pprint import pformat as pf  # This is temporary for RAT-ing
 
@@ -6,9 +7,9 @@ import click
 from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
-from dbt.events.functions import setup_event_logger
+from dbt.events.functions import fire_event, setup_event_logger
+from dbt.events.types import MainEncounteredError
 from dbt.profiler import profiler
-import logging
 
 
 def cli_runner():
@@ -54,12 +55,20 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    flags = Flags(invoked_subcommand=globals()[ctx.invoked_subcommand])
+    flags = Flags()
 
     # Logging
     # N.B. Legacy logger is not supported
+
+    # TODO: Check w Nate and Jerco-- does this do what we need it to wrt to list/ls log levels?
     level_override = logging.WARN if ctx.invoked_subcommand in ("list", "ls") else None
     setup_event_logger(flags.LOG_PATH or "logs", level_override)
+    # TODO: Do we need to set `event_logger.format_json = flags.LOG_FORMAT` like we used to?
+    # Do we even need these pre-init-hooks in basetask and list?
+    # I need Nate/Jerco to walk me through this convoluted mess.
+
+    #  This is just a test log event, remove before merge
+    fire_event(MainEncounteredError(exc="bork bork bork!"))
 
     # Profiling
     if flags.RECORD_TIMING_INFO:

@@ -2,10 +2,11 @@
 import os
 import sys
 from dataclasses import dataclass
+from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
 
-from click import get_current_context
+from click import Context, get_current_context
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -14,7 +15,7 @@ if os.name != "nt":
 
 @dataclass(frozen=True)
 class Flags:
-    def __init__(self, ctx=None, invoked_subcommand=None) -> None:
+    def __init__(self, ctx: Context = None) -> None:
 
         if ctx is None:
             ctx = get_current_context()
@@ -34,7 +35,9 @@ class Flags:
         assign_params(ctx)
 
         # Get the invoked command flags
-        if invoked_subcommand is not None:
+        if hasattr(ctx, "invoked_subcommand") and ctx.invoked_subcommand is not None:
+            invoked_subcommand = getattr(import_module("dbt.cli.main"), ctx.invoked_subcommand)
+            # TODO:  I think sys.argv[2::] is a little fragile-- Think through edge cases!
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv[2:])
             assign_params(invoked_subcommand_ctx)
 
