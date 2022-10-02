@@ -488,7 +488,26 @@ def untar_package(tar_path: str, dest_dir: str, rename_to: Optional[str] = None)
     tar_path = convert_path(tar_path)
     tar_dir_name = None
     with tarfile.open(tar_path, "r:gz") as tarball:
-        tarball.extractall(dest_dir)
+        def is_within_directory(directory, target):
+            
+            abs_directory = os.path.abspath(directory)
+            abs_target = os.path.abspath(target)
+        
+            prefix = os.path.commonprefix([abs_directory, abs_target])
+            
+            return prefix == abs_directory
+        
+        def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+        
+            for member in tar.getmembers():
+                member_path = os.path.join(path, member.name)
+                if not is_within_directory(path, member_path):
+                    raise Exception("Attempted Path Traversal in Tar File")
+        
+            tar.extractall(path, members, numeric_owner) 
+            
+        
+        safe_extract(tarball, dest_dir)
         tar_dir_name = os.path.commonprefix(tarball.getnames())
     if rename_to:
         downloaded_path = os.path.join(dest_dir, tar_dir_name)
