@@ -1,7 +1,6 @@
 import betterproto
 from colorama import Style
 
-# from dbt.contracts.util import get_metadata_env
 from dbt.constants import METADATA_ENV_PREFIX
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
