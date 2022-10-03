@@ -37,8 +37,9 @@ class Flags:
         # Get the invoked command flags
         if hasattr(ctx, "invoked_subcommand") and ctx.invoked_subcommand is not None:
             invoked_subcommand = getattr(import_module("dbt.cli.main"), ctx.invoked_subcommand)
-            # TODO:  I think sys.argv[2::] is a little fragile-- Think through edge cases!
-            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv[2:])
+            invoked_subcommand.allow_extra_args = True
+            invoked_subcommand.ignore_unknown_options = True
+            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
             assign_params(invoked_subcommand_ctx)
 
         # Hard coded flags
