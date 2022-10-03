@@ -14,7 +14,8 @@ message EventInfo {
     int32 pid = 6;
     string thread = 7;
     google.protobuf.Timestamp ts = 8;
-    map<string, string> extra = 9;
+    map<string, string> metatdata_vars = 9;
+    map<string, string> extra = 10;
 }
 
 // TimingInfo

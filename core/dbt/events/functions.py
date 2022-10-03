@@ -1,5 +1,7 @@
 import betterproto
 from colorama import Style
+# from dbt.contracts.util import get_metadata_env
+from dbt.constants import METADATA_ENV_PREFIX
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
 from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
@@ -20,7 +22,7 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 import threading
-from typing import List, Optional, Union, Callable
+from typing import List, Optional, Union, Callable, Dict
 from collections import deque
 
 LOG_VERSION = 3
@@ -42,6 +44,7 @@ STDOUT_LOG.addHandler(stdout_handler)
 format_color = True
 format_json = False
 invocation_id: Optional[str] = None
+metadata_vars: Optional[Dict[str, str]] = None
 
 
 def setup_event_logger(log_path, level_override=None):
@@ -262,6 +265,17 @@ def fire_event(e: BaseEvent) -> None:
         log_line = create_log_line(e)
         if log_line:
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
+
+def get_metadata_vars() -> str:
+    global metadata_vars
+    if metadata_vars is None:
+        # todo: centralize this with contracts.utils logic - caused circular import
+        metadata_vars =  {
+            k[len(METADATA_ENV_PREFIX) :]: v
+            for k, v in os.environ.items()
+            if k.startswith(METADATA_ENV_PREFIX)
+        }
+    return metadata_vars
 
 
 def get_invocation_id() -> str:

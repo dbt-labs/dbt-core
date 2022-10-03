@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
+from dbt.constants import METADATA_ENV_PREFIX
 from dbt import deprecations
 from dbt.exceptions import (
     InternalException,
@@ -146,12 +147,6 @@ class SchemaVersion:
 
     def __str__(self) -> str:
         return BASE_SCHEMAS_URL + self.path
-
-
-SCHEMA_VERSION_KEY = "dbt_schema_version"
-
-
-METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
 
 
 def get_metadata_env() -> Dict[str, str]:
