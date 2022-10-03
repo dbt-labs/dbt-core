@@ -42,6 +42,16 @@ jobs:
           source env/bin/activate
           pip install --upgrade pip
 
+      - name: Add Homebrew to PATH
+        run: |
+          echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
+
+      - name: Install Homebrew packages
+        run: |
+          brew install pre-commit
+          brew tap miniscruff/changie https://github.com/miniscruff/changie
+          brew install changie
+
       - name: Audit Version and Parse Into Parts
         id: semver
         uses: dbt-labs/actions/parse-semver@v1
@@ -66,18 +76,8 @@ jobs:
           env/bin/bumpversion --allow-dirty --new-version ${{ github.event.inputs.version_number }} major
           git status
 
-      # this step will fail on whitespace errors but also correct them
-      - name: Format bumpversion file
-        continue-on-error: true
-        run: |
-          brew install pre-commit
-          pre-commit run trailing-whitespace --files .bumpversion.cfg
-          git status
-
       - name: Run changie
         run: |
-          brew tap miniscruff/changie https://github.com/miniscruff/changie
-          brew install changie
           if [[ ${{ steps.semver.outputs.is-pre-release }} -eq 1 ]]
           then
             changie batch ${{ steps.semver.outputs.base-version }}  --move-dir '${{ steps.semver.outputs.base-version }}' --prerelease '${{ steps.semver.outputs.pre-release }}'
@@ -85,6 +85,20 @@ jobs:
             changie batch ${{ steps.semver.outputs.base-version }}  --include '${{ steps.semver.outputs.base-version }}' --remove-prereleases
           fi
           changie merge
+          git status
+
+      # this step will fail on whitespace errors but also correct them
+      - name: Remove trailing whitespace
+        continue-on-error: true
+        run: |
+          pre-commit run trailing-whitespace --files .bumpversion.cfg CHANGELOG.md .changes/*
+          git status
+
+      # this step will fail on newline errors but also correct them
+      - name: Removing extra newlines
+        continue-on-error: true
+        run: |
+          pre-commit run end-of-file-fixer --files .bumpversion.cfg CHANGELOG.md .changes/*
           git status
 
       - name: Commit version bump to branch
