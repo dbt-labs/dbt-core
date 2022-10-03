@@ -1,10 +1,8 @@
 import dataclasses
-import os
 from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
-from dbt.constants import METADATA_ENV_PREFIX
 from dbt import deprecations
 from dbt.exceptions import (
     InternalException,
@@ -12,7 +10,7 @@ from dbt.exceptions import (
     IncompatibleSchemaException,
 )
 from dbt.version import __version__
-from dbt.events.functions import get_invocation_id
+from dbt.events.functions import get_invocation_id, get_metadata_vars
 from dbt.dataclass_schema import dbtClassMixin
 
 from dbt.dataclass_schema import (
@@ -149,14 +147,6 @@ class SchemaVersion:
         return BASE_SCHEMAS_URL + self.path
 
 
-def get_metadata_env() -> Dict[str, str]:
-    return {
-        k[len(METADATA_ENV_PREFIX) :]: v
-        for k, v in os.environ.items()
-        if k.startswith(METADATA_ENV_PREFIX)
-    }
-
-
 # This is used in the ManifestMetadata, RunResultsMetadata, RunOperationResultMetadata,
 # FreshnessMetadata, and CatalogMetadata classes
 @dataclasses.dataclass
@@ -165,7 +155,7 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
-    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_env)
+    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
