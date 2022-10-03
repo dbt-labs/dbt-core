@@ -78,6 +78,82 @@ select 1 as fun
 
 """
 
+my_model = """
+select 1 as user
+"""
+
+my_model_2 = """
+select * from {{ ref('my_model') }}
+"""
+
+my_model_3 = """
+select * from {{ ref('my_model_2') }}
+"""
+
+my_model_2_disabled = """
+{{ config(enabled=false) }}
+select * from {{ ref('my_model') }}
+"""
+
+my_model_3_disabled = """
+{{ config(enabled=false) }}
+select * from {{ ref('my_model_2') }}
+"""
+
+my_model_2_enabled = """
+{{ config(enabled=true) }}
+select * from {{ ref('my_model') }}
+"""
+
+my_model_3_enabled = """
+{{ config(enabled=true) }}
+select * from {{ ref('my_model') }}
+"""
+
+schema_all_disabled_yml = """
+version: 2
+models:
+  - name: my_model
+  - name: my_model_2
+    config:
+      enabled: false
+  - name: my_model_3
+    config:
+      enabled: false
+"""
+
+schema_explicit_enabled_yml = """
+version: 2
+models:
+  - name: my_model
+  - name: my_model_2
+    config:
+      enabled: true
+  - name: my_model_3
+    config:
+      enabled: true
+"""
+
+schema_partial_disabled_yml = """
+version: 2
+models:
+  - name: my_model
+  - name: my_model_2
+    config:
+      enabled: false
+  - name: my_model_3
+"""
+
+schema_partial_enabled_yml = """
+version: 2
+models:
+  - name: my_model
+  - name: my_model_2
+    config:
+      enabled: True
+  - name: my_model_3
+"""
+
 
 class BaseConfigProject:
     @pytest.fixture(scope="class")

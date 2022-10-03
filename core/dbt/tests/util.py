@@ -4,7 +4,7 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import List
+from typing import Dict, List
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
@@ -35,6 +35,7 @@ from dbt.events.test_types import IntegrationTestDebug
 #   relation_from_name
 #   check_relation_types (table/view)
 #   check_relations_equal
+#   check_relation_has_expected_schema
 #   check_relations_equal_with_relations
 #   check_table_does_exist
 #   check_table_does_not_exist
@@ -319,6 +320,17 @@ def check_relations_equal(adapter, relation_names: List, compare_snapshot_cols=F
     return check_relations_equal_with_relations(
         adapter, relations, compare_snapshot_cols=compare_snapshot_cols
     )
+
+
+# Used to check that a particular relation has an expected schema
+# expected_schema should look like {"column_name": "expected datatype"}
+def check_relation_has_expected_schema(adapter, relation_name, expected_schema: Dict):
+    relation = relation_from_name(adapter, relation_name)
+    with get_connection(adapter):
+        actual_columns = {c.name: c.data_type for c in adapter.get_columns_in_relation(relation)}
+    assert (
+        actual_columns == expected_schema
+    ), f"Actual schema did not match expected, actual: {json.dumps(actual_columns)}"
 
 
 # This can be used when checking relations in different schemas, by supplying
