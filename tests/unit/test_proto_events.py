@@ -1,3 +1,4 @@
+import os
 import sys
 from dbt.events.types import (
     MainReportVersion,
@@ -13,6 +14,27 @@ from dbt.version import installed
 
 
 info_keys = {"name", "code", "msg", "level", "invocation_id", "pid", "thread", "ts", "extra"}
+
+
+def test_extra_dict_on_event():
+
+    os.environ["DBT_ENV_CUSTOM_ENV_env_key"] = "env_value"
+
+    event = MainReportVersion(version=str(installed), log_version=LOG_VERSION)
+    event_dict = event_to_dict(event)
+    assert set(event_dict["info"].keys()) == info_keys
+    assert event.info.extra == {"env_key": "env_value"}
+    serialized = bytes(event)
+
+    # Extract EventInfo from serialized message
+    generic_event = pl.GenericMessage().parse(serialized)
+    assert generic_event.info.code == "A001"
+    # get the message class for the real message from the generic message
+    message_class = getattr(sys.modules["dbt.events.proto_types"], generic_event.info.name)
+    new_event = message_class().parse(serialized)
+    assert new_event.info.extra == event.info.extra
+
+    del os.environ["DBT_ENV_CUSTOM_ENV_env_key"]
 
 
 def test_events():
