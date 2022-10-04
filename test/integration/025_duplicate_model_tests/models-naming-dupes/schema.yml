@@ -1,9 +1,0 @@
-version: 2
-models:
-  - name: something
-    description: This table has basic information about orders, as well as some derived facts based on payments
-exposures:
-  - name: something
-    type: dashboard
-    owner:
-      email: test@example.com
