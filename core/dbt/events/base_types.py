@@ -16,9 +16,9 @@ class Cache:
 
 
 def get_metadata_vars() -> dict:
-    from dbt.events.functions import get_metadata_vars
+    from dbt.events.functions import global_metadata_vars
 
-    return get_metadata_vars()
+    return global_metadata_vars()
 
 
 def get_invocation_id() -> str:
