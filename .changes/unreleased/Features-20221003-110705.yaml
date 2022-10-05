@@ -1,5 +1,5 @@
 kind: Features
-body: extend -f
+body: extend -f flag shorthand for seed command
 time: 2022-10-03T11:07:05.381632-05:00
 custom:
   Author: dave-connors-3
