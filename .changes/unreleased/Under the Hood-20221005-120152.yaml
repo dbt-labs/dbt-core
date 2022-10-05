@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add `.mypy_cache` to gitignore
+time: 2022-10-05T12:01:52.533727-07:00
+custom:
+  Author: max-sixty
+  Issue: "5978"
+  PR: "5978"
