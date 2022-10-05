@@ -178,7 +178,7 @@ def handle_and_check(args):
         # Set flags from args, user config, and env vars
         user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
         flags.set_from_args(parsed, user_config)
-        dbt.tracking.initialize_from_flags()
+        dbt.tracking.initialize_from_flags(flags)
         # Set log_format from flags
         parsed.cls.set_log_format()
 

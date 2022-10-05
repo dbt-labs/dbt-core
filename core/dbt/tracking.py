@@ -16,7 +16,6 @@ from dbt.events.types import (
     TrackingInitializeFailure,
 )
 from dbt import version as dbt_version
-from dbt import flags
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
@@ -470,17 +469,15 @@ class InvocationProcessor(logbook.Processor):
             )
 
 
-def initialize_from_flags():
+def initialize_from_flags(flags):
     # Setting these used to be in UserConfig, but had to be moved here
+    global active_user
     if flags.SEND_ANONYMOUS_USAGE_STATS:
-        initialize_tracking(flags.PROFILES_DIR)
+        active_user = User(flags.PROFILES_DIR)
+        try:
+            active_user.initialize()
+        except Exception:
+            fire_event(TrackingInitializeFailure())
+            active_user = User(None)
     else:
-        do_not_track()
-
-
-def initialize_from_flags_click(flags):
-    # Setting these used to be in UserConfig, but had to be moved here
-    if flags.SEND_ANONYMOUS_USAGE_STATS:
-        initialize_tracking(flags.PROFILES_DIR)
-    else:
-        do_not_track()
+        active_user = User(None)

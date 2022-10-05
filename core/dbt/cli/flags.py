@@ -44,7 +44,9 @@ class Flags:
 
         # Support console DO NOT TRACK initiave
         if os.getenv("DO_NOT_TRACK", "").lower() in (1, "t", "true", "y", "yes"):
-            object.__setattr__(self, "ANONYMOUS_USAGE_STATS", False)
+            object.__setattr__(self, "SEND_ANONYMOUS_USAGE_STATS", False)
+        else:
+            object.__setattr__(self, "SEND_ANONYMOUS_USAGE_STATS", True)
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))

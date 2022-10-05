@@ -8,7 +8,7 @@ from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
-from dbt.tracking import initialize_from_flags_click
+from dbt.tracking import initialize_from_flags as initialize_tracking
 import logging
 
 
@@ -59,6 +59,8 @@ def cli(ctx, **kwargs):
     For more documentation on these commands, visit: docs.getdbt.com
     """
     flags = Flags(invoked_subcommand=globals()[ctx.invoked_subcommand])
+
+    initialize_tracking(flags)
 
     # Logging
     # N.B. Legacy logger is not supported
