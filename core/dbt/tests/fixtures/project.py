@@ -6,6 +6,7 @@ from datetime import datetime
 import warnings
 import yaml
 
+from dbt.exceptions import CompilationException
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
@@ -481,8 +482,11 @@ def project(
     # See https://github.com/dbt-labs/dbt-core/issues/5041
     # The debug command also results in an AttributeError since `Profile` doesn't have
     # a `load_dependencies` method.
+    # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
+    # the macros have errors (which is what we're actually testing for...) they end up
+    # throwing CompilationExceptions
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError):
+    except (KeyError, AttributeError, CompilationException):
         pass
     os.chdir(orig_cwd)
