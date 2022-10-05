@@ -1,0 +1,5 @@
+[tool.mypy]
+exclude = ['core/build/.*']
+files = 'core'
+mypy_path = "third-party-stubs/"
+namespace_packages = true
