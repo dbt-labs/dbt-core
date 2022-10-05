@@ -780,7 +780,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return frozenset(x.database for x in chain(self.nodes.values(), self.sources.values()))
 
     def deepcopy(self):
-        return Manifest(
+        copy = Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
             sources={k: _deepcopy(v) for k, v in self.sources.items()},
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
@@ -793,6 +793,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
         )
+        copy.build_flat_graph()
+        return copy
 
     def build_parent_and_child_maps(self):
         edge_members = list(
