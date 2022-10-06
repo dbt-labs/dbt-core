@@ -24,15 +24,10 @@ repos:
   rev: 22.3.0
   hooks:
   - id: black
-    args:
-    - "--line-length=99"
-    - "--target-version=py38"
   - id: black
     alias: black-check
     stages: [manual]
     args:
-    - "--line-length=99"
-    - "--target-version=py38"
     - "--check"
     - "--diff"
 - repo: https://gitlab.com/pycqa/flake8

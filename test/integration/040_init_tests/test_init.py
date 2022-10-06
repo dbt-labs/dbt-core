@@ -443,9 +443,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
-# In this example config, we tell dbt to build all models in the example/ directory
-# as tables. These settings can be overridden in the individual model files
-# using the `{{{{ config(...) }}}}` macro.
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{{{ config(...) }}}}` macro.
 models:
   {project_name}:
     # Config indicated by + and applies to all files under models/example/
@@ -563,9 +563,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
-# In this example config, we tell dbt to build all models in the example/ directory
-# as tables. These settings can be overridden in the individual model files
-# using the `{{{{ config(...) }}}}` macro.
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{{{ config(...) }}}}` macro.
 models:
   {project_name}:
     # Config indicated by + and applies to all files under models/example/
@@ -674,9 +674,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
-# In this example config, we tell dbt to build all models in the example/ directory
-# as tables. These settings can be overridden in the individual model files
-# using the `{{{{ config(...) }}}}` macro.
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{{{ config(...) }}}}` macro.
 models:
   {project_name}:
     # Config indicated by + and applies to all files under models/example/
@@ -744,9 +744,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
-# In this example config, we tell dbt to build all models in the example/ directory
-# as tables. These settings can be overridden in the individual model files
-# using the `{{{{ config(...) }}}}` macro.
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{{{ config(...) }}}}` macro.
 models:
   {project_name}:
     # Config indicated by + and applies to all files under models/example/
