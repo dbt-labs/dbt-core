@@ -224,15 +224,15 @@ class SQLAdapter(BaseAdapter):
     def run_sql_for_tests(self, sql, fetch, conn):
         cursor = conn.handle.cursor()
         try:
+            result_set = None
             cursor.execute(sql)
+            if fetch == "one":
+                result_set = cursor.fetchone()
+            elif fetch == "all":
+                result_set = cursor.fetchall()
             if hasattr(conn.handle, "commit"):
                 conn.handle.commit()
-            if fetch == "one":
-                return cursor.fetchone()
-            elif fetch == "all":
-                return cursor.fetchall()
-            else:
-                return
+            return result_set
         except BaseException as e:
             if conn.handle and not getattr(conn.handle, "closed", True):
                 conn.handle.rollback()
