@@ -600,9 +600,9 @@ def _get_target_failure_msg(
 
 
 def get_target_not_found_or_disabled_msg(
-    model,
-    target_model_name: str,
-    target_model_package: Optional[str],
+    node,
+    target_name: str,
+    target_package: Optional[str],
     disabled: Optional[bool] = None,
 ) -> str:
     if disabled is None:
@@ -612,11 +612,11 @@ def get_target_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        model.original_file_path,
-        model.unique_id,
-        model.resource_type.title(),
-        target_model_name,
-        target_model_package,
+        node.original_file_path,
+        node.unique_id,
+        node.resource_type.title(),
+        target_name,
+        target_package,
         include_path=True,
         reason=reason,
         target_kind="node",
