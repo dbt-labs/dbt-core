@@ -224,7 +224,7 @@ def run_from_args(parsed):
     results = None
     project_id = None if task.config is None else task.config.hashed_name()
     credentials = None if task.config is None else task.config.credentials
-    with dbt.tracking.track_run(project_id, credentials, task.config.args.which):
+    with dbt.tracking.track_run(project_id, credentials, parsed.which):
         results = task.run()
     return task, results
 
