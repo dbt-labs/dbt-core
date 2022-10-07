@@ -571,7 +571,9 @@ def doc_target_not_found(
 
 
 def _get_target_failure_msg(
-    model,
+    original_file_path,
+    unique_id,
+    resource_type_title,
     target_name: str,
     target_model_package: Optional[str],
     include_path: bool,
@@ -584,11 +586,11 @@ def _get_target_failure_msg(
 
     source_path_string = ""
     if include_path:
-        source_path_string = " ({})".format(model.original_file_path)
+        source_path_string = " ({})".format(original_file_path)
 
     return "{} '{}'{} depends on a {} named '{}' {}which {}".format(
-        model.resource_type.title(),
-        model.unique_id,
+        resource_type_title,
+        unique_id,
         source_path_string,
         target_kind,
         target_name,
@@ -598,9 +600,9 @@ def _get_target_failure_msg(
 
 
 def get_target_not_found_or_disabled_msg(
-    model,
-    target_model_name: str,
-    target_model_package: Optional[str],
+    node,
+    target_name: str,
+    target_package: Optional[str],
     disabled: Optional[bool] = None,
 ) -> str:
     if disabled is None:
@@ -610,9 +612,11 @@ def get_target_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        model,
-        target_model_name,
-        target_model_package,
+        node.original_file_path,
+        node.unique_id,
+        node.resource_type.title(),
+        target_name,
+        target_package,
         include_path=True,
         reason=reason,
         target_kind="node",
@@ -645,7 +649,9 @@ def get_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        node,
+        node.original_file_path,
+        node.unique_id,
+        node.resource_type.title(),
         target_name,
         target_package,
         include_path=True,
@@ -654,46 +660,22 @@ def get_not_found_or_disabled_msg(
     )
 
 
-def source_target_not_found(
-    model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
+def target_not_found(
+    node,
+    target_name: str,
+    target_kind: str,
+    target_package: Optional[str] = None,
+    disabled: Optional[bool] = None,
 ) -> NoReturn:
     msg = get_not_found_or_disabled_msg(
-        node=model,
-        target_name=f"{target_name}.{target_table_name}",
-        target_kind="source",
-        disabled=disabled,
-    )
-    raise_compiler_error(msg, model)
-
-
-def metric_target_not_found(
-    metric, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
-) -> NoReturn:
-
-    msg = get_not_found_or_disabled_msg(
-        node=metric,
+        node=node,
         target_name=target_name,
-        target_kind="metric",
+        target_kind=target_kind,
         target_package=target_package,
         disabled=disabled,
     )
 
-    raise_compiler_error(msg, metric)
-
-
-def exposure_target_not_found(
-    exposure, target_name: str, target_package: Optional[str], disabled: Optional[bool] = None
-) -> NoReturn:
-
-    msg = get_not_found_or_disabled_msg(
-        node=exposure,
-        target_name=target_name,
-        target_kind="exposure",
-        target_package=target_package,
-        disabled=disabled,
-    )
-
-    raise_compiler_error(msg, exposure)
+    raise_compiler_error(msg, node)
 
 
 def dependency_not_found(model, target_model_name):

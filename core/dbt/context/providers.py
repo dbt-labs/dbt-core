@@ -54,9 +54,8 @@ from dbt.exceptions import (
     ref_invalid_args,
     metric_invalid_args,
     ref_target_not_found,
-    metric_target_not_found,
+    target_not_found,
     ref_bad_context,
-    source_target_not_found,
     wrapped_exports,
     raise_parsing_error,
     disallow_secret_env_var,
@@ -542,10 +541,11 @@ class RuntimeSourceResolver(BaseSourceResolver):
         )
 
         if target_source is None or isinstance(target_source, Disabled):
-            source_target_not_found(
-                self.model,
-                source_name,
-                table_name,
+            target_not_found(
+                node=self.model,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
             )
         return self.Relation.create_from_source(target_source)
 
@@ -568,11 +568,11 @@ class RuntimeMetricResolver(BaseMetricResolver):
         )
 
         if target_metric is None or isinstance(target_metric, Disabled):
-            # TODO : Use a different exception!!
-            metric_target_not_found(
-                self.model,
-                target_name,
-                target_package,
+            target_not_found(
+                node=self.model,
+                target_name=target_name,
+                target_kind="metric",
+                target_package=target_package,
             )
 
         return ResolvedMetricReference(target_metric, self.manifest, self.Relation)
