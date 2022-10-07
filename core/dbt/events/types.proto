@@ -38,7 +38,6 @@ message NodeInfo {
 
 // RunResult
 message RunResultMsg {
-    // status: Union[RunStatus, TestStatus, FreshnessStatus]
     string status = 1;
     string message = 2;
     repeated TimingInfoMsg timing_info = 3;
@@ -1030,49 +1029,23 @@ message SQLRunnerException {
 }
 
 // Q007
-message PrintErrorTestResult {
+message LogTestResult {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string name = 3;
-    int32 index = 4;
-    int32 num_models = 5;
-    float execution_time = 6;
+    string status = 4;
+    int32 index = 5;
+    int32 num_models = 6;
+    float execution_time = 7;
+    int32 num_failures = 8;
 }
 
-// Q008
-message PrintPassTestResult {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    int32 index = 4;
-    int32 num_models = 5;
-    float execution_time = 6;
-}
 
-// Q009
-message PrintWarnTestResult {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    int32 index = 4;
-    int32 num_models = 5;
-    float execution_time = 6;
-    int32 num_failures = 7;
-}
+// Skipped Q008, Q009, Q010
 
-// Q010
-message PrintFailureTestResult {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    int32 index = 4;
-    int32 num_models = 5;
-    float execution_time = 6;
-    int32 num_failures = 7;
-}
 
 // Q011
-message PrintStartLine {
+message LogStartLine {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string description = 3;
@@ -1081,41 +1054,20 @@ message PrintStartLine {
 }
 
 // Q012
-message PrintModelResultLine {
+message LogModelResult {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string description = 3;
     string status = 4;
     int32 index = 5;
     int32 total = 6;
-    float execution_time = 7;
+    int32 execution_time = 7;
 }
 
-// Q013
-message PrintModelErrorResultLine {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string description = 3;
-    string status = 4;
-    int32 index = 5;
-    int32 total = 6;
-    float execution_time = 7;
-}
-
-// Q014
-message PrintSnapshotErrorResultLine {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string description = 3;
-    string status = 4;
-    int32 index = 5;
-    int32 total = 6;
-    float execution_time = 7;
-    map<string, string> cfg = 8;
-}
+// skipped Q013, Q014
 
 // Q015
-message PrintSnapshotResultLine {
+message LogSnapshotResult {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string description = 3;
@@ -1127,7 +1079,7 @@ message PrintSnapshotResultLine {
 }
 
 // Q016
-message PrintSeedErrorResultLine {
+message LogSeedResult {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string status = 3;
@@ -1138,64 +1090,26 @@ message PrintSeedErrorResultLine {
     string relation = 8;
 }
 
-// Q017
-message PrintSeedResultLine {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string status = 3;
-    int32 index = 4;
-    int32 total = 5;
-    float execution_time = 6;
-    string schema = 7;
-    string relation = 8;
-}
+// Skipped Q017
 
 // Q018
-message PrintFreshnessErrorLine {
+message LogFreshnessResult {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    int32 index = 3;
-    int32 total = 4;
-    float execution_time = 5;
-    string source_name = 6;
-    string table_name = 7;
+    string status = 2;
+    NodeInfo node_info = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    string source_name = 7;
+    string table_name = 8;
 }
 
-// Q019
-message PrintFreshnessErrorStaleLine {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    int32 index = 3;
-    int32 total = 4;
-    float execution_time = 5;
-    string source_name = 6;
-    string table_name = 7;
-}
 
-// Q020
-message PrintFreshnessWarnLine {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    int32 index = 3;
-    int32 total = 4;
-    float execution_time = 5;
-    string source_name = 6;
-    string table_name = 7;
-}
+// Skipped Q019, Q020, Q021
 
-// Q021
-message PrintFreshnessPassLine {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    int32 index = 3;
-    int32 total = 4;
-    float execution_time = 5;
-    string source_name = 6;
-    string table_name = 7;
-}
 
 // Q022
-message PrintCancelLine {
+message LogCancelLine {
     EventInfo info = 1;
     string conn_name = 2;
 }
@@ -1261,7 +1175,7 @@ message NodeExecuting {
 }
 
 // Q032
-message PrintHookStartLine {
+message LogHookStartLine {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string statement = 3;
@@ -1270,7 +1184,7 @@ message PrintHookStartLine {
 }
 
 // Q033
-message PrintHookEndLine {
+message LogHookEndLine {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string statement = 3;
@@ -1411,7 +1325,7 @@ message TimingInfoCollected {
 }
 
 // Z011
-message PrintDebugStackTrace {
+message LogDebugStackTrace {
     EventInfo info = 1;
     string exc_info = 2;
 }
@@ -1538,7 +1452,7 @@ message EndOfRunSummary {
 // Skipped Z031, Z032, Z033
 
 // Z034
-message PrintSkipBecauseError {
+message LogSkipBecauseError {
     EventInfo info = 1;
     string schema = 2;
     string relation = 3;

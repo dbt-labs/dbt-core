@@ -9,14 +9,13 @@ from dbt.contracts.results import RunStatus
 from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, info
 from dbt.events.types import (
     SeedHeader,
     SeedHeaderSeparator,
     EmptyLine,
-    PrintSeedErrorResultLine,
-    PrintSeedResultLine,
-    PrintStartLine,
+    LogSeedResult,
+    LogStartLine,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus
@@ -28,7 +27,7 @@ class SeedRunner(ModelRunner):
 
     def before_execute(self):
         fire_event(
-            PrintStartLine(
+            LogStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
@@ -47,30 +46,19 @@ class SeedRunner(ModelRunner):
 
     def print_result_line(self, result):
         model = result.node
-        if result.status == NodeStatus.Error:
-            fire_event(
-                PrintSeedErrorResultLine(
-                    status=result.status,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    schema=self.node.schema,
-                    relation=model.alias,
-                    node_info=model.node_info,
-                )
+        level = "error" if result.status == NodeStatus.Error else "info"
+        fire_event(
+            LogSeedResult(
+                info=info(level=level),
+                status=result.status,
+                index=self.node_index,
+                total=self.num_nodes,
+                execution_time=result.execution_time,
+                schema=self.node.schema,
+                relation=model.alias,
+                node_info=model.node_info,
             )
-        else:
-            fire_event(
-                PrintSeedResultLine(
-                    status=result.message,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    schema=self.node.schema,
-                    relation=model.alias,
-                    node_info=model.node_info,
-                )
-            )
+        )
 
 
 class SeedTask(RunTask):

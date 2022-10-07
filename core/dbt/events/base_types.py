@@ -49,7 +49,8 @@ class BaseEvent:
 
     def __post_init__(self):
         super().__post_init__()
-        self.info.level = self.level_tag()
+        if not self.info.level:
+            self.info.level = self.level_tag()
         if not hasattr(self.info, "msg") or not self.info.msg:
             self.info.msg = self.message()
         self.info.invocation_id = get_invocation_id()

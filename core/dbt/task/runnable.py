@@ -29,7 +29,7 @@ from dbt.logger import (
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     EmptyLine,
-    PrintCancelLine,
+    LogCancelLine,
     DefaultSelector,
     NodeStart,
     NodeFinished,
@@ -364,7 +364,7 @@ class GraphRunnableTask(ManifestTask):
                             continue
                     # if we don't have a manifest/don't have a node, print
                     # anyway.
-                    fire_event(PrintCancelLine(conn_name=conn_name))
+                    fire_event(LogCancelLine(conn_name=conn_name))
 
         pool.join()
 

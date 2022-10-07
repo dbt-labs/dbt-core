@@ -2,6 +2,7 @@ import betterproto
 from colorama import Style
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
 from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
+from dbt.events.proto_types import EventInfo
 import dbt.flags as flags
 from dbt.constants import SECRET_ENV_PREFIX, METADATA_ENV_PREFIX
 
@@ -325,3 +326,11 @@ def add_to_event_history(event):
 def reset_event_history():
     global EVENT_HISTORY
     EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)
+
+
+# Currently used to set the level in EventInfo, so logging events can
+# provide more than one "level". Might be used in the future to set
+# more fields in EventInfo, once some of that information is no longer global
+def info(level="info"):
+    info = EventInfo(level=level)
+    return info

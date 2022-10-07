@@ -5,7 +5,7 @@ from dbt.events.types import (
     RollbackFailed,
     MainEncounteredError,
     PluginLoadError,
-    PrintStartLine,
+    LogStartLine,
 )
 from dbt.events.functions import event_to_dict, LOG_VERSION, reset_metadata_vars
 from dbt.events import proto_types as pl
@@ -89,7 +89,7 @@ def test_node_info_events():
         "node_started_at": "some_time",
         "node_finished_at": "another_time",
     }
-    event = PrintStartLine(
+    event = LogStartLine(
         description="some description",
         index=123,
         total=111,

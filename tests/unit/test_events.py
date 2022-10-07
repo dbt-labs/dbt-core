@@ -341,54 +341,31 @@ sample_values = [
     FirstRunResultError(msg=""),
     AfterFirstRunResultError(msg=""),
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
-    PrintStartLine(description="", index=0, total=0, node_info=NodeInfo()),
-    PrintHookStartLine(statement="", index=0, total=0, node_info=NodeInfo()),
-    PrintHookEndLine(
+    LogStartLine(description="", index=0, total=0, node_info=NodeInfo()),
+    LogHookStartLine(statement="", index=0, total=0, node_info=NodeInfo()),
+    LogHookEndLine(
         statement="", status="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
     SkippingDetails(
         resource_type="", schema="", node_name="", index=0, total=0, node_info=NodeInfo()
     ),
-    PrintErrorTestResult(name="", index=0, num_models=0, execution_time=0, node_info=NodeInfo()),
-    PrintPassTestResult(name="", index=0, num_models=0, execution_time=0, node_info=NodeInfo()),
-    PrintWarnTestResult(
+    LogTestResult(
         name="", index=0, num_models=0, execution_time=0, num_failures=0, node_info=NodeInfo()
     ),
-    PrintFailureTestResult(
-        name="", index=0, num_models=0, execution_time=0, num_failures=0, node_info=NodeInfo()
-    ),
-    PrintSkipBecauseError(schema="", relation="", index=0, total=0),
-    PrintModelErrorResultLine(
+    LogSkipBecauseError(schema="", relation="", index=0, total=0),
+    LogModelResult(
         description="", status="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
-    PrintModelResultLine(
-        description="", status="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintSnapshotErrorResultLine(
+    LogSnapshotResult(
         status="", description="", cfg={}, index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
-    PrintSnapshotResultLine(
-        status="", description="", cfg={}, index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintSeedErrorResultLine(
+    LogSeedResult(
         status="", index=0, total=0, execution_time=0, schema="", relation="", node_info=NodeInfo()
     ),
-    PrintSeedResultLine(
-        status="", index=0, total=0, execution_time=0, schema="", relation="", node_info=NodeInfo()
-    ),
-    PrintFreshnessErrorLine(
+    LogFreshnessResult(
         source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
-    PrintFreshnessErrorStaleLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintFreshnessWarnLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintFreshnessPassLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintCancelLine(conn_name=""),
+    LogCancelLine(conn_name=""),
     DefaultSelector(name=""),
     NodeStart(unique_id="", node_info=NodeInfo()),
     NodeCompiling(unique_id="", node_info=NodeInfo()),
@@ -427,7 +404,7 @@ sample_values = [
     AdapterEventInfo(name="", base_msg="", args=()),
     AdapterEventWarning(name="", base_msg="", args=()),
     AdapterEventError(name="", base_msg="", args=()),
-    PrintDebugStackTrace(),
+    LogDebugStackTrace(),
     MainReportArgs(args={}),
     RegistryProgressGETRequest(url=""),
     RegistryIndexProgressGETRequest(url=""),

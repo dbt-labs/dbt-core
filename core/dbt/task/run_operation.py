@@ -15,7 +15,7 @@ from dbt.events.functions import fire_event
 from dbt.events.types import (
     RunningOperationCaughtError,
     RunningOperationUncaughtError,
-    PrintDebugStackTrace,
+    LogDebugStackTrace,
 )
 
 
@@ -57,11 +57,11 @@ class RunOperationTask(ManifestTask):
             self._run_unsafe()
         except dbt.exceptions.Exception as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
-            fire_event(PrintDebugStackTrace(exc_info=traceback.format_exc()))
+            fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
             success = False
         except Exception as exc:
             fire_event(RunningOperationUncaughtError(exc=str(exc)))
-            fire_event(PrintDebugStackTrace(exc_info=traceback.format_exc()))
+            fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
             success = False
         else:
             success = True
