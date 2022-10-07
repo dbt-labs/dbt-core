@@ -8,7 +8,7 @@ from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
-from dbt.tracking import initialize_from_flags as initialize_tracking
+import dbt.tracking
 import logging
 
 
@@ -57,7 +57,13 @@ def cli(ctx, **kwargs):
     """
     flags = Flags(invoked_subcommand=globals()[ctx.invoked_subcommand])
 
-    initialize_tracking(flags)
+    dbt.tracking.initialize_from_flags(flags)
+    # TODO we need to have config to get the projectID
+    project_id = ""
+    # TODO we need to get the credentials or we need to know that this will make adapter info
+    # not available in invocation start/end events
+    credentials = None
+    ctx.with_resource(dbt.tracking.track_run(project_id, credentials, ctx.invoked_subcommand))
 
     # Logging
     # N.B. Legacy logger is not supported

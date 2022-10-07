@@ -38,7 +38,6 @@ class DepsTask(BaseTask):
         elif source_type != "hub":
             package_name = dbt.utils.md5(package_name)
             version = dbt.utils.md5(version)
-
         dbt.tracking.track_package_install(
             self.config,
             self.config.args,
