@@ -1,8 +1,11 @@
+
+from hologram import ValidationError
 import pytest
 import os
 
-from dbt.tests.util import run_dbt, check_relations_equal
-from tests.functional.configs.fixtures import BaseConfigProject
+from dbt.exceptions import ParsingException
+from dbt.tests.util import run_dbt, update_config_file, write_file, check_relations_equal
+from tests.functional.configs.fixtures import BaseConfigProject, simple_snapshot
 
 
 class TestConfigs(BaseConfigProject):
@@ -63,3 +66,33 @@ class TestTargetConfigs(BaseConfigProject):
             if os.path.isdir(d) and d.startswith("target_"):
                 target_path = d
         assert os.path.exists(os.path.join(project.project_root, target_path, "manifest.json"))
+
+
+class TestInvalidTestsMaterialization(object):
+    def test_tests_materialization(self, project):
+        config_patch = {"tests": {"materialized": "table"}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+        
+        with pytest.raises(ValidationError):
+            run_dbt()
+
+
+class TestInvalidSeedsMaterialization(object):
+    def test_seeds_materialization(self, project):
+        config_patch = {"seeds": {"materialized": "table"}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+
+        with pytest.raises(ValidationError):
+            run_dbt()
+
+
+class TestInvalidSnapshotsMaterialization(object):
+    def test_snapshots_materialization(self, project):
+        config_patch = {"snapshots": {"materialized": "table"}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+
+        snapshots_dir = os.path.join(project.project_root, "snapshots")
+        write_file(simple_snapshot, snapshots_dir, "foo.SQL")
+
+        with pytest.raises(ParsingException):
+            run_dbt()

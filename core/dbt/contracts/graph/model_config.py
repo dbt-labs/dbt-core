@@ -529,6 +529,13 @@ class SeedConfig(NodeConfig):
     materialized: str = "seed"
     quote_columns: Optional[bool] = None
 
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+        if data.get("materialized") and data.get("materialized") != "seed":
+            raise ValidationError(
+                "A seed must have a materialized value of 'seed'"
+            )
 
 @dataclass
 class TestConfig(NodeAndTestConfig):
@@ -568,6 +575,14 @@ class TestConfig(NodeAndTestConfig):
                     return False
         return True
 
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+        if data.get("materialized") and data.get("materialized") != "test":
+            raise ValidationError(
+                "A test must have a materialized value of 'test'"
+            )
+
 
 @dataclass
 class EmptySnapshotConfig(NodeConfig):
@@ -604,7 +619,6 @@ class SnapshotConfig(EmptySnapshotConfig):
                     f"Invalid value for 'check_cols': {data['check_cols']}. "
                     "Expected 'all' or a list of strings."
                 )
-
         elif data.get("strategy") == "timestamp":
             if not data.get("updated_at"):
                 raise ValidationError(
@@ -615,6 +629,11 @@ class SnapshotConfig(EmptySnapshotConfig):
                 raise ValidationError("A 'timestamp' snapshot should not have 'check_cols'")
         # If the strategy is not 'check' or 'timestamp' it's a custom strategy,
         # formerly supported with GenericSnapshotConfig
+
+        if data.get("materialized") and data.get("materialized") != "snapshot":
+            raise ValidationError(
+                "A snapshot must have a materialized value of 'snapshot'"
+            )
 
     def finalize_and_validate(self):
         data = self.to_dict(omit_none=True)

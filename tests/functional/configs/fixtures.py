@@ -154,6 +154,21 @@ models:
   - name: my_model_3
 """
 
+simple_snapshot = """{% snapshot foo %}
+
+    {{
+        config(
+          target_schema='snapshots',
+          strategy='timestamp',
+          unique_key='id',
+          updated_at='updated_at'
+        )
+    }}
+
+    select * from {{ source('jaffle_shop', 'orders') }}
+
+{% endsnapshot %}"""
+
 
 class BaseConfigProject:
     @pytest.fixture(scope="class")
