@@ -5,7 +5,6 @@ from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
 from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
 import dbt.flags as flags
 from dbt.constants import SECRET_ENV_PREFIX, METADATA_ENV_PREFIX
-
 from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
 import json
