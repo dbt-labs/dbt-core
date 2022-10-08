@@ -272,21 +272,34 @@ def track_rpc_request(options):
     )
 
 
-def track_package_install(config, args, options):
-    assert active_user is not None, "Cannot track package installs when active user is None"
-
-    invocation_data = {
-        "project_id": None if config is None else config.hashed_name(),
+def get_base_invocation_context():
+    assert (
+        active_user is not None
+    ), "initialize active user before calling get_base_invocation_context"
+    return {
+        "project_id": None,
         "user_id": active_user.id,
         "invocation_id": active_user.invocation_id,
-        "command": args.which,
+        "command": None,
         "options": None,
         "version": str(dbt_version.installed),
         "run_type": "regular",
-        # adapter info has never been set here, can remove when we update the invocation event schema
         "adapter_type": None,
         "adapter_unique_id": None,
     }
+
+
+def track_package_install(config, args, options):
+    assert active_user is not None, "Cannot track package installs when active user is None"
+
+    invocation_data = get_base_invocation_context()
+
+    invocation_data.update(
+        {
+            "project_id": None if config is None else config.hashed_name(),
+            "command": args.which,
+        }
+    )
 
     context = [
         SelfDescribingJson(INVOCATION_SPEC, invocation_data),
@@ -333,8 +346,10 @@ def track_invocation_end(invocation_context, result_type=None):
     track(active_user, category="dbt", action="invocation", label="end", context=context)
 
 
-def track_invalid_invocation(invocation_context, result_type=None):
+def track_invalid_invocation(args=None, result_type=None):
     assert active_user is not None, "Cannot track invalid invocations when active user is None"
+    invocation_context = get_base_invocation_context()
+    invocation_context.update({"command": args.which})
     data = {"progress": "invalid", "result_type": result_type, "result": None}
     data.update(invocation_context)
     context = [
@@ -446,18 +461,16 @@ def track_run(project_id, credentials, run_command):
     except Exception:
         adapter_unique_id = None
 
-    invocation_context = {
-        "project_id": project_id,
-        "user_id": active_user.id,
-        "invocation_id": active_user.invocation_id,
-        "command": run_command,
-        "options": None,
-        "version": str(dbt_version.installed),
-        "run_type": "regular",
-        "adapter_type": adapter_type,
-        "adapter_unique_id": adapter_unique_id,
-    }
+    invocation_context = get_base_invocation_context()
 
+    invocation_context.update(
+        {
+            "project_id": project_id,
+            "command": run_command,
+            "adapter_type": adapter_type,
+            "adapter_unique_id": adapter_unique_id,
+        }
+    )
     track_invocation_start(invocation_context)
     try:
         yield
