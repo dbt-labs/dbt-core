@@ -49,7 +49,7 @@ from dbt.events.types import (
     CodeExecution,
     CodeExecutionStatus,
 )
-from dbt.utils import filter_null_values, executor
+from dbt.utils import filter_null_values, executor, lowercase
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
 from dbt.adapters.base.meta import AdapterMeta, available
@@ -83,7 +83,7 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    schemas = frozenset((d.lower(), s.lower()) for d, s in manifest.get_used_schemas())
+    schemas = frozenset((lowercase(d), lowercase(s)) for d, s in manifest.get_used_schemas())
 
     def test(row: agate.Row) -> bool:
         table_database = _expect_row_value("table_database", row)
