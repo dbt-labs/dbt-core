@@ -409,5 +409,4 @@ def test(ctx, **kwargs):
 
 # Support running as a module
 if __name__ == "__main__":
-    breakpoint()
     cli_runner()
