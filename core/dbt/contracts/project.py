@@ -83,17 +83,6 @@ class RegistryPackage(Package):
         else:
             return [str(self.version)]
 
-    def __post_init__(self):
-        if not self.version:
-            raise ValidationError(
-                "When installing from the Hub package index, version is a required property"
-            )
-
-        if "/" not in self.package:
-            raise ValidationError(
-                f"{self.package} was not found in the package index. Packages on the index require a namespace, e.g dbt-labs/dbt_utils"
-            )
-
 
 PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
 
@@ -101,6 +90,22 @@ PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
 @dataclass
 class PackageConfig(dbtClassMixin, Replaceable):
     packages: List[PackageSpec]
+
+    @classmethod
+    def validate(cls, data):
+        for package in data["packages"]:
+            if not package["version"]:
+                raise ValidationError(
+                    f"{package['package']} is missing the version. When installing from the Hub "
+                    "package index, version is a required property"
+                )
+
+            if "/" not in package["package"]:
+                raise ValidationError(
+                    f"{package['package']} was not found in the package index. Packages on the index "
+                    "require a namespace, e.g dbt-labs/dbt_utils"
+                )
+        super().validate(data)
 
 
 @dataclass
