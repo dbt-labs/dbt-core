@@ -1,0 +1,7 @@
+kind: Fixes
+body: ' error while generating docs for database designed without schema'
+time: 2022-10-08T22:20:08.559477815+08:00
+custom:
+  Author: forestlzj
+  Issue: "6031"
+  PR: "6032"
