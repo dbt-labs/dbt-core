@@ -281,13 +281,12 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     @classmethod
     def validate(cls, data):
         super(UnparsedSourceDefinition, cls).validate(data)
-        for source_table in data["tables"]:
-            if source_table.get("config"):
-                enabled = source_table["config"].get("enabled")
-                if not (isinstance(enabled, bool)):
-                    raise ValidationError(
-                        f"Source config value of 'enabled: {enabled}' is not of type boolean"
-                    )
+        if data.get("config"):
+            enabled = data["config"].get("enabled")
+            if not (isinstance(enabled, bool)):
+                raise ValidationError(
+                    f"Source config value of 'enabled: {enabled}' is not of type boolean"
+                )
 
     @property
     def yaml_key(self) -> "str":
