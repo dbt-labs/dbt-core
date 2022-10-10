@@ -177,5 +177,5 @@ class TestDisabledMetricRef(SourceConfigTests):
     def test_invalid_config_metric(self, project):
         with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])
-        expected_msg = "Invalid source config value of 'True and False' for enabled. Boolean expected."
+        expected_msg = "Source config value of 'enabled: True and False' is not of type boolean"
         assert expected_msg in str(excinfo.value)

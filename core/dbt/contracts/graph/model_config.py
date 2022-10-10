@@ -369,10 +369,9 @@ class MetricConfig(BaseConfig):
 
     def __post_init__(self):
         if not isinstance(self.enabled, bool):
-            if not self.get("check_cols"):
-                raise ValidationError(
-                    f"Invalid metric config value of '{self.enabled}' for enabled. Boolean expected."
-                )
+            raise ValidationError(
+                f"Metric config value of 'enabled: {self.enabled}' is not of type boolean"
+            )
 
 
 @dataclass
@@ -381,10 +380,9 @@ class ExposureConfig(BaseConfig):
 
     def __post_init__(self):
         if not isinstance(self.enabled, bool):
-            if not self.get("check_cols"):
-                raise ValidationError(
-                    f"Invalid exposure config value of '{self.enabled}' for enabled. Boolean expected."
-                )
+            raise ValidationError(
+                f"Exposure config value of 'enabled: {self.enabled}' is not of type boolean"
+            )
 
 
 @dataclass
@@ -393,10 +391,9 @@ class SourceConfig(BaseConfig):
 
     def __post_init__(self):
         if not isinstance(self.enabled, bool):
-            if not self.get("check_cols"):
-                raise ValidationError(
-                    f"Invalid source config value of '{self.enabled}' for enabled. Boolean expected."
-                )
+            raise ValidationError(
+                f"Source config value of 'enabled: {self.enabled}' is not of type boolean"
+            )
 
 
 @dataclass

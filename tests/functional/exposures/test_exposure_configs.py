@@ -121,5 +121,5 @@ class TestInvalidConfig(ExposureConfigTests):
     def test_exposure_config_yaml_level(self, project):
         with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])
-        expected_msg = "Invalid exposure config value of 'True and False' for enabled. Boolean expected."
+        expected_msg = "Exposure config value of 'enabled: True and False' is not of type boolean"
         assert expected_msg in str(excinfo.value)
