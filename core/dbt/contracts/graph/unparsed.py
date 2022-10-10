@@ -281,12 +281,14 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     @classmethod
     def validate(cls, data):
         super(UnparsedSourceDefinition, cls).validate(data)
-        if data.get("config"):
-            enabled = data["config"].get("enabled")
-            if not (isinstance(enabled, bool)):
-                raise ValidationError(
-                    f"Source config value of 'enabled: {enabled}' is not of type boolean"
-                )
+        if data.get("tables"):
+            for source_table in data["tables"]:
+                if source_table.get("config"):
+                    enabled = source_table["config"].get("enabled")
+                    if not (isinstance(enabled, bool)):
+                        raise ValidationError(
+                            f"Source config value of 'enabled: {enabled}' is not of type boolean"
+                        )
 
     @property
     def yaml_key(self) -> "str":
@@ -354,13 +356,20 @@ class SourcePatch(dbtClassMixin, Replaceable):
     @classmethod
     def validate(cls, data):
         super(SourcePatch, cls).validate(data)
-        for source_table in data["tables"]:
-            if source_table.get("config"):
-                enabled = source_table["config"].get("enabled")
-                if not (isinstance(enabled, bool)):
-                    raise ValidationError(
-                        f"Source config value of 'enabled: {enabled}' is not of type boolean"
-                    )
+        if data.get("tables"):
+            for source_table in data["tables"]:
+                if source_table.get("config"):
+                    enabled = source_table["config"].get("enabled")
+                    if not (isinstance(enabled, bool)):
+                        raise ValidationError(
+                            f"Source config value of 'enabled: {enabled}' is not of type boolean"
+                        )
+        elif data.get("config"):
+            enabled = data["config"].get("enabled")
+            if not (isinstance(enabled, bool)):
+                raise ValidationError(
+                    f"Source config value of 'enabled: {enabled}' is not of type boolean"
+                )
 
     def to_patch_dict(self) -> Dict[str, Any]:
         dct = self.to_dict(omit_none=True)
