@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 import dbt.version
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
-    error_models__schema_yml,
-    error_models__model_sql,
-    filtered_models__schema_yml,
-    override_freshness_models__schema_yml,
+    error_models_schema_yml,
+    error_models_model_sql,
+    filtered_models_schema_yml,
+    override_freshness_models_schema_yml,
 )
 from dbt.tests.util import AnyStringWith, AnyFloat
 
@@ -256,8 +256,8 @@ class TestSourceFreshnessErrors(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": error_models__schema_yml,
-            "model.sql": error_models__model_sql,
+            "schema.yml": error_models_schema_yml,
+            "model.sql": error_models_model_sql,
         }
 
     def test_source_freshness_error(self, project):
@@ -269,7 +269,7 @@ class TestSourceFreshnessErrors(SuccessfulSourceFreshnessTest):
 class TestSourceFreshnessFilter(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"schema.yml": filtered_models__schema_yml}
+        return {"schema.yml": filtered_models_schema_yml}
 
     def test_source_freshness_all_records(self, project):
         # all records are filtered out
@@ -288,7 +288,7 @@ class TestSourceFreshnessFilter(SuccessfulSourceFreshnessTest):
 class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"schema.yml": override_freshness_models__schema_yml}
+        return {"schema.yml": override_freshness_models_schema_yml}
 
     @staticmethod
     def get_result_from_unique_id(data, unique_id):

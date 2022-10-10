@@ -1,4 +1,4 @@
-error_models__schema_yml = """version: 2
+error_models_schema_yml = """version: 2
 sources:
   - name: test_source
     loader: custom
@@ -12,10 +12,10 @@ sources:
         loaded_at_field: updated_at
 """
 
-error_models__model_sql = """select * from {{ source('test_source', 'test_table') }}
+error_models_model_sql = """select * from {{ source('test_source', 'test_table') }}
 """
 
-override_freshness_models__schema_yml = """version: 2
+override_freshness_models_schema_yml = """version: 2
 sources:
   - name: test_source
     loader: custom
@@ -59,7 +59,7 @@ sources:
         freshness: null # override: disable freshness for this table
 """
 
-models__schema_yml = """version: 2
+models_schema_yml = """version: 2
 models:
   - name: descendant_model
     columns:
@@ -142,31 +142,31 @@ sources:
       - name: table
 """
 
-models__view_model_sql = """{# See here: https://github.com/dbt-labs/dbt-core/pull/1729 #}
+models_view_model_sql = """{# See here: https://github.com/dbt-labs/dbt-core/pull/1729 #}
 
 select * from {{ ref('ephemeral_model') }}
 """
 
-models__ephemeral_model_sql = """{{ config(materialized='ephemeral') }}
+models_ephemeral_model_sql = """{{ config(materialized='ephemeral') }}
 
 select 1 as id
 """
 
-models__descendant_model_sql = """select * from {{ source('test_source', 'test_table') }}
+models_descendant_model_sql = """select * from {{ source('test_source', 'test_table') }}
 """
 
-models__multi_source_model_sql = """select * from {{ source('test_source', 'other_test_table')}}
+models_multi_source_model_sql = """select * from {{ source('test_source', 'other_test_table')}}
   join {{ source('other_source', 'test_table')}} using (id)
 """
 
-models__nonsource_descendant_sql = """select * from {{ schema }}.source
+models_nonsource_descendant_sql = """select * from {{ schema }}.source
 """
 
-models__newly_added_model_sql = """select 2 as id"""
+models_newly_added_model_sql = """select 2 as id"""
 
-models__newly_added_error_model_sql = """select error from fake_table"""
+models_newly_added_error_model_sql = """select error from fake_table"""
 
-malformed_models__schema_yml = """version: 2
+malformed_models_schema_yml = """version: 2
 sources:
   - name: test_source
     loader: custom
@@ -182,10 +182,10 @@ sources:
               - field: favorite_color
 """
 
-malformed_models__descendant_model_sql = """select * from {{ source('test_source', 'test_table') }}
+malformed_models_descendant_model_sql = """select * from {{ source('test_source', 'test_table') }}
 """
 
-filtered_models__schema_yml = """version: 2
+filtered_models_schema_yml = """version: 2
 sources:
   - name: test_source
     loader: custom
@@ -205,7 +205,7 @@ sources:
           filter: id > 101
 """
 
-macros__macro_sql = """{% macro override_me() -%}
+macros_macro_sql = """{% macro override_me() -%}
     {{ exceptions.raise_compiler_error('this is a bad macro') }}
 {%- endmacro %}
 
@@ -221,7 +221,7 @@ macros__macro_sql = """{% macro override_me() -%}
 {%- endmacro %}
 """
 
-seeds__source_csv = """favorite_color,id,first_name,email,ip_address,updated_at
+seeds_source_csv = """favorite_color,id,first_name,email,ip_address,updated_at
 blue,1,Larry,lking0@miitbeian.gov.cn,'69.135.206.194',2008-09-12 19:08:31
 blue,2,Larry,lperkins1@toplist.cz,'64.210.133.162',1978-05-09 04:15:14
 blue,3,Anna,amontgomery2@miitbeian.gov.cn,'168.104.64.114',2011-10-16 04:07:57
@@ -324,25 +324,25 @@ green,99,Paul,pjohnson2q@umn.edu,'183.59.198.197',1991-11-14 12:33:55
 green,100,Frank,fgreene2r@blogspot.com,'150.143.68.121',2010-06-12 23:55:39
 """
 
-seeds__other_table_csv = """id,first_name
+seeds_other_table_csv = """id,first_name
 1,Larry
 2,Curly
 3,Moe
 """
 
-seeds__expected_multi_source_csv = """id,first_name,color
+seeds_expected_multi_source_csv = """id,first_name,color
 1,Larry,blue
 2,Curly,red
 3,Moe,green
 """
 
-seeds__other_source_table_csv = """id,color
+seeds_other_source_table_csv = """id,color
 1,blue
 2,red
 3,green
 """
 
-malformed_schema_tests__schema_yml = """version: 2
+malformed_schema_tests_schema_yml = """version: 2
 sources:
   - name: test_source
     schema: "{{ var('test_run_schema') }}"
@@ -358,5 +358,84 @@ sources:
                   field: "{{ 'favorite' ~ 'color' }}"
 """
 
-malformed_schema_tests__model_sql = """select * from {{ source('test_source', 'test_table') }}
+malformed_schema_tests_model_sql = """select * from {{ source('test_source', 'test_table') }}
+"""
+
+basic_source_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+  - name: other_source
+    tables:
+      - name: test_table
+"""
+
+disabled_source_level_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    config:
+      enabled: False
+    tables:
+      - name: test_table
+      - name: disabled_test_table
+"""
+
+disabled_source_table_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+      - name: disabled_test_table
+        config:
+            enabled: False
+"""
+
+all_configs_everywhere_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    config:
+        enabled: False
+    tables:
+      - name: test_table
+        config:
+            enabled: True
+      - name: other_test_table
+"""
+
+all_configs_not_table_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    config:
+        enabled: True
+    tables:
+      - name: test_table
+      - name: other_test_table
+"""
+
+all_configs_project_source_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+            enabled: True
+      - name: other_test_table
+"""
+
+invalid_config_source_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+            enabled: True and False
+      - name: other_test_table
 """

@@ -12,9 +12,9 @@ import dbt.version
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 
 from tests.functional.sources.fixtures import (
-    error_models__schema_yml,
-    models__newly_added_model_sql,
-    models__newly_added_error_model_sql,
+    error_models_schema_yml,
+    models_newly_added_model_sql,
+    models_newly_added_error_model_sql,
 )
 
 
@@ -273,7 +273,7 @@ class TestSourceFresherBuildStateModified(SuccessfulSourceFreshnessTest):
         models_path = project_root.join("models/")
         assert os.path.exists(models_path)
         with open(f"{models_path}/newly_added_model.sql", "w") as fp:
-            fp.write(models__newly_added_model_sql)
+            fp.write(models_newly_added_model_sql)
 
         copy_to_previous_state()
         state_modified_results = self.run_dbt_with_vars(
@@ -305,7 +305,7 @@ class TestSourceFresherRuntimeError(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": error_models__schema_yml,
+            "schema.yml": error_models_schema_yml,
         }
 
     def test_runtime_error_states(self, project):
@@ -656,7 +656,7 @@ class TestSourceFresherBuildResultSelectors(SuccessfulSourceFreshnessTest):
         models_path = project_root.join("models/")
         assert os.path.exists(models_path)
         with open(f"{models_path}/newly_added_error_model.sql", "w") as fp:
-            fp.write(models__newly_added_error_model_sql)
+            fp.write(models_newly_added_error_model_sql)
 
         self.run_dbt_with_vars(project, ["run"], expect_pass=False)
 
