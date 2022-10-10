@@ -278,6 +278,17 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedSourceDefinition, cls).validate(data)
+        for source_table in data["tables"]:
+            if source_table.get("config"):
+                enabled = source_table["config"].get("enabled")
+                if not (isinstance(enabled, bool)):
+                    raise ValidationError(
+                        f"Source config value of 'enabled: {enabled}' is not of type boolean"
+                    )
+
     @property
     def yaml_key(self) -> "str":
         return "sources"
@@ -340,6 +351,17 @@ class SourcePatch(dbtClassMixin, Replaceable):
     loaded_at_field: Optional[str] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None
+
+    @classmethod
+    def validate(cls, data):
+        super(SourcePatch, cls).validate(data)
+        for source_table in data["tables"]:
+            if source_table.get("config"):
+                enabled = source_table["config"].get("enabled")
+                if not (isinstance(enabled, bool)):
+                    raise ValidationError(
+                        f"Source config value of 'enabled: {enabled}' is not of type boolean"
+                    )
 
     def to_patch_dict(self) -> Dict[str, Any]:
         dct = self.to_dict(omit_none=True)
@@ -452,6 +474,12 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
             # name can only contain alphanumeric chars and underscores
             if not (re.match(r"[\w-]+$", data["name"])):
                 deprecations.warn("exposure-name", exposure=data["name"])
+        if data.get("config"):
+            enabled = data["config"].get("enabled")
+            if not (isinstance(enabled, bool)):
+                raise ValidationError(
+                    f"Exposure config value of 'enabled: {enabled}' is not of type boolean"
+                )
 
 
 @dataclass
@@ -525,3 +553,10 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
         if data.get("model") is not None and data.get("calculation_method") == "derived":
             raise ValidationError("Derived metrics cannot have a 'model' property")
+
+        if data.get("config"):
+            enabled = data["config"].get("enabled")
+            if not (isinstance(enabled, bool)):
+                raise ValidationError(
+                    f"Metric config value of 'enabled: {enabled}' is not of type boolean"
+                )

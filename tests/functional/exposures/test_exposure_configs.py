@@ -1,5 +1,5 @@
 import pytest
-from hologram import ValidationError
+from dbt.exceptions import ParsingException
 
 from dbt.contracts.graph.model_config import ExposureConfig
 
@@ -119,7 +119,7 @@ class TestInvalidConfig(ExposureConfigTests):
         }
 
     def test_exposure_config_yaml_level(self, project):
-        with pytest.raises(ValidationError) as excinfo:
+        with pytest.raises(ParsingException) as excinfo:
             run_dbt(["parse"])
         expected_msg = "Exposure config value of 'enabled: True and False' is not of type boolean"
         assert expected_msg in str(excinfo.value)

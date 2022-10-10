@@ -1,5 +1,6 @@
 import pytest
-from hologram import ValidationError
+from dbt.exceptions import ParsingException
+
 from dbt.contracts.graph.model_config import SourceConfig
 
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
@@ -167,15 +168,15 @@ class TestSourceConfigsInheritence3(SourceConfigTests):
 
 
 # Test invalid source configs
-class TestDisabledMetricRef(SourceConfigTests):
+class TestInvalidSourceConfig(SourceConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "schema.yml": invalid_config_source_schema_yml,
         }
 
-    def test_invalid_config_metric(self, project):
-        with pytest.raises(ValidationError) as excinfo:
+    def test_invalid_config_source(self, project):
+        with pytest.raises(ParsingException) as excinfo:
             run_dbt(["parse"])
         expected_msg = "Source config value of 'enabled: True and False' is not of type boolean"
         assert expected_msg in str(excinfo.value)

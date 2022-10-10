@@ -1,7 +1,6 @@
 import pytest
-from hologram import ValidationError
 from dbt.contracts.graph.model_config import MetricConfig
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 
 
@@ -148,7 +147,7 @@ class TestInvalidMetric(MetricConfigTests):
         }
 
     def test_invalid_config_metric(self, project):
-        with pytest.raises(ValidationError) as excinfo:
+        with pytest.raises(ParsingException) as excinfo:
             run_dbt(["parse"])
         expected_msg = "Metric config value of 'enabled: True and False' is not of type boolean"
         assert expected_msg in str(excinfo.value)

@@ -367,33 +367,15 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 class MetricConfig(BaseConfig):
     enabled: bool = True
 
-    def __post_init__(self):
-        if not isinstance(self.enabled, bool):
-            raise ValidationError(
-                f"Metric config value of 'enabled: {self.enabled}' is not of type boolean"
-            )
-
 
 @dataclass
 class ExposureConfig(BaseConfig):
     enabled: bool = True
 
-    def __post_init__(self):
-        if not isinstance(self.enabled, bool):
-            raise ValidationError(
-                f"Exposure config value of 'enabled: {self.enabled}' is not of type boolean"
-            )
-
 
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
-
-    def __post_init__(self):
-        if not isinstance(self.enabled, bool):
-            raise ValidationError(
-                f"Source config value of 'enabled: {self.enabled}' is not of type boolean"
-            )
 
 
 @dataclass
