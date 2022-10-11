@@ -34,9 +34,9 @@ def setup_event_logger(log_path, log_format, use_colors, debug):
     global FILE_LOG
     global STDOUT_LOG
     breakpoint()
-    
+
     make_log_dir_if_missing(log_path)
-    
+
     null_handler = logging.NullHandler()
     FILE_LOG.addHandler(null_handler)
 

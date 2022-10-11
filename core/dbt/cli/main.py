@@ -60,11 +60,11 @@ def cli(ctx, **kwargs):
     # Logging
     # N.B. Legacy logger is not supported
     setup_event_logger(
-        flags.LOG_PATH if hasattr(flags.LOG_PATH) else "logs", 
+        flags.LOG_PATH if hasattr(flags.LOG_PATH) else "logs",
         flags.LOG_FORMAT,
         flags.USE_COLORS,
-        flags.DEBUG, 
-        )
+        flags.DEBUG,
+    )
 
     #  This is just a test log event, remove before merge
     fire_event(MainEncounteredError(exc="bork bork bork!\n\n\n"))
