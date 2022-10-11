@@ -27,7 +27,7 @@ include = [
 
 homepage = "https://getdbt.com"
 repository = "https://github.com/dbt-labs/dbt-core"
-documentation = "https://ats.readthedocs.io/en/latest"
+documentation = "https://docs.getdbt.com/"
 
 classifiers = [
   "Development Status :: 5 - Production/Stable",
