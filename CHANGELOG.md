@@ -66,6 +66,7 @@
 - shorthand for full refresh should be one character ([#5878](https://github.com/dbt-labs/dbt-core/issues/5878), [#5908](https://github.com/dbt-labs/dbt-core/pull/5908))
 - Fix macro resolution order during static analysis for custom generic tests ([#5720](https://github.com/dbt-labs/dbt-core/issues/5720), [#5907](https://github.com/dbt-labs/dbt-core/pull/5907))
 - Fix race condition when invoking dbt via lib.py concurrently ([#5919](https://github.com/dbt-labs/dbt-core/issues/5919), [#5921](https://github.com/dbt-labs/dbt-core/pull/5921))
+- check length of args of python model function before accessing it ([#6041](https://github.com/dbt-labs/dbt-core/issues/6041), [#6042](https://github.com/dbt-labs/dbt-core/pull/6042))
 
 ### Docs
 
@@ -143,6 +144,7 @@
 - [@tomasfarias](https://github.com/tomasfarias) ([#5432](https://github.com/dbt-labs/dbt-core/pull/5432))
 - [@varun-dc](https://github.com/varun-dc) ([#5627](https://github.com/dbt-labs/dbt-core/pull/5627))
 - [@yoiki](https://github.com/yoiki) ([#5693](https://github.com/dbt-labs/dbt-core/pull/5693))
+- [@chamini2](https://github.com/chamini2) ([#6042](https://github.com/dbt-labs/dbt-core/pull/6042))
 
 
 ## Previous Releases
