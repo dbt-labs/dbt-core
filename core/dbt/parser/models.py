@@ -61,7 +61,7 @@ class PythonValidationVisitor(ast.NodeVisitor):
 
     def check_error(self, node):
         if self.num_model_def != 1:
-            raise ParsingException("dbt only allow one model defined per python file", node=node)
+            raise ParsingException("dbt only allows one model defined per python file", node=node)
         if len(self.dbt_errors) != 0:
             raise ParsingException("\n".join(self.dbt_errors), node=node)
 
