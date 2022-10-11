@@ -267,13 +267,6 @@ def fire_event(e: BaseEvent) -> None:
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
 
 
-def global_metadata_vars() -> Dict[str, str]:
-    global metadata_vars
-    if metadata_vars is None:
-        metadata_vars = get_metadata_vars()
-    return metadata_vars
-
-
 def get_metadata_vars() -> Dict[str, str]:
     return {
         k[len(METADATA_ENV_PREFIX) :]: v

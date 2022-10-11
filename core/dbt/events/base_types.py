@@ -3,6 +3,8 @@ import os
 import threading
 from datetime import datetime
 
+import functools
+import collections
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # These base types define the _required structure_ for the concrete event #
@@ -10,15 +12,51 @@ from datetime import datetime
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
+# TODO: this should not live here - duplicated and modified from utils.py because of circular imports for now
+class memoized:
+    """Decorator. Caches a function's return value each time it is called. If
+    called later with the same arguments, the cached value is returned (not
+    reevaluated).
+
+    Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize"""
+
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+
+    def __call__(self, *args):
+        if not isinstance(args, collections.abc.Hashable):
+            # uncacheable. a list, for instance.
+            # better to not cache than blow up.
+            return self.func(*args)
+        if args in self.cache:
+            return self.cache[args]
+        value = self.func(*args)
+        self.cache[args] = value
+        return value
+
+    def __repr__(self):
+        """Return the function's docstring."""
+        return self.func.__doc__
+
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        return functools.partial(self.__call__, obj)
+
+    def reset(self):
+        self.cache = {}
+
+
 class Cache:
     # Events with this class will only be logged when the `--log-cache-events` flag is passed
     pass
 
 
-def get_metadata_vars() -> dict:
-    from dbt.events.functions import global_metadata_vars
+@memoized
+def get_global_metadata_vars() -> dict:
+    from dbt.events.functions import get_metadata_vars
 
-    return global_metadata_vars()
+    return get_metadata_vars()
 
 
 def get_invocation_id() -> str:
@@ -54,7 +92,7 @@ class BaseEvent:
         if not hasattr(self.info, "msg") or not self.info.msg:
             self.info.msg = self.message()
         self.info.invocation_id = get_invocation_id()
-        self.info.extra = get_metadata_vars()
+        self.info.extra = get_global_metadata_vars()
         self.info.ts = datetime.utcnow()
         self.info.pid = get_pid()
         self.info.thread = get_thread_name()
