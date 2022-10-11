@@ -623,7 +623,17 @@ def model(dbt):
         self.parser.manifest.files[block.file.file_id] = block.file
         with self.assertRaises(ParsingException):
             self.parser.parse_file(block)
-    
+
+    def test_wrong_python_model_def_miss_session(self):
+        py_code = """
+def model():
+    return df
+        """
+        block = self.file_block_for(py_code, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingException):
+            self.parser.parse_file(block)
+
     def test_wrong_python_model_def_wrong_arg(self):
         """ First argument for python model should be dbt
         """
