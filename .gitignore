@@ -97,6 +97,3 @@ venv/
 # vscode
 .vscode/
 *.code-workspace
-
-# poetry
-poetry.lock

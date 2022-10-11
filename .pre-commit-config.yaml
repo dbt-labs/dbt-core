@@ -20,6 +20,11 @@ repos:
     exclude_types:
       - "markdown"
   - id: check-case-conflict
+- repo: https://github.com/python-poetry/poetry
+  rev: 1.2.2
+  hooks:
+    - id: poetry-check
+    - id: poetry-lock
 - repo: https://github.com/psf/black
   rev: 22.3.0
   hooks:
