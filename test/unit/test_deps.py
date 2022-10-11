@@ -22,7 +22,6 @@ from dbt.version import get_installed_version
 
 from dbt.dataclass_schema import ValidationError
 
-
 class TestLocalPackage(unittest.TestCase):
     def test_init(self):
         a_contract = LocalPackage.from_dict({'local': '/path/to/package'})
@@ -654,3 +653,27 @@ class TestPackageSpec(unittest.TestCase):
         resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
         self.assertEqual(resolved[0].name, 'dbt-labs-test/a')
         self.assertEqual(resolved[0].version, '0.1.4a1')
+
+    def test_validation_error_when_version_is_missing_from_package_config(self):
+        
+        packages_data = {"packages": [{'package': 'dbt-labs-test/b', 'version': None}]}
+        
+        with self.assertRaises(ValidationError) as exc:
+            a = PackageConfig.validate(data=packages_data)
+
+        msg = (
+            "dbt-labs-test/b is missing the version. When installing from the Hub package index, version is a required property"
+        )
+        assert msg in str(exc.exception)
+
+    def test_validation_error_when_namespace_is_missing_from_package_config(self):
+        
+        packages_data = {"packages": [{'package': 'dbt-labs', 'version': '1.0.0'}]}
+        
+        with self.assertRaises(ValidationError) as exc:
+            a = PackageConfig.validate(data=packages_data)
+
+        msg = (
+            "dbt-labs was not found in the package index. Packages on the index require a namespace, e.g dbt-labs/dbt_utils"
+        )
+        assert msg in str(exc.exception)
