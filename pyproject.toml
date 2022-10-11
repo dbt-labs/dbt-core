@@ -1,6 +1,6 @@
 [tool.mypy]
-exclude = ['core/build/.*']
-files = 'core'
+# TODO: widen range of files as we fix issues
+files = 'core/dbt'
 mypy_path = "third-party-stubs/"
 namespace_packages = true
 
