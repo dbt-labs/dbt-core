@@ -20,11 +20,7 @@ author = "dbt Labs"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx_click",
-    "dbt_click",
-]
+extensions = ["dbt_click"]
 
 templates_path = ["_templates"]
 exclude_patterns: t.List[str] = []

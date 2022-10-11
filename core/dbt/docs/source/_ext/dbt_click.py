@@ -17,7 +17,7 @@ PARAM_TYPE_MAP = {
 }
 
 
-def format_command(cmd) -> nodes.Section:
+def format_command(cmd) -> nodes.section:
     cmd_name = cmd.name.replace("-", "_")
     section = nodes.section(
         "",
@@ -29,7 +29,7 @@ def format_command(cmd) -> nodes.Section:
     return section
 
 
-def format_params(cmd) -> t.List[nodes.Section]:
+def format_params(cmd) -> t.List[nodes.section]:
     lines = []
     for param in cmd.params:
         uid = f"{cmd.name}|{param.name}"
@@ -99,7 +99,7 @@ class DBTClick(Directive):
         cmd_strs = [cmd for cmd in click_group.commands]
         cmd_strs.sort()
         cmds = []
-        for cmd_str in click_group.commands:
+        for cmd_str in cmd_strs:
             cmd = click_group.commands.get(cmd_str)
             if cmd is not None:
                 cmds.append(cmd)
