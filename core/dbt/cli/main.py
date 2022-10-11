@@ -59,16 +59,15 @@ def cli(ctx, **kwargs):
 
     # Logging
     # N.B. Legacy logger is not supported
-
-    # TODO: Check w Nate and Jerco-- does this do what we need it to wrt to list/ls log levels?
-    level_override = logging.WARN if ctx.invoked_subcommand in ("list", "ls") else None
-    setup_event_logger(flags.LOG_PATH or "logs", level_override)
-    # TODO: Do we need to set `event_logger.format_json = flags.LOG_FORMAT` like we used to?
-    # Do we even need these pre-init-hooks in basetask and list?
-    # I need Nate/Jerco to walk me through this convoluted mess.
+    setup_event_logger(
+        flags.LOG_PATH if hasattr(flags.LOG_PATH) else "logs", 
+        flags.LOG_FORMAT,
+        flags.USE_COLORS,
+        flags.DEBUG, 
+        )
 
     #  This is just a test log event, remove before merge
-    fire_event(MainEncounteredError(exc="bork bork bork!"))
+    fire_event(MainEncounteredError(exc="bork bork bork!\n\n\n"))
 
     # Profiling
     if flags.RECORD_TIMING_INFO:
