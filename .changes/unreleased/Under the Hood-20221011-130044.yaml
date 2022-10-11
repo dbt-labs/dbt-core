@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Consolidate build logic into pyproject.toml, using poetry
+time: 2022-10-11T13:00:44.581117-05:00
+custom:
+  Author: davidbloss
+  Issue: "5696"
+  PR: "6047"
