@@ -61,7 +61,7 @@ from dbt.adapters.base.relation import (
 )
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
-from dbt.adapters.cache import RelationsCache, _make_key_msg
+from dbt.adapters.cache import RelationsCache, _make_ref_key_msg
 
 
 SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
@@ -728,7 +728,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             ListRelations(
                 database=cast_to_str(database),
                 schema=schema,
-                relations=[_make_key_msg(x) for x in relations],
+                relations=[_make_ref_key_msg(x) for x in relations],
             )
         )
 

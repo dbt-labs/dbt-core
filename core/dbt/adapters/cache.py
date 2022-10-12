@@ -3,7 +3,12 @@ import threading
 from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from dbt.adapters.reference_keys import _make_key, _make_key_msg, _make_msg_from_key, _ReferenceKey
+from dbt.adapters.reference_keys import (
+    _make_key,
+    _make_ref_key_msg,
+    _make_msg_from_ref_key,
+    _ReferenceKey,
+)
 import dbt.exceptions
 from dbt.events.functions import fire_event, fire_event_if
 from dbt.events.types import (
@@ -302,7 +307,8 @@ class RelationsCache:
             # a link - we will never drop the referenced relation during a run.
             fire_event(
                 UncachedRelation(
-                    dep_key=_make_msg_from_key(dep_key), ref_key=_make_msg_from_key(ref_key)
+                    dep_key=_make_msg_from_ref_key(dep_key),
+                    ref_key=_make_msg_from_ref_key(ref_key),
                 )
             )
             return
@@ -315,7 +321,9 @@ class RelationsCache:
             dependent = dependent.replace(type=referenced.External)
             self.add(dependent)
         fire_event(
-            AddLink(dep_key=_make_msg_from_key(dep_key), ref_key=_make_msg_from_key(ref_key))
+            AddLink(
+                dep_key=_make_msg_from_ref_key(dep_key), ref_key=_make_msg_from_ref_key(ref_key)
+            )
         )
         with self.lock:
             self._add_link(ref_key, dep_key)
@@ -327,7 +335,7 @@ class RelationsCache:
         :param BaseRelation relation: The underlying relation.
         """
         cached = _CachedRelation(relation)
-        fire_event(AddRelation(relation=_make_key_msg(cached)))
+        fire_event(AddRelation(relation=_make_ref_key_msg(cached)))
         fire_event_if(flags.LOG_CACHE_EVENTS, lambda: DumpBeforeAddGraph(dump=self.dump_graph()))
 
         with self.lock:
@@ -359,7 +367,7 @@ class RelationsCache:
         :param str identifier: The identifier of the relation to drop.
         """
         dropped_key = _make_key(relation)
-        dropped_key_msg = _make_key_msg(relation)
+        dropped_key_msg = _make_ref_key_msg(relation)
         fire_event(DropRelation(dropped=dropped_key_msg))
         with self.lock:
             if dropped_key not in self.relations:
@@ -367,7 +375,7 @@ class RelationsCache:
                 return
             consequences = self.relations[dropped_key].collect_consequences()
             # convert from a list of _ReferenceKeys to a list of ReferenceKeyMsgs
-            consequence_msgs = [_make_msg_from_key(key) for key in consequences]
+            consequence_msgs = [_make_msg_from_ref_key(key) for key in consequences]
 
             fire_event(DropCascade(dropped=dropped_key_msg, consequences=consequence_msgs))
             self._remove_refs(consequences)
@@ -393,9 +401,9 @@ class RelationsCache:
             if cached.is_referenced_by(old_key):
                 fire_event(
                     UpdateReference(
-                        old_key=_make_key_msg(old_key),
-                        new_key=_make_key_msg(new_key),
-                        cached_key=_make_key_msg(cached.key()),
+                        old_key=_make_ref_key_msg(old_key),
+                        new_key=_make_ref_key_msg(new_key),
+                        cached_key=_make_ref_key_msg(cached.key()),
                     )
                 )
                 cached.rename_key(old_key, new_key)
@@ -442,7 +450,7 @@ class RelationsCache:
             )
 
         if old_key not in self.relations:
-            fire_event(TemporaryRelation(key=_make_msg_from_key(old_key)))
+            fire_event(TemporaryRelation(key=_make_msg_from_ref_key(old_key)))
             return False
         return True
 
@@ -461,7 +469,9 @@ class RelationsCache:
         old_key = _make_key(old)
         new_key = _make_key(new)
         fire_event(
-            RenameSchema(old_key=_make_msg_from_key(old_key), new_key=_make_msg_from_key(new))
+            RenameSchema(
+                old_key=_make_msg_from_ref_key(old_key), new_key=_make_msg_from_ref_key(new)
+            )
         )
 
         fire_event_if(

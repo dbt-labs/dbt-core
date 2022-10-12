@@ -25,11 +25,11 @@ def _make_key(relation: Any) -> _ReferenceKey:
     )
 
 
-def _make_key_msg(relation: Any):
-    return _make_msg_from_key(_make_key(relation))
+def _make_ref_key_msg(relation: Any):
+    return _make_msg_from_ref_key(_make_key(relation))
 
 
-def _make_msg_from_key(ref_key: _ReferenceKey) -> ReferenceKeyMsg:
+def _make_msg_from_ref_key(ref_key: _ReferenceKey) -> ReferenceKeyMsg:
     return ReferenceKeyMsg(
         database=ref_key.database, schema=ref_key.schema, identifier=ref_key.identifier
     )
