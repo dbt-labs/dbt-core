@@ -3,12 +3,12 @@ from colorama import Style
 
 from dbt.constants import METADATA_ENV_PREFIX
 import dbt.events.functions as this  # don't worry I hate it too.
+
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
 from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
 import dbt.flags as flags
 from dbt.constants import SECRET_ENV_PREFIX
 
-# TODO this will need to move eventually
 from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
 import json
@@ -48,19 +48,20 @@ metadata_vars: Optional[Dict[str, str]] = None
 
 
 def setup_event_logger(log_path, level_override=None):
+    global format_json, format_color, STDOUT_LOG, FILE_LOG
     make_log_dir_if_missing(log_path)
 
-    this.format_json = flags.LOG_FORMAT == "json"
+    format_json = flags.LOG_FORMAT == "json"
     # USE_COLORS can be None if the app just started and the cli flags
     # havent been applied yet
-    this.format_color = True if flags.USE_COLORS else False
+    format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
     log_dest = os.path.join(log_path, "dbt.log")
     level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
     # overwrite the STDOUT_LOG logger with the configured one
-    this.STDOUT_LOG = logging.getLogger("configured_std_out")
-    this.STDOUT_LOG.setLevel(level)
+    STDOUT_LOG = logging.getLogger("configured_std_out")
+    STDOUT_LOG.setLevel(level)
 
     FORMAT = "%(message)s"
     stdout_passthrough_formatter = logging.Formatter(fmt=FORMAT)
@@ -69,16 +70,16 @@ def setup_event_logger(log_path, level_override=None):
     stdout_handler.setFormatter(stdout_passthrough_formatter)
     stdout_handler.setLevel(level)
     # clear existing stdout TextIOWrapper stream handlers
-    this.STDOUT_LOG.handlers = [
+    STDOUT_LOG.handlers = [
         h
-        for h in this.STDOUT_LOG.handlers
+        for h in STDOUT_LOG.handlers
         if not (hasattr(h, "stream") and isinstance(h.stream, TextIOWrapper))  # type: ignore
     ]
-    this.STDOUT_LOG.addHandler(stdout_handler)
+    STDOUT_LOG.addHandler(stdout_handler)
 
     # overwrite the FILE_LOG logger with the configured one
-    this.FILE_LOG = logging.getLogger("configured_file")
-    this.FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
+    FILE_LOG = logging.getLogger("configured_file")
+    FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
@@ -87,24 +88,26 @@ def setup_event_logger(log_path, level_override=None):
     )
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
-    this.FILE_LOG.handlers.clear()
-    this.FILE_LOG.addHandler(file_handler)
+    FILE_LOG.handlers.clear()
+    FILE_LOG.addHandler(file_handler)
 
 
 # used for integration tests
 def capture_stdout_logs() -> StringIO:
+    global STDOUT_LOG
     capture_buf = io.StringIO()
     stdout_capture_handler = logging.StreamHandler(capture_buf)
     stdout_handler.setLevel(logging.DEBUG)
-    this.STDOUT_LOG.addHandler(stdout_capture_handler)
+    STDOUT_LOG.addHandler(stdout_capture_handler)
     return capture_buf
 
 
 # used for integration tests
 def stop_capture_stdout_logs() -> None:
-    this.STDOUT_LOG.handlers = [
+    global STDOUT_LOG
+    STDOUT_LOG.handlers = [
         h
-        for h in this.STDOUT_LOG.handlers
+        for h in STDOUT_LOG.handlers
         if not (hasattr(h, "stream") and isinstance(h.stream, StringIO))  # type: ignore
     ]
 
@@ -147,7 +150,8 @@ def event_to_dict(event: BaseEvent) -> dict:
 # translates an Event to a completely formatted text-based log line
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
 def reset_color() -> str:
-    return "" if not this.format_color else Style.RESET_ALL
+    global format_color
+    return "" if not format_color else Style.RESET_ALL
 
 
 def create_info_text_log_line(e: BaseEvent) -> str:
@@ -189,7 +193,8 @@ def create_json_log_line(e: BaseEvent) -> Optional[str]:
 
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
 def create_log_line(e: BaseEvent, file_output=False) -> Optional[str]:
-    if this.format_json:
+    global format_json
+    if format_json:
         # TODO: Do we want to skip EmptyLine() like the TextOnly for logbook?
         return create_json_log_line(e)  # json output, both console and file
     elif file_output is True or flags.DEBUG:

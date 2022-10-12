@@ -88,7 +88,7 @@ class AdapterProtocol(  # type: ignore[misc]
     ],
 ):
     # N.B. Technically these are ClassVars, but mypy doesn't support putting type vars in a
-    # ClassVar due to the restirctiveness of PEP-526
+    # ClassVar due to the restrictiveness of PEP-526
     # See: https://github.com/python/mypy/issues/5144
     AdapterSpecificConfigs: Type[AdapterConfig_T]
     Column: Type[Column_T]

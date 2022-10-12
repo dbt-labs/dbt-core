@@ -826,8 +826,8 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     description: str
     label: str
     calculation_method: str
-    expression: str
     timestamp: str
+    expression: str
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]

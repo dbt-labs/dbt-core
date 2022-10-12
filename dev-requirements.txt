@@ -1,5 +1,5 @@
 betterproto[compiler]
-black==22.8.0
+black==22.10.0
 bumpversion
 flake8
 flaky

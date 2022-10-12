@@ -1,7 +1,0 @@
-kind: Fixes
-body: Finishing logic upgrade to Redshift for name truncation collisions.
-time: 2022-08-15T23:04:09.173645-07:00
-custom:
-  Author: versusfacit
-  Issue: "5586"
-  PR: "5656"

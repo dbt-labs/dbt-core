@@ -15,7 +15,7 @@ def statically_extract_macro_calls(string, ctx, db_wrapper=None):
         if hasattr(func_call, "node") and hasattr(func_call.node, "name"):
             func_name = func_call.node.name
         else:
-            # func_call for dbt_utils.current_timestamp macro
+            # func_call for dbt.current_timestamp macro
             # Call(
             #   node=Getattr(
             #     node=Name(

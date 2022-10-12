@@ -687,6 +687,7 @@ def _build_seed_subparser(subparsers, base_subparser):
     )
     seed_sub.add_argument(
         "--full-refresh",
+        "-f",
         action="store_true",
         help="""
         Drop existing seed tables and recreate them

@@ -367,16 +367,16 @@ sample_values = [
     PrintSeedResultLine(
         status="", index=0, total=0, execution_time=0, schema="", relation="", node_info=NodeInfo()
     ),
-    PrintHookEndErrorLine(
+    PrintFreshnessErrorLine(
         source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
-    PrintHookEndErrorStaleLine(
+    PrintFreshnessErrorStaleLine(
         source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
-    PrintHookEndWarnLine(
+    PrintFreshnessWarnLine(
         source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
-    PrintHookEndPassLine(
+    PrintFreshnessPassLine(
         source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
     ),
     PrintCancelLine(conn_name=""),

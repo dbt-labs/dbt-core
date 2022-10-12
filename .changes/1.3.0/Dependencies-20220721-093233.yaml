@@ -1,7 +1,0 @@
-kind: Dependencies
-body: Remove pin for MarkUpSafe from >=0.23,<2.1
-time: 2022-07-21T09:32:33.494002-05:00
-custom:
-  Author: emmyoop
-  Issue: "5506"
-  PR: "5507"

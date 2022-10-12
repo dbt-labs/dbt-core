@@ -386,7 +386,7 @@ class RelationsCache:
         relation = self.relations.pop(old_key)
         new_key = new_relation.key()
 
-        # relaton has to rename its innards, so it needs the _CachedRelation.
+        # relation has to rename its innards, so it needs the _CachedRelation.
         relation.rename(new_relation)
         # update all the relations that refer to it
         for cached in self.relations.values():

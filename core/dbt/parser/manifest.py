@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
@@ -72,9 +73,7 @@ from dbt.contracts.util import Writable
 from dbt.exceptions import (
     ref_target_not_found,
     get_target_not_found_or_disabled_msg,
-    source_target_not_found,
-    metric_target_not_found,
-    exposure_target_not_found,
+    target_not_found,
     get_not_found_or_disabled_msg,
     warn_or_error,
 )
@@ -367,6 +366,8 @@ class ManifestLoader:
                     project, project_parser_files[project.project_name], parser_types
                 )
 
+            self.process_nodes()
+
             self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
             # patch_sources converts the UnparsedSourceDefinitions in the
@@ -467,6 +468,7 @@ class ManifestLoader:
                         dct = block.file.pp_dict
                     else:
                         dct = block.file.dict_from_yaml
+                    # this is where the schema file gets parsed
                     parser.parse_file(block, dct=dct)
                     # Came out of here with UnpatchedSourceDefinition containing configs at the source level
                     # and not configs at the table level (as expected)
@@ -927,12 +929,40 @@ class ManifestLoader:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
 
+    def process_nodes(self):
+        # make sure the nodes are in the manifest.nodes or the disabled dict,
+        # correctly now that the schema files are also parsed
+        disabled_nodes = []
+        for node in self.manifest.nodes.values():
+            if not node.config.enabled:
+                disabled_nodes.append(node.unique_id)
+                self.manifest.add_disabled_nofile(node)
+        for unique_id in disabled_nodes:
+            self.manifest.nodes.pop(unique_id)
+
+        disabled_copy = deepcopy(self.manifest.disabled)
+        for disabled in disabled_copy.values():
+            for node in disabled:
+                if node.config.enabled:
+                    for dis_index, dis_node in enumerate(disabled):
+                        # Remove node from disabled and unique_id from disabled dict if necessary
+                        del self.manifest.disabled[node.unique_id][dis_index]
+                        if not self.manifest.disabled[node.unique_id]:
+                            self.manifest.disabled.pop(node.unique_id)
+
+                    self.manifest.add_node_nofile(node)
+
+        self.manifest.rebuild_ref_lookup()
+
 
 def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, disabled):
 
     if node.resource_type == NodeType.Test:
         msg = get_target_not_found_or_disabled_msg(
-            node, target_model_name, target_model_package, disabled
+            node=node,
+            target_name=target_model_name,
+            target_package=target_model_package,
+            disabled=disabled,
         )
         if disabled:
             fire_event(InvalidRefInTestNode(msg=msg))
@@ -960,34 +990,31 @@ def invalid_source_fail_unless_test(node, target_name, target_table_name, disabl
         else:
             warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
-        source_target_not_found(node, target_name, target_table_name, disabled=disabled)
-
-
-def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_package):
-
-    if node.resource_type == NodeType.Test:
-        msg = get_target_not_found_or_disabled_msg(node, target_metric_name, target_metric_package)
-        warn_or_error(msg, log_fmt=warning_tag("{}"))
-    else:
-        metric_target_not_found(
-            node,
-            target_metric_name,
-            target_metric_package,
+        target_not_found(
+            node=node,
+            target_name=f"{target_name}.{target_table_name}",
+            target_kind="source",
+            disabled=disabled,
         )
 
 
-def invalid_exposure_fail_unless_test(node, target_exposure_name, target_exposure_package):
+def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_package, disabled):
 
     if node.resource_type == NodeType.Test:
         msg = get_target_not_found_or_disabled_msg(
-            node, target_exposure_name, target_exposure_package
+            node=node,
+            target_name=target_metric_name,
+            target_package=target_metric_package,
+            disabled=disabled,
         )
         warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
-        exposure_target_not_found(
-            node,
-            target_exposure_name,
-            target_exposure_package,
+        target_not_found(
+            node=node,
+            target_name=target_metric_name,
+            target_kind="metric",
+            target_package=target_metric_package,
+            disabled=disabled,
         )
 
 
@@ -1216,6 +1243,7 @@ def _process_metrics_for_node(
                 node,
                 target_metric_name,
                 target_metric_package,
+                disabled=(isinstance(target_metric, Disabled)),
             )
 
             continue

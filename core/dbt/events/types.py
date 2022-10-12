@@ -1742,7 +1742,7 @@ class PrintSeedResultLine(InfoLevel, pt.PrintSeedResultLine):
 
 
 @dataclass
-class PrintHookEndErrorLine(ErrorLevel, pt.PrintHookEndErrorLine):
+class PrintFreshnessErrorLine(ErrorLevel, pt.PrintFreshnessErrorLine):
     def code(self):
         return "Q018"
 
@@ -1759,7 +1759,7 @@ class PrintHookEndErrorLine(ErrorLevel, pt.PrintHookEndErrorLine):
 
 
 @dataclass
-class PrintHookEndErrorStaleLine(ErrorLevel, pt.PrintHookEndErrorStaleLine):
+class PrintFreshnessErrorStaleLine(ErrorLevel, pt.PrintFreshnessErrorStaleLine):
     def code(self):
         return "Q019"
 
@@ -1776,7 +1776,7 @@ class PrintHookEndErrorStaleLine(ErrorLevel, pt.PrintHookEndErrorStaleLine):
 
 
 @dataclass
-class PrintHookEndWarnLine(WarnLevel, pt.PrintHookEndWarnLine):
+class PrintFreshnessWarnLine(WarnLevel, pt.PrintFreshnessWarnLine):
     def code(self):
         return "Q020"
 
@@ -1793,7 +1793,7 @@ class PrintHookEndWarnLine(WarnLevel, pt.PrintHookEndWarnLine):
 
 
 @dataclass
-class PrintHookEndPassLine(InfoLevel, pt.PrintHookEndPassLine):
+class PrintFreshnessPassLine(InfoLevel, pt.PrintFreshnessPassLine):
     def code(self):
         return "Q021"
 
@@ -2749,28 +2749,28 @@ if 1 == 0:
         schema="",
         relation="",
     )
-    PrintHookEndErrorLine(
+    PrintFreshnessErrorLine(
         source_name="",
         table_name="",
         index=0,
         total=0,
         execution_time=0,
     )
-    PrintHookEndErrorStaleLine(
+    PrintFreshnessErrorStaleLine(
         source_name="",
         table_name="",
         index=0,
         total=0,
         execution_time=0,
     )
-    PrintHookEndWarnLine(
+    PrintFreshnessWarnLine(
         source_name="",
         table_name="",
         index=0,
         total=0,
         execution_time=0,
     )
-    PrintHookEndPassLine(
+    PrintFreshnessPassLine(
         source_name="",
         table_name="",
         index=0,

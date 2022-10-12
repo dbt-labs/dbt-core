@@ -834,17 +834,24 @@ class PartialParsing:
         # remove elem node and remove unique_id from node_patches
         if elem_unique_id:
             # might have been already removed
-            if elem_unique_id in self.saved_manifest.nodes:
-                node = self.saved_manifest.nodes.pop(elem_unique_id)
-                self.deleted_manifest.nodes[elem_unique_id] = node
+            if (
+                elem_unique_id in self.saved_manifest.nodes
+                or elem_unique_id in self.saved_manifest.disabled
+            ):
+                if elem_unique_id in self.saved_manifest.nodes:
+                    nodes = [self.saved_manifest.nodes.pop(elem_unique_id)]
+                else:
+                    # The value of disabled items is a list of nodes
+                    nodes = self.saved_manifest.disabled.pop(elem_unique_id)
                 # need to add the node source_file to pp_files
-                file_id = node.file_id
-                # need to copy new file to saved files in order to get content
-                if file_id in self.new_files:
-                    self.saved_files[file_id] = deepcopy(self.new_files[file_id])
-                if self.saved_files[file_id]:
-                    source_file = self.saved_files[file_id]
-                    self.add_to_pp_files(source_file)
+                for node in nodes:
+                    file_id = node.file_id
+                    # need to copy new file to saved files in order to get content
+                    if file_id in self.new_files:
+                        self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                    if self.saved_files[file_id]:
+                        source_file = self.saved_files[file_id]
+                        self.add_to_pp_files(source_file)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)
 

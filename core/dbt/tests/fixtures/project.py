@@ -6,6 +6,7 @@ from datetime import datetime
 import warnings
 import yaml
 
+from dbt.exceptions import CompilationException
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
@@ -25,7 +26,7 @@ from dbt.tests.util import (
 # schema in the testing database, and returns a `TestProjInfo` object that
 # contains information from the other fixtures for convenience.
 #
-# The models, macros, seeds, snapshots, tests, and analysis fixtures all
+# The models, macros, seeds, snapshots, tests, and analyses fixtures all
 # represent directories in a dbt project, and are all dictionaries with
 # file name keys and file contents values.
 #
@@ -281,7 +282,7 @@ def write_project_files_recursively(path, file_dict):
             write_project_files_recursively(path.mkdir(name), value)
 
 
-# models, macros, seeds, snapshots, tests, analysis
+# models, macros, seeds, snapshots, tests, analyses
 # Provide a dictionary of file names to contents. Nested directories
 # are handle by nested dictionaries.
 
@@ -321,21 +322,21 @@ def tests():
     return {}
 
 
-# analysis directory
+# analyses directory
 @pytest.fixture(scope="class")
-def analysis():
+def analyses():
     return {}
 
 
-# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analysis
+# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analyses
 @pytest.fixture(scope="class")
-def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analysis):
+def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analyses):
     write_project_files(project_root, "models", {**models, **properties})
     write_project_files(project_root, "macros", macros)
     write_project_files(project_root, "snapshots", snapshots)
     write_project_files(project_root, "seeds", seeds)
     write_project_files(project_root, "tests", tests)
-    write_project_files(project_root, "analysis", analysis)
+    write_project_files(project_root, "analyses", analyses)
 
 
 # We have a separate logs dir for every test
@@ -481,8 +482,11 @@ def project(
     # See https://github.com/dbt-labs/dbt-core/issues/5041
     # The debug command also results in an AttributeError since `Profile` doesn't have
     # a `load_dependencies` method.
+    # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
+    # the macros have errors (which is what we're actually testing for...) they end up
+    # throwing CompilationExceptions
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError):
+    except (KeyError, AttributeError, CompilationException):
         pass
     os.chdir(orig_cwd)

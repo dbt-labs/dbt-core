@@ -98,5 +98,4 @@ venv/
 *.code-workspace
 
 # poetry
-pyproject.toml
 poetry.lock
