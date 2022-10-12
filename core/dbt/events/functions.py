@@ -2,15 +2,14 @@ import betterproto
 from colorama import Style
 
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
-import dbt.events.types
-
+from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
 import dbt.flags as flags
 from dbt.constants import SECRET_ENV_PREFIX, METADATA_ENV_PREFIX
 from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
 import json
 import io
-from io import StringIO, TextIOWrapper, BytesIO
+from io import StringIO, TextIOWrapper
 import logbook
 import logging
 from logging import Logger
@@ -21,8 +20,6 @@ import uuid
 import threading
 from typing import List, Optional, Union, Callable, Dict
 from collections import deque
-
-from psycopg2 import Timestamp
 
 LOG_VERSION = 3
 EVENT_HISTORY = None
@@ -154,7 +151,6 @@ def reset_color() -> str:
 
 
 def create_info_text_log_line(e: BaseEvent) -> str:
-    assert_event_survives_proto_round_trip(e)
     color_tag: str = reset_color()
     ts: str = get_ts().strftime("%H:%M:%S")  # TODO: get this from the event.ts?
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
@@ -163,10 +159,9 @@ def create_info_text_log_line(e: BaseEvent) -> str:
 
 
 def create_debug_text_log_line(e: BaseEvent) -> str:
-    assert_event_survives_proto_round_trip(e)
     log_line: str = ""
     # Create a separator if this is the beginning of an invocation
-    if type(e) == dbt.events.types.MainReportVersion:
+    if type(e) == MainReportVersion:
         separator = 30 * "="
         log_line = f"\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n"
     color_tag: str = reset_color()
@@ -186,94 +181,10 @@ def create_debug_text_log_line(e: BaseEvent) -> str:
 
 # translates an Event to a completely formatted json log line
 def create_json_log_line(e: BaseEvent) -> Optional[str]:
-    assert_event_survives_proto_round_trip(e)
-    if type(e) == dbt.events.types.EmptyLine:
+    if type(e) == EmptyLine:
         return None  # will not be sent to logger
     raw_log_line = event_to_json(e)
     return scrub_secrets(raw_log_line, env_secrets())
-
-
-def create_protobuf_log_block(e: BaseEvent) -> bytes:
-    event_name = type(e).__name__
-    event_name_bytes = bytes(event_name, "utf-8")
-    
-    try:
-        event_proto_bytes = bytes(e)
-    except Exception as exp:
-        raise Exception("Trouble with: " + event_name + " " + repr(e))
-    
-    # The encoded byte block for an entry in the binary event log consists of
-    # the following four byte sequences, concatenated:
-    # 
-    # 1. A 16-bit integer, unsigned, little-endian
-    # 2. The event type name, a UTF-8 string with byte-length given by (1)
-    # 3. A 32-bit integer, unsigned, little-endian
-    # 4. A protobuf message of type given by (2) and byte-length given by (3)
-    block_bytes: bytes = (
-        len(event_name_bytes).to_bytes(2, "little", signed=False) +
-        event_name_bytes +
-        len(event_proto_bytes).to_bytes(4, "little", signed=False) +
-        event_proto_bytes
-    )
-
-    # ISSUE: Create and apply a scrub_secrets() equivalent for protobuf binary log messages
-
-    return block_bytes
-
-
-def parse_protobuf_log_block(block_bytes: bytes) -> BaseEvent:
-    # decodes byte blocks as encoded by create_progobuf_log_block()
-    buffer = io.BytesIO(block_bytes)
-    event_name_bytes_len = int.from_bytes(buffer.read(2), 'little', signed=False) # read uint16
-    event_name = buffer.read(event_name_bytes_len).decode('utf-8') # read utf-8 str
-    event_proto_bytes_len = int.from_bytes(buffer.read(4), 'little', signed=False) # read uint32
-    event_proto_bytes = buffer.read(event_proto_bytes_len) # read bytes
-
-    cls = getattr(dbt.events.types, event_name)
-
-    parsed = cls().parse(event_proto_bytes)
-
-    return parsed
-
-
-def assert_event_survives_proto_round_trip(e: BaseEvent) -> bool:
-
-    try:
-        block = create_protobuf_log_block(e)
-    except Exception as exp:
-        raise Exception("CREATE BLOCK ERROR: " + repr(e))
-
-    try:
-        e_prime = parse_protobuf_log_block(block)
-    except Exception as exp:
-        raise Exception("PARSE BLOCK ERROR: " + repr(e))
-
-    if not _proto_eq(e, e_prime):
-        raise Exception("Event did not survive protocol buffer encode/decode round-trip.")
-
-def _proto_eq(e1, e2) -> bool:
-    for field in e1.__dataclass_fields__.values():
-        v1 = getattr(e1, field.name)
-        v2 = getattr(e2, field.name)
-
-        if field.type == str:
-            if v1 != v2 and (v1 != None and v1 != "" or v2 != None and v2 != ""):
-                return False
-        elif field.type == float:
-            if (v1 - v2) > 0.000001:
-                return False
-        elif field.type == datetime:
-            pass
-        elif hasattr(v1, "__dataclass_fields__"):
-            if not _proto_eq(v1, v2):
-                return False
-        elif isinstance(v1, list):
-            if len(v1) != len(v2) or any(not _proto_eq(e[0], e[1]) for e in zip(v1, v2)):
-                return False
-        elif v1 != v2:
-            return False
-
-    return True
 
 
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
@@ -408,7 +319,7 @@ def add_to_event_history(event):
     EVENT_HISTORY.append(event)
     # We only set the EventBufferFull message for event buffers >= 10,000
     if flags.EVENT_BUFFER_SIZE >= 10000 and len(EVENT_HISTORY) == (flags.EVENT_BUFFER_SIZE - 1):
-        fire_event(dbt.events.types.EventBufferFull())
+        fire_event(EventBufferFull())
 
 
 def reset_event_history():
