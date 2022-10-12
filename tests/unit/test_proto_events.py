@@ -7,8 +7,7 @@ from dbt.events.types import (
     PluginLoadError,
     PrintStartLine,
 )
-from dbt.events.functions import event_to_dict, LOG_VERSION
-from dbt.events.base_types import get_global_metadata_vars
+from dbt.events.functions import event_to_dict, LOG_VERSION, reset_metadata_vars
 from dbt.events import proto_types as pl
 from dbt.version import installed
 
@@ -104,8 +103,7 @@ def test_extra_dict_on_event(monkeypatch):
 
     monkeypatch.setenv("DBT_ENV_CUSTOM_ENV_env_key", "env_value")
 
-    # need to reset the memoized values so they get filled appropriately with the expected env var
-    get_global_metadata_vars.reset()
+    reset_metadata_vars()
 
     event = MainReportVersion(version=str(installed), log_version=LOG_VERSION)
     event_dict = event_to_dict(event)
@@ -122,4 +120,4 @@ def test_extra_dict_on_event(monkeypatch):
     assert new_event.info.extra == event.info.extra
 
     # clean up
-    get_global_metadata_vars.reset()
+    reset_metadata_vars()

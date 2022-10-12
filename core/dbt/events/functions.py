@@ -268,11 +268,19 @@ def fire_event(e: BaseEvent) -> None:
 
 
 def get_metadata_vars() -> Dict[str, str]:
-    return {
-        k[len(METADATA_ENV_PREFIX) :]: v
-        for k, v in os.environ.items()
-        if k.startswith(METADATA_ENV_PREFIX)
-    }
+    global metadata_vars
+    if metadata_vars is None:
+        metadata_vars = {
+            k[len(METADATA_ENV_PREFIX) :]: v
+            for k, v in os.environ.items()
+            if k.startswith(METADATA_ENV_PREFIX)
+        }
+    return metadata_vars
+
+
+def reset_metadata_vars() -> None:
+    global metadata_vars
+    metadata_vars = None
 
 
 def get_invocation_id() -> str:
