@@ -2,7 +2,6 @@ import pytest
 import json
 import os
 
-from dbt.constants import METADATA_ENV_PREFIX
 from dbt.tests.util import run_dbt_and_capture
 
 
@@ -22,9 +21,9 @@ def parse_json_logs(json_log_output):
 class TestCustomVarInLogs:
     @pytest.fixture(scope="class", autouse=True)
     def setup(self):
-        os.environ[METADATA_ENV_PREFIX + "some_var"] = "value"
+        os.environ["DBT_ENV_CUSTOM_ENV_some_var"] = "value"
         yield
-        del os.environ[METADATA_ENV_PREFIX + "some_var"]
+        del os.environ["DBT_ENV_CUSTOM_ENV_some_var"]
 
     def test_extra_filled(self, project):
         _, log_output = run_dbt_and_capture(['--log-format=json', 'deps'],)
