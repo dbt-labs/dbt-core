@@ -143,7 +143,7 @@ macros__deprecated_adapter_macro = """
 """
 
 
-class TestMacros(object):
+class TestMacros:
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         project.run_sql_file(project.test_data_dir / Path("seed.sql"))
@@ -192,7 +192,7 @@ class TestMacros(object):
         check_relations_equal(project.adapter, ["expected_local_macro", "local_macro"])
 
 
-class TestInvalidMacros(object):
+class TestInvalidMacros:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -205,7 +205,7 @@ class TestInvalidMacros(object):
         run_dbt(expect_pass=False)
 
 
-class TestAdapterMacroNoDestination(object):
+class TestAdapterMacroNoDestination:
     @pytest.fixture(scope="class")
     def models(self):
         return {"model.sql": models__with_undefined_macro}
@@ -221,7 +221,7 @@ class TestAdapterMacroNoDestination(object):
         assert "In dispatch: No macro named 'dispatch_to_nowhere' found" in str(exc.value)
 
 
-class TestMacroOverrideBuiltin(object):
+class TestMacroOverrideBuiltin:
     @pytest.fixture(scope="class")
     def models(self):
         return {"model.sql": models__override_get_columns_macros}
@@ -236,7 +236,7 @@ class TestMacroOverrideBuiltin(object):
         run_dbt()
 
 
-class TestMacroOverridePackage(object):
+class TestMacroOverridePackage:
     """
     The macro in `override-postgres-get-columns-macros` should override the
     `get_columns_in_relation` macro by default.
@@ -256,7 +256,7 @@ class TestMacroOverridePackage(object):
         run_dbt()
 
 
-class TestMacroNotOverridePackage(object):
+class TestMacroNotOverridePackage:
     """
     The macro in `override-postgres-get-columns-macros` does NOT override the
     `get_columns_in_relation` macro because we tell dispatch to not look at the
@@ -321,7 +321,7 @@ class TestDispatchMacroOverrideBuiltin(TestMacroOverrideBuiltin):
         run_dbt()
 
 
-class TestAdapterMacroDeprecated(object):
+class TestAdapterMacroDeprecated:
     @pytest.fixture(scope="class")
     def models(self):
         return {"model.sql": models__deprecated_adapter_macro_model}
