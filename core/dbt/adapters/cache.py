@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from dbt.adapters.reference_keys import (
-    _make_key,
+    _make_ref_key,
     _make_ref_key_msg,
     _make_msg_from_ref_key,
     _ReferenceKey,
@@ -87,7 +87,7 @@ class _CachedRelation:
 
         :return _ReferenceKey: A key for this relation.
         """
-        return _make_key(self)
+        return _make_ref_key(self)
 
     def add_reference(self, referrer: "_CachedRelation"):
         """Add a reference from referrer to self, indicating that if this node
@@ -299,8 +299,8 @@ class RelationsCache:
         :param BaseRelation dependent: The dependent model.
         :raises InternalError: If either entry does not exist.
         """
-        ref_key = _make_key(referenced)
-        dep_key = _make_key(dependent)
+        ref_key = _make_ref_key(referenced)
+        dep_key = _make_ref_key(dependent)
         if (ref_key.database, ref_key.schema) not in self:
             # if we have not cached the referenced schema at all, we must be
             # referring to a table outside our control. There's no need to make
@@ -366,7 +366,7 @@ class RelationsCache:
         :param str schema: The schema of the relation to drop.
         :param str identifier: The identifier of the relation to drop.
         """
-        dropped_key = _make_key(relation)
+        dropped_key = _make_ref_key(relation)
         dropped_key_msg = _make_ref_key_msg(relation)
         fire_event(DropRelation(dropped=dropped_key_msg))
         with self.lock:
@@ -466,8 +466,8 @@ class RelationsCache:
         :param BaseRelation new: The new relation name information.
         :raises InternalError: If the new key is already present.
         """
-        old_key = _make_key(old)
-        new_key = _make_key(new)
+        old_key = _make_ref_key(old)
+        new_key = _make_ref_key(new)
         fire_event(
             RenameSchema(
                 old_key=_make_msg_from_ref_key(old_key), new_key=_make_msg_from_ref_key(new)
@@ -534,6 +534,6 @@ class RelationsCache:
         """
         for relation in to_remove:
             # it may have been cascaded out already
-            drop_key = _make_key(relation)
+            drop_key = _make_ref_key(relation)
             if drop_key in self.relations:
                 self.drop(drop_key)
