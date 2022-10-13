@@ -1066,16 +1066,8 @@ class PartialParsingDeletedExposure(betterproto.Message):
 
 
 @dataclass
-class InvalidDisabledSourceInTestNode(betterproto.Message):
+class InvalidDisabledTargetInTestNode(betterproto.Message):
     """I050"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
-
-
-@dataclass
-class InvalidRefInTestNode(betterproto.Message):
-    """I051"""
 
     info: "EventInfo" = betterproto.message_field(1)
     msg: str = betterproto.string_field(2)

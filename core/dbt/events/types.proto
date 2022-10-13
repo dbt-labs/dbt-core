@@ -806,13 +806,7 @@ message PartialParsingDeletedExposure {
 }
 
 // I050
-message InvalidDisabledSourceInTestNode {
-    EventInfo info = 1;
-    string msg = 2;
-}
-
-// I051
-message InvalidRefInTestNode {
+message InvalidDisabledTargetInTestNode {
     EventInfo info = 1;
     string msg = 2;
 }

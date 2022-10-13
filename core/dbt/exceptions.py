@@ -3,13 +3,7 @@ import functools
 from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.events.helpers import env_secrets, scrub_secrets
-
-# from dbt.events.functions import fire_event, scrub_secrets, env_secrets
-# from dbt.events.types import GeneralWarningMsg, GeneralWarningException
 from dbt.node_types import NodeType
-
-# from dbt import flags
-# from dbt.ui import warning_tag
 
 import dbt.dataclass_schema
 
@@ -602,44 +596,10 @@ def _get_target_failure_msg(
     )
 
 
-def get_target_not_found_or_disabled_msg(
-    node,
-    target_name: str,
-    target_package: Optional[str],
-    disabled: Optional[bool] = None,
-) -> str:
-    if disabled is None:
-        reason = "was not found or is disabled"
-    elif disabled is True:
-        reason = "is disabled"
-    else:
-        reason = "was not found"
-    return _get_target_failure_msg(
-        node.original_file_path,
-        node.unique_id,
-        node.resource_type.title(),
-        target_name,
-        target_package,
-        include_path=True,
-        reason=reason,
-        target_kind="node",
-    )
-
-
-def ref_target_not_found(
-    model,
-    target_model_name: str,
-    target_model_package: Optional[str],
-    disabled: Optional[bool] = None,
-) -> NoReturn:
-    msg = get_target_not_found_or_disabled_msg(
-        model, target_model_name, target_model_package, disabled
-    )
-    raise_compiler_error(msg, model)
-
-
 def get_not_found_or_disabled_msg(
-    node,
+    original_file_path,
+    unique_id,
+    resource_type,
     target_name: str,
     target_kind: str,
     target_package: Optional[str] = None,
@@ -652,9 +612,9 @@ def get_not_found_or_disabled_msg(
     else:
         reason = "was not found"
     return _get_target_failure_msg(
-        node.original_file_path,
-        node.unique_id,
-        node.resource_type.title(),
+        original_file_path,
+        unique_id,
+        resource_type,
         target_name,
         target_package,
         include_path=True,
@@ -671,7 +631,9 @@ def target_not_found(
     disabled: Optional[bool] = None,
 ) -> NoReturn:
     msg = get_not_found_or_disabled_msg(
-        node=node,
+        original_file_path=node.original_file_path,
+        unique_id=node.unique_id,
+        resource_type=node.resource_type.title(),
         target_name=target_name,
         target_kind=target_kind,
         target_package=target_package,
@@ -1055,20 +1017,6 @@ def raise_duplicate_alias(
     key_names = ", ".join("{}".format(k) for k in kwargs if aliases.get(k) == canonical_key)
 
     raise AliasException(f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"')
-
-
-# def warn_or_error(msg, node=None, log_fmt=None):
-#     if flags.WARN_ERROR:
-#         raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
-#     else:
-#         fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
-
-
-# def warn_or_raise(exc, log_fmt=None):
-#     if flags.WARN_ERROR:
-#         raise exc
-#     else:
-#         fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
 
 
 def warn(msg, node=None):

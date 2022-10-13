@@ -1218,26 +1218,13 @@ class PartialParsingDeletedExposure(DebugLevel, pt.PartialParsingDeletedExposure
         return f"Partial parsing: deleted exposure {self.unique_id}"
 
 
-# TODO: switch to storing structured info and calling get_target_failure_msg
 @dataclass
-class InvalidDisabledSourceInTestNode(
-    WarnLevel, EventStringFunctor, pt.InvalidDisabledSourceInTestNode
-):
+class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestNode):
     def code(self):
         return "I050"
 
     def message(self) -> str:
         return ui.warning_tag(self.msg)
-
-
-# TODO: switch to storing structured info and calling get_target_failure_msg
-@dataclass
-class InvalidRefInTestNode(DebugLevel, EventStringFunctor, pt.InvalidRefInTestNode):
-    def code(self):
-        return "I051"
-
-    def message(self) -> str:
-        return self.msg
 
 
 # =======================================================
@@ -2650,8 +2637,7 @@ if 1 == 0:
     PartialParsingUpdateSchemaFile(file_id="")
     PartialParsingDeletedSource(unique_id="")
     PartialParsingDeletedExposure(unique_id="")
-    InvalidDisabledSourceInTestNode(msg="")
-    InvalidRefInTestNode(msg="")
+    InvalidDisabledTargetInTestNode(msg="")
 
     # M - Deps generation ======================
 
