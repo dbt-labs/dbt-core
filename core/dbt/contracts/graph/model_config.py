@@ -499,9 +499,8 @@ class SeedConfig(NodeConfig):
     def validate(cls, data):
         super().validate(data)
         if data.get("materialized") and data.get("materialized") != "seed":
-            raise ValidationError(
-                "A seed must have a materialized value of 'seed'"
-            )
+            raise ValidationError("A seed must have a materialized value of 'seed'")
+
 
 @dataclass
 class TestConfig(NodeAndTestConfig):
@@ -545,9 +544,7 @@ class TestConfig(NodeAndTestConfig):
     def validate(cls, data):
         super().validate(data)
         if data.get("materialized") and data.get("materialized") != "test":
-            raise ValidationError(
-                "A test must have a materialized value of 'test'"
-            )
+            raise ValidationError("A test must have a materialized value of 'test'")
 
 
 @dataclass
@@ -597,9 +594,7 @@ class SnapshotConfig(EmptySnapshotConfig):
         # formerly supported with GenericSnapshotConfig
 
         if data.get("materialized") and data.get("materialized") != "snapshot":
-            raise ValidationError(
-                "A snapshot must have a materialized value of 'snapshot'"
-            )
+            raise ValidationError("A snapshot must have a materialized value of 'snapshot'")
 
     def finalize_and_validate(self):
         data = self.to_dict(omit_none=True)
