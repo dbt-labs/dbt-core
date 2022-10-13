@@ -11,8 +11,8 @@ from dbt.events.types import (
     GeneralWarningException,
 )
 import dbt.flags as flags
+
 from dbt.constants import METADATA_ENV_PREFIX
-# from dbt.exceptions import raise_compiler_error
 
 from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
@@ -219,8 +219,9 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
 
 def warn_or_error(msg, node=None, log_fmt=None):
     if flags.WARN_ERROR:
-        # raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
-        pass
+        from dbt.exceptions import raise_compiler_error
+
+        raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
     else:
         fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
 
