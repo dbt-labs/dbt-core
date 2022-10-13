@@ -208,7 +208,9 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         generated_at: datetime,
         args: Dict,
     ):
-        processed_results = [process_run_result(result) for result in results]
+        processed_results = [
+            process_run_result(result) for result in results if isinstance(result, RunResult)
+        ]
         meta = RunResultsMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,

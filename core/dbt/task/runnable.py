@@ -413,9 +413,6 @@ class GraphRunnableTask(ManifestTask):
                 {"adapter_cache_construction_elapsed": cache_populate_time}
             )
 
-    def before_hooks(self, adapter):
-        pass
-
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
             self.populate_adapter_cache(adapter)
@@ -423,24 +420,24 @@ class GraphRunnableTask(ManifestTask):
     def after_run(self, adapter, results):
         pass
 
-    def after_hooks(self, adapter, results, elapsed):
+    def print_results_line(self, node_results, elapsed):
         pass
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
+        started = time.time()
         try:
-            self.before_hooks(adapter)
-            started = time.time()
             self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
             self.after_run(adapter, res)
-            elapsed = time.time() - started
-            self.after_hooks(adapter, res, elapsed)
-
         finally:
             adapter.cleanup_connections()
+            elapsed = time.time() - started
+            self.print_results_line(self.node_results, elapsed)
+            result = self.get_result(
+                results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
+            )
 
-        result = self.get_result(results=res, elapsed_time=elapsed, generated_at=datetime.utcnow())
         return result
 
     def write_result(self, result):
@@ -470,7 +467,6 @@ class GraphRunnableTask(ManifestTask):
                 fire_event(EmptyLine())
             selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
             result = self.execute_with_hooks(selected_uids)
-
         if flags.WRITE_JSON:
             self.write_manifest()
             self.write_result(result)
