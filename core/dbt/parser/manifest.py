@@ -18,7 +18,7 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
 )
 from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
     PartialParsingFullReparseBecauseOfError,
     PartialParsingExceptionFile,
@@ -75,7 +75,6 @@ from dbt.exceptions import (
     get_target_not_found_or_disabled_msg,
     target_not_found,
     get_not_found_or_disabled_msg,
-    warn_or_error,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser

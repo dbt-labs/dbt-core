@@ -50,7 +50,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
-    warn_invalid_patch,
     validator_error_message,
     JSONValidationException,
     raise_invalid_property_yml_version,
@@ -60,9 +59,9 @@ from dbt.exceptions import (
     raise_duplicate_macro_patch_name,
     InternalException,
     raise_duplicate_source_patch_name,
-    warn_or_error,
     CompilationException,
 )
+from dbt.events.functions import warn_or_error
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
@@ -74,7 +73,7 @@ from dbt.parser.generic_test_builders import (
     TestBlock,
     Testable,
 )
-from dbt.ui import warning_tag
+from dbt.ui import warning_tag, line_wrap_message
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
@@ -873,7 +872,16 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
-                    warn_invalid_patch(patch, resource_type)
+                    msg = line_wrap_message(
+                        f"""\
+                        '{patch.name}' is a {resource_type} node, but it is
+                        specified in the {patch.yaml_key} section of
+                        {patch.original_file_path}.
+                        To fix this error, place the `{patch.name}`
+                        specification under the {resource_type.pluralize()} key instead.
+                        """
+                    )
+                    warn_or_error(msg, log_fmt=warning_tag("{}"))
                     return
 
         elif patch.yaml_key == "analyses":

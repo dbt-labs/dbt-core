@@ -24,7 +24,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
     Time,
 )
-from dbt.exceptions import warn_or_error, InternalException
+from dbt.events.functions import warn_or_error
+from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
 
 from dbt.parser.schemas import SchemaParser, ParserRef

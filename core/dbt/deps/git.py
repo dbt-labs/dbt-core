@@ -9,8 +9,8 @@ from dbt.contracts.project import (
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import ExecutableError, warn_or_error, raise_dependency_error
-from dbt.events.functions import fire_event
+from dbt.exceptions import ExecutableError, raise_dependency_error
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import EnsureGitInstalled
 from dbt import ui
 

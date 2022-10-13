@@ -26,7 +26,7 @@ from dbt.logger import (
     ModelMetadata,
     NodeCount,
 )
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     EmptyLine,
     PrintCancelLine,
@@ -47,7 +47,6 @@ from dbt.exceptions import (
     NotImplementedException,
     RuntimeException,
     FailFastException,
-    warn_or_error,
 )
 
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph

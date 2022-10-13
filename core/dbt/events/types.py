@@ -1230,6 +1230,7 @@ class InvalidDisabledSourceInTestNode(
         return ui.warning_tag(self.msg)
 
 
+# TODO: switch to storing structured info and calling get_target_failure_msg
 @dataclass
 class InvalidRefInTestNode(DebugLevel, EventStringFunctor, pt.InvalidRefInTestNode):
     def code(self):
@@ -1337,6 +1338,7 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
         )
 
 
+# This is for the log method used in macros, can only pass msg
 @dataclass
 class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
     def code(self):
@@ -1346,6 +1348,7 @@ class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
         return self.msg
 
 
+# This is for the log method used in macros, can only pass msg
 @dataclass
 class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
     def code(self):
@@ -2264,6 +2267,7 @@ class StatsLine(InfoLevel, pt.StatsLine):
         return stats_line.format(**self.stats)
 
 
+# this contains the message contained in the result object, not a message built and passed in
 @dataclass
 class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
     def code(self):
@@ -2302,6 +2306,9 @@ class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
         return f"  See test failures:\n  {border}\n  {msg}\n  {border}"
 
 
+# FirstRunResultError and AfterFirstRunResultError are just splitting the message from the result
+#  object into multiple log lines
+# TODO: is this reallly needed?
 @dataclass
 class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError):
     def code(self):
@@ -2449,7 +2456,7 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 # Skipped Z045
 
 
-# This cannot format the message because it's being triggerd all over the code and the message is not standard.
+# This cannot format the message because it's being triggered all over the code and the message is not standard.
 @dataclass
 class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
     def code(self):
@@ -2483,6 +2490,7 @@ class EventBufferFull(WarnLevel, pt.EventBufferFull):
         )
 
 
+# this is the message from the result object
 @dataclass
 class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):
     def code(self):

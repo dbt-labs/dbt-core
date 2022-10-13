@@ -5,13 +5,12 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
 
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import SelectorReportInvalidSelector
 from dbt.node_types import NodeType
 from dbt.exceptions import (
     InternalException,
     InvalidSelectorException,
-    warn_or_error,
 )
 from dbt.contracts.graph.compiled import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest

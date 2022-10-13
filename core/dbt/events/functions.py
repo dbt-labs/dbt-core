@@ -2,9 +2,18 @@ import betterproto
 from colorama import Style
 
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
-from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
+from dbt.events.helpers import env_secrets, scrub_secrets
+from dbt.events.types import (
+    EventBufferFull,
+    MainReportVersion,
+    EmptyLine,
+    GeneralWarningMsg,
+    GeneralWarningException,
+)
 import dbt.flags as flags
-from dbt.constants import SECRET_ENV_PREFIX, METADATA_ENV_PREFIX
+from dbt.constants import METADATA_ENV_PREFIX
+# from dbt.exceptions import raise_compiler_error
+
 from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
 import json
@@ -18,7 +27,8 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 import threading
-from typing import List, Optional, Union, Callable, Dict
+from typing import Optional, Union, Callable, Dict
+
 from collections import deque
 
 LOG_VERSION = 3
@@ -106,19 +116,6 @@ def stop_capture_stdout_logs() -> None:
         for h in STDOUT_LOG.handlers
         if not (hasattr(h, "stream") and isinstance(h.stream, StringIO))  # type: ignore
     ]
-
-
-def env_secrets() -> List[str]:
-    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
-
-
-def scrub_secrets(msg: str, secrets: List[str]) -> str:
-    scrubbed = msg
-
-    for secret in secrets:
-        scrubbed = scrubbed.replace(secret, "*****")
-
-    return scrubbed
 
 
 # returns a dictionary representation of the event fields.
@@ -218,6 +215,28 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
         raise AssertionError(
             f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
         )
+
+
+def warn_or_error(msg, node=None, log_fmt=None):
+    if flags.WARN_ERROR:
+        # raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
+        pass
+    else:
+        fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
+
+
+def warn_or_raise(exc, log_fmt=None):
+    if flags.WARN_ERROR:
+        raise exc
+    else:
+        fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
+
+
+def warn(msg, node=None):
+    # there's no reason to expose log_fmt to macros - it's only useful for
+    # handling colors
+    warn_or_error(msg, node=node)
+    return ""
 
 
 # an alternative to fire_event which only creates and logs the event value

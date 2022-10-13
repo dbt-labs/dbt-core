@@ -5,7 +5,8 @@ from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
-from dbt.exceptions import RuntimeException, InternalException, warn_or_error
+from dbt.events.functions import warn_or_error
+from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import log_manager
 import logging
 import dbt.events.functions as event_logger

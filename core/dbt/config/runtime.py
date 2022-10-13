@@ -23,10 +23,9 @@ from dbt.exceptions import (
     RuntimeException,
     DbtProjectError,
     validator_error_message,
-    warn_or_error,
     raise_compiler_error,
 )
-
+from dbt.events.functions import warn_or_error
 from dbt.dataclass_schema import ValidationError
 
 

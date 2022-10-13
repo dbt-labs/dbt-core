@@ -41,7 +41,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
-from dbt.exceptions import warn_or_error
+from dbt.events.functions import warn_or_error
 from dbt import flags
 from dbt.node_types import ModelLanguage, NodeType
 

@@ -2,11 +2,14 @@ import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
 
-from dbt.events.functions import fire_event, scrub_secrets, env_secrets
-from dbt.events.types import GeneralWarningMsg, GeneralWarningException
+from dbt.events.helpers import env_secrets, scrub_secrets
+
+# from dbt.events.functions import fire_event, scrub_secrets, env_secrets
+# from dbt.events.types import GeneralWarningMsg, GeneralWarningException
 from dbt.node_types import NodeType
-from dbt import flags
-from dbt.ui import line_wrap_message, warning_tag
+
+# from dbt import flags
+# from dbt.ui import warning_tag
 
 import dbt.dataclass_schema
 
@@ -1041,19 +1044,6 @@ def raise_unrecognized_credentials_type(typename, supported_types):
     )
 
 
-def warn_invalid_patch(patch, resource_type):
-    msg = line_wrap_message(
-        f"""\
-        '{patch.name}' is a {resource_type} node, but it is
-        specified in the {patch.yaml_key} section of
-        {patch.original_file_path}.
-        To fix this error, place the `{patch.name}`
-        specification under the {resource_type.pluralize()} key instead.
-        """
-    )
-    warn_or_error(msg, log_fmt=warning_tag("{}"))
-
-
 def raise_not_implemented(msg):
     raise NotImplementedException("ERROR: {}".format(msg))
 
@@ -1067,24 +1057,24 @@ def raise_duplicate_alias(
     raise AliasException(f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"')
 
 
-def warn_or_error(msg, node=None, log_fmt=None):
-    if flags.WARN_ERROR:
-        raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
-    else:
-        fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
+# def warn_or_error(msg, node=None, log_fmt=None):
+#     if flags.WARN_ERROR:
+#         raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
+#     else:
+#         fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
 
 
-def warn_or_raise(exc, log_fmt=None):
-    if flags.WARN_ERROR:
-        raise exc
-    else:
-        fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
+# def warn_or_raise(exc, log_fmt=None):
+#     if flags.WARN_ERROR:
+#         raise exc
+#     else:
+#         fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
 
 
 def warn(msg, node=None):
     # there's no reason to expose log_fmt to macros - it's only useful for
     # handling colors
-    warn_or_error(msg, node=node)
+    dbt.events.functions.warn_or_error(msg, node=node)
     return ""
 
 
