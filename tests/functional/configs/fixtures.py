@@ -154,7 +154,7 @@ models:
   - name: my_model_3
 """
 
-simple_snapshot = """{% snapshot foo %}
+simple_snapshot = """{% snapshot mysnapshot %}
 
     {{
         config(
@@ -165,7 +165,7 @@ simple_snapshot = """{% snapshot foo %}
         )
     }}
 
-    select * from {{ source('jaffle_shop', 'orders') }}
+    select * from dummy
 
 {% endsnapshot %}"""
 
