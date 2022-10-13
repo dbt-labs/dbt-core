@@ -2,62 +2,12 @@ import os
 import pytest
 from dbt.tests.util import run_dbt, copy_file, write_file
 from pathlib import Path
-
-metrics_yml = """
-version: 2
-
-metrics:
-  - name: some_metric
-    label: Some Metric
-    model: ref('model_a')
-
-    calculation_method: count
-    expression: id
-
-    timestamp: ts
-    time_grains: [day]
-"""
-
-metrics_2_yml = """
-version: 2
-
-metrics:
-  - name: some_metric
-    label: Some Metric
-    model: ref('model_a')
-
-    calculation_method: count
-    expression: user_id
-
-    timestamp: ts
-    time_grains: [day]
-"""
-
-model_a_sql = """
-select 1 as fun
-"""
-
-model_b_sql = """
--- {{ metric('some_metric') }}
-
-{% if execute %}
-  {% set model_ref_node = graph.nodes.values() | selectattr('name', 'equalto', 'model_a') | first %}
-  {% set relation = api.Relation.create(
-      database = model_ref_node.database,
-      schema = model_ref_node.schema,
-      identifier = model_ref_node.alias
-  )
-  %}
-{% else %}
-  {% set relation = "" %}
-{% endif %}
-
--- this one is a real ref
-select * from {{ ref('model_a') }}
-union all
--- this one is synthesized via 'graph' var
-select * from {{ relation }}
-"""
+from tests.functional.metrics.fixtures import (
+    metrics_1_yml,
+    metrics_2_yml,
+    model_a_sql,
+    model_b_sql,
+)
 
 
 class TestMetricDeferral:
@@ -106,7 +56,7 @@ class TestMetricDeferral:
         return {
             "model_a.sql": model_a_sql,
             "model_b.sql": model_b_sql,
-            "metrics.yml": metrics_yml,
+            "metrics.yml": metrics_1_yml,
         }
 
     def test_metric_deferral(self, project):

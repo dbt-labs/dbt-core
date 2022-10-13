@@ -141,6 +141,8 @@ class SourcePatcher:
             rendered=True,
         )
 
+        config = config.finalize_and_validate()
+
         unrendered_config = self._generate_source_config(
             target=target,
             rendered=False,
