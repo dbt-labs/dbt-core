@@ -1070,7 +1070,12 @@ class InvalidDisabledTargetInTestNode(betterproto.Message):
     """I050"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
+    resource_type_title: str = betterproto.string_field(2)
+    unique_id: str = betterproto.string_field(3)
+    original_file_path: str = betterproto.string_field(4)
+    target_kind: str = betterproto.string_field(5)
+    target_name: str = betterproto.string_field(6)
+    target_package: str = betterproto.string_field(7)
 
 
 @dataclass

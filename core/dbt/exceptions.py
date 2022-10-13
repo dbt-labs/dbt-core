@@ -567,39 +567,10 @@ def doc_target_not_found(
     raise_compiler_error(msg, model)
 
 
-def _get_target_failure_msg(
-    original_file_path,
-    unique_id,
-    resource_type_title,
-    target_name: str,
-    target_model_package: Optional[str],
-    include_path: bool,
-    reason: str,
-    target_kind: str,
-) -> str:
-    target_package_string = ""
-    if target_model_package is not None:
-        target_package_string = "in package '{}' ".format(target_model_package)
-
-    source_path_string = ""
-    if include_path:
-        source_path_string = " ({})".format(original_file_path)
-
-    return "{} '{}'{} depends on a {} named '{}' {}which {}".format(
-        resource_type_title,
-        unique_id,
-        source_path_string,
-        target_kind,
-        target_name,
-        target_package_string,
-        reason,
-    )
-
-
 def get_not_found_or_disabled_msg(
     original_file_path,
     unique_id,
-    resource_type,
+    resource_type_title,
     target_name: str,
     target_kind: str,
     target_package: Optional[str] = None,
@@ -611,15 +582,19 @@ def get_not_found_or_disabled_msg(
         reason = "is disabled"
     else:
         reason = "was not found"
-    return _get_target_failure_msg(
-        original_file_path,
+
+    target_package_string = ""
+    if target_package is not None:
+        target_package_string = "in package '{}' ".format(target_package)
+
+    return "{} '{}' ({}) depends on a {} named '{}' {}which {}".format(
+        resource_type_title,
         unique_id,
-        resource_type,
+        original_file_path,
+        target_kind,
         target_name,
-        target_package,
-        include_path=True,
-        reason=reason,
-        target_kind=target_kind,
+        target_package_string,
+        reason,
     )
 
 
@@ -633,7 +608,7 @@ def target_not_found(
     msg = get_not_found_or_disabled_msg(
         original_file_path=node.original_file_path,
         unique_id=node.unique_id,
-        resource_type=node.resource_type.title(),
+        resource_type_title=node.resource_type.title(),
         target_name=target_name,
         target_kind=target_kind,
         target_package=target_package,

@@ -1224,7 +1224,21 @@ class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestN
         return "I050"
 
     def message(self) -> str:
-        return ui.warning_tag(self.msg)
+
+        target_package_string = ""
+        if self.target_package != target_package_string:
+            target_package_string = "in package '{}' ".format(self.target_package)
+
+        msg = "{} '{}' ({}) depends on a {} named '{}' {}which is disabled".format(
+            self.resource_type_title,
+            self.unique_id,
+            self.original_file_path,
+            self.target_kind,
+            self.target_name,
+            target_package_string,
+        )
+
+        return ui.warning_tag(msg)
 
 
 # =======================================================
@@ -2637,7 +2651,14 @@ if 1 == 0:
     PartialParsingUpdateSchemaFile(file_id="")
     PartialParsingDeletedSource(unique_id="")
     PartialParsingDeletedExposure(unique_id="")
-    InvalidDisabledTargetInTestNode(msg="")
+    InvalidDisabledTargetInTestNode(
+        resource_type_title="",
+        unique_id="",
+        original_file_path="",
+        target_kind="",
+        target_name="",
+        target_package="",
+    )
 
     # M - Deps generation ======================
 

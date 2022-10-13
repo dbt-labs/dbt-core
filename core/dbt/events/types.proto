@@ -808,7 +808,12 @@ message PartialParsingDeletedExposure {
 // I050
 message InvalidDisabledTargetInTestNode {
     EventInfo info = 1;
-    string msg = 2;
+    string resource_type_title = 2;
+    string unique_id = 3;
+    string original_file_path = 4;
+    string target_kind = 5;
+    string target_name = 6;
+    string target_package = 7;
 }
 
 

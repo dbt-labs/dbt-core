@@ -959,18 +959,27 @@ def invalid_target_fail_unless_test(
     disabled: Optional[bool] = None,
 ):
     if node.resource_type == NodeType.Test:
-        msg = get_not_found_or_disabled_msg(
-            original_file_path=node.original_file_path,
-            unique_id=node.unique_id,
-            resource_type=node.resource_type.title(),
-            target_name=target_name,
-            target_kind=target_kind,
-            target_package=target_package,
-            disabled=disabled,
-        )
         if disabled:
-            fire_event(InvalidDisabledTargetInTestNode(msg=msg))
+            fire_event(
+                InvalidDisabledTargetInTestNode(
+                    resource_type_title=node.resource_type.title(),
+                    unique_id=node.unique_id,
+                    original_file_path=node.original_file_path,
+                    target_kind=target_kind,
+                    target_name=target_name,
+                    target_package=target_package if target_package else "",
+                )
+            )
         else:
+            msg = get_not_found_or_disabled_msg(
+                original_file_path=node.original_file_path,
+                unique_id=node.unique_id,
+                resource_type_title=node.resource_type.title(),
+                target_name=target_name,
+                target_kind=target_kind,
+                target_package=target_package,
+                disabled=disabled,
+            )
             warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
         target_not_found(
