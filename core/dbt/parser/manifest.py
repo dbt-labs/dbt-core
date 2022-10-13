@@ -1007,6 +1007,7 @@ def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_pack
             target_package=target_metric_package,
             disabled=disabled,
         )
+        # todo: why is this not conditional on it not being disabled?
         warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
         target_not_found(

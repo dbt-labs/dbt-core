@@ -2449,6 +2449,7 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 # Skipped Z045
 
 
+# This cannot format the message because it's being triggerd all over the code and the message is not standard.
 @dataclass
 class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
     def code(self):
@@ -2456,6 +2457,9 @@ class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
 
     def message(self) -> str:
         return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
+
+
+# This cannot format the message because it's being triggerd all over the code and the message is not standard.
 
 
 @dataclass
