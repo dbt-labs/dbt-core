@@ -34,7 +34,8 @@ from dbt.contracts.graph.unparsed import (
 )
 
 from dbt.contracts.graph.compiled import CompiledModelNode
-from dbt.events.functions import get_invocation_id
+from dbt.events.functions import reset_metadata_vars
+
 from dbt.node_types import NodeType
 import freezegun
 
@@ -60,6 +61,8 @@ ENV_KEY_NAME = 'KEY' if os.name == 'nt' else 'key'
 
 class ManifestTest(unittest.TestCase):
     def setUp(self):
+        reset_metadata_vars()
+
         # TODO: why is this needed for tests in this module to pass?
         tracking.active_user = None
 
@@ -304,6 +307,7 @@ class ManifestTest(unittest.TestCase):
 
     def tearDown(self):
         del os.environ['DBT_ENV_CUSTOM_ENV_key']
+        reset_metadata_vars()
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
