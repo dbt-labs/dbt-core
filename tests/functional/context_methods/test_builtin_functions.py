@@ -61,7 +61,7 @@ def parse_json_logs(json_log_output):
 
 def find_result_in_parsed_logs(parsed_logs, result_name):
     return next(
-        (item for item in parsed_logs if result_name in item["data"].get("msg", "msg")),
+        (item for item in parsed_logs if result_name in item["info"].get("msg", "msg")),
         False,
     )
 

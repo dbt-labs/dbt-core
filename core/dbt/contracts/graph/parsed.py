@@ -40,6 +40,7 @@ from dbt.contracts.graph.unparsed import (
     MetricTime,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
+from dbt.events.proto_types import NodeInfo
 from dbt.exceptions import warn_or_error
 from dbt import flags
 from dbt.node_types import ModelLanguage, NodeType
@@ -192,7 +193,8 @@ class NodeInfoMixin:
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
         }
-        return node_info
+        node_info_msg = NodeInfo(**node_info)
+        return node_info_msg
 
 
 @dataclass

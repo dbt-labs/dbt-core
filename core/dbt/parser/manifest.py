@@ -291,8 +291,7 @@ class ManifestLoader:
                         if source_file:
                             parse_file_type = source_file.parse_file_type
                             fire_event(PartialParsingExceptionFile(file=file_id))
-                            file_dict = source_file.to_dict()
-                            fire_event(PartialParsingFile(file_dict=file_dict))
+                            fire_event(PartialParsingFile(file_id=source_file.file_id))
                     exc_info["parse_file_type"] = parse_file_type
                     fire_event(PartialParsingException(exc_info=exc_info))
 
@@ -662,7 +661,9 @@ class ManifestLoader:
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
             except Exception as exc:
-                fire_event(ParsedFileLoadFailed(path=path, exc=str(exc)))
+                fire_event(
+                    ParsedFileLoadFailed(path=path, exc=str(exc), exc_info=traceback.format_exc())
+                )
                 reparse_reason = ReparseReason.load_file_failure
         else:
             fire_event(PartialParseSaveFileNotFound())
