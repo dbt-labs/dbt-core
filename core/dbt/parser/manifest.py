@@ -1094,11 +1094,6 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: ParsedMetric) -> 
     metric.description = get_rendered(metric.description, context)
 
 
-# TODO: this isn't actually referenced anywhere?
-def _process_derived_metrics(context: Dict[str, Any], metric: ParsedMetric) -> None:
-    metric.description = get_rendered(metric.description, context)
-
-
 def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposure: ParsedExposure):
     """Given a manifest and exposure in that manifest, process its refs"""
     for ref in exposure.refs:
@@ -1131,7 +1126,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
-                disabled=(isinstance(target_model, Disabled)),  # TODO: is this right??
+                disabled=(isinstance(target_model, Disabled)),
             )
 
             continue
@@ -1174,7 +1169,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
-                disabled=(isinstance(target_model, Disabled)),  # TODO: is this right??
+                disabled=(isinstance(target_model, Disabled)),
             )
             continue
 
@@ -1218,7 +1213,7 @@ def _process_metrics_for_node(
                 target_name=target_metric_name,
                 target_kind="source",
                 target_package=target_metric_package,
-                disabled=(isinstance(target_metric, Disabled)),  # TODO: is this right??
+                disabled=(isinstance(target_metric, Disabled)),
             )
             continue
 
@@ -1259,7 +1254,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
-                disabled=(isinstance(target_model, Disabled)),  # TODO: is this right??
+                disabled=(isinstance(target_model, Disabled)),
             )
             continue
 
