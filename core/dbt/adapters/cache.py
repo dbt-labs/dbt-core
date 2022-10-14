@@ -10,7 +10,7 @@ from dbt.adapters.reference_keys import (
     _ReferenceKey,
 )
 import dbt.exceptions
-from dbt.events.functions import fire_event, fire_event_if, fire_event_if
+from dbt.events.functions import fire_event, fire_event_if
 from dbt.events.types import (
     AddLink,
     AddRelation,
