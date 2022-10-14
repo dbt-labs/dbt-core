@@ -79,15 +79,6 @@ class TestInvalidTestsMaterializationProj(object):
             run_dbt()
 
 
-class TestInvalidTestsMaterializationSchema(object):
-    def test_tests_materialization_proj_config(self, project):
-        tests_dir = os.path.join(project.project_root, "tests")
-        write_file("version: 2\tests:\n  - name: mytest\n    config:\n      materialized: table", tests_dir, "schema.yml")
-        write_file("select * from foo", tests_dir, "mytest.sql")
-
-        run_dbt()
-
-
 class TestInvalidSeedsMaterializationProj(object):
     def test_seeds_materialization_proj_config(self, project):
         config_patch = {"seeds": {"materialized": "table"}}
