@@ -191,7 +191,6 @@ def create_json_log_line(e: BaseEvent) -> Optional[str]:
 def create_log_line(e: BaseEvent, file_output=False) -> Optional[str]:
     global format_json
     if format_json:
-        # TODO: Do we want to skip EmptyLine() like the TextOnly for logbook?
         return create_json_log_line(e)  # json output, both console and file
     elif file_output is True or flags.DEBUG:
         return create_debug_text_log_line(e)  # default file output
