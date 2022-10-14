@@ -63,7 +63,6 @@ from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_msg
 
 
-
 SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
 
 
