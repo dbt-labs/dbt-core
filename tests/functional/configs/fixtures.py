@@ -163,6 +163,21 @@ models:
   - name: my_model_3
 """
 
+simple_snapshot = """{% snapshot mysnapshot %}
+
+    {{
+        config(
+          target_schema='snapshots',
+          strategy='timestamp',
+          unique_key='id',
+          updated_at='updated_at'
+        )
+    }}
+
+    select * from dummy
+
+{% endsnapshot %}"""
+
 
 class BaseConfigProject:
     @pytest.fixture(scope="class")
