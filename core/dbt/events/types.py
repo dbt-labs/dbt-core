@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from dbt import ui
+from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.events.base_types import (
     NoFile,
     DebugLevel,
@@ -32,10 +32,11 @@ from dbt.node_types import NodeType
 # | Code |     Description     |
 # |:----:|:-------------------:|
 # | A    | Pre-project loading |
+# | D    | Deprecations        |
 # | E    | DB adapter          |
 # | I    | Project parsing     |
 # | M    | Deps generation     |
-# | Q    | Node execution     |
+# | Q    | Node execution      |
 # | W    | Node testing        |
 # | Z    | Misc                |
 # | T    | Test only           |
@@ -303,6 +304,88 @@ Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
 
 Happy modeling!
 """
+
+
+# =======================================================
+# D - Deprecations
+# =======================================================
+
+
+@dataclass
+class PackageRedirectDeprecation(DebugLevel, pt.PackageRedirectDeprecation):  # noqa
+    def code(self):
+        return "D001"
+
+    def message(self):
+        description = (
+            f"The `{self.old_name}` package is deprecated in favor of `{self.new_name}`. Please "
+            f"update your `packages.yml` configuration to use `{self.new_name}` instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class PackageInstallPathDeprecation(DebugLevel, pt.PackageInstallPathDeprecation):  # noqa
+    def code(self):
+        return "D002"
+
+    def message(self):
+        description = """\
+        The default package install path has changed from `dbt_modules` to `dbt_packages`.
+        Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
+        Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
+        """
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class AdapterDeprecationWarning(DebugLevel, pt.AdapterDeprecationWarning):  # noqa
+    def code(self):
+        return "D003"
+
+    def message(self):
+        description = (
+            f"The adapter function `adapter.{self.old_name}` is deprecated and will be removed in "
+            f"a future release of dbt. Please use `adapter.{self.new_name}` instead. "
+            f"\n\nDocumentation for {self.new_name} can be found here:"
+            f"\n\nhttps://docs.getdbt.com/docs/adapter"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class MetricAttributesRenamed(DebugLevel, pt.MetricAttributesRenamed):  # noqa
+    def code(self):
+        return "D004"
+
+    def message(self):
+        description = (
+            "dbt-core v1.3 renamed attributes for metrics:"
+            "\n  'sql'              -> 'expression'"
+            "\n  'type'             -> 'calculation_method'"
+            "\n  'type: expression' -> 'calculation_method: derived'"
+            "\nThe old metric parameter names will be fully deprecated in v1.4."
+            f"\nPlease remove them from the metric definition of metric '{self.metric_name}'"
+            "\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849"
+        )
+
+        return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+@dataclass
+class ExposureNameDeprecation(DebugLevel, pt.ExposureNameDeprecation):  # noqa
+    def code(self):
+        return "D005"
+
+    def message(self):
+        description = (
+            "Starting in v1.3, the 'name' of an exposure should contain only letters, "
+            "numbers, and underscores. Exposures support a new property, 'label', which may "
+            f"contain spaces, capital letters, and special characters. {self.exposure} does not "
+            "follow this pattern. Please update the 'name', and use the 'label' property for a "
+            "human-friendly title. This will raise an error in a future version of dbt-core."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
 # =======================================================
@@ -1238,7 +1321,7 @@ class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestN
             target_package_string,
         )
 
-        return ui.warning_tag(msg)
+        return warning_tag(msg)
 
 
 # =======================================================
@@ -1579,7 +1662,7 @@ class PrintErrorTestResult(ErrorLevel, pt.PrintErrorTestResult):
         msg = f"{info} {self.name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(info),
+            status=red(info),
             index=self.index,
             total=self.num_models,
             execution_time=self.execution_time,
@@ -1596,7 +1679,7 @@ class PrintPassTestResult(InfoLevel, pt.PrintPassTestResult):
         msg = f"{info} {self.name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(info),
+            status=green(info),
             index=self.index,
             total=self.num_models,
             execution_time=self.execution_time,
@@ -1613,7 +1696,7 @@ class PrintWarnTestResult(WarnLevel, pt.PrintWarnTestResult):
         msg = f"{info} {self.name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.yellow(info),
+            status=yellow(info),
             index=self.index,
             total=self.num_models,
             execution_time=self.execution_time,
@@ -1630,7 +1713,7 @@ class PrintFailureTestResult(ErrorLevel, pt.PrintFailureTestResult):
         msg = f"{info} {self.name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(info),
+            status=red(info),
             index=self.index,
             total=self.num_models,
             execution_time=self.execution_time,
@@ -1657,7 +1740,7 @@ class PrintModelResultLine(InfoLevel, pt.PrintModelResultLine):
         msg = f"{info} {self.description}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=green(self.status),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1674,7 +1757,7 @@ class PrintModelErrorResultLine(ErrorLevel, pt.PrintModelErrorResultLine):
         msg = f"{info} {self.description}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(self.status.upper()),
+            status=red(self.status.upper()),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1691,7 +1774,7 @@ class PrintSnapshotErrorResultLine(ErrorLevel, pt.PrintSnapshotErrorResultLine):
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(self.status.upper()),
+            status=red(self.status.upper()),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1708,7 +1791,7 @@ class PrintSnapshotResultLine(InfoLevel, pt.PrintSnapshotResultLine):
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=green(self.status),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1725,7 +1808,7 @@ class PrintSeedErrorResultLine(ErrorLevel, pt.PrintSeedErrorResultLine):
         msg = f"{info} seed file {self.schema}.{self.relation}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(self.status.upper()),
+            status=red(self.status.upper()),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1742,7 +1825,7 @@ class PrintSeedResultLine(InfoLevel, pt.PrintSeedResultLine):
         msg = f"{info} seed file {self.schema}.{self.relation}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=green(self.status),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1759,7 +1842,7 @@ class PrintFreshnessErrorLine(ErrorLevel, pt.PrintFreshnessErrorLine):
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(info),
+            status=red(info),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1776,7 +1859,7 @@ class PrintFreshnessErrorStaleLine(ErrorLevel, pt.PrintFreshnessErrorStaleLine):
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(info),
+            status=red(info),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1793,7 +1876,7 @@ class PrintFreshnessWarnLine(WarnLevel, pt.PrintFreshnessWarnLine):
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.yellow(info),
+            status=yellow(info),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1810,7 +1893,7 @@ class PrintFreshnessPassLine(InfoLevel, pt.PrintFreshnessPassLine):
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(info),
+            status=green(info),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1824,7 +1907,7 @@ class PrintCancelLine(ErrorLevel, pt.PrintCancelLine):
 
     def message(self) -> str:
         msg = "CANCEL query {}".format(self.conn_name)
-        return format_fancy_output_line(msg=msg, status=ui.red("CANCEL"), index=None, total=None)
+        return format_fancy_output_line(msg=msg, status=red("CANCEL"), index=None, total=None)
 
 
 @dataclass
@@ -1865,7 +1948,7 @@ class QueryCancelationUnsupported(InfoLevel, pt.QueryCancelationUnsupported):
             "cancellation. Some queries may still be "
             "running!"
         )
-        return ui.yellow(msg)
+        return yellow(msg)
 
 
 @dataclass
@@ -1934,7 +2017,7 @@ class PrintHookEndLine(InfoLevel, pt.PrintHookEndLine):  # noqa
         msg = "OK hook: {}".format(self.statement)
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=green(self.status),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1953,7 +2036,7 @@ class SkippingDetails(InfoLevel, pt.SkippingDetails):
         else:
             msg = f"SKIP {self.resource_type} {self.node_name}"
         return format_fancy_output_line(
-            msg=msg, status=ui.yellow("SKIP"), index=self.index, total=self.total
+            msg=msg, status=yellow("SKIP"), index=self.index, total=self.total
         )
 
 
@@ -2007,7 +2090,7 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
 """.strip()
 
         return "{prefix}\n{error}\n\n{note}".format(
-            prefix=ui.red(prefix), error=str(self.exc).strip(), note=internal_error_string
+            prefix=red(prefix), error=str(self.exc).strip(), note=internal_error_string
         )
 
 
@@ -2021,7 +2104,7 @@ class GenericExceptionOnRun(ErrorLevel, pt.GenericExceptionOnRun):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(prefix=ui.red(prefix), error=str(self.exc).strip())
+        return "{prefix}\n{error}".format(prefix=red(prefix), error=str(self.exc).strip())
 
 
 @dataclass
@@ -2245,7 +2328,7 @@ class RunResultWarning(WarnLevel, pt.RunResultWarning):
 
     def message(self) -> str:
         info = "Warning"
-        return ui.yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+        return yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
 @dataclass
@@ -2255,7 +2338,7 @@ class RunResultFailure(ErrorLevel, pt.RunResultFailure):
 
     def message(self) -> str:
         info = "Failure"
-        return ui.red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+        return red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
 @dataclass
@@ -2316,7 +2399,7 @@ class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError
         return "Z028"
 
     def message(self) -> str:
-        return ui.yellow(self.msg)
+        return yellow(self.msg)
 
 
 @dataclass
@@ -2337,13 +2420,13 @@ class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
         if self.keyboard_interrupt:
-            message = ui.yellow("Exited because of keyboard interrupt.")
+            message = yellow("Exited because of keyboard interrupt.")
         elif self.num_errors > 0:
-            message = ui.red("Completed with {} and {}:".format(error_plural, warn_plural))
+            message = red("Completed with {} and {}:".format(error_plural, warn_plural))
         elif self.num_warnings > 0:
-            message = ui.yellow("Completed with {}:".format(warn_plural))
+            message = yellow("Completed with {}:".format(warn_plural))
         else:
-            message = ui.green("Completed successfully")
+            message = green("Completed successfully")
         return message
 
 
@@ -2358,7 +2441,7 @@ class PrintSkipBecauseError(ErrorLevel, pt.PrintSkipBecauseError):
     def message(self) -> str:
         msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model error"
         return format_fancy_output_line(
-            msg=msg, status=ui.red("ERROR SKIP"), index=self.index, total=self.total
+            msg=msg, status=red("ERROR SKIP"), index=self.index, total=self.total
         )
 
 

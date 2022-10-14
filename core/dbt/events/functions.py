@@ -233,6 +233,22 @@ def warn_or_raise(exc, log_fmt=None):
         fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
 
 
+def warn_or_error_rewrite(event, node=None):
+    if flags.WARN_ERROR:
+        from dbt.exceptions import raise_compiler_error
+
+        raise_compiler_error(scrub_secrets(event.info.msg, env_secrets()), node)
+    else:
+        fire_event(event)
+
+
+def warn_or_raise_rewrite(event):
+    if flags.WARN_ERROR:
+        raise event.info.exc
+    else:
+        fire_event(event)
+
+
 # an alternative to fire_event which only creates and logs the event value
 # if the condition is met. Does nothing otherwise.
 def fire_event_if(conditional: bool, lazy_e: Callable[[], BaseEvent]) -> None:

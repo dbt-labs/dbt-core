@@ -282,6 +282,47 @@ class ProjectCreated(betterproto.Message):
 
 
 @dataclass
+class PackageRedirectDeprecation(betterproto.Message):
+    """D001"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    old_name: str = betterproto.string_field(2)
+    new_name: str = betterproto.string_field(3)
+
+
+@dataclass
+class PackageInstallPathDeprecation(betterproto.Message):
+    """D002"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+
+
+@dataclass
+class AdapterDeprecationWarning(betterproto.Message):
+    """D003"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    old_name: str = betterproto.string_field(2)
+    new_name: str = betterproto.string_field(3)
+
+
+@dataclass
+class MetricAttributesRenamed(betterproto.Message):
+    """D004"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    metric_name: str = betterproto.string_field(2)
+
+
+@dataclass
+class ExposureNameDeprecation(betterproto.Message):
+    """D005"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    exposure: str = betterproto.string_field(2)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 

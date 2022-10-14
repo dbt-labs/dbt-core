@@ -213,6 +213,39 @@ message ProjectCreated {
     string slack_url = 4;
 }
 
+// D - Deprecation
+
+// D001
+message PackageRedirectDeprecation {
+    EventInfo info = 1;
+    string old_name = 2;
+    string new_name = 3;
+}
+
+// D002
+message PackageInstallPathDeprecation {
+    EventInfo info = 1;
+}
+
+//D003
+message AdapterDeprecationWarning {
+    EventInfo info = 1;
+    string old_name = 2;
+    string new_name = 3;
+}
+
+//D004
+message MetricAttributesRenamed {
+    EventInfo info = 1;
+    string metric_name = 2;
+}
+
+//D005
+message ExposureNameDeprecation {
+    EventInfo info = 1;
+    string exposure = 2;
+}
+
 // E - DB Adapter
 
 // E001
