@@ -21,4 +21,3 @@ values ('arg1', 'arg2'), ('arg3', 'arg4');
 
 insert into {schema}.seed (id, updated_at)
 values (1, '2017-01-01'), (2, '2017-01-02');
-
