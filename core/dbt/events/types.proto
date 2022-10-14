@@ -1036,7 +1036,7 @@ message PrintErrorTestResult {
     string name = 3;
     int32 index = 4;
     int32 num_models = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
 }
 
 // Q008
@@ -1046,7 +1046,7 @@ message PrintPassTestResult {
     string name = 3;
     int32 index = 4;
     int32 num_models = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
 }
 
 // Q009
@@ -1056,7 +1056,7 @@ message PrintWarnTestResult {
     string name = 3;
     int32 index = 4;
     int32 num_models = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
     int32 num_failures = 7;
 }
 
@@ -1067,7 +1067,7 @@ message PrintFailureTestResult {
     string name = 3;
     int32 index = 4;
     int32 num_models = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
     int32 num_failures = 7;
 }
 
@@ -1088,7 +1088,7 @@ message PrintModelResultLine {
     string status = 4;
     int32 index = 5;
     int32 total = 6;
-    int32 execution_time = 7;
+    float execution_time = 7;
 }
 
 // Q013
@@ -1099,7 +1099,7 @@ message PrintModelErrorResultLine {
     string status = 4;
     int32 index = 5;
     int32 total = 6;
-    int32 execution_time = 7;
+    float execution_time = 7;
 }
 
 // Q014
@@ -1110,7 +1110,7 @@ message PrintSnapshotErrorResultLine {
     string status = 4;
     int32 index = 5;
     int32 total = 6;
-    int32 execution_time = 7;
+    float execution_time = 7;
     map<string, string> cfg = 8;
 }
 
@@ -1122,7 +1122,7 @@ message PrintSnapshotResultLine {
     string status = 4;
     int32 index = 5;
     int32 total = 6;
-    int32 execution_time = 7;
+    float execution_time = 7;
     map<string, string> cfg = 8;
 }
 
@@ -1133,7 +1133,7 @@ message PrintSeedErrorResultLine {
     string status = 3;
     int32 index = 4;
     int32 total = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
     string schema = 7;
     string relation = 8;
 }
@@ -1145,7 +1145,7 @@ message PrintSeedResultLine {
     string status = 3;
     int32 index = 4;
     int32 total = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
     string schema = 7;
     string relation = 8;
 }
@@ -1156,7 +1156,7 @@ message PrintFreshnessErrorLine {
     NodeInfo node_info = 2;
     int32 index = 3;
     int32 total = 4;
-    int32 execution_time = 5;
+    float execution_time = 5;
     string source_name = 6;
     string table_name = 7;
 }
@@ -1167,7 +1167,7 @@ message PrintFreshnessErrorStaleLine {
     NodeInfo node_info = 2;
     int32 index = 3;
     int32 total = 4;
-    int32 execution_time = 5;
+    float execution_time = 5;
     string source_name = 6;
     string table_name = 7;
 }
@@ -1178,7 +1178,7 @@ message PrintFreshnessWarnLine {
     NodeInfo node_info = 2;
     int32 index = 3;
     int32 total = 4;
-    int32 execution_time = 5;
+    float execution_time = 5;
     string source_name = 6;
     string table_name = 7;
 }
@@ -1189,7 +1189,7 @@ message PrintFreshnessPassLine {
     NodeInfo node_info = 2;
     int32 index = 3;
     int32 total = 4;
-    int32 execution_time = 5;
+    float execution_time = 5;
     string source_name = 6;
     string table_name = 7;
 }
@@ -1277,7 +1277,7 @@ message PrintHookEndLine {
     string status = 4;
     int32 index = 5;
     int32 total = 6;
-    int32 execution_time = 7;
+    float execution_time = 7;
 }
 
 // Q034

@@ -3,7 +3,6 @@ import os
 import threading
 from datetime import datetime
 
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # These base types define the _required structure_ for the concrete event #
 # types defined in types.py                                               #
@@ -13,6 +12,12 @@ from datetime import datetime
 class Cache:
     # Events with this class will only be logged when the `--log-cache-events` flag is passed
     pass
+
+
+def get_global_metadata_vars() -> dict:
+    from dbt.events.functions import get_metadata_vars
+
+    return get_metadata_vars()
 
 
 def get_invocation_id() -> str:
@@ -48,6 +53,7 @@ class BaseEvent:
         if not hasattr(self.info, "msg") or not self.info.msg:
             self.info.msg = self.message()
         self.info.invocation_id = get_invocation_id()
+        self.info.extra = get_global_metadata_vars()
         self.info.ts = datetime.utcnow()
         self.info.pid = get_pid()
         self.info.thread = get_thread_name()

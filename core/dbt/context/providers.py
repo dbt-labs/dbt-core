@@ -41,7 +41,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
-from dbt.contracts.util import get_metadata_env
+from dbt.events.functions import get_metadata_vars
 from dbt.exceptions import (
     CompilationException,
     ParsingException,
@@ -713,7 +713,7 @@ class ProviderContext(ManifestContext):
 
     @contextproperty
     def dbt_metadata_envs(self) -> Dict[str, str]:
-        return get_metadata_env()
+        return get_metadata_vars()
 
     @contextproperty
     def invocation_args_dict(self):

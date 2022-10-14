@@ -1365,7 +1365,7 @@ class PrintErrorTestResult(betterproto.Message):
     name: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     num_models: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
 
 
 @dataclass
@@ -1377,7 +1377,7 @@ class PrintPassTestResult(betterproto.Message):
     name: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     num_models: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
 
 
 @dataclass
@@ -1389,7 +1389,7 @@ class PrintWarnTestResult(betterproto.Message):
     name: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     num_models: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
     num_failures: int = betterproto.int32_field(7)
 
 
@@ -1402,7 +1402,7 @@ class PrintFailureTestResult(betterproto.Message):
     name: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     num_models: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
     num_failures: int = betterproto.int32_field(7)
 
 
@@ -1427,7 +1427,7 @@ class PrintModelResultLine(betterproto.Message):
     status: str = betterproto.string_field(4)
     index: int = betterproto.int32_field(5)
     total: int = betterproto.int32_field(6)
-    execution_time: int = betterproto.int32_field(7)
+    execution_time: float = betterproto.float_field(7)
 
 
 @dataclass
@@ -1440,7 +1440,7 @@ class PrintModelErrorResultLine(betterproto.Message):
     status: str = betterproto.string_field(4)
     index: int = betterproto.int32_field(5)
     total: int = betterproto.int32_field(6)
-    execution_time: int = betterproto.int32_field(7)
+    execution_time: float = betterproto.float_field(7)
 
 
 @dataclass
@@ -1453,7 +1453,7 @@ class PrintSnapshotErrorResultLine(betterproto.Message):
     status: str = betterproto.string_field(4)
     index: int = betterproto.int32_field(5)
     total: int = betterproto.int32_field(6)
-    execution_time: int = betterproto.int32_field(7)
+    execution_time: float = betterproto.float_field(7)
     cfg: Dict[str, str] = betterproto.map_field(
         8, betterproto.TYPE_STRING, betterproto.TYPE_STRING
     )
@@ -1469,7 +1469,7 @@ class PrintSnapshotResultLine(betterproto.Message):
     status: str = betterproto.string_field(4)
     index: int = betterproto.int32_field(5)
     total: int = betterproto.int32_field(6)
-    execution_time: int = betterproto.int32_field(7)
+    execution_time: float = betterproto.float_field(7)
     cfg: Dict[str, str] = betterproto.map_field(
         8, betterproto.TYPE_STRING, betterproto.TYPE_STRING
     )
@@ -1484,7 +1484,7 @@ class PrintSeedErrorResultLine(betterproto.Message):
     status: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     total: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
     schema: str = betterproto.string_field(7)
     relation: str = betterproto.string_field(8)
 
@@ -1498,7 +1498,7 @@ class PrintSeedResultLine(betterproto.Message):
     status: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     total: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
     schema: str = betterproto.string_field(7)
     relation: str = betterproto.string_field(8)
 
@@ -1511,7 +1511,7 @@ class PrintFreshnessErrorLine(betterproto.Message):
     node_info: "NodeInfo" = betterproto.message_field(2)
     index: int = betterproto.int32_field(3)
     total: int = betterproto.int32_field(4)
-    execution_time: int = betterproto.int32_field(5)
+    execution_time: float = betterproto.float_field(5)
     source_name: str = betterproto.string_field(6)
     table_name: str = betterproto.string_field(7)
 
@@ -1524,7 +1524,7 @@ class PrintFreshnessErrorStaleLine(betterproto.Message):
     node_info: "NodeInfo" = betterproto.message_field(2)
     index: int = betterproto.int32_field(3)
     total: int = betterproto.int32_field(4)
-    execution_time: int = betterproto.int32_field(5)
+    execution_time: float = betterproto.float_field(5)
     source_name: str = betterproto.string_field(6)
     table_name: str = betterproto.string_field(7)
 
@@ -1537,7 +1537,7 @@ class PrintFreshnessWarnLine(betterproto.Message):
     node_info: "NodeInfo" = betterproto.message_field(2)
     index: int = betterproto.int32_field(3)
     total: int = betterproto.int32_field(4)
-    execution_time: int = betterproto.int32_field(5)
+    execution_time: float = betterproto.float_field(5)
     source_name: str = betterproto.string_field(6)
     table_name: str = betterproto.string_field(7)
 
@@ -1550,7 +1550,7 @@ class PrintFreshnessPassLine(betterproto.Message):
     node_info: "NodeInfo" = betterproto.message_field(2)
     index: int = betterproto.int32_field(3)
     total: int = betterproto.int32_field(4)
-    execution_time: int = betterproto.int32_field(5)
+    execution_time: float = betterproto.float_field(5)
     source_name: str = betterproto.string_field(6)
     table_name: str = betterproto.string_field(7)
 
@@ -1662,7 +1662,7 @@ class PrintHookEndLine(betterproto.Message):
     status: str = betterproto.string_field(4)
     index: int = betterproto.int32_field(5)
     total: int = betterproto.int32_field(6)
-    execution_time: int = betterproto.int32_field(7)
+    execution_time: float = betterproto.float_field(7)
 
 
 @dataclass
