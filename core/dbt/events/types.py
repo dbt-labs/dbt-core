@@ -1339,23 +1339,23 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
         )
 
 
-# This is for the log method used in macros, can only pass msg
 @dataclass
 class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
     def code(self):
         return "M011"
 
     def message(self) -> str:
+        # This is for the log method used in macros so msg cannot be built here
         return self.msg
 
 
-# This is for the log method used in macros, can only pass msg
 @dataclass
 class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
     def code(self):
         return "M012"
 
     def message(self) -> str:
+        # This is for the log method used in macros so msg cannot be built here
         return self.msg
 
 
@@ -2268,13 +2268,13 @@ class StatsLine(InfoLevel, pt.StatsLine):
         return stats_line.format(**self.stats)
 
 
-# this contains the message contained in the result object, not a message built and passed in
 @dataclass
 class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
     def code(self):
         return "Z024"
 
     def message(self) -> str:
+        # This is the message on the result object, cannot be built here
         return f"  {self.msg}"
 
 
@@ -2309,7 +2309,7 @@ class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
 
 # FirstRunResultError and AfterFirstRunResultError are just splitting the message from the result
 #  object into multiple log lines
-# TODO: is this reallly needed?
+# TODO: is this reallly needed?  See printer.py
 @dataclass
 class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError):
     def code(self):
@@ -2457,13 +2457,14 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 # Skipped Z045
 
 
-# This cannot format the message because it's being triggered all over the code and the message is not standard.
 @dataclass
 class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
     def code(self):
         return "Z046"
 
     def message(self) -> str:
+        # This is triggered from `warn_or_error` where every unique message is custom built
+        # Cannot format message in event
         return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
 
 
@@ -2498,6 +2499,7 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
         return "Z049"
 
     def message(self) -> str:
+        # This is the message on the result object, cannot be formatted in event
         return self.msg
 
 
