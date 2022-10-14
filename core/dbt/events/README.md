@@ -12,13 +12,13 @@ New events need to have a proto message definition created in core/dbt/events/ty
 
 A matching class needs to be created in the core/dbt/events/types.py file, which will have two superclasses, the "Level" mixin and the generated class from proto_types.py. These classes will also generally have two methods, a "code" method that returns the event code, and a "message" method that is used to construct the "msg" from the event fields. In addition the "Level" mixin will provide a "level_tag" method to set the level (which can also be overridden using the "info" convenience function from functions.py)
 
-Note that no attributes can exist in these event classes except for fields defined in the protobuf definitions, because the betterproto metaclass will throw an error. Betterproto provides a to_dict() method to convert the generated classes to a dictionary and from that to json. However some attributes will successfully convert to dictionaries but not to serialized protobufs, so we need to test both output formats.jjkkkkkkkkkkj
+Note that no attributes can exist in these event classes except for fields defined in the protobuf definitions, because the betterproto metaclass will throw an error. Betterproto provides a to_dict() method to convert the generated classes to a dictionary and from that to json. However some attributes will successfully convert to dictionaries but not to serialized protobufs, so we need to test both output formats.
 
 
 ## Required for Every Event
 
 - a method `code`, that's unique across events
-- assign a log level by using the Level misin: `DebugLevel`, `InfoLevel`, `WarnLevel`, or `ErrorLevel`
+- assign a log level by using the Level mixin: `DebugLevel`, `InfoLevel`, `WarnLevel`, or `ErrorLevel`
 - a message()
 
 Example
