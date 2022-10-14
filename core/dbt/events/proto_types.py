@@ -1483,6 +1483,7 @@ class PrintSeedErrorResultLine(betterproto.Message):
     total: int = betterproto.int32_field(5)
     execution_time: float = betterproto.float_field(6)
     schema: str = betterproto.string_field(7)
+    relation: str = betterproto.string_field(8)
 
 
 @dataclass
