@@ -290,6 +290,12 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
 
 
 @dataclass
+class UnparsedDynamicSourceDefinition(UnparsedSourceDefinition):
+    tables_exclude_pattern: Optional[str] = None
+    tables_include_pattern: Optional[str] = None
+
+
+@dataclass
 class SourceTablePatch(dbtClassMixin):
     name: str
     description: Optional[str] = None

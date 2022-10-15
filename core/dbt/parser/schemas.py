@@ -6,6 +6,8 @@ from abc import ABCMeta, abstractmethod
 from hashlib import md5
 from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 
+from dbt.contracts.graph.unparsed import UnparsedSourceTableDefinition
+
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
 
 from dbt.adapters.factory import get_adapter, get_adapter_package_names
@@ -48,6 +50,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedExposure,
     UnparsedMetric,
     UnparsedSourceDefinition,
+    UnparsedDynamicSourceDefinition
 )
 from dbt.exceptions import (
     warn_invalid_patch,
@@ -533,6 +536,10 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 parser = SourceParser(self, yaml_block, "sources")
                 parser.parse()
 
+            if "dynamic_sources" in dct:
+                parser = DynamicSourceParser(self, yaml_block, "dynamic_sources")
+                parser.parse()
+
             # NonSourceParser.parse() (but never test_blocks)
             if "macros" in dct:
                 parser = MacroPatchParser(self, yaml_block, "macros")
@@ -737,6 +744,50 @@ class SourceParser(YamlDocsReader):
             )
             self.manifest.add_source(self.yaml.file, source_def)
 
+class DynamicSourceParser(SourceParser):
+    def _target_from_dict(self, cls: Type[T], data: Dict[str, Any]) -> T:
+        return super()._target_from_dict(UnparsedDynamicSourceDefinition, data)
+
+    def add_source_definitions(self, source: UnparsedDynamicSourceDefinition) -> None:
+        original_file_path = self.yaml.path.original_file_path
+        fqn_path = self.yaml.path.relative_path
+        exclude_pattern = re.compile(source.tables_exclude_pattern)
+        include_pattern = re.compile(source.tables_include_pattern)
+        
+        tables = []
+        adapter = get_adapter(self.root_project)
+        with adapter.connection_named("dynamic_sources"):
+            schema_relation = BaseRelation.create(
+                # database = self.root_project.default_database,
+                schema = source.schema
+            )
+            relations = adapter.list_relations_without_caching(schema_relation)
+            for relation in relations:
+                table_name = relation.path.identifier
+                if include_pattern.match(table_name) and not exclude_pattern.match(table_name):
+                    tables.append(UnparsedSourceTableDefinition.from_dict({'name': table_name}))
+
+        for table in tables:
+            unique_id = ".".join(
+                [NodeType.Source, self.project.project_name, source.name, table.name]
+            )
+
+            # the FQN is project name / path elements /source_name /table_name
+            fqn = self.schema_parser.get_fqn_prefix(fqn_path)
+            fqn.extend([source.name, table.name])
+
+            source_def = UnpatchedSourceDefinition(
+                source=source,
+                table=table,
+                path=original_file_path,
+                original_file_path=original_file_path,
+                root_path=self.project.project_root,
+                package_name=self.project.project_name,
+                unique_id=unique_id,
+                resource_type=NodeType.Source,
+                fqn=fqn,
+            )
+            self.manifest.add_source(self.yaml.file, source_def)
 
 # This class has three main subclasses: TestablePatchParser (models,
 # seeds, snapshots), MacroPatchParser, and AnalysisPatchParser
