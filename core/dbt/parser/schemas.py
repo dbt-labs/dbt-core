@@ -11,6 +11,7 @@ from dbt.contracts.graph.unparsed import UnparsedSourceTableDefinition
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
 
 from dbt.adapters.factory import get_adapter, get_adapter_package_names
+from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.parser.schema_renderer import SchemaYamlRenderer
@@ -80,6 +81,7 @@ from dbt.parser.generic_test_builders import (
 from dbt.ui import warning_tag
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
+import re
 
 TestDef = Union[str, Dict[str, Any]]
 
