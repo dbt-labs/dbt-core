@@ -1,0 +1,7 @@
+kind: Features
+body: '''Added support for Citus Columnar table type to postgres adapter'''
+time: 2022-10-16T13:37:47.275559026+02:00
+custom:
+  Author: Dennis8
+  Issue: "6052"
+  PR: "6053"
