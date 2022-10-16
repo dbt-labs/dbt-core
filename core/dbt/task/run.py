@@ -30,7 +30,7 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
-    DatabaseErrorRunning,
+    DatabaseErrorRunningHook,
     EmptyLine,
     HooksRunning,
     HookFinished,
@@ -401,7 +401,7 @@ class RunTask(CompileTask):
         try:
             self.run_hooks(adapter, hook_type, extra_context)
         except RuntimeException:
-            fire_event(DatabaseErrorRunning(hook_type=hook_type.value))
+            fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
             raise
 
     def print_results_line(self, results, execution_time):

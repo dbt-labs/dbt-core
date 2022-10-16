@@ -90,6 +90,7 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
 
     # Make sure we have a valid invocation_id
     dbt.events.functions.set_invocation_id()
+    dbt.events.functions.reset_metadata_vars()
 
     return config
 
