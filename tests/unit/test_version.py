@@ -13,7 +13,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -39,7 +39,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -65,7 +65,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -94,7 +94,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -120,7 +120,7 @@ class TestGetVersionInformation:
             latest="1.0.0",
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -148,7 +148,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -177,7 +177,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -203,7 +203,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -229,7 +229,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -259,7 +259,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -289,7 +289,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -319,7 +319,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -349,7 +349,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -379,7 +379,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -409,7 +409,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -439,7 +439,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -469,7 +469,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -499,7 +499,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -534,7 +534,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -571,7 +571,7 @@ class TestGetVersionInformation:
             },
         )
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
@@ -649,7 +649,7 @@ class TestGetVersionInformation:
 
         mocker.patch("importlib.import_module").side_effect = mock_import
 
-        actual = dbt.version.get_version_information()
+        actual = "\n".join(dbt.version.get_version_information())
         expected = "\n".join(
             [
                 "Core:",
