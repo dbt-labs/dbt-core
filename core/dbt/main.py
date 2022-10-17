@@ -230,8 +230,8 @@ def run_from_args(parsed):
         log_path = getattr(task.config, "log_path", None)
     log_manager.set_path(log_path)
     # if 'list' task: set stdout to WARN instead of INFO
-    level_override = parsed.cls.pre_init_hook(parsed)
-    setup_event_logger(log_path or "logs", level_override)
+    # level_override = parsed.cls.pre_init_hook(parsed)
+    setup_event_logger(log_path or "logs", "json", False, True)
 
     fire_event(MainReportVersion(version=str(dbt.version.installed), log_version=LOG_VERSION))
     fire_event(MainReportArgs(args=args_to_dict(parsed)))

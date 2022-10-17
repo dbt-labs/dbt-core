@@ -313,7 +313,7 @@ class DBTIntegrationTest(unittest.TestCase):
         os.chdir(self.initial_dir)
         # before we go anywhere, collect the initial path info
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
-        setup_event_logger(self._logs_dir)
+        setup_event_logger(self._logs_dir, None, False, True)
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
         self.test_root_dir = self._generate_test_root_dir()
