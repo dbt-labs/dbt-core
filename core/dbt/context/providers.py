@@ -225,7 +225,7 @@ class BaseRefResolver(BaseResolver):
 
         if package is not None and not isinstance(package, str):
             raise CompilationException(
-                f"The package argument to ref() must be a string or None, got  {type(package)}"
+                f"The package argument to ref() must be a string or None, got {type(package)}"
             )
 
     def __call__(self, *args: str) -> RelationProxy:
