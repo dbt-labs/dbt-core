@@ -1,0 +1,7 @@
+kind: Features
+body: New ALLOW_UNUSED_CONFIG_PATHS flag
+time: 2022-10-17T17:07:47.601694-05:00
+custom:
+  Author: katieclaiborne felippecaso
+  Issue: "6080"
+  PR: "6091"
