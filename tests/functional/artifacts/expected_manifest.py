@@ -1275,7 +1275,7 @@ def expected_references_manifest(project):
             },
             "test.view_summary": {
                 "block_contents": (
-                    "A view of the summary of the ephemeral copy of the " "seed data"
+                    "A view of the summary of the ephemeral copy of the seed data"
                 ),
                 "name": "view_summary",
                 "original_file_path": docs_path,

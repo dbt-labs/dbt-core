@@ -298,7 +298,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
         except ParsingException as exc:
             context = _trimmed(str(target))
-            msg = "Invalid test config given in {}:" "\n\t{}\n\t@: {}".format(
+            msg = "Invalid test config given in {}:\n\t{}\n\t@: {}".format(
                 target.original_file_path, exc.msg, context
             )
             raise ParsingException(msg) from exc

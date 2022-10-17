@@ -347,7 +347,7 @@ class ConfiguredParser(
             )
         else:
             raise InternalException(
-                f"Got an unexpected project version={config_version}, " f"expected 2"
+                f"Got an unexpected project version={config_version}, expected 2"
             )
 
     def config_dict(
