@@ -73,9 +73,7 @@ from dbt.contracts.util import Writable
 from dbt.exceptions import (
     ref_target_not_found,
     get_target_not_found_or_disabled_msg,
-    source_target_not_found,
-    metric_target_not_found,
-    exposure_target_not_found,
+    target_not_found,
     get_not_found_or_disabled_msg,
     warn_or_error,
 )
@@ -293,8 +291,7 @@ class ManifestLoader:
                         if source_file:
                             parse_file_type = source_file.parse_file_type
                             fire_event(PartialParsingExceptionFile(file=file_id))
-                            file_dict = source_file.to_dict()
-                            fire_event(PartialParsingFile(file_dict=file_dict))
+                            fire_event(PartialParsingFile(file_id=source_file.file_id))
                     exc_info["parse_file_type"] = parse_file_type
                     fire_event(PartialParsingException(exc_info=exc_info))
 
@@ -664,7 +661,9 @@ class ManifestLoader:
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
             except Exception as exc:
-                fire_event(ParsedFileLoadFailed(path=path, exc=str(exc)))
+                fire_event(
+                    ParsedFileLoadFailed(path=path, exc=str(exc), exc_info=traceback.format_exc())
+                )
                 reparse_reason = ReparseReason.load_file_failure
         else:
             fire_event(PartialParseSaveFileNotFound())
@@ -960,7 +959,10 @@ def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, 
 
     if node.resource_type == NodeType.Test:
         msg = get_target_not_found_or_disabled_msg(
-            node, target_model_name, target_model_package, disabled
+            node=node,
+            target_name=target_model_name,
+            target_package=target_model_package,
+            disabled=disabled,
         )
         if disabled:
             fire_event(InvalidRefInTestNode(msg=msg))
@@ -988,34 +990,31 @@ def invalid_source_fail_unless_test(node, target_name, target_table_name, disabl
         else:
             warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
-        source_target_not_found(node, target_name, target_table_name, disabled=disabled)
-
-
-def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_package):
-
-    if node.resource_type == NodeType.Test:
-        msg = get_target_not_found_or_disabled_msg(node, target_metric_name, target_metric_package)
-        warn_or_error(msg, log_fmt=warning_tag("{}"))
-    else:
-        metric_target_not_found(
-            node,
-            target_metric_name,
-            target_metric_package,
+        target_not_found(
+            node=node,
+            target_name=f"{target_name}.{target_table_name}",
+            target_kind="source",
+            disabled=disabled,
         )
 
 
-def invalid_exposure_fail_unless_test(node, target_exposure_name, target_exposure_package):
+def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_package, disabled):
 
     if node.resource_type == NodeType.Test:
         msg = get_target_not_found_or_disabled_msg(
-            node, target_exposure_name, target_exposure_package
+            node=node,
+            target_name=target_metric_name,
+            target_package=target_metric_package,
+            disabled=disabled,
         )
         warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
-        exposure_target_not_found(
-            node,
-            target_exposure_name,
-            target_exposure_package,
+        target_not_found(
+            node=node,
+            target_name=target_metric_name,
+            target_kind="metric",
+            target_package=target_metric_package,
+            disabled=disabled,
         )
 
 
@@ -1244,6 +1243,7 @@ def _process_metrics_for_node(
                 node,
                 target_metric_name,
                 target_metric_package,
+                disabled=(isinstance(target_metric, Disabled)),
             )
 
             continue

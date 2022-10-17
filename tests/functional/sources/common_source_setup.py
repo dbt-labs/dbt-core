@@ -4,16 +4,16 @@ import yaml
 
 from dbt.tests.util import run_dbt
 from tests.functional.sources.fixtures import (
-    models__schema_yml,
-    models__view_model_sql,
-    models__ephemeral_model_sql,
-    models__descendant_model_sql,
-    models__multi_source_model_sql,
-    models__nonsource_descendant_sql,
-    seeds__source_csv,
-    seeds__other_table_csv,
-    seeds__expected_multi_source_csv,
-    seeds__other_source_table_csv,
+    models_schema_yml,
+    models_view_model_sql,
+    models_ephemeral_model_sql,
+    models_descendant_model_sql,
+    models_multi_source_model_sql,
+    models_nonsource_descendant_sql,
+    seeds_source_csv,
+    seeds_other_table_csv,
+    seeds_expected_multi_source_csv,
+    seeds_other_source_table_csv,
 )
 
 
@@ -29,21 +29,21 @@ class BaseSourcesTest:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": models__schema_yml,
-            "view_model.sql": models__view_model_sql,
-            "ephemeral_model.sql": models__ephemeral_model_sql,
-            "descendant_model.sql": models__descendant_model_sql,
-            "multi_source_model.sql": models__multi_source_model_sql,
-            "nonsource_descendant.sql": models__nonsource_descendant_sql,
+            "schema.yml": models_schema_yml,
+            "view_model.sql": models_view_model_sql,
+            "ephemeral_model.sql": models_ephemeral_model_sql,
+            "descendant_model.sql": models_descendant_model_sql,
+            "multi_source_model.sql": models_multi_source_model_sql,
+            "nonsource_descendant.sql": models_nonsource_descendant_sql,
         }
 
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
-            "source.csv": seeds__source_csv,
-            "other_table.csv": seeds__other_table_csv,
-            "expected_multi_source.csv": seeds__expected_multi_source_csv,
-            "other_source_table.csv": seeds__other_source_table_csv,
+            "source.csv": seeds_source_csv,
+            "other_table.csv": seeds_other_table_csv,
+            "expected_multi_source.csv": seeds_expected_multi_source_csv,
+            "other_source_table.csv": seeds_other_source_table_csv,
         }
 
     @pytest.fixture(scope="class")

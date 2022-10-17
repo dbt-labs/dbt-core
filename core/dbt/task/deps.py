@@ -12,7 +12,7 @@ from dbt.events.types import (
     DepsNoPackagesFound,
     DepsStartPackageInstall,
     DepsUpdateAvailable,
-    DepsUTD,
+    DepsUpToDate,
     DepsInstallInfo,
     DepsListSubdirectory,
     DepsNotifyUpdatesAvailable,
@@ -72,7 +72,7 @@ class DepsTask(BaseTask):
                         packages_to_upgrade.append(package_name)
                         fire_event(DepsUpdateAvailable(version_latest=version_latest))
                     else:
-                        fire_event(DepsUTD())
+                        fire_event(DepsUpToDate())
                 if package.get_subdirectory():
                     fire_event(DepsListSubdirectory(subdirectory=package.get_subdirectory()))
 

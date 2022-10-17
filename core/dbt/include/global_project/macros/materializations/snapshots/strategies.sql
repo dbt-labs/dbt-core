@@ -46,19 +46,6 @@
     {%- endfor -%})
 {%- endmacro %}
 
-
-{#
-    Get the current time cross-db
-#}
-{% macro snapshot_get_time() -%}
-  {{ adapter.dispatch('snapshot_get_time', 'dbt')() }}
-{%- endmacro %}
-
-{% macro default__snapshot_get_time() -%}
-  {{ current_timestamp() }}
-{%- endmacro %}
-
-
 {#
     Core strategy definitions
 #}

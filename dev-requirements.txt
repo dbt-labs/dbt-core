@@ -1,5 +1,7 @@
-black==22.8.0
+betterproto[compiler]==1.2.5
+black==22.10.0
 bumpversion
+docutils
 flake8
 flaky
 freezegun==0.3.12
@@ -7,6 +9,7 @@ ipdb
 mypy==0.971
 pip-tools
 pre-commit
+protobuf
 pytest
 pytest-cov
 pytest-csv
@@ -15,13 +18,16 @@ pytest-logbook
 pytest-mock
 pytest-xdist
 pytz
+sphinx
 tox>=3.13
 twine
 types-colorama
+types-docutils
 types-PyYAML
 types-freezegun
 types-Jinja2
 types-mock
+types-protobuf
 types-python-dateutil
 types-pytz
 types-requests

@@ -45,7 +45,7 @@ class PythonValidationVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         if node.name == "model":
             self.num_model_def += 1
-            if not node.args.args[0].arg == "dbt":
+            if node.args.args and not node.args.args[0].arg == "dbt":
                 self.dbt_errors.append("'dbt' not provided for model as the first argument")
             if len(node.args.args) != 2:
                 self.dbt_errors.append(

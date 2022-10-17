@@ -1,9 +1,0 @@
-version: 2
-models:
-- name: model
-  columns:
-  - name: id
-    tests:
-    - accepted_values:
-        values:
-        - 1

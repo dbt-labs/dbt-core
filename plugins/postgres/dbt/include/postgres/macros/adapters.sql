@@ -117,23 +117,8 @@
   {{ return(load_result('check_schema_exists').table) }}
 {% endmacro %}
 
-
-{% macro postgres__current_timestamp() -%}
-  now()
-{%- endmacro %}
-
-{% macro postgres__snapshot_string_as_time(timestamp) -%}
-    {%- set result = "'" ~ timestamp ~ "'::timestamp without time zone" -%}
-    {{ return(result) }}
-{%- endmacro %}
-
-
-{% macro postgres__snapshot_get_time() -%}
-  {{ current_timestamp() }}::timestamp without time zone
-{%- endmacro %}
-
 {#
-  Postgres tables have a maximum length off 63 characters, anything longer is silently truncated.
+  Postgres tables have a maximum length of 63 characters, anything longer is silently truncated.
   Temp and backup relations add a lot of extra characters to the end of table names to ensure uniqueness.
   To prevent this going over the character limit, the base_relation name is truncated to ensure
   that name + suffix + uniquestring is < 63 characters.

@@ -1,0 +1,11 @@
+[tool.mypy]
+# TODO: widen range of files as we fix issues
+files = 'core/dbt'
+mypy_path = "third-party-stubs/"
+namespace_packages = true
+
+[tool.black]
+# TODO: remove global exclusion of tests when testing overhaul is complete
+force-exclude = 'test'
+line-length = 99
+target-version = ['py38']
