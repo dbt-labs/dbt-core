@@ -37,6 +37,7 @@ import dbt.task.seed as seed_task
 import dbt.task.serve as serve_task
 import dbt.task.snapshot as snapshot_task
 import dbt.task.test as test_task
+import dbt.task.preview as preview_task
 from dbt.profiler import profiler
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
@@ -173,7 +174,7 @@ def adapter_management():
 
 def handle_and_check(args):
     with log_manager.applicationbound():
-        parsed = parse_args(args)
+        parsed = parse_args(args)x` `
 
         # Set flags from args, user config, and env vars
         user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
@@ -898,6 +899,26 @@ def _build_run_operation_subparser(subparsers, base_subparser):
     )
     return sub
 
+def _build_preview_subparser(subparsers, base_subparser):
+    preview_sub = subparsers.add_parser(
+        "preview",
+        parents=[base_subparser],
+        help="""
+        Compile SQL and execute against the current target database, with out the DDL.
+        """,
+    )
+    preview_sub.add_argument(
+        "-x",
+        "--fail-fast",
+        dest="sub_fail_fast",
+        action="store_true",
+        help="""
+        Stop execution upon a first failure.
+        """,
+    )
+
+    preview_sub.set_defaults(cls=preview_task.PreviewTask, which="preview", rpc_method="")
+    return preview_sub
 
 def parse_args(args, cls=DBTArgumentParser):
     p = cls(
@@ -1164,13 +1185,14 @@ def parse_args(args, cls=DBTArgumentParser):
     generate_sub = _build_docs_generate_subparser(docs_subs, base_subparser)
     test_sub = _build_test_subparser(subs, base_subparser)
     seed_sub = _build_seed_subparser(subs, base_subparser)
+    preview_sub = _build_preview_subparser(subs, base_subparser)
     # --threads, --no-version-check
     _add_common_arguments(
-        run_sub, compile_sub, generate_sub, test_sub, seed_sub, parse_sub, build_sub
+        run_sub, compile_sub, generate_sub, test_sub, seed_sub, parse_sub, build_sub, preview_sub
     )
     # --select, --exclude
     # list_sub sets up its own arguments.
-    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
+    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub, preview_sub)
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub, compile_sub)
     # --full-refresh
