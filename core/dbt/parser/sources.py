@@ -150,7 +150,7 @@ class SourcePatcher:
 
         if not isinstance(config, SourceConfig):
             raise InternalException(
-                f"Calculated a {type(config)} for a source, but expected " f"a SourceConfig"
+                f"Calculated a {type(config)} for a source, but expected a SourceConfig"
             )
 
         default_database = self.root_project.credentials.database
