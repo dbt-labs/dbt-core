@@ -71,7 +71,12 @@ class DBTVersion(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         formatter = argparse.RawTextHelpFormatter(prog=parser.prog)
-        formatter.add_text(dbt.version.get_version_information())
+
+        version_iterable = dbt.version.get_version_information()
+
+        for i in version_iterable:
+            formatter.add_text(i)
+
         parser.exit(message=formatter.format_help())
 
 
