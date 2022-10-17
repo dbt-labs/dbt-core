@@ -1,5 +1,4 @@
 import inspect  # This is temporary for RAT-ing
-import logging
 from copy import copy
 from pprint import pformat as pf  # This is temporary for RAT-ing
 
@@ -7,8 +6,7 @@ import click
 from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
-from dbt.events.functions import fire_event, setup_event_logger
-from dbt.events.types import MainEncounteredError
+from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
 
 
@@ -38,6 +36,7 @@ def cli_runner():
 @p.fail_fast
 @p.log_cache_events
 @p.log_format
+@p.log_path
 @p.macro_debugging
 @p.partial_parse
 @p.print
@@ -60,14 +59,11 @@ def cli(ctx, **kwargs):
     # Logging
     # N.B. Legacy logger is not supported
     setup_event_logger(
-        flags.LOG_PATH if hasattr(flags.LOG_PATH) else "logs",
+        flags.LOG_PATH,
         flags.LOG_FORMAT,
         flags.USE_COLORS,
         flags.DEBUG,
     )
-
-    #  This is just a test log event, remove before merge
-    fire_event(MainEncounteredError(exc="bork bork bork!\n\n\n"))
 
     # Profiling
     if flags.RECORD_TIMING_INFO:
@@ -92,7 +88,6 @@ def cli(ctx, **kwargs):
 @p.fail_fast
 @p.full_refresh
 @p.indirect_selection
-@p.log_path
 @p.models
 @p.profile
 @p.profiles_dir
@@ -139,7 +134,6 @@ def docs(ctx, **kwargs):
 @p.compile_docs
 @p.defer
 @p.exclude
-@p.log_path
 @p.models
 @p.profile
 @p.profiles_dir
@@ -179,7 +173,6 @@ def docs_serve(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.full_refresh
-@p.log_path
 @p.models
 @p.parse_only
 @p.profile
@@ -269,7 +262,6 @@ def list(ctx, **kwargs):
 @cli.command("parse")
 @click.pass_context
 @p.compile_parse
-@p.log_path
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -292,7 +284,6 @@ def parse(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.full_refresh
-@p.log_path
 @p.models
 @p.profile
 @p.profiles_dir
@@ -330,7 +321,6 @@ def run_operation(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.full_refresh
-@p.log_path
 @p.models
 @p.profile
 @p.profiles_dir
@@ -403,7 +393,6 @@ def freshness(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.indirect_selection
-@p.log_path
 @p.models
 @p.profile
 @p.profiles_dir

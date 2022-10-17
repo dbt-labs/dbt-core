@@ -18,14 +18,14 @@ from colorama import Style
 from dbt.constants import SECRET_ENV_PREFIX
 from dbt.events.base_types import Cache, Event, NoFile, NoStdOut, ShowException
 from dbt.events.types import EmptyLine, EventBufferFull, MainReportVersion, T_Event
-from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
+from dbt.logger import make_log_dir_if_missing
 
+# create the module-globals
 LOG_VERSION = 2
 EVENT_HISTORY = None
 
-# create the module-global loggers
 FILE_LOG = logging.getLogger("default_file")
-STDOUT_LOG = logging.getLogger("default_stdout")
+STDOUT_LOG = logging.getLogger("default_std_out")
 
 invocation_id: Optional[str] = None
 
@@ -33,22 +33,9 @@ invocation_id: Optional[str] = None
 def setup_event_logger(log_path, log_format, use_colors, debug):
     global FILE_LOG
     global STDOUT_LOG
-    breakpoint()
 
     make_log_dir_if_missing(log_path)
 
-    null_handler = logging.NullHandler()
-    FILE_LOG.addHandler(null_handler)
-
-    STDOUT_LOG.setLevel(logging.INFO)
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.INFO)
-    STDOUT_LOG.addHandler(stdout_handler)
-
-    format_json = log_format == "json"
-    # USE_COLORS can be None if the app just started and the cli flags
-    # havent been applied yet
-    format_color = True if use_colors else False
     # TODO this default should live somewhere better
     log_dest = os.path.join(log_path, "dbt.log")
     level = logging.DEBUG if debug else logging.INFO
@@ -56,6 +43,8 @@ def setup_event_logger(log_path, log_format, use_colors, debug):
     # overwrite the STDOUT_LOG logger with the configured one
     STDOUT_LOG = logging.getLogger("configured_std_out")
     STDOUT_LOG.setLevel(level)
+    STDOUT_LOG.format_json = log_format == "json"
+    STDOUT_LOG.format_color = True if use_colors else False
 
     FORMAT = "%(message)s"
     stdout_passthrough_formatter = logging.Formatter(fmt=FORMAT)
@@ -74,6 +63,8 @@ def setup_event_logger(log_path, log_format, use_colors, debug):
     # overwrite the FILE_LOG logger with the configured one
     FILE_LOG = logging.getLogger("configured_file")
     FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
+    FILE_LOG.format_json = log_format == "json"
+    FILE_LOG.format_color = True if use_colors else False
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
@@ -90,7 +81,7 @@ def setup_event_logger(log_path, log_format, use_colors, debug):
 def capture_stdout_logs() -> StringIO:
     capture_buf = io.StringIO()
     stdout_capture_handler = logging.StreamHandler(capture_buf)
-    stdout_handler.setLevel(logging.DEBUG)
+    stdout_capture_handler.setLevel(logging.DEBUG)
     STDOUT_LOG.addHandler(stdout_capture_handler)
     return capture_buf
 
@@ -124,7 +115,6 @@ def event_to_serializable_dict(
 ) -> Dict[str, Any]:
 
     log_line = dict()
-    code: str
     try:
         log_line = e.to_dict()
     except AttributeError as exc:
@@ -156,7 +146,7 @@ def event_to_serializable_dict(
 # translates an Event to a completely formatted text-based log line
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
 def reset_color() -> str:
-    return "" if not format_color else Style.RESET_ALL
+    return Style.RESET_ALL if getattr(STDOUT_LOG, "format_color", False) else ""
 
 
 def create_info_text_log_line(e: T_Event) -> str:
@@ -199,7 +189,26 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
 
 # calls create_stdout_text_log_line() or create_json_log_line() according to logger config
 def create_log_line(e: T_Event, file_output=False) -> Optional[str]:
-    if format_json:
+    global FILE_LOG
+    global STDOUT_LOG
+    if FILE_LOG is None and STDOUT_LOG is None:
+
+        # TODO: This is only necessary because our test framework doesn't correctly set up logging.
+        # This code should be moved to the test framework when we do CT-XXX (tix # needed)
+        null_handler = logging.NullHandler()
+        FILE_LOG.addHandler(null_handler)
+        FILE_LOG.format_json = False
+        FILE_LOG.format_color = False
+
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setLevel(logging.INFO)
+        STDOUT_LOG.setLevel(logging.INFO)
+        STDOUT_LOG.addHandler(stdout_handler)
+        STDOUT_LOG.format_json = False
+        STDOUT_LOG.format_color = False
+
+    logger = FILE_LOG if file_output else STDOUT_LOG
+    if getattr(logger, "format_json"):
         return create_json_log_line(e)  # json output, both console and file
     elif file_output is True or flags.DEBUG:
         return create_debug_text_log_line(e)  # default file output
