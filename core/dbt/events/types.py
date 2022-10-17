@@ -7,6 +7,8 @@ from dbt.events.base_types import (
     WarnLevel,
     ErrorLevel,
     Cache,
+    AdapterEventStringFunctor,
+    EventStringFunctor,
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 
@@ -309,7 +311,7 @@ Happy modeling!
 
 
 @dataclass
-class AdapterEventDebug(DebugLevel, pt.AdapterEventDebug):  # noqa
+class AdapterEventDebug(DebugLevel, AdapterEventStringFunctor, pt.AdapterEventDebug):  # noqa
     def code(self):
         return "E001"
 
@@ -318,7 +320,7 @@ class AdapterEventDebug(DebugLevel, pt.AdapterEventDebug):  # noqa
 
 
 @dataclass
-class AdapterEventInfo(InfoLevel, pt.AdapterEventInfo):  # noqa
+class AdapterEventInfo(InfoLevel, AdapterEventStringFunctor, pt.AdapterEventInfo):  # noqa
     def code(self):
         return "E002"
 
@@ -327,7 +329,7 @@ class AdapterEventInfo(InfoLevel, pt.AdapterEventInfo):  # noqa
 
 
 @dataclass
-class AdapterEventWarning(WarnLevel, pt.AdapterEventWarning):  # noqa
+class AdapterEventWarning(WarnLevel, AdapterEventStringFunctor, pt.AdapterEventWarning):  # noqa
     def code(self):
         return "E003"
 
@@ -336,7 +338,7 @@ class AdapterEventWarning(WarnLevel, pt.AdapterEventWarning):  # noqa
 
 
 @dataclass
-class AdapterEventError(ErrorLevel, pt.AdapterEventError):  # noqa
+class AdapterEventError(ErrorLevel, AdapterEventStringFunctor, pt.AdapterEventError):  # noqa
     def code(self):
         return "E004"
 
@@ -1227,7 +1229,7 @@ class InvalidDisabledSourceInTestNode(WarnLevel, pt.InvalidDisabledSourceInTestN
 
 
 @dataclass
-class InvalidRefInTestNode(DebugLevel, pt.InvalidRefInTestNode):
+class InvalidRefInTestNode(DebugLevel, EventStringFunctor, pt.InvalidRefInTestNode):
     def code(self):
         return "I051"
 
@@ -1334,7 +1336,7 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
 
 
 @dataclass
-class MacroEventInfo(InfoLevel, pt.MacroEventInfo):
+class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
     def code(self):
         return "M011"
 
@@ -1343,7 +1345,7 @@ class MacroEventInfo(InfoLevel, pt.MacroEventInfo):
 
 
 @dataclass
-class MacroEventDebug(DebugLevel, pt.MacroEventDebug):
+class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
     def code(self):
         return "M012"
 
@@ -2308,7 +2310,7 @@ class FirstRunResultError(ErrorLevel, pt.FirstRunResultError):
 
 
 @dataclass
-class AfterFirstRunResultError(ErrorLevel, pt.AfterFirstRunResultError):
+class AfterFirstRunResultError(ErrorLevel, EventStringFunctor, pt.AfterFirstRunResultError):
     def code(self):
         return "Z029"
 
@@ -2476,7 +2478,7 @@ class EventBufferFull(WarnLevel, pt.EventBufferFull):
 
 
 @dataclass
-class RunResultWarningMessage(WarnLevel, pt.RunResultWarningMessage):
+class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):
     def code(self):
         return "Z049"
 

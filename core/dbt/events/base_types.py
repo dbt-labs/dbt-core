@@ -99,6 +99,23 @@ class ErrorLevel(BaseEvent):
         return "error"
 
 
+# Included to ensure classes with str-type message members are initialized correctly.
+@dataclass  # type: ignore[misc]
+class AdapterEventStringFunctor:
+    def __post_init__(self):
+        super().__post_init__()
+        if not isinstance(self.base_msg, str):
+            self.base_msg = str(self.base_msg)
+
+
+@dataclass  # type: ignore[misc]
+class EventStringFunctor:
+    def __post_init__(self):
+        super().__post_init__()
+        if not isinstance(self.msg, str):
+            self.msg = str(self.msg)
+
+
 # prevents an event from going to the file
 # This should rarely be used in core code. It is currently
 # only used in integration tests and for the 'clean' command.

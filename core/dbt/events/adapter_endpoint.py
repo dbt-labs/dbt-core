@@ -9,6 +9,7 @@ from dbt.events.types import (
 )
 
 
+# N.B. No guarantees for what type param msg is.
 @dataclass
 class AdapterLogger:
     name: str
