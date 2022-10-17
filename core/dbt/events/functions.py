@@ -24,8 +24,11 @@ from dbt.logger import make_log_dir_if_missing
 LOG_VERSION = 2
 EVENT_HISTORY = None
 
-FILE_LOG = logging.getLogger("default_file")
-STDOUT_LOG = logging.getLogger("default_std_out")
+DEFAULT_FILE_LOGGER_NAME = "default_file"
+FILE_LOG = logging.getLogger(DEFAULT_FILE_LOGGER_NAME)
+
+DEFAULT_STDOUT_LOGGER_NAME = "default_std_out"
+STDOUT_LOG = logging.getLogger(DEFAULT_STDOUT_LOGGER_NAME)
 
 invocation_id: Optional[str] = None
 
@@ -43,8 +46,8 @@ def setup_event_logger(log_path, log_format, use_colors, debug):
     # overwrite the STDOUT_LOG logger with the configured one
     STDOUT_LOG = logging.getLogger("configured_std_out")
     STDOUT_LOG.setLevel(level)
-    STDOUT_LOG.format_json = log_format == "json"
-    STDOUT_LOG.format_color = True if use_colors else False
+    setattr(STDOUT_LOG, "format_json", log_format == "json")
+    setattr(STDOUT_LOG, "format_color", True if use_colors else False)
 
     FORMAT = "%(message)s"
     stdout_passthrough_formatter = logging.Formatter(fmt=FORMAT)
@@ -63,8 +66,8 @@ def setup_event_logger(log_path, log_format, use_colors, debug):
     # overwrite the FILE_LOG logger with the configured one
     FILE_LOG = logging.getLogger("configured_file")
     FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
-    FILE_LOG.format_json = log_format == "json"
-    FILE_LOG.format_color = True if use_colors else False
+    setattr(FILE_LOG, "format_json", log_format == "json")
+    setattr(FILE_LOG, "format_color", True if use_colors else False)
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
@@ -191,21 +194,22 @@ def create_json_log_line(e: T_Event) -> Optional[str]:
 def create_log_line(e: T_Event, file_output=False) -> Optional[str]:
     global FILE_LOG
     global STDOUT_LOG
-    if FILE_LOG is None and STDOUT_LOG is None:
+
+    if FILE_LOG.name == DEFAULT_FILE_LOGGER_NAME and STDOUT_LOG.name == DEFAULT_STDOUT_LOGGER_NAME:
 
         # TODO: This is only necessary because our test framework doesn't correctly set up logging.
         # This code should be moved to the test framework when we do CT-XXX (tix # needed)
         null_handler = logging.NullHandler()
         FILE_LOG.addHandler(null_handler)
-        FILE_LOG.format_json = False
-        FILE_LOG.format_color = False
+        setattr(FILE_LOG, "format_json", False)
+        setattr(FILE_LOG, "format_color", False)
 
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setLevel(logging.INFO)
         STDOUT_LOG.setLevel(logging.INFO)
         STDOUT_LOG.addHandler(stdout_handler)
-        STDOUT_LOG.format_json = False
-        STDOUT_LOG.format_color = False
+        setattr(STDOUT_LOG, "format_json", False)
+        setattr(STDOUT_LOG, "format_color", False)
 
     logger = FILE_LOG if file_output else STDOUT_LOG
     if getattr(logger, "format_json"):
