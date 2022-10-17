@@ -1220,7 +1220,9 @@ class PartialParsingDeletedExposure(DebugLevel, pt.PartialParsingDeletedExposure
 
 # TODO: switch to storing structured info and calling get_target_failure_msg
 @dataclass
-class InvalidDisabledSourceInTestNode(WarnLevel, pt.InvalidDisabledSourceInTestNode):
+class InvalidDisabledSourceInTestNode(
+    WarnLevel, EventStringFunctor, pt.InvalidDisabledSourceInTestNode
+):
     def code(self):
         return "I050"
 
@@ -2263,7 +2265,7 @@ class StatsLine(InfoLevel, pt.StatsLine):
 
 
 @dataclass
-class RunResultError(ErrorLevel, pt.RunResultError):
+class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
     def code(self):
         return "Z024"
 
@@ -2301,7 +2303,7 @@ class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
 
 
 @dataclass
-class FirstRunResultError(ErrorLevel, pt.FirstRunResultError):
+class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError):
     def code(self):
         return "Z028"
 
@@ -2448,7 +2450,7 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 
 
 @dataclass
-class GeneralWarningMsg(WarnLevel, pt.GeneralWarningMsg):
+class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
     def code(self):
         return "Z046"
 
