@@ -248,7 +248,7 @@ class PartialProject(RenderComponents):
     project_name: Optional[str] = field(
         metadata=dict(
             description=(
-                "The name of the project. This should always be set and will not " "be rendered"
+                "The name of the project. This should always be set and will not be rendered"
             )
         )
     )
