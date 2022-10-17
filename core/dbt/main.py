@@ -174,7 +174,7 @@ def adapter_management():
 
 def handle_and_check(args):
     with log_manager.applicationbound():
-        parsed = parse_args(args)x` `
+        parsed = parse_args(args)
 
         # Set flags from args, user config, and env vars
         user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
