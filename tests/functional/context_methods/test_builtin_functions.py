@@ -112,7 +112,7 @@ class TestContextBuiltins:
         expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
         assert expected in str(result)
 
-        expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
+        expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager', 'allow_unused_config_paths': True}"
         assert expected in str(result)
 
     def test_builtin_dbt_metadata_envs_function(self, project, monkeypatch):

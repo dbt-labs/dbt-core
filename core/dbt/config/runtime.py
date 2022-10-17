@@ -11,6 +11,7 @@ from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from .utils import parse_cli_vars
 from dbt import flags
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
+from dbt.events.functions import scrub_secrets, env_secrets
 from dbt.helper_types import FQNPath, PathSet, DictDefaultEmptyStr
 from dbt.config.profile import read_user_config
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
@@ -314,7 +315,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             len(unused), "\n".join("- {}".format(".".join(u)) for u in unused)
         )
 
-        warn_or_error(msg, log_fmt=warning_tag("{}"))
+        if flags.ALLOW_UNUSED_CONFIG_PATHS:
+            warn_or_error(msg, log_fmt=warning_tag("{}"))
+        else:
+            raise_compiler_error(scrub_secrets(msg, env_secrets()))
 
     def load_dependencies(self, base_only=False) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:

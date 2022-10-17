@@ -45,6 +45,7 @@ NO_PRINT = None
 CACHE_SELECTED_ONLY = None
 TARGET_PATH = None
 LOG_PATH = None
+ALLOW_UNUSED_CONFIG_PATHS = None
 
 _NON_BOOLEAN_FLAGS = [
     "LOG_FORMAT",
@@ -84,6 +85,7 @@ flag_defaults = {
     "CACHE_SELECTED_ONLY": False,
     "TARGET_PATH": None,
     "LOG_PATH": None,
+    "ALLOW_UNUSED_CONFIG_PATHS": True,
 }
 
 
@@ -134,7 +136,7 @@ def set_from_args(args, user_config):
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
     global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
     global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE, QUIET, NO_PRINT, CACHE_SELECTED_ONLY
-    global TARGET_PATH, LOG_PATH
+    global TARGET_PATH, LOG_PATH, ALLOW_UNUSED_CONFIG_PATHS
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
@@ -164,6 +166,7 @@ def set_from_args(args, user_config):
     CACHE_SELECTED_ONLY = get_flag_value("CACHE_SELECTED_ONLY", args, user_config)
     TARGET_PATH = get_flag_value("TARGET_PATH", args, user_config)
     LOG_PATH = get_flag_value("LOG_PATH", args, user_config)
+    ALLOW_UNUSED_CONFIG_PATHS = get_flag_value("ALLOW_UNUSED_CONFIG_PATHS", args, user_config)
 
     _set_overrides_from_env()
 
@@ -245,4 +248,5 @@ def get_flag_dict():
         "event_buffer_size": EVENT_BUFFER_SIZE,
         "quiet": QUIET,
         "no_print": NO_PRINT,
+        "allow_unused_config_paths": ALLOW_UNUSED_CONFIG_PATHS,
     }

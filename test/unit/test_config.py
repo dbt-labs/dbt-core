@@ -19,6 +19,7 @@ from dbt.context.base import generate_base_context
 from dbt.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.node_types import NodeType
+from dbt.exceptions import CompilationException
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
@@ -1114,16 +1115,34 @@ class TestRuntimeConfig(BaseConfigTest):
         ))}, [])
         self.assertEqual(len(unused), 0)
 
-    def test__warn_for_unused_resource_config_paths_empty(self):
+    def test__error_for_unused_resource_config_paths_empty(self):
         project = self.from_parts()
-        dbt.flags.WARN_ERROR = True
-        try:
-            project.warn_for_unused_resource_config_paths({'models': frozenset((
-                ('my_test_project', 'foo', 'bar'),
-                ('my_test_project', 'foo', 'baz'),
-            ))}, [])
-        finally:
-            dbt.flags.WARN_ERROR = False
+        dbt.flags.ALLOW_UNUSED_CONFIG_PATHS = False
+
+        self.default_project_data.update({
+            'models': model_config['my_package_name'],
+            'seeds': {},
+        })
+        project = self.from_parts()
+        resource_fqns = {'models': model_fqns}
+
+        with pytest.raises(CompilationException):
+            project.warn_for_unused_resource_config_paths(resource_fqns, [])
+
+    @mock.patch.object(dbt.config.runtime, 'warn_or_error')
+    def test__warn_for_unused_resource_config_paths_empty(self, warn_or_error):
+        project = self.from_parts()
+        dbt.flags.ALLOW_UNUSED_CONFIG_PATHS = True
+
+        self.default_project_data.update({
+            'models': model_config['my_package_name'],
+            'seeds': {},
+        })
+        project = self.from_parts()
+        resource_fqns = {'models': model_fqns}
+        project.warn_for_unused_resource_config_paths(resource_fqns, [])
+        warn_or_error.assert_called_once()
+        
 
 
 class TestRuntimeConfigWithConfigs(BaseConfigTest):

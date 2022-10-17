@@ -276,3 +276,17 @@ class TestFlags(TestCase):
         os.environ.pop('DBT_EVENT_BUFFER_SIZE')
         delattr(self.args, 'event_buffer_size')
         self.user_config.event_buffer_size = None
+
+         # allow_unused_config_paths
+        self.user_config.allow_unused_config_paths = True
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.ALLOW_UNUSED_CONFIG_PATHS, True)
+        os.environ['DBT_ALLOW_UNUSED_CONFIG_PATHS'] = 'false'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.ALLOW_UNUSED_CONFIG_PATHS, False)
+        setattr(self.args, 'allow_unused_config_paths', True)
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.ALLOW_UNUSED_CONFIG_PATHS, True)
+        # cleanup
+        os.environ.pop('DBT_ALLOW_UNUSED_CONFIG_PATHS')
+        delattr(self.args, 'allow_unused_config_paths')
