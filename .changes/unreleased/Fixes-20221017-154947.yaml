@@ -1,0 +1,7 @@
+kind: Fixes
+body: Make dbt --version faster
+time: 2022-10-17T15:49:47.451693-05:00
+custom:
+  Author: k-aranke talia-betterup
+  Issue: "6085"
+  PR: "6083"
