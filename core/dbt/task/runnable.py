@@ -459,7 +459,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             with TextOnly():
                 fire_event(EmptyLine())
-            msg = "Nothing to do. Try checking your model " "configs and model specification args"
+            msg = "Nothing to do. Try checking your model configs and model specification args"
             warn_or_error(msg, log_fmt=warning_tag("{}"))
             result = self.get_result(
                 results=[],

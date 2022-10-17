@@ -317,7 +317,7 @@ class SourcePatcher:
         unused_tables: Dict[SourceKey, Optional[Set[str]]],
     ) -> str:
         msg = [
-            "During parsing, dbt encountered source overrides that had no " "target:",
+            "During parsing, dbt encountered source overrides that had no target:",
         ]
         for key, table_names in unused_tables.items():
             patch = self.manifest.source_patches[key]

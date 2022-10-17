@@ -461,7 +461,7 @@ class BaseRunner(metaclass=ABCMeta):
                 print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
                     raise InternalException(
-                        "Skip cause not set but skip was somehow caused by " "an ephemeral failure"
+                        "Skip cause not set but skip was somehow caused by an ephemeral failure"
                     )
                 # set an error so dbt will exit with an error code
                 error_message = (
