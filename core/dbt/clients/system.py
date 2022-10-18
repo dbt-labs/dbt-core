@@ -10,7 +10,7 @@ import stat
 import subprocess
 import sys
 import tarfile
-from pathlib import Path, PosixPath, WindowsPath
+from pathlib import Path
 from typing import Any, Callable, Dict, List, NoReturn, Optional, Tuple, Type, Union
 
 import dbt.exceptions
@@ -24,6 +24,7 @@ from dbt.events.types import (
     SystemStdErrMsg,
     SystemStdOutMsg,
 )
+from dbt.exceptions import InternalException
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 from pathspec import PathSpec  # type: ignore
 
@@ -45,7 +46,7 @@ def find_matching(
     absolute root path (`relative_paths_to_search`), and a `file_pattern`
     like '*.sql', returns information about the files. For example:
 
-    > find_matching('/root/path', ['models'], '*.sql')
+    > find_matching('/root/path', ['models'], '*.sql')a
 
       [ { 'absolute_path': '/root/path/models/model_one.sql',
           'relative_path': 'model_one.sql',
@@ -107,28 +108,34 @@ def load_file_contents(path: str, strip: bool = True) -> str:
     return to_return
 
 
-def make_directory(path: Union[str, Path]) -> None:
+@functools.singledispatch
+def make_directory(path=None) -> None:
     """
     Make a directory and any intermediate directories that don't already
     exist. This function handles the case where two threads try to create
     a directory at once.
     """
+    raise InternalException(f"Can not create directory from {type(path)} ")
 
-    if type(path) is str:
-        path = convert_path(path)
-        if not os.path.exists(path):
-            # concurrent writes that try to create the same dir can fail
-            try:
-                os.makedirs(path)
 
-            except OSError as e:
-                if e.errno == errno.EEXIST:
-                    pass
-                else:
-                    raise e
-    elif type(path) in (PosixPath, WindowsPath):
-        assert type(path) is PosixPath
-        path.mkdir(parents=True, exist_ok=True)
+@make_directory.register
+def _(path: str) -> None:
+    path = convert_path(path)
+    if not os.path.exists(path):
+        # concurrent writes that try to create the same dir can fail
+        try:
+            os.makedirs(path)
+
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                pass
+            else:
+                raise e
+
+
+@make_directory.register
+def _(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def make_file(path: str, contents: str = "", overwrite: bool = False) -> bool:
