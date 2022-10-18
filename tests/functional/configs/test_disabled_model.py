@@ -1,4 +1,5 @@
 import pytest
+from hologram import ValidationError
 from dbt.tests.util import run_dbt, get_manifest
 
 from dbt.exceptions import CompilationException, ParsingException
@@ -8,6 +9,7 @@ from tests.functional.configs.fixtures import (
     schema_partial_enabled_yml,
     schema_partial_disabled_yml,
     schema_explicit_enabled_yml,
+    schema_invalid_enabled_yml,
     my_model,
     my_model_2,
     my_model_2_enabled,
@@ -383,3 +385,19 @@ class TestManyDisabledNodesSuccess:
 
         assert len(manifest.disabled["model.test.my_model_2"]) == 3
         assert len(manifest.disabled["model.test.my_model_3"]) == 3
+
+
+class TestInvalidEnabledConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_invalid_enabled_yml,
+            "my_model.sql": my_model,
+        }
+
+    def test_invalis_config(self, project):
+        with pytest.raises(ValidationError) as exc:
+            run_dbt(["parse"])
+        exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
+        expected_msg = "'True and False' is not of type 'boolean'"
+        assert expected_msg in exc_str

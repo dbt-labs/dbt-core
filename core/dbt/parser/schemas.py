@@ -714,12 +714,11 @@ class SourceParser(YamlDocsReader):
         return []
 
     def add_source_definitions(self, source: UnparsedSourceDefinition) -> None:
+        package_name = self.project.project_name
         original_file_path = self.yaml.path.original_file_path
         fqn_path = self.yaml.path.relative_path
         for table in source.tables:
-            unique_id = ".".join(
-                [NodeType.Source, self.project.project_name, source.name, table.name]
-            )
+            unique_id = ".".join([NodeType.Source, package_name, source.name, table.name])
 
             # the FQN is project name / path elements /source_name /table_name
             fqn = self.schema_parser.get_fqn_prefix(fqn_path)
@@ -731,7 +730,7 @@ class SourceParser(YamlDocsReader):
                 path=original_file_path,
                 original_file_path=original_file_path,
                 root_path=self.project.project_root,
-                package_name=self.project.project_name,
+                package_name=package_name,
                 unique_id=unique_id,
                 resource_type=NodeType.Source,
                 fqn=fqn,
@@ -1009,6 +1008,8 @@ class ExposureParser(YamlReader):
             rendered=True,
         )
 
+        config = config.finalize_and_validate()
+
         unrendered_config = self._generate_exposure_config(
             target=unparsed,
             fqn=fqn,
@@ -1110,6 +1111,8 @@ class MetricParser(YamlReader):
             package_name=package_name,
             rendered=True,
         )
+
+        config = config.finalize_and_validate()
 
         unrendered_config = self._generate_metric_config(
             target=unparsed,

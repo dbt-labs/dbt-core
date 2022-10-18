@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Dict, Any
+import traceback
 
 import agate
 
@@ -56,11 +57,11 @@ class RunOperationTask(ManifestTask):
             self._run_unsafe()
         except dbt.exceptions.Exception as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
-            fire_event(PrintDebugStackTrace())
+            fire_event(PrintDebugStackTrace(exc_info=traceback.format_exc()))
             success = False
         except Exception as exc:
             fire_event(RunningOperationUncaughtError(exc=str(exc)))
-            fire_event(PrintDebugStackTrace())
+            fire_event(PrintDebugStackTrace(exc_info=traceback.format_exc()))
             success = False
         else:
             success = True

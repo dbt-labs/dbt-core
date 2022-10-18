@@ -91,6 +91,23 @@ PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
 class PackageConfig(dbtClassMixin, Replaceable):
     packages: List[PackageSpec]
 
+    @classmethod
+    def validate(cls, data):
+        for package in data.get("packages", data):
+            if isinstance(package, dict) and package.get("package"):
+                if not package["version"]:
+                    raise ValidationError(
+                        f"{package['package']} is missing the version. When installing from the Hub "
+                        "package index, version is a required property"
+                    )
+
+                if "/" not in package["package"]:
+                    raise ValidationError(
+                        f"{package['package']} was not found in the package index. Packages on the index "
+                        "require a namespace, e.g dbt-labs/dbt_utils"
+                    )
+        super().validate(data)
+
 
 @dataclass
 class ProjectPackageMetadata:

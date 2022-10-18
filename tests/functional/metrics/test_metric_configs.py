@@ -1,10 +1,18 @@
 import pytest
+from hologram import ValidationError
 from dbt.contracts.graph.model_config import MetricConfig
 from dbt.exceptions import CompilationException
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 
 
-from tests.functional.metrics.fixture_metrics import models__people_sql
+from tests.functional.metrics.fixtures import (
+    models_people_sql,
+    models_people_metrics_yml,
+    disabled_metric_level_schema_yml,
+    enabled_metric_level_schema_yml,
+    models_people_metrics_sql,
+    invalid_config_metric_yml
+)
 
 
 class MetricConfigTests:
@@ -15,48 +23,13 @@ class MetricConfigTests:
         )
 
 
-models__people_metrics_yml = """
-version: 2
-
-metrics:
-
-  - name: number_of_people
-    label: "Number of people"
-    description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective_tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
-
-
 # Test enabled config in dbt_project.yml
 class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people.sql": models__people_sql,
-            "schema.yml": models__people_metrics_yml,
+            "people.sql": models_people_sql,
+            "schema.yml": models_people_metrics_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -90,50 +63,13 @@ class TestMetricEnabledConfigProjectLevel(MetricConfigTests):
         assert "metric.test.collective_tenure" in manifest.metrics
 
 
-disabled_metric_level__schema_yml = """
-version: 2
-
-metrics:
-
-  - name: number_of_people
-    label: "Number of people"
-    description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    config:
-      enabled: False
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective_tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
-
-
 # Test enabled config at metrics level in yml file
 class TestConfigYamlMetricLevel(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people.sql": models__people_sql,
-            "schema.yml": disabled_metric_level__schema_yml,
+            "people.sql": models_people_sql,
+            "schema.yml": disabled_metric_level_schema_yml,
         }
 
     def test_metric_config_yaml_metric_level(self, project):
@@ -143,50 +79,13 @@ class TestConfigYamlMetricLevel(MetricConfigTests):
         assert "metric.test.collective_tenure" in manifest.metrics
 
 
-enabled_metric_level__schema_yml = """
-version: 2
-
-metrics:
-
-  - name: number_of_people
-    label: "Number of people"
-    description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    config:
-      enabled: True
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective_tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
-
-
 # Test inheritence - set configs at project and metric level - expect metric level to win
 class TestMetricConfigsInheritence(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people.sql": models__people_sql,
-            "schema.yml": enabled_metric_level__schema_yml,
+            "people.sql": models_people_sql,
+            "schema.yml": enabled_metric_level_schema_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -207,58 +106,14 @@ class TestMetricConfigsInheritence(MetricConfigTests):
         assert config_test_table == pytest.expected_config
 
 
-models__people_metrics_sql = """
--- this model will depend on these two metrics
-{% set some_metrics = [
-    metric('number_of_people'),
-    metric('collective_tenure')
-] %}
-
-/*
-{% if not execute %}
-
-    -- the only properties available to us at 'parse' time are:
-    --      'metric_name'
-    --      'package_name' (None if same package)
-
-    {% set metric_names = [] %}
-    {% for m in some_metrics %}
-        {% do metric_names.append(m.metric_name) %}
-    {% endfor %}
-
-    -- this config does nothing, but it lets us check these values below
-    {{ config(metric_names = metric_names) }}
-
-{% else %}
-
-    -- these are the properties available to us at 'execution' time
-
-    {% for m in some_metrics %}
-        name: {{ m.name }}
-        label: {{ m.label }}
-        calculation_method: {{ m.calculation_method }}
-        expression: {{ m.expression }}
-        timestamp: {{ m.timestamp }}
-        time_grains: {{ m.time_grains }}
-        dimensions: {{ m.dimensions }}
-        filters: {{ m.filters }}
-        window: {{ m.window }}
-    {% endfor %}
-
-{% endif %}
-
-select 1 as id
-"""
-
-
 # Test CompilationException if a model references a disabled metric
 class TestDisabledMetricRef(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people.sql": models__people_sql,
-            "people_metrics.sql": models__people_metrics_sql,
-            "schema.yml": models__people_metrics_yml,
+            "people.sql": models_people_sql,
+            "people_metrics.sql": models_people_metrics_sql,
+            "schema.yml": models_people_metrics_yml,
         }
 
     def test_disabled_metric_ref_model(self, project):
@@ -281,3 +136,19 @@ class TestDisabledMetricRef(MetricConfigTests):
         update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
         with pytest.raises(CompilationException):
             run_dbt(["parse"])
+
+
+# Test invalid metric configs
+class TestInvalidMetric(MetricConfigTests):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "schema.yml": invalid_config_metric_yml,
+        }
+
+    def test_invalid_config_metric(self, project):
+        with pytest.raises(ValidationError) as excinfo:
+            run_dbt(["parse"])
+        expected_msg = "'True and False' is not of type 'boolean'"
+        assert expected_msg in str(excinfo.value)

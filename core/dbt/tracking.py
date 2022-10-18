@@ -1,32 +1,30 @@
-from typing import Optional
+import os
+import platform
+import traceback
+import uuid
 from contextlib import contextmanager
-
-from dbt.clients.yaml_helper import yaml, safe_load  # noqa:F401
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import (
-    DisableTracking,
-    SendingEvent,
-    SendEventFailure,
-    FlushEvents,
-    FlushEventsFailure,
-    TrackingInitializeFailure,
-    MainEncounteredError,
-)
-from dbt import version as dbt_version
-from dbt.exceptions import (
-    NotImplementedException,
-    FailedToConnectException,
-)
-from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
-from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
+from typing import Optional
 
 import logbook
 import pytz
-import platform
-import uuid
 import requests
-import os
+from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
+from snowplow_tracker import logger as sp_logger
+
+from dbt import version as dbt_version
+from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
+from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.types import (
+    DisableTracking,
+    FlushEvents,
+    FlushEventsFailure,
+    MainEncounteredError,
+    SendEventFailure,
+    SendingEvent,
+    TrackingInitializeFailure,
+)
+from dbt.exceptions import FailedToConnectException, NotImplementedException
 
 sp_logger.setLevel(100)
 
@@ -443,7 +441,7 @@ def initialize_from_flags(anonymous_usage_stats, profiles_dir):
         try:
             active_user.initialize()
         except Exception:
-            fire_event(TrackingInitializeFailure())
+            fire_event(TrackingInitializeFailure(exc_info=traceback.format_exc()))
             active_user = User(None)
     else:
         active_user = User(None)

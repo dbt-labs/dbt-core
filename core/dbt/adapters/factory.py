@@ -1,4 +1,5 @@
 import threading
+import traceback
 from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
@@ -63,7 +64,7 @@ class AdapterContainer:
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
 
-            fire_event(PluginLoadError())
+            fire_event(PluginLoadError(exc_info=traceback.format_exc()))
             raise
         plugin: AdapterPlugin = mod.Plugin
         plugin_type = plugin.adapter.type()

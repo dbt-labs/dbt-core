@@ -285,6 +285,7 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
+    @classmethod
     def interpret_results(self, results: Optional[CatalogResults]) -> bool:
         if results is None:
             return False

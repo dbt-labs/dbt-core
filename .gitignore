@@ -24,7 +24,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-*.mypy_cache/
+.mypy_cache/
+.dmypy.json
 logs/
 
 # PyInstaller
@@ -98,5 +99,4 @@ venv/
 *.code-workspace
 
 # poetry
-pyproject.toml
 poetry.lock

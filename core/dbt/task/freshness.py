@@ -20,10 +20,10 @@ from dbt.events.functions import fire_event
 from dbt.events.types import (
     FreshnessCheckComplete,
     PrintStartLine,
-    PrintHookEndErrorLine,
-    PrintHookEndErrorStaleLine,
-    PrintHookEndWarnLine,
-    PrintHookEndPassLine,
+    PrintFreshnessErrorLine,
+    PrintFreshnessErrorStaleLine,
+    PrintFreshnessWarnLine,
+    PrintFreshnessPassLine,
 )
 from dbt.node_types import NodeType
 
@@ -58,7 +58,7 @@ class FreshnessRunner(BaseRunner):
             table_name = result.table_name
         if result.status == FreshnessStatus.RuntimeErr:
             fire_event(
-                PrintHookEndErrorLine(
+                PrintFreshnessErrorLine(
                     source_name=source_name,
                     table_name=table_name,
                     index=self.node_index,
@@ -69,7 +69,7 @@ class FreshnessRunner(BaseRunner):
             )
         elif result.status == FreshnessStatus.Error:
             fire_event(
-                PrintHookEndErrorStaleLine(
+                PrintFreshnessErrorStaleLine(
                     source_name=source_name,
                     table_name=table_name,
                     index=self.node_index,
@@ -80,7 +80,7 @@ class FreshnessRunner(BaseRunner):
             )
         elif result.status == FreshnessStatus.Warn:
             fire_event(
-                PrintHookEndWarnLine(
+                PrintFreshnessWarnLine(
                     source_name=source_name,
                     table_name=table_name,
                     index=self.node_index,
@@ -91,7 +91,7 @@ class FreshnessRunner(BaseRunner):
             )
         else:
             fire_event(
-                PrintHookEndPassLine(
+                PrintFreshnessPassLine(
                     source_name=source_name,
                     table_name=table_name,
                     index=self.node_index,

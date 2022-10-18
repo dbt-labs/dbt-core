@@ -28,7 +28,7 @@ from dbt.events.types import (
     SettingUpProfile,
     InvalidProfileTemplateYAML,
     ProjectNameAlreadyExists,
-    GetAddendum,
+    ProjectCreated,
 )
 
 from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
@@ -43,22 +43,6 @@ SLACK_URL = "https://community.getdbt.com/"
 # This file is not needed for the starter project but exists for finding the resource path
 IGNORE_FILES = ["__init__.py", "__pycache__"]
 
-ON_COMPLETE_MESSAGE = """
-Your new dbt project "{project_name}" was created!
-
-For more information on how to configure the profiles.yml file,
-please consult the dbt documentation here:
-
-  {docs_url}
-
-One more thing:
-
-Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
-
-  {slack_url}
-
-Happy modeling!
-"""
 
 # https://click.palletsprojects.com/en/8.0.x/api/#types
 # click v7.0 has UNPROCESSED, STRING, INT, FLOAT, BOOL, and UUID available.
@@ -115,17 +99,6 @@ class InitTask(BaseTask):
                 fire_event(
                     ProfileWrittenWithSample(name=profile_name, path=str(profiles_filepath))
                 )
-
-    def get_addendum(self, project_name: str, profiles_path: str) -> str:
-        open_cmd = dbt.clients.system.open_dir_cmd()
-
-        return ON_COMPLETE_MESSAGE.format(
-            open_cmd=open_cmd,
-            project_name=project_name,
-            profiles_path=profiles_path,
-            docs_url=DOCS_URL,
-            slack_url=SLACK_URL,
-        )
 
     def generate_target_from_input(self, profile_template: dict, target: dict = {}) -> dict:
         """Generate a target configuration from profile_template and user input."""
@@ -330,5 +303,10 @@ class InitTask(BaseTask):
                 return
             adapter = self.ask_for_adapter_choice()
             self.create_profile_from_target(adapter, profile_name=project_name)
-            msg = self.get_addendum(project_name, profiles_dir)
-            fire_event(GetAddendum(msg=msg))
+            fire_event(
+                ProjectCreated(
+                    project_name=project_name,
+                    docs_url=DOCS_URL,
+                    slack_url=SLACK_URL,
+                )
+            )
