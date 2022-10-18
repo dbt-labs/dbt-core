@@ -2,10 +2,11 @@
 import os
 import sys
 from dataclasses import dataclass
+from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
 
-from click import get_current_context
+from click import Context, get_current_context
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -14,7 +15,7 @@ if os.name != "nt":
 
 @dataclass(frozen=True)
 class Flags:
-    def __init__(self, ctx=None, invoked_subcommand=None) -> None:
+    def __init__(self, ctx: Context = None) -> None:
 
         if ctx is None:
             ctx = get_current_context()
@@ -34,8 +35,11 @@ class Flags:
         assign_params(ctx)
 
         # Get the invoked command flags
-        if invoked_subcommand is not None:
-            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv[2:])
+        if hasattr(ctx, "invoked_subcommand") and ctx.invoked_subcommand is not None:
+            invoked_subcommand = getattr(import_module("dbt.cli.main"), ctx.invoked_subcommand)
+            invoked_subcommand.allow_extra_args = True
+            invoked_subcommand.ignore_unknown_options = True
+            invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
             assign_params(invoked_subcommand_ctx)
 
         # Hard coded flags
@@ -44,9 +48,7 @@ class Flags:
 
         # Support console DO NOT TRACK initiave
         if os.getenv("DO_NOT_TRACK", "").lower() in (1, "t", "true", "y", "yes"):
-            object.__setattr__(self, "SEND_ANONYMOUS_USAGE_STATS", False)
-        else:
-            object.__setattr__(self, "SEND_ANONYMOUS_USAGE_STATS", True)
+            object.__setattr__(self, "ANONYMOUS_USAGE_STATS", False)
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))
