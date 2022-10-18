@@ -17,7 +17,7 @@ class TestTracking(unittest.TestCase):
     def test_tracking_initial(self):
         assert dbt.tracking.active_user is None
         flags = MagicMock()
-        flags.SEND_ANONYMOUS_USAGE_STATS = True
+        flags.ANONYMOUS_USAGE_STATS = True
         flags.PROFILES_DIR = self.tempdir
         dbt.tracking.initialize_from_flags(flags)
         assert isinstance(dbt.tracking.active_user, dbt.tracking.User)
@@ -80,7 +80,7 @@ class TestTracking(unittest.TestCase):
             with self.subTest(
                 send_aonymous_usage_stats=send_aonymous_usage_stats
             ):
-                dbt.flags.SEND_ANONYMOUS_USAGE_STATS = (
+                dbt.flags.ANONYMOUS_USAGE_STATS = (
                     send_aonymous_usage_stats
                 )
 
