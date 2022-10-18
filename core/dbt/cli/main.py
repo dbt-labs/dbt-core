@@ -56,7 +56,7 @@ def cli(ctx, **kwargs):
     flags = Flags()
 
     # Tracking
-    initialize_from_flags(flags)
+    initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
     ctx.with_resource(track_run(run_command=ctx.invoked_subcommand))
 
     # Profiling
