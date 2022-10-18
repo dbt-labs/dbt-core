@@ -75,6 +75,15 @@ class TestAdapterLogger:
         event = AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=())
         assert "boop{x}boop" in event.message()
 
+        # ensure AdapterLogger and subclasses makes all base_msg members
+        # of type string; when someone writes logger.debug(a) where a is
+        # any non-string object
+        event = AdapterEventDebug(name="dbt_tests", base_msg=[1,2,3], args=(3,))
+        assert isinstance(event.base_msg, str)
+
+        event = MacroEventDebug(msg=[1,2,3])
+        assert isinstance(event.msg, str)
+
 
 class TestEventCodes:
 
