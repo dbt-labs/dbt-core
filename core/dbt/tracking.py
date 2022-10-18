@@ -438,7 +438,7 @@ class InvocationProcessor(logbook.Processor):
 def initialize_from_flags(flags):
     # Setting these used to be in UserConfig, but had to be moved here
     global active_user
-    if flags.SEND_ANONYMOUS_USAGE_STATS:
+    if flags.ANONYMOUS_USAGE_STATS:
         active_user = User(flags.PROFILES_DIR)
         try:
             active_user.initialize()
@@ -450,7 +450,7 @@ def initialize_from_flags(flags):
 
 
 @contextmanager
-def track_run(project_id, credentials, run_command):
+def track_run(project_id=None, credentials=None, run_command=None):
     # this adapter might not have implemented the type or unique_field properties
     try:
         adapter_type = credentials.type

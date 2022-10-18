@@ -57,12 +57,7 @@ def cli(ctx, **kwargs):
 
     # Tracking
     initialize_from_flags(flags)
-    # TODO we need to have config to get the projectID
-    project_id = ""
-    # TODO we need to get the credentials or we need to know that this will make adapter info
-    # not available in invocation start/end events
-    credentials = None
-    ctx.with_resource(track_run(project_id, credentials, ctx.invoked_subcommand))
+    ctx.with_resource(track_run(run_command=ctx.invoked_subcommand))
 
     # Profiling
     if flags.RECORD_TIMING_INFO:
