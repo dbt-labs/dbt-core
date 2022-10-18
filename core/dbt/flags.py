@@ -24,27 +24,28 @@ FULL_REFRESH = False  # subcommand
 STORE_FAILURES = False  # subcommand
 
 # Global CLI commands
-USE_EXPERIMENTAL_PARSER = None
-STATIC_PARSER = None
-WARN_ERROR = None
-WRITE_JSON = None
-PARTIAL_PARSE = None
-USE_COLORS = None
+ANONYMOUS_USAGE_STATS = None
+CACHE_SELECTED_ONLY = None
 DEBUG = None
-LOG_FORMAT = None
-VERSION_CHECK = None
+EVENT_BUFFER_SIZE = 100000
 FAIL_FAST = None
-SEND_ANONYMOUS_USAGE_STATS = None
-PRINTER_WIDTH = 80
-WHICH = None
 INDIRECT_SELECTION = None
 LOG_CACHE_EVENTS = None
-EVENT_BUFFER_SIZE = 100000
-QUIET = None
-NO_PRINT = None
-CACHE_SELECTED_ONLY = None
-TARGET_PATH = None
+LOG_FORMAT = None
 LOG_PATH = None
+NO_PRINT = None
+PARTIAL_PARSE = None
+PRINTER_WIDTH = 80
+QUIET = None
+SEND_ANONYMOUS_USAGE_STATS = None
+STATIC_PARSER = None
+TARGET_PATH = None
+USE_COLORS = None
+USE_EXPERIMENTAL_PARSER = None
+VERSION_CHECK = None
+WARN_ERROR = None
+WHICH = None
+WRITE_JSON = None
 
 _NON_BOOLEAN_FLAGS = [
     "LOG_FORMAT",
@@ -63,27 +64,28 @@ _NON_DBT_ENV_FLAGS = ["DO_NOT_TRACK"]
 # CLI args, environment variables, and user_config (profiles.yml).
 # Environment variables use the pattern 'DBT_{flag name}', like DBT_PROFILES_DIR
 flag_defaults = {
-    "USE_EXPERIMENTAL_PARSER": False,
-    "STATIC_PARSER": True,
-    "WARN_ERROR": False,
-    "WRITE_JSON": True,
-    "PARTIAL_PARSE": True,
-    "USE_COLORS": True,
-    "PROFILES_DIR": DEFAULT_PROFILES_DIR,
+    "ANONYMOUS_USAGE_STATS": True,
+    "CACHE_SELECTED_ONLY": False,
     "DEBUG": False,
-    "LOG_FORMAT": None,
-    "VERSION_CHECK": True,
+    "EVENT_BUFFER_SIZE": 100000,
     "FAIL_FAST": False,
-    "SEND_ANONYMOUS_USAGE_STATS": True,
-    "PRINTER_WIDTH": 80,
     "INDIRECT_SELECTION": "eager",
     "LOG_CACHE_EVENTS": False,
-    "EVENT_BUFFER_SIZE": 100000,
-    "QUIET": False,
-    "NO_PRINT": False,
-    "CACHE_SELECTED_ONLY": False,
-    "TARGET_PATH": None,
+    "LOG_FORMAT": None,
     "LOG_PATH": None,
+    "NO_PRINT": False,
+    "PARTIAL_PARSE": True,
+    "PRINTER_WIDTH": 80,
+    "PROFILES_DIR": DEFAULT_PROFILES_DIR,
+    "QUIET": False,
+    "SEND_ANONYMOUS_USAGE_STATS": True,
+    "STATIC_PARSER": True,
+    "TARGET_PATH": None,
+    "USE_COLORS": True,
+    "USE_EXPERIMENTAL_PARSER": False,
+    "VERSION_CHECK": True,
+    "WARN_ERROR": False,
+    "WRITE_JSON": True,
 }
 
 
@@ -132,7 +134,7 @@ def set_from_args(args, user_config):
     # black insists in putting them all on one line
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
-    global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
+    global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, ANONYMOUS_USAGE_STATS
     global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE, QUIET, NO_PRINT, CACHE_SELECTED_ONLY
     global TARGET_PATH, LOG_PATH
 
@@ -143,39 +145,42 @@ def set_from_args(args, user_config):
     WHICH = getattr(args, "which", WHICH)
 
     # global cli flags with env var and user_config alternatives
-    USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
-    STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
-    WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
-    WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
-    PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
-    USE_COLORS = get_flag_value("USE_COLORS", args, user_config)
-    PROFILES_DIR = get_flag_value("PROFILES_DIR", args, user_config)
+    ANONYMOUS_USAGE_STATS = get_flag_value("ANONYMOUS_USAGE_STATS", args, user_config)
+    CACHE_SELECTED_ONLY = get_flag_value("CACHE_SELECTED_ONLY", args, user_config)
     DEBUG = get_flag_value("DEBUG", args, user_config)
-    LOG_FORMAT = get_flag_value("LOG_FORMAT", args, user_config)
-    VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
+    EVENT_BUFFER_SIZE = get_flag_value("EVENT_BUFFER_SIZE", args, user_config)
     FAIL_FAST = get_flag_value("FAIL_FAST", args, user_config)
-    SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
-    PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value("INDIRECT_SELECTION", args, user_config)
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
-    EVENT_BUFFER_SIZE = get_flag_value("EVENT_BUFFER_SIZE", args, user_config)
-    QUIET = get_flag_value("QUIET", args, user_config)
-    NO_PRINT = get_flag_value("NO_PRINT", args, user_config)
-    CACHE_SELECTED_ONLY = get_flag_value("CACHE_SELECTED_ONLY", args, user_config)
-    TARGET_PATH = get_flag_value("TARGET_PATH", args, user_config)
+    LOG_FORMAT = get_flag_value("LOG_FORMAT", args, user_config)
     LOG_PATH = get_flag_value("LOG_PATH", args, user_config)
+    NO_PRINT = get_flag_value("NO_PRINT", args, user_config)
+    PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
+    PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
+    PROFILES_DIR = get_flag_value("PROFILES_DIR", args, user_config)
+    QUIET = get_flag_value("QUIET", args, user_config)
+    SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
+    STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
+    TARGET_PATH = get_flag_value("TARGET_PATH", args, user_config)
+    USE_COLORS = get_flag_value("USE_COLORS", args, user_config)
+    USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
+    VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
+    WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
+    WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
 
     _set_overrides_from_env()
 
 
 def _set_overrides_from_env():
     global SEND_ANONYMOUS_USAGE_STATS
+    global ANONYMOUS_USAGE_STATS
 
     flag_value = _get_flag_value_from_env("DO_NOT_TRACK")
     if flag_value is None:
         return
 
     SEND_ANONYMOUS_USAGE_STATS = not flag_value
+    ANONYMOUS_USAGE_STATS = not flag_value
 
 
 def get_flag_value(flag, args, user_config):
@@ -239,6 +244,7 @@ def get_flag_dict():
         "version_check": VERSION_CHECK,
         "fail_fast": FAIL_FAST,
         "send_anonymous_usage_stats": SEND_ANONYMOUS_USAGE_STATS,
+        "anonymous_usage_stats": ANONYMOUS_USAGE_STATS,
         "printer_width": PRINTER_WIDTH,
         "indirect_selection": INDIRECT_SELECTION,
         "log_cache_events": LOG_CACHE_EVENTS,
