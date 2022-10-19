@@ -43,7 +43,7 @@ class TestSimpleCycle:
 
     def test_postgres_simple_cycle(self, project):
         with pytest.raises(RuntimeError) as exc:
-            run_dbt(["run"], expect_pass=False)
+            run_dbt(["run"])
         expected_msg = "Found a cycle"
         assert expected_msg in str(exc.value)
 
@@ -66,6 +66,6 @@ class TestComplexCycle:
 
     def test_postgres_complex_cycle(self, project):
         with pytest.raises(RuntimeError) as exc:
-            run_dbt(["run"], expect_pass=False)
+            run_dbt(["run"])
         expected_msg = "Found a cycle"
         assert expected_msg in str(exc.value)
