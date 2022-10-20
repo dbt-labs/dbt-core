@@ -182,7 +182,7 @@ class BaseDatabaseWrapper:
                     return macro
 
         searched = ", ".join(repr(a) for a in attempts)
-        msg = f"In dispatch: No macro named '{macro_name}' found\n" f"    Searched for: {searched}"
+        msg = f"In dispatch: No macro named '{macro_name}' found\n    Searched for: {searched}"
         raise CompilationException(msg)
 
 
@@ -220,12 +220,12 @@ class BaseRefResolver(BaseResolver):
     def validate_args(self, name: str, package: Optional[str]):
         if not isinstance(name, str):
             raise CompilationException(
-                f"The name argument to ref() must be a string, got " f"{type(name)}"
+                f"The name argument to ref() must be a string, got {type(name)}"
             )
 
         if package is not None and not isinstance(package, str):
             raise CompilationException(
-                f"The package argument to ref() must be a string or None, got " f"{type(package)}"
+                f"The package argument to ref() must be a string or None, got {type(package)}"
             )
 
     def __call__(self, *args: str) -> RelationProxy:

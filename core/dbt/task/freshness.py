@@ -135,7 +135,7 @@ class FreshnessRunner(BaseRunner):
         # broken, raise!
         if compiled_node.loaded_at_field is None:
             raise InternalException(
-                "Got to execute for source freshness of a source that has no " "loaded_at_field!"
+                "Got to execute for source freshness of a source that has no loaded_at_field!"
             )
 
         relation = self.adapter.Relation.create_from_source(compiled_node)

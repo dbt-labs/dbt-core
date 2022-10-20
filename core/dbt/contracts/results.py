@@ -339,7 +339,7 @@ def process_freshness_result(result: FreshnessNodeResult) -> FreshnessNodeOutput
     criteria = result.node.freshness
     if criteria is None:
         raise InternalException(
-            "Somehow evaluated a freshness result for a source " "that has no freshness criteria!"
+            "Somehow evaluated a freshness result for a source that has no freshness criteria!"
         )
     return SourceFreshnessOutput(
         unique_id=unique_id,

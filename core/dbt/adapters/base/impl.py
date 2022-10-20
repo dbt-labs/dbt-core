@@ -581,7 +581,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :rtype: List[self.Relation]
         """
         raise NotImplementedException(
-            "`list_relations_without_caching` is not implemented for this " "adapter!"
+            "`list_relations_without_caching` is not implemented for this adapter!"
         )
 
     ###

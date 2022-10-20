@@ -248,7 +248,7 @@ class PartialProject(RenderComponents):
     project_name: Optional[str] = field(
         metadata=dict(
             description=(
-                "The name of the project. This should always be set and will not " "be rendered"
+                "The name of the project. This should always be set and will not be rendered"
             )
         )
     )
@@ -668,7 +668,7 @@ class Project:
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:
             raise RuntimeException(
-                f"Could not find selector named {name}, expected one of " f"{list(self.selectors)}"
+                f"Could not find selector named {name}, expected one of {list(self.selectors)}"
             )
         return self.selectors[name]["definition"]
 
