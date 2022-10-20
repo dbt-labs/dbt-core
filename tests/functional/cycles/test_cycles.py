@@ -41,7 +41,7 @@ class TestSimpleCycle:
             "model_b.sql": model_b_sql
         }
 
-    def test_postgres_simple_cycle(self, project):
+    def test_simple_cycle(self, project):
         with pytest.raises(RuntimeError) as exc:
             run_dbt(["run"])
         expected_msg = "Found a cycle"
@@ -64,7 +64,7 @@ class TestComplexCycle:
             "model_e.sql": complex_cycle__model_e_sql,
         }
 
-    def test_postgres_complex_cycle(self, project):
+    def test_complex_cycle(self, project):
         with pytest.raises(RuntimeError) as exc:
             run_dbt(["run"])
         expected_msg = "Found a cycle"
