@@ -35,7 +35,6 @@ class TestStatements:
         }
 
     def test_postgres_statements(self, project):
-
         results = run_dbt(["seed"])
         assert len(results) == 2
         results = run_dbt()
