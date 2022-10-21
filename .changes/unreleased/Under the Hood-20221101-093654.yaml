@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: add github action to generate high level CLI API docs
+time: 2022-11-01T09:36:54.313337-05:00
+custom:
+  Author: stu-k
+  Issue: "5942"
+  PR: "6187"
