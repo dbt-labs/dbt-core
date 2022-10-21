@@ -23,5 +23,5 @@ permissions:
 
 jobs:
   triage_label:
-    uses: dbt-labs/actions/.github/workflows/triage-labels.yml@er/centralize-triage-workflows
+    uses: dbt-labs/actions/.github/workflows/triage-labels.yml@main
     secrets: inherit
