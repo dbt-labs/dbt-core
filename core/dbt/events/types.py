@@ -7,6 +7,8 @@ from dbt.events.base_types import (
     WarnLevel,
     ErrorLevel,
     Cache,
+    AdapterEventStringFunctor,
+    EventStringFunctor,
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 
@@ -309,7 +311,7 @@ Happy modeling!
 
 
 @dataclass
-class AdapterEventDebug(DebugLevel, pt.AdapterEventDebug):  # noqa
+class AdapterEventDebug(DebugLevel, AdapterEventStringFunctor, pt.AdapterEventDebug):  # noqa
     def code(self):
         return "E001"
 
@@ -318,7 +320,7 @@ class AdapterEventDebug(DebugLevel, pt.AdapterEventDebug):  # noqa
 
 
 @dataclass
-class AdapterEventInfo(InfoLevel, pt.AdapterEventInfo):  # noqa
+class AdapterEventInfo(InfoLevel, AdapterEventStringFunctor, pt.AdapterEventInfo):  # noqa
     def code(self):
         return "E002"
 
@@ -327,7 +329,7 @@ class AdapterEventInfo(InfoLevel, pt.AdapterEventInfo):  # noqa
 
 
 @dataclass
-class AdapterEventWarning(WarnLevel, pt.AdapterEventWarning):  # noqa
+class AdapterEventWarning(WarnLevel, AdapterEventStringFunctor, pt.AdapterEventWarning):  # noqa
     def code(self):
         return "E003"
 
@@ -336,7 +338,7 @@ class AdapterEventWarning(WarnLevel, pt.AdapterEventWarning):  # noqa
 
 
 @dataclass
-class AdapterEventError(ErrorLevel, pt.AdapterEventError):  # noqa
+class AdapterEventError(ErrorLevel, AdapterEventStringFunctor, pt.AdapterEventError):  # noqa
     def code(self):
         return "E004"
 
@@ -1218,7 +1220,9 @@ class PartialParsingDeletedExposure(DebugLevel, pt.PartialParsingDeletedExposure
 
 # TODO: switch to storing structured info and calling get_target_failure_msg
 @dataclass
-class InvalidDisabledSourceInTestNode(WarnLevel, pt.InvalidDisabledSourceInTestNode):
+class InvalidDisabledSourceInTestNode(
+    WarnLevel, EventStringFunctor, pt.InvalidDisabledSourceInTestNode
+):
     def code(self):
         return "I050"
 
@@ -1227,7 +1231,7 @@ class InvalidDisabledSourceInTestNode(WarnLevel, pt.InvalidDisabledSourceInTestN
 
 
 @dataclass
-class InvalidRefInTestNode(DebugLevel, pt.InvalidRefInTestNode):
+class InvalidRefInTestNode(DebugLevel, EventStringFunctor, pt.InvalidRefInTestNode):
     def code(self):
         return "I051"
 
@@ -1334,7 +1338,7 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
 
 
 @dataclass
-class MacroEventInfo(InfoLevel, pt.MacroEventInfo):
+class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
     def code(self):
         return "M011"
 
@@ -1343,7 +1347,7 @@ class MacroEventInfo(InfoLevel, pt.MacroEventInfo):
 
 
 @dataclass
-class MacroEventDebug(DebugLevel, pt.MacroEventDebug):
+class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
     def code(self):
         return "M012"
 
@@ -2261,7 +2265,7 @@ class StatsLine(InfoLevel, pt.StatsLine):
 
 
 @dataclass
-class RunResultError(ErrorLevel, pt.RunResultError):
+class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
     def code(self):
         return "Z024"
 
@@ -2299,7 +2303,7 @@ class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
 
 
 @dataclass
-class FirstRunResultError(ErrorLevel, pt.FirstRunResultError):
+class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError):
     def code(self):
         return "Z028"
 
@@ -2308,7 +2312,7 @@ class FirstRunResultError(ErrorLevel, pt.FirstRunResultError):
 
 
 @dataclass
-class AfterFirstRunResultError(ErrorLevel, pt.AfterFirstRunResultError):
+class AfterFirstRunResultError(ErrorLevel, EventStringFunctor, pt.AfterFirstRunResultError):
     def code(self):
         return "Z029"
 
@@ -2446,7 +2450,7 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 
 
 @dataclass
-class GeneralWarningMsg(WarnLevel, pt.GeneralWarningMsg):
+class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
     def code(self):
         return "Z046"
 
@@ -2476,7 +2480,7 @@ class EventBufferFull(WarnLevel, pt.EventBufferFull):
 
 
 @dataclass
-class RunResultWarningMessage(WarnLevel, pt.RunResultWarningMessage):
+class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):
     def code(self):
         return "Z049"
 
