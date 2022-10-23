@@ -7,10 +7,7 @@ tag = true
 push = true
 
 [tool.bumpver.file_patterns]
-"pyproject.toml" = [
-    'current_version = "{version}"',
-    'version = "{version}"',
-]
+"pyproject.toml" = ['current_version = "{version}"']
 "core/pyproject.toml" = ["{version}"]
 "plugins/postgres/pyproject.toml" = ["{version}"]
 "tests/adapter/pyproject.toml" = ["{version}"]
