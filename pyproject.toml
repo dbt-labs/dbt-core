@@ -9,8 +9,11 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"']
 "core/pyproject.toml" = ["{version}"]
+"core/setup.py" = ["{package_version}"]
 "plugins/postgres/pyproject.toml" = ["{version}"]
+"plugins/postgres/setup.py" = ["{package_version}"]
 "tests/adapter/pyproject.toml" = ["{version}"]
+"tests/adapter/setup.py" = ["{package_version}"]
 
 [tool.mypy]
 # TODO: widen range of files as we fix issues
