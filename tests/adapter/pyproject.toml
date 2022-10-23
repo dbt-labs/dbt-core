@@ -1,0 +1,39 @@
+[tool.poetry]
+name =  "dbt-tests-adapter"
+version = "1.4.0a1"
+description = """\
+  The dbt adapter tests for adapter plugins\
+  """
+authors = [
+  "dbt Labs <info@dbtlabs.com>",
+]
+license = "Apache-2.0"
+readme = "README.md"
+
+packages = [
+  { include = "dbt" },
+]
+
+homepage = "https://getdbt.com"
+repository = "https://github.com/dbt-labs/dbt-core/tree/main/tests/adapter"
+documentation = "https://docs.getdbt.com/docs/contributing/testing-a-new-adapter"
+
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7.2"
+dbt-core = { path = "../../core/" }
+pytest = ">=7.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.2.0"]
+build-backend = "poetry.core.masonry.api"

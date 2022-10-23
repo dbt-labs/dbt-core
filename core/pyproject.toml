@@ -1,0 +1,116 @@
+[tool.poetry]
+name =  "dbt-core"
+version = "1.4.0a1"
+description = """\
+  With dbt, data analysts and engineers can build \
+  analytics the way engineers build applications.\
+  """
+authors = [
+  "dbt Labs <info@dbtlabs.com>",
+]
+license = "Apache-2.0"
+readme = "README.md"
+
+packages = [
+  { include = "dbt" },
+]
+include = [
+  { path = "dbt/py.typed" },
+  { path = "dbt/include/**/.gitkeep" },
+  { path = "dbt/include/**/.gitignore" },
+  { path = "dbt/include/**/*.html" },
+  { path = "dbt/include/**/*.md" },
+  { path = "dbt/include/**/*.py" },
+  { path = "dbt/include/**/*.sql" },
+  { path = "dbt/include/**/*.yml" },
+]
+
+homepage = "https://getdbt.com"
+repository = "https://github.com/dbt-labs/dbt-core"
+documentation = "https://docs.getdbt.com/"
+
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7.2"
+Jinja2 = "==3.1.2"
+agate = ">=1.6,<1.6.4"
+click = ">=7.0,<9"
+colorama = ">=0.3.9,<0.4.6"
+hologram = ">=0.0.14,<=0.0.15"
+isodate = ">=0.6,<0.7"
+logbook = ">=1.5,<1.6"
+mashumaro = { version = "==3.0.4", extras = ["msgpack"] }
+minimal-snowplow-tracker = "==0.0.2"
+networkx = [
+  { version = ">=2.3,<2.8.1", python = "<3.8" },
+  { version = ">=2.3,<3", python = ">=3.8" },
+]
+packaging = ">=20.9,<22.0"
+sqlparse = ">=0.2.3,<0.5"
+dbt-extractor = "~=0.4.1"
+typing-extensions = ">=3.7.4"
+pathspec = "~=0.9.0"
+# the following are all to match snowflake-connector-python
+requests = "<3.0.0"
+idna = ">=2.5,<4"
+cffi = ">=1.9,<2.0.0"
+pyyaml = ">=6.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "==22.10.0"
+bumpversion = "*"
+flake8 = "*"
+flaky = "*"
+freezegun = "==0.3.12"
+ipdb = "*"
+mypy = "==0.971"
+pip-tools = "*"
+pre-commit = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-csv = "*"
+pytest-dotenv = "*"
+pytest-logbook = "*"
+pytest-mock = "*"
+pytest-xdist = "*"
+pytz = "*"
+tox = ">=3.13"
+twine = "*"
+types-colorama = "*"
+types-PyYAML = "*"
+types-freezegun = "*"
+types-Jinja2 = "*"
+types-mock = "*"
+types-python-dateutil = "*"
+types-pytz = "*"
+types-requests = "*"
+types-setuptools = "*"
+wheel = "*"
+
+[tool.poetry.scripts]
+dbt = "dbt.main:main"
+
+[tool.poetry.urls]
+"Blog" = "https://www.getdbt.com/blog/"
+"Changelog" = "https://github.com/dbt-labs/dbt-core/blob/main/CHANGELOG.md"
+"Discourse" = "https://discourse.getdbt.com/"
+"Events" = "https://www.getdbt.com/events/"
+"Issues" = "https://github.com/dbt-labs/dbt-core/issues/new"
+"Slack" = "https://www.getdbt.com/community/"
+"Twitter" = "https://twitter.com/dbt_labs"
+"YouTube" = "https://www.youtube.com/c/dbt-labs"
+
+[build-system]
+requires = ["poetry-core>=1.2.0"]
+build-backend = "poetry.core.masonry.api"

@@ -24,6 +24,14 @@ dev: ## Installs dbt-* packages in develop mode along with development dependenc
 	@\
 	pip install -r dev-requirements.txt -r editable-requirements.txt
 
+.PHONY: dev-poetry
+dev-poetry: ## Installs editable dbt-* packages for development with poetry.
+	@pip install poetry
+	@cd core && poetry install --only=dev
+	@cd plugins/postgres && poetry install
+	@cd tests/adapter && poetry install
+
+
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
 	@\

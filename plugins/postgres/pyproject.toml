@@ -1,0 +1,46 @@
+[tool.poetry]
+name =  "dbt-postgres"
+version = "1.4.0a1"
+description = """\
+  The postgres adapter plugin for dbt (data build tool)\
+  """
+authors = [
+  "dbt Labs <info@dbtlabs.com>",
+]
+license = "Apache-2.0"
+readme = "README.md"
+
+packages = [
+  { include = "dbt" },
+]
+include = [
+  { path = "dbt/include/postgres/dbt_project.yml" },
+  { path = "dbt/include/postgres/sample_profiles.yml" },
+  { path = "dbt/include/postgres/macros/*.sql" },
+  { path = "dbt/include/postgres/macros/**/*.sql" },
+]
+
+homepage = "https://getdbt.com"
+repository = "https://github.com/dbt-labs/dbt-core/tree/main/plugins/postgres"
+documentation = "https://docs.getdbt.com/docs/profile-postgres"
+
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7.2"
+dbt-core = { path = "../../core/" }
+psycopg2-binary = "~=2.8"
+
+[build-system]
+requires = ["poetry-core>=1.2.0"]
+build-backend = "poetry.core.masonry.api"
