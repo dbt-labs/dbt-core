@@ -154,6 +154,30 @@ models:
   - name: my_model_3
 """
 
+schema_invalid_enabled_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      enabled: True and False
+  - name: my_model_3
+"""
+
+simple_snapshot = """{% snapshot mysnapshot %}
+
+    {{
+        config(
+          target_schema='snapshots',
+          strategy='timestamp',
+          unique_key='id',
+          updated_at='updated_at'
+        )
+    }}
+
+    select * from dummy
+
+{% endsnapshot %}"""
+
 
 class BaseConfigProject:
     @pytest.fixture(scope="class")

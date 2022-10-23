@@ -19,6 +19,7 @@ from dbt.contracts.graph.parsed import (
 from dbt.config.project import VarProvider
 from dbt.context import base, target, configured, providers, docs, manifest, macros
 from dbt.contracts.files import FileHash
+from dbt.events.functions import reset_metadata_vars
 from dbt.node_types import NodeType
 import dbt.exceptions
 from .utils import (
@@ -503,6 +504,8 @@ def test_macro_namespace(config_postgres, manifest_fx):
         assert result["some_macro"].macro is package_macro
 
 def test_dbt_metadata_envs(monkeypatch, config_postgres, manifest_fx, get_adapter, get_include_paths):
+    reset_metadata_vars()
+    
     envs = {
         "DBT_ENV_CUSTOM_ENV_RUN_ID": 1234,
         "DBT_ENV_CUSTOM_ENV_JOB_ID": 5678,
@@ -519,3 +522,6 @@ def test_dbt_metadata_envs(monkeypatch, config_postgres, manifest_fx, get_adapte
     ) 
 
     assert ctx["dbt_metadata_envs"] == {'JOB_ID': 5678, 'RUN_ID': 1234}
+
+    # cleanup
+    reset_metadata_vars()

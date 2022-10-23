@@ -376,40 +376,6 @@ class ExposureConfig(BaseConfig):
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
-    # to be implmented to complete CT-201
-    # quoting: Dict[str, Any] = field(
-    #     default_factory=dict,
-    #     metadata=MergeBehavior.Update.meta(),
-    # )
-    # freshness: Optional[Dict[str, Any]] = field(
-    #     default=None,
-    #     metadata=CompareBehavior.Exclude.meta(),
-    # )
-    # loader: Optional[str] = field(
-    #     default=None,
-    #     metadata=CompareBehavior.Exclude.meta(),
-    # )
-    # # TODO what type is this? docs say: "<column_name_or_expression>"
-    # loaded_at_field: Optional[str] = field(
-    #     default=None,
-    #     metadata=CompareBehavior.Exclude.meta(),
-    # )
-    # database: Optional[str] = field(
-    #     default=None,
-    #     metadata=CompareBehavior.Exclude.meta(),
-    # )
-    # schema: Optional[str] = field(
-    #     default=None,
-    #     metadata=CompareBehavior.Exclude.meta(),
-    # )
-    # meta: Dict[str, Any] = field(
-    #     default_factory=dict,
-    #     metadata=MergeBehavior.Update.meta(),
-    # )
-    # tags: Union[List[str], str] = field(
-    #     default_factory=list_str,
-    #     metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
-    # )
 
 
 @dataclass
@@ -529,6 +495,12 @@ class SeedConfig(NodeConfig):
     materialized: str = "seed"
     quote_columns: Optional[bool] = None
 
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+        if data.get("materialized") and data.get("materialized") != "seed":
+            raise ValidationError("A seed must have a materialized value of 'seed'")
+
 
 @dataclass
 class TestConfig(NodeAndTestConfig):
@@ -568,6 +540,12 @@ class TestConfig(NodeAndTestConfig):
                     return False
         return True
 
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+        if data.get("materialized") and data.get("materialized") != "test":
+            raise ValidationError("A test must have a materialized value of 'test'")
+
 
 @dataclass
 class EmptySnapshotConfig(NodeConfig):
@@ -604,7 +582,6 @@ class SnapshotConfig(EmptySnapshotConfig):
                     f"Invalid value for 'check_cols': {data['check_cols']}. "
                     "Expected 'all' or a list of strings."
                 )
-
         elif data.get("strategy") == "timestamp":
             if not data.get("updated_at"):
                 raise ValidationError(
@@ -615,6 +592,9 @@ class SnapshotConfig(EmptySnapshotConfig):
                 raise ValidationError("A 'timestamp' snapshot should not have 'check_cols'")
         # If the strategy is not 'check' or 'timestamp' it's a custom strategy,
         # formerly supported with GenericSnapshotConfig
+
+        if data.get("materialized") and data.get("materialized") != "snapshot":
+            raise ValidationError("A snapshot must have a materialized value of 'snapshot'")
 
     def finalize_and_validate(self):
         data = self.to_dict(omit_none=True)

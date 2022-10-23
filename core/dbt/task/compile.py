@@ -64,7 +64,7 @@ class CompileTask(GraphRunnableTask):
         state = self.previous_state
         if state is None:
             raise RuntimeException(
-                "Received a --defer argument, but no value was provided " "to --state"
+                "Received a --defer argument, but no value was provided to --state"
             )
 
         if state.manifest is None:
@@ -77,7 +77,7 @@ class CompileTask(GraphRunnableTask):
             return
         if self.manifest is None:
             raise InternalException(
-                "Expected to defer to manifest, but there is no runtime " "manifest to defer from!"
+                "Expected to defer to manifest, but there is no runtime manifest to defer from!"
             )
         self.manifest.merge_from_artifact(
             adapter=adapter,

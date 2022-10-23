@@ -126,7 +126,7 @@ class ContextMeta(type):
 
 
 class Var:
-    UndefinedVarError = "Required var '{}' not found in config:\nVars " "supplied to {} = {}"
+    UndefinedVarError = "Required var '{}' not found in config:\nVars supplied to {} = {}"
     _VAR_NOTSET = object()
 
     def __init__(

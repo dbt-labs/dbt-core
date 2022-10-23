@@ -41,7 +41,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
-from dbt.contracts.util import get_metadata_env
+from dbt.events.functions import get_metadata_vars
 from dbt.exceptions import (
     CompilationException,
     ParsingException,
@@ -182,7 +182,7 @@ class BaseDatabaseWrapper:
                     return macro
 
         searched = ", ".join(repr(a) for a in attempts)
-        msg = f"In dispatch: No macro named '{macro_name}' found\n" f"    Searched for: {searched}"
+        msg = f"In dispatch: No macro named '{macro_name}' found\n    Searched for: {searched}"
         raise CompilationException(msg)
 
 
@@ -220,12 +220,12 @@ class BaseRefResolver(BaseResolver):
     def validate_args(self, name: str, package: Optional[str]):
         if not isinstance(name, str):
             raise CompilationException(
-                f"The name argument to ref() must be a string, got " f"{type(name)}"
+                f"The name argument to ref() must be a string, got {type(name)}"
             )
 
         if package is not None and not isinstance(package, str):
             raise CompilationException(
-                f"The package argument to ref() must be a string or None, got " f"{type(package)}"
+                f"The package argument to ref() must be a string or None, got {type(package)}"
             )
 
     def __call__(self, *args: str) -> RelationProxy:
@@ -713,7 +713,7 @@ class ProviderContext(ManifestContext):
 
     @contextproperty
     def dbt_metadata_envs(self) -> Dict[str, str]:
-        return get_metadata_env()
+        return get_metadata_vars()
 
     @contextproperty
     def invocation_args_dict(self):

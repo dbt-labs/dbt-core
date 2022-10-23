@@ -491,11 +491,11 @@ class SingleThreadedExecutor(ConnectingExecutor):
             self, fn, *args = args
         elif not args:
             raise TypeError(
-                "descriptor 'submit' of 'SingleThreadedExecutor' object needs " "an argument"
+                "descriptor 'submit' of 'SingleThreadedExecutor' object needs an argument"
             )
         else:
             raise TypeError(
-                "submit expected at least 1 positional argument, " "got %d" % (len(args) - 1)
+                "submit expected at least 1 positional argument, got %d" % (len(args) - 1)
             )
         fut = concurrent.futures.Future()
         try:
@@ -666,3 +666,20 @@ def args_to_dict(args):
             var_args[key] = str(var_args[key])
         dict_args[key] = var_args[key]
     return dict_args
+
+
+# This is useful for proto generated classes in particular, since
+# the default for protobuf for strings is the empty string, so
+# Optional[str] types don't work for generated Python classes.
+def cast_to_str(string: Optional[str]) -> str:
+    if string is None:
+        return ""
+    else:
+        return string
+
+
+def cast_to_int(integer: Optional[int]) -> int:
+    if integer is None:
+        return 0
+    else:
+        return integer

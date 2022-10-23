@@ -94,7 +94,7 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    failures=result.failures,
+                    num_failures=result.failures,
                     node_info=model.node_info,
                 )
             )
@@ -105,7 +105,7 @@ class TestRunner(CompileRunner):
                     index=self.node_index,
                     num_models=self.num_nodes,
                     execution_time=result.execution_time,
-                    failures=result.failures,
+                    num_failures=result.failures,
                     node_info=model.node_info,
                 )
             )

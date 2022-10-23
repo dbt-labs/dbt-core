@@ -141,6 +141,8 @@ class SourcePatcher:
             rendered=True,
         )
 
+        config = config.finalize_and_validate()
+
         unrendered_config = self._generate_source_config(
             target=target,
             rendered=False,
@@ -148,7 +150,7 @@ class SourcePatcher:
 
         if not isinstance(config, SourceConfig):
             raise InternalException(
-                f"Calculated a {type(config)} for a source, but expected " f"a SourceConfig"
+                f"Calculated a {type(config)} for a source, but expected a SourceConfig"
             )
 
         default_database = self.root_project.credentials.database
@@ -315,7 +317,7 @@ class SourcePatcher:
         unused_tables: Dict[SourceKey, Optional[Set[str]]],
     ) -> str:
         msg = [
-            "During parsing, dbt encountered source overrides that had no " "target:",
+            "During parsing, dbt encountered source overrides that had no target:",
         ]
         for key, table_names in unused_tables.items():
             patch = self.manifest.source_patches[key]
