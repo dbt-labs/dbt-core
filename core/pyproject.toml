@@ -1,6 +1,6 @@
 [tool.poetry]
 name =  "dbt-core"
-version = "1.4.0a1"
+version = "1.5.0a0"
 description = """\
   With dbt, data analysts and engineers can build \
   analytics the way engineers build applications.\
@@ -42,37 +42,37 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7.2"
-Jinja2 = "==3.1.2"
-agate = ">=1.6,<1.6.4"
+python = "^1.5.0a0"
+Jinja2 = "==1.5.0a0"
+agate = ">=1.6,<1.5.0a0"
 click = ">=7.0,<9"
-colorama = ">=0.3.9,<0.4.6"
-hologram = ">=0.0.14,<=0.0.15"
+colorama = ">=1.5.0a0,<0.4.6"
+hologram = ">=1.5.0a0,<=0.0.15"
 isodate = ">=0.6,<0.7"
 logbook = ">=1.5,<1.6"
-mashumaro = { version = "==3.0.4", extras = ["msgpack"] }
-minimal-snowplow-tracker = "==0.0.2"
+mashumaro = { version = "==1.5.0a0", extras = ["msgpack"] }
+minimal-snowplow-tracker = "==1.5.0a0"
 networkx = [
-  { version = ">=2.3,<2.8.1", python = "<3.8" },
+  { version = ">=2.3,<1.5.0a0", python = "<3.8" },
   { version = ">=2.3,<3", python = ">=3.8" },
 ]
 packaging = ">=20.9,<22.0"
-sqlparse = ">=0.2.3,<0.5"
-dbt-extractor = "~=0.4.1"
-typing-extensions = ">=3.7.4"
-pathspec = "~=0.9.0"
+sqlparse = ">=1.5.0a0,<0.5"
+dbt-extractor = "~=1.5.0a0"
+typing-extensions = ">=1.5.0a0"
+pathspec = "~=1.5.0a0"
 # the following are all to match snowflake-connector-python
-requests = "<3.0.0"
+requests = "<1.5.0a0"
 idna = ">=2.5,<4"
-cffi = ">=1.9,<2.0.0"
+cffi = ">=1.9,<1.5.0a0"
 pyyaml = ">=6.0"
 
 [tool.poetry.group.dev.dependencies]
-black = "==22.10.0"
+black = "==1.5.0a0"
 bumpversion = "*"
 flake8 = "*"
 flaky = "*"
-freezegun = "==0.3.12"
+freezegun = "==1.5.0a0"
 ipdb = "*"
 mypy = "==0.971"
 pip-tools = "*"
@@ -112,5 +112,5 @@ dbt = "dbt.main:main"
 "YouTube" = "https://www.youtube.com/c/dbt-labs"
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
+requires = ["poetry-core>=1.5.0a0"]
 build-backend = "poetry.core.masonry.api"

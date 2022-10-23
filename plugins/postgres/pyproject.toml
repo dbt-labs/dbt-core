@@ -1,6 +1,6 @@
 [tool.poetry]
 name =  "dbt-postgres"
-version = "1.4.0a1"
+version = "1.5.0a0"
 description = """\
   The postgres adapter plugin for dbt (data build tool)\
   """
@@ -37,10 +37,10 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7.2"
+python = "^1.5.0a0"
 dbt-core = { path = "../../core/" }
 psycopg2-binary = "~=2.8"
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
+requires = ["poetry-core>=1.5.0a0"]
 build-backend = "poetry.core.masonry.api"

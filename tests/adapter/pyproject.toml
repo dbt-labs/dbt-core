@@ -1,6 +1,6 @@
 [tool.poetry]
 name =  "dbt-tests-adapter"
-version = "1.4.0a1"
+version = "1.5.0a0"
 description = """\
   The dbt adapter tests for adapter plugins\
   """
@@ -30,10 +30,10 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7.2"
+python = "^1.5.0a0"
 dbt-core = { path = "../../core/" }
-pytest = ">=7.0.0"
+pytest = ">=1.5.0a0"
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
+requires = ["poetry-core>=1.5.0a0"]
 build-backend = "poetry.core.masonry.api"
