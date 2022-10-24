@@ -28,6 +28,8 @@ class BaseDebug:
                 msg = f'linepat {linepat} not found in stdout: {output}'
                 assert msg in str(exc.value)
 
+
+class TestDebug(BaseDebug):
     def test_ok(self, project):
         run_dbt(["debug"])
         assert "ERROR" not in self.capsys.readouterr().out
@@ -43,7 +45,3 @@ class BaseDebug:
     def test_empty_target(self, project):
         run_dbt(['debug', '--target', 'none_target'], expect_pass=False)
         self.assertGotValue(re.compile(r"\s+output 'none_target'"), 'misconfigured')
-
-
-class TestDebug(BaseDebug):
-    pass
