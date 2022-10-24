@@ -1,16 +1,14 @@
 import hashlib
 import os
 from dataclasses import dataclass, field
+
 from mashumaro.types import SerializableType
 from typing import List, Optional, Union, Dict, Any
 
+from dbt.constants import MAXIMUM_SEED_SIZE
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 from .util import SourceKey
-
-
-MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
-MAXIMUM_SEED_SIZE_NAME = "1MB"
 
 
 class ParseFileType(StrEnum):

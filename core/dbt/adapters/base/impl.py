@@ -41,12 +41,13 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
-from dbt.events.functions import fire_event, warn_or_error
+from dbt.events.functions import fire_event, warn_or_error_rewrite
 from dbt.events.types import (
     CacheMiss,
     ListRelations,
     CodeExecution,
     CodeExecutionStatus,
+    CatalogGenerationError,
 )
 from dbt.utils import filter_null_values, executor, cast_to_str
 
@@ -1326,7 +1327,7 @@ def catch_as_completed(
         elif isinstance(exc, KeyboardInterrupt) or not isinstance(exc, Exception):
             raise exc
         else:
-            warn_or_error(f"Encountered an error while generating catalog: {str(exc)}")
+            warn_or_error_rewrite(CatalogGenerationError(exc=str(exc)))
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions

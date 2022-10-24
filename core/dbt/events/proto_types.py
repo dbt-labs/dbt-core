@@ -671,6 +671,14 @@ class CodeExecutionStatus(betterproto.Message):
 
 
 @dataclass
+class CatalogGenerationError(betterproto.Message):
+    """E040"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    exc: str = betterproto.string_field(2)
+
+
+@dataclass
 class WriteCatalogFailure(betterproto.Message):
     """E041"""
 
@@ -1117,6 +1125,51 @@ class InvalidDisabledTargetInTestNode(betterproto.Message):
     target_kind: str = betterproto.string_field(5)
     target_name: str = betterproto.string_field(6)
     target_package: str = betterproto.string_field(7)
+
+
+@dataclass
+class UnsedResourceConfigPath(betterproto.Message):
+    """I051"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    unused_config_paths: List[str] = betterproto.string_field(2)
+
+
+@dataclass
+class SeedIncreased(betterproto.Message):
+    """I052"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+
+
+@dataclass
+class SeedExceedsLimitSamePath(betterproto.Message):
+    """I053"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+
+
+@dataclass
+class SeedExceedsLimitAndPathChanged(betterproto.Message):
+    """I054"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+
+
+@dataclass
+class SeedExceedsLimitChecksumChanged(betterproto.Message):
+    """I055"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+    checksum_name: str = betterproto.string_field(4)
 
 
 @dataclass

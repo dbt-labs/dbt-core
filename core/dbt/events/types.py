@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
+from dbt.constants import MAXIMUM_SEED_SIZE_NAME
 from dbt.events.base_types import (
     NoFile,
     DebugLevel,
@@ -758,7 +759,13 @@ class CodeExecutionStatus(DebugLevel, pt.CodeExecutionStatus):
         return f"Execution status: {self.status} in {self.elapsed} seconds"
 
 
-# Skipped E040
+@dataclass
+class CatalogGenerationError(InfoLevel, pt.CatalogGenerationError):
+    def code(self):
+        return "E040"
+
+    def message(self) -> str:
+        return f"Encountered an error while generating catalog: {self.exc}"
 
 
 @dataclass
@@ -1322,6 +1329,77 @@ class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestN
         )
 
         return warning_tag(msg)
+
+
+@dataclass
+class UnsedResourceConfigPath(DebugLevel, pt.UnsedResourceConfigPath):
+    def code(self):
+        return "I051"
+
+    def message(self) -> str:
+        path_list = "\n".join(f"- {u}" for u in self.unused_config_paths)
+        msg = (
+            "Configuration paths exist in your dbt_project.yml file which do not "
+            "apply to any resources.\n"
+            f"There are {len(self.unused_config_paths)} unused configuration paths:\n{path_list}"
+        )
+        return warning_tag(msg)
+
+
+@dataclass
+class SeedIncreased(DebugLevel, pt.SeedIncreased):
+    def code(self):
+        return "I052"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
+            f"<={MAXIMUM_SEED_SIZE_NAME}, so it has changed"
+        )
+        return msg
+
+
+@dataclass
+class SeedExceedsLimitSamePath(DebugLevel, pt.SeedExceedsLimitSamePath):
+    def code(self):
+        return "I053"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt "
+            f"cannot tell if it has changed: assuming they are the same"
+        )
+        return msg
+
+
+@dataclass
+class SeedExceedsLimitAndPathChanged(DebugLevel, pt.SeedExceedsLimitAndPathChanged):
+    def code(self):
+        return "I054"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in "
+            f"a different location, assuming it has changed"
+        )
+        return msg
+
+
+@dataclass
+class SeedExceedsLimitChecksumChanged(DebugLevel, pt.SeedExceedsLimitChecksumChanged):
+    def code(self):
+        return "I055"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a "
+            f"checksum type of {self.checksum_name}, so it has changed"
+        )
+        return msg
 
 
 # =======================================================

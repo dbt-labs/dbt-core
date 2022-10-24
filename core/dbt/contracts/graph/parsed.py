@@ -18,7 +18,7 @@ from typing import (
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
-from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedDocumentation,
@@ -41,7 +41,13 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
-from dbt.events.functions import warn_or_error
+from dbt.events.functions import warn_or_error_rewrite
+from dbt.events.types import (
+    SeedIncreased,
+    SeedExceedsLimitSamePath,
+    SeedExceedsLimitAndPathChanged,
+    SeedExceedsLimitChecksumChanged,
+)
 from dbt import flags
 from dbt.node_types import ModelLanguage, NodeType
 
@@ -375,30 +381,28 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
     if first.checksum.name == "path":
         msg: str
         if second.checksum.name != "path":
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
-                f"<={MAXIMUM_SEED_SIZE_NAME}, so it has changed"
+            warn_or_error_rewrite(
+                SeedIncreased(package_name=first.package_name, name=first.name), node=first
             )
         elif result:
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt "
-                f"cannot tell if it has changed: assuming they are the same"
+            warn_or_error_rewrite(
+                SeedExceedsLimitSamePath(package_name=first.package_name, name=first.name),
+                node=first,
             )
         elif not result:
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in "
-                f"a different location, assuming it has changed"
+            warn_or_error_rewrite(
+                SeedExceedsLimitAndPathChanged(package_name=first.package_name, name=first.name),
+                node=first,
             )
         else:
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a "
-                f"checksum type of {second.checksum.name}, so it has changed"
+            warn_or_error_rewrite(
+                SeedExceedsLimitChecksumChanged(
+                    package_name=first.package_name,
+                    name=first.name,
+                    checksum_name=second.checksum.name,
+                ),
+                node=first,
             )
-        warn_or_error(msg, node=first)
 
     return result
 

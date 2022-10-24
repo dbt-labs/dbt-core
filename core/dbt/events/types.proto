@@ -488,7 +488,6 @@ message AdapterImportError {
 message PluginLoadError {
     EventInfo info = 1;
     string exc_info = 2;
-
 }
 
 // E037
@@ -511,7 +510,11 @@ message CodeExecutionStatus {
     float elapsed = 3;
 }
 
-// Skipped E040
+// E040
+message CatalogGenerationError {
+    EventInfo info = 1;
+    string exc = 2;
+}
 
 // E041
 message WriteCatalogFailure {
@@ -848,6 +851,42 @@ message InvalidDisabledTargetInTestNode {
     string target_name = 6;
     string target_package = 7;
 }
+
+// I051
+message UnsedResourceConfigPath {
+    EventInfo info = 1;
+    repeated string unused_config_paths = 2;
+}
+
+// I052
+message SeedIncreased {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+}
+
+// I053
+message SeedExceedsLimitSamePath {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+}
+
+// I054
+message SeedExceedsLimitAndPathChanged {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+}
+
+// I055
+message SeedExceedsLimitChecksumChanged {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+    string checksum_name = 4;
+}
+
 
 
 // M - Deps generation
