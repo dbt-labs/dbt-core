@@ -289,7 +289,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         used.
         """
         disabled_fqns = frozenset(tuple(fqn) for fqn in disabled)
-        resource_config_paths = self.get_resource_config_paths()  # returns dict(str, set)
+        resource_config_paths = self.get_resource_config_paths()
         unused_resource_config_paths = []
         for resource_type, config_paths in resource_config_paths.items():
             used_fqns = resource_fqns.get(resource_type, frozenset())
