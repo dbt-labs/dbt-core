@@ -222,9 +222,9 @@ def run_from_args(parsed):
         fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
 
     results = None
-    project_id = None if task.config is None else task.config.hashed_name()
-    credentials = None if task.config is None else task.config.credentials
-    with dbt.tracking.track_run(project_id, credentials, parsed.which):
+    # this has been updated with project_id and adapter info removed, these will be added to new cli work
+    # being tracked at #6097 and #6098
+    with dbt.tracking.track_run(parsed.which):
         results = task.run()
     return task, results
 

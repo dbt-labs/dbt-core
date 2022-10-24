@@ -448,27 +448,10 @@ def initialize_from_flags(anonymous_usage_stats, profiles_dir):
 
 
 @contextmanager
-def track_run(project_id=None, credentials=None, run_command=None):
-    # this adapter might not have implemented the type or unique_field properties
-    try:
-        adapter_type = credentials.type
-    except Exception:
-        adapter_type = None
-    try:
-        adapter_unique_id = credentials.hashed_unique_field()
-    except Exception:
-        adapter_unique_id = None
-
+def track_run(run_command=None):
     invocation_context = get_base_invocation_context()
+    invocation_context["command"] = run_command
 
-    invocation_context.update(
-        {
-            "project_id": project_id,
-            "command": run_command,
-            "adapter_type": adapter_type,
-            "adapter_unique_id": adapter_unique_id,
-        }
-    )
     track_invocation_start(invocation_context)
     try:
         yield
