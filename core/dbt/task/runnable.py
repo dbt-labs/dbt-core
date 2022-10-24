@@ -26,7 +26,7 @@ from dbt.logger import (
     ModelMetadata,
     NodeCount,
 )
-from dbt.events.functions import fire_event, warn_or_error
+from dbt.events.functions import fire_event, warn_or_error_rewrite
 from dbt.events.types import (
     EmptyLine,
     PrintCancelLine,
@@ -36,6 +36,7 @@ from dbt.events.types import (
     QueryCancelationUnsupported,
     ConcurrencyLine,
     EndRunResult,
+    NothingToDo,
 )
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
@@ -56,7 +57,6 @@ import dbt.tracking
 import dbt.exceptions
 from dbt import flags
 import dbt.utils
-from dbt.ui import warning_tag
 
 RESULT_FILE_NAME = "run_results.json"
 MANIFEST_FILE_NAME = "manifest.json"
@@ -458,8 +458,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             with TextOnly():
                 fire_event(EmptyLine())
-            msg = "Nothing to do. Try checking your model configs and model specification args"
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
+            warn_or_error_rewrite(NothingToDo())
             result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),

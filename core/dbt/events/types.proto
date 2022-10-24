@@ -1063,6 +1063,19 @@ message DepsSetDownloadDirectory {
     string path = 2;
 }
 
+// M029
+message DepsUnpinned {
+    EventInfo info = 1;
+    string revision = 2;
+    string git = 3;
+}
+
+// M030
+message NoNodesForSelectionCriteria {
+    EventInfo info = 1;
+    string spec_raw = 2;
+}
+
 // Q - Node execution
 
 // Q001
@@ -1362,7 +1375,10 @@ message SkippingDetails {
     int32 total = 7;
 }
 
-// Skipped Q035
+// Q035
+message NothingToDo {
+    EventInfo info = 1;
+}
 
 // Q036
 message RunningOperationUncaughtError {
@@ -1377,6 +1393,11 @@ message EndRunResult {
     float elapsed_time = 3;
     google.protobuf.Timestamp generated_at = 4;
     bool success = 5;
+}
+
+// Q038
+message NoNodesSelected {
+    EventInfo info = 1;
 }
 
 // W - Node testing

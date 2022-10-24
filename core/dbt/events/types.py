@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
-from dbt.constants import MAXIMUM_SEED_SIZE_NAME
+from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
     NoFile,
     DebugLevel,
@@ -1332,7 +1332,7 @@ class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestN
 
 
 @dataclass
-class UnsedResourceConfigPath(DebugLevel, pt.UnsedResourceConfigPath):
+class UnsedResourceConfigPath(WarnLevel, pt.UnsedResourceConfigPath):
     def code(self):
         return "I051"
 
@@ -1347,7 +1347,7 @@ class UnsedResourceConfigPath(DebugLevel, pt.UnsedResourceConfigPath):
 
 
 @dataclass
-class SeedIncreased(DebugLevel, pt.SeedIncreased):
+class SeedIncreased(WarnLevel, pt.SeedIncreased):
     def code(self):
         return "I052"
 
@@ -1361,7 +1361,7 @@ class SeedIncreased(DebugLevel, pt.SeedIncreased):
 
 
 @dataclass
-class SeedExceedsLimitSamePath(DebugLevel, pt.SeedExceedsLimitSamePath):
+class SeedExceedsLimitSamePath(WarnLevel, pt.SeedExceedsLimitSamePath):
     def code(self):
         return "I053"
 
@@ -1375,7 +1375,7 @@ class SeedExceedsLimitSamePath(DebugLevel, pt.SeedExceedsLimitSamePath):
 
 
 @dataclass
-class SeedExceedsLimitAndPathChanged(DebugLevel, pt.SeedExceedsLimitAndPathChanged):
+class SeedExceedsLimitAndPathChanged(WarnLevel, pt.SeedExceedsLimitAndPathChanged):
     def code(self):
         return "I054"
 
@@ -1389,7 +1389,7 @@ class SeedExceedsLimitAndPathChanged(DebugLevel, pt.SeedExceedsLimitAndPathChang
 
 
 @dataclass
-class SeedExceedsLimitChecksumChanged(DebugLevel, pt.SeedExceedsLimitChecksumChanged):
+class SeedExceedsLimitChecksumChanged(WarnLevel, pt.SeedExceedsLimitChecksumChanged):
     def code(self):
         return "I055"
 
@@ -1668,6 +1668,33 @@ class DepsSetDownloadDirectory(DebugLevel, pt.DepsSetDownloadDirectory):
 
     def message(self) -> str:
         return f"Set downloads directory='{self.path}'"
+
+
+@dataclass
+class DepsUnpinned(WarnLevel, pt.DepsUnpinned):
+    def code(self):
+        return "M029"
+
+    def message(self) -> str:
+        if self.revision == "HEAD":
+            unpinned_msg = "not pinned, using HEAD (default branch)"
+        elif self.revision in ("main", "master"):
+            unpinned_msg = f'pinned to the "{self.revision}" branch'
+
+        msg = (
+            f'The git package "{self.git}" \n\tis {unpinned_msg}.\n\tThis can introduce '
+            f"breaking changes into your project without warning!\n\nSee {PIN_PACKAGE_URL}"
+        )
+        return yellow(f"WARNING: {msg}")
+
+
+@dataclass
+class NoNodesForSelectionCriteria(WarnLevel, pt.NoNodesForSelectionCriteria):
+    def code(self):
+        return "M030"
+
+    def message(self) -> str:
+        return f"The selection criterion '{self.spec_raw}' does not match any nodes"
 
 
 # =======================================================
@@ -2118,7 +2145,13 @@ class SkippingDetails(InfoLevel, pt.SkippingDetails):
         )
 
 
-# Skipped Q035
+@dataclass
+class NothingToDo(WarnLevel, pt.NothingToDo):
+    def code(self):
+        return "Q035"
+
+    def message(self) -> str:
+        return "Nothing to do. Try checking your model configs and model specification args"
 
 
 @dataclass
@@ -2137,6 +2170,15 @@ class EndRunResult(DebugLevel, pt.EndRunResult):
 
     def message(self) -> str:
         return "Command end result"
+
+
+@dataclass
+class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
+    def code(self):
+        return "Q038"
+
+    def message(self) -> str:
+        return "No nodes selected!"
 
 
 # =======================================================

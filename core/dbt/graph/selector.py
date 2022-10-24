@@ -5,8 +5,8 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
 
-from dbt.events.functions import fire_event, warn_or_error
-from dbt.events.types import SelectorReportInvalidSelector
+from dbt.events.functions import fire_event, warn_or_error_rewrite
+from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
 from dbt.node_types import NodeType
 from dbt.exceptions import (
     InternalException,
@@ -21,11 +21,6 @@ from dbt import selected_resources
 
 def get_package_names(nodes):
     return set([node.split(".")[1] for node in nodes])
-
-
-def alert_non_existence(raw_spec, nodes):
-    if len(nodes) == 0:
-        warn_or_error(f"The selection criterion '{str(raw_spec)}' does not match any nodes")
 
 
 def can_select_indirectly(node):
@@ -142,7 +137,7 @@ class NodeSelector(MethodManager):
             direct_nodes = self.incorporate_indirect_nodes(initial_direct, indirect_nodes)
 
             if spec.expect_exists:
-                alert_non_existence(spec.raw, direct_nodes)
+                warn_or_error_rewrite(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
 
         return direct_nodes, indirect_nodes
 

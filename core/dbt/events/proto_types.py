@@ -1401,6 +1401,23 @@ class DepsSetDownloadDirectory(betterproto.Message):
 
 
 @dataclass
+class DepsUnpinned(betterproto.Message):
+    """M029"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    revision: str = betterproto.string_field(2)
+    git: str = betterproto.string_field(3)
+
+
+@dataclass
+class NoNodesForSelectionCriteria(betterproto.Message):
+    """M030"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    spec_raw: str = betterproto.string_field(2)
+
+
+@dataclass
 class RunningOperationCaughtError(betterproto.Message):
     """Q001"""
 
@@ -1770,6 +1787,13 @@ class SkippingDetails(betterproto.Message):
 
 
 @dataclass
+class NothingToDo(betterproto.Message):
+    """Q035"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+
+
+@dataclass
 class RunningOperationUncaughtError(betterproto.Message):
     """Q036"""
 
@@ -1786,6 +1810,13 @@ class EndRunResult(betterproto.Message):
     elapsed_time: float = betterproto.float_field(3)
     generated_at: datetime = betterproto.message_field(4)
     success: bool = betterproto.bool_field(5)
+
+
+@dataclass
+class NoNodesSelected(betterproto.Message):
+    """Q038"""
+
+    info: "EventInfo" = betterproto.message_field(1)
 
 
 @dataclass
