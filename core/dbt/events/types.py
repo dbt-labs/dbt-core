@@ -1402,6 +1402,20 @@ class SeedExceedsLimitChecksumChanged(WarnLevel, pt.SeedExceedsLimitChecksumChan
         return msg
 
 
+@dataclass
+class UnusedTables(WarnLevel, pt.UnusedTables):
+    def code(self):
+        return "I056"
+
+    def message(self) -> str:
+        msg = [
+            "During parsing, dbt encountered source overrides that had no target:",
+        ]
+        msg += self.unused_tables
+        msg.append("")
+        return warning_tag("\n".join(msg))
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================

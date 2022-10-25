@@ -1173,6 +1173,14 @@ class SeedExceedsLimitChecksumChanged(betterproto.Message):
 
 
 @dataclass
+class UnusedTables(betterproto.Message):
+    """I056"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    unused_tables: List[str] = betterproto.string_field(2)
+
+
+@dataclass
 class GitSparseCheckoutSubdirectory(betterproto.Message):
     """M001"""
 

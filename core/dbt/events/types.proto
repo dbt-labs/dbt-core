@@ -887,7 +887,11 @@ message SeedExceedsLimitChecksumChanged {
     string checksum_name = 4;
 }
 
-
+// I056
+message UnusedTables {
+    EventInfo info = 1;
+    repeated string unused_tables = 2;
+}
 
 // M - Deps generation
 
