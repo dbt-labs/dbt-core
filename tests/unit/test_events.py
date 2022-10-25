@@ -426,8 +426,6 @@ sample_values = [
     FlushEventsFailure(),
     TrackingInitializeFailure(),
     RetryExternalCall(attempt=0, max=0),
-    GeneralWarningMsg(msg="", log_fmt=""),
-    GeneralWarningException(exc="", log_fmt=""),
     PartialParsingProfileEnvVarsChanged(),
     AdapterEventDebug(name="", base_msg="", args=()),
     AdapterEventInfo(name="", base_msg="", args=()),
