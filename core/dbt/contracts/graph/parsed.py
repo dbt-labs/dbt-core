@@ -41,7 +41,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
-from dbt.events.functions import warn_or_error_rewrite
+from dbt.events.functions import warn_or_error
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -381,21 +381,21 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
     if first.checksum.name == "path":
         msg: str
         if second.checksum.name != "path":
-            warn_or_error_rewrite(
+            warn_or_error(
                 SeedIncreased(package_name=first.package_name, name=first.name), node=first
             )
         elif result:
-            warn_or_error_rewrite(
+            warn_or_error(
                 SeedExceedsLimitSamePath(package_name=first.package_name, name=first.name),
                 node=first,
             )
         elif not result:
-            warn_or_error_rewrite(
+            warn_or_error(
                 SeedExceedsLimitAndPathChanged(package_name=first.package_name, name=first.name),
                 node=first,
             )
         else:
-            warn_or_error_rewrite(
+            warn_or_error(
                 SeedExceedsLimitChecksumChanged(
                     package_name=first.package_name,
                     name=first.name,

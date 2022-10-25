@@ -5,7 +5,7 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
 
-from dbt.events.functions import fire_event, warn_or_error_rewrite
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
 from dbt.node_types import NodeType
 from dbt.exceptions import (
@@ -137,7 +137,7 @@ class NodeSelector(MethodManager):
             direct_nodes = self.incorporate_indirect_nodes(initial_direct, indirect_nodes)
 
             if spec.expect_exists:
-                warn_or_error_rewrite(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
+                warn_or_error(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
 
         return direct_nodes, indirect_nodes
 

@@ -10,7 +10,7 @@ from dbt.contracts.project import (
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.exceptions import ExecutableError, raise_dependency_error
-from dbt.events.functions import fire_event, warn_or_error_rewrite
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import EnsureGitInstalled, DepsUnpinned
 
 
@@ -80,7 +80,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         path = self._checkout()
 
         if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
-            warn_or_error_rewrite(DepsUnpinned(git=self.git))
+            warn_or_error(DepsUnpinned(git=self.git))
         loaded = Project.from_project_root(path, renderer)
         return ProjectPackageMetadata.from_project(loaded)
 

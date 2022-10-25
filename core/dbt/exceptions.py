@@ -995,8 +995,6 @@ def raise_duplicate_alias(
 
 
 def warn(msg, node=None):
-    # there's no reason to expose log_fmt to macros - it's only useful for
-    # handling colors
     dbt.events.functions.warn_or_error(msg, node=node)
     return ""
 

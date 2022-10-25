@@ -38,6 +38,7 @@ from dbt.events.types import (
     InvalidDisabledTargetInTestNode,
     PartialParsingProjectEnvVarsChanged,
     PartialParsingProfileEnvVarsChanged,
+    NodeNotFoundOrDisabled,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
@@ -71,7 +72,6 @@ from dbt.contracts.graph.parsed import (
 from dbt.contracts.util import Writable
 from dbt.exceptions import (
     target_not_found,
-    get_not_found_or_disabled_msg,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -86,7 +86,6 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
-from dbt.ui import warning_tag
 from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
@@ -971,16 +970,17 @@ def invalid_target_fail_unless_test(
                 )
             )
         else:
-            msg = get_not_found_or_disabled_msg(
-                original_file_path=node.original_file_path,
-                unique_id=node.unique_id,
-                resource_type_title=node.resource_type.title(),
-                target_name=target_name,
-                target_kind=target_kind,
-                target_package=target_package,
-                disabled=disabled,
+            warn_or_error(
+                NodeNotFoundOrDisabled(
+                    original_file_path=node.original_file_path,
+                    unique_id=node.unique_id,
+                    resource_type_title=node.resource_type.title(),
+                    target_name=target_name,
+                    target_kind=target_kind,
+                    target_package=target_package if target_package else "",
+                    disabled=str(disabled),
+                )
             )
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
     else:
         target_not_found(
             node=node,

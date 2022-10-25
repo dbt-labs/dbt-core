@@ -36,7 +36,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
-            dbt.events.functions.warn_or_error_rewrite(event)
+            dbt.events.functions.warn_or_error(event)
             self.track_deprecation_warn()
             active_deprecations.add(self.name)
 

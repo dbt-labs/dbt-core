@@ -926,7 +926,7 @@ message NodeNotFoundOrDisabled {
     string target_name = 5;
     string target_kind = 6;
     string target_package = 7;
-    bool disabled = 8;
+    string disabled = 8;
 }
 
 // M - Deps generation

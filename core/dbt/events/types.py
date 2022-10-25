@@ -1466,9 +1466,10 @@ class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
     def message(self) -> str:
         # this is duplicated logic from exceptions.get_not_found_or_disabled_msg
         # when we convert exceptions to be stuctured maybe it can be combined?
-        if self.disabled is None:
+        # convverting the bool to a string since None is also valid
+        if self.disabled == "None":
             reason = "was not found or is disabled"
-        elif self.disabled is True:
+        elif self.disabled == "True":
             reason = "is disabled"
         else:
             reason = "was not found"
@@ -2807,6 +2808,13 @@ if 1 == 0:
     ProjectNameAlreadyExists(name="")
     ProjectCreated(project_name="")
 
+    # D - Deprecations ======================
+    PackageRedirectDeprecation(old_name="", new_name="")
+    PackageInstallPathDeprecation()
+    AdapterDeprecationWarning(old_name="", new_name="")
+    MetricAttributesRenamed(metric_name="")
+    ExposureNameDeprecation(exposure="")
+
     # E - DB Adapter ======================
     AdapterEventDebug()
     AdapterEventInfo()
@@ -2865,6 +2873,7 @@ if 1 == 0:
     NewConnectionOpening(connection_state="")
     CodeExecution(conn_name="", code_content="")
     CodeExecutionStatus(status="", elapsed=0.1)
+    CatalogGenerationError(exc="")
     WriteCatalogFailure(num_exceptions=0)
     CatalogWritten(path="")
     CannotGenerateDocs()
@@ -2930,6 +2939,24 @@ if 1 == 0:
         target_kind="",
         target_name="",
         target_package="",
+    )
+    UnsedResourceConfigPath(unused_config_paths=[])
+    SeedIncreased(package_name="", name="")
+    SeedExceedsLimitSamePath(package_name="", name="")
+    SeedExceedsLimitAndPathChanged(package_name="", name="")
+    SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name="")
+    UnusedTables(unused_tables=[])
+    WrongResourceSchemaFile(patch_name="", resource_type="", file_path="", plural_resource_type="")
+    NoNodeForYamlKey(patch_name="", yaml_key="", file_path="")
+    MacroPatchNotFound(patch_name="")
+    NodeNotFoundOrDisabled(
+        original_file_path="",
+        unique_id="",
+        resource_type_title="",
+        target_name="",
+        target_kind="",
+        target_package="",
+        disabled="",
     )
 
     # M - Deps generation ======================
@@ -3101,8 +3128,12 @@ if 1 == 0:
         index=0,
         total=0,
     )
+    NothingToDo()
     RunningOperationUncaughtError(exc="")
     EndRunResult()
+    NoNodesSelected()
+    DepsUnpinned(revision="", git="")
+    NoNodesForSelectionCriteria(spec_raw="")
 
     # W - Node testing ======================
 

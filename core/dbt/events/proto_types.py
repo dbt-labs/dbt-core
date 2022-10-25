@@ -1221,7 +1221,7 @@ class NodeNotFoundOrDisabled(betterproto.Message):
     target_name: str = betterproto.string_field(5)
     target_kind: str = betterproto.string_field(6)
     target_package: str = betterproto.string_field(7)
-    disabled: bool = betterproto.bool_field(8)
+    disabled: str = betterproto.string_field(8)
 
 
 @dataclass
