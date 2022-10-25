@@ -313,7 +313,7 @@ Happy modeling!
 
 
 @dataclass
-class PackageRedirectDeprecation(DebugLevel, pt.PackageRedirectDeprecation):  # noqa
+class PackageRedirectDeprecation(WarnLevel, pt.PackageRedirectDeprecation):  # noqa
     def code(self):
         return "D001"
 
@@ -326,7 +326,7 @@ class PackageRedirectDeprecation(DebugLevel, pt.PackageRedirectDeprecation):  # 
 
 
 @dataclass
-class PackageInstallPathDeprecation(DebugLevel, pt.PackageInstallPathDeprecation):  # noqa
+class PackageInstallPathDeprecation(WarnLevel, pt.PackageInstallPathDeprecation):  # noqa
     def code(self):
         return "D002"
 
@@ -340,7 +340,7 @@ class PackageInstallPathDeprecation(DebugLevel, pt.PackageInstallPathDeprecation
 
 
 @dataclass
-class ConfigSourcePathDeprecation(DebugLevel, pt.ConfigSourcePathDeprecation):  # noqa
+class ConfigSourcePathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
     def code(self):
         return "D003"
 
@@ -353,7 +353,7 @@ class ConfigSourcePathDeprecation(DebugLevel, pt.ConfigSourcePathDeprecation):  
 
 
 @dataclass
-class ConfigDataPathDeprecation(DebugLevel, pt.ConfigDataPathDeprecation):  # noqa
+class ConfigDataPathDeprecation(WarnLevel, pt.ConfigDataPathDeprecation):  # noqa
     def code(self):
         return "D004"
 
@@ -366,7 +366,7 @@ class ConfigDataPathDeprecation(DebugLevel, pt.ConfigDataPathDeprecation):  # no
 
 
 @dataclass
-class AdapterDeprecationWarning(DebugLevel, pt.AdapterDeprecationWarning):  # noqa
+class AdapterDeprecationWarning(WarnLevel, pt.AdapterDeprecationWarning):  # noqa
     def code(self):
         return "D005"
 
@@ -381,7 +381,7 @@ class AdapterDeprecationWarning(DebugLevel, pt.AdapterDeprecationWarning):  # no
 
 
 @dataclass
-class MetricAttributesRenamed(DebugLevel, pt.MetricAttributesRenamed):  # noqa
+class MetricAttributesRenamed(WarnLevel, pt.MetricAttributesRenamed):  # noqa
     def code(self):
         return "D006"
 
@@ -400,7 +400,7 @@ class MetricAttributesRenamed(DebugLevel, pt.MetricAttributesRenamed):  # noqa
 
 
 @dataclass
-class ExposureNameDeprecation(DebugLevel, pt.ExposureNameDeprecation):  # noqa
+class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
     def code(self):
         return "D007"
 
@@ -786,7 +786,7 @@ class CodeExecutionStatus(DebugLevel, pt.CodeExecutionStatus):
 
 
 @dataclass
-class CatalogGenerationError(InfoLevel, pt.CatalogGenerationError):
+class CatalogGenerationError(WarnLevel, pt.CatalogGenerationError):
     def code(self):
         return "E040"
 
