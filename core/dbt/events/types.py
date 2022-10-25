@@ -2772,15 +2772,10 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
         return "Got an exception trying to initialize tracking"
 
 
-# Skipped Z045
-# Skipped Z046
-# Skipped Z047
-
-
 @dataclass
 class EventBufferFull(WarnLevel, pt.EventBufferFull):
     def code(self):
-        return "Z048"
+        return "Z045"
 
     def message(self) -> str:
         return (
@@ -2793,7 +2788,7 @@ class EventBufferFull(WarnLevel, pt.EventBufferFull):
 @dataclass
 class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):
     def code(self):
-        return "Z049"
+        return "Z046"
 
     def message(self) -> str:
         # This is the message on the result object, cannot be formatted in event
