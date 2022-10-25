@@ -47,8 +47,6 @@ from dbt.config.profile import read_user_config
 from dbt.exceptions import (
     Exception as dbtException,
     InternalException,
-    NotImplementedException,
-    FailedToConnectException,
 )
 
 
@@ -178,7 +176,7 @@ def handle_and_check(args):
         # Set flags from args, user config, and env vars
         user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
         flags.set_from_args(parsed, user_config)
-        dbt.tracking.initialize_from_flags()
+        dbt.tracking.initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         # Set log_format from flags
         parsed.cls.set_log_format()
 
@@ -199,22 +197,6 @@ def handle_and_check(args):
                 success = task.interpret_results(res)
 
             return res, success
-
-
-@contextmanager
-def track_run(task):
-    dbt.tracking.track_invocation_start(config=task.config, args=task.args)
-    try:
-        yield
-        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
-    except (NotImplementedException, FailedToConnectException) as e:
-        fire_event(MainEncounteredError(exc=str(e)))
-        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
-    except Exception:
-        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
-        raise
-    finally:
-        dbt.tracking.flush()
 
 
 def run_from_args(parsed):
@@ -238,8 +220,9 @@ def run_from_args(parsed):
         fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
 
     results = None
-
-    with track_run(task):
+    # this has been updated with project_id and adapter info removed, these will be added to new cli work
+    # being tracked at #6097 and #6098
+    with dbt.tracking.track_run(parsed.which):
         results = task.run()
     return task, results
 

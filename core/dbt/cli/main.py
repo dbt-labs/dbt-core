@@ -8,6 +8,7 @@ from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
+from dbt.tracking import initialize_from_flags, track_run
 
 
 def cli_runner():
@@ -64,6 +65,9 @@ def cli(ctx, **kwargs):
         flags.USE_COLORS,
         flags.DEBUG,
     )
+    # Tracking
+    initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
+    ctx.with_resource(track_run(run_command=ctx.invoked_subcommand))
 
     # Profiling
     if flags.RECORD_TIMING_INFO:
