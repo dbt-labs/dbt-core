@@ -893,6 +893,29 @@ message UnusedTables {
     repeated string unused_tables = 2;
 }
 
+// I057
+message WrongResourceSchemaFile {
+    EventInfo info = 1;
+    string patch_name = 2;
+    string resource_type = 3;
+    string yaml_key = 4;
+    string file_path = 5;
+}
+
+// I058
+message NoNodeForYamlKey {
+    EventInfo info = 1;
+    string patch_name = 2;
+    string yaml_key = 3;
+    string file_path = 4;
+}
+
+// I059
+message MacroPatchNotFound {
+    EventInfo info = 1;
+    string patch_name = 2;
+}
+
 // M - Deps generation
 
 // M001

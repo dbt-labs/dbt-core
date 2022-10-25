@@ -1416,6 +1416,48 @@ class UnusedTables(WarnLevel, pt.UnusedTables):
         return warning_tag("\n".join(msg))
 
 
+@dataclass
+class WrongResourceSchemaFile(WarnLevel, pt.WrongResourceSchemaFile):
+    def code(self):
+        return "I057"
+
+    def message(self) -> str:
+        msg = line_wrap_message(
+            f"""\
+            '{self.patch_name}' is a {self.resource_type} node, but it is
+            specified in the {self.yaml_key} section of
+            {self.file_path}.
+            To fix this error, place the `{self.patch_name}`
+            specification under the {pluralize(2, self.resource_type)} key instead.
+            """
+        )
+        return warning_tag(msg)
+
+
+@dataclass
+class NoNodeForYamlKey(WarnLevel, pt.NoNodeForYamlKey):
+    def code(self):
+        return "I058"
+
+    def message(self) -> str:
+        msg = (
+            f"Did not find matching node for patch with name '{self.patch_name}' "
+            f"in the '{self.yaml_key}' section of "
+            f"file '{self.file_path}'"
+        )
+        return warning_tag(msg)
+
+
+@dataclass
+class MacroPatchNotFound(WarnLevel, pt.MacroPatchNotFound):
+    def code(self):
+        return "I059"
+
+    def message(self) -> str:
+        msg = f'Found patch for macro "{self.patch_name}" which was not found'
+        return warning_tag(msg)
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
