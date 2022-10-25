@@ -70,7 +70,7 @@ setup(
     },
     install_requires=[
         "dbt-core=={}".format(package_version),
-        "{}~=2.9.4".format(DBT_PSYCOPG2_NAME),
+        "{}~=2.8".format(DBT_PSYCOPG2_NAME),
     ],
     zip_safe=False,
     classifiers=[
