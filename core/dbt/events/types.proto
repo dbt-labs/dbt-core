@@ -898,8 +898,9 @@ message WrongResourceSchemaFile {
     EventInfo info = 1;
     string patch_name = 2;
     string resource_type = 3;
-    string yaml_key = 4;
-    string file_path = 5;
+    string plural_resource_type = 4;
+    string yaml_key = 5;
+    string file_path = 6;
 }
 
 // I058

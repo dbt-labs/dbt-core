@@ -1428,7 +1428,7 @@ class WrongResourceSchemaFile(WarnLevel, pt.WrongResourceSchemaFile):
             specified in the {self.yaml_key} section of
             {self.file_path}.
             To fix this error, place the `{self.patch_name}`
-            specification under the {pluralize(2, self.resource_type)} key instead.
+            specification under the {self.plural_resource_type} key instead.
             """
         )
         return warning_tag(msg)

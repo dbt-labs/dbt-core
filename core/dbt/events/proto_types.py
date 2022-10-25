@@ -1187,8 +1187,9 @@ class WrongResourceSchemaFile(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     patch_name: str = betterproto.string_field(2)
     resource_type: str = betterproto.string_field(3)
-    yaml_key: str = betterproto.string_field(4)
-    file_path: str = betterproto.string_field(5)
+    plural_resource_type: str = betterproto.string_field(4)
+    yaml_key: str = betterproto.string_field(5)
+    file_path: str = betterproto.string_field(6)
 
 
 @dataclass
