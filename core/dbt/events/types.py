@@ -2747,15 +2747,7 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 
 # Skipped Z045
 # Skipped Z046
-
-
-@dataclass
-class GeneralWarningException(WarnLevel, pt.GeneralWarningException):
-    def code(self):
-        return "Z047"
-
-    def message(self) -> str:
-        return self.log_fmt.format(str(self.exc)) if self.log_fmt is not None else str(self.exc)
+# Skipped Z047
 
 
 @dataclass
@@ -3162,5 +3154,4 @@ if 1 == 0:
     FlushEvents()
     FlushEventsFailure()
     TrackingInitializeFailure()
-    GeneralWarningException(exc="", log_fmt="")
     EventBufferFull()

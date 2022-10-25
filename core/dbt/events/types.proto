@@ -1729,12 +1729,7 @@ message TrackingInitializeFailure {
 
 // Skipped Z046
 
-// Z047
-message GeneralWarningException {
-    EventInfo info = 1;
-    string exc = 2;
-    string log_fmt = 3;
-}
+// Skipped Z047
 
 // Z048
 message EventBufferFull {

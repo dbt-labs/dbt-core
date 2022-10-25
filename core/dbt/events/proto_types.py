@@ -2241,15 +2241,6 @@ class TrackingInitializeFailure(betterproto.Message):
 
 
 @dataclass
-class GeneralWarningException(betterproto.Message):
-    """Z047"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    exc: str = betterproto.string_field(2)
-    log_fmt: str = betterproto.string_field(3)
-
-
-@dataclass
 class EventBufferFull(betterproto.Message):
     """Z048"""
 
