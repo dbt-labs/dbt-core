@@ -7,7 +7,6 @@ from dbt.events.types import (
     EventBufferFull,
     MainReportVersion,
     EmptyLine,
-    GeneralWarningMsg,
     GeneralWarningException,
 )
 import dbt.flags as flags
@@ -217,15 +216,6 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
         )
 
 
-def warn_or_error(msg, node=None, log_fmt=None):
-    if flags.WARN_ERROR:
-        from dbt.exceptions import raise_compiler_error
-
-        raise_compiler_error(scrub_secrets(msg, env_secrets()), node)
-    else:
-        fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
-
-
 def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
@@ -233,7 +223,7 @@ def warn_or_raise(exc, log_fmt=None):
         fire_event(GeneralWarningException(exc=str(exc), log_fmt=log_fmt))
 
 
-def warn_or_error_rewrite(event, node=None):
+def warn_or_error(event, node=None):
     if flags.WARN_ERROR:
         from dbt.exceptions import raise_compiler_error
 

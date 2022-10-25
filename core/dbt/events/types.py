@@ -2746,20 +2746,7 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 
 
 # Skipped Z045
-
-
-@dataclass
-class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
-    def code(self):
-        return "Z046"
-
-    def message(self) -> str:
-        # This is triggered from `warn_or_error` where every unique message is custom built
-        # Cannot format message in event
-        return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
-
-
-# This cannot format the message because it's being triggerd all over the code and the message is not standard.
+# Skipped Z046
 
 
 @dataclass
@@ -3175,6 +3162,5 @@ if 1 == 0:
     FlushEvents()
     FlushEventsFailure()
     TrackingInitializeFailure()
-    GeneralWarningMsg(msg="", log_fmt="")
     GeneralWarningException(exc="", log_fmt="")
     EventBufferFull()
