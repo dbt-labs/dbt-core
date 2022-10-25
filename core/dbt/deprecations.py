@@ -53,12 +53,12 @@ class PackageInstallPathDeprecation(DBTDeprecation):
 
 class ConfigSourcePathDeprecation(DBTDeprecation):
     _name = "project-config-source-paths"
-    _event = "ProjectConfigSourcePathDeprecation"
+    _event = "ConfigSourcePathDeprecation"
 
 
 class ConfigDataPathDeprecation(DBTDeprecation):
     _name = "project-config-data-paths"
-    _event = "ProjectConfigDataPathDeprecation"
+    _event = "ConfigDataPathDeprecation"
 
 
 def renamed_method(old_name: str, new_name: str):
@@ -95,10 +95,12 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
-    ExposureNameDeprecation(),
-    PackageInstallPathDeprecation(),
     PackageRedirectDeprecation(),
+    PackageInstallPathDeprecation(),
+    ConfigSourcePathDeprecation(),
+    ConfigDataPathDeprecation(),
     MetricAttributesRenamed(),
+    ExposureNameDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

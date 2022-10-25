@@ -345,10 +345,10 @@ class ConfigSourcePathDeprecation(DebugLevel, pt.ConfigSourcePathDeprecation):  
         return "D003"
 
     def message(self):
-        description = """\
-        The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`.
-        Please update your `dbt_project.yml` configuration to reflect this change.
-        """
+        description = (
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`."
+            "Please update your `dbt_project.yml` configuration to reflect this change."
+        )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
@@ -358,10 +358,10 @@ class ConfigDataPathDeprecation(DebugLevel, pt.ConfigDataPathDeprecation):  # no
         return "D004"
 
     def message(self):
-        description = """\
-        The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`.
-        Please update your `dbt_project.yml` configuration to reflect this change.
-        """
+        description = (
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`."
+            "Please update your `dbt_project.yml` configuration to reflect this change."
+        )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
