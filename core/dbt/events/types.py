@@ -1458,6 +1458,38 @@ class MacroPatchNotFound(WarnLevel, pt.MacroPatchNotFound):
         return warning_tag(msg)
 
 
+@dataclass
+class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
+    def code(self):
+        return "I060"
+
+    def message(self) -> str:
+        # this is duplicated logic from exceptions.get_not_found_or_disabled_msg
+        # when we convert exceptions to be stuctured maybe it can be combined?
+        if self.disabled is None:
+            reason = "was not found or is disabled"
+        elif self.disabled is True:
+            reason = "is disabled"
+        else:
+            reason = "was not found"
+
+        target_package_string = ""
+        if self.target_package is not None:
+            target_package_string = "in package '{}' ".format(self.target_package)
+
+        msg = "{} '{}' ({}) depends on a {} named '{}' {}which {}".format(
+            self.resource_type_title,
+            self.unique_id,
+            self.original_file_path,
+            self.target_kind,
+            self.target_name,
+            target_package_string,
+            reason,
+        )
+
+        return warning_tag(msg)
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================

@@ -1211,6 +1211,20 @@ class MacroPatchNotFound(betterproto.Message):
 
 
 @dataclass
+class NodeNotFoundOrDisabled(betterproto.Message):
+    """I060"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    original_file_path: str = betterproto.string_field(2)
+    unique_id: str = betterproto.string_field(3)
+    resource_type_title: str = betterproto.string_field(4)
+    target_name: str = betterproto.string_field(5)
+    target_kind: str = betterproto.string_field(6)
+    target_package: str = betterproto.string_field(7)
+    disabled: bool = betterproto.bool_field(8)
+
+
+@dataclass
 class GitSparseCheckoutSubdirectory(betterproto.Message):
     """M001"""
 

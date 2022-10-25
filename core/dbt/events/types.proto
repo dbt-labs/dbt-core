@@ -917,6 +917,18 @@ message MacroPatchNotFound {
     string patch_name = 2;
 }
 
+// I060
+message NodeNotFoundOrDisabled {
+    EventInfo info = 1;
+    string original_file_path = 2;
+    string unique_id = 3;
+    string resource_type_title = 4;
+    string target_name = 5;
+    string target_kind = 6;
+    string target_package = 7;
+    bool disabled = 8;
+}
+
 // M - Deps generation
 
 // M001
