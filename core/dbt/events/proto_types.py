@@ -298,8 +298,26 @@ class PackageInstallPathDeprecation(betterproto.Message):
 
 
 @dataclass
-class AdapterDeprecationWarning(betterproto.Message):
+class ConfigSourcePathDeprecation(betterproto.Message):
     """D003"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    deprecated_path: str = betterproto.string_field(2)
+    exp_path: str = betterproto.string_field(3)
+
+
+@dataclass
+class ConfigDataPathDeprecation(betterproto.Message):
+    """D004"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    deprecated_path: str = betterproto.string_field(2)
+    exp_path: str = betterproto.string_field(3)
+
+
+@dataclass
+class AdapterDeprecationWarning(betterproto.Message):
+    """D005"""
 
     info: "EventInfo" = betterproto.message_field(1)
     old_name: str = betterproto.string_field(2)
@@ -308,7 +326,7 @@ class AdapterDeprecationWarning(betterproto.Message):
 
 @dataclass
 class MetricAttributesRenamed(betterproto.Message):
-    """D004"""
+    """D006"""
 
     info: "EventInfo" = betterproto.message_field(1)
     metric_name: str = betterproto.string_field(2)
@@ -316,7 +334,7 @@ class MetricAttributesRenamed(betterproto.Message):
 
 @dataclass
 class ExposureNameDeprecation(betterproto.Message):
-    """D005"""
+    """D007"""
 
     info: "EventInfo" = betterproto.message_field(1)
     exposure: str = betterproto.string_field(2)

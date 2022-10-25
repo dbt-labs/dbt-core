@@ -51,6 +51,16 @@ class PackageInstallPathDeprecation(DBTDeprecation):
     _event = "PackageInstallPathDeprecation"
 
 
+class ConfigSourcePathDeprecation(DBTDeprecation):
+    _name = "project-config-source-paths"
+    _event = "ProjectConfigSourcePathDeprecation"
+
+
+class ConfigDataPathDeprecation(DBTDeprecation):
+    _name = "project-config-data-paths"
+    _event = "ProjectConfigDataPathDeprecation"
+
+
 def renamed_method(old_name: str, new_name: str):
     class AdapterDeprecationWarning(DBTDeprecation):
         _name = "adapter:{}".format(old_name)

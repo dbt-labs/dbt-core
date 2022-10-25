@@ -44,6 +44,32 @@ exposures:
 """
 
 
+class TestConfigPathDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"already_exists.sql": models_trivial__model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"config-version": 2, "data-paths": ["data"]}
+
+    def test_data_path(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        run_dbt(["debug"])
+        expected = {"project-config-data-paths"}
+        assert expected == deprecations.active_deprecations
+
+    def test_data_path_fail(self, project):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        with pytest.raises(dbt.exceptions.CompilationException) as exc:
+            run_dbt(["--warn-error", "debug"])
+        exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
+        expected_msg = "The `data-paths` config has been renamed"
+        assert expected_msg in exc_str
+
+
 class TestAdapterDeprecations:
     @pytest.fixture(scope="class")
     def models(self):

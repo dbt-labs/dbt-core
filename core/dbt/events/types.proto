@@ -227,20 +227,34 @@ message PackageInstallPathDeprecation {
     EventInfo info = 1;
 }
 
-//D003
+// D003
+message ConfigSourcePathDeprecation {
+    EventInfo info = 1;
+    string deprecated_path = 2;
+    string exp_path = 3;
+}
+
+// D004
+message ConfigDataPathDeprecation {
+    EventInfo info = 1;
+    string deprecated_path = 2;
+    string exp_path = 3;
+}
+
+//D005
 message AdapterDeprecationWarning {
     EventInfo info = 1;
     string old_name = 2;
     string new_name = 3;
 }
 
-//D004
+//D006
 message MetricAttributesRenamed {
     EventInfo info = 1;
     string metric_name = 2;
 }
 
-//D005
+//D007
 message ExposureNameDeprecation {
     EventInfo info = 1;
     string exposure = 2;

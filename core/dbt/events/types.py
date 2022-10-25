@@ -340,9 +340,35 @@ class PackageInstallPathDeprecation(DebugLevel, pt.PackageInstallPathDeprecation
 
 
 @dataclass
-class AdapterDeprecationWarning(DebugLevel, pt.AdapterDeprecationWarning):  # noqa
+class ConfigSourcePathDeprecation(DebugLevel, pt.ConfigSourcePathDeprecation):  # noqa
     def code(self):
         return "D003"
+
+    def message(self):
+        description = """\
+        The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`.
+        Please update your `dbt_project.yml` configuration to reflect this change.
+        """
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class ConfigDataPathDeprecation(DebugLevel, pt.ConfigDataPathDeprecation):  # noqa
+    def code(self):
+        return "D004"
+
+    def message(self):
+        description = """\
+        The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`.
+        Please update your `dbt_project.yml` configuration to reflect this change.
+        """
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class AdapterDeprecationWarning(DebugLevel, pt.AdapterDeprecationWarning):  # noqa
+    def code(self):
+        return "D005"
 
     def message(self):
         description = (
@@ -357,7 +383,7 @@ class AdapterDeprecationWarning(DebugLevel, pt.AdapterDeprecationWarning):  # no
 @dataclass
 class MetricAttributesRenamed(DebugLevel, pt.MetricAttributesRenamed):  # noqa
     def code(self):
-        return "D004"
+        return "D006"
 
     def message(self):
         description = (
@@ -376,7 +402,7 @@ class MetricAttributesRenamed(DebugLevel, pt.MetricAttributesRenamed):  # noqa
 @dataclass
 class ExposureNameDeprecation(DebugLevel, pt.ExposureNameDeprecation):  # noqa
     def code(self):
-        return "D005"
+        return "D007"
 
     def message(self):
         description = (
@@ -2811,6 +2837,8 @@ if 1 == 0:
     # D - Deprecations ======================
     PackageRedirectDeprecation(old_name="", new_name="")
     PackageInstallPathDeprecation()
+    ConfigSourcePathDeprecation(deprecated_path="", exp_path="")
+    ConfigDataPathDeprecation(deprecated_path="", exp_path="")
     AdapterDeprecationWarning(old_name="", new_name="")
     MetricAttributesRenamed(metric_name="")
     ExposureNameDeprecation(exposure="")
