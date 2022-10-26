@@ -90,7 +90,6 @@ class TestPartialParsing(unittest.TestCase):
     def get_model(self, name):
         return ParsedModelNode(
             package_name='my_test',
-            root_path='/users/root/',
             path=f'{name}.sql',
             original_file_path=f'models/{name}.sql',
             language='sql',
@@ -109,7 +108,6 @@ class TestPartialParsing(unittest.TestCase):
     def get_python_model(self, name):
         return ParsedModelNode(
             package_name='my_test',
-            root_path='/users/root/',
             path=f'{name}.py',
             original_file_path=f'models/{name}.py',
             raw_code='import something',
