@@ -29,6 +29,15 @@ class BaseDebug:
                 assert msg in str(exc.value)
 
 
+class BaseDebugProfileVariable(BaseDebug):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            'config-version': 2,
+            'profile': '{{ "te" ~ "st" }}'
+        }
+
+
 class TestDebug(BaseDebug):
     def test_ok(self, project):
         run_dbt(["debug"])
@@ -45,3 +54,11 @@ class TestDebug(BaseDebug):
     def test_empty_target(self, project):
         run_dbt(['debug', '--target', 'none_target'], expect_pass=False)
         self.assertGotValue(re.compile(r"\s+output 'none_target'"), 'misconfigured')
+
+
+class TestDebugProfileVariablePostgres(BaseDebugProfileVariable):
+    pass
+
+
+# class TestDebugInvalidProjectPostgres(BaseDebug):
+#     pass
