@@ -97,6 +97,7 @@ class CompiledSeedNode(CompiledNode):
     # keep this in sync with ParsedSeedNode!
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
+    root_path: Optional[str] = None
 
     @property
     def empty(self):

@@ -286,8 +286,6 @@ class PathSelectorMethod(SelectorMethod):
         root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
         for node, real_node in self.all_nodes(included_nodes):
-            if Path(real_node.root_path) != root:
-                continue
             ofp = Path(real_node.original_file_path)
             if ofp in paths:
                 yield node
