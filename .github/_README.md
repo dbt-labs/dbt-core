@@ -138,7 +138,7 @@ Some triggers of note that we use:
         id: fp
         run: |
           FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
-          echo "::set-output name=FILEPATH::$FILEPATH"
+          echo "FILEPATH=$FILEPATH" >> $GITHUB_OUTPUT
   ```
 
 - Print out all variables you will reference as the first step of a job.  This allows for easier debugging.  The first job should log all inputs.  Subsequent jobs should reference outputs of other jobs, if present.
@@ -163,9 +163,9 @@ Some triggers of note that we use:
     - name: Set Variables
       id: variables
       run: |
-        echo "::set-output name=important_path::'performance/runner/Cargo.toml'"
-        echo "::set-output name=release_id::${{github.event.inputs.release_id}}"
-        echo "::set-output name=open_prs::${{github.event.inputs.open_prs}}"
+        echo "important_path='performance/runner/Cargo.toml'" >> $GITHUB_OUTPUT
+        echo "release_id=${{github.event.inputs.release_id}}" >> $GITHUB_OUTPUT
+        echo "open_prs=${{github.event.inputs.open_prs}}" >> $GITHUB_OUTPUT
 
   job2:
     needs: [job1]
