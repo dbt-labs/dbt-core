@@ -160,7 +160,6 @@ class SourcePatcher:
             database=(source.database or default_database),
             schema=(source.schema or source.name),
             identifier=(table.identifier or table.name),
-            root_path=target.root_path,
             path=target.path,
             original_file_path=target.original_file_path,
             columns=refs.column_info,

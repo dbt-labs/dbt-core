@@ -32,7 +32,6 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         contents = get_rendered(block.contents, {}).strip()
 
         doc = ParsedDocumentation(
-            root_path=self.project.project_root,
             path=block.file.path.relative_path,
             original_file_path=block.path.original_file_path,
             package_name=self.project.project_name,

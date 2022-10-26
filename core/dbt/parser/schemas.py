@@ -245,7 +245,6 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             "database": self.default_database,
             "fqn": fqn,
             "name": name,
-            "root_path": self.project.project_root,
             "resource_type": self.resource_type,
             "tags": tags,
             "path": path,
@@ -729,7 +728,6 @@ class SourceParser(YamlDocsReader):
                 table=table,
                 path=original_file_path,
                 original_file_path=original_file_path,
-                root_path=self.project.project_root,
                 package_name=package_name,
                 unique_id=unique_id,
                 resource_type=NodeType.Source,
@@ -1024,7 +1022,6 @@ class ExposureParser(YamlReader):
 
         parsed = ParsedExposure(
             package_name=package_name,
-            root_path=self.project.project_root,
             path=path,
             original_file_path=self.yaml.path.original_file_path,
             unique_id=unique_id,
@@ -1128,7 +1125,6 @@ class MetricParser(YamlReader):
 
         parsed = ParsedMetric(
             package_name=package_name,
-            root_path=self.project.project_root,
             path=path,
             original_file_path=self.yaml.path.original_file_path,
             unique_id=unique_id,
