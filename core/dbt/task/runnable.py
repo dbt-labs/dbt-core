@@ -12,7 +12,7 @@ from .printer import (
     print_run_end_messages,
 )
 
-from dbt.clients.parallel import ThreadPool
+from dbt.clients.parallel import Parallel
 from dbt.clients.system import write_file
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
@@ -62,6 +62,7 @@ from dbt.ui import warning_tag
 RESULT_FILE_NAME = "run_results.json"
 MANIFEST_FILE_NAME = "manifest.json"
 RUNNING_STATE = DbtProcessState("running")
+PARALLEL = Parallel(flags.IS_PYODIDE)
 
 
 class ManifestTask(ConfiguredTask):
@@ -377,7 +378,7 @@ class GraphRunnableTask(ManifestTask):
         with TextOnly():
             fire_event(EmptyLine())
 
-        pool = ThreadPool(num_threads)
+        pool = PARALLEL.ThreadPool(num_threads)
         try:
             self.run_queue(pool)
 

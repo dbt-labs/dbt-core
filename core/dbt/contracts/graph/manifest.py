@@ -2,7 +2,7 @@ import enum
 from dataclasses import dataclass, field
 from itertools import chain, islice
 from mashumaro.mixins.msgpack import DataClassMessagePackMixin
-from dbt.clients.parallel import Lock
+from dbt.clients.parallel import Parallel, PyodideLock
 
 from typing import (
     Dict,
@@ -58,6 +58,8 @@ from dbt.ui import line_wrap_message
 from dbt import flags
 from dbt import tracking
 import dbt.utils
+
+PARALLEL = Parallel(flags.IS_PYODIDE)
 
 NodeEdgeMap = Dict[str, List[str]]
 PackageName = str
@@ -647,12 +649,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         # Not sure how to avoid this change
         # Fails with this error:
         # mashumaro.exceptions.UnserializableDataError: <built-in function allocate_lock> as a field type is not supported by mashumaro
-        _lock: Callable = field(
+        _lock: PyodideLock = field(  # type: ignore
             default_factory=flags.MP_CONTEXT.Lock,
             metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
         )
     else:
-        _lock: Lock = field(
+        _lock: PARALLEL.Lock = field(  # type: ignore
             default_factory=flags.MP_CONTEXT.Lock,
             metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
         )

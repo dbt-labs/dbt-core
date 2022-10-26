@@ -10,10 +10,11 @@ import requests
 import dbt.exceptions
 import dbt.semver
 
-from dbt.clients.http import http
+from dbt.clients.http import Http
 from dbt.ui import green, red, yellow
 from dbt import flags
 
+HTTP = Http(flags.IS_PYODIDE).client
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
 
@@ -46,7 +47,7 @@ def get_latest_version(
     version_url: str = PYPI_VERSION_URL,
 ) -> Optional[dbt.semver.VersionSpecifier]:
     try:
-        data = http.get_json(version_url)
+        data = HTTP.get_json(version_url)
         version_string = data["info"]["version"]
     except (json.JSONDecodeError, KeyError, requests.RequestException):
         return None

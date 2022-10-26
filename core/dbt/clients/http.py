@@ -1,5 +1,3 @@
-from dbt import flags
-
 from abc import ABCMeta, abstractmethod
 import json
 from typing import Any, Dict
@@ -8,7 +6,7 @@ from requests import Response
 from urllib.parse import urlencode
 
 
-class Http(metaclass=ABCMeta):
+class BaseHttp(metaclass=ABCMeta):
     @abstractmethod
     def get_json(
         self,
@@ -38,10 +36,10 @@ class Http(metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class PyodideHttp(Http):
+class PyodideHttp(BaseHttp):
     def __init__(self) -> None:
         super().__init__()
-        from pyodide.http import open_url
+        from pyodide.http import open_url  # type: ignore
 
         self._open_url = open_url
 
@@ -74,7 +72,7 @@ class PyodideHttp(Http):
         raise NotImplementedError
 
 
-class Requests(Http):
+class Requests(BaseHttp):
     def get_json(
         self,
         url: str,
@@ -101,7 +99,6 @@ class Requests(Http):
         return requests.post(url=url, data=data, headers=headers, timeout=timeout)
 
 
-if flags.IS_PYODIDE:
-    http = PyodideHttp()
-else:
-    http = Requests()
+class Http:
+    def __init__(self, is_pyodide: bool) -> None:
+        self.client = PyodideHttp() if is_pyodide else Requests()

@@ -1,7 +1,7 @@
 from typing import Optional
 import traceback
 
-from dbt.clients.http import http
+from dbt.clients.http import Http
 from dbt.clients.yaml_helper import (  # noqa:F401
     yaml,
     safe_load,
@@ -47,6 +47,7 @@ EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
 RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
+HTTP = Http(flags.IS_PYODIDE)
 
 
 class TimeoutEmitter(Emitter):
@@ -82,7 +83,7 @@ class TimeoutEmitter(Emitter):
     def http_post(self, payload):
         self._log_request("POST", payload)
 
-        r = http.post(
+        r = HTTP.post(
             self.endpoint,
             data=payload,
             headers={"content-type": "application/json; charset=utf-8"},
@@ -95,7 +96,7 @@ class TimeoutEmitter(Emitter):
     def http_get(self, payload):
         self._log_request("GET", payload)
 
-        r = http.get_response(self.endpoint, params=payload, timeout=5.0)
+        r = HTTP.get_response(self.endpoint, params=payload, timeout=5.0)
 
         self._log_result("GET", r.status_code)
         return r

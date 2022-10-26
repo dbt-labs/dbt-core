@@ -1,7 +1,7 @@
 import functools
 from typing import Any, Dict, List
 import requests
-from dbt.clients.http import http
+from dbt.clients.http import Http
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     RegistryProgressGETRequest,
@@ -15,8 +15,11 @@ from dbt.events.types import (
 )
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
 from dbt import deprecations
+from dbt import flags
 from dbt import semver
 import os
+
+HTTP = Http(flags.IS_PYODIDE).client
 
 if os.getenv("DBT_PACKAGE_HUB_URL"):
     DEFAULT_REGISTRY_BASE_URL = os.getenv("DBT_PACKAGE_HUB_URL")
@@ -41,7 +44,7 @@ def _get(package_name, registry_base_url=None):
     url = _get_url(package_name, registry_base_url)
     fire_event(RegistryProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here
-    resp = http.get_response(url, timeout=30)
+    resp = HTTP.get_response(url, timeout=30)
     fire_event(RegistryProgressGETResponse(url=url, resp_code=resp.status_code))
     resp.raise_for_status()
 
@@ -165,7 +168,7 @@ def _get_index(registry_base_url=None):
     url = _get_url("index", registry_base_url)
     fire_event(RegistryIndexProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here
-    resp = http.get_response(url, timeout=30)
+    resp = HTTP.get_response(url, timeout=30)
     fire_event(RegistryIndexProgressGETResponse(url=url, resp_code=resp.status_code))
     resp.raise_for_status()
 

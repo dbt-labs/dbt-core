@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tarfile
 import stat
-from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
+from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable
 from pathspec import PathSpec  # type: ignore
 
 from dbt.events.functions import fire_event
@@ -22,9 +22,12 @@ from dbt.events.types import (
     SystemStdErrMsg,
     SystemReportReturnCode,
 )
-from dbt.clients.http import http
+from dbt.clients.http import Http
+from dbt import flags
 import dbt.exceptions
 from dbt.utils import _connection_exception_retry as connection_exception_retry
+
+HTTP = Http(flags.IS_PYODIDE).client
 
 if sys.platform == "win32":
     from ctypes import WinDLL, c_bool
@@ -450,21 +453,25 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
     return out, err
 
 
-def download_with_retries(
-    url: str, path: str, timeout: Optional[Union[float, tuple]] = None
-) -> None:
+def download_with_retries(url: str, path: str, timeout: Optional[float] = None) -> None:
     download_fn = functools.partial(download, url, path, timeout)
     connection_exception_retry(download_fn, 5)
+
+
+def _get_timeout(timeout: Optional[float]) -> int:
+    if timeout is not None:
+        return int(timeout)
+    else:
+        return int(os.getenv("DBT_HTTP_TIMEOUT", 10))
 
 
 def download(
     url: str,
     path: str,
-    timeout: Optional[Union[float, Tuple[float, float], Tuple[float, None]]] = None,
+    timeout: Optional[float] = None,
 ) -> None:
     path = convert_path(path)
-    connection_timeout = timeout or float(os.getenv("DBT_HTTP_TIMEOUT", 10))
-    response = http.get_response(url, timeout=connection_timeout)
+    response = HTTP.get_response(url, timeout=_get_timeout(timeout))
     with open(path, "wb") as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)

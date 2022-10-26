@@ -4,8 +4,8 @@ from time import sleep
 import sys
 import traceback
 
-# dbt.clients.parallel.RLock is a function returning this type
-from dbt.clients.parallel import RLock
+# dbt.clients.parallel.Parallel.RLock is a function returning this type
+from dbt.clients.parallel import Parallel
 from threading import get_ident
 from typing import (
     Any,
@@ -54,6 +54,8 @@ from dbt.utils import cast_to_str
 SleepTime = Union[int, float]  # As taken by time.sleep.
 AdapterHandle = Any  # Adapter connection handle objects can be any class.
 
+PARALLEL = Parallel(flags.IS_PYODIDE)
+
 
 class BaseConnectionManager(metaclass=abc.ABCMeta):
     """Methods to implement:
@@ -74,7 +76,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def __init__(self, profile: AdapterRequiredConfig):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
-        self.lock: RLock = flags.MP_CONTEXT.RLock()
+        self.lock: PARALLEL.RLock = flags.MP_CONTEXT.RLock()  # type:ignore
         self.query_header: Optional[MacroQueryStringSetter] = None
 
     def set_query_header(self, manifest: Manifest) -> None:

@@ -1,7 +1,8 @@
+from multiprocessing.context import SpawnContext
 import os
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import Callable, Optional, Union
 
 # PROFILES_DIR must be set before the other flags
 # It also gets set in main.py and in set_from_args because the rpc server
@@ -114,25 +115,30 @@ ARTIFACT_STATE_PATH = env_set_path("DBT_ARTIFACT_STATE_PATH")
 ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
 
 
+class _PyodideContext:
+    def __init__(self, lock: Callable, rlock: Callable) -> None:
+        self.Lock = lock
+        self.RLock = rlock
+
+
+def _get_mp_context(is_pyodide: bool) -> Union[_PyodideContext, SpawnContext]:
+    if is_pyodide:
+        from threading import Lock
+        from threading import RLock
+
+        return _PyodideContext(lock=Lock, rlock=RLock)
+    else:
+        import multiprocessing
+
+        if os.name != "nt":
+            # https://bugs.python.org/issue41567
+            import multiprocessing.popen_spawn_posix  # type: ignore
+        # TODO: change this back to use fork() on linux when we have made that safe
+        return multiprocessing.get_context("spawn")
+
+
 # This is not a flag, it's a place to store the lock
-if IS_PYODIDE:
-    from typing import NamedTuple
-    from threading import Lock as PyodideLock
-    from threading import RLock as PyodideRLock
-
-    class PyodideContext(NamedTuple):
-        Lock = PyodideLock
-        RLock = PyodideRLock
-
-    MP_CONTEXT = PyodideContext()
-else:
-    import multiprocessing
-
-    if os.name != "nt":
-        # https://bugs.python.org/issue41567
-        import multiprocessing.popen_spawn_posix  # type: ignore
-    # TODO: change this back to use fork() on linux when we have made that safe
-    MP_CONTEXT = multiprocessing.get_context("spawn")
+MP_CONTEXT = _get_mp_context(IS_PYODIDE)
 
 
 def set_from_args(args, user_config):

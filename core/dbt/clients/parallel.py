@@ -24,11 +24,8 @@ class PyodideThreadPool:
         pass
 
 
-if flags.IS_PYODIDE:
-    Lock = PyodideLock
-    ThreadPool = PyodideThreadPool
-    RLock = PyodideRLock
-else:
-    Lock = MultiprocessingLock
-    ThreadPool = MultiprocessingThreadPool
-    RLock = MultiprocessingRLock
+class Parallel:
+    def __init__(self, is_pyodide: bool) -> None:
+        self.Lock = PyodideLock if is_pyodide else MultiprocessingLock
+        self.ThreadPool = PyodideThreadPool if is_pyodide else MultiprocessingThreadPool
+        self.RLock = PyodideRLock if is_pyodide else MultiprocessingRLock
