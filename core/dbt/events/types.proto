@@ -943,6 +943,12 @@ message NodeNotFoundOrDisabled {
     string disabled = 8;
 }
 
+// I061
+message GeneralMacroWarning {
+    EventInfo info = 1;
+    string msg = 2;
+}
+
 // M - Deps generation
 
 // M001

@@ -1243,6 +1243,14 @@ class NodeNotFoundOrDisabled(betterproto.Message):
 
 
 @dataclass
+class GeneralMacroWarning(betterproto.Message):
+    """I061"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    msg: str = betterproto.string_field(2)
+
+
+@dataclass
 class GitSparseCheckoutSubdirectory(betterproto.Message):
     """M001"""
 
@@ -2260,14 +2268,14 @@ class TrackingInitializeFailure(betterproto.Message):
 
 @dataclass
 class EventBufferFull(betterproto.Message):
-    """Z048"""
+    """Z045"""
 
     info: "EventInfo" = betterproto.message_field(1)
 
 
 @dataclass
 class RunResultWarningMessage(betterproto.Message):
-    """Z049"""
+    """Z046"""
 
     info: "EventInfo" = betterproto.message_field(1)
     msg: str = betterproto.string_field(2)

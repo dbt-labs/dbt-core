@@ -1517,6 +1517,15 @@ class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
         return warning_tag(msg)
 
 
+@dataclass
+class GeneralMacroWarning(WarnLevel, pt.GeneralMacroWarning):
+    def code(self):
+        return "I061"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
