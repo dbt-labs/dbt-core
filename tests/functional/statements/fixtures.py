@@ -1,4 +1,12 @@
-id,first_name,last_name,email,gender,ip_address
+#
+# Seeds
+#
+seeds__statement_expected = """source,value
+matrix,100
+table,100
+"""
+
+seeds__statement_actual = """id,first_name,last_name,email,gender,ip_address
 1,Jack,Hunter,jhunter0@pbs.org,Male,59.80.20.168
 2,Kathryn,Walker,kwalker1@ezinearticles.com,Female,194.121.179.35
 3,Gerald,Ryan,gryan2@com.com,Male,11.3.212.243
@@ -99,3 +107,32 @@ id,first_name,last_name,email,gender,ip_address
 98,Angela,Brooks,abrooks2p@mtv.com,Female,10.63.249.126
 99,Harold,Foster,hfoster2q@privacy.gov.au,Male,139.214.40.244
 100,Carl,Meyer,cmeyer2r@disqus.com,Male,204.117.7.88
+"""
+
+#
+# Models
+#
+models__statement_actual = """
+-- {{ ref('seed') }}
+
+{%- call statement('test_statement', fetch_result=True) -%}
+
+  select
+    count(*) as "num_records"
+
+  from {{ ref('seed') }}
+
+{%- endcall -%}
+
+{% set result = load_result('test_statement') %}
+
+{% set res_table = result['table'] %}
+{% set res_matrix = result['data'] %}
+
+{% set matrix_value = res_matrix[0][0] %}
+{% set table_value = res_table[0]['num_records'] %}
+
+select 'matrix' as source, {{ matrix_value }} as value
+union all
+select 'table' as source, {{ table_value }} as value
+"""
