@@ -1152,7 +1152,7 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
             event = warn_or_error_patch.call_args[0][0]
             assert event.info.name == 'UnsedResourceConfigPath'
             msg = event.info.msg
-            expected_msg = "- models.('my_test_project', 'baz')"
+            expected_msg = "- models.my_test_project.baz"
             assert expected_msg in msg
 
 
