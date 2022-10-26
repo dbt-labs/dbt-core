@@ -1804,6 +1804,8 @@ class DepsUnpinned(WarnLevel, pt.DepsUnpinned):
             unpinned_msg = "not pinned, using HEAD (default branch)"
         elif self.revision in ("main", "master"):
             unpinned_msg = f'pinned to the "{self.revision}" branch'
+        else:
+            unpinned_msg = None
 
         msg = (
             f'The git package "{self.git}" \n\tis {unpinned_msg}.\n\tThis can introduce '

@@ -297,7 +297,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
             for config_path in config_paths:
                 if not _is_config_used(config_path, fqns):
-                    unused_resource_config_paths.append(f"{resource_type}.{config_path}")
+                    resource_path = ".".join(i for i in ((resource_type,) + config_path))
+                    unused_resource_config_paths.append(resource_path)
 
         if len(unused_resource_config_paths) == 0:
             return
