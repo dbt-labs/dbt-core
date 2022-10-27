@@ -23,5 +23,8 @@ permissions:
 
 jobs:
   triage_label:
-    uses: dbt-labs/actions/.github/workflows/triage-labels.yml@main
+    uses: dbt-labs/actions/.github/workflows/replace-label.yml@main
+    with:
+      original_label: "awaiting_response"
+      new_label: "triage"
     secrets: inherit
