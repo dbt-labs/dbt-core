@@ -79,6 +79,13 @@ class TestDebugInvalidProjectPostgres(BaseDebug):
         splitout = self.capsys.readouterr().out.split("\n")
         self.check_project(splitout)
 
+    def test_badproject(self, project):
+        with open("dbt_project.yml", "w") as f:  # noqa: F841
+            yaml.safe_dump({"invalid-key": "not a valid key so this is bad project"})
+        run_dbt(["debug", "--profile", "test"], expect_pass=False)
+        splitout = self.capsys.readouterr().out.split("\n")
+        self.check_project(splitout)
+
     def test_not_found_project(self, project):
         run_dbt(["debug", "--project-dir", "nopass"], expect_pass=False)
         splitout = self.capsys.readouterr().out.split("\n")
@@ -95,17 +102,3 @@ class TestDebugInvalidProjectPostgres(BaseDebug):
         run_dbt(["debug", "--project-dir", "custom"], expect_pass=False)
         splitout = self.capsys.readouterr().out.split("\n")
         self.check_project(splitout)
-
-
-# class TestDebugBadProjectPostgres(BaseDebug):
-#     @pytest.fixture(scope="class")
-#     def project_config_update(self):
-#         # load a special project that is an error
-#         return {
-#             "invalid-key": "not a valid key so this is bad project"
-#         }
-
-#     def test_badproject(self, project):
-#         run_dbt(["debug", "--profile", "test"], expect_pass=False)
-#         splitout = self.capsys.readouterr().out.split("\n")
-#         self.check_project(splitout)
