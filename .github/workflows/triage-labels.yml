@@ -23,11 +23,5 @@ permissions:
 
 jobs:
   triage_label:
-    if: contains(github.event.issue.labels.*.name, 'awaiting_response')
-    runs-on: ubuntu-latest
-    steps:
-      - name: initial labeling
-        uses: andymckay/labeler@master
-        with:
-          add-labels: "triage"
-          remove-labels: "awaiting_response"
+    uses: dbt-labs/actions/.github/workflows/triage-labels.yml@main
+    secrets: inherit
