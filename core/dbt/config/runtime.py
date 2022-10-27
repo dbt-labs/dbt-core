@@ -3,31 +3,42 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet, Type
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    MutableSet,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
-from .profile import Profile
-from .project import Project
-from .renderer import DbtProjectYamlRenderer, ProfileRenderer
-from .utils import parse_cli_vars
 from dbt import flags
-from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
-from dbt.helper_types import FQNPath, PathSet, DictDefaultEmptyStr
+from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.config.profile import read_user_config
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
-from dbt.contracts.relation import ComponentName
-from dbt.ui import warning_tag
-
 from dbt.contracts.project import Configuration, UserConfig
+from dbt.contracts.relation import ComponentName
+from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import (
-    RuntimeException,
     DbtProjectError,
+    RuntimeException,
+    raise_compiler_error,
     validator_error_message,
     warn_or_error,
-    raise_compiler_error,
 )
+from dbt.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
+from dbt.ui import warning_tag
 
-from dbt.dataclass_schema import ValidationError
+from .profile import Profile
+from .project import Project, PartialProject
+from .renderer import DbtProjectYamlRenderer, ProfileRenderer
+from .utils import parse_cli_vars
 
 
 def _project_quoting_dict(proj: Project, profile: Profile) -> Dict[ComponentName, bool]:
@@ -188,28 +199,52 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
     @classmethod
     def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
-        # profile_name from the project
-        project_root = args.project_dir if args.project_dir else os.getcwd()
-        version_check = bool(flags.VERSION_CHECK)
-        partial = Project.partial_load(project_root, verify_version=version_check)
 
-        # build the profile using the base renderer and the one fact we know
-        # Note: only the named profile section is rendered. The rest of the
-        # profile is ignored.
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+
+        profile = cls.collect_profile(args=args)
+        project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
+        project = cls.collect_project(args=args, project_renderer=project_renderer)
+        assert type(project) is Project
+        return (project, profile)
+
+    @classmethod
+    def collect_profile(
+        cls: Type["RuntimeConfig"], args: Any, profile_name: Optional[str] = None
+    ) -> Profile:
+
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
         profile_renderer = ProfileRenderer(cli_vars)
-        profile_name = partial.render_profile_name(profile_renderer)
+
+        # build the profile using the base renderer and the one fact we know
+        if profile_name is None:
+            # Note: only the named profile section is rendered here. The rest of the
+            # profile is ignored.
+            partial = cls.collect_project(args)
+            assert type(partial) is PartialProject
+            profile_name = partial.render_profile_name(profile_renderer)
+
         profile = cls._get_rendered_profile(args, profile_renderer, profile_name)
         # Save env_vars encountered in rendering for partial parsing
         profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
+        return profile
 
-        # get a new renderer using our target information and render the
-        # project
-        project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
-        project = partial.render(project_renderer)
-        # Save env_vars encountered in rendering for partial parsing
-        project.project_env_vars = project_renderer.ctx_obj.env_vars
-        return (project, profile)
+    @classmethod
+    def collect_project(
+        cls: Type["RuntimeConfig"],
+        args: Any,
+        project_renderer: Optional[DbtProjectYamlRenderer] = None,
+    ) -> Union[Project, PartialProject]:
+
+        project_root = args.project_dir if args.project_dir else os.getcwd()
+        version_check = bool(flags.VERSION_CHECK)
+        partial = Project.partial_load(project_root, verify_version=version_check)
+        if project_renderer is None:
+            return partial
+        else:
+            project = partial.render(project_renderer)
+            project.project_env_vars = project_renderer.ctx_obj.env_vars
+            return project
 
     # Called in main.py, lib.py, task/base.py
     @classmethod
