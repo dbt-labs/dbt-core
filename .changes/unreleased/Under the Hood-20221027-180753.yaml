@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Fix deprecated GH action command
+time: 2022-10-27T18:07:53.205506+02:00
+custom:
+  Author: kevinneville
+  Issue: "6153"
+  PR: "6152"
