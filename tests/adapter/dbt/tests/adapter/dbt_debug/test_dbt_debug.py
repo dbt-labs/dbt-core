@@ -80,8 +80,16 @@ class TestDebugInvalidProjectPostgres(BaseDebug):
         self.check_project(splitout)
 
     def test_badproject(self, project):
-        with open("dbt_project.yml", "w") as f:  # noqa: F841
-            yaml.safe_dump({"invalid-key": "not a valid key so this is bad project"})
+        update_project = {"invalid-key": "not a valid key so this is bad project"}
+
+        with open("dbt_project.yml", "r") as f:
+            cur_project = yaml.safe_load(f)
+            cur_project.update(update_project)
+
+        if cur_project:
+            with open("dbt_project.yml", "w") as f:
+                yaml.safe_dump(cur_project, f)
+
         run_dbt(["debug", "--profile", "test"], expect_pass=False)
         splitout = self.capsys.readouterr().out.split("\n")
         self.check_project(splitout)
