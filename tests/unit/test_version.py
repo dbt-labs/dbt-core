@@ -706,7 +706,7 @@ def mock_latest_versions(mocker, core_latest=None, plugins={}):
         mocked_response = mocker.Mock()
         mocked_response.json.return_value = {"bad object": None}
 
-        version_url = args[0]
+        version_url = kwargs['url']
 
         if version_url is dbt.version.PYPI_VERSION_URL:
             if core_latest:
