@@ -483,7 +483,16 @@ class RuntimeRefResolver(BaseRefResolver):
                 disabled=isinstance(target_model, Disabled),
             )
         self.validate(target_model, target_name, target_package)
-        return self.create_relation(target_model, target_name)
+        relation = self.db_wrapper._adapter.get_relation(
+            database=target_model.database,
+            schema=target_model.schema,
+            identifier=target_model.identifier
+        )
+        if relation is not None:
+            return relation
+        else:
+            # we need to create a relation if no existing relation was found
+            return self.create_relation(target_model, target_name)
 
     def create_relation(self, target_model: ManifestNode, name: str) -> RelationProxy:
         if target_model.is_ephemeral_model:
