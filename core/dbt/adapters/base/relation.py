@@ -1,5 +1,5 @@
 from collections.abc import Hashable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
 
 from dbt.contracts.graph.nodes import SourceDefinition, ParsedNode
@@ -26,8 +26,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     path: Path
     type: Optional[RelationType] = None
     quote_character: str = '"'
-    include_policy: Policy = Policy()
-    quote_policy: Policy = Policy()
+    # Python 3.11 requires that these use default_factory instead of simple default
+    # ValueError: mutable default <class 'dbt.contracts.relation.Policy'> for field include_policy is not allowed: use default_factory
+    include_policy: Policy = field(default_factory=Policy)
+    quote_policy: Policy = field(default_factory=Policy)
     dbt_created: bool = False
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
@@ -51,11 +53,11 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @classmethod
     def get_default_quote_policy(cls) -> Policy:
-        return cls._get_field_named("quote_policy").default
+        return cls._get_field_named("quote_policy").default_factory
 
     @classmethod
     def get_default_include_policy(cls) -> Policy:
-        return cls._get_field_named("include_policy").default
+        return cls._get_field_named("include_policy").default_factory
 
     def get(self, key, default=None):
         """Override `.get` to return a metadata object so we don't break
@@ -187,7 +189,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         source_quoting = source.quoting.to_dict(omit_none=True)
         source_quoting.pop("column", None)
         quote_policy = deep_merge(
-            cls.get_default_quote_policy().to_dict(omit_none=True),
+            cls.get_default_quote_policy()().to_dict(omit_none=True),  # mypy doesn't like this
             source_quoting,
             kwargs.get("quote_policy", {}),
         )
