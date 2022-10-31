@@ -50,7 +50,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
-    warn_invalid_patch,
     validator_error_message,
     JSONValidationException,
     raise_invalid_property_yml_version,
@@ -60,9 +59,10 @@ from dbt.exceptions import (
     raise_duplicate_macro_patch_name,
     InternalException,
     raise_duplicate_source_patch_name,
-    warn_or_error,
     CompilationException,
 )
+from dbt.events.functions import warn_or_error
+from dbt.events.types import WrongResourceSchemaFile, NoNodeForYamlKey, MacroPatchNotFound
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
@@ -74,7 +74,6 @@ from dbt.parser.generic_test_builders import (
     TestBlock,
     Testable,
 )
-from dbt.ui import warning_tag
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
@@ -873,7 +872,15 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
-                    warn_invalid_patch(patch, resource_type)
+                    warn_or_error(
+                        WrongResourceSchemaFile(
+                            patch_name=patch.name,
+                            resource_type=resource_type,
+                            plural_resource_type=resource_type.pluralize(),
+                            yaml_key=patch.yaml_key,
+                            file_path=patch.original_file_path,
+                        )
+                    )
                     return
 
         elif patch.yaml_key == "analyses":
@@ -912,12 +919,13 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
                     node.patch(patch)
             else:
-                msg = (
-                    f"Did not find matching node for patch with name '{patch.name}' "
-                    f"in the '{patch.yaml_key}' section of "
-                    f"file '{source_file.path.original_file_path}'"
+                warn_or_error(
+                    NoNodeForYamlKey(
+                        patch_name=patch.name,
+                        yaml_key=patch.yaml_key,
+                        file_path=source_file.path.original_file_path,
+                    )
                 )
-                warn_or_error(msg, log_fmt=warning_tag("{}"))
                 return
 
         # patches can't be overwritten
@@ -977,8 +985,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            msg = f'Found patch for macro "{patch.name}" ' f"which was not found"
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
+            warn_or_error(MacroPatchNotFound(patch_name=patch.name))
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")

@@ -281,6 +281,65 @@ class ProjectCreated(betterproto.Message):
 
 
 @dataclass
+class PackageRedirectDeprecation(betterproto.Message):
+    """D001"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    old_name: str = betterproto.string_field(2)
+    new_name: str = betterproto.string_field(3)
+
+
+@dataclass
+class PackageInstallPathDeprecation(betterproto.Message):
+    """D002"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+
+
+@dataclass
+class ConfigSourcePathDeprecation(betterproto.Message):
+    """D003"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    deprecated_path: str = betterproto.string_field(2)
+    exp_path: str = betterproto.string_field(3)
+
+
+@dataclass
+class ConfigDataPathDeprecation(betterproto.Message):
+    """D004"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    deprecated_path: str = betterproto.string_field(2)
+    exp_path: str = betterproto.string_field(3)
+
+
+@dataclass
+class AdapterDeprecationWarning(betterproto.Message):
+    """D005"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    old_name: str = betterproto.string_field(2)
+    new_name: str = betterproto.string_field(3)
+
+
+@dataclass
+class MetricAttributesRenamed(betterproto.Message):
+    """D006"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    metric_name: str = betterproto.string_field(2)
+
+
+@dataclass
+class ExposureNameDeprecation(betterproto.Message):
+    """D007"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    exposure: str = betterproto.string_field(2)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 
@@ -626,6 +685,14 @@ class CodeExecutionStatus(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     status: str = betterproto.string_field(2)
     elapsed: float = betterproto.float_field(3)
+
+
+@dataclass
+class CatalogGenerationError(betterproto.Message):
+    """E040"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    exc: str = betterproto.string_field(2)
 
 
 @dataclass
@@ -1065,16 +1132,118 @@ class PartialParsingDeletedExposure(betterproto.Message):
 
 
 @dataclass
-class InvalidDisabledSourceInTestNode(betterproto.Message):
+class InvalidDisabledTargetInTestNode(betterproto.Message):
     """I050"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
+    resource_type_title: str = betterproto.string_field(2)
+    unique_id: str = betterproto.string_field(3)
+    original_file_path: str = betterproto.string_field(4)
+    target_kind: str = betterproto.string_field(5)
+    target_name: str = betterproto.string_field(6)
+    target_package: str = betterproto.string_field(7)
 
 
 @dataclass
-class InvalidRefInTestNode(betterproto.Message):
+class UnusedResourceConfigPath(betterproto.Message):
     """I051"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    unused_config_paths: List[str] = betterproto.string_field(2)
+
+
+@dataclass
+class SeedIncreased(betterproto.Message):
+    """I052"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+
+
+@dataclass
+class SeedExceedsLimitSamePath(betterproto.Message):
+    """I053"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+
+
+@dataclass
+class SeedExceedsLimitAndPathChanged(betterproto.Message):
+    """I054"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+
+
+@dataclass
+class SeedExceedsLimitChecksumChanged(betterproto.Message):
+    """I055"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    package_name: str = betterproto.string_field(2)
+    name: str = betterproto.string_field(3)
+    checksum_name: str = betterproto.string_field(4)
+
+
+@dataclass
+class UnusedTables(betterproto.Message):
+    """I056"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    unused_tables: List[str] = betterproto.string_field(2)
+
+
+@dataclass
+class WrongResourceSchemaFile(betterproto.Message):
+    """I057"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    patch_name: str = betterproto.string_field(2)
+    resource_type: str = betterproto.string_field(3)
+    plural_resource_type: str = betterproto.string_field(4)
+    yaml_key: str = betterproto.string_field(5)
+    file_path: str = betterproto.string_field(6)
+
+
+@dataclass
+class NoNodeForYamlKey(betterproto.Message):
+    """I058"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    patch_name: str = betterproto.string_field(2)
+    yaml_key: str = betterproto.string_field(3)
+    file_path: str = betterproto.string_field(4)
+
+
+@dataclass
+class MacroPatchNotFound(betterproto.Message):
+    """I059"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    patch_name: str = betterproto.string_field(2)
+
+
+@dataclass
+class NodeNotFoundOrDisabled(betterproto.Message):
+    """I060"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    original_file_path: str = betterproto.string_field(2)
+    unique_id: str = betterproto.string_field(3)
+    resource_type_title: str = betterproto.string_field(4)
+    target_name: str = betterproto.string_field(5)
+    target_kind: str = betterproto.string_field(6)
+    target_package: str = betterproto.string_field(7)
+    disabled: str = betterproto.string_field(8)
+
+
+@dataclass
+class GeneralMacroWarning(betterproto.Message):
+    """I061"""
 
     info: "EventInfo" = betterproto.message_field(1)
     msg: str = betterproto.string_field(2)
@@ -1306,6 +1475,23 @@ class DepsSetDownloadDirectory(betterproto.Message):
 
     info: "EventInfo" = betterproto.message_field(1)
     path: str = betterproto.string_field(2)
+
+
+@dataclass
+class DepsUnpinned(betterproto.Message):
+    """M029"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    revision: str = betterproto.string_field(2)
+    git: str = betterproto.string_field(3)
+
+
+@dataclass
+class NoNodesForSelectionCriteria(betterproto.Message):
+    """M030"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    spec_raw: str = betterproto.string_field(2)
 
 
 @dataclass
@@ -1561,6 +1747,13 @@ class SkippingDetails(betterproto.Message):
 
 
 @dataclass
+class NothingToDo(betterproto.Message):
+    """Q035"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+
+
+@dataclass
 class RunningOperationUncaughtError(betterproto.Message):
     """Q036"""
 
@@ -1577,6 +1770,13 @@ class EndRunResult(betterproto.Message):
     elapsed_time: float = betterproto.float_field(3)
     generated_at: datetime = betterproto.message_field(4)
     success: bool = betterproto.bool_field(5)
+
+
+@dataclass
+class NoNodesSelected(betterproto.Message):
+    """Q038"""
+
+    info: "EventInfo" = betterproto.message_field(1)
 
 
 @dataclass
@@ -1949,33 +2149,15 @@ class TrackingInitializeFailure(betterproto.Message):
 
 
 @dataclass
-class GeneralWarningMsg(betterproto.Message):
-    """Z046"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
-    log_fmt: str = betterproto.string_field(3)
-
-
-@dataclass
-class GeneralWarningException(betterproto.Message):
-    """Z047"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    exc: str = betterproto.string_field(2)
-    log_fmt: str = betterproto.string_field(3)
-
-
-@dataclass
 class EventBufferFull(betterproto.Message):
-    """Z048"""
+    """Z045"""
 
     info: "EventInfo" = betterproto.message_field(1)
 
 
 @dataclass
 class RunResultWarningMessage(betterproto.Message):
-    """Z049"""
+    """Z046"""
 
     info: "EventInfo" = betterproto.message_field(1)
     msg: str = betterproto.string_field(2)

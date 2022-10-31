@@ -1,10 +1,13 @@
 import betterproto
 from colorama import Style
+
 from dbt.events.base_types import NoStdOut, BaseEvent, NoFile, Cache
 from dbt.events.types import EventBufferFull, MainReportVersion, EmptyLine
 from dbt.events.proto_types import EventInfo
+from dbt.events.helpers import env_secrets, scrub_secrets
 import dbt.flags as flags
-from dbt.constants import SECRET_ENV_PREFIX, METADATA_ENV_PREFIX
+
+from dbt.constants import METADATA_ENV_PREFIX
 
 from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
 from datetime import datetime
@@ -19,7 +22,8 @@ from logging.handlers import RotatingFileHandler
 import os
 import uuid
 import threading
-from typing import List, Optional, Union, Callable, Dict
+from typing import Optional, Union, Callable, Dict
+
 from collections import deque
 
 LOG_VERSION = 3
@@ -107,19 +111,6 @@ def stop_capture_stdout_logs() -> None:
         for h in STDOUT_LOG.handlers
         if not (hasattr(h, "stream") and isinstance(h.stream, StringIO))  # type: ignore
     ]
-
-
-def env_secrets() -> List[str]:
-    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
-
-
-def scrub_secrets(msg: str, secrets: List[str]) -> str:
-    scrubbed = msg
-
-    for secret in secrets:
-        scrubbed = scrubbed.replace(secret, "*****")
-
-    return scrubbed
 
 
 # returns a dictionary representation of the event fields.
@@ -219,6 +210,15 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
         raise AssertionError(
             f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
         )
+
+
+def warn_or_error(event, node=None):
+    if flags.WARN_ERROR:
+        from dbt.exceptions import raise_compiler_error
+
+        raise_compiler_error(scrub_secrets(event.info.msg, env_secrets()), node)
+    else:
+        fire_event(event)
 
 
 # an alternative to fire_event which only creates and logs the event value
