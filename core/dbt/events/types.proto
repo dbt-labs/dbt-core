@@ -213,6 +213,53 @@ message ProjectCreated {
     string slack_url = 4;
 }
 
+// D - Deprecation
+
+// D001
+message PackageRedirectDeprecation {
+    EventInfo info = 1;
+    string old_name = 2;
+    string new_name = 3;
+}
+
+// D002
+message PackageInstallPathDeprecation {
+    EventInfo info = 1;
+}
+
+// D003
+message ConfigSourcePathDeprecation {
+    EventInfo info = 1;
+    string deprecated_path = 2;
+    string exp_path = 3;
+}
+
+// D004
+message ConfigDataPathDeprecation {
+    EventInfo info = 1;
+    string deprecated_path = 2;
+    string exp_path = 3;
+}
+
+//D005
+message AdapterDeprecationWarning {
+    EventInfo info = 1;
+    string old_name = 2;
+    string new_name = 3;
+}
+
+//D006
+message MetricAttributesRenamed {
+    EventInfo info = 1;
+    string metric_name = 2;
+}
+
+//D007
+message ExposureNameDeprecation {
+    EventInfo info = 1;
+    string exposure = 2;
+}
+
 // E - DB Adapter
 
 // E001
@@ -455,7 +502,6 @@ message AdapterImportError {
 message PluginLoadError {
     EventInfo info = 1;
     string exc_info = 2;
-
 }
 
 // E037
@@ -478,7 +524,11 @@ message CodeExecutionStatus {
     float elapsed = 3;
 }
 
-// Skipped E040
+// E040
+message CatalogGenerationError {
+    EventInfo info = 1;
+    string exc = 2;
+}
 
 // E041
 message WriteCatalogFailure {
@@ -806,17 +856,98 @@ message PartialParsingDeletedExposure {
 }
 
 // I050
-message InvalidDisabledSourceInTestNode {
+message InvalidDisabledTargetInTestNode {
     EventInfo info = 1;
-    string msg = 2;
+    string resource_type_title = 2;
+    string unique_id = 3;
+    string original_file_path = 4;
+    string target_kind = 5;
+    string target_name = 6;
+    string target_package = 7;
 }
 
 // I051
-message InvalidRefInTestNode {
+message UnusedResourceConfigPath {
+    EventInfo info = 1;
+    repeated string unused_config_paths = 2;
+}
+
+// I052
+message SeedIncreased {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+}
+
+// I053
+message SeedExceedsLimitSamePath {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+}
+
+// I054
+message SeedExceedsLimitAndPathChanged {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+}
+
+// I055
+message SeedExceedsLimitChecksumChanged {
+    EventInfo info = 1;
+    string package_name = 2;
+    string name = 3;
+    string checksum_name = 4;
+}
+
+// I056
+message UnusedTables {
+    EventInfo info = 1;
+    repeated string unused_tables = 2;
+}
+
+// I057
+message WrongResourceSchemaFile {
+    EventInfo info = 1;
+    string patch_name = 2;
+    string resource_type = 3;
+    string plural_resource_type = 4;
+    string yaml_key = 5;
+    string file_path = 6;
+}
+
+// I058
+message NoNodeForYamlKey {
+    EventInfo info = 1;
+    string patch_name = 2;
+    string yaml_key = 3;
+    string file_path = 4;
+}
+
+// I059
+message MacroPatchNotFound {
+    EventInfo info = 1;
+    string patch_name = 2;
+}
+
+// I060
+message NodeNotFoundOrDisabled {
+    EventInfo info = 1;
+    string original_file_path = 2;
+    string unique_id = 3;
+    string resource_type_title = 4;
+    string target_name = 5;
+    string target_kind = 6;
+    string target_package = 7;
+    string disabled = 8;
+}
+
+// I061
+message GeneralMacroWarning {
     EventInfo info = 1;
     string msg = 2;
 }
-
 
 // M - Deps generation
 
@@ -990,6 +1121,19 @@ message RegistryResponseExtraNestedKeys {
 message DepsSetDownloadDirectory {
     EventInfo info = 1;
     string path = 2;
+}
+
+// M029
+message DepsUnpinned {
+    EventInfo info = 1;
+    string revision = 2;
+    string git = 3;
+}
+
+// M030
+message NoNodesForSelectionCriteria {
+    EventInfo info = 1;
+    string spec_raw = 2;
 }
 
 // Q - Node execution
@@ -1291,7 +1435,10 @@ message SkippingDetails {
     int32 total = 7;
 }
 
-// Skipped Q035
+// Q035
+message NothingToDo {
+    EventInfo info = 1;
+}
 
 // Q036
 message RunningOperationUncaughtError {
@@ -1306,6 +1453,11 @@ message EndRunResult {
     float elapsed_time = 3;
     google.protobuf.Timestamp generated_at = 4;
     bool success = 5;
+}
+
+// Q038
+message NoNodesSelected {
+    EventInfo info = 1;
 }
 
 // W - Node testing
@@ -1593,28 +1745,12 @@ message TrackingInitializeFailure {
     string exc_info = 2;
 }
 
-// Skipped Z045
-
-// Z046
-message GeneralWarningMsg {
-    EventInfo info = 1;
-    string msg = 2;
-    string log_fmt = 3;
-}
-
-// Z047
-message GeneralWarningException {
-    EventInfo info = 1;
-    string exc = 2;
-    string log_fmt = 3;
-}
-
-// Z048
+// Z045
 message EventBufferFull {
     EventInfo info = 1;
 }
 
-// Z049
+// Z046
 message RunResultWarningMessage {
     EventInfo info = 1;
     string msg = 2;

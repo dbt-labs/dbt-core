@@ -8,7 +8,6 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
-    List,
     Mapping,
     MutableSet,
     Optional,
@@ -30,10 +29,10 @@ from dbt.exceptions import (
     RuntimeException,
     raise_compiler_error,
     validator_error_message,
-    warn_or_error,
 )
+from dbt.events.functions import warn_or_error
+from dbt.events.types import UnusedResourceConfigPath
 from dbt.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
-from dbt.ui import warning_tag
 
 from .profile import Profile
 from .project import Project, PartialProject
@@ -315,11 +314,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "exposures": self._get_config_paths(self.exposures),
         }
 
-    def get_unused_resource_config_paths(
+    def warn_for_unused_resource_config_paths(
         self,
         resource_fqns: Mapping[str, PathSet],
         disabled: PathSet,
-    ) -> List[FQNPath]:
+    ) -> None:
         """Return a list of lists of strings, where each inner list of strings
         represents a type + FQN path of a resource configuration that is not
         used.
@@ -333,23 +332,13 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
             for config_path in config_paths:
                 if not _is_config_used(config_path, fqns):
-                    unused_resource_config_paths.append((resource_type,) + config_path)
-        return unused_resource_config_paths
+                    resource_path = ".".join(i for i in ((resource_type,) + config_path))
+                    unused_resource_config_paths.append(resource_path)
 
-    def warn_for_unused_resource_config_paths(
-        self,
-        resource_fqns: Mapping[str, PathSet],
-        disabled: PathSet,
-    ) -> None:
-        unused = self.get_unused_resource_config_paths(resource_fqns, disabled)
-        if len(unused) == 0:
+        if len(unused_resource_config_paths) == 0:
             return
 
-        msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
-            len(unused), "\n".join("- {}".format(".".join(u)) for u in unused)
-        )
-
-        warn_or_error(msg, log_fmt=warning_tag("{}"))
+        warn_or_error(UnusedResourceConfigPath(unused_config_paths=unused_resource_config_paths))
 
     def load_dependencies(self, base_only=False) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:
@@ -624,14 +613,6 @@ class UnsetProfileConfig(RuntimeConfig):
         project, profile = cls.collect_parts(args)
 
         return cls.from_parts(project=project, profile=profile, args=args)
-
-
-UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
-Configuration paths exist in your dbt_project.yml file which do not \
-apply to any resources.
-There are {} unused configuration paths:
-{}
-"""
 
 
 def _is_config_used(path, fqns):

@@ -9,14 +9,9 @@ from dbt.contracts.project import (
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import ExecutableError, warn_or_error, raise_dependency_error
-from dbt.events.functions import fire_event
-from dbt.events.types import EnsureGitInstalled
-from dbt import ui
-
-PIN_PACKAGE_URL = (
-    "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
-)
+from dbt.exceptions import ExecutableError, raise_dependency_error
+from dbt.events.functions import fire_event, warn_or_error
+from dbt.events.types import EnsureGitInstalled, DepsUnpinned
 
 
 def md5sum(s: str):
@@ -62,14 +57,6 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         else:
             return "revision {}".format(self.revision)
 
-    def unpinned_msg(self):
-        if self.revision == "HEAD":
-            return "not pinned, using HEAD (default branch)"
-        elif self.revision in ("main", "master"):
-            return f'pinned to the "{self.revision}" branch'
-        else:
-            return None
-
     def _checkout(self):
         """Performs a shallow clone of the repository into the downloads
         directory. This function can be called repeatedly. If the project has
@@ -92,14 +79,8 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
         path = self._checkout()
 
-        if self.unpinned_msg() and self.warn_unpinned:
-            warn_or_error(
-                'The git package "{}" \n\tis {}.\n\tThis can introduce '
-                "breaking changes into your project without warning!\n\nSee {}".format(
-                    self.git, self.unpinned_msg(), PIN_PACKAGE_URL
-                ),
-                log_fmt=ui.yellow("WARNING: {}"),
-            )
+        if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
+            warn_or_error(DepsUnpinned(git=self.git))
         loaded = Project.from_project_root(path, renderer)
         return ProjectPackageMetadata.from_project(loaded)
 
