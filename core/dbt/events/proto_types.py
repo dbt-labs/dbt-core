@@ -1146,7 +1146,7 @@ class InvalidDisabledTargetInTestNode(betterproto.Message):
 
 
 @dataclass
-class UnsedResourceConfigPath(betterproto.Message):
+class UnusedResourceConfigPath(betterproto.Message):
     """I051"""
 
     info: "EventInfo" = betterproto.message_field(1)

@@ -867,7 +867,7 @@ message InvalidDisabledTargetInTestNode {
 }
 
 // I051
-message UnsedResourceConfigPath {
+message UnusedResourceConfigPath {
     EventInfo info = 1;
     repeated string unused_config_paths = 2;
 }

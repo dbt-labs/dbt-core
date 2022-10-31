@@ -1358,7 +1358,7 @@ class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestN
 
 
 @dataclass
-class UnsedResourceConfigPath(WarnLevel, pt.UnsedResourceConfigPath):
+class UnusedResourceConfigPath(WarnLevel, pt.UnusedResourceConfigPath):
     def code(self):
         return "I051"
 
@@ -2974,7 +2974,7 @@ if 1 == 0:
         target_name="",
         target_package="",
     )
-    UnsedResourceConfigPath(unused_config_paths=[])
+    UnusedResourceConfigPath(unused_config_paths=[])
     SeedIncreased(package_name="", name="")
     SeedExceedsLimitSamePath(package_name="", name="")
     SeedExceedsLimitAndPathChanged(package_name="", name="")

@@ -25,7 +25,7 @@ from dbt.exceptions import (
     raise_compiler_error,
 )
 from dbt.events.functions import warn_or_error
-from dbt.events.types import UnsedResourceConfigPath
+from dbt.events.types import UnusedResourceConfigPath
 from dbt.dataclass_schema import ValidationError
 
 
@@ -303,7 +303,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         if len(unused_resource_config_paths) == 0:
             return
 
-        warn_or_error(UnsedResourceConfigPath(unused_config_paths=unused_resource_config_paths))
+        warn_or_error(UnusedResourceConfigPath(unused_config_paths=unused_resource_config_paths))
 
     def load_dependencies(self, base_only=False) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:
