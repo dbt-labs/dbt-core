@@ -8,7 +8,6 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
-    List,
     Mapping,
     MutableSet,
     Optional,
@@ -30,13 +29,10 @@ from dbt.exceptions import (
     RuntimeException,
     raise_compiler_error,
     validator_error_message,
-    raise_compiler_error,
 )
 from dbt.events.functions import warn_or_error
 from dbt.events.types import UnusedResourceConfigPath
-from dbt.dataclass_schema import ValidationError
 from dbt.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
-from dbt.ui import warning_tag
 
 from .profile import Profile
 from .project import Project, PartialProject
