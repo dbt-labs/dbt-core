@@ -1236,15 +1236,24 @@ def _process_semantic_information_for_metric(
                         )
                     metric.dimensions[to_model.name].append(col.name)
 
-        import pdb
-
-        pdb.set_trace()
-
-        # if metric.time_grains:
-        #     pass
-        # elif timestamp_col:
-        #     inferred_time_grains  = timestamp_col.time_grains
-        #     metric.time_grains = inferred_time_grains
+        if (
+            not metric.time_grains
+            and not timestamp_col.time_grains
+            and not metric.config._extra["time_grains"]
+        ):
+            raise dbt.exceptions.CompilationException(
+                f"""The metric `{metric.name}` does not have time_grains configured.
+                    Please add a list of timegrains to the metric specification, the timestamp columns, or as a metric config."""
+            )
+        # metric spec takes first precedence
+        elif metric.time_grains:
+            pass
+        # then timegrains from the column config
+        elif timestamp_col.time_grains:
+            metric.time_grains = timestamp_col.time_grains
+        # then metric configs
+        else:
+            metric.time_grains = metric.config._extra["time_grains"]
 
 
 def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: ParsedMetric):
