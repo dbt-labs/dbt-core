@@ -1916,47 +1916,9 @@ class LogTestResult(ErrorLevel, pt.LogTestResult):
             return "error"
         else:
             return status
-    @classmethod
-    def status_to_level(cls, status):
-        if status == "fail":
-            return "error"
-        else:
-            return status
 
 
-@dataclass
-class PrintWarnTestResult(WarnLevel, pt.PrintWarnTestResult):
-    def code(self):
-        return "Q009"
-
-    def message(self) -> str:
-        info = f"WARN {self.num_failures}"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=yellow(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintFailureTestResult(ErrorLevel, pt.PrintFailureTestResult):
-    def code(self):
-        return "Q010"
-
-    def message(self) -> str:
-        info = f"FAIL {self.num_failures}"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=red(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
->>>>>>> main
+# Skipped Q008, Q009, Q010
 
 
 @dataclass
@@ -2051,16 +2013,16 @@ class LogFreshnessResult(InfoLevel, pt.LogFreshnessResult):
     def message(self) -> str:
         if self.status == "runtimeerr":
             info = "ERROR"
-            status = ui.red(info)
+            status = red(info)
         elif self.status == "error":
             info = "ERROR STALE"
-            status = ui.red(info)
+            status = red(info)
         elif self.status == "warn":
             info = "WARN"
-            status = ui.yellow(info)
+            status = yellow(info)
         else:
             info = "PASS"
-            status = ui.green(info)
+            status = green(info)
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
