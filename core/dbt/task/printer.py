@@ -120,6 +120,8 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
     elif result.message is not None:
         first = True
         for line in result.message.split("\n"):
+            # TODO: why do we format like this?  Is there a reason this needs to
+            # be split instead of sending it as a single log line?
             if first:
                 fire_event(FirstRunResultError(msg=line))
                 first = False

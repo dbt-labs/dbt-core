@@ -973,7 +973,9 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
     with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'modified')
         warn_or_error_patch.assert_called_once()
-        msg = warn_or_error_patch.call_args[0][0]
+        event = warn_or_error_patch.call_args[0][0]
+        assert event.info.name == 'SeedExceedsLimitSamePath'
+        msg = event.info.msg
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
@@ -988,7 +990,9 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         assert search_manifest_using_method(
             manifest, method, 'modified') == {'seed'}
         warn_or_error_patch.assert_called_once()
-        msg = warn_or_error_patch.call_args[0][0]
+        event = warn_or_error_patch.call_args[0][0]
+        assert event.info.name == 'SeedIncreased'
+        msg = event.info.msg
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')

@@ -18,7 +18,7 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
 )
 from dbt.helper_types import PathSet
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
     PartialParsingFullReparseBecauseOfError,
     PartialParsingExceptionFile,
@@ -35,10 +35,10 @@ from dbt.events.types import (
     PartialParsingNotEnabled,
     ParsedFileLoadFailed,
     PartialParseSaveFileNotFound,
-    InvalidDisabledSourceInTestNode,
-    InvalidRefInTestNode,
+    InvalidDisabledTargetInTestNode,
     PartialParsingProjectEnvVarsChanged,
     PartialParsingProfileEnvVarsChanged,
+    NodeNotFoundOrDisabled,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
@@ -71,11 +71,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.util import Writable
 from dbt.exceptions import (
-    ref_target_not_found,
-    get_target_not_found_or_disabled_msg,
     target_not_found,
-    get_not_found_or_disabled_msg,
-    warn_or_error,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -90,7 +86,6 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
-from dbt.ui import warning_tag
 from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
@@ -955,65 +950,43 @@ class ManifestLoader:
         self.manifest.rebuild_ref_lookup()
 
 
-def invalid_ref_fail_unless_test(node, target_model_name, target_model_package, disabled):
-
+def invalid_target_fail_unless_test(
+    node,
+    target_name: str,
+    target_kind: str,
+    target_package: Optional[str] = None,
+    disabled: Optional[bool] = None,
+):
     if node.resource_type == NodeType.Test:
-        msg = get_target_not_found_or_disabled_msg(
-            node=node,
-            target_name=target_model_name,
-            target_package=target_model_package,
-            disabled=disabled,
-        )
         if disabled:
-            fire_event(InvalidRefInTestNode(msg=msg))
+            fire_event(
+                InvalidDisabledTargetInTestNode(
+                    resource_type_title=node.resource_type.title(),
+                    unique_id=node.unique_id,
+                    original_file_path=node.original_file_path,
+                    target_kind=target_kind,
+                    target_name=target_name,
+                    target_package=target_package if target_package else "",
+                )
+            )
         else:
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
-    else:
-        ref_target_not_found(
-            node,
-            target_model_name,
-            target_model_package,
-            disabled=disabled,
-        )
-
-
-def invalid_source_fail_unless_test(node, target_name, target_table_name, disabled):
-    if node.resource_type == NodeType.Test:
-        msg = get_not_found_or_disabled_msg(
-            node=node,
-            target_name=f"{target_name}.{target_table_name}",
-            target_kind="source",
-            disabled=disabled,
-        )
-        if disabled:
-            fire_event(InvalidDisabledSourceInTestNode(msg=msg))
-        else:
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
+            warn_or_error(
+                NodeNotFoundOrDisabled(
+                    original_file_path=node.original_file_path,
+                    unique_id=node.unique_id,
+                    resource_type_title=node.resource_type.title(),
+                    target_name=target_name,
+                    target_kind=target_kind,
+                    target_package=target_package if target_package else "",
+                    disabled=str(disabled),
+                )
+            )
     else:
         target_not_found(
             node=node,
-            target_name=f"{target_name}.{target_table_name}",
-            target_kind="source",
-            disabled=disabled,
-        )
-
-
-def invalid_metric_fail_unless_test(node, target_metric_name, target_metric_package, disabled):
-
-    if node.resource_type == NodeType.Test:
-        msg = get_target_not_found_or_disabled_msg(
-            node=node,
-            target_name=target_metric_name,
-            target_package=target_metric_package,
-            disabled=disabled,
-        )
-        warn_or_error(msg, log_fmt=warning_tag("{}"))
-    else:
-        target_not_found(
-            node=node,
-            target_name=target_metric_name,
-            target_kind="metric",
-            target_package=target_metric_package,
+            target_name=target_name,
+            target_kind=target_kind,
+            target_package=target_package,
             disabled=disabled,
         )
 
@@ -1121,11 +1094,6 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: ParsedMetric) -> 
     metric.description = get_rendered(metric.description, context)
 
 
-# TODO: this isn't actually referenced anywhere?
-def _process_derived_metrics(context: Dict[str, Any], metric: ParsedMetric) -> None:
-    metric.description = get_rendered(metric.description, context)
-
-
 def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposure: ParsedExposure):
     """Given a manifest and exposure in that manifest, process its refs"""
     for ref in exposure.refs:
@@ -1153,10 +1121,11 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
             exposure.config.enabled = False
-            invalid_ref_fail_unless_test(
-                exposure,
-                target_model_name,
-                target_model_package,
+            invalid_target_fail_unless_test(
+                node=exposure,
+                target_name=target_model_name,
+                target_kind="node",
+                target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
             )
 
@@ -1195,13 +1164,13 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
             # This may raise. Even if it doesn't, we don't want to add
             # this metric to the graph b/c there is no destination metric
             metric.config.enabled = False
-            invalid_ref_fail_unless_test(
-                metric,
-                target_model_name,
-                target_model_package,
+            invalid_target_fail_unless_test(
+                node=metric,
+                target_name=target_model_name,
+                target_kind="node",
+                target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
             )
-
             continue
 
         target_model_id = target_model.unique_id
@@ -1239,13 +1208,13 @@ def _process_metrics_for_node(
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node
             node.config.enabled = False
-            invalid_metric_fail_unless_test(
-                node,
-                target_metric_name,
-                target_metric_package,
+            invalid_target_fail_unless_test(
+                node=node,
+                target_name=target_metric_name,
+                target_kind="source",
+                target_package=target_metric_package,
                 disabled=(isinstance(target_metric, Disabled)),
             )
-
             continue
 
         target_metric_id = target_metric.unique_id
@@ -1280,13 +1249,13 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node
             node.config.enabled = False
-            invalid_ref_fail_unless_test(
-                node,
-                target_model_name,
-                target_model_package,
+            invalid_target_fail_unless_test(
+                node=node,
+                target_name=target_model_name,
+                target_kind="node",
+                target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
             )
-
             continue
 
         target_model_id = target_model.unique_id
@@ -1312,8 +1281,11 @@ def _process_sources_for_exposure(
         )
         if target_source is None or isinstance(target_source, Disabled):
             exposure.config.enabled = False
-            invalid_source_fail_unless_test(
-                exposure, source_name, table_name, disabled=(isinstance(target_source, Disabled))
+            invalid_target_fail_unless_test(
+                node=exposure,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
             )
             continue
         target_source_id = target_source.unique_id
@@ -1332,8 +1304,11 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
         )
         if target_source is None or isinstance(target_source, Disabled):
             metric.config.enabled = False
-            invalid_source_fail_unless_test(
-                metric, source_name, table_name, disabled=(isinstance(target_source, Disabled))
+            invalid_target_fail_unless_test(
+                node=metric,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
             )
             continue
         target_source_id = target_source.unique_id
@@ -1354,8 +1329,11 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
         if target_source is None or isinstance(target_source, Disabled):
             # this folows the same pattern as refs
             node.config.enabled = False
-            invalid_source_fail_unless_test(
-                node, source_name, table_name, disabled=(isinstance(target_source, Disabled))
+            invalid_target_fail_unless_test(
+                node=node,
+                target_name=f"{source_name}.{table_name}",
+                target_kind="source",
+                disabled=(isinstance(target_source, Disabled)),
             )
             continue
         target_source_id = target_source.unique_id
