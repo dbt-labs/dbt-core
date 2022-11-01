@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix for docs generate with --defer
+time: 2022-11-01T09:01:29.321867282-07:00
+custom:
+  Author: seub
+  Issue: "6124"
+  PR: "6188"
