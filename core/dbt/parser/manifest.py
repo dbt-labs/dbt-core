@@ -1188,9 +1188,6 @@ def _process_semantic_information_for_metric(
         primary_model_dimensions = [
             col for col in target_model.columns.values() if col.is_dimension
         ]
-        import pdb
-
-        pdb.set_trace()
         timestamp_col = target_model.columns[metric.timestamp]
 
         # validate declared dims from primary model
@@ -1416,7 +1413,7 @@ def _process_semantic_information_for_node(
     target_model_package: Optional[str] = None
 
     # Limit this parsing to public models/seeds that have relationships
-    if node.resource_type == "model" and node.is_public == True:
+    if node.resource_type == "model" and node.is_public:
 
         # Creating a list that will be populated with models missing the in_public
         # flag that are being referenced with relationships
@@ -1448,7 +1445,7 @@ def _process_semantic_information_for_node(
 
             # Create a list of models that have relationships pointed at them that
             # have not been set to is_public. Use this list to raise CompilationException
-            if to_model.is_public == False:
+            if not to_model.is_public:
                 non_public_models.append(to_model.name)
 
             # Using the to_model, create an inverse relationship in the model
