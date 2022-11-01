@@ -419,6 +419,7 @@ class GraphRunnableTask(ManifestTask):
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
             self.populate_adapter_cache(adapter)
+            self.defer_to_manifest(adapter, selected_uids)
 
     def after_run(self, adapter, results):
         pass
