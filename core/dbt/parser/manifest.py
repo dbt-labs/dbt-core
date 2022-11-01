@@ -1236,7 +1236,7 @@ def _process_semantic_information_for_metric(
         if (
             not metric.time_grains
             and not timestamp_col.time_grains
-            and "time_grains" not in metric.config._extra.keys()
+            and "default_time_grains" not in metric.config._extra.keys()
         ):
             raise dbt.exceptions.CompilationException(
                 f"""The metric `{metric.name}` does not have time_grains configured. Please add a list of timegrains to the metric specification, the timestamp columns, or as a metric config."""
@@ -1249,7 +1249,7 @@ def _process_semantic_information_for_metric(
             metric.time_grains = timestamp_col.time_grains
         # then metric configs
         else:
-            metric.time_grains = metric.config._extra["time_grains"]
+            metric.time_grains = metric.config._extra["default_time_grains"]
 
 
 def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: ParsedMetric):
