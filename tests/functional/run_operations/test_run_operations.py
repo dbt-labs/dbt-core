@@ -12,11 +12,12 @@ from tests.functional.run_operations.fixtures import (
     model_sql
 )
 
+
 class TestOperations:
     @pytest.fixture(scope="class")
     def models(self):
         return {"model.sql": model_sql}
-    
+
     @pytest.fixture(scope="class")
     def macros(self):
         return {
@@ -62,7 +63,7 @@ class TestOperations:
         if extra_args:
             args.extend(extra_args)
         return run_dbt(args, expect_pass=expect_pass)
-    
+
     def test_macro_noargs(self, project):
         self.run_operation('no_args')
         check_table_does_exist(project.adapter, 'no_args')
@@ -70,23 +71,23 @@ class TestOperations:
     def test_macro_args(self, project):
         self.run_operation('table_name_args', table_name='my_fancy_table')
         check_table_does_exist(project.adapter, 'my_fancy_table')
-    
+
     def test_macro_exception(self, project):
         self.run_operation('syntax_error', False)
-    
+
     def test_macro_missing(self, project):
         self.run_operation('this_macro_does_not_exist', False)
-    
+
     def test_cannot_connect(self, project):
         self.run_operation('no_args',
                            extra_args=['--target', 'noaccess'],
                            expect_pass=False)
-    
+
     def test_vacuum(self, project):
         run_dbt(['run'])
         # this should succeed
         self.run_operation('vacuum', table_name='model')
-    
+
     def test_vacuum_ref(self, project):
         run_dbt(['run'])
         # this should succeed
