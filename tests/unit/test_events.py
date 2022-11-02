@@ -13,7 +13,7 @@ from dbt.events.base_types import (
     ErrorLevel,
     TestLevel,
 )
-from dbt.events.proto_types import NodeInfo, RunResultMsg, ReferenceKeyMsg
+from dbt.events.proto_types import ListOfStrings, NodeInfo, RunResultMsg, ReferenceKeyMsg
 from importlib import reload
 import dbt.events.functions as event_funcs
 import dbt.flags as flags
@@ -321,7 +321,8 @@ sample_values = [
     DepsInstallInfo(version_name=""),
     DepsUpdateAvailable(version_latest=""),
     DepsListSubdirectory(subdirectory=""),
-    DepsNotifyUpdatesAvailable(packages=[]),
+    DepsNotifyUpdatesAvailable(packages=ListOfStrings()),
+    DepsNotifyUpdatesAvailable(packages=ListOfStrings(['dbt-utils'])),
     DatabaseErrorRunningHook(hook_type=""),
     EmptyLine(),
     HooksRunning(num_hooks=0, hook_type=""),
