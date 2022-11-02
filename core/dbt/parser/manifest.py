@@ -1251,6 +1251,18 @@ def _process_semantic_information_for_metric(
             metric.time_grains = metric.config._extra["default_time_grains"]
 
 
+def _validate_non_public_metric(metric: ParsedMetric):
+    """
+    Ensure that there are the necessary fields for metrics from non-public models
+    """
+    keys_to_check = ["time_grains"]
+    keys_without_values = [key for key in keys_to_check if not metric.to_dict()[key]]
+    for key in keys_without_values:
+        raise dbt.exceptions.CompilationException(
+            f"Metrics built on non-public models must delare the `{key}` property. Please add this to the `{metric.name}` definition in {metric.original_file_path}."
+        )
+
+
 def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: ParsedMetric):
     """Given a manifest and a metric in that manifest, process its refs"""
     for ref in metric.refs:
@@ -1291,9 +1303,12 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
 
         metric.depends_on.nodes.append(target_model_id)
 
-        _process_semantic_information_for_metric(
-            manifest, target_model, metric, target_model_package, current_project
-        )
+        if target_model.is_public:
+            _process_semantic_information_for_metric(
+                manifest, target_model, metric, target_model_package, current_project
+            )
+        else:
+            _validate_non_public_metric(metric)
 
         # this should not go here
         # this checks the node columns, and adds any dimensions
