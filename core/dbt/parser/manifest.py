@@ -1240,10 +1240,6 @@ def _process_semantic_information_for_metric(
         ):
             metric.time_grains = ["day", "week", "month", "year"]
             # TODO: make this a structured log
-            # return (
-            #     f"""The metric `{metric.name}` does not have time_grains configured. Defaulting to 'day','week','month','year']. You can update this by editing the metric specification, the timestamp columns, or the metric config."""
-            # )
-
         # metric spec takes first precedence
         elif metric.time_grains:
             pass
