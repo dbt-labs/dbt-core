@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
+    DynamicLevel,
     NoFile,
     DebugLevel,
     InfoLevel,
@@ -1883,7 +1884,7 @@ class SQLRunnerException(DebugLevel, pt.SQLRunnerException):  # noqa
 
 
 @dataclass
-class LogTestResult(ErrorLevel, pt.LogTestResult):
+class LogTestResult(DynamicLevel, pt.LogTestResult):
     def code(self):
         return "Q007"
 
@@ -1912,10 +1913,17 @@ class LogTestResult(ErrorLevel, pt.LogTestResult):
 
     @classmethod
     def status_to_level(cls, status):
-        if status == "fail":
-            return "error"
+        # The statuses come from TestStatus
+        level_lookup = {
+            "fail": "error",
+            "pass": "info",
+            "warn": "warn",
+            "error": "error",
+        }
+        if status in level_lookup:
+            return level_lookup[status]
         else:
-            return status
+            return "info"
 
 
 # Skipped Q008, Q009, Q010
@@ -1932,7 +1940,7 @@ class LogStartLine(InfoLevel, pt.LogStartLine):  # noqa
 
 
 @dataclass
-class LogModelResult(InfoLevel, pt.LogModelResult):
+class LogModelResult(DynamicLevel, pt.LogModelResult):
     def code(self):
         return "Q012"
 
@@ -1958,7 +1966,7 @@ class LogModelResult(InfoLevel, pt.LogModelResult):
 
 
 @dataclass
-class LogSnapshotResult(ErrorLevel, pt.LogSnapshotResult):
+class LogSnapshotResult(DynamicLevel, pt.LogSnapshotResult):
     def code(self):
         return "Q015"
 
@@ -1981,7 +1989,7 @@ class LogSnapshotResult(ErrorLevel, pt.LogSnapshotResult):
 
 
 @dataclass
-class LogSeedResult(InfoLevel, pt.LogSeedResult):
+class LogSeedResult(DynamicLevel, pt.LogSeedResult):
     def code(self):
         return "Q016"
 
@@ -2006,12 +2014,12 @@ class LogSeedResult(InfoLevel, pt.LogSeedResult):
 
 
 @dataclass
-class LogFreshnessResult(InfoLevel, pt.LogFreshnessResult):
+class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
     def code(self):
         return "Q018"
 
     def message(self) -> str:
-        if self.status == "runtimeerr":
+        if self.status == "runtime error":
             info = "ERROR"
             status = red(info)
         elif self.status == "error":
@@ -2034,12 +2042,17 @@ class LogFreshnessResult(InfoLevel, pt.LogFreshnessResult):
 
     @classmethod
     def status_to_level(cls, status):
-        if status == "runtimeerr":
-            return "error"
-        elif status == "pass":
+        # The statuses come from FreshnessStatus
+        level_lookup = {
+            "runtime error": "error",
+            "pass": "info",
+            "warn": "warn",
+            "error": "error",
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
             return "info"
-        else:  # warn, error
-            return status
 
 
 # Skipped Q019, Q020, Q021

@@ -30,7 +30,7 @@ def get_all_subclasses(cls):
     all_subclasses = []
     for subclass in cls.__subclasses__():
         # If the test breaks because of abcs this list might have to be updated.
-        if subclass in [TestLevel, DebugLevel, WarnLevel, InfoLevel, ErrorLevel]:
+        if subclass in [TestLevel, DebugLevel, WarnLevel, InfoLevel, ErrorLevel, DynamicLevel]:
             continue
         all_subclasses.append(subclass)
         all_subclasses.extend(get_all_subclasses(subclass))
@@ -96,7 +96,7 @@ class TestEventCodes:
         for event in all_concrete:
             if not inspect.isabstract(event):
                 # must be in the form 1 capital letter, 3 digits
-                assert re.match("^[A-Z][0-9]{3}", event.code)
+                assert re.match("^[A-Z][0-9]{3}", event.info.code)
                 # cannot have been used already
                 assert (
                     event.info.code not in all_codes

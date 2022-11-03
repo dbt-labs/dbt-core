@@ -6,8 +6,9 @@ from dbt.events.types import (
     MainEncounteredError,
     PluginLoadError,
     LogStartLine,
+    LogTestResult,
 )
-from dbt.events.functions import event_to_dict, LOG_VERSION, reset_metadata_vars
+from dbt.events.functions import event_to_dict, LOG_VERSION, reset_metadata_vars, info
 from dbt.events import proto_types as pl
 from dbt.version import installed
 
@@ -121,3 +122,16 @@ def test_extra_dict_on_event(monkeypatch):
 
     # clean up
     reset_metadata_vars()
+
+
+def test_dynamic_level_events():
+    event = LogTestResult(
+        name="model_name",
+        info=info(level=LogTestResult.status_to_level("pass")),
+        status="pass",
+        index=1,
+        num_models=3,
+        num_failures=0
+    )
+    assert event
+    assert event.info.level == "info"

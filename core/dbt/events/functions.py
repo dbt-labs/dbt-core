@@ -160,7 +160,7 @@ def create_debug_text_log_line(e: BaseEvent) -> str:
     ts: str = get_ts().strftime("%H:%M:%S.%f")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     # Make the levels all 5 characters so they line up
-    level: str = f"{e.level_tag():<5}"
+    level: str = f"{e.log_level():<5}"
     thread = ""
     if threading.current_thread().name:
         thread_name = threading.current_thread().name
@@ -192,23 +192,23 @@ def create_log_line(e: BaseEvent, file_output=False) -> Optional[str]:
 
 # allows for reuse of this obnoxious if else tree.
 # do not use for exceptions, it doesn't pass along exc_info, stack_info, or extra
-def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
+def send_to_logger(l: Union[Logger, logbook.Logger], level: str, log_line: str):
     if not log_line:
         return
-    if level_tag == "test":
+    if level == "test":
         # TODO after implmenting #3977 send to new test level
         l.debug(log_line)
-    elif level_tag == "debug":
+    elif level == "debug":
         l.debug(log_line)
-    elif level_tag == "info":
+    elif level == "info":
         l.info(log_line)
-    elif level_tag == "warn":
+    elif level == "warn":
         l.warning(log_line)
-    elif level_tag == "error":
+    elif level == "error":
         l.error(log_line)
     else:
         raise AssertionError(
-            f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
+            f"While attempting to log {log_line}, encountered the unhandled level: {level}"
         )
 
 
@@ -245,7 +245,7 @@ def fire_event(e: BaseEvent) -> None:
         # destination
         log_line = create_log_line(e)
         if log_line:
-            send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
+            send_to_logger(GLOBAL_LOGGER, level=e.log_level(), log_line=log_line)
         return  # exit the function to avoid using the current logger as well
 
     # always logs debug level regardless of user input
@@ -253,19 +253,19 @@ def fire_event(e: BaseEvent) -> None:
         log_line = create_log_line(e, file_output=True)
         # doesn't send exceptions to exception logger
         if log_line:
-            send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
+            send_to_logger(FILE_LOG, level=e.log_level(), log_line=log_line)
 
     if not isinstance(e, NoStdOut):
         # explicitly checking the debug flag here so that potentially expensive-to-construct
         # log messages are not constructed if debug messages are never shown.
-        if e.level_tag() == "debug" and not flags.DEBUG:
+        if e.log_level() == "debug" and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
-        if e.level_tag() != "error" and flags.QUIET:
+        if e.log_level() != "error" and flags.QUIET:
             return  # eat all non-exception messages in quiet mode
 
         log_line = create_log_line(e)
         if log_line:
-            send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
+            send_to_logger(STDOUT_LOG, level=e.log_level(), log_line=log_line)
 
 
 def get_metadata_vars() -> Dict[str, str]:
