@@ -73,7 +73,6 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     else:
         profiles_dir = flags.DEFAULT_PROFILES_DIR
 
-    
     profile_name = getattr(args, "profile", None)
 
     runtime_args = RuntimeArgs(
@@ -90,7 +89,6 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     assert type(project) is Project
 
     config = RuntimeConfig.from_parts(project, profile, runtime_args)
-
 
     # Set global flags from arguments
     flags.set_from_args(args, config)
