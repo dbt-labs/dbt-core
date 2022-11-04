@@ -1,4 +1,6 @@
 import os
+from dbt.config.project import Project
+from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.contracts.results import RunningStatus, collect_timing_info
 from dbt.events.functions import fire_event
 from dbt.events.types import NodeCompiling, NodeExecuting
@@ -71,16 +73,22 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     else:
         profiles_dir = flags.DEFAULT_PROFILES_DIR
 
+    profile_name = getattr(args, "profile", None)
+
     runtime_args = RuntimeArgs(
         project_dir=project_dir,
         profiles_dir=profiles_dir,
         single_threaded=single_threaded,
-        profile=getattr(args, "profile", None),
+        profile=profile_name,
         target=getattr(args, "target", None),
     )
 
-    # Construct a RuntimeConfig from phony args
-    config = RuntimeConfig.from_args(runtime_args)
+    profile = RuntimeConfig.collect_profile(args=runtime_args, profile_name=profile_name)
+    project_renderer = DbtProjectYamlRenderer(profile, None)
+    project = RuntimeConfig.collect_project(args=runtime_args, project_renderer=project_renderer)
+    assert type(project) is Project
+
+    config = RuntimeConfig.from_parts(project, profile, runtime_args)
 
     # Set global flags from arguments
     flags.set_from_args(args, config)
