@@ -240,13 +240,20 @@ def rename_sql_attr(node_content: dict) -> dict:
 def upgrade_manifest_json(manifest: dict) -> dict:
     for node_content in manifest.get("nodes", {}).values():
         node_content = rename_sql_attr(node_content)
+        if node_content["resource_type"] != "seed" and "root_path" in node_content:
+            del node_content["root_path"]
     for disabled in manifest.get("disabled", {}).values():
         # There can be multiple disabled nodes for the same unique_id
         # so make sure all the nodes get the attr renamed
-        disabled = [rename_sql_attr(n) for n in disabled]
+        for node_content in disabled:
+            rename_sql_attr(node_content)
+            if node_content["resource_type"] != "seed" and "root_path" in node_content:
+                del node_content["root_path"]
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
+        if "root_path" in metric_content:
+            del metric_content["root_path"]
     return manifest
 
 
