@@ -254,6 +254,18 @@ def upgrade_manifest_json(manifest: dict) -> dict:
         metric_content = rename_metric_attr(metric_content)
         if "root_path" in metric_content:
             del metric_content["root_path"]
+    for exposure_content in manifest.get("exposures", {}).values():
+        if "root_path" in exposure_content:
+            del exposure_content["root_path"]
+    for source_content in manifest.get("sources", {}).values():
+        if "root_path" in exposure_content:
+            del source_content["root_path"]
+    for macro_content in manifest.get("macros", {}).values():
+        if "root_path" in macro_content:
+            del macro_content["root_path"]
+    for doc_content in manifest.get("docs", {}).values():
+        if "root_path" in doc_content:
+            del doc_content["root_path"]
     return manifest
 
 
@@ -298,7 +310,7 @@ class VersionedSchema(dbtClassMixin):
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )
-        if get_manifest_schema_version(data) <= 6:
+        if get_manifest_schema_version(data) <= 7:
             data = upgrade_manifest_json(data)
         return cls.from_dict(data)  # type: ignore
 
