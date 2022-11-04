@@ -7,6 +7,8 @@ from dbt.parser.search import FileBlock
 
 class SeedParser(SimpleSQLParser[ParsedSeedNode]):
     def parse_from_dict(self, dct, validate=True) -> ParsedSeedNode:
+        # seeds need the root_path because the contents are not loaded
+        dct["root_path"] = self.project.project_root
         if validate:
             ParsedSeedNode.validate(dct)
         return ParsedSeedNode.from_dict(dct)

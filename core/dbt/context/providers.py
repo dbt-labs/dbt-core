@@ -803,6 +803,7 @@ class ProviderContext(ManifestContext):
             raise_compiler_error(
                 "can only load_agate_table for seeds (got a {})".format(self.model.resource_type)
             )
+        assert self.model.root_path
         path = os.path.join(self.model.root_path, self.model.original_file_path)
         column_types = self.model.config.column_types
         try:

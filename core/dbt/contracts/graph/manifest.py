@@ -1183,7 +1183,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 7)
+@schema_version("manifest", 8)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1229,7 +1229,7 @@ class WritableManifest(ArtifactMixin):
 
     @classmethod
     def compatible_previous_versions(self):
-        return [("manifest", 4), ("manifest", 5), ("manifest", 6)]
+        return [("manifest", 4), ("manifest", 5), ("manifest", 6), ("manifest", 7)]
 
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():

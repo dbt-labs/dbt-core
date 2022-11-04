@@ -127,7 +127,6 @@ def test_config_same(unrendered_node_config_dict, func):
 def base_parsed_model_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Model),
         'path': '/root/x/path.sql',
@@ -175,7 +174,6 @@ def base_parsed_model_dict():
 def basic_parsed_model_object():
     return ParsedModelNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -204,7 +202,6 @@ def basic_parsed_model_object():
 def minimal_parsed_model_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Model),
         'path': '/root/x/path.sql',
@@ -226,7 +223,6 @@ def minimal_parsed_model_dict():
 def complex_parsed_model_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Model),
         'path': '/root/x/path.sql',
@@ -285,7 +281,6 @@ def complex_parsed_model_dict():
 def complex_parsed_model_object():
     return ParsedModelNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -428,7 +423,6 @@ def test_compare_changed_model(func, basic_parsed_model_object):
 def basic_parsed_seed_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Seed),
         'path': '/root/seeds/seed.csv',
@@ -476,7 +470,6 @@ def basic_parsed_seed_dict():
 def basic_parsed_seed_object():
     return ParsedSeedNode(
         name='foo',
-        root_path='/root/',
         resource_type=NodeType.Seed,
         path='/root/seeds/seed.csv',
         original_file_path='seeds/seed.csv',
@@ -509,7 +502,6 @@ def basic_parsed_seed_object():
 def minimal_parsed_seed_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Seed),
         'path': '/root/seeds/seed.csv',
@@ -530,7 +522,6 @@ def minimal_parsed_seed_dict():
 def complex_parsed_seed_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Seed),
         'path': '/root/seeds/seed.csv',
@@ -581,7 +572,6 @@ def complex_parsed_seed_dict():
 def complex_parsed_seed_object():
     return ParsedSeedNode(
         name='foo',
-        root_path='/root/',
         resource_type=NodeType.Seed,
         path='/root/seeds/seed.csv',
         original_file_path='seeds/seed.csv',
@@ -731,7 +721,6 @@ def basic_parsed_model_patch_object():
 def patched_model_object():
     return ParsedModelNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -771,7 +760,6 @@ def test_patch_parsed_model(basic_parsed_model_object, basic_parsed_model_patch_
 def minimal_parsed_hook_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'resource_type': str(NodeType.Operation),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -791,7 +779,6 @@ def minimal_parsed_hook_dict():
 def base_parsed_hook_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Operation),
         'path': '/root/x/path.sql',
@@ -839,7 +826,6 @@ def base_parsed_hook_dict():
 def base_parsed_hook_object():
     return ParsedHookNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -869,7 +855,6 @@ def base_parsed_hook_object():
 def complex_parsed_hook_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Operation),
         'path': '/root/x/path.sql',
@@ -928,7 +913,6 @@ def complex_parsed_hook_dict():
 def complex_parsed_hook_object():
     return ParsedHookNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -996,7 +980,6 @@ def test_invalid_hook_index_type(base_parsed_hook_dict):
 def minimal_parsed_schema_test_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
@@ -1023,7 +1006,6 @@ def minimal_parsed_schema_test_dict():
 def basic_parsed_schema_test_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
@@ -1071,7 +1053,6 @@ def basic_parsed_schema_test_dict():
 def basic_parsed_schema_test_object():
     return ParsedGenericTestNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -1100,7 +1081,6 @@ def basic_parsed_schema_test_object():
 def complex_parsed_schema_test_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
@@ -1165,7 +1145,6 @@ def complex_parsed_schema_test_object():
     cfg._extra.update({'extra_key': 'extra value'})
     return ParsedGenericTestNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -1459,7 +1438,6 @@ def test_invalid_check_value(basic_check_snapshot_config_dict):
 def basic_timestamp_snapshot_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Snapshot),
         'path': '/root/x/path.sql',
@@ -1518,7 +1496,6 @@ def basic_timestamp_snapshot_dict():
 def basic_timestamp_snapshot_object():
     return ParsedSnapshotNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -1567,7 +1544,6 @@ def basic_intermediate_timestamp_snapshot_object():
 
     return IntermediateSnapshotNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -1602,7 +1578,6 @@ def basic_intermediate_timestamp_snapshot_object():
 def basic_check_snapshot_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1.0,
         'resource_type': str(NodeType.Snapshot),
         'path': '/root/x/path.sql',
@@ -1661,7 +1636,6 @@ def basic_check_snapshot_dict():
 def basic_check_snapshot_object():
     return ParsedSnapshotNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -1710,7 +1684,6 @@ def basic_intermediate_check_snapshot_object():
 
     return IntermediateSnapshotNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -1829,7 +1802,6 @@ class TestParsedMacro(ContractTestCase):
             'created_at': 1.0,
             'package_name': 'test',
             'macro_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
-            'root_path': '/root/',
             'resource_type': 'macro',
             'unique_id': 'macro.test.foo',
             'tags': [],
@@ -1848,7 +1820,6 @@ class TestParsedMacro(ContractTestCase):
             original_file_path='/root/path.sql',
             package_name='test',
             macro_sql='{% macro foo() %}select 1 as id{% endmacro %}',
-            root_path='/root/',
             resource_type=NodeType.Macro,
             unique_id='macro.test.foo',
             tags=[],
@@ -1881,7 +1852,6 @@ class TestParsedDocumentation(ContractTestCase):
             'original_file_path': '/root/docs/doc.md',
             'package_name': 'test',
             'path': '/root/docs',
-            'root_path': '/root',
             'unique_id': 'test.foo',
         }
 
@@ -1889,7 +1859,6 @@ class TestParsedDocumentation(ContractTestCase):
         doc_dict = self._ok_dict()
         doc = self.ContractType(
             package_name='test',
-            root_path='/root',
             path='/root/docs',
             original_file_path='/root/docs/doc.md',
             name='foo',
@@ -1914,7 +1883,6 @@ class TestParsedDocumentation(ContractTestCase):
 def minimum_parsed_source_definition_dict():
     return {
         'package_name': 'test',
-        'root_path': '/root',
         'path': '/root/models/sources.yml',
         'original_file_path': '/root/models/sources.yml',
         'created_at': 1.0,
@@ -1935,7 +1903,6 @@ def minimum_parsed_source_definition_dict():
 def basic_parsed_source_definition_dict():
     return {
         'package_name': 'test',
-        'root_path': '/root',
         'path': '/root/models/sources.yml',
         'original_file_path': '/root/models/sources.yml',
         'created_at': 1.0,
@@ -1977,7 +1944,6 @@ def basic_parsed_source_definition_object():
         path='/root/models/sources.yml',
         quoting=Quoting(),
         resource_type=NodeType.Source,
-        root_path='/root',
         schema='some_schema',
         source_description='my source description',
         source_name='my_source',
@@ -1991,7 +1957,6 @@ def basic_parsed_source_definition_object():
 def complex_parsed_source_definition_dict():
     return {
         'package_name': 'test',
-        'root_path': '/root',
         'path': '/root/models/sources.yml',
         'original_file_path': '/root/models/sources.yml',
         'created_at': 1.0,
@@ -2038,7 +2003,6 @@ def complex_parsed_source_definition_object():
         path='/root/models/sources.yml',
         quoting=Quoting(),
         resource_type=NodeType.Source,
-        root_path='/root',
         schema='some_schema',
         source_description='my source description',
         source_name='my_source',
@@ -2146,7 +2110,6 @@ def minimal_parsed_exposure_dict():
         'meta': {},
         'tags': [],
         'path': 'models/something.yml',
-        'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
         'description': '',
         'created_at': 1.0,
@@ -2172,7 +2135,6 @@ def basic_parsed_exposure_dict():
         'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
         'path': 'models/something.yml',
-        'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
         'description': '',
         'meta': {},
@@ -2194,7 +2156,6 @@ def basic_parsed_exposure_object():
         unique_id='exposure.test.my_exposure',
         package_name='test',
         path='models/something.yml',
-        root_path='/usr/src/app',
         original_file_path='models/something.yml',
         owner=ExposureOwner(email='test@example.com'),
         description='',
@@ -2234,7 +2195,6 @@ def complex_parsed_exposure_dict():
         'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
         'path': 'models/something.yml',
-        'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
         'config': {
             'enabled': True,
@@ -2259,7 +2219,6 @@ def complex_parsed_exposure_object():
         unique_id='exposure.test.my_exposure',
         package_name='test',
         path='models/something.yml',
-        root_path='/usr/src/app',
         original_file_path='models/something.yml',
         config=ExposureConfig(),
         unrendered_config={},
@@ -2318,7 +2277,6 @@ def minimal_parsed_metric_dict():
         'meta': {},
         'tags': [],
         'path': 'models/something.yml',
-        'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
         'description': '',
         'created_at': 1.0,
@@ -2351,7 +2309,6 @@ def basic_parsed_metric_dict():
         'unique_id': 'metric.test.my_metric',
         'package_name': 'test',
         'path': 'models/something.yml',
-        'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
         'description': '',
         'meta': {},
@@ -2373,7 +2330,6 @@ def basic_parsed_metric_object():
         unique_id='metric.test.my_metric',
         package_name='test',
         path='models/something.yml',
-        root_path='/usr/src/app',
         original_file_path='models/something.yml',
         description='',
         meta={},

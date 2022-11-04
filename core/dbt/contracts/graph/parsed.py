@@ -412,6 +412,9 @@ class ParsedSeedNode(ParsedNode):
     # keep this in sync with CompiledSeedNode!
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
+    # seeds need the root_path because the contents are not loaded initially
+    # and we need the root_path to load the seed later
+    root_path: Optional[str] = None
 
     @property
     def empty(self):

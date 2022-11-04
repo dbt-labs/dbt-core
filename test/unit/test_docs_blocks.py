@@ -158,7 +158,6 @@ class DocumentationParserTest(unittest.TestCase):
             self.assertIsInstance(result, ParsedDocumentation)
             self.assertEqual(result.package_name, 'some_package')
             self.assertEqual(result.original_file_path, self.testfile_path)
-            self.assertEqual(result.root_path, self.subdir_path)
             self.assertEqual(result.resource_type, NodeType.Documentation)
             self.assertEqual(result.path, 'test_file.md')
 
@@ -200,7 +199,6 @@ class DocumentationParserTest(unittest.TestCase):
             self.assertIsInstance(result, ParsedDocumentation)
             self.assertEqual(result.package_name, 'some_package')
             self.assertEqual(result.original_file_path, self.testfile_path)
-            self.assertEqual(result.root_path, self.subdir_path)
             self.assertEqual(result.resource_type, NodeType.Documentation)
             self.assertEqual(result.path, 'test_file.md')
 
