@@ -28,17 +28,16 @@ from dbt.exceptions import (
     ValidationException,
     missing_materialization,
 )
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.functions import fire_event, get_invocation_id, info
 from dbt.events.types import (
     DatabaseErrorRunningHook,
     EmptyLine,
     HooksRunning,
     HookFinished,
-    PrintModelErrorResultLine,
-    PrintModelResultLine,
-    PrintStartLine,
-    PrintHookEndLine,
-    PrintHookStartLine,
+    LogModelResult,
+    LogStartLine,
+    LogHookEndLine,
+    LogHookStartLine,
 )
 from dbt.logger import (
     TextOnly,
@@ -176,7 +175,7 @@ class ModelRunner(CompileRunner):
 
     def print_start_line(self):
         fire_event(
-            PrintStartLine(
+            LogStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
@@ -187,27 +186,22 @@ class ModelRunner(CompileRunner):
     def print_result_line(self, result):
         description = self.describe_node()
         if result.status == NodeStatus.Error:
-            fire_event(
-                PrintModelErrorResultLine(
-                    description=description,
-                    status=result.status,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
-            )
+            status = result.status
+            level = "error"
         else:
-            fire_event(
-                PrintModelResultLine(
-                    description=description,
-                    status=result.message,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
+            status = result.message
+            level = "info"
+        fire_event(
+            LogModelResult(
+                description=description,
+                status=status,
+                index=self.node_index,
+                total=self.num_nodes,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+                info=info(level=level),
             )
+        )
 
     def before_execute(self):
         self.print_start_line()
@@ -355,7 +349,7 @@ class RunTask(CompileTask):
             with UniqueID(hook.unique_id):
                 with hook_meta_ctx, startctx:
                     fire_event(
-                        PrintHookStartLine(
+                        LogHookStartLine(
                             statement=hook_text,
                             index=idx,
                             total=num_hooks,
@@ -375,7 +369,7 @@ class RunTask(CompileTask):
                 with finishctx, DbtModelState({"node_status": "passed"}):
                     hook._event_status["node_status"] = RunStatus.Success
                     fire_event(
-                        PrintHookEndLine(
+                        LogHookEndLine(
                             statement=hook_text,
                             status=status,
                             index=idx,

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
+    DynamicLevel,
     NoFile,
     DebugLevel,
     InfoLevel,
@@ -1883,76 +1884,53 @@ class SQLRunnerException(DebugLevel, pt.SQLRunnerException):  # noqa
 
 
 @dataclass
-@dataclass
-class PrintErrorTestResult(ErrorLevel, pt.PrintErrorTestResult):
+class LogTestResult(DynamicLevel, pt.LogTestResult):
     def code(self):
         return "Q007"
 
     def message(self) -> str:
-        info = "ERROR"
+        if self.status == "error":
+            info = "ERROR"
+            status = red(info)
+        elif self.status == "pass":
+            info = "PASS"
+            status = green(info)
+        elif self.status == "warn":
+            info = f"WARN {self.num_failures}"
+            status = yellow(info)
+        else:  # self.status == "fail":
+            info = f"FAIL {self.num_failures}"
+            status = red(info)
         msg = f"{info} {self.name}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=red(info),
+            status=status,
             index=self.index,
             total=self.num_models,
             execution_time=self.execution_time,
         )
 
-
-@dataclass
-class PrintPassTestResult(InfoLevel, pt.PrintPassTestResult):
-    def code(self):
-        return "Q008"
-
-    def message(self) -> str:
-        info = "PASS"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=green(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
+    @classmethod
+    def status_to_level(cls, status):
+        # The statuses come from TestStatus
+        level_lookup = {
+            "fail": "error",
+            "pass": "info",
+            "warn": "warn",
+            "error": "error",
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return "info"
 
 
-@dataclass
-class PrintWarnTestResult(WarnLevel, pt.PrintWarnTestResult):
-    def code(self):
-        return "Q009"
-
-    def message(self) -> str:
-        info = f"WARN {self.num_failures}"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=yellow(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
+# Skipped Q008, Q009, Q010
 
 
 @dataclass
-class PrintFailureTestResult(ErrorLevel, pt.PrintFailureTestResult):
-    def code(self):
-        return "Q010"
-
-    def message(self) -> str:
-        info = f"FAIL {self.num_failures}"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=red(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintStartLine(InfoLevel, pt.PrintStartLine):  # noqa
+class LogStartLine(InfoLevel, pt.LogStartLine):  # noqa
     def code(self):
         return "Q011"
 
@@ -1962,67 +1940,48 @@ class PrintStartLine(InfoLevel, pt.PrintStartLine):  # noqa
 
 
 @dataclass
-class PrintModelResultLine(InfoLevel, pt.PrintModelResultLine):
+class LogModelResult(DynamicLevel, pt.LogModelResult):
     def code(self):
         return "Q012"
 
     def message(self) -> str:
-        info = "OK created"
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
         msg = f"{info} {self.description}"
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
         )
 
 
-@dataclass
-class PrintModelErrorResultLine(ErrorLevel, pt.PrintModelErrorResultLine):
-    def code(self):
-        return "Q013"
-
-    def message(self) -> str:
-        info = "ERROR creating"
-        msg = f"{info} {self.description}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=red(self.status.upper()),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+# Skipped Q013, Q014
 
 
 @dataclass
-class PrintSnapshotErrorResultLine(ErrorLevel, pt.PrintSnapshotErrorResultLine):
-    def code(self):
-        return "Q014"
-
-    def message(self) -> str:
-        info = "ERROR snapshotting"
-        msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
-        return format_fancy_output_line(
-            msg=msg,
-            status=red(self.status.upper()),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintSnapshotResultLine(InfoLevel, pt.PrintSnapshotResultLine):
+class LogSnapshotResult(DynamicLevel, pt.LogSnapshotResult):
     def code(self):
         return "Q015"
 
     def message(self) -> str:
-        info = "OK snapshotted"
+        if self.status == "error":
+            info = "ERROR snapshotting"
+            status = red(self.status.upper())
+        else:
+            info = "OK snapshotted"
+            status = green(self.status)
+
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -2030,109 +1989,77 @@ class PrintSnapshotResultLine(InfoLevel, pt.PrintSnapshotResultLine):
 
 
 @dataclass
-class PrintSeedErrorResultLine(ErrorLevel, pt.PrintSeedErrorResultLine):
+class LogSeedResult(DynamicLevel, pt.LogSeedResult):
     def code(self):
         return "Q016"
 
     def message(self) -> str:
-        info = "ERROR loading"
+        if self.status == "error":
+            info = "ERROR loading"
+            status = red(self.status.upper())
+        else:
+            info = "OK loaded"
+            status = green(self.status)
         msg = f"{info} seed file {self.schema}.{self.relation}"
         return format_fancy_output_line(
             msg=msg,
-            status=red(self.status.upper()),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
         )
 
 
-@dataclass
-class PrintSeedResultLine(InfoLevel, pt.PrintSeedResultLine):
-    def code(self):
-        return "Q017"
-
-    def message(self) -> str:
-        info = "OK loaded"
-        msg = f"{info} seed file {self.schema}.{self.relation}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=green(self.status),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+# Skipped Q017
 
 
 @dataclass
-class PrintFreshnessErrorLine(ErrorLevel, pt.PrintFreshnessErrorLine):
+class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
     def code(self):
         return "Q018"
 
     def message(self) -> str:
-        info = "ERROR"
+        if self.status == "runtime error":
+            info = "ERROR"
+            status = red(info)
+        elif self.status == "error":
+            info = "ERROR STALE"
+            status = red(info)
+        elif self.status == "warn":
+            info = "WARN"
+            status = yellow(info)
+        else:
+            info = "PASS"
+            status = green(info)
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
-            status=red(info),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
         )
 
-
-@dataclass
-class PrintFreshnessErrorStaleLine(ErrorLevel, pt.PrintFreshnessErrorStaleLine):
-    def code(self):
-        return "Q019"
-
-    def message(self) -> str:
-        info = "ERROR STALE"
-        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=red(info),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+    @classmethod
+    def status_to_level(cls, status):
+        # The statuses come from FreshnessStatus
+        level_lookup = {
+            "runtime error": "error",
+            "pass": "info",
+            "warn": "warn",
+            "error": "error",
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return "info"
 
 
-@dataclass
-class PrintFreshnessWarnLine(WarnLevel, pt.PrintFreshnessWarnLine):
-    def code(self):
-        return "Q020"
-
-    def message(self) -> str:
-        info = "WARN"
-        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=yellow(info),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+# Skipped Q019, Q020, Q021
 
 
 @dataclass
-class PrintFreshnessPassLine(InfoLevel, pt.PrintFreshnessPassLine):
-    def code(self):
-        return "Q021"
-
-    def message(self) -> str:
-        info = "PASS"
-        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=green(info),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintCancelLine(ErrorLevel, pt.PrintCancelLine):
+class LogCancelLine(ErrorLevel, pt.LogCancelLine):
     def code(self):
         return "Q022"
 
@@ -2228,7 +2155,7 @@ class NodeExecuting(DebugLevel, pt.NodeExecuting):
 
 
 @dataclass
-class PrintHookStartLine(InfoLevel, pt.PrintHookStartLine):  # noqa
+class LogHookStartLine(InfoLevel, pt.LogHookStartLine):  # noqa
     def code(self):
         return "Q032"
 
@@ -2240,7 +2167,7 @@ class PrintHookStartLine(InfoLevel, pt.PrintHookStartLine):  # noqa
 
 
 @dataclass
-class PrintHookEndLine(InfoLevel, pt.PrintHookEndLine):  # noqa
+class LogHookEndLine(InfoLevel, pt.LogHookEndLine):  # noqa
     def code(self):
         return "Q033"
 
@@ -2472,7 +2399,7 @@ class TimingInfoCollected(DebugLevel, pt.TimingInfoCollected):
 # This prints the stack trace at the debug level while allowing just the nice exception message
 # at the error level - or whatever other level chosen.  Used in multiple places.
 @dataclass
-class PrintDebugStackTrace(DebugLevel, pt.PrintDebugStackTrace):  # noqa
+class LogDebugStackTrace(DebugLevel, pt.LogDebugStackTrace):  # noqa
     def code(self):
         return "Z011"
 
@@ -2680,7 +2607,7 @@ class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
 
 
 @dataclass
-class PrintSkipBecauseError(ErrorLevel, pt.PrintSkipBecauseError):
+class LogSkipBecauseError(ErrorLevel, pt.LogSkipBecauseError):
     def code(self):
         return "Z034"
 
@@ -3032,48 +2959,22 @@ if 1 == 0:
     SeedHeader(header="")
     SeedHeaderSeparator(len_header=0)
     SQLRunnerException(exc="")
-    PrintErrorTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-    )
-    PrintPassTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-    )
-    PrintWarnTestResult(
+    LogTestResult(
         name="",
         index=0,
         num_models=0,
         execution_time=0,
         num_failures=0,
     )
-    PrintFailureTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-        num_failures=0,
-    )
-    PrintStartLine(description="", index=0, total=0, node_info=NodeInfo())
-    PrintModelResultLine(
+    LogStartLine(description="", index=0, total=0, node_info=NodeInfo())
+    LogModelResult(
         description="",
         status="",
         index=0,
         total=0,
         execution_time=0,
     )
-    PrintModelErrorResultLine(
-        description="",
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintSnapshotErrorResultLine(
+    LogSnapshotResult(
         status="",
         description="",
         cfg={},
@@ -3081,15 +2982,7 @@ if 1 == 0:
         total=0,
         execution_time=0,
     )
-    PrintSnapshotResultLine(
-        status="",
-        description="",
-        cfg={},
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintSeedErrorResultLine(
+    LogSeedResult(
         status="",
         index=0,
         total=0,
@@ -3097,43 +2990,14 @@ if 1 == 0:
         schema="",
         relation="",
     )
-    PrintSeedResultLine(
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-        schema="",
-        relation="",
-    )
-    PrintFreshnessErrorLine(
+    LogFreshnessResult(
         source_name="",
         table_name="",
         index=0,
         total=0,
         execution_time=0,
     )
-    PrintFreshnessErrorStaleLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintFreshnessWarnLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintFreshnessPassLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintCancelLine(conn_name="")
+    LogCancelLine(conn_name="")
     DefaultSelector(name="")
     NodeStart(unique_id="")
     NodeFinished(unique_id="")
@@ -3143,12 +3007,12 @@ if 1 == 0:
     WritingInjectedSQLForNode(unique_id="")
     NodeCompiling(unique_id="")
     NodeExecuting(unique_id="")
-    PrintHookStartLine(
+    LogHookStartLine(
         statement="",
         index=0,
         total=0,
     )
-    PrintHookEndLine(
+    LogHookEndLine(
         statement="",
         status="",
         index=0,
@@ -3189,7 +3053,7 @@ if 1 == 0:
     SystemStdErrMsg(bmsg=b"")
     SystemReportReturnCode(returncode=0)
     TimingInfoCollected()
-    PrintDebugStackTrace()
+    LogDebugStackTrace()
     CheckCleanPath(path="")
     ConfirmCleanPath(path="")
     ProtectedCleanPath(path="")
@@ -3209,7 +3073,7 @@ if 1 == 0:
     FirstRunResultError(msg="")
     AfterFirstRunResultError(msg="")
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
-    PrintSkipBecauseError(schema="", relation="", index=0, total=0)
+    LogSkipBecauseError(schema="", relation="", index=0, total=0)
     EnsureGitInstalled()
     DepsCreatingLocalSymlink()
     DepsSymlinkNotAvailable()

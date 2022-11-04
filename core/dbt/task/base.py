@@ -37,9 +37,9 @@ from dbt.events.types import (
     InternalExceptionOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
-    PrintDebugStackTrace,
+    LogDebugStackTrace,
     SkippingDetails,
-    PrintSkipBecauseError,
+    LogSkipBecauseError,
     NodeCompiling,
     NodeExecuting,
 )
@@ -362,7 +362,7 @@ class BaseRunner(metaclass=ABCMeta):
                 exc=str(e),
             )
         )
-        fire_event(PrintDebugStackTrace(exc_info=traceback.format_exc()))
+        fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
 
         return str(e)
 
@@ -451,7 +451,7 @@ class BaseRunner(metaclass=ABCMeta):
             # failure, print a special 'error skip' message.
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
-                    PrintSkipBecauseError(
+                    LogSkipBecauseError(
                         schema=schema_name,
                         relation=node_name,
                         index=self.node_index,
