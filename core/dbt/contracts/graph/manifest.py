@@ -1008,7 +1008,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         adapter,
         other: "WritableManifest",
         selected: AbstractSet[UniqueID],
-        favor_state: bool,
+        favor_state: bool = False,
     ) -> None:
         """Given the selected unique IDs and a writable manifest, update this
         manifest by replacing any unselected nodes with their counterpart.
