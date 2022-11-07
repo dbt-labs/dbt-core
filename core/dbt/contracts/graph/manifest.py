@@ -499,7 +499,7 @@ def _update_into(dest: MutableMapping[str, T], new_item: T):
     existing = dest[unique_id]
     if new_item.original_file_path != existing.original_file_path:
         raise dbt.exceptions.RuntimeException(
-            f"cannot update a {new_item.resource_type} to have a new file " f"path!"
+            f"cannot update a {new_item.resource_type} to have a new file path!"
         )
     dest[unique_id] = new_item
 
@@ -1036,7 +1036,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         # log up to 5 items
         sample = list(islice(merged, 5))
-        fire_event(MergedFromState(nbr_merged=len(merged), sample=sample))
+        fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
 
@@ -1183,7 +1183,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 7)
+@schema_version("manifest", 8)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1229,7 +1229,7 @@ class WritableManifest(ArtifactMixin):
 
     @classmethod
     def compatible_previous_versions(self):
-        return [("manifest", 4), ("manifest", 5), ("manifest", 6)]
+        return [("manifest", 4), ("manifest", 5), ("manifest", 6), ("manifest", 7)]
 
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():

@@ -24,7 +24,6 @@ from typing import Optional, List, Union, Dict, Any, Sequence
 @dataclass
 class UnparsedBaseNode(dbtClassMixin, Replaceable):
     package_name: str
-    root_path: str
     path: str
     original_file_path: str
 
@@ -364,7 +363,6 @@ class SourcePatch(dbtClassMixin, Replaceable):
 @dataclass
 class UnparsedDocumentation(dbtClassMixin, Replaceable):
     package_name: str
-    root_path: str
     path: str
     original_file_path: str
 

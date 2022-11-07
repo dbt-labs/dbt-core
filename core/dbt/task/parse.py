@@ -17,11 +17,11 @@ from dbt.events.types import (
     ManifestLoaded,
     ManifestChecked,
     ManifestFlatGraphBuilt,
-    ParsingStart,
-    ParsingCompiling,
-    ParsingWritingManifest,
-    ParsingDone,
-    ReportPerformancePath,
+    ParseCmdStart,
+    ParseCmdCompiling,
+    ParseCmdWritingManifest,
+    ParseCmdDone,
+    ParseCmdPerfInfoPath,
 )
 from dbt.events.functions import fire_event
 from dbt.graph import Graph
@@ -50,7 +50,7 @@ class ParseTask(ConfiguredTask):
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self.loader._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
-        fire_event(ReportPerformancePath(path=path))
+        fire_event(ParseCmdPerfInfoPath(path=path))
 
     # This method takes code that normally exists in other files
     # and pulls it in here, to simplify logging and make the
@@ -89,14 +89,14 @@ class ParseTask(ConfiguredTask):
         self.graph = compiler.compile(self.manifest)
 
     def run(self):
-        fire_event(ParsingStart())
+        fire_event(ParseCmdStart())
         self.get_full_manifest()
         if self.args.compile:
-            fire_event(ParsingCompiling())
+            fire_event(ParseCmdCompiling())
             self.compile_manifest()
         if self.args.write_manifest:
-            fire_event(ParsingWritingManifest())
+            fire_event(ParseCmdWritingManifest())
             self.write_manifest()
 
         self.write_perf_info()
-        fire_event(ParsingDone())
+        fire_event(ParseCmdDone())

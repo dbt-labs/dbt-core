@@ -90,7 +90,7 @@ class Graph:
         for node in include_nodes:
             if node not in new_graph:
                 raise ValueError(
-                    "Couldn't find model '{}' -- does it exist or is " "it disabled?".format(node)
+                    "Couldn't find model '{}' -- does it exist or is it disabled?".format(node)
                 )
 
         return Graph(new_graph)

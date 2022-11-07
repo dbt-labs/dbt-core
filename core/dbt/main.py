@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import dbt.version
-from dbt.events.functions import fire_event, setup_event_logger
+from dbt.events.functions import fire_event, setup_event_logger, LOG_VERSION
 from dbt.events.types import (
     MainEncounteredError,
     MainKeyboardInterrupt,
@@ -233,7 +233,7 @@ def run_from_args(parsed):
     level_override = parsed.cls.pre_init_hook(parsed)
     setup_event_logger(log_path or "logs", level_override)
 
-    fire_event(MainReportVersion(v=str(dbt.version.installed)))
+    fire_event(MainReportVersion(version=str(dbt.version.installed), log_version=LOG_VERSION))
     fire_event(MainReportArgs(args=args_to_dict(parsed)))
 
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true

@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from datetime import datetime
 from typing import Generic, TypeVar
+import traceback
 
 import dbt.exceptions
 from dbt.contracts.sql import (
@@ -10,7 +11,7 @@ from dbt.contracts.sql import (
     ResultTable,
 )
 from dbt.events.functions import fire_event
-from dbt.events.types import SQlRunnerException
+from dbt.events.types import SQLRunnerException
 from dbt.task.compile import CompileRunner
 
 
@@ -22,7 +23,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
         CompileRunner.__init__(self, config, adapter, node, node_index, num_nodes)
 
     def handle_exception(self, e, ctx):
-        fire_event(SQlRunnerException(exc=str(e)))
+        fire_event(SQLRunnerException(exc=str(e), exc_info=traceback.format_exc()))
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt.exceptions.RuntimeException):
                 e.add_node(ctx.node)

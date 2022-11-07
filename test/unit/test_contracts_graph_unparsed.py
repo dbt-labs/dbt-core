@@ -24,7 +24,6 @@ class TestUnparsedMacro(ContractTestCase):
             'package_name': 'test',
             'language': 'sql',
             'raw_code': '{% macro foo() %}select 1 as id{% endmacro %}',
-            'root_path': '/root/',
             'resource_type': 'macro',
         }
         macro = self.ContractType(
@@ -33,7 +32,6 @@ class TestUnparsedMacro(ContractTestCase):
             package_name='test',
             language='sql',
             raw_code='{% macro foo() %}select 1 as id{% endmacro %}',
-            root_path='/root/',
             resource_type=NodeType.Macro,
         )
         self.assert_symmetric(macro, macro_dict)
@@ -46,7 +44,6 @@ class TestUnparsedMacro(ContractTestCase):
             # 'package_name': 'test',
             'language': 'sql',
             'raw_code': '{% macro foo() %}select 1 as id{% endmacro %}',
-            'root_path': '/root/',
             'resource_type': 'macro',
         }
         self.assert_fails_validation(macro_dict)
@@ -58,7 +55,6 @@ class TestUnparsedMacro(ContractTestCase):
             'package_name': 'test',
             'language': 'sql',
             'raw_code': '{% macro foo() %}select 1 as id{% endmacro %}',
-            'root_path': '/root/',
             'extra': 'extra',
             'resource_type': 'macro',
         }
@@ -71,7 +67,6 @@ class TestUnparsedNode(ContractTestCase):
     def test_ok(self):
         node_dict = {
             'name': 'foo',
-            'root_path': '/root/',
             'resource_type': NodeType.Model,
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
@@ -81,7 +76,6 @@ class TestUnparsedNode(ContractTestCase):
         }
         node = self.ContractType(
             package_name='test',
-            root_path='/root/',
             path='/root/x/path.sql',
             original_file_path='/root/path.sql',
             language='sql',
@@ -99,7 +93,6 @@ class TestUnparsedNode(ContractTestCase):
     def test_empty(self):
         node_dict = {
             'name': 'foo',
-            'root_path': '/root/',
             'resource_type': NodeType.Model,
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
@@ -109,7 +102,6 @@ class TestUnparsedNode(ContractTestCase):
         }
         node = UnparsedNode(
             package_name='test',
-            root_path='/root/',
             path='/root/x/path.sql',
             original_file_path='/root/path.sql',
             language='sql',
@@ -126,7 +118,6 @@ class TestUnparsedNode(ContractTestCase):
     def test_bad_type(self):
         node_dict = {
             'name': 'foo',
-            'root_path': '/root/',
             'resource_type': NodeType.Source,  # not valid!
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
@@ -143,7 +134,6 @@ class TestUnparsedRunHook(ContractTestCase):
     def test_ok(self):
         node_dict = {
             'name': 'foo',
-            'root_path': 'test/dbt_project.yml',
             'resource_type': NodeType.Operation,
             'path': '/root/dbt_project.yml',
             'original_file_path': '/root/dbt_project.yml',
@@ -154,7 +144,6 @@ class TestUnparsedRunHook(ContractTestCase):
         }
         node = self.ContractType(
             package_name='test',
-            root_path='test/dbt_project.yml',
             path='/root/dbt_project.yml',
             original_file_path='/root/dbt_project.yml',
             language='sql',
@@ -170,7 +159,6 @@ class TestUnparsedRunHook(ContractTestCase):
     def test_bad_type(self):
         node_dict = {
             'name': 'foo',
-            'root_path': 'test/dbt_project.yml',
             'resource_type': NodeType.Model,  # invalid
             'path': '/root/dbt_project.yml',
             'original_file_path': '/root/dbt_project.yml',
@@ -365,14 +353,12 @@ class TestUnparsedDocumentationFile(ContractTestCase):
     def test_ok(self):
         doc = self.ContractType(
             package_name='test',
-            root_path='/root',
             path='/root/docs',
             original_file_path='/root/docs/doc.md',
             file_contents='blah blah blah',
         )
         doc_dict = {
             'package_name': 'test',
-            'root_path': '/root',
             'path': '/root/docs',
             'original_file_path': '/root/docs/doc.md',
             'file_contents': 'blah blah blah',
@@ -386,7 +372,6 @@ class TestUnparsedDocumentationFile(ContractTestCase):
         self.assert_fails_validation({})
         doc_dict = {
             'package_name': 'test',
-            'root_path': '/root',
             'path': '/root/docs',
             'original_file_path': '/root/docs/doc.md',
             'file_contents': 'blah blah blah',

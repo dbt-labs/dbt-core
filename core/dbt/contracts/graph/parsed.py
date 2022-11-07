@@ -18,7 +18,7 @@ from typing import (
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
-from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedDocumentation,
@@ -40,7 +40,14 @@ from dbt.contracts.graph.unparsed import (
     MetricTime,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
-from dbt.exceptions import warn_or_error
+from dbt.events.proto_types import NodeInfo
+from dbt.events.functions import warn_or_error
+from dbt.events.types import (
+    SeedIncreased,
+    SeedExceedsLimitSamePath,
+    SeedExceedsLimitAndPathChanged,
+    SeedExceedsLimitChecksumChanged,
+)
 from dbt import flags
 from dbt.node_types import ModelLanguage, NodeType
 
@@ -192,7 +199,8 @@ class NodeInfoMixin:
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
         }
-        return node_info
+        node_info_msg = NodeInfo(**node_info)
+        return node_info_msg
 
 
 @dataclass
@@ -373,30 +381,28 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
     if first.checksum.name == "path":
         msg: str
         if second.checksum.name != "path":
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
-                f"<={MAXIMUM_SEED_SIZE_NAME}, so it has changed"
+            warn_or_error(
+                SeedIncreased(package_name=first.package_name, name=first.name), node=first
             )
         elif result:
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt "
-                f"cannot tell if it has changed: assuming they are the same"
+            warn_or_error(
+                SeedExceedsLimitSamePath(package_name=first.package_name, name=first.name),
+                node=first,
             )
         elif not result:
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in "
-                f"a different location, assuming it has changed"
+            warn_or_error(
+                SeedExceedsLimitAndPathChanged(package_name=first.package_name, name=first.name),
+                node=first,
             )
         else:
-            msg = (
-                f"Found a seed ({first.package_name}.{first.name}) "
-                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a "
-                f"checksum type of {second.checksum.name}, so it has changed"
+            warn_or_error(
+                SeedExceedsLimitChecksumChanged(
+                    package_name=first.package_name,
+                    name=first.name,
+                    checksum_name=second.checksum.name,
+                ),
+                node=first,
             )
-        warn_or_error(msg, node=first)
 
     return result
 
@@ -406,6 +412,9 @@ class ParsedSeedNode(ParsedNode):
     # keep this in sync with CompiledSeedNode!
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
+    # seeds need the root_path because the contents are not loaded initially
+    # and we need the root_path to load the seed later
+    root_path: Optional[str] = None
 
     @property
     def empty(self):

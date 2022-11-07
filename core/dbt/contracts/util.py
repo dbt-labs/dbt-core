@@ -1,5 +1,4 @@
 import dataclasses
-import os
 from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
@@ -11,7 +10,7 @@ from dbt.exceptions import (
     IncompatibleSchemaException,
 )
 from dbt.version import __version__
-from dbt.events.functions import get_invocation_id
+from dbt.events.functions import get_invocation_id, get_metadata_vars
 from dbt.dataclass_schema import dbtClassMixin
 
 from dbt.dataclass_schema import (
@@ -148,20 +147,6 @@ class SchemaVersion:
         return BASE_SCHEMAS_URL + self.path
 
 
-SCHEMA_VERSION_KEY = "dbt_schema_version"
-
-
-METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
-
-
-def get_metadata_env() -> Dict[str, str]:
-    return {
-        k[len(METADATA_ENV_PREFIX) :]: v
-        for k, v in os.environ.items()
-        if k.startswith(METADATA_ENV_PREFIX)
-    }
-
-
 # This is used in the ManifestMetadata, RunResultsMetadata, RunOperationResultMetadata,
 # FreshnessMetadata, and CatalogMetadata classes
 @dataclasses.dataclass
@@ -170,7 +155,7 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
-    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_env)
+    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
@@ -255,13 +240,32 @@ def rename_sql_attr(node_content: dict) -> dict:
 def upgrade_manifest_json(manifest: dict) -> dict:
     for node_content in manifest.get("nodes", {}).values():
         node_content = rename_sql_attr(node_content)
+        if node_content["resource_type"] != "seed" and "root_path" in node_content:
+            del node_content["root_path"]
     for disabled in manifest.get("disabled", {}).values():
         # There can be multiple disabled nodes for the same unique_id
         # so make sure all the nodes get the attr renamed
-        disabled = [rename_sql_attr(n) for n in disabled]
+        for node_content in disabled:
+            rename_sql_attr(node_content)
+            if node_content["resource_type"] != "seed" and "root_path" in node_content:
+                del node_content["root_path"]
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
+        if "root_path" in metric_content:
+            del metric_content["root_path"]
+    for exposure_content in manifest.get("exposures", {}).values():
+        if "root_path" in exposure_content:
+            del exposure_content["root_path"]
+    for source_content in manifest.get("sources", {}).values():
+        if "root_path" in exposure_content:
+            del source_content["root_path"]
+    for macro_content in manifest.get("macros", {}).values():
+        if "root_path" in macro_content:
+            del macro_content["root_path"]
+    for doc_content in manifest.get("docs", {}).values():
+        if "root_path" in doc_content:
+            del doc_content["root_path"]
     return manifest
 
 
@@ -306,7 +310,7 @@ class VersionedSchema(dbtClassMixin):
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )
-        if get_manifest_schema_version(data) <= 6:
+        if get_manifest_schema_version(data) <= 7:
             data = upgrade_manifest_json(data)
         return cls.from_dict(data)  # type: ignore
 

@@ -46,12 +46,6 @@ jobs:
         with:
           python-version: "3.8"
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
       - name: Install python dependencies
         run: |
           pip install --user --upgrade pip
@@ -69,10 +63,3 @@ jobs:
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
         run: tox -e integration -- -nauto
-
-      # apply our schema tests to every log event from the previous step
-      # skips any output that isn't valid json
-      - uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --manifest-path test/interop/log_parsing/Cargo.toml

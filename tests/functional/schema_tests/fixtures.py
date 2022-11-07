@@ -536,6 +536,10 @@ select 1 as "Id"
 
 """
 
+all_quotes_schema__schema_yml = """# models/schema.yml
+# only comments here, which should be okay!
+# https://github.com/dbt-labs/dbt-core/issues/3568"""
+
 models_v2__render_test_cli_arg_models__schema_yml = """
 version: 2
 

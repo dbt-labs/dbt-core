@@ -1,4 +1,5 @@
 from typing import Optional
+import traceback
 
 from dbt.clients.yaml_helper import (  # noqa:F401
     yaml,
@@ -452,7 +453,7 @@ def initialize_tracking(cookie_dir):
     try:
         active_user.initialize()
     except Exception:
-        fire_event(TrackingInitializeFailure())
+        fire_event(TrackingInitializeFailure(exc_info=traceback.format_exc()))
         active_user = User(None)
 
 

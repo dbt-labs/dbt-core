@@ -24,7 +24,6 @@ from .utils import (
 def basic_uncompiled_model():
     return CompiledModelNode(
         package_name='test',
-        root_path='/root/',
         path='/root/models/foo.sql',
         original_file_path='models/foo.sql',
         language='sql',
@@ -57,7 +56,6 @@ def basic_uncompiled_model():
 def basic_compiled_model():
     return CompiledModelNode(
         package_name='test',
-        root_path='/root/',
         path='/root/models/foo.sql',
         original_file_path='models/foo.sql',
         language='sql',
@@ -91,7 +89,6 @@ def basic_compiled_model():
 def minimal_uncompiled_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
@@ -114,7 +111,6 @@ def minimal_uncompiled_dict():
 def basic_uncompiled_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
@@ -164,7 +160,6 @@ def basic_uncompiled_dict():
 def basic_compiled_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
@@ -328,7 +323,6 @@ def test_compare_changed_model(func, basic_uncompiled_model):
 def minimal_schema_test_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
@@ -354,7 +348,6 @@ def minimal_schema_test_dict():
 def basic_uncompiled_schema_test_node():
     return CompiledGenericTestNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -388,7 +381,6 @@ def basic_uncompiled_schema_test_node():
 def basic_compiled_schema_test_node():
     return CompiledGenericTestNode(
         package_name='test',
-        root_path='/root/',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
         language='sql',
@@ -426,7 +418,6 @@ def basic_compiled_schema_test_node():
 def basic_uncompiled_schema_test_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
@@ -477,7 +468,6 @@ def basic_uncompiled_schema_test_dict():
 def basic_compiled_schema_test_dict():
     return {
         'name': 'foo',
-        'root_path': '/root/',
         'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',

@@ -34,7 +34,8 @@ from dbt.contracts.graph.unparsed import (
 )
 
 from dbt.contracts.graph.compiled import CompiledModelNode
-from dbt.events.functions import get_invocation_id
+from dbt.events.functions import reset_metadata_vars
+
 from dbt.node_types import NodeType
 import freezegun
 
@@ -44,7 +45,7 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
-    'package_name', 'root_path', 'path', 'original_file_path', 'raw_code', 'language',
+    'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
     'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict',
 })
@@ -60,6 +61,8 @@ ENV_KEY_NAME = 'KEY' if os.name == 'nt' else 'key'
 
 class ManifestTest(unittest.TestCase):
     def setUp(self):
+        reset_metadata_vars()
+
         # TODO: why is this needed for tests in this module to pass?
         tracking.active_user = None
 
@@ -92,7 +95,6 @@ class ManifestTest(unittest.TestCase):
                 fqn=['root', 'my_exposure'],
                 unique_id='exposure.root.my_exposure',
                 package_name='root',
-                root_path='',
                 path='my_exposure.sql',
                 original_file_path='my_exposure.sql'
             )
@@ -125,7 +127,6 @@ class ManifestTest(unittest.TestCase):
                 fqn=['root', 'my_metric'],
                 unique_id='metric.root.my_metric',
                 package_name='root',
-                root_path='',
                 path='my_metric.yml',
                 original_file_path='my_metric.yml'
             )
@@ -149,7 +150,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='events.sql',
                 original_file_path='events.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -172,7 +172,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='events.sql',
                 original_file_path='events.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -195,7 +194,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -218,7 +216,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -241,7 +238,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -264,7 +260,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -286,7 +281,6 @@ class ManifestTest(unittest.TestCase):
                 unique_id='source.test.my_source.my_table',
                 fqn=['test', 'my_source', 'my_table'],
                 package_name='root',
-                root_path='',
                 path='schema.yml',
                 original_file_path='schema.yml',
             ),
@@ -304,6 +298,7 @@ class ManifestTest(unittest.TestCase):
 
     def tearDown(self):
         del os.environ['DBT_ENV_CUSTOM_ENV_key']
+        reset_metadata_vars()
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
@@ -327,7 +322,7 @@ class ManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v7.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
                     'dbt_version': dbt.version.__version__,
                     'env': {ENV_KEY_NAME: 'value'},
                     'invocation_id': invocation_id,
@@ -478,7 +473,7 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v7.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
                     'dbt_version': dbt.version.__version__,
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -514,7 +509,6 @@ class ManifestTest(unittest.TestCase):
             tags=[],
             path='seed.csv',
             original_file_path='seed.csv',
-            root_path='',
             language='sql',
             raw_code='-- csv --',
             checksum=FileHash.empty(),
@@ -565,7 +559,6 @@ class ManifestTest(unittest.TestCase):
                 tags=[],
                 path='events.sql',
                 original_file_path='events.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -609,7 +602,6 @@ class MixedManifestTest(unittest.TestCase):
                 tags=[],
                 path='events.sql',
                 original_file_path='events.sql',
-                root_path='',
                 language='sql',
                 raw_code='does not matter',
                 meta={},
@@ -636,7 +628,6 @@ class MixedManifestTest(unittest.TestCase):
                 tags=[],
                 path='events.sql',
                 original_file_path='events.sql',
-                root_path='',
                 raw_code='does not matter',
                 meta={},
                 compiled=True,
@@ -663,7 +654,6 @@ class MixedManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -685,7 +675,6 @@ class MixedManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -707,7 +696,6 @@ class MixedManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -729,7 +717,6 @@ class MixedManifestTest(unittest.TestCase):
                 tags=[],
                 path='multi.sql',
                 original_file_path='multi.sql',
-                root_path='',
                 meta={},
                 language='sql',
                 raw_code='does not matter',
@@ -759,7 +746,7 @@ class MixedManifestTest(unittest.TestCase):
                 'child_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v7.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
                     'dbt_version': dbt.version.__version__,
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                     'env': {ENV_KEY_NAME: 'value'},

@@ -35,7 +35,6 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             macro_sql=block.full_block,
             original_file_path=base_node.original_file_path,
             package_name=base_node.package_name,
-            root_path=base_node.root_path,
             resource_type=base_node.resource_type,
             name=name,
             unique_id=unique_id,
@@ -96,7 +95,6 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             original_file_path=original_file_path,
             package_name=self.project.project_name,
             raw_code=source_file.contents,
-            root_path=self.project.project_root,
             resource_type=NodeType.Macro,
             language="sql",
         )

@@ -1,8 +1,8 @@
 from .run import ModelRunner, RunTask
 
 from dbt.exceptions import InternalException
-from dbt.events.functions import fire_event
-from dbt.events.types import PrintSnapshotErrorResultLine, PrintSnapshotResultLine
+from dbt.events.functions import fire_event, info
+from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus
@@ -15,30 +15,19 @@ class SnapshotRunner(ModelRunner):
     def print_result_line(self, result):
         model = result.node
         cfg = model.config.to_dict(omit_none=True)
-        if result.status == NodeStatus.Error:
-            fire_event(
-                PrintSnapshotErrorResultLine(
-                    status=result.status,
-                    description=self.get_node_representation(),
-                    cfg=cfg,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=model.node_info,
-                )
+        level = "error" if result.status == NodeStatus.Error else "info"
+        fire_event(
+            LogSnapshotResult(
+                info=info(level=level),
+                status=result.status,
+                description=self.get_node_representation(),
+                cfg=cfg,
+                index=self.node_index,
+                total=self.num_nodes,
+                execution_time=result.execution_time,
+                node_info=model.node_info,
             )
-        else:
-            fire_event(
-                PrintSnapshotResultLine(
-                    status=result.message,
-                    description=self.get_node_representation(),
-                    cfg=cfg,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=model.node_info,
-                )
-            )
+        )
 
 
 class SnapshotTask(RunTask):

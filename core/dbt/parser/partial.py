@@ -315,7 +315,7 @@ class PartialParsing:
         else:
             # It's not clear when this would actually happen.
             # Logging in case there are other associated errors.
-            fire_event(PartialParsingNodeMissingInSourceFile(source_file=old_source_file))
+            fire_event(PartialParsingNodeMissingInSourceFile(file_id=old_source_file.file_id))
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
@@ -931,7 +931,7 @@ class PartialParsing:
                         unique_id
                     )
                     schema_file.metrics.remove(unique_id)
-                    fire_event(PartialParsingDeletedMetric(id=unique_id))
+                    fire_event(PartialParsingDeletedMetric(unique_id=unique_id))
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 

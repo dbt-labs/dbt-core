@@ -28,9 +28,7 @@ if sys.platform == "win32" and (not os.getenv("TERM") or os.getenv("TERM") == "N
     colorama.init(wrap=True)
 
 STDOUT_LOG_FORMAT = "{record.message}"
-DEBUG_LOG_FORMAT = (
-    "{record.time:%Y-%m-%d %H:%M:%S.%f%z} " "({record.thread_name}): " "{record.message}"
-)
+DEBUG_LOG_FORMAT = "{record.time:%Y-%m-%d %H:%M:%S.%f%z} ({record.thread_name}): {record.message}"
 
 
 def get_secret_env() -> List[str]:

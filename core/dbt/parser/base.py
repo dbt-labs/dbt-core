@@ -169,7 +169,6 @@ class ConfiguredParser(
             resource_type=self.resource_type,
             path=path,
             original_file_path=original_file_path,
-            root_path=self.project.project_root,
             package_name=self.project.project_name,
             raw_code=raw_code,
             language=language,
@@ -202,7 +201,6 @@ class ConfiguredParser(
             "database": self.default_database,
             "fqn": fqn,
             "name": name,
-            "root_path": self.project.project_root,
             "resource_type": self.resource_type,
             "path": path,
             "original_file_path": block.path.original_file_path,
@@ -347,7 +345,7 @@ class ConfiguredParser(
             )
         else:
             raise InternalException(
-                f"Got an unexpected project version={config_version}, " f"expected 2"
+                f"Got an unexpected project version={config_version}, expected 2"
             )
 
     def config_dict(

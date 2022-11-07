@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+import traceback
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union, Dict, Any, Optional
 
@@ -36,9 +37,9 @@ from dbt.events.types import (
     InternalExceptionOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
-    PrintDebugStackTrace,
+    LogDebugStackTrace,
     SkippingDetails,
-    PrintSkipBecauseError,
+    LogSkipBecauseError,
     NodeCompiling,
     NodeExecuting,
 )
@@ -346,7 +347,7 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        fire_event(CatchableExceptionOnRun(exc=str(e)))
+        fire_event(CatchableExceptionOnRun(exc=str(e), exc_info=traceback.format_exc()))
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
@@ -361,7 +362,7 @@ class BaseRunner(metaclass=ABCMeta):
                 exc=str(e),
             )
         )
-        fire_event(PrintDebugStackTrace())
+        fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
 
         return str(e)
 
@@ -414,7 +415,11 @@ class BaseRunner(metaclass=ABCMeta):
         try:
             self.adapter.release_connection()
         except Exception as exc:
-            fire_event(NodeConnectionReleaseError(node_name=self.node.name, exc=str(exc)))
+            fire_event(
+                NodeConnectionReleaseError(
+                    node_name=self.node.name, exc=str(exc), exc_info=traceback.format_exc()
+                )
+            )
             return str(exc)
 
         return None
@@ -446,7 +451,7 @@ class BaseRunner(metaclass=ABCMeta):
             # failure, print a special 'error skip' message.
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
-                    PrintSkipBecauseError(
+                    LogSkipBecauseError(
                         schema=schema_name,
                         relation=node_name,
                         index=self.node_index,
@@ -456,7 +461,7 @@ class BaseRunner(metaclass=ABCMeta):
                 print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
                     raise InternalException(
-                        "Skip cause not set but skip was somehow caused by " "an ephemeral failure"
+                        "Skip cause not set but skip was somehow caused by an ephemeral failure"
                     )
                 # set an error so dbt will exit with an error code
                 error_message = (

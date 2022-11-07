@@ -42,7 +42,7 @@ metrics:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 7
+    CURRENT_EXPECTED_MANIFEST_VERSION = 8
 
     @pytest.fixture(scope="class")
     def models(self):

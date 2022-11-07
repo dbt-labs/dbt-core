@@ -30,7 +30,7 @@
 * some of the legacy tests used a 'default_project' method to change (for example)
   the seeds directory to load a different seed. Don't do that. Copying a file is
   probably a better option.
-
+* If there are more than 50 lines of fixture strings, they should be defined in a fixtures.py and then imported. We definitely don't do this everywhere right now but should move to this model.
 
 # Integration test directories that have been converted
 * 001\_simple\_copy\_tests => moved to 'basic'

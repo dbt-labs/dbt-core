@@ -16,14 +16,11 @@ from dbt.contracts.results import (
     FreshnessStatus,
 )
 from dbt.exceptions import RuntimeException, InternalException
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, info
 from dbt.events.types import (
     FreshnessCheckComplete,
-    PrintStartLine,
-    PrintHookEndErrorLine,
-    PrintHookEndErrorStaleLine,
-    PrintHookEndWarnLine,
-    PrintHookEndPassLine,
+    LogStartLine,
+    LogFreshnessResult,
 )
 from dbt.node_types import NodeType
 
@@ -41,7 +38,7 @@ class FreshnessRunner(BaseRunner):
     def before_execute(self):
         description = "freshness of {0.source_name}.{0.name}".format(self.node)
         fire_event(
-            PrintStartLine(
+            LogStartLine(
                 description=description,
                 index=self.node_index,
                 total=self.num_nodes,
@@ -56,50 +53,19 @@ class FreshnessRunner(BaseRunner):
         else:
             source_name = result.source_name
             table_name = result.table_name
-        if result.status == FreshnessStatus.RuntimeErr:
-            fire_event(
-                PrintHookEndErrorLine(
-                    source_name=source_name,
-                    table_name=table_name,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
+        level = LogFreshnessResult.status_to_level(str(result.status))
+        fire_event(
+            LogFreshnessResult(
+                info=info(level=level),
+                status=result.status,
+                source_name=source_name,
+                table_name=table_name,
+                index=self.node_index,
+                total=self.num_nodes,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
             )
-        elif result.status == FreshnessStatus.Error:
-            fire_event(
-                PrintHookEndErrorStaleLine(
-                    source_name=source_name,
-                    table_name=table_name,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
-            )
-        elif result.status == FreshnessStatus.Warn:
-            fire_event(
-                PrintHookEndWarnLine(
-                    source_name=source_name,
-                    table_name=table_name,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
-            )
-        else:
-            fire_event(
-                PrintHookEndPassLine(
-                    source_name=source_name,
-                    table_name=table_name,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
-            )
+        )
 
     def error_result(self, node, message, start_time, timing_info):
         return self._build_run_result(
@@ -135,7 +101,7 @@ class FreshnessRunner(BaseRunner):
         # broken, raise!
         if compiled_node.loaded_at_field is None:
             raise InternalException(
-                "Got to execute for source freshness of a source that has no " "loaded_at_field!"
+                "Got to execute for source freshness of a source that has no loaded_at_field!"
             )
 
         relation = self.adapter.Relation.create_from_source(compiled_node)

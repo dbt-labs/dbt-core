@@ -11,7 +11,7 @@ from dbt.adapters.factory import Adapter
 from dbt.main import handle_and_check
 from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
-from dbt.events.functions import fire_event, capture_stdout_logs, stop_capture_stdout_logs
+from dbt.events.functions import fire_event, capture_stdout_logs, stop_capture_stdout_logs, reset_metadata_vars
 from dbt.events.test_types import IntegrationTestDebug
 
 # =============================================================================
@@ -62,6 +62,9 @@ from dbt.events.test_types import IntegrationTestDebug
 def run_dbt(args: List[str] = None, expect_pass=True):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
+
+    # reset global vars
+    reset_metadata_vars()
 
     # The logger will complain about already being initialized if
     # we don't do this.

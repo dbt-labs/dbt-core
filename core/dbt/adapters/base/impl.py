@@ -41,15 +41,15 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
-from dbt.exceptions import warn_or_error
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     CacheMiss,
     ListRelations,
     CodeExecution,
     CodeExecutionStatus,
+    CatalogGenerationError,
 )
-from dbt.utils import filter_null_values, executor
+from dbt.utils import filter_null_values, executor, cast_to_str
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
 from dbt.adapters.base.meta import AdapterMeta, available
@@ -61,7 +61,7 @@ from dbt.adapters.base.relation import (
 )
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
-from dbt.adapters.cache import RelationsCache, _make_key
+from dbt.adapters.cache import RelationsCache, _make_ref_key_msg
 
 
 SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
@@ -343,7 +343,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             fire_event(
                 CacheMiss(
                     conn_name=self.nice_connection_name(),
-                    database=database,
+                    database=cast_to_str(database),
                     schema=schema,
                 )
             )
@@ -581,7 +581,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :rtype: List[self.Relation]
         """
         raise NotImplementedException(
-            "`list_relations_without_caching` is not implemented for this " "adapter!"
+            "`list_relations_without_caching` is not implemented for this adapter!"
         )
 
     ###
@@ -726,9 +726,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         relations = self.list_relations_without_caching(schema_relation)
         fire_event(
             ListRelations(
-                database=database,
+                database=cast_to_str(database),
                 schema=schema,
-                relations=[_make_key(x) for x in relations],
+                relations=[_make_ref_key_msg(x) for x in relations],
             )
         )
 
@@ -1327,7 +1327,7 @@ def catch_as_completed(
         elif isinstance(exc, KeyboardInterrupt) or not isinstance(exc, Exception):
             raise exc
         else:
-            warn_or_error(f"Encountered an error while generating catalog: {str(exc)}")
+            warn_or_error(CatalogGenerationError(exc=str(exc)))
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions

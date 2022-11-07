@@ -93,6 +93,7 @@ from tests.functional.schema_tests.fixtures import (
     macro_resolution_order_models__config_yml,
     macro_resolution_order_models__my_model_sql,
     alt_local_utils__macros__type_timestamp_sql,
+    all_quotes_schema__schema_yml,
 )
 from dbt.exceptions import ParsingException, CompilationException
 from dbt.contracts.results import TestStatus
@@ -989,6 +990,24 @@ class TestInvalidSchema:
         with pytest.raises(ParsingException) as exc:
             run_dbt()
         assert re.search(r"'models' is not a list", str(exc))
+
+
+class TestCommentedSchema:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": all_quotes_schema__schema_yml,
+            "model.sql": invalid_schema_models__model_sql,
+        }
+
+    def test_quoted_schema_file(self, project):
+        try:
+            # A schema file consisting entirely of quotes should not be a problem
+            run_dbt(['parse'])
+        except TypeError:
+            assert False, '`dbt parse` failed with a yaml file that is all comments with the same exception as 3568'
+        except Exception:
+            assert False, '`dbt parse` failed with a yaml file that is all comments'
 
 
 class TestWrongSpecificationBlock:
