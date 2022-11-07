@@ -292,8 +292,8 @@ class TestDeferState(DBTIntegrationTest):
 
         # despite deferral, test should use models just created in our schema
         results = self.run_dbt(['test', '--state', 'state', '--defer', '--favor-state'])
-        assert self.other_schema not in results[0].node.compiled_sql
-        assert self.unique_schema() in results[0].node.compiled_sql
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
 
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):
