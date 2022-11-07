@@ -249,8 +249,8 @@ class TestDeferState(DBTIntegrationTest):
         assert len(results) == 2
 
         # because the seed exists in other schema, we should defer it
-        assert self.other_schema not in results[0].node.compiled_sql
-        assert self.unique_schema() in results[0].node.compiled_sql
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
 
     def run_defer_deleted_upstream(self):
         results = self.run_dbt(['seed'])
