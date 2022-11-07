@@ -16,7 +16,7 @@ from dbt import flags
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
 
-def get_version_information() -> str:
+def get_version_information() -> Iterator[str]:
     flags.USE_COLORS = True if not flags.USE_COLORS else None
 
     installed = get_installed_version()
@@ -26,15 +26,13 @@ def get_version_information() -> str:
     core_msg = _format_core_msg(core_msg_lines)
     plugin_version_msg = _get_plugins_msg(installed)
 
-    msg_lines = [core_msg]
+    yield core_msg
 
     if core_info_msg != "":
-        msg_lines.append(core_info_msg)
+        yield core_info_msg
 
-    msg_lines.append(plugin_version_msg)
-    msg_lines.append("")
-
-    return "\n\n".join(msg_lines)
+    yield plugin_version_msg
+    yield ""
 
 
 def get_installed_version() -> dbt.semver.VersionSpecifier:
