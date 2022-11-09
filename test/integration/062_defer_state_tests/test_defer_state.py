@@ -243,7 +243,7 @@ class TestDeferState(DBTIntegrationTest):
 
         # copy files over from the happy times when we had a good target
         self.copy_state()
-        results = self.run_dbt(['seed', '--target', 'otherschema'])
+        results = self.run_dbt(['seed'])
         assert len(results) == 1
         results = self.run_dbt(['run', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'])
         assert len(results) == 2
