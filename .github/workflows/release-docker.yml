@@ -70,8 +70,11 @@ jobs:
       - name: Get docker build arg
         id: build_arg
         run: |
-          echo "build_arg_name="$(echo ${{ github.event.inputs.package }} | sed 's/\-/_/g') >> $GITHUB_OUTPUT
-          echo "build_arg_value="$(echo ${{ github.event.inputs.package }} | sed 's/postgres/core/g') >> $GITHUB_OUTPUT
+          SNAKE_CASE_PACKAGE=$(echo ${{ github.event.inputs.package }} | sed 's/\-/_/g')
+          CORE_PACKAGE=$(echo ${{ github.event.inputs.package }} | sed 's/postgres/core/g')
+
+          echo "build_arg_name=$SNAKE_CASE_PACKAGE" >> $GITHUB_OUTPUT
+          echo "build_arg_value=$CORE_PACKAGE" >> $GITHUB_OUTPUT
 
       - name: Log in to the GHCR
         uses: docker/login-action@v1
