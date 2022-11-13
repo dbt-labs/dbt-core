@@ -463,7 +463,7 @@ class NewConnection(DebugLevel, pt.NewConnection):
         return "E005"
 
     def message(self) -> str:
-        return f'Acquiring new {self.conn_type} connection "{self.conn_name}"'
+        return f"Acquiring new {self.conn_type} connection '{self.conn_name}'"
 
 
 @dataclass
