@@ -690,7 +690,7 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def md5(value: str):
+    def md5(value: str) -> str:
         """Calculates an MD5 hash of the given string.
 
         :param value: The value to hash
