@@ -690,13 +690,14 @@ class BaseContext(metaclass=ContextMeta):
 
     @contextmember
     @staticmethod
-    def md5(value: str) -> str:
+    def local_md5(value: str) -> str:
         """Calculates an MD5 hash of the given string.
+        It's called "local_md5" to emphasize that it runs locally in dbt (in jinja context) and not an MD5 SQL command.
 
         :param value: The value to hash
 
         Usage:
-            {% set value_hash = md5("hello world") %}
+            {% set value_hash = local_md5("hello world") %}
         """
         return utils.md5(value)
 
