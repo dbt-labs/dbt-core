@@ -4,6 +4,7 @@ from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
 
 from dbt import flags
 from dbt import tracking
+from dbt import utils
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
@@ -686,6 +687,18 @@ class BaseContext(metaclass=ContextMeta):
             else:
                 dict_diff.update({k: dict_a[k]})
         return dict_diff
+
+    @contextmember
+    @staticmethod
+    def md5(value: str):
+        """Calculates an MD5 hash of the given string.
+
+        :param value: The value to hash
+
+        Usage:
+            {% set value_hash = md5("hello world") %}
+        """
+        return utils.md5(value)
 
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:
