@@ -111,8 +111,11 @@ jobs:
 
       - name: push docs
         run: |
+          echo ">>>>> head ref"
+          echo ${{ github.head_ref }}
+          echo ">>>>> show-ref"
           git show-ref | grep CT-12
-          echo >>>>>
+          echo ">>>>> rest"
           git config --global user.name "Doc Bot"
           git config --global user.email "doc.bot@dbtlabs.com"
           git add ${{ env.DOCS_BUILD_DIR }}
