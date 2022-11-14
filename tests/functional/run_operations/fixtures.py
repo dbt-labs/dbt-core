@@ -1,3 +1,4 @@
+happy_macros_sql = """
 {% macro no_args() %}
   {% if execute %}
     {% call statement(auto_begin=True) %}
@@ -54,3 +55,18 @@
 {% macro print_something() %}
   {{ print("You're doing awesome!") }}
 {% endmacro %}
+"""
+
+sad_macros_sql = """
+{% macro syntax_error() %}
+  {% if execute %}
+    {% call statement() %}
+        select NOPE NOT A VALID QUERY
+    {% endcall %}
+  {% endif %}
+{% endmacro %}
+"""
+
+model_sql = """
+select 1 as id
+"""
