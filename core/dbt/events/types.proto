@@ -1227,11 +1227,12 @@ message LogSeedResult {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string status = 3;
-    int32 index = 4;
-    int32 total = 5;
-    float execution_time = 6;
-    string schema = 7;
-    string relation = 8;
+    string result_message = 4;
+    int32 index = 5;
+    int32 total = 6;
+    float execution_time = 7;
+    string schema = 8;
+    string relation = 9;
 }
 
 // Skipped Q017

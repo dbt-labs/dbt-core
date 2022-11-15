@@ -1999,7 +1999,7 @@ class LogSeedResult(DynamicLevel, pt.LogSeedResult):
             status = red(self.status.upper())
         else:
             info = "OK loaded"
-            status = green(self.status)
+            status = green(self.result_message)
         msg = f"{info} seed file {self.schema}.{self.relation}"
         return format_fancy_output_line(
             msg=msg,

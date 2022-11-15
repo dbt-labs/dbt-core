@@ -1602,11 +1602,12 @@ class LogSeedResult(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     node_info: "NodeInfo" = betterproto.message_field(2)
     status: str = betterproto.string_field(3)
-    index: int = betterproto.int32_field(4)
-    total: int = betterproto.int32_field(5)
-    execution_time: float = betterproto.float_field(6)
-    schema: str = betterproto.string_field(7)
-    relation: str = betterproto.string_field(8)
+    result_message: str = betterproto.string_field(4)
+    index: int = betterproto.int32_field(5)
+    total: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(7)
+    schema: str = betterproto.string_field(8)
+    relation: str = betterproto.string_field(9)
 
 
 @dataclass

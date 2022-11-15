@@ -51,6 +51,7 @@ class SeedRunner(ModelRunner):
             LogSeedResult(
                 info=info(level=level),
                 status=result.status,
+                result_message=result.message,
                 index=self.node_index,
                 total=self.num_nodes,
                 execution_time=result.execution_time,
