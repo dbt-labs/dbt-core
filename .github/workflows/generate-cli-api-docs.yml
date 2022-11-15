@@ -85,6 +85,8 @@ jobs:
     steps:
       - name: git checkout
         uses: actions/checkout@v3
+        with:
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: install python
         uses: actions/setup-python@v4.3.0
@@ -109,8 +111,21 @@ jobs:
           echo creating docs
           make html
 
+      - name: push docsx
+        uses: EndBug/add-and-commit@v7
+        with:
+          author_name: 'Github Build Bot'
+          author_email: 'buildbot@fishtownanalytics.com'
+          message: 'Bumping version to ${{ github.event.inputs.version_number }} and generate CHANGELOG'
+          branch: '${{ steps.variables.outputs.BRANCH_NAME }}'
+          push: 'origin origin/${{ steps.variables.outputs.BRANCH_NAME }}'
+
       - name: push docs
         run: |
+          echo ">>>>> status"
+          git status
+          echo ">>>>> log"
+          git log --pretty=oneline | head -5
           echo ">>>>> remote"
           git remote -v
           echo ">>>>> config"
@@ -122,3 +137,7 @@ jobs:
           git add ${{ env.DOCS_BUILD_DIR }}
           git commit -m "[auto] add generated CLI API docs"
           git push -u origin ${{ github.head_ref }}
+          echo ">>>>> status"
+          git status
+          echo ">>>>> log"
+          git log --pretty=oneline | head -5
