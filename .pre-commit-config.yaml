@@ -35,7 +35,7 @@ repos:
     - "--target-version=py38"
     - "--check"
     - "--diff"
-- repo: https://gitlab.com/pycqa/flake8
+- repo: https://github.com/pycqa/flake8
   rev: 4.0.1
   hooks:
   - id: flake8
