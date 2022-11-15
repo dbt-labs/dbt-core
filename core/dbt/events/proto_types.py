@@ -406,7 +406,7 @@ class ConnectionLeftOpen(betterproto.Message):
 
 
 @dataclass
-class ConnectionClosed(betterproto.Message):
+class ConnectionClosedInCleanup(betterproto.Message):
     """E008"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -423,7 +423,7 @@ class RollbackFailed(betterproto.Message):
 
 
 @dataclass
-class ConnectionClosed2(betterproto.Message):
+class ConnectionClosed(betterproto.Message):
     """E010"""
 
     info: "EventInfo" = betterproto.message_field(1)

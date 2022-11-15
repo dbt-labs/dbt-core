@@ -43,8 +43,8 @@ from dbt.events.types import (
     ConnectionReused,
     ConnectionLeftOpen,
     ConnectionLeftOpen2,
+    ConnectionClosedInCleanup,
     ConnectionClosed,
-    ConnectionClosed2,
     Rollback,
     RollbackFailed,
 )
@@ -308,7 +308,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 if connection.state not in {"closed", "init"}:
                     fire_event(ConnectionLeftOpen(conn_name=cast_to_str(connection.name)))
                 else:
-                    fire_event(ConnectionClosed(conn_name=cast_to_str(connection.name)))
+                    fire_event(ConnectionClosedInCleanup(conn_name=cast_to_str(connection.name)))
                 self.close(connection)
 
             # garbage collect these connections
@@ -345,7 +345,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, "close"):
-            fire_event(ConnectionClosed2(conn_name=cast_to_str(connection.name)))
+            fire_event(ConnectionClosed(conn_name=cast_to_str(connection.name)))
             connection.handle.close()
         else:
             fire_event(ConnectionLeftOpen2(conn_name=cast_to_str(connection.name)))

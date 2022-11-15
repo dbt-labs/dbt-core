@@ -314,7 +314,7 @@ message ConnectionLeftOpen {
 }
 
 // E008
-message ConnectionClosed {
+message ConnectionClosedInCleanup {
     EventInfo info = 1;
     string conn_name = 2;
 }
@@ -327,7 +327,7 @@ message RollbackFailed {
 }
 
 // E010
-message ConnectionClosed2 {
+message ConnectionClosed {
     EventInfo info = 1;
     string conn_name = 2;
 }

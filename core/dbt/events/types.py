@@ -485,7 +485,7 @@ class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
 
 
 @dataclass
-class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
+class ConnectionClosedInCleanup(DebugLevel, pt.ConnectionClosedInCleanup):
     def code(self):
         return "E008"
 
@@ -504,7 +504,7 @@ class RollbackFailed(DebugLevel, pt.RollbackFailed):  # noqa
 
 # TODO: can we combine this with ConnectionClosed?
 @dataclass
-class ConnectionClosed2(DebugLevel, pt.ConnectionClosed2):
+class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
     def code(self):
         return "E010"
 
@@ -2784,9 +2784,9 @@ if 1 == 0:
     NewConnection(conn_type="", conn_name="")
     ConnectionReused(conn_name="")
     ConnectionLeftOpen(conn_name="")
-    ConnectionClosed(conn_name="")
+    ConnectionClosedInCleanup(conn_name="")
     RollbackFailed(conn_name="")
-    ConnectionClosed2(conn_name="")
+    ConnectionClosed(conn_name="")
     ConnectionLeftOpen2(conn_name="")
     Rollback(conn_name="")
     CacheMiss(conn_name="", database="", schema="")
