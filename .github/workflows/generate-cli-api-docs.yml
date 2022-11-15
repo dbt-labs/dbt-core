@@ -114,7 +114,7 @@ jobs:
           echo ">>>>> status"
           git status
 
-      - name: push docsx
+      - name: commit docs
         uses: EndBug/add-and-commit@v7
         with:
           author_name: 'Github Build Bot'
@@ -123,8 +123,11 @@ jobs:
           branch: '${{ github.head_ref }}'
           push: 'origin origin/${{ github.head_ref }}'
 
-      - name: push docs not really
+      - name: push docs
         run: |
+          echo ">>>>> status"
+          git status
+          git push -u origin ${{ github.head_ref }}
           echo ">>>>> status"
           git status
           #echo ">>>>> status"
@@ -141,7 +144,6 @@ jobs:
           #echo ">>>>> rest"
           #git add ${{ env.DOCS_BUILD_DIR }}
           #git commit -m "[auto] add generated CLI API docs"
-          #git push -u origin ${{ github.head_ref }}
           #echo ">>>>> status"
           #git status
           #echo ">>>>> log"
