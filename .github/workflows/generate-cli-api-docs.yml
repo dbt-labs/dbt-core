@@ -111,8 +111,14 @@ jobs:
 
       - name: push docs
         run: |
+          echo ">>>>> remote"
+          git remote -v
+          echo ">>>>> config"
           git config --global user.name "Doc Bot"
           git config --global user.email "doc.bot@dbtlabs.com"
+          echo ">>>>> remote 2"
+          git remote -v
+          echo ">>>>> rest"
           git add ${{ env.DOCS_BUILD_DIR }}
           git commit -m "[auto] add generated CLI API docs"
           git push -u origin ${{ github.head_ref }}
