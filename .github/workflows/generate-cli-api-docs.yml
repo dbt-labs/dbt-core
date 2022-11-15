@@ -111,33 +111,38 @@ jobs:
           echo creating docs
           make html
 
+          echo ">>>>> status"
+          git status
+
       - name: push docsx
         uses: EndBug/add-and-commit@v7
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Bumping version to ${{ github.event.inputs.version_number }} and generate CHANGELOG'
-          branch: '${{ steps.variables.outputs.BRANCH_NAME }}'
-          push: 'origin origin/${{ steps.variables.outputs.BRANCH_NAME }}'
+          message: 'Add generated CLI API docs'
+          branch: '${{ github.head_ref }}'
+          push: 'origin origin/${{ github.head_ref }}'
 
-      - name: push docs
+      - name: push docs not really
         run: |
           echo ">>>>> status"
           git status
-          echo ">>>>> log"
-          git log --pretty=oneline | head -5
-          echo ">>>>> remote"
-          git remote -v
-          echo ">>>>> config"
-          git config --global user.name "Doc Bot"
-          git config --global user.email "doc.bot@dbtlabs.com"
-          echo ">>>>> remote 2"
-          git remote -v
-          echo ">>>>> rest"
-          git add ${{ env.DOCS_BUILD_DIR }}
-          git commit -m "[auto] add generated CLI API docs"
-          git push -u origin ${{ github.head_ref }}
-          echo ">>>>> status"
-          git status
-          echo ">>>>> log"
-          git log --pretty=oneline | head -5
+          #echo ">>>>> status"
+          #git status
+          #echo ">>>>> log"
+          #git log --pretty=oneline | head -5
+          #echo ">>>>> remote"
+          #git remote -v
+          #echo ">>>>> config"
+          #git config --global user.name "Doc Bot"
+          #git config --global user.email "doc.bot@dbtlabs.com"
+          #echo ">>>>> remote 2"
+          #git remote -v
+          #echo ">>>>> rest"
+          #git add ${{ env.DOCS_BUILD_DIR }}
+          #git commit -m "[auto] add generated CLI API docs"
+          #git push -u origin ${{ github.head_ref }}
+          #echo ">>>>> status"
+          #git status
+          #echo ">>>>> log"
+          #git log --pretty=oneline | head -5
