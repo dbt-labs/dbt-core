@@ -1015,13 +1015,13 @@ message SelectorReportInvalidSelector {
 }
 
 // M011
-message MacroEventInfo {
+message JinjaLogInfo {
     EventInfo info = 1;
     string msg = 2;
 }
 
 // M012
-message MacroEventDebug {
+message JinjaLogDebug {
     EventInfo info = 1;
     string msg = 2;
 }

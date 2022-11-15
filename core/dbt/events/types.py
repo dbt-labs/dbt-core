@@ -1626,7 +1626,7 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
 
 
 @dataclass
-class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
+class JinjaLogInfo(InfoLevel, EventStringFunctor, pt.JinjaLogInfo):
     def code(self):
         return "M011"
 
@@ -1636,7 +1636,7 @@ class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
 
 
 @dataclass
-class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
+class JinjaLogDebug(DebugLevel, EventStringFunctor, pt.JinjaLogDebug):
     def code(self):
         return "M012"
 
@@ -2932,8 +2932,8 @@ if 1 == 0:
     RegistryProgressGETRequest(url="")
     RegistryProgressGETResponse(url="", resp_code=1234)
     SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec="")
-    MacroEventInfo(msg="")
-    MacroEventDebug(msg="")
+    JinjaLogInfo(msg="")
+    JinjaLogDebug(msg="")
     DepsNoPackagesFound()
     DepsStartPackageInstall(package_name="")
     DepsInstallInfo(version_name="")

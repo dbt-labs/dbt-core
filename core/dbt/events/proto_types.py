@@ -1334,7 +1334,7 @@ class SelectorReportInvalidSelector(betterproto.Message):
 
 
 @dataclass
-class MacroEventInfo(betterproto.Message):
+class JinjaLogInfo(betterproto.Message):
     """M011"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -1342,7 +1342,7 @@ class MacroEventInfo(betterproto.Message):
 
 
 @dataclass
-class MacroEventDebug(betterproto.Message):
+class JinjaLogDebug(betterproto.Message):
     """M012"""
 
     info: "EventInfo" = betterproto.message_field(1)

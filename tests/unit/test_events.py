@@ -81,7 +81,7 @@ class TestAdapterLogger:
         event = AdapterEventDebug(name="dbt_tests", base_msg=[1,2,3], args=(3,))
         assert isinstance(event.base_msg, str)
 
-        event = MacroEventDebug(msg=[1,2,3])
+        event = JinjaLogDebug(msg=[1,2,3])
         assert isinstance(event.msg, str)
 
 
@@ -192,8 +192,8 @@ sample_values = [
     SystemStdOutMsg(bmsg=b""),
     SystemStdErrMsg(bmsg=b""),
     SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec=""),
-    MacroEventInfo(msg=""),
-    MacroEventDebug(msg=""),
+    JinjaLogInfo(msg=""),
+    JinjaLogDebug(msg=""),
     NewConnection(conn_type="", conn_name=""),
     ConnectionReused(conn_name=""),
     ConnectionLeftOpen(conn_name=""),
