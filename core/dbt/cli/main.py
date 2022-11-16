@@ -10,6 +10,7 @@ from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
 from dbt.tracking import initialize_from_flags, track_run
 from dbt.config.runtime import load_project
+from dbt.task.deps import DepsTask
 
 
 def cli_runner():
@@ -228,7 +229,13 @@ def debug(ctx, **kwargs):
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
     flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    project = ctx.obj['project']
+    
+    task = DepsTask.from_project(project, flags.VARS)
+    
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt init

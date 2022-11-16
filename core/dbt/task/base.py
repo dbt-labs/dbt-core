@@ -77,7 +77,8 @@ class BaseTask(metaclass=ABCMeta):
 
     def __init__(self, args, config):
         self.args = args
-        self.args.single_threaded = False
+        # TODO
+        # self.args.single_threaded = False
         self.config = config
 
     @classmethod
@@ -139,14 +140,14 @@ class BaseTask(metaclass=ABCMeta):
     def interpret_results(self, results):
         return True
 
-
-def get_nearest_project_dir(args):
+from pathlib import Path
+def get_nearest_project_dir(project_dir: Optional[Path]):
     # If the user provides an explicit project directory, use that
     # but don't look at parent directories.
-    if args.project_dir:
-        project_file = os.path.join(args.project_dir, "dbt_project.yml")
+    if project_dir:
+        project_file = os.path.join(project_dir, "dbt_project.yml")
         if os.path.exists(project_file):
-            return args.project_dir
+            return project_dir
         else:
             raise dbt.exceptions.RuntimeException(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
@@ -169,7 +170,7 @@ def get_nearest_project_dir(args):
 
 
 def move_to_nearest_project_dir(args):
-    nearest_project_dir = get_nearest_project_dir(args)
+    nearest_project_dir = get_nearest_project_dir(args.project_dir)
     os.chdir(nearest_project_dir)
     return nearest_project_dir
 

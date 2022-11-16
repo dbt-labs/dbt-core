@@ -287,15 +287,15 @@ def get_base_invocation_context():
     }
 
 
-def track_package_install(config, args, options):
+def track_package_install(command_name: str, project_hashed_name: Optional[str], options):
     assert active_user is not None, "Cannot track package installs when active user is None"
 
     invocation_data = get_base_invocation_context()
 
     invocation_data.update(
         {
-            "project_id": None if config is None else config.hashed_name(),
-            "command": args.which,
+            "project_id": project_hashed_name,
+            "command": command_name
         }
     )
 

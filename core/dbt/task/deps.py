@@ -23,11 +23,17 @@ from dbt.clients import system
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
 
-class DepsTask(BaseTask):
-    ConfigType = UnsetProfileConfig
+from dbt.config import RuntimeConfig, Project
+from dbt.task.base import NoneConfig
 
-    def __init__(self, args, config: UnsetProfileConfig):
+class DepsTask(BaseTask):
+    # NoneConfig is the default, just setting it explicitly here for now.
+    ConfigType = NoneConfig
+
+    def __init__(self, args, config: NoneConfig, project: Project, cli_vars):
         super().__init__(args=args, config=config)
+        self.project = project
+        self.cli_vars = cli_vars
 
     def track_package_install(self, package_name: str, source_type: str, version: str) -> None:
         # Hub packages do not need to be hashed, as they are public
@@ -39,22 +45,22 @@ class DepsTask(BaseTask):
             package_name = dbt.utils.md5(package_name)
             version = dbt.utils.md5(version)
         dbt.tracking.track_package_install(
-            self.config,
-            self.config.args,
+            "deps", #flags.WHICH alternatively
+            self.project.hashed_name(),
             {"name": package_name, "source": source_type, "version": version},
         )
 
     def run(self):
-        system.make_directory(self.config.packages_install_path)
-        packages = self.config.packages.packages
+        system.make_directory(self.project.packages_install_path)
+        packages = self.project.packages.packages
         if not packages:
             fire_event(DepsNoPackagesFound())
             return
 
         with downloads_directory():
-            final_deps = resolve_packages(packages, self.config)
+            final_deps = resolve_packages(packages, self.project, None, self.cli_vars)
 
-            renderer = DbtProjectYamlRenderer(self.config, self.config.cli_vars)
+            renderer = DbtProjectYamlRenderer(None, self.cli_vars)
 
             packages_to_upgrade = []
             for package in final_deps:
@@ -63,7 +69,7 @@ class DepsTask(BaseTask):
                 version = package.get_version()
 
                 fire_event(DepsStartPackageInstall(package_name=package_name))
-                package.install(self.config, renderer)
+                package.install(self.project, renderer)
                 fire_event(DepsInstallInfo(version_name=package.nice_version_name()))
                 if source_type == "hub":
                     version_latest = package.get_version_latest()
@@ -88,3 +94,9 @@ class DepsTask(BaseTask):
         # into the modules directory
         move_to_nearest_project_dir(args)
         return super().from_args(args)
+
+    @classmethod
+    def from_project(cls, project: Project, cli_vars):
+        move_to_nearest_project_dir(project.project_root)
+        # TODO: consider args, need for UnsetProfile
+        return cls(None, NoneConfig(), project, cli_vars)

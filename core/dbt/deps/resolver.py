@@ -94,19 +94,19 @@ class PackageListing:
 
 def _check_for_duplicate_project_names(
     final_deps: List[PinnedPackage],
-    config: Project,
+    project: Project,
     renderer: DbtProjectYamlRenderer,
 ):
     seen: Set[str] = set()
     for package in final_deps:
-        project_name = package.get_project_name(config, renderer)
+        project_name = package.get_project_name(project, renderer)
         if project_name in seen:
             raise_dependency_error(
                 f'Found duplicate project "{project_name}". This occurs when '
                 "a dependency has the same project name as some other "
                 "dependency."
             )
-        elif project_name == config.project_name:
+        elif project_name == project.project_name:
             raise_dependency_error(
                 "Found a dependency with the same name as the root project "
                 f'"{project_name}". Package names must be unique in a project.'
@@ -116,21 +116,21 @@ def _check_for_duplicate_project_names(
 
 
 def resolve_packages(
-    packages: List[PackageContract], config: RuntimeConfig
+    packages: List[PackageContract], project: Project, profile, cli_vars
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
-    renderer = DbtProjectYamlRenderer(config, config.cli_vars)
+    renderer = DbtProjectYamlRenderer(profile, cli_vars)
 
     while pending:
         next_pending = PackageListing()
         # resolve the dependency in question
         for package in pending:
             final.incorporate(package)
-            target = final[package].resolved().fetch_metadata(config, renderer)
+            target = final[package].resolved().fetch_metadata(project, renderer)
             next_pending.update_from(target.packages)
         pending = next_pending
 
     resolved = final.resolved()
-    _check_for_duplicate_project_names(resolved, config, renderer)
+    _check_for_duplicate_project_names(resolved, project, renderer)
     return resolved
