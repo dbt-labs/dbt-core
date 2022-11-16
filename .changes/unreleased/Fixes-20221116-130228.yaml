@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fixed reaading the Profiles.yml file multiple times for every dbt operation.
+time: 2022-11-16T13:02:28.837792+05:30
+custom:
+  Author: akashrn5
+  Issue: "6263"
+  PR: "6264"

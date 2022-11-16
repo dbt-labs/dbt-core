@@ -102,11 +102,11 @@ class BaseTask(metaclass=ABCMeta):
             log_manager.format_text()
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, raw_profiles: Dict[str, Any]):
         try:
             # This is usually RuntimeConfig but will be UnsetProfileConfig
             # for the clean or deps tasks
-            config = cls.ConfigType.from_args(args)
+            config = cls.ConfigType.from_args(args, raw_profiles)
         except dbt.exceptions.DbtProjectError as exc:
             fire_event(DbtProjectError())
             fire_event(DbtProjectErrorException(exc=str(exc)))
@@ -182,9 +182,9 @@ class ConfiguredTask(BaseTask):
         register_adapter(self.config)
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, raw_profiles: Dict[str, Any]):
         move_to_nearest_project_dir(args)
-        return super().from_args(args)
+        return super().from_args(args, raw_profiles)
 
 
 class ExecutionContext:

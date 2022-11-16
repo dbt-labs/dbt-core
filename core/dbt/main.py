@@ -176,7 +176,7 @@ def handle_and_check(args):
         parsed = parse_args(args)
 
         # Set flags from args, user config, and env vars
-        user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
+        user_config, raw_profiles = read_user_config(flags.PROFILES_DIR)  # This is read again later
         flags.set_from_args(parsed, user_config)
         dbt.tracking.initialize_from_flags()
         # Set log_format from flags
@@ -195,7 +195,7 @@ def handle_and_check(args):
 
             with adapter_management():
 
-                task, res = run_from_args(parsed)
+                task, res = run_from_args(parsed, raw_profiles)
                 success = task.interpret_results(res)
 
             return res, success
@@ -217,12 +217,12 @@ def track_run(task):
         dbt.tracking.flush()
 
 
-def run_from_args(parsed):
+def run_from_args(parsed, raw_profiles):
     log_cache_events(getattr(parsed, "log_cache_events", False))
 
     # this will convert DbtConfigErrors into RuntimeExceptions
     # task could be any one of the task objects
-    task = parsed.cls.from_args(args=parsed)
+    task = parsed.cls.from_args(args=parsed, raw_profiles=raw_profiles)
 
     # Set up logging
     log_path = None

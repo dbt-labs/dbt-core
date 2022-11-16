@@ -65,14 +65,14 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
     return {}
 
 
-def read_user_config(directory: str) -> UserConfig:
+def read_user_config(directory: str) -> Tuple[UserConfig, Dict[str, Any]]:
     try:
         profile = read_profile(directory)
         if profile:
             user_config = coerce_dict_str(profile.get("config", {}))
             if user_config is not None:
                 UserConfig.validate(user_config)
-                return UserConfig.from_dict(user_config)
+                return UserConfig.from_dict(user_config), profile
     except (RuntimeException, ValidationError):
         pass
     return UserConfig()
@@ -404,11 +404,13 @@ class Profile(HasCredentials):
         args: Any,
         renderer: ProfileRenderer,
         project_profile_name: Optional[str],
+        raw_profiles: Dict[str, Any],
     ) -> "Profile":
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
 
+        :param raw_profiles: The profiles configured for the project
         :param args argparse.Namespace: The arguments as parsed from the cli.
         :param project_profile_name Optional[str]: The profile name, if
             specified in a project.
@@ -421,7 +423,6 @@ class Profile(HasCredentials):
         """
         threads_override = getattr(args, "threads", None)
         target_override = getattr(args, "target", None)
-        raw_profiles = read_profile(flags.PROFILES_DIR)
         profile_name = cls.pick_profile_name(getattr(args, "profile", None), project_profile_name)
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,

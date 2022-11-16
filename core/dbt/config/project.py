@@ -259,7 +259,7 @@ class PartialProject(RenderComponents):
         metadata=dict(description=("If True, verify the dbt version matches the required version"))
     )
 
-    def render_profile_name(self, renderer) -> Optional[str]:
+    def render_profile_name(self, renderer, raw_profiles) -> Optional[str]:
         if self.profile_name is None:
             return None
         return renderer.render_value(self.profile_name)

@@ -194,16 +194,17 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         args: Any,
         profile_renderer: ProfileRenderer,
         profile_name: Optional[str],
+        raw_profiles: Dict[str, Any],
     ) -> Profile:
 
-        return Profile.render_from_args(args, profile_renderer, profile_name)
+        return Profile.render_from_args(args, profile_renderer, profile_name, raw_profiles)
 
     @classmethod
-    def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
+    def collect_parts(cls: Type["RuntimeConfig"], args: Any, raw_profiles: Dict[str, Any]) -> Tuple[Project, Profile]:
 
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
 
-        profile = cls.collect_profile(args=args)
+        profile = cls.collect_profile(args=args, raw_profiles=raw_profiles)
         project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
         project = cls.collect_project(args=args, project_renderer=project_renderer)
         assert type(project) is Project
@@ -211,7 +212,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
     @classmethod
     def collect_profile(
-        cls: Type["RuntimeConfig"], args: Any, profile_name: Optional[str] = None
+        cls: Type["RuntimeConfig"], args: Any, raw_profiles: Dict[str, Any], profile_name: Optional[str] = None,
     ) -> Profile:
 
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
@@ -223,7 +224,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             # profile is ignored.
             partial = cls.collect_project(args)
             assert type(partial) is PartialProject
-            profile_name = partial.render_profile_name(profile_renderer)
+            profile_name = partial.render_profile_name(profile_renderer, raw_profiles)
 
         profile = cls._get_rendered_profile(args, profile_renderer, profile_name)
         # Save env_vars encountered in rendering for partial parsing
@@ -249,17 +250,18 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
     # Called in main.py, lib.py, task/base.py
     @classmethod
-    def from_args(cls, args: Any) -> "RuntimeConfig":
+    def from_args(cls, args: Any, raw_profiles: Dict[str, Any]) -> "RuntimeConfig":
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.
 
+        :param raw_profiles: The profiles configured in dbt project.
         :param args: The arguments as parsed from the cli.
         :raises DbtProjectError: If the project is invalid or missing.
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
-        project, profile = cls.collect_parts(args)
+        project, profile = cls.collect_parts(args, raw_profiles=raw_profiles)
 
         return cls.from_parts(
             project=project,
