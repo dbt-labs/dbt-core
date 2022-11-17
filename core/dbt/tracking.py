@@ -292,12 +292,7 @@ def track_package_install(command_name: str, project_hashed_name: Optional[str],
 
     invocation_data = get_base_invocation_context()
 
-    invocation_data.update(
-        {
-            "project_id": project_hashed_name,
-            "command": command_name
-        }
-    )
+    invocation_data.update({"project_id": project_hashed_name, "command": command_name})
 
     context = [
         SelfDescribingJson(INVOCATION_SPEC, invocation_data),

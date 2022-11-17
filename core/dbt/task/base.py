@@ -140,8 +140,8 @@ class BaseTask(metaclass=ABCMeta):
     def interpret_results(self, results):
         return True
 
-from pathlib import Path
-def get_nearest_project_dir(project_dir: Optional[Path]):
+
+def get_nearest_project_dir(project_dir: Optional[str]) -> str:
     # If the user provides an explicit project directory, use that
     # but don't look at parent directories.
     if project_dir:
@@ -169,8 +169,8 @@ def get_nearest_project_dir(project_dir: Optional[Path]):
     )
 
 
-def move_to_nearest_project_dir(args):
-    nearest_project_dir = get_nearest_project_dir(args.project_dir)
+def move_to_nearest_project_dir(project_dir: Optional[str]) -> str:
+    nearest_project_dir = get_nearest_project_dir(project_dir)
     os.chdir(nearest_project_dir)
     return nearest_project_dir
 
@@ -184,7 +184,7 @@ class ConfiguredTask(BaseTask):
 
     @classmethod
     def from_args(cls, args):
-        move_to_nearest_project_dir(args)
+        move_to_nearest_project_dir(args.project_dir)
         return super().from_args(args)
 
 

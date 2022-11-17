@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Union, Type, Iterator, Set
+from typing import Dict, List, NoReturn, Union, Type, Iterator, Set, Optional, Any
 
 from dbt.exceptions import raise_dependency_error, InternalException
 
-from dbt.config import Project, RuntimeConfig
+from dbt.config import Project
 from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
@@ -116,7 +116,10 @@ def _check_for_duplicate_project_names(
 
 
 def resolve_packages(
-    packages: List[PackageContract], project: Project, profile, cli_vars
+    packages: List[PackageContract],
+    project: Project,
+    profile,
+    cli_vars: Optional[Dict[str, Any]] = None,
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()

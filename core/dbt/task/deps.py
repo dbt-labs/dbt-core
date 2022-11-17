@@ -1,8 +1,9 @@
+from typing import Optional, Dict, Any
+
 import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
-from dbt.config import UnsetProfileConfig
 from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
@@ -23,14 +24,17 @@ from dbt.clients import system
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
 
-from dbt.config import RuntimeConfig, Project
+from dbt.config import Project
 from dbt.task.base import NoneConfig
+
 
 class DepsTask(BaseTask):
     # NoneConfig is the default, just setting it explicitly here for now.
     ConfigType = NoneConfig
 
-    def __init__(self, args, config: NoneConfig, project: Project, cli_vars):
+    def __init__(
+        self, args, config: NoneConfig, project: Project, cli_vars: Optional[Dict[str, Any]] = None
+    ):
         super().__init__(args=args, config=config)
         self.project = project
         self.cli_vars = cli_vars
@@ -45,7 +49,7 @@ class DepsTask(BaseTask):
             package_name = dbt.utils.md5(package_name)
             version = dbt.utils.md5(version)
         dbt.tracking.track_package_install(
-            "deps", #flags.WHICH alternatively
+            "deps",  # flags.WHICH alternatively
             self.project.hashed_name(),
             {"name": package_name, "source": source_type, "version": version},
         )
@@ -92,11 +96,13 @@ class DepsTask(BaseTask):
     def from_args(cls, args):
         # deps needs to move to the project directory, as it does put files
         # into the modules directory
-        move_to_nearest_project_dir(args)
+        move_to_nearest_project_dir(args.project_dir)
         return super().from_args(args)
 
     @classmethod
-    def from_project(cls, project: Project, cli_vars):
+    def from_project(
+        cls, project: Project, cli_vars: Optional[Dict[str, Any]] = None
+    ) -> "DepsTask":
         move_to_nearest_project_dir(project.project_root)
         # TODO: consider args, need for UnsetProfile
         return cls(None, NoneConfig(), project, cli_vars)

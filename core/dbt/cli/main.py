@@ -229,10 +229,10 @@ def debug(ctx, **kwargs):
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
     flags = Flags()
-    project = ctx.obj['project']
-    
+    project = ctx.obj["project"]
+
     task = DepsTask.from_project(project, flags.VARS)
-    
+
     results = task.run()
     success = task.interpret_results(results)
     return results, success
