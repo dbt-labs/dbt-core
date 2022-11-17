@@ -1,0 +1,7 @@
+kind: Features
+body: Add invocation_id to default query-comment
+time: 2022-11-17T11:51:48.801725Z
+custom:
+  Author: NiallRees
+  Issue: "6277"
+  PR: "6277"
