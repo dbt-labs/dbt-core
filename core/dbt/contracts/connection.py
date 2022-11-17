@@ -204,6 +204,7 @@ DEFAULT_QUERY_COMMENT = """
     dbt_version=dbt_version,
     profile_name=target.get('profile_name'),
     target_name=target.get('target_name'),
+    invocation_id=invocation_id,
 ) -%}
 {%- if node is not none -%}
   {%- do comment_dict.update(
