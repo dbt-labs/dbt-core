@@ -1243,7 +1243,7 @@ class NodeNotFoundOrDisabled(betterproto.Message):
 
 
 @dataclass
-class GeneralMacroWarning(betterproto.Message):
+class JinjaLogWarning(betterproto.Message):
     """I061"""
 
     info: "EventInfo" = betterproto.message_field(1)

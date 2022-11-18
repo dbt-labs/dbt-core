@@ -1519,7 +1519,7 @@ class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
 
 
 @dataclass
-class GeneralMacroWarning(WarnLevel, pt.GeneralMacroWarning):
+class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
     def code(self):
         return "I061"
 

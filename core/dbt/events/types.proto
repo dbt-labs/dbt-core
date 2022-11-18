@@ -944,7 +944,7 @@ message NodeNotFoundOrDisabled {
 }
 
 // I061
-message GeneralMacroWarning {
+message JinjaLogWarning {
     EventInfo info = 1;
     string msg = 2;
 }

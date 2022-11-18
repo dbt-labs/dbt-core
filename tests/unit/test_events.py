@@ -340,7 +340,7 @@ sample_values = [
         target_package="",
         disabled="",
     ),
-    GeneralMacroWarning(),
+    JinjaLogWarning(),
 
     # M - Deps generation ======================
 
