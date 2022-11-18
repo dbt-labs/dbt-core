@@ -308,7 +308,7 @@ message ConnectionReused {
 }
 
 // E007
-message ConnectionLeftOpen {
+message ConnectionLeftOpenInCleanup {
     EventInfo info = 1;
     string conn_name = 2;
 }
@@ -333,7 +333,7 @@ message ConnectionClosed {
 }
 
 // E011
-message ConnectionLeftOpen2 {
+message ConnectionLeftOpen {
     EventInfo info = 1;
     string conn_name = 2;
 }

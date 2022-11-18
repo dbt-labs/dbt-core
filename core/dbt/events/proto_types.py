@@ -398,7 +398,7 @@ class ConnectionReused(betterproto.Message):
 
 
 @dataclass
-class ConnectionLeftOpen(betterproto.Message):
+class ConnectionLeftOpenInCleanup(betterproto.Message):
     """E007"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -431,7 +431,7 @@ class ConnectionClosed(betterproto.Message):
 
 
 @dataclass
-class ConnectionLeftOpen2(betterproto.Message):
+class ConnectionLeftOpen(betterproto.Message):
     """E011"""
 
     info: "EventInfo" = betterproto.message_field(1)
