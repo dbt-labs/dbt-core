@@ -15,6 +15,7 @@ message EventInfo {
     string thread = 7;
     google.protobuf.Timestamp ts = 8;
     map<string, string> extra = 9;
+    string category = 10;
 }
 
 // TimingInfo

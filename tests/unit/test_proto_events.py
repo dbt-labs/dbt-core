@@ -13,7 +13,7 @@ from dbt.events import proto_types as pl
 from dbt.version import installed
 
 
-info_keys = {"name", "code", "msg", "level", "invocation_id", "pid", "thread", "ts", "extra"}
+info_keys = {"name", "code", "msg", "level", "invocation_id", "pid", "thread", "ts", "extra", "category"}
 
 
 def test_events():

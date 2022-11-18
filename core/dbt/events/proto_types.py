@@ -23,6 +23,7 @@ class EventInfo(betterproto.Message):
     extra: Dict[str, str] = betterproto.map_field(
         9, betterproto.TYPE_STRING, betterproto.TYPE_STRING
     )
+    category: str = betterproto.string_field(10)
 
 
 @dataclass
