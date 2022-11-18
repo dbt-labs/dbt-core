@@ -5,6 +5,7 @@ from dbt.exceptions import raise_dependency_error, InternalException
 
 from dbt.config import Project
 from dbt.config.renderer import DbtProjectYamlRenderer
+from dbt.config.runtime import UnsetProfile
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
@@ -118,11 +119,11 @@ def _check_for_duplicate_project_names(
 def resolve_packages(
     packages: List[PackageContract],
     project: Project,
-    profile,
     cli_vars: Optional[Dict[str, Any]] = None,
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
+    profile = UnsetProfile()
     renderer = DbtProjectYamlRenderer(profile, cli_vars)
 
     while pending:

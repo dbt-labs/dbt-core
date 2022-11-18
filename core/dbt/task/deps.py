@@ -62,7 +62,7 @@ class DepsTask(BaseTask):
             return
 
         with downloads_directory():
-            final_deps = resolve_packages(packages, self.project, None, self.cli_vars)
+            final_deps = resolve_packages(packages, self.project, self.cli_vars)
 
             renderer = DbtProjectYamlRenderer(None, self.cli_vars)
 
@@ -104,5 +104,5 @@ class DepsTask(BaseTask):
         cls, project: Project, cli_vars: Optional[Dict[str, Any]] = None
     ) -> "DepsTask":
         move_to_nearest_project_dir(project.project_root)
-        # TODO: consider args, need for UnsetProfile
+        # TODO: consider args
         return cls(None, NoneConfig(), project, cli_vars)
