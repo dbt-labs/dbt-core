@@ -250,7 +250,7 @@ class InitTask(BaseTask):
         self.create_profiles_dir(profiles_dir)
 
         try:
-            move_to_nearest_project_dir(self.args)
+            move_to_nearest_project_dir(self.args.project_dir)
             in_project = True
         except dbt.exceptions.RuntimeException:
             in_project = False

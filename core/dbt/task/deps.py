@@ -4,6 +4,7 @@ import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
+from dbt.config.runtime import load_project, UnsetProfile
 from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
@@ -33,10 +34,13 @@ class DepsTask(BaseTask):
     ConfigType = NoneConfig
 
     def __init__(
-        self, args, config: NoneConfig, project: Project, cli_vars: Optional[Dict[str, Any]] = None
+        self,
+        args,
+        config: NoneConfig,
+        project: Optional[Project] = None,
+        cli_vars: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(args=args, config=config)
-        self.project = project
+        super().__init__(args=args, config=config, project=project)
         self.cli_vars = cli_vars
 
     def track_package_install(self, package_name: str, source_type: str, version: str) -> None:
@@ -49,7 +53,7 @@ class DepsTask(BaseTask):
             package_name = dbt.utils.md5(package_name)
             version = dbt.utils.md5(version)
         dbt.tracking.track_package_install(
-            "deps",  # flags.WHICH alternatively
+            "deps",
             self.project.hashed_name(),
             {"name": package_name, "source": source_type, "version": version},
         )
@@ -96,13 +100,15 @@ class DepsTask(BaseTask):
     def from_args(cls, args):
         # deps needs to move to the project directory, as it does put files
         # into the modules directory
-        move_to_nearest_project_dir(args.project_dir)
-        return super().from_args(args)
+        nearest_project_dir = move_to_nearest_project_dir(args.project_dir)
+        project = load_project(
+            args.project_dir or nearest_project_dir, args.version_check, UnsetProfile(), args.vars
+        )
+        return cls(args, NoneConfig(), project, args.vars)
 
     @classmethod
     def from_project(
         cls, project: Project, cli_vars: Optional[Dict[str, Any]] = None
     ) -> "DepsTask":
         move_to_nearest_project_dir(project.project_root)
-        # TODO: consider args
         return cls(None, NoneConfig(), project, cli_vars)

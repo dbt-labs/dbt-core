@@ -75,11 +75,12 @@ def read_profiles(profiles_dir=None):
 class BaseTask(metaclass=ABCMeta):
     ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
-    def __init__(self, args, config):
+    def __init__(self, args, config, project=None):
         self.args = args
-        # TODO
-        # self.args.single_threaded = False
         self.config = config
+        if hasattr(config, "args"):
+            self.config.args.single_threaded = False
+        self.project = config if isinstance(config, Project) else project
 
     @classmethod
     def pre_init_hook(cls, args):

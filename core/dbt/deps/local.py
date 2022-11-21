@@ -8,6 +8,7 @@ from dbt.contracts.project import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
+from dbt.config.project import PartialProject, package_config_from_data
 
 
 class LocalPackageMixin:
@@ -39,9 +40,11 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
             project.project_root,
         )
 
-    def _fetch_metadata(self, project, renderer):
-        loaded = project.from_project_root(self.resolve_path(project), renderer)
-        return ProjectPackageMetadata.from_project(loaded)
+    def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
+        partial = PartialProject.from_project_root(self.resolve_path(project))
+        packages_data = renderer.render_data(partial.packages_dict)
+        packages_config = package_config_from_data(packages_data)
+        return ProjectPackageMetadata(partial.project_name, packages_config.packages)
 
     def install(self, project, renderer):
         src_path = self.resolve_path(project)

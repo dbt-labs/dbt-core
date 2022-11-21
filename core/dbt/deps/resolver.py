@@ -4,8 +4,7 @@ from typing import Dict, List, NoReturn, Union, Type, Iterator, Set, Optional, A
 from dbt.exceptions import raise_dependency_error, InternalException
 
 from dbt.config import Project
-from dbt.config.renderer import DbtProjectYamlRenderer
-from dbt.config.runtime import UnsetProfile
+from dbt.config.renderer import PackageRenderer
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
@@ -96,7 +95,7 @@ class PackageListing:
 def _check_for_duplicate_project_names(
     final_deps: List[PinnedPackage],
     project: Project,
-    renderer: DbtProjectYamlRenderer,
+    renderer: PackageRenderer,
 ):
     seen: Set[str] = set()
     for package in final_deps:
@@ -123,8 +122,10 @@ def resolve_packages(
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
-    profile = UnsetProfile()
-    renderer = DbtProjectYamlRenderer(profile, cli_vars)
+
+    # TODO: uwnrangle default cli_vars value
+    cli_vars = cli_vars or {}
+    renderer = PackageRenderer(cli_vars)
 
     while pending:
         next_pending = PackageListing()

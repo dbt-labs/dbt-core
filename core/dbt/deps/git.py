@@ -3,7 +3,7 @@ import hashlib
 from typing import List, Optional
 
 from dbt.clients import git, system
-from dbt.config import Project
+from dbt.config.project import PartialProject, package_config_from_data
 from dbt.contracts.project import (
     ProjectPackageMetadata,
     GitPackage,
@@ -100,8 +100,10 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
                 ),
                 log_fmt=ui.yellow("WARNING: {}"),
             )
-        loaded = Project.from_project_root(path, renderer)
-        return ProjectPackageMetadata.from_project(loaded)
+        partial = PartialProject.from_project_root(path)
+        packages_data = renderer.render_data(partial.packages_dict)
+        packages_config = package_config_from_data(packages_data)
+        return ProjectPackageMetadata(partial.project_name, packages_config.packages)
 
     def install(self, project, renderer):
         dest_path = self.get_installation_path(project, renderer)
