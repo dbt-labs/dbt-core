@@ -30,17 +30,15 @@ from dbt.task.base import NoneConfig
 
 
 class DepsTask(BaseTask):
-    # NoneConfig is the default, just setting it explicitly here for now.
     ConfigType = NoneConfig
 
     def __init__(
         self,
         args,
-        config: NoneConfig,
         project: Optional[Project] = None,
         cli_vars: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(args=args, config=config, project=project)
+        super().__init__(args=args, config=None, project=project)
         self.cli_vars = cli_vars
 
     def track_package_install(self, package_name: str, source_type: str, version: str) -> None:
@@ -104,11 +102,12 @@ class DepsTask(BaseTask):
         project = load_project(
             args.project_dir or nearest_project_dir, args.version_check, UnsetProfile(), args.vars
         )
-        return cls(args, NoneConfig(), project, args.vars)
+        return cls(args, project, args.vars)
 
     @classmethod
     def from_project(
         cls, project: Project, cli_vars: Optional[Dict[str, Any]] = None
     ) -> "DepsTask":
         move_to_nearest_project_dir(project.project_root)
-        return cls(None, NoneConfig(), project, cli_vars)
+        # TODO: remove args=None once BaseTask does not require args
+        return cls(None, project, cli_vars)
