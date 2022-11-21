@@ -62,7 +62,7 @@ class DebugTask(BaseTask):
         self.profiles_dir = flags.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
-            self.project_dir = get_nearest_project_dir(self.args)
+            self.project_dir = get_nearest_project_dir(self.args.project_dir)
         except dbt.exceptions.Exception:
             # we probably couldn't find a project directory. Set project dir
             # to whatever was given, or default to the current directory.
