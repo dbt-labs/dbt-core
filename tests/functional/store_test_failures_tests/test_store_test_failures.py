@@ -19,19 +19,12 @@ from tests.functional.store_test_failures_tests.fixtures import (
     tests__passing_test,
 )
 
+# used to rename test audit schema to help test schema meet max char limit
+# the default is _dbt_test__audit but this runs over the postgres 63 schema name char limit
+TEST_AUDIT_SCHEMA_SUFFIX = "_dbt_test__aud"
+
 
 class TestStoreTestFailures:
-    @pytest.fixture(scope="function")
-    def clean_up(self, project):
-        yield
-        with project.adapter.connection_named('__test'):
-            test_audit_schema = project.test_schema + "_dbt_test__aud"
-            relation = project.adapter.Relation.create(database=project.database, schema=test_audit_schema)
-            project.adapter.drop_schema(relation)
-
-            relation = project.adapter.Relation.create(database=project.database, schema=project.test_schema)
-            project.adapter.drop_schema(relation)
-
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -72,7 +65,7 @@ class TestStoreTestFailures:
                 "test": self.column_type_overrides(),
             },
             "tests": {
-                "+schema": "dbt_test__aud"  # max char limit
+                "+schema": "dbt_test__aud"
             }
         }
 
@@ -80,7 +73,7 @@ class TestStoreTestFailures:
         return {}
 
     def run_tests_store_one_failure(self, project):
-        test_audit_schema = project.test_schema + "_dbt_test__aud"
+        test_audit_schema = project.test_schema + TEST_AUDIT_SCHEMA_SUFFIX
 
         run_dbt(["seed"])
         run_dbt(["run"])
@@ -96,7 +89,7 @@ class TestStoreTestFailures:
         )
 
     def run_tests_store_failures_and_assert(self, project):
-        test_audit_schema = project.test_schema + "_dbt_test__aud"
+        test_audit_schema = project.test_schema + TEST_AUDIT_SCHEMA_SUFFIX
         project.created_schemas.append(test_audit_schema)
 
         run_dbt(["seed"])
@@ -144,6 +137,17 @@ class TestStoreTestFailures:
 
 
 class TestStoreTestFailures(TestStoreTestFailures):
+    @pytest.fixture(scope="function")
+    def clean_up(self, project):
+        yield
+        with project.adapter.connection_named('__test'):
+            test_audit_schema = project.test_schema + TEST_AUDIT_SCHEMA_SUFFIX
+            relation = project.adapter.Relation.create(database=project.database, schema=test_audit_schema)
+            project.adapter.drop_schema(relation)
+
+            relation = project.adapter.Relation.create(database=project.database, schema=project.test_schema)
+            project.adapter.drop_schema(relation)
+
     def column_type_overrides(self):
         return {
             "expected_unique_problematic_model_id": {
