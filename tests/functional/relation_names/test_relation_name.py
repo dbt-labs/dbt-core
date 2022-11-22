@@ -1,5 +1,6 @@
 import pytest
 
+from dbt.contracts.results import RunStatus
 from dbt.tests.util import run_dbt
 
 # Test coverage: A relation is a name for a database entity, i.e. a table or view. Every relation has
@@ -37,9 +38,13 @@ select * from {{ this.schema }}.seed
 class TestGeneratedDDLNameRules:
     @classmethod
     def setup_class(self):
+        self.incremental_filename = "my_name_is_51_characters_incremental_abcdefghijklmn"
         # length is 63
         self.max_length_filename = "my_name_is_max_length_chars_abcdefghijklmnopqrstuvwxyz123456789"
-        self.over_max_length_filename = self.max_length_filename + '0'
+        # length is 64
+        self.over_max_length_filename = "my_name_is_one_over_max_length_chats_abcdefghijklmnopqrstuvwxyz1"
+
+        self.filename_for_backup_file = "my_name_is_52_characters_abcdefghijklmnopqrstuvwxyz0"
 
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
@@ -52,9 +57,9 @@ class TestGeneratedDDLNameRules:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_name_is_51_characters_incremental_abcdefghijklmn.sql":
+            f"{self.incremental_filename}.sql":
                 models__basic_incremental,
-            "my_name_is_52_characters_abcdefghijklmnopqrstuvwxyz0.sql":
+            f"{self.filename_for_backup_file}.sql":
                 models__basic_table,
             f"{self.max_length_filename}.sql":
                 models__basic_table,
@@ -70,29 +75,17 @@ class TestGeneratedDDLNameRules:
             },
         }
 
-    # 63 characters is the character limit for a table name in a postgres database
-    # (assuming compiled without changes from source)
-    def test_name_longer_than_63_does_not_build(self):
-        run_dbt(
-            [
-                "run",
-                "-m",
-                self.over_max_length_filename,
-            ],
-            expect_pass=False,
-        )
-
     # Backup table name generation:
-    #   1. for a relation whose name is smaller than 51 characters, backfills
-    #   2. for a relation whose name is larger than 51 characters, overwrites
+    #   1. for len(relation name) <= 51, backfills
+    #   2. for len(relation name) > 51 characters, overwrites
     #  the last 12 characters with __dbt_backup
     def test_name_shorter_or_equal_to_63_passes(self, project):
         run_dbt(
             [
                 "run",
-                "-m",
-                "my_name_is_63_characters_abcdefghijklmnopqrstuvwxyz012345678901",
-                "my_name_is_52_characters_abcdefghijklmnopqrstuvwxyz0",
+                "-s",
+                f"{self.max_length_filename}",
+                f"{self.filename_for_backup_file}",
             ],
         )
 
@@ -100,8 +93,8 @@ class TestGeneratedDDLNameRules:
         run_dbt(
             [
                 "run",
-                "-m",
-                "my_name_is_51_characters_incremental_abcdefghijklmn",
+                "-s",
+                f"{self.incremental_filename}",
             ],
         )
 
@@ -109,8 +102,23 @@ class TestGeneratedDDLNameRules:
         run_dbt(
             [
                 "run",
-                "-m",
-                "my_name_is_51_characters_incremental_abcdefghijklmn",
+                "-s",
+                f"{self.incremental_filename}",
             ],
-            expect_pass=True,
         )
+
+    # 63 characters is the character limit for a table name in a postgres database
+    # (assuming compiled without changes from source)
+    def test_name_longer_than_63_does_not_build(self):
+        err_msg = "Relation name 'my_name_is_one_over_max"\
+            "_length_chats_abcdefghijklmnopqrstuvwxyz1' is longer than 63 characters"
+        res = run_dbt(
+            [
+                "run",
+                "-s",
+                self.over_max_length_filename,
+            ],
+            expect_pass=False
+        )
+        assert res[0].status == RunStatus.Error
+        assert err_msg in res[0].message
