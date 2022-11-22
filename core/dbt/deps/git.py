@@ -3,7 +3,8 @@ import hashlib
 from typing import List, Optional
 
 from dbt.clients import git, system
-from dbt.config.project import PartialProject, package_config_from_data
+from dbt.config.project import PartialProject, Project
+from dbt.config.renderer import PackageRenderer
 from dbt.contracts.project import (
     ProjectPackageMetadata,
     GitPackage,
@@ -89,7 +90,9 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             raise
         return os.path.join(get_downloads_path(), dir_)
 
-    def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
+    def _fetch_metadata(
+        self, project: Project, renderer: PackageRenderer
+    ) -> ProjectPackageMetadata:
         path = self._checkout()
 
         if self.unpinned_msg() and self.warn_unpinned:
@@ -101,9 +104,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
                 log_fmt=ui.yellow("WARNING: {}"),
             )
         partial = PartialProject.from_project_root(path)
-        packages_data = renderer.render_data(partial.packages_dict)
-        packages_config = package_config_from_data(packages_data)
-        return ProjectPackageMetadata(partial.project_name, packages_config.packages)
+        return partial.render_package_metadata(renderer)
 
     def install(self, project, renderer):
         dest_path = self.get_installation_path(project, renderer)

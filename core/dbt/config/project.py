@@ -37,9 +37,9 @@ from dbt.contracts.project import (
     Project as ProjectContract,
     SemverString,
 )
-from dbt.contracts.project import PackageConfig
+from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
 from dbt.dataclass_schema import ValidationError
-from .renderer import DbtProjectYamlRenderer
+from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
     selector_config_from_data,
     selector_data_from_root,
@@ -288,6 +288,13 @@ class PartialProject(RenderComponents):
             if exc.path is None:
                 exc.path = os.path.join(self.project_root, "dbt_project.yml")
             raise
+
+    def render_package_metadata(self, renderer: PackageRenderer) -> ProjectPackageMetadata:
+        packages_data = renderer.render_data(self.packages_dict)
+        packages_config = package_config_from_data(packages_data)
+        if not self.project_name:
+            raise DbtProjectError(DbtProjectError("Package dbt_project.yml must have a name!"))
+        return ProjectPackageMetadata(self.project_name, packages_config.packages)
 
     def check_config_path(self, project_dict, deprecated_path, exp_path):
         if deprecated_path in project_dict:
