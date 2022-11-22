@@ -136,7 +136,7 @@ class NodeSelector(MethodManager):
 
             direct_nodes = self.incorporate_indirect_nodes(initial_direct, indirect_nodes)
 
-            if spec.expect_exists:
+            if spec.expect_exists and len(direct_nodes) == 0:
                 warn_or_error(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
 
         return direct_nodes, indirect_nodes
