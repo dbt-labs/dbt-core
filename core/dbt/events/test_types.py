@@ -61,18 +61,3 @@ class UnitTestInfo(InfoLevel, NoFile, pl.UnitTestInfo):
 
     def message(self) -> str:
         return f"Unit Test: {self.msg}"
-
-
-# since mypy doesn't run on every file we need to suggest to mypy that every
-# class gets instantiated. But we don't actually want to run this code.
-# making the conditional `if False` causes mypy to skip it as dead code so
-# we need to skirt around that by computing something it doesn't check statically.
-#
-# TODO remove these lines once we run mypy everywhere.
-if 1 == 0:
-    IntegrationTestInfo(msg="")
-    IntegrationTestDebug(msg="")
-    IntegrationTestWarn(msg="")
-    IntegrationTestError(msg="")
-    IntegrationTestException(msg="")
-    UnitTestInfo(msg="")

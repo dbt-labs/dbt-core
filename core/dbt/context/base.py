@@ -16,7 +16,7 @@ from dbt.exceptions import (
     disallow_secret_env_var,
 )
 from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import MacroEventInfo, MacroEventDebug
+from dbt.events.types import JinjaLogInfo, JinjaLogDebug
 from dbt.version import __version__ as dbt_version
 
 # These modules are added to the context. Consider alternative
@@ -557,9 +557,9 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
         if info:
-            fire_event(MacroEventInfo(msg=msg))
+            fire_event(JinjaLogInfo(msg=msg))
         else:
-            fire_event(MacroEventDebug(msg=msg))
+            fire_event(JinjaLogDebug(msg=msg))
         return ""
 
     @contextproperty

@@ -23,6 +23,7 @@ class EventInfo(betterproto.Message):
     extra: Dict[str, str] = betterproto.map_field(
         9, betterproto.TYPE_STRING, betterproto.TYPE_STRING
     )
+    category: str = betterproto.string_field(10)
 
 
 @dataclass
@@ -398,7 +399,7 @@ class ConnectionReused(betterproto.Message):
 
 
 @dataclass
-class ConnectionLeftOpen(betterproto.Message):
+class ConnectionLeftOpenInCleanup(betterproto.Message):
     """E007"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -406,7 +407,7 @@ class ConnectionLeftOpen(betterproto.Message):
 
 
 @dataclass
-class ConnectionClosed(betterproto.Message):
+class ConnectionClosedInCleanup(betterproto.Message):
     """E008"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -423,7 +424,7 @@ class RollbackFailed(betterproto.Message):
 
 
 @dataclass
-class ConnectionClosed2(betterproto.Message):
+class ConnectionClosed(betterproto.Message):
     """E010"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -431,7 +432,7 @@ class ConnectionClosed2(betterproto.Message):
 
 
 @dataclass
-class ConnectionLeftOpen2(betterproto.Message):
+class ConnectionLeftOpen(betterproto.Message):
     """E011"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -1242,7 +1243,7 @@ class NodeNotFoundOrDisabled(betterproto.Message):
 
 
 @dataclass
-class GeneralMacroWarning(betterproto.Message):
+class JinjaLogWarning(betterproto.Message):
     """I061"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -1334,7 +1335,7 @@ class SelectorReportInvalidSelector(betterproto.Message):
 
 
 @dataclass
-class MacroEventInfo(betterproto.Message):
+class JinjaLogInfo(betterproto.Message):
     """M011"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -1342,7 +1343,7 @@ class MacroEventInfo(betterproto.Message):
 
 
 @dataclass
-class MacroEventDebug(betterproto.Message):
+class JinjaLogDebug(betterproto.Message):
     """M012"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -1602,11 +1603,12 @@ class LogSeedResult(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     node_info: "NodeInfo" = betterproto.message_field(2)
     status: str = betterproto.string_field(3)
-    index: int = betterproto.int32_field(4)
-    total: int = betterproto.int32_field(5)
-    execution_time: float = betterproto.float_field(6)
-    schema: str = betterproto.string_field(7)
-    relation: str = betterproto.string_field(8)
+    result_message: str = betterproto.string_field(4)
+    index: int = betterproto.int32_field(5)
+    total: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(7)
+    schema: str = betterproto.string_field(8)
+    relation: str = betterproto.string_field(9)
 
 
 @dataclass

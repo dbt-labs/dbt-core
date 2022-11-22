@@ -15,6 +15,7 @@ message EventInfo {
     string thread = 7;
     google.protobuf.Timestamp ts = 8;
     map<string, string> extra = 9;
+    string category = 10;
 }
 
 // TimingInfo
@@ -308,13 +309,13 @@ message ConnectionReused {
 }
 
 // E007
-message ConnectionLeftOpen {
+message ConnectionLeftOpenInCleanup {
     EventInfo info = 1;
     string conn_name = 2;
 }
 
 // E008
-message ConnectionClosed {
+message ConnectionClosedInCleanup {
     EventInfo info = 1;
     string conn_name = 2;
 }
@@ -327,13 +328,13 @@ message RollbackFailed {
 }
 
 // E010
-message ConnectionClosed2 {
+message ConnectionClosed {
     EventInfo info = 1;
     string conn_name = 2;
 }
 
 // E011
-message ConnectionLeftOpen2 {
+message ConnectionLeftOpen {
     EventInfo info = 1;
     string conn_name = 2;
 }
@@ -943,7 +944,7 @@ message NodeNotFoundOrDisabled {
 }
 
 // I061
-message GeneralMacroWarning {
+message JinjaLogWarning {
     EventInfo info = 1;
     string msg = 2;
 }
@@ -1015,13 +1016,13 @@ message SelectorReportInvalidSelector {
 }
 
 // M011
-message MacroEventInfo {
+message JinjaLogInfo {
     EventInfo info = 1;
     string msg = 2;
 }
 
 // M012
-message MacroEventDebug {
+message JinjaLogDebug {
     EventInfo info = 1;
     string msg = 2;
 }
@@ -1227,11 +1228,12 @@ message LogSeedResult {
     EventInfo info = 1;
     NodeInfo node_info = 2;
     string status = 3;
-    int32 index = 4;
-    int32 total = 5;
-    float execution_time = 6;
-    string schema = 7;
-    string relation = 8;
+    string result_message = 4;
+    int32 index = 5;
+    int32 total = 6;
+    float execution_time = 7;
+    string schema = 8;
+    string relation = 9;
 }
 
 // Skipped Q017

@@ -16,7 +16,7 @@ from dbt.events.format import format_fancy_output_line, pluralize
 
 # The generated classes quote the included message classes, requiring the following line
 from dbt.events.proto_types import EventInfo, RunResultMsg, ListOfStrings  # noqa
-from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg
+from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg  # noqa
 from dbt.events import proto_types as pt
 
 from dbt.node_types import NodeType
@@ -476,7 +476,7 @@ class ConnectionReused(DebugLevel, pt.ConnectionReused):
 
 
 @dataclass
-class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
+class ConnectionLeftOpenInCleanup(DebugLevel, pt.ConnectionLeftOpenInCleanup):
     def code(self):
         return "E007"
 
@@ -485,7 +485,7 @@ class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
 
 
 @dataclass
-class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
+class ConnectionClosedInCleanup(DebugLevel, pt.ConnectionClosedInCleanup):
     def code(self):
         return "E008"
 
@@ -504,7 +504,7 @@ class RollbackFailed(DebugLevel, pt.RollbackFailed):  # noqa
 
 # TODO: can we combine this with ConnectionClosed?
 @dataclass
-class ConnectionClosed2(DebugLevel, pt.ConnectionClosed2):
+class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
     def code(self):
         return "E010"
 
@@ -514,7 +514,7 @@ class ConnectionClosed2(DebugLevel, pt.ConnectionClosed2):
 
 # TODO: can we combine this with ConnectionLeftOpen?
 @dataclass
-class ConnectionLeftOpen2(DebugLevel, pt.ConnectionLeftOpen2):
+class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
     def code(self):
         return "E011"
 
@@ -1519,7 +1519,7 @@ class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
 
 
 @dataclass
-class GeneralMacroWarning(WarnLevel, pt.GeneralMacroWarning):
+class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
     def code(self):
         return "I061"
 
@@ -1626,7 +1626,7 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
 
 
 @dataclass
-class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
+class JinjaLogInfo(InfoLevel, EventStringFunctor, pt.JinjaLogInfo):
     def code(self):
         return "M011"
 
@@ -1636,7 +1636,7 @@ class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
 
 
 @dataclass
-class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
+class JinjaLogDebug(DebugLevel, EventStringFunctor, pt.JinjaLogDebug):
     def code(self):
         return "M012"
 
@@ -1999,7 +1999,7 @@ class LogSeedResult(DynamicLevel, pt.LogSeedResult):
             status = red(self.status.upper())
         else:
             info = "OK loaded"
-            status = green(self.status)
+            status = green(self.result_message)
         msg = f"{info} seed file {self.schema}.{self.relation}"
         return format_fancy_output_line(
             msg=msg,
@@ -2731,356 +2731,3 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
     def message(self) -> str:
         # This is the message on the result object, cannot be formatted in event
         return self.msg
-
-
-# since mypy doesn't run on every file we need to suggest to mypy that every
-# class gets instantiated. But we don't actually want to run this code.
-# making the conditional `if False` causes mypy to skip it as dead code so
-# we need to skirt around that by computing something it doesn't check statically.
-#
-# TODO remove these lines once we run mypy everywhere.
-if 1 == 0:
-
-    # A - pre-project loading
-    MainReportVersion(version="")
-    MainReportArgs(args={})
-    MainTrackingUserState(user_state="")
-    MergedFromState(num_merged=0, sample=[])
-    MissingProfileTarget(profile_name="", target_name="")
-    InvalidVarsYAML()
-    DbtProjectError()
-    DbtProjectErrorException(exc="")
-    DbtProfileError()
-    DbtProfileErrorException(exc="")
-    ProfileListTitle()
-    ListSingleProfile(profile="")
-    NoDefinedProfiles()
-    ProfileHelpMessage()
-    StarterProjectPath(dir="")
-    ConfigFolderDirectory(dir="")
-    NoSampleProfileFound(adapter="")
-    ProfileWrittenWithSample(name="", path="")
-    ProfileWrittenWithTargetTemplateYAML(name="", path="")
-    ProfileWrittenWithProjectTemplateYAML(name="", path="")
-    SettingUpProfile()
-    InvalidProfileTemplateYAML()
-    ProjectNameAlreadyExists(name="")
-    ProjectCreated(project_name="")
-
-    # D - Deprecations ======================
-    PackageRedirectDeprecation(old_name="", new_name="")
-    PackageInstallPathDeprecation()
-    ConfigSourcePathDeprecation(deprecated_path="", exp_path="")
-    ConfigDataPathDeprecation(deprecated_path="", exp_path="")
-    AdapterDeprecationWarning(old_name="", new_name="")
-    MetricAttributesRenamed(metric_name="")
-    ExposureNameDeprecation(exposure="")
-
-    # E - DB Adapter ======================
-    AdapterEventDebug()
-    AdapterEventInfo()
-    AdapterEventWarning()
-    AdapterEventError()
-    NewConnection(conn_type="", conn_name="")
-    ConnectionReused(conn_name="")
-    ConnectionLeftOpen(conn_name="")
-    ConnectionClosed(conn_name="")
-    RollbackFailed(conn_name="")
-    ConnectionClosed2(conn_name="")
-    ConnectionLeftOpen2(conn_name="")
-    Rollback(conn_name="")
-    CacheMiss(conn_name="", database="", schema="")
-    ListRelations(database="", schema="")
-    ConnectionUsed(conn_type="", conn_name="")
-    SQLQuery(conn_name="", sql="")
-    SQLQueryStatus(status="", elapsed=0.1)
-    SQLCommit(conn_name="")
-    ColTypeChange(
-        orig_type="", new_type="", table=ReferenceKeyMsg(database="", schema="", identifier="")
-    )
-    SchemaCreation(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    SchemaDrop(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    UncachedRelation(
-        dep_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        ref_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    AddLink(
-        dep_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        ref_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    AddRelation(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    DropMissingRelation(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    DropCascade(
-        dropped=ReferenceKeyMsg(database="", schema="", identifier=""),
-        consequences=[ReferenceKeyMsg(database="", schema="", identifier="")],
-    )
-    DropRelation(dropped=ReferenceKeyMsg())
-    UpdateReference(
-        old_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        new_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        cached_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    TemporaryRelation(key=ReferenceKeyMsg(database="", schema="", identifier=""))
-    RenameSchema(
-        old_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        new_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    DumpBeforeAddGraph(dump=dict())
-    DumpAfterAddGraph(dump=dict())
-    DumpBeforeRenameSchema(dump=dict())
-    DumpAfterRenameSchema(dump=dict())
-    AdapterImportError(exc="")
-    PluginLoadError(exc_info="")
-    NewConnectionOpening(connection_state="")
-    CodeExecution(conn_name="", code_content="")
-    CodeExecutionStatus(status="", elapsed=0.1)
-    CatalogGenerationError(exc="")
-    WriteCatalogFailure(num_exceptions=0)
-    CatalogWritten(path="")
-    CannotGenerateDocs()
-    BuildingCatalog()
-    DatabaseErrorRunningHook(hook_type="")
-    HooksRunning(num_hooks=0, hook_type="")
-    HookFinished(stat_line="", execution="", execution_time=0)
-
-    # I - Project parsing ======================
-    ParseCmdStart()
-    ParseCmdCompiling()
-    ParseCmdWritingManifest()
-    ParseCmdDone()
-    ManifestDependenciesLoaded()
-    ManifestLoaderCreated()
-    ManifestLoaded()
-    ManifestChecked()
-    ManifestFlatGraphBuilt()
-    ParseCmdPerfInfoPath(path="")
-    GenericTestFileParse(path="")
-    MacroFileParse(path="")
-    PartialParsingFullReparseBecauseOfError()
-    PartialParsingExceptionFile(file="")
-    PartialParsingFile(file_id="")
-    PartialParsingException(exc_info={})
-    PartialParsingSkipParsing()
-    PartialParsingMacroChangeStartFullParse()
-    PartialParsingProjectEnvVarsChanged()
-    PartialParsingProfileEnvVarsChanged()
-    PartialParsingDeletedMetric(unique_id="")
-    ManifestWrongMetadataVersion(version="")
-    PartialParsingVersionMismatch(saved_version="", current_version="")
-    PartialParsingFailedBecauseConfigChange()
-    PartialParsingFailedBecauseProfileChange()
-    PartialParsingFailedBecauseNewProjectDependency()
-    PartialParsingFailedBecauseHashChanged()
-    PartialParsingNotEnabled()
-    ParsedFileLoadFailed(path="", exc="", exc_info="")
-    PartialParseSaveFileNotFound()
-    StaticParserCausedJinjaRendering(path="")
-    UsingExperimentalParser(path="")
-    SampleFullJinjaRendering(path="")
-    StaticParserFallbackJinjaRendering(path="")
-    StaticParsingMacroOverrideDetected(path="")
-    StaticParserSuccess(path="")
-    StaticParserFailure(path="")
-    ExperimentalParserSuccess(path="")
-    ExperimentalParserFailure(path="")
-    PartialParsingEnabled(deleted=0, added=0, changed=0)
-    PartialParsingAddedFile(file_id="")
-    PartialParsingDeletedFile(file_id="")
-    PartialParsingUpdatedFile(file_id="")
-    PartialParsingNodeMissingInSourceFile(file_id="")
-    PartialParsingMissingNodes(file_id="")
-    PartialParsingChildMapMissingUniqueID(unique_id="")
-    PartialParsingUpdateSchemaFile(file_id="")
-    PartialParsingDeletedSource(unique_id="")
-    PartialParsingDeletedExposure(unique_id="")
-    InvalidDisabledTargetInTestNode(
-        resource_type_title="",
-        unique_id="",
-        original_file_path="",
-        target_kind="",
-        target_name="",
-        target_package="",
-    )
-    UnusedResourceConfigPath(unused_config_paths=[])
-    SeedIncreased(package_name="", name="")
-    SeedExceedsLimitSamePath(package_name="", name="")
-    SeedExceedsLimitAndPathChanged(package_name="", name="")
-    SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name="")
-    UnusedTables(unused_tables=[])
-    WrongResourceSchemaFile(patch_name="", resource_type="", file_path="", plural_resource_type="")
-    NoNodeForYamlKey(patch_name="", yaml_key="", file_path="")
-    MacroPatchNotFound(patch_name="")
-    NodeNotFoundOrDisabled(
-        original_file_path="",
-        unique_id="",
-        resource_type_title="",
-        target_name="",
-        target_kind="",
-        target_package="",
-        disabled="",
-    )
-
-    # M - Deps generation ======================
-
-    GitSparseCheckoutSubdirectory(subdir="")
-    GitProgressCheckoutRevision(revision="")
-    GitProgressUpdatingExistingDependency(dir="")
-    GitProgressPullingNewDependency(dir="")
-    GitNothingToDo(sha="")
-    GitProgressUpdatedCheckoutRange(start_sha="", end_sha="")
-    GitProgressCheckedOutAt(end_sha="")
-    RegistryProgressGETRequest(url="")
-    RegistryProgressGETResponse(url="", resp_code=1234)
-    SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec="")
-    MacroEventInfo(msg="")
-    MacroEventDebug(msg="")
-    DepsNoPackagesFound()
-    DepsStartPackageInstall(package_name="")
-    DepsInstallInfo(version_name="")
-    DepsUpdateAvailable(version_latest="")
-    DepsUpToDate()
-    DepsListSubdirectory(subdirectory="")
-    DepsNotifyUpdatesAvailable(packages=ListOfStrings())
-    RetryExternalCall(attempt=0, max=0)
-    RecordRetryException(exc="")
-    RegistryIndexProgressGETRequest(url="")
-    RegistryIndexProgressGETResponse(url="", resp_code=1234)
-    RegistryResponseUnexpectedType(response=""),
-    RegistryResponseMissingTopKeys(response=""),
-    RegistryResponseMissingNestedKeys(response=""),
-    RegistryResponseExtraNestedKeys(response=""),
-    DepsSetDownloadDirectory(path="")
-
-    # Q - Node execution ======================
-
-    RunningOperationCaughtError(exc="")
-    CompileComplete()
-    FreshnessCheckComplete()
-    SeedHeader(header="")
-    SeedHeaderSeparator(len_header=0)
-    SQLRunnerException(exc="")
-    LogTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-        num_failures=0,
-    )
-    LogStartLine(description="", index=0, total=0, node_info=NodeInfo())
-    LogModelResult(
-        description="",
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    LogSnapshotResult(
-        status="",
-        description="",
-        cfg={},
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    LogSeedResult(
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-        schema="",
-        relation="",
-    )
-    LogFreshnessResult(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    LogCancelLine(conn_name="")
-    DefaultSelector(name="")
-    NodeStart(unique_id="")
-    NodeFinished(unique_id="")
-    QueryCancelationUnsupported(type="")
-    ConcurrencyLine(num_threads=0, target_name="")
-    CompilingNode(unique_id="")
-    WritingInjectedSQLForNode(unique_id="")
-    NodeCompiling(unique_id="")
-    NodeExecuting(unique_id="")
-    LogHookStartLine(
-        statement="",
-        index=0,
-        total=0,
-    )
-    LogHookEndLine(
-        statement="",
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    SkippingDetails(
-        resource_type="",
-        schema="",
-        node_name="",
-        index=0,
-        total=0,
-    )
-    NothingToDo()
-    RunningOperationUncaughtError(exc="")
-    EndRunResult()
-    NoNodesSelected()
-    DepsUnpinned(revision="", git="")
-    NoNodesForSelectionCriteria(spec_raw="")
-
-    # W - Node testing ======================
-
-    CatchableExceptionOnRun(exc="")
-    InternalExceptionOnRun(build_path="", exc="")
-    GenericExceptionOnRun(build_path="", unique_id="", exc="")
-    NodeConnectionReleaseError(node_name="", exc="")
-    FoundStats(stat_line="")
-
-    # Z - misc ======================
-
-    MainKeyboardInterrupt()
-    MainEncounteredError(exc="")
-    MainStackTrace(stack_trace="")
-    SystemErrorRetrievingModTime(path="")
-    SystemCouldNotWrite(path="", reason="", exc="")
-    SystemExecutingCmd(cmd=[""])
-    SystemStdOutMsg(bmsg=b"")
-    SystemStdErrMsg(bmsg=b"")
-    SystemReportReturnCode(returncode=0)
-    TimingInfoCollected()
-    LogDebugStackTrace()
-    CheckCleanPath(path="")
-    ConfirmCleanPath(path="")
-    ProtectedCleanPath(path="")
-    FinishedCleanPaths()
-    OpenCommand(open_cmd="", profiles_dir="")
-    EmptyLine()
-    ServingDocsPort(address="", port=0)
-    ServingDocsAccessInfo(port="")
-    ServingDocsExitInfo()
-    RunResultWarning(resource_type="", node_name="", path="")
-    RunResultFailure(resource_type="", node_name="", path="")
-    StatsLine(stats={})
-    RunResultError(msg="")
-    RunResultErrorNoMessage(status="")
-    SQLCompiledPath(path="")
-    CheckNodeTestFailure(relation_name="")
-    FirstRunResultError(msg="")
-    AfterFirstRunResultError(msg="")
-    EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
-    LogSkipBecauseError(schema="", relation="", index=0, total=0)
-    EnsureGitInstalled()
-    DepsCreatingLocalSymlink()
-    DepsSymlinkNotAvailable()
-    DisableTracking()
-    SendingEvent(kwargs="")
-    SendEventFailure()
-    FlushEvents()
-    FlushEventsFailure()
-    TrackingInitializeFailure()
-    EventBufferFull()
