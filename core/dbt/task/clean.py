@@ -15,6 +15,8 @@ from dbt.config import UnsetProfileConfig
 
 
 class CleanTask(BaseTask):
+    # Note: CleanTask is the last task that uses UnsetProfileConfig,
+    # and can be deleted once CleanTask no longer requires it.
     ConfigType = UnsetProfileConfig
 
     def __is_project_path(self, path):
