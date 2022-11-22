@@ -350,6 +350,7 @@ vars = click.option(
     envvar=None,
     help="Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. '{my_variable: my_value}'",
     type=YAML(),
+    default="{}",
 )
 
 version = click.option(

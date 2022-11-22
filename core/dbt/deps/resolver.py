@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Union, Type, Iterator, Set, Optional, Any
+from typing import Dict, List, NoReturn, Union, Type, Iterator, Set, Any
 
 from dbt.exceptions import raise_dependency_error, InternalException
 
@@ -118,13 +118,11 @@ def _check_for_duplicate_project_names(
 def resolve_packages(
     packages: List[PackageContract],
     project: Project,
-    cli_vars: Optional[Dict[str, Any]] = None,
+    cli_vars: Dict[str, Any],
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
 
-    # TODO: uwnrangle default cli_vars value
-    cli_vars = cli_vars or {}
     renderer = PackageRenderer(cli_vars)
 
     while pending:
