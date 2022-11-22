@@ -25,7 +25,7 @@ class TestStoreTestFailures:
     def clean_up(self, project):
         yield
         with project.adapter.connection_named('__test'):
-            test_audit_schema = project.test_schema + "_dbt_test__audit"
+            test_audit_schema = project.test_schema + "_dbt_test__aud"
             relation = project.adapter.Relation.create(database=project.database, schema=test_audit_schema)
             project.adapter.drop_schema(relation)
 
@@ -67,20 +67,20 @@ class TestStoreTestFailures:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "test-paths": ["tests"],
             "seeds": {
                 "quote_columns": False,
-                "test": {
-                    "expected": self.column_type_overrides()
-                },
+                "test": self.column_type_overrides(),
             },
+            "tests": {
+                "+schema": "dbt_test__aud"  # max char limit
+            }
         }
 
     def column_type_overrides(self):
         return {}
 
     def run_tests_store_one_failure(self, project):
-        test_audit_schema = project.test_schema + "_dbt_test__audit"
+        test_audit_schema = project.test_schema + "_dbt_test__aud"
 
         run_dbt(["seed"])
         run_dbt(["run"])
@@ -96,7 +96,8 @@ class TestStoreTestFailures:
         )
 
     def run_tests_store_failures_and_assert(self, project):
-        test_audit_schema = project.test_schema + "_dbt_test__audit"
+        test_audit_schema = project.test_schema + "_dbt_test__aud"
+        project.created_schemas.append(test_audit_schema)
 
         run_dbt(["seed"])
         run_dbt(["run"])
@@ -159,6 +160,4 @@ class TestStoreTestFailures(TestStoreTestFailures):
 
     def test__store_and_assert(self, project, clean_up):
         self.run_tests_store_one_failure(project)
-
-    def test__store_and_assert_b(self, project, clean_up):
         self.run_tests_store_failures_and_assert(project)
