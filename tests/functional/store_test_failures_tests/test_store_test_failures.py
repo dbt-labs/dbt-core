@@ -21,10 +21,16 @@ from tests.functional.store_test_failures_tests.fixtures import (
 
 # used to rename test audit schema to help test schema meet max char limit
 # the default is _dbt_test__audit but this runs over the postgres 63 schema name char limit
-TEST_AUDIT_SCHEMA_SUFFIX = "_dbt_test__aud"
+TEST_AUDIT_SCHEMA_SUFFIX = "dbt_test__aud"
 
 
 class TestStoreTestFailures:
+    @pytest.fixture(scope="function", autouse=True)
+    def setUp(self, project):
+        self.test_audit_schema = f"{project.test_schema}_{TEST_AUDIT_SCHEMA_SUFFIX}"
+        run_dbt(["seed"])
+        run_dbt(["run"])
+
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -65,7 +71,7 @@ class TestStoreTestFailures:
                 "test": self.column_type_overrides(),
             },
             "tests": {
-                "+schema": "dbt_test__aud"
+                "+schema": TEST_AUDIT_SCHEMA_SUFFIX
             }
         }
 
@@ -73,27 +79,18 @@ class TestStoreTestFailures:
         return {}
 
     def run_tests_store_one_failure(self, project):
-        test_audit_schema = project.test_schema + TEST_AUDIT_SCHEMA_SUFFIX
-
-        run_dbt(["seed"])
-        run_dbt(["run"])
         run_dbt(["test"], expect_pass=False)
 
         # one test is configured with store_failures: true, make sure it worked
         check_relations_equal(
             project.adapter,
             [
-                f"{test_audit_schema}.unique_problematic_model_id",
+                f"{self.test_audit_schema}.unique_problematic_model_id",
                 "expected_unique_problematic_model_id"
             ]
         )
 
     def run_tests_store_failures_and_assert(self, project):
-        test_audit_schema = project.test_schema + TEST_AUDIT_SCHEMA_SUFFIX
-        project.created_schemas.append(test_audit_schema)
-
-        run_dbt(["seed"])
-        run_dbt(["run"])
         # make sure this works idempotently for all tests
         run_dbt(["test", "--store-failures"], expect_pass=False)
         results = run_dbt(["test", "--store-failures"], expect_pass=False)
@@ -105,35 +102,23 @@ class TestStoreTestFailures:
         assert sorted(actual) == sorted(expected)
 
         # compare test results stored in database
-        check_relations_equal(
-            project.adapter,
-            [
-                f"{test_audit_schema}.failing_test",
-                "expected_failing_test"
-            ]
-        )
-        check_relations_equal(
-            project.adapter,
-            [
-                f"{test_audit_schema}.not_null_problematic_model_id",
-                "expected_not_null_problematic_model_id"
-            ]
-        )
-        check_relations_equal(
-            project.adapter,
-            [
-                f"{test_audit_schema}.unique_problematic_model_id",
-                "expected_unique_problematic_model_id"
-            ]
-        )
-        check_relations_equal(
-            project.adapter,
-            [
-                f"{test_audit_schema}.accepted_values_problemat"
-                "ic_mo_c533ab4ca65c1a9dbf14f79ded49b628",
-                "expected_accepted_values"
-            ]
-        )
+        check_relations_equal(project.adapter, [
+            f"{self.test_audit_schema}.failing_test",
+            "expected_failing_test"
+        ])
+        check_relations_equal(project.adapter, [
+            f"{self.test_audit_schema}.not_null_problematic_model_id",
+            "expected_not_null_problematic_model_id"
+        ])
+        check_relations_equal(project.adapter, [
+            f"{self.test_audit_schema}.unique_problematic_model_id",
+            "expected_unique_problematic_model_id"
+        ])
+        check_relations_equal(project.adapter, [
+            f"{self.test_audit_schema}.accepted_values_problemat"
+            "ic_mo_c533ab4ca65c1a9dbf14f79ded49b628",
+            "expected_accepted_values"
+        ])
 
 
 class TestStoreTestFailures(TestStoreTestFailures):
@@ -141,8 +126,7 @@ class TestStoreTestFailures(TestStoreTestFailures):
     def clean_up(self, project):
         yield
         with project.adapter.connection_named('__test'):
-            test_audit_schema = project.test_schema + TEST_AUDIT_SCHEMA_SUFFIX
-            relation = project.adapter.Relation.create(database=project.database, schema=test_audit_schema)
+            relation = project.adapter.Relation.create(database=project.database, schema=self.test_audit_schema)
             project.adapter.drop_schema(relation)
 
             relation = project.adapter.Relation.create(database=project.database, schema=project.test_schema)
