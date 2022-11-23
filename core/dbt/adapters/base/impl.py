@@ -773,6 +773,17 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse_none
     def get_relation(self, database: str, schema: str, identifier: str) -> Optional[BaseRelation]:
+        # Alert that the nullset indicates an unexpected schema name truncation.
+        if getattr(self.Relation, "relation_max_name_length", None):
+            rel_max_length = self.Relation.relation_max_name_length(self)  # type: ignore
+            if len(schema) > rel_max_length:
+                raise_database_error(
+                    "The character count length of '{}' exceeds the limit '{}' allowed by '{}'. "
+                    "Shorten this schema's name to avoid further errors.".format(
+                        schema, rel_max_length, database
+                    )
+                )
+
         relations_list = self.list_relations(database, schema)
 
         matches = self._make_match(relations_list, database, schema, identifier)
