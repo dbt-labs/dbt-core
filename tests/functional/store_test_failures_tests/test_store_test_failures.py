@@ -21,6 +21,7 @@ from tests.functional.store_test_failures_tests.fixtures import (
 
 # used to rename test audit schema to help test schema meet max char limit
 # the default is _dbt_test__audit but this runs over the postgres 63 schema name char limit
+# without which idempotency conditions will not hold (i.e. dbt can't drop the schema properly)
 TEST_AUDIT_SCHEMA_SUFFIX = "dbt_test__aud"
 
 
