@@ -210,8 +210,19 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         config_keys_defaults = []
         for (func, args, kwargs) in dbtParser.dbt_function_calls:
             if func == "get":
+                num_args = len(args)
+                if num_args == 0:
+                    raise ParsingException(
+                        "dbt.config.get() requires at least one argument",
+                        node=node,
+                    )
+                if num_args > 2:
+                    raise ParsingException(
+                        f"dbt.config.get() takes at most  arguments ({num_args} given)",
+                        node=node,
+                    )
                 key = args[0]
-                default_value = args[1] if len(args) == 2 else None
+                default_value = args[1] if num_args == 2 else None
                 config_keys_used.append(key)
                 config_keys_defaults.append(default_value)
                 continue
