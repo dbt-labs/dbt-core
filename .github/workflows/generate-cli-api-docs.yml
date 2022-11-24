@@ -94,13 +94,13 @@ jobs:
           ${{ steps.set_shas.outputs.this_sha }} \
           -- ${{ env.DOCS_BUILD_DIR }})
 
-        echo "docs_dir_changed=false" >> $GITHUB_OUTPUT
         if [ -n "$DOCS_DIR_CHANGES" ] && [ -z "$DOCS_BUILD_DIR_CHANGES" ]; then
           echo "changes found"
           echo $DOCS_DIR_CHANGES
           echo "docs_dir_changed=true" >> $GITHUB_OUTPUT
           exit 0
         fi
+        echo "docs_dir_changed=false" >> $GITHUB_OUTPUT
         echo "no changes found"
 
   gen_docs:
