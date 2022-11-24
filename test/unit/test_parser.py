@@ -608,6 +608,25 @@ def model(dbt, session):
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
 
+    def test_python_model_config_default(self):
+            py_code = """
+def model(dbt, session):
+    dbt.config.get("param_None", None)
+    dbt.config.get("param_Str", "default")
+    dbt.config.get("param_List", [1, 2])
+    return df
+            """
+            block = self.file_block_for(py_code, 'nested/py_model.py')
+            self.parser.manifest.files[block.file.file_id] = block.file
+
+            self.parser.parse_file(block)
+            node = list(self.parser.manifest.nodes.values())[0]
+            default_values = node.config.to_dict()["config_keys_defaults"]
+            self.assertIsNone(default_values[0])
+            self.assertEqual(default_values[1], "default")
+            self.assertEqual(default_values[2], [1, 2])
+
+
     def test_wrong_python_model_def_miss_session(self):
         py_code = """
 def model(dbt):
@@ -1319,5 +1338,3 @@ class AnalysisParserTest(BaseParserTest):
         file_id = 'snowplow://' +  normalize('analyses/nested/analysis_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['analysis.snowplow.analysis_1'])
-
-
