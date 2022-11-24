@@ -71,13 +71,13 @@ jobs:
           ${{ steps.set_shas.outputs.this_sha }} \
           -- ${{ env.CLI_DIR }})
 
-        echo "cli_dir_changed=false" >> $GITHUB_OUTPUT
         if [ -n "$CLI_DIR_CHANGES" ]; then
           echo "changes found"
           echo $CLI_DIR_CHANGES
           echo "cli_dir_changed=true" >> $GITHUB_OUTPUT
           exit 0
         fi
+        echo "cli_dir_changed=false" >> $GITHUB_OUTPUT
         echo "no changes found"
 
     - name: check for changes in core/dbt/docs
