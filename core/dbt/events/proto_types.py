@@ -386,8 +386,9 @@ class NewConnection(betterproto.Message):
     """E005"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_type: str = betterproto.string_field(2)
-    conn_name: str = betterproto.string_field(3)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_type: str = betterproto.string_field(3)
+    conn_name: str = betterproto.string_field(4)
 
 
 @dataclass
