@@ -428,7 +428,8 @@ class ConnectionClosed(betterproto.Message):
     """E010"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_name: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_name: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -436,7 +437,8 @@ class ConnectionLeftOpen(betterproto.Message):
     """E011"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_name: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_name: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -492,8 +494,9 @@ class SQLQueryStatus(betterproto.Message):
     """E017"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    status: str = betterproto.string_field(2)
-    elapsed: float = betterproto.float_field(3)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    status: str = betterproto.string_field(3)
+    elapsed: float = betterproto.float_field(4)
 
 
 @dataclass
@@ -501,7 +504,8 @@ class SQLCommit(betterproto.Message):
     """E018"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_name: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_name: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -669,7 +673,8 @@ class NewConnectionOpening(betterproto.Message):
     """E037"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    connection_state: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    connection_state: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -1341,7 +1346,8 @@ class JinjaLogInfo(betterproto.Message):
     """M011"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    msg: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -1349,7 +1355,8 @@ class JinjaLogDebug(betterproto.Message):
     """M012"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    msg: str = betterproto.string_field(3)
 
 
 @dataclass

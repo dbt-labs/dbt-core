@@ -16,6 +16,7 @@ from dbt.exceptions import InternalException
 from dbt.utils import translate_aliases
 from dbt.events.functions import fire_event
 from dbt.events.types import NewConnectionOpening
+from dbt.events.contextvars import get_node_info
 from typing_extensions import Protocol
 from dbt.dataclass_schema import (
     dbtClassMixin,
@@ -112,7 +113,9 @@ class LazyHandle:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:
-        fire_event(NewConnectionOpening(connection_state=connection.state))
+        fire_event(
+            NewConnectionOpening(connection_state=connection.state, node_info=get_node_info())
+        )
         return self.opener(connection)
 
 

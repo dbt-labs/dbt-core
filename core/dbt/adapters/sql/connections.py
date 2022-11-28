@@ -10,7 +10,7 @@ from dbt.adapters.base import BaseConnectionManager
 from dbt.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.events.functions import fire_event
 from dbt.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
-from dbt.events.contextvars import get_contextvars, get_node_info
+from dbt.events.contextvars import get_node_info
 from dbt.utils import cast_to_str
 
 
@@ -83,7 +83,9 @@ class SQLConnectionManager(BaseConnectionManager):
 
             fire_event(
                 SQLQueryStatus(
-                    status=str(self.get_response(cursor)), elapsed=round((time.time() - pre), 2)
+                    status=str(self.get_response(cursor)),
+                    elapsed=round((time.time() - pre)),
+                    node_info=get_node_info(),
                 )
             )
 
@@ -167,7 +169,7 @@ class SQLConnectionManager(BaseConnectionManager):
                 "it does not have one open!".format(connection.name)
             )
 
-        fire_event(SQLCommit(conn_name=connection.name))
+        fire_event(SQLCommit(conn_name=connection.name, node_info=get_node_info()))
         self.add_commit_query()
 
         connection.transaction_open = False

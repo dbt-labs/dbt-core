@@ -330,13 +330,15 @@ message RollbackFailed {
 // E010
 message ConnectionClosed {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E011
 message ConnectionLeftOpen {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E012
@@ -380,14 +382,16 @@ message SQLQuery {
 // E017
 message SQLQueryStatus {
     EventInfo info = 1;
-    string status = 2;
-    float elapsed = 3;
+    NodeInfo node_info = 2;
+    string status = 3;
+    float elapsed = 4;
 }
 
 // E018
 message SQLCommit {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E019
@@ -509,7 +513,8 @@ message PluginLoadError {
 // E037
 message NewConnectionOpening {
     EventInfo info = 1;
-    string connection_state = 2;
+    NodeInfo node_info = 2;
+    string connection_state = 3;
 }
 
 // E038
@@ -1020,13 +1025,15 @@ message SelectorReportInvalidSelector {
 // M011
 message JinjaLogInfo {
     EventInfo info = 1;
-    string msg = 2;
+    NodeInfo node_info = 2;
+    string msg = 3;
 }
 
 // M012
 message JinjaLogDebug {
     EventInfo info = 1;
-    string msg = 2;
+    NodeInfo node_info = 2;
+    string msg = 3;
 }
 
 // M013

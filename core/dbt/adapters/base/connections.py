@@ -48,6 +48,7 @@ from dbt.events.types import (
     Rollback,
     RollbackFailed,
 )
+from dbt.events.contextvars import get_node_info
 from dbt import flags
 from dbt.utils import cast_to_str
 
@@ -345,10 +346,16 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, "close"):
-            fire_event(ConnectionClosed(conn_name=cast_to_str(connection.name)))
+            fire_event(
+                ConnectionClosed(conn_name=cast_to_str(connection.name), node_info=get_node_info())
+            )
             connection.handle.close()
         else:
-            fire_event(ConnectionLeftOpen(conn_name=cast_to_str(connection.name)))
+            fire_event(
+                ConnectionLeftOpen(
+                    conn_name=cast_to_str(connection.name), node_info=get_node_info()
+                )
+            )
 
     @classmethod
     def _rollback(cls, connection: Connection) -> None:
