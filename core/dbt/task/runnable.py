@@ -38,6 +38,7 @@ from dbt.events.types import (
     EndRunResult,
     NothingToDo,
 )
+from dbt.events.contextvars import log_contextvars
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
@@ -205,7 +206,7 @@ class GraphRunnableTask(ManifestTask):
 
     def call_runner(self, runner):
         uid_context = UniqueID(runner.node.unique_id)
-        with RUNNING_STATE, uid_context:
+        with RUNNING_STATE, uid_context, log_contextvars(unique_id=runner.node.unique_id):
             startctx = TimestampNamed("node_started_at")
             index = self.index_offset(runner.node_index)
             runner.node._event_status["started_at"] = datetime.utcnow().isoformat()
@@ -216,7 +217,6 @@ class GraphRunnableTask(ManifestTask):
                 fire_event(
                     NodeStart(
                         node_info=runner.node.node_info,
-                        unique_id=runner.node.unique_id,
                     )
                 )
             status: Dict[str, str] = {}
@@ -231,7 +231,6 @@ class GraphRunnableTask(ManifestTask):
                     fire_event(
                         NodeFinished(
                             node_info=runner.node.node_info,
-                            unique_id=runner.node.unique_id,
                             run_result=result.to_msg(),
                         )
                     )

@@ -1647,7 +1647,6 @@ class NodeStart(betterproto.Message):
 
     info: "EventInfo" = betterproto.message_field(1)
     node_info: "NodeInfo" = betterproto.message_field(2)
-    unique_id: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -1656,7 +1655,6 @@ class NodeFinished(betterproto.Message):
 
     info: "EventInfo" = betterproto.message_field(1)
     node_info: "NodeInfo" = betterproto.message_field(2)
-    unique_id: str = betterproto.string_field(3)
     run_result: "RunResultMsg" = betterproto.message_field(4)
 
 
@@ -1699,7 +1697,6 @@ class NodeCompiling(betterproto.Message):
 
     info: "EventInfo" = betterproto.message_field(1)
     node_info: "NodeInfo" = betterproto.message_field(2)
-    unique_id: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -1708,7 +1705,6 @@ class NodeExecuting(betterproto.Message):
 
     info: "EventInfo" = betterproto.message_field(1)
     node_info: "NodeInfo" = betterproto.message_field(2)
-    unique_id: str = betterproto.string_field(3)
 
 
 @dataclass

@@ -316,7 +316,6 @@ class BaseRunner(metaclass=ABCMeta):
             fire_event(
                 NodeCompiling(
                     node_info=ctx.node.node_info,
-                    unique_id=ctx.node.unique_id,
                 )
             )
             with collect_timing_info("compile") as timing_info:
@@ -332,7 +331,6 @@ class BaseRunner(metaclass=ABCMeta):
                 fire_event(
                     NodeExecuting(
                         node_info=ctx.node.node_info,
-                        unique_id=ctx.node.unique_id,
                     )
                 )
                 with collect_timing_info("execute") as timing_info:

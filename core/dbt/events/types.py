@@ -2083,7 +2083,7 @@ class NodeStart(DebugLevel, pt.NodeStart):
         return "Q024"
 
     def message(self) -> str:
-        return f"Began running node {self.unique_id}"
+        return f"Began running node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2092,7 +2092,7 @@ class NodeFinished(DebugLevel, pt.NodeFinished):
         return "Q025"
 
     def message(self) -> str:
-        return f"Finished running node {self.unique_id}"
+        return f"Finished running node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2142,7 +2142,7 @@ class NodeCompiling(DebugLevel, pt.NodeCompiling):
         return "Q030"
 
     def message(self) -> str:
-        return f"Began compiling node {self.unique_id}"
+        return f"Began compiling node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2151,7 +2151,7 @@ class NodeExecuting(DebugLevel, pt.NodeExecuting):
         return "Q031"
 
     def message(self) -> str:
-        return f"Began executing node {self.unique_id}"
+        return f"Began executing node {self.node_info.unique_id}"
 
 
 @dataclass

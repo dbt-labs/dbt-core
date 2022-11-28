@@ -10,6 +10,7 @@ from dbt.adapters.base import BaseConnectionManager
 from dbt.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.events.functions import fire_event
 from dbt.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
+from dbt.events.contextvars import get_contextvars
 from dbt.utils import cast_to_str
 
 
@@ -56,6 +57,7 @@ class SQLConnectionManager(BaseConnectionManager):
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
+        print(f"--- in SQLConnectionManager.add_query. contextvars: {get_contextvars()}")
         fire_event(ConnectionUsed(conn_type=self.TYPE, conn_name=cast_to_str(connection.name)))
 
         with self.exception_handler(sql):

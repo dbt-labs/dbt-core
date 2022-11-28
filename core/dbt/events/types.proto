@@ -1270,14 +1270,12 @@ message DefaultSelector {
 message NodeStart {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
 }
 
 // Q025
 message NodeFinished {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
     RunResultMsg run_result = 4;
 }
 
@@ -1310,14 +1308,12 @@ message WritingInjectedSQLForNode {
 message NodeCompiling {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
 }
 
 // Q031
 message NodeExecuting {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
 }
 
 // Q032
