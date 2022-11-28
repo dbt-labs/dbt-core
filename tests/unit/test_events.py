@@ -425,8 +425,7 @@ sample_values = [
     NodeFinished(node_info=NodeInfo()),
     QueryCancelationUnsupported(type=""),
     ConcurrencyLine(num_threads=0, target_name=""),
-    CompilingNode(unique_id=""),
-    WritingInjectedSQLForNode(unique_id=""),
+    WritingInjectedSQLForNode(node_info=NodeInfo()),
     NodeCompiling(node_info=NodeInfo()),
     NodeExecuting(node_info=NodeInfo()),
     LogHookStartLine(

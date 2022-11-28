@@ -2118,13 +2118,7 @@ class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-@dataclass
-class CompilingNode(DebugLevel, pt.CompilingNode):
-    def code(self):
-        return "Q028"
-
-    def message(self) -> str:
-        return f"Compiling {self.unique_id}"
+# Skipped Q028
 
 
 @dataclass
@@ -2133,7 +2127,7 @@ class WritingInjectedSQLForNode(DebugLevel, pt.WritingInjectedSQLForNode):
         return "Q029"
 
     def message(self) -> str:
-        return f'Writing injected SQL for node "{self.unique_id}"'
+        return f'Writing injected SQL for node "{self.node_info.unique_id}"'
 
 
 @dataclass

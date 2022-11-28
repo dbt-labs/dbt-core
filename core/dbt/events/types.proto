@@ -1301,16 +1301,12 @@ message ConcurrencyLine {
     string target_name = 3;
 }
 
-// Q028
-message CompilingNode {
-    EventInfo info = 1;
-    string unique_id = 2;
-}
+// Skipped Q028
 
 // Q029
 message WritingInjectedSQLForNode {
     EventInfo info = 1;
-    string unique_id = 2;
+    NodeInfo node_info = 2;
 }
 
 // Q030
