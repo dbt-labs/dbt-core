@@ -191,11 +191,6 @@ class Relevel(logbook.Processor):
             record.level = self.target_level
 
 
-class JsonOnly(logbook.Processor):
-    def process(self, record):
-        record.extra["json_only"] = True
-
-
 class TextOnly(logbook.Processor):
     def process(self, record):
         record.extra["text_only"] = True

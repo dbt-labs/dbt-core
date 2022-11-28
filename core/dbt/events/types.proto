@@ -1478,6 +1478,8 @@ message SystemReportReturnCode {
 // Z010
 message TimingInfoCollected {
     EventInfo info = 1;
+    NodeInfo node_info = 2;
+    TimingInfoMsg timing_info = 3;
 }
 
 // Z011

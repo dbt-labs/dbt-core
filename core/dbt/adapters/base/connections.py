@@ -170,7 +170,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         if conn.name == conn_name and conn.state == "open":
             return conn
 
-        fire_event(NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info()))
+        fire_event(
+            NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info())
+        )
 
         if conn.state == "open":
             fire_event(ConnectionReused(conn_name=conn_name))

@@ -14,9 +14,9 @@ from dbt.events.base_types import (
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 
-# The generated classes quote the included message classes, requiring the following line
+# The generated classes quote the included message classes, requiring the following lines
 from dbt.events.proto_types import EventInfo, RunResultMsg, ListOfStrings  # noqa
-from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg  # noqa
+from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg, TimingInfoMsg  # noqa
 from dbt.events import proto_types as pt
 
 from dbt.node_types import NodeType
@@ -2387,7 +2387,7 @@ class TimingInfoCollected(DebugLevel, pt.TimingInfoCollected):
         return "Z010"
 
     def message(self) -> str:
-        return "finished collecting timing info"
+        return "Collected timing info: {self.timing_info.name}: {self.timing_info.started_at} => {self.timing_info.completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message

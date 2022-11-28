@@ -1903,6 +1903,8 @@ class TimingInfoCollected(betterproto.Message):
     """Z010"""
 
     info: "EventInfo" = betterproto.message_field(1)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    timing_info: "TimingInfoMsg" = betterproto.message_field(3)
 
 
 @dataclass
