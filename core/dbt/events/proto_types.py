@@ -1683,6 +1683,7 @@ class ConcurrencyLine(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     num_threads: int = betterproto.int32_field(2)
     target_name: str = betterproto.string_field(3)
+    node_count: int = betterproto.int32_field(4)
 
 
 @dataclass

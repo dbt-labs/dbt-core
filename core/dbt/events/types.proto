@@ -1300,6 +1300,7 @@ message ConcurrencyLine {
     EventInfo info = 1;
     int32 num_threads = 2;
     string target_name = 3;
+    int32 node_count = 4;
 }
 
 // Skipped Q028

@@ -370,8 +370,13 @@ class GraphRunnableTask(ManifestTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
+        # following line can be removed when legacy logger is removed
         with NodeCount(self.num_nodes):
-            fire_event(ConcurrencyLine(num_threads=num_threads, target_name=target_name))
+            fire_event(
+                ConcurrencyLine(
+                    num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
+                )
+            )
         with TextOnly():
             fire_event(EmptyLine())
 
