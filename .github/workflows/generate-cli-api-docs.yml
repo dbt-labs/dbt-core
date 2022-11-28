@@ -13,6 +13,8 @@
 # between the PR branch and main's core/dbt/cli and or core/dbt/docs dirs.
 
 # TODO: add bot comment to PR informing contributor that the docs have been committed
+# TODO: figure out why github action triggered pushes cause github to fail to report
+#       the status of jobs
 
 name: Generate CLI API docs
 
