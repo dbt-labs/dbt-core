@@ -206,7 +206,7 @@ class GraphRunnableTask(ManifestTask):
 
     def call_runner(self, runner):
         uid_context = UniqueID(runner.node.unique_id)
-        with RUNNING_STATE, uid_context, log_contextvars(unique_id=runner.node.unique_id):
+        with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
             startctx = TimestampNamed("node_started_at")
             index = self.index_offset(runner.node_index)
             runner.node._event_status["started_at"] = datetime.utcnow().isoformat()

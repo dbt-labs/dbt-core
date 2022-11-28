@@ -364,15 +364,17 @@ message ListRelations {
 // E015
 message ConnectionUsed {
     EventInfo info = 1;
-    string conn_type = 2;
-    string conn_name = 3;
+    NodeInfo node_info = 2;
+    string conn_type = 3;
+    string conn_name = 4;
 }
 
 // E016
 message SQLQuery {
     EventInfo info = 1;
-    string conn_name = 2;
-    string sql = 3;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
+    string sql = 4;
 }
 
 // E017

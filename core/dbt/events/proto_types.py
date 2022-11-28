@@ -472,8 +472,9 @@ class ConnectionUsed(betterproto.Message):
     """E015"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_type: str = betterproto.string_field(2)
-    conn_name: str = betterproto.string_field(3)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_type: str = betterproto.string_field(3)
+    conn_name: str = betterproto.string_field(4)
 
 
 @dataclass
@@ -481,8 +482,9 @@ class SQLQuery(betterproto.Message):
     """E016"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_name: str = betterproto.string_field(2)
-    sql: str = betterproto.string_field(3)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_name: str = betterproto.string_field(3)
+    sql: str = betterproto.string_field(4)
 
 
 @dataclass
