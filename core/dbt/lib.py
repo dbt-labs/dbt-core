@@ -31,7 +31,7 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
         method. Once conditional credential usage is enabled, this should be removed.
         """
         result = None
-        ctx.node._event_status["node_status"] = RunningStatus.Compiling
+        ctx.node.update_event_status(node_status=RunningStatus.Compiling)
         fire_event(
             NodeCompiling(
                 node_info=ctx.node.node_info,
@@ -46,7 +46,7 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
 
         # for ephemeral nodes, we only want to compile, not run
         if not ctx.node.is_ephemeral_model:
-            ctx.node._event_status["node_status"] = RunningStatus.Executing
+            ctx.node.update_event_status(node_status=RunningStatus.Executing)
             fire_event(
                 NodeExecuting(
                     node_info=ctx.node.node_info,
