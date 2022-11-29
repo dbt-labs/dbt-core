@@ -390,6 +390,6 @@ _TESTS__SELECT_FROM_INCREMENTAL_IGNORE_TARGET = """
 select * from {{ ref('incremental_ignore_target') }} where false
 """
 
-_TESTS__SELECT_FROM_INCREMENTAL_APPEND_NEW_COLUMNS =  """
+_TESTS__SELECT_FROM_INCREMENTAL_APPEND_NEW_COLUMNS = """
 select * from {{ ref('incremental_append_new_columns') }} where false
 """

@@ -131,6 +131,6 @@ class TestIncrementalSchemaChange:
 
     def test_run_incremental_fail_on_schema_change(self, project):
         select = 'model_a incremental_fail'
-        results_one = run_dbt(['run', '--models', select, '--full-refresh'])
+        run_dbt(['run', '--models', select, '--full-refresh'])
         results_two = run_dbt(['run', '--models', select], expect_pass=False)
         assert 'Compilation Error' in results_two[1].message
