@@ -496,7 +496,7 @@ def get_environment(
     args['extensions'].append(TestExtension)
 
     env_cls: Type[jinja2.Environment]
-    filters: Type
+    filters: Dict[str, Callable[[Any], Any]]
     if native:
         env_cls = NativeSandboxEnvironment
         filters = NATIVE_FILTERS
