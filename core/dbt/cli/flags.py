@@ -11,6 +11,7 @@ from click import Context, get_current_context
 from click.core import ParameterSource
 
 from dbt.config.profile import read_user_config
+from dbt.contracts.project import UserConfig
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -19,7 +20,7 @@ if os.name != "nt":
 
 @dataclass(frozen=True)
 class Flags:
-    def __init__(self, ctx: Context = None) -> None:
+    def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
 
         if ctx is None:
             ctx = get_current_context()
@@ -49,19 +50,23 @@ class Flags:
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
             assign_params(invoked_subcommand_ctx, params_assigned_from_default)
 
+        if not user_config:
+            profiles_dir = getattr(self, "PROFILES_DIR", None)
+            user_config = read_user_config(profiles_dir) if profiles_dir else None
+
         # Overwrite default assignments with user config if available
-        profiles_dir = getattr(self, "PROFILES_DIR", None)
-        user_config = read_user_config(profiles_dir) if profiles_dir else None
         if user_config:
             for param_assigned_from_default in params_assigned_from_default:
                 user_config_param_value = getattr(user_config, param_assigned_from_default, None)
-                if user_config_param_value:
+                if user_config_param_value is not None:
                     object.__setattr__(
                         self, param_assigned_from_default.upper(), user_config_param_value
                     )
 
         # Hard coded flags
-        object.__setattr__(self, "WHICH", ctx.info_name)
+        object.__setattr__(
+            self, "WHICH", ctx.protected_args[0] if ctx.protected_args else ctx.info_name
+        )
         object.__setattr__(self, "MP_CONTEXT", get_context("spawn"))
 
         # Support console DO NOT TRACK initiave
@@ -69,7 +74,7 @@ class Flags:
             self,
             "ANONYMOUS_USAGE_STATS",
             False
-            if os.getenv("DO_NOT_TRACK", "").lower() in (1, "t", "true", "y", "yes")
+            if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes")
             else True,
         )
 
