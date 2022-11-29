@@ -71,3 +71,11 @@ class TestFlags:
 
         flags = Flags(context, user_config)
         assert flags.USE_COLORS
+
+    def test_prefer_env_to_user_config(self, monkeypatch):
+        user_config = UserConfig(use_colors=False)
+        monkeypatch.setenv("DBT_USE_COLORS", "True")
+        context = self.make_dbt_context(["run"])
+
+        flags = Flags(context, user_config)
+        assert flags.USE_COLORS
