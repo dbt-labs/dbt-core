@@ -2,7 +2,7 @@
 # Eventually the hooks described here will be run as tests before merging each PR.
 
 # TODO: remove global exclusion of tests when testing overhaul is complete
-exclude: ^test/
+exclude: ^(test/|core/dbt/docs/build/)
 
 # Force all unspecified python hooks to run python 3.8
 default_language_version:
