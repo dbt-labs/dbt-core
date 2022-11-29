@@ -345,9 +345,10 @@ class AdapterEventDebug(betterproto.Message):
     """E001"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    name: str = betterproto.string_field(2)
-    base_msg: str = betterproto.string_field(3)
-    args: List[str] = betterproto.string_field(4)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    name: str = betterproto.string_field(3)
+    base_msg: str = betterproto.string_field(4)
+    args: List[str] = betterproto.string_field(5)
 
 
 @dataclass
@@ -355,9 +356,10 @@ class AdapterEventInfo(betterproto.Message):
     """E002"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    name: str = betterproto.string_field(2)
-    base_msg: str = betterproto.string_field(3)
-    args: List[str] = betterproto.string_field(4)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    name: str = betterproto.string_field(3)
+    base_msg: str = betterproto.string_field(4)
+    args: List[str] = betterproto.string_field(5)
 
 
 @dataclass
@@ -365,9 +367,10 @@ class AdapterEventWarning(betterproto.Message):
     """E003"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    name: str = betterproto.string_field(2)
-    base_msg: str = betterproto.string_field(3)
-    args: List[str] = betterproto.string_field(4)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    name: str = betterproto.string_field(3)
+    base_msg: str = betterproto.string_field(4)
+    args: List[str] = betterproto.string_field(5)
 
 
 @dataclass
@@ -375,10 +378,11 @@ class AdapterEventError(betterproto.Message):
     """E004"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    name: str = betterproto.string_field(2)
-    base_msg: str = betterproto.string_field(3)
-    args: List[str] = betterproto.string_field(4)
-    exc_info: str = betterproto.string_field(5)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    name: str = betterproto.string_field(3)
+    base_msg: str = betterproto.string_field(4)
+    args: List[str] = betterproto.string_field(5)
+    exc_info: str = betterproto.string_field(6)
 
 
 @dataclass
@@ -420,8 +424,9 @@ class RollbackFailed(betterproto.Message):
     """E009"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_name: str = betterproto.string_field(2)
-    exc_info: str = betterproto.string_field(3)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_name: str = betterproto.string_field(3)
+    exc_info: str = betterproto.string_field(4)
 
 
 @dataclass
@@ -447,7 +452,8 @@ class Rollback(betterproto.Message):
     """E012"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    conn_name: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    conn_name: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -1255,7 +1261,8 @@ class JinjaLogWarning(betterproto.Message):
     """I061"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    msg: str = betterproto.string_field(2)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    msg: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -1785,8 +1792,9 @@ class CatchableExceptionOnRun(betterproto.Message):
     """W002"""
 
     info: "EventInfo" = betterproto.message_field(1)
-    exc: str = betterproto.string_field(2)
-    exc_info: str = betterproto.string_field(3)
+    node_info: "NodeInfo" = betterproto.message_field(2)
+    exc: str = betterproto.string_field(3)
+    exc_info: str = betterproto.string_field(4)
 
 
 @dataclass

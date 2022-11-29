@@ -43,6 +43,7 @@ from dbt.events.types import (
     NodeCompiling,
     NodeExecuting,
 )
+from dbt.events.contextvars import get_node_info
 from .printer import print_run_result_error
 
 from dbt.adapters.factory import register_adapter
@@ -345,7 +346,11 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        fire_event(CatchableExceptionOnRun(exc=str(e), exc_info=traceback.format_exc()))
+        fire_event(
+            CatchableExceptionOnRun(
+                exc=str(e), exc_info=traceback.format_exc(), node_info=get_node_info()
+            )
+        )
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):

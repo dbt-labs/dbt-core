@@ -339,7 +339,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         except Exception:
             fire_event(
                 RollbackFailed(
-                    conn_name=cast_to_str(connection.name), exc_info=traceback.format_exc()
+                    conn_name=cast_to_str(connection.name),
+                    exc_info=traceback.format_exc(),
+                    node_info=get_node_info(),
                 )
             )
 
@@ -368,7 +370,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 f'"{connection.name}", but it does not have one open!'
             )
 
-        fire_event(Rollback(conn_name=cast_to_str(connection.name)))
+        fire_event(Rollback(conn_name=cast_to_str(connection.name), node_info=get_node_info()))
         cls._rollback_handle(connection)
 
         connection.transaction_open = False
@@ -380,7 +382,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             return connection
 
         if connection.transaction_open and connection.handle:
-            fire_event(Rollback(conn_name=cast_to_str(connection.name)))
+            fire_event(Rollback(conn_name=cast_to_str(connection.name), node_info=get_node_info()))
             cls._rollback_handle(connection)
         connection.transaction_open = False
 

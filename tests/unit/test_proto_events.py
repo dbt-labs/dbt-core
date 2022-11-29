@@ -53,7 +53,7 @@ def test_exception_events():
     event = RollbackFailed(conn_name="test", exc_info="something failed")
     event_dict = event_to_dict(event)
     event_json = event.to_json()
-    assert set(event_dict.keys()) == {"info", "conn_name", "exc_info"}
+    assert set(event_dict.keys()) == {"info", "conn_name", "exc_info", "node_info"}
     assert set(event_dict["info"].keys()) == info_keys
     assert event_json
     assert event.info.code == "E009"
