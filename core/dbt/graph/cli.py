@@ -38,7 +38,10 @@ def parse_union(
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
         intersection_components: List[SelectionSpec] = [
-            SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
+            SelectionCriteria.from_single_spec(
+                part,
+                indirect_selection=indirect_selection
+            )
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
         union_components.append(SelectionIntersection(
@@ -57,8 +60,6 @@ def parse_union_from_default(
     raw: Optional[List[str]], default: List[str],
     indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
-    components: List[str]
-    expect_exists: bool
     if raw is None:
         return parse_union(
             components=default,
@@ -262,6 +263,9 @@ def parse_from_selectors_definition(
     for selector in source.selectors:
         result[selector.name] = {
             "default": selector.default,
-            "definition": parse_from_definition(selector.definition, rootlevel=True)
+            "definition": parse_from_definition(
+                selector.definition,
+                rootlevel=True
+            )
         }
     return result

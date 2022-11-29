@@ -43,7 +43,8 @@ class MacroNamespace(Mapping):
         yield {
             GLOBAL_PROJECT_NAME: self.global_project_namespace,  # dbt
         }
-        yield self.global_project_namespace  # other internal project besides dbt
+        # other internal project besides dbt
+        yield self.global_project_namespace
 
     # provides special keys method for MacroNamespace iterator
     # returns keys from local_namespace, global_namespace, packages,
@@ -71,7 +72,6 @@ class MacroNamespace(Mapping):
     def get_from_package(
         self, package_name: Optional[str], name: str
     ) -> Optional[MacroGenerator]:
-        pkg: FlatNamespace
         if package_name is None:
             return self.get(name)
         elif package_name == GLOBAL_PROJECT_NAME:
@@ -177,6 +177,6 @@ class MacroNamespaceBuilder:
         return MacroNamespace(
             global_namespace=self.globals,  # root package macros
             local_namespace=self.locals,  # packages for *this* node
-            global_project_namespace=global_project_namespace,  # internal packages
+            global_project_namespace=global_project_namespace,  # internal pkgs
             packages=self.packages,  # non internal_packages
         )
