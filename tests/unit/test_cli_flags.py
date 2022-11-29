@@ -25,11 +25,11 @@ class TestFlags:
         flags = Flags(run_context)
         assert flags.MP_CONTEXT == get_context("spawn")
 
-    def test_cli_group_param_defaults(self, run_context):
+    @pytest.mark.parametrize('param', cli.params)
+    def test_cli_group_flags_from_params(self, run_context, param):
         flags = Flags(run_context)
-        for param in cli.params:
-            assert hasattr(flags, param.name.upper())
-            assert getattr(flags, param.name.upper()) == param.get_default(run_context)
+        assert hasattr(flags, param.name.upper())
+        assert getattr(flags, param.name.upper()) == run_context.params[param.name.lower()]
 
     @pytest.mark.parametrize('do_not_track,expected_anonymous_usage_stats', [
         ("1", False),
