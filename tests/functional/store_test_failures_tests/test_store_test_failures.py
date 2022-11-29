@@ -25,7 +25,7 @@ from tests.functional.store_test_failures_tests.fixtures import (
 TEST_AUDIT_SCHEMA_SUFFIX = "dbt_test__aud"
 
 
-class TestStoreTestFailures:
+class StoreTestFailuresBase:
     @pytest.fixture(scope="function", autouse=True)
     def setUp(self, project):
         self.test_audit_schema = f"{project.test_schema}_{TEST_AUDIT_SCHEMA_SUFFIX}"
@@ -122,7 +122,7 @@ class TestStoreTestFailures:
         ])
 
 
-class TestStoreTestFailures(TestStoreTestFailures):
+class TestStoreTestFailures(StoreTestFailuresBase):
     @pytest.fixture(scope="function")
     def clean_up(self, project):
         yield
