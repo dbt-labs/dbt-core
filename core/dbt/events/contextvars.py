@@ -1,14 +1,14 @@
 import contextlib
 import contextvars
 
-from typing import Any, Generator, Mapping
+from typing import Any, Generator, Mapping, Dict
 from dbt.events.proto_types import NodeInfo
 
 
 LOG_PREFIX = "log_"
 LOG_PREFIX_LEN = len(LOG_PREFIX)
 
-_log_context_vars: dict[str, contextvars.ContextVar] = {}
+_log_context_vars: Dict[str, contextvars.ContextVar] = {}
 
 
 def get_contextvars() -> dict[str, Any]:
