@@ -8,7 +8,7 @@ from dbt.events.proto_types import NodeInfo
 LOG_PREFIX = "log_"
 LOG_PREFIX_LEN = len(LOG_PREFIX)
 
-_log_context_vars: dict[str, contextvars.ContextVar[Any]] = {}
+_log_context_vars: dict[str, contextvars.ContextVar] = {}
 
 
 def get_contextvars() -> dict[str, Any]:

@@ -998,7 +998,8 @@ def raise_duplicate_alias(
 
 def warn(msg, node=None):
     dbt.events.functions.warn_or_error(
-        JinjaLogWarning(msg=msg), node=node, node_info=get_node_info()
+        JinjaLogWarning(msg=msg, node_info=get_node_info()),
+        node=node,
     )
     return ""
 
