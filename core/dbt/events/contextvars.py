@@ -11,7 +11,7 @@ LOG_PREFIX_LEN = len(LOG_PREFIX)
 _log_context_vars: Dict[str, contextvars.ContextVar] = {}
 
 
-def get_contextvars() -> dict[str, Any]:
+def get_contextvars() -> Dict[str, Any]:
     rv = {}
     ctx = contextvars.copy_context()
 
