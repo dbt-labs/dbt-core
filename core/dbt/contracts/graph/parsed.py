@@ -764,6 +764,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property
