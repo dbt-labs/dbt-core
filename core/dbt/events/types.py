@@ -2387,7 +2387,7 @@ class TimingInfoCollected(DebugLevel, pt.TimingInfoCollected):
         return "Z010"
 
     def message(self) -> str:
-        return f"Collected timing info: {self.timing_info.name}: {self.timing_info.started_at} => {self.timing_info.completed_at}"
+        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {self.timing_info.started_at} => {self.timing_info.completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message

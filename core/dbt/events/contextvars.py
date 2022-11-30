@@ -39,7 +39,7 @@ def clear_contextvars() -> None:
 
 # put keys and values into context. Returns the contextvar.Token mapping
 # Save and pass to reset_contextvars
-def set_contextvars(**kwargs: Any) -> Mapping[str, contextvars.Token[Any]]:
+def set_contextvars(**kwargs: Any) -> Mapping[str, contextvars.Token]:
     cvar_tokens = {}
     for k, v in kwargs.items():
         log_key = f"{LOG_PREFIX}{k}"
@@ -55,7 +55,7 @@ def set_contextvars(**kwargs: Any) -> Mapping[str, contextvars.Token[Any]]:
 
 
 # reset by Tokens
-def reset_contextvars(**kwargs: contextvars.Token[Any]) -> None:
+def reset_contextvars(**kwargs: contextvars.Token) -> None:
     for k, v in kwargs.items():
         log_key = f"{LOG_PREFIX}{k}"
         var = _log_context_vars[log_key]
