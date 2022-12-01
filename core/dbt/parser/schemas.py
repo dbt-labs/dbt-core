@@ -1053,7 +1053,7 @@ class ExposureParser(YamlReader):
         )
         depends_on_jinja = "\n".join("{{ " + line + "}}" for line in unparsed.depends_on)
         get_rendered(depends_on_jinja, ctx, parsed, capture_macros=True)
-        # parsed now has a populated refs/sources
+        # parsed now has a populated refs/sources/metrics
 
         if parsed.config.enabled:
             self.manifest.add_exposure(self.yaml.file, parsed)
