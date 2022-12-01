@@ -252,8 +252,8 @@ def relation_from_name(adapter, name: str):
     # Different adapters have different Relation classes
     cls = adapter.Relation
     credentials = adapter.config.credentials
-    quote_policy = cls.get_default_quote_policy().to_dict()
-    include_policy = cls.get_default_include_policy().to_dict()
+    quote_policy = cls.get_default_quote_policy()().to_dict()  # [mypy] error: "Policy" not callable  [operator]
+    include_policy = cls.get_default_include_policy()().to_dict()  # [mypy] error: "Policy" not callable  [operator]
 
     # Make sure we have database/schema/identifier parts, even if
     # only identifier was supplied.

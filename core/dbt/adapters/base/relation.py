@@ -40,9 +40,9 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @classmethod
     def _get_field_named(cls, field_name):
-        for field, _ in cls._get_fields():
-            if field.name == field_name:
-                return field
+        for f, _ in cls._get_fields():
+            if f.name == field_name:
+                return f
         # this should be unreachable
         raise ValueError(f"BaseRelation has no {field_name} field!")
 
@@ -189,7 +189,9 @@ class BaseRelation(FakeAPIObject, Hashable):
         source_quoting = source.quoting.to_dict(omit_none=True)
         source_quoting.pop("column", None)
         quote_policy = deep_merge(
-            cls.get_default_quote_policy()().to_dict(omit_none=True),  # mypy doesn't like this
+            cls.get_default_quote_policy()().to_dict(
+                omit_none=True
+            ),  # [mypy] error: "Policy" not callable  [operator]
             source_quoting,
             kwargs.get("quote_policy", {}),
         )

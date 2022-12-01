@@ -826,7 +826,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         except ValueError:
             return identifier
 
-        default = self.Relation.get_default_quote_policy().get_part(key)
+        default = self.Relation.get_default_quote_policy()().get_part(
+            key
+        )  # [mypy] error: "Policy" not callable  [operator]
         if self.config.quoting.get(key, default):
             return self.quote(identifier)
         else:

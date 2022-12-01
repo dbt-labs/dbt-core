@@ -79,7 +79,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         """
         quoting: Dict[str, Any] = (
             get_relation_class_by_name(profile.credentials.type)
-            .get_default_quote_policy()()  # mypy doesn't like this
+            .get_default_quote_policy()()  # [mypy] error: "Policy" not callable  [operator]
             .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict(omit_none=True)
 
