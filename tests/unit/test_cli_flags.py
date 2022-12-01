@@ -2,6 +2,7 @@ import pytest
 
 import click
 from multiprocessing import get_context
+from typing import List
 
 from dbt.cli.main import cli
 from dbt.contracts.project import UserConfig
@@ -9,13 +10,13 @@ from dbt.cli.flags import Flags
 
 
 class TestFlags:
-    def make_dbt_context(self, args) -> click.Context:
-        ctx = cli.make_context(cli.name, args)
+    def make_dbt_context(self, context_name: str, args: List[str]) -> click.Context:
+        ctx = cli.make_context(context_name, args)
         return ctx
 
     @pytest.fixture(scope="class")
     def run_context(self) -> click.Context:
-        return self.make_dbt_context(["run"])
+        return self.make_dbt_context("run", ["run"])
 
     def test_which(self, run_context):
         flags = Flags(run_context)
@@ -67,7 +68,7 @@ class TestFlags:
 
     def test_prefer_param_value_to_user_config(self):
         user_config = UserConfig(use_colors=False)
-        context = self.make_dbt_context(["--use-colors", "True", "run"])
+        context = self.make_dbt_context("run", ["--use-colors", "True", "run"])
 
         flags = Flags(context, user_config)
         assert flags.USE_COLORS
@@ -75,7 +76,7 @@ class TestFlags:
     def test_prefer_env_to_user_config(self, monkeypatch):
         user_config = UserConfig(use_colors=False)
         monkeypatch.setenv("DBT_USE_COLORS", "True")
-        context = self.make_dbt_context(["run"])
+        context = self.make_dbt_context("run", ["run"])
 
         flags = Flags(context, user_config)
         assert flags.USE_COLORS

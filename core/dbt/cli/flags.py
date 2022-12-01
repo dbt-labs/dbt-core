@@ -43,8 +43,11 @@ class Flags:
         assign_params(ctx, params_assigned_from_default)
 
         # Get the invoked command flags
-        if hasattr(ctx, "invoked_subcommand") and ctx.invoked_subcommand is not None:
-            invoked_subcommand = getattr(import_module("dbt.cli.main"), ctx.invoked_subcommand)
+        invoked_subcommand_name = (
+            ctx.invoked_subcommand if hasattr(ctx, "invoked_subcommand") else None
+        )
+        if invoked_subcommand_name is not None:
+            invoked_subcommand = getattr(import_module("dbt.cli.main"), invoked_subcommand_name)
             invoked_subcommand.allow_extra_args = True
             invoked_subcommand.ignore_unknown_options = True
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
@@ -64,9 +67,7 @@ class Flags:
                     )
 
         # Hard coded flags
-        object.__setattr__(
-            self, "WHICH", ctx.protected_args[0] if ctx.protected_args else ctx.info_name
-        )
+        object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
         object.__setattr__(self, "MP_CONTEXT", get_context("spawn"))
 
         # Support console DO NOT TRACK initiave
