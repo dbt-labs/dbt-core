@@ -597,6 +597,25 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             conn.handle.commit()
             conn.transaction_open = False
+            
+    def run_sql_vertica(self, sql, fetch, conn):
+        with conn.handle.cursor() as cursor:
+            try:
+                cursor.execute(sql)
+                if fetch == 'one':
+                    return cursor.fetchone()
+                elif fetch == 'all':
+                    return cursor.fetchall()
+                else:
+                    return
+            except BaseException as e:
+                if conn.handle and not getattr(conn.handle, 'closed', True):
+                    conn.handle.rollback()
+                print(sql)
+                print(e)
+                raise
+            finally:
+                conn.transaction_open = False
 
     def run_sql_common(self, sql, fetch, conn):
         with conn.handle.cursor() as cursor:
@@ -632,6 +651,8 @@ class DBTIntegrationTest(unittest.TestCase):
             fire_event(IntegrationTestDebug(msg=msg))
             if self.adapter_type == 'presto':
                 return self.run_sql_presto(sql, fetch, conn)
+            if self.adapter_type == 'vertica':
+                return self.run_sql_vertica(sql, fetch, conn)
             else:
                 return self.run_sql_common(sql, fetch, conn)
 
