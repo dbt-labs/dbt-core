@@ -744,6 +744,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
+                "metrics": [],
                 "tags": ["my_department"],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -770,6 +771,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "enabled": True,
                 },
                 "fqn": ["test", "simple_exposure"],
+                "metrics": [],
                 "name": "simple_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
                 "owner": {
@@ -1185,6 +1187,7 @@ def expected_references_manifest(project):
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
+                "metrics": [],
                 "tags": ["my_department"],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),

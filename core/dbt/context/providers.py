@@ -1435,6 +1435,14 @@ class ExposureSourceResolver(BaseResolver):
         return ""
 
 
+class ExposureMetricResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        if len(args) not in (1, 2):
+            metric_invalid_args(self.model, args)
+        self.model.metrics.append(list(args))
+        return ""
+
+
 def generate_parse_exposure(
     exposure: ParsedExposure,
     config: RuntimeConfig,
@@ -1450,6 +1458,12 @@ def generate_parse_exposure(
             manifest,
         ),
         "source": ExposureSourceResolver(
+            None,
+            exposure,
+            project,
+            manifest,
+        ),
+        "metric": ExposureMetricResolver(
             None,
             exposure,
             project,

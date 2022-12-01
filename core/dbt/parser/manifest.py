@@ -851,6 +851,10 @@ class ManifestLoader:
             if metric.created_at < self.started_at:
                 continue
             _process_metrics_for_node(self.manifest, current_project, metric)
+        for exposure in self.manifest.exposures.values():
+            if exposure.created_at < self.started_at:
+                continue
+            _process_metrics_for_node(self.manifest, current_project, exposure)
 
     # nodes: node and column descriptions
     # sources: source and table descriptions, column descriptions
@@ -1180,7 +1184,9 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
 
 
 def _process_metrics_for_node(
-    manifest: Manifest, current_project: str, node: Union[ManifestNode, ParsedMetric]
+    manifest: Manifest,
+    current_project: str,
+    node: Union[ManifestNode, ParsedMetric, ParsedExposure],
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
     for metric in node.metrics:
