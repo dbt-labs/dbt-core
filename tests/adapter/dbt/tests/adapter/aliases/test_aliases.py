@@ -50,7 +50,15 @@ class BaseAliases:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
+
+    def test_alias_model_name(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 4
+        run_dbt(["test"])
 
 
 class BaseAliasErrors:
@@ -63,7 +71,10 @@ class BaseAliasErrors:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -71,6 +82,12 @@ class BaseAliasErrors:
             "model_a.sql": MODELS_DUPE__MODEL_A_SQL,
             "model_b.sql": MODELS_DUPE__MODEL_B_SQL,
         }
+
+    def test_alias_dupe_thorews_exeption(self, project):
+        message = ".*identical database representation.*"
+        with pytest.raises(Exception) as exc:
+            assert message in exc
+            run_dbt(["run"])
 
 
 class BaseSameAliasDifferentSchemas:
@@ -83,7 +100,10 @@ class BaseSameAliasDifferentSchemas:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -93,6 +113,12 @@ class BaseSameAliasDifferentSchemas:
             "model_b.sql": MODELS_DUPE_CUSTOM_SCHEMA__MODEL_B_SQL,
             "model_c.sql": MODELS_DUPE_CUSTOM_SCHEMA__MODEL_C_SQL,
         }
+
+    def test_same_alias_succeeds_in_different_schemas(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 3
+        res = run_dbt(["test"])
+        assert len(res) > 0
 
 
 class BaseSameAliasDifferentDatabases:
@@ -113,7 +139,10 @@ class BaseSameAliasDifferentDatabases:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -123,33 +152,24 @@ class BaseSameAliasDifferentDatabases:
             "model_b.sql": MODELS_DUPE_CUSTOM_DATABASE__MODEL_B_SQL,
         }
 
-
-class TestAliases(BaseAliases):
-    def test_alias_model_name(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 4
-        run_dbt(["test"])
-
-
-class TestAliasErrors(BaseAliasErrors):
-    def test_alias_dupe_thorews_exeption(self, project):
-        message = ".*identical database representation.*"
-        with pytest.raises(Exception) as exc:
-            assert message in exc
-            run_dbt(["run"])
-
-
-class TestSameAliasDifferentSchemas(BaseSameAliasDifferentSchemas):
-    def test_same_alias_succeeds_in_different_schemas(self, project):
-        results = run_dbt(["run"])
-        assert len(results) == 3
-        res = run_dbt(["test"])
-        assert len(res) > 0
-
-
-class TestSameAliasDifferentDatabases(BaseSameAliasDifferentDatabases):
     def test_alias_model_name_diff_database(self, project):
         results = run_dbt(["run"])
         assert len(results) == 2
         res = run_dbt(["test"])
         assert len(res) > 0
+
+
+class TestAliases(BaseAliases):
+    pass
+
+
+class TestAliasErrors(BaseAliasErrors):
+    pass
+
+
+class TestSameAliasDifferentSchemas(BaseSameAliasDifferentSchemas):
+    pass
+
+
+class TestSameAliasDifferentDatabases(BaseSameAliasDifferentDatabases):
+    pass
