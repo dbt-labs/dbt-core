@@ -8,9 +8,10 @@ The event module provides types that represent what is happening in dbt in `even
 When events are processed via `fire_event`, nearly everything is logged. Whether or not the user has enabled the debug flag, all debug messages are still logged to the file. However, some events are particularly time consuming to construct because they return a huge amount of data. Today, the only messages in this category are cache events and are only logged if the `--log-cache-events` flag is on. This is important because these messages should not be created unless they are going to be logged, because they cause a noticable performance degredation. These events use a "fire_event_if" functions.
 
 # Adding a New Event
-New events need to have a proto message definition created in core/dbt/events/types.proto. Every message must include EventInfo as the first field, named "info" and numbered 1. To update the proto_types.py file, in the core/dbt/events directory: ```protoc --python_betterproto_out . types.proto```
-
-A matching class needs to be created in the core/dbt/events/types.py file, which will have two superclasses, the "Level" mixin and the generated class from proto_types.py. These classes will also generally have two methods, a "code" method that returns the event code, and a "message" method that is used to construct the "msg" from the event fields. In addition the "Level" mixin will provide a "level_tag" method to set the level (which can also be overridden using the "info" convenience function from functions.py)
+* Add a new message in types.proto with an EventInfo field first
+* run the protoc compiler to update proto_types.py:  ```protoc --python_betterproto_out . types.proto```
+* Add a wrapping class in core/dbt/event/types.py with a Level superclass and the superclass from proto_types.py, plus code and message methods
+* Add the class to tests/unit/test_events.py
 
 Note that no attributes can exist in these event classes except for fields defined in the protobuf definitions, because the betterproto metaclass will throw an error. Betterproto provides a to_dict() method to convert the generated classes to a dictionary and from that to json. However some attributes will successfully convert to dictionaries but not to serialized protobufs, so we need to test both output formats.
 

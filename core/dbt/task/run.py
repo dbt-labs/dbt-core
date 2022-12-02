@@ -20,7 +20,7 @@ from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus
+from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
 from dbt.exceptions import (
     CompilationException,
     InternalException,
@@ -28,17 +28,16 @@ from dbt.exceptions import (
     ValidationException,
     missing_materialization,
 )
-from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.functions import fire_event, get_invocation_id, info
 from dbt.events.types import (
     DatabaseErrorRunningHook,
     EmptyLine,
     HooksRunning,
     HookFinished,
-    PrintModelErrorResultLine,
-    PrintModelResultLine,
-    PrintStartLine,
-    PrintHookEndLine,
-    PrintHookStartLine,
+    LogModelResult,
+    LogStartLine,
+    LogHookEndLine,
+    LogHookStartLine,
 )
 from dbt.logger import (
     TextOnly,
@@ -176,7 +175,7 @@ class ModelRunner(CompileRunner):
 
     def print_start_line(self):
         fire_event(
-            PrintStartLine(
+            LogStartLine(
                 description=self.describe_node(),
                 index=self.node_index,
                 total=self.num_nodes,
@@ -187,27 +186,22 @@ class ModelRunner(CompileRunner):
     def print_result_line(self, result):
         description = self.describe_node()
         if result.status == NodeStatus.Error:
-            fire_event(
-                PrintModelErrorResultLine(
-                    description=description,
-                    status=result.status,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
-            )
+            status = result.status
+            level = "error"
         else:
-            fire_event(
-                PrintModelResultLine(
-                    description=description,
-                    status=result.message,
-                    index=self.node_index,
-                    total=self.num_nodes,
-                    execution_time=result.execution_time,
-                    node_info=self.node.node_info,
-                )
+            status = result.message
+            level = "info"
+        fire_event(
+            LogModelResult(
+                description=description,
+                status=status,
+                index=self.node_index,
+                total=self.num_nodes,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+                info=info(level=level),
             )
+        )
 
     def before_execute(self):
         self.print_start_line()
@@ -355,7 +349,7 @@ class RunTask(CompileTask):
             with UniqueID(hook.unique_id):
                 with hook_meta_ctx, startctx:
                     fire_event(
-                        PrintHookStartLine(
+                        LogHookStartLine(
                             statement=hook_text,
                             index=idx,
                             total=num_hooks,
@@ -375,7 +369,7 @@ class RunTask(CompileTask):
                 with finishctx, DbtModelState({"node_status": "passed"}):
                     hook._event_status["node_status"] = RunStatus.Success
                     fire_event(
-                        PrintHookEndLine(
+                        LogHookEndLine(
                             statement=hook_text,
                             status=status,
                             index=idx,
@@ -400,12 +394,22 @@ class RunTask(CompileTask):
     ) -> None:
         try:
             self.run_hooks(adapter, hook_type, extra_context)
-        except RuntimeException:
+        except RuntimeException as exc:
             fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
-            raise
+            self.node_results.append(
+                BaseResult(
+                    status=RunStatus.Error,
+                    thread_id="main",
+                    timing=[],
+                    message=f"{hook_type.value} failed, error:\n {exc.msg}",
+                    adapter_response=exc.msg,
+                    execution_time=0,
+                    failures=1,
+                )
+            )
 
     def print_results_line(self, results, execution_time):
-        nodes = [r.node for r in results] + self.ran_hooks
+        nodes = [r.node for r in results if hasattr(r, "node")] + self.ran_hooks
         stat_line = get_counts(nodes)
 
         execution = ""
@@ -449,9 +453,6 @@ class RunTask(CompileTask):
         }
         with adapter.connection_named("master"):
             self.safe_run_hooks(adapter, RunHookType.End, extras)
-
-    def after_hooks(self, adapter, results, elapsed):
-        self.print_results_line(results, elapsed)
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:

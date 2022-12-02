@@ -241,7 +241,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "build_path": None,
                 "created_at": ANY,
                 "name": "model",
-                "root_path": project.project_root,
                 "relation_name": relation_name_node_format.format(
                     model_database, my_schema_name, "model"
                 ),
@@ -321,7 +320,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "build_path": None,
                 "created_at": ANY,
                 "name": "second_model",
-                "root_path": project.project_root,
                 "relation_name": relation_name_node_format.format(
                     project.database, alternate_schema, "second_model"
                 ),
@@ -510,7 +508,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "refs": [["model"]],
                 "relation_name": None,
                 "resource_type": "test",
-                "root_path": project.project_root,
                 "schema": test_audit_schema,
                 "database": project.database,
                 "tags": [],
@@ -571,7 +568,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     project.database, alternate_schema, "snapshot_seed"
                 ),
                 "resource_type": "snapshot",
-                "root_path": project.project_root,
                 "schema": alternate_schema,
                 "sources": [],
                 "tags": [],
@@ -608,7 +604,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "refs": [["model"]],
                 "relation_name": None,
                 "resource_type": "test",
-                "root_path": project.project_root,
                 "schema": test_audit_schema,
                 "database": project.database,
                 "tags": [],
@@ -659,7 +654,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "refs": [["model"]],
                 "relation_name": None,
                 "resource_type": "test",
-                "root_path": project.project_root,
                 "schema": test_audit_schema,
                 "database": project.database,
                 "tags": [],
@@ -725,7 +719,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     project.database, my_schema_name, "seed"
                 ),
                 "resource_type": "source",
-                "root_path": project.project_root,
                 "schema": my_schema_name,
                 "source_description": "My source",
                 "source_name": "my_source",
@@ -751,6 +744,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
+                "metrics": [],
                 "tags": ["my_department"],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -759,7 +753,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "path": "schema.yml",
                 "refs": [["model"], ["second_model"]],
                 "resource_type": "exposure",
-                "root_path": project.project_root,
                 "sources": [],
                 "type": "notebook",
                 "unique_id": "exposure.test.notebook_exposure",
@@ -778,6 +771,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "enabled": True,
                 },
                 "fqn": ["test", "simple_exposure"],
+                "metrics": [],
                 "name": "simple_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
                 "owner": {
@@ -788,7 +782,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "path": "schema.yml",
                 "refs": [["model"]],
                 "resource_type": "exposure",
-                "root_path": project.project_root,
                 "sources": [["my_source", "my_table"]],
                 "type": "dashboard",
                 "unique_id": "exposure.test.simple_exposure",
@@ -892,7 +885,6 @@ def expected_references_manifest(project):
                 "refs": [],
                 "relation_name": None,
                 "resource_type": "model",
-                "root_path": project.project_root,
                 "schema": my_schema_name,
                 "database": project.database,
                 "tags": [],
@@ -948,7 +940,6 @@ def expected_references_manifest(project):
                     model_database, my_schema_name
                 ),
                 "resource_type": "model",
-                "root_path": project.project_root,
                 "schema": my_schema_name,
                 "database": project.database,
                 "tags": [],
@@ -1002,7 +993,6 @@ def expected_references_manifest(project):
                 "refs": [["ephemeral_summary"]],
                 "relation_name": '"{0}"."{1}".view_summary'.format(model_database, my_schema_name),
                 "resource_type": "model",
-                "root_path": project.project_root,
                 "schema": my_schema_name,
                 "sources": [],
                 "tags": [],
@@ -1125,7 +1115,6 @@ def expected_references_manifest(project):
                     model_database, alternate_schema
                 ),
                 "resource_type": "snapshot",
-                "root_path": project.project_root,
                 "schema": alternate_schema,
                 "sources": [],
                 "tags": [],
@@ -1176,7 +1165,6 @@ def expected_references_manifest(project):
                 "patch_path": None,
                 "relation_name": '{0}."{1}"."seed"'.format(project.database, my_schema_name),
                 "resource_type": "source",
-                "root_path": project.project_root,
                 "schema": my_schema_name,
                 "source_description": "My source",
                 "source_name": "my_source",
@@ -1199,6 +1187,7 @@ def expected_references_manifest(project):
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
+                "metrics": [],
                 "tags": ["my_department"],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -1207,7 +1196,6 @@ def expected_references_manifest(project):
                 "path": "schema.yml",
                 "refs": [["view_summary"]],
                 "resource_type": "exposure",
-                "root_path": project.project_root,
                 "sources": [],
                 "type": "notebook",
                 "unique_id": "exposure.test.notebook_exposure",
@@ -1225,7 +1213,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.column_info",
             },
             "test.ephemeral_summary": {
@@ -1234,7 +1221,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.ephemeral_summary",
             },
             "test.source_info": {
@@ -1243,7 +1229,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.source_info",
             },
             "test.summary_count": {
@@ -1252,7 +1237,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.summary_count",
             },
             "test.summary_first_name": {
@@ -1261,7 +1245,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.summary_first_name",
             },
             "test.table_info": {
@@ -1270,7 +1253,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.table_info",
             },
             "test.view_summary": {
@@ -1281,7 +1263,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.view_summary",
             },
             "test.macro_info": {
@@ -1290,7 +1271,6 @@ def expected_references_manifest(project):
                 "original_file_path": os.path.join("macros", "macro.md"),
                 "package_name": "test",
                 "path": "macro.md",
-                "root_path": project.project_root,
                 "unique_id": "test.macro_info",
             },
             "test.notebook_info": {
@@ -1299,7 +1279,6 @@ def expected_references_manifest(project):
                 "original_file_path": docs_path,
                 "package_name": "test",
                 "path": "docs.md",
-                "root_path": project.project_root,
                 "unique_id": "test.notebook_info",
             },
             "test.macro_arg_info": {
@@ -1308,7 +1287,6 @@ def expected_references_manifest(project):
                 "original_file_path": os.path.join("macros", "macro.md"),
                 "package_name": "test",
                 "path": "macro.md",
-                "root_path": project.project_root,
                 "unique_id": "test.macro_arg_info",
             },
         },
@@ -1349,7 +1327,6 @@ def expected_references_manifest(project):
                 "resource_type": "macro",
                 "unique_id": "macro.test.test_nothing",
                 "tags": [],
-                "root_path": project.project_root,
                 "supported_languages": None,
                 "arguments": [
                     {

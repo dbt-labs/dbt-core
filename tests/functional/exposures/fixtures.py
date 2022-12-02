@@ -7,6 +7,29 @@ second_model_sql = """
 select 1 as id
 """
 
+
+source_schema_yml = """version: 2
+
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+"""
+
+metrics_schema_yml = """version: 2
+
+metrics:
+  - name: metric
+    model: ref('model')
+    label: "label"
+
+    calculation_method: count_distinct
+    expression: id
+
+    timestamp: first_order
+    time_grains: [day]
+"""
+
 simple_exposure_yml = """
 version: 2
 
@@ -16,6 +39,8 @@ exposures:
     type: dashboard
     depends_on:
       - ref('model')
+      - source('test_source', 'test_table')
+      - metric('metric')
     owner:
       email: something@example.com
   - name: notebook_exposure

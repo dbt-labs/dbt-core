@@ -1,6 +1,8 @@
 from dataclasses import dataclass
-from dbt import ui
+from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
+from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
+    DynamicLevel,
     NoFile,
     DebugLevel,
     InfoLevel,
@@ -14,7 +16,7 @@ from dbt.events.format import format_fancy_output_line, pluralize
 
 # The generated classes quote the included message classes, requiring the following line
 from dbt.events.proto_types import EventInfo, RunResultMsg, ListOfStrings  # noqa
-from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg
+from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg  # noqa
 from dbt.events import proto_types as pt
 
 from dbt.node_types import NodeType
@@ -32,10 +34,11 @@ from dbt.node_types import NodeType
 # | Code |     Description     |
 # |:----:|:-------------------:|
 # | A    | Pre-project loading |
+# | D    | Deprecations        |
 # | E    | DB adapter          |
 # | I    | Project parsing     |
 # | M    | Deps generation     |
-# | Q    | Node execution     |
+# | Q    | Node execution      |
 # | W    | Node testing        |
 # | Z    | Misc                |
 # | T    | Test only           |
@@ -306,6 +309,114 @@ Happy modeling!
 
 
 # =======================================================
+# D - Deprecations
+# =======================================================
+
+
+@dataclass
+class PackageRedirectDeprecation(WarnLevel, pt.PackageRedirectDeprecation):  # noqa
+    def code(self):
+        return "D001"
+
+    def message(self):
+        description = (
+            f"The `{self.old_name}` package is deprecated in favor of `{self.new_name}`. Please "
+            f"update your `packages.yml` configuration to use `{self.new_name}` instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class PackageInstallPathDeprecation(WarnLevel, pt.PackageInstallPathDeprecation):  # noqa
+    def code(self):
+        return "D002"
+
+    def message(self):
+        description = """\
+        The default package install path has changed from `dbt_modules` to `dbt_packages`.
+        Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
+        Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
+        """
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class ConfigSourcePathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
+    def code(self):
+        return "D003"
+
+    def message(self):
+        description = (
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`."
+            "Please update your `dbt_project.yml` configuration to reflect this change."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class ConfigDataPathDeprecation(WarnLevel, pt.ConfigDataPathDeprecation):  # noqa
+    def code(self):
+        return "D004"
+
+    def message(self):
+        description = (
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`."
+            "Please update your `dbt_project.yml` configuration to reflect this change."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class AdapterDeprecationWarning(WarnLevel, pt.AdapterDeprecationWarning):  # noqa
+    def code(self):
+        return "D005"
+
+    def message(self):
+        description = (
+            f"The adapter function `adapter.{self.old_name}` is deprecated and will be removed in "
+            f"a future release of dbt. Please use `adapter.{self.new_name}` instead. "
+            f"\n\nDocumentation for {self.new_name} can be found here:"
+            f"\n\nhttps://docs.getdbt.com/docs/adapter"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class MetricAttributesRenamed(WarnLevel, pt.MetricAttributesRenamed):  # noqa
+    def code(self):
+        return "D006"
+
+    def message(self):
+        description = (
+            "dbt-core v1.3 renamed attributes for metrics:"
+            "\n  'sql'              -> 'expression'"
+            "\n  'type'             -> 'calculation_method'"
+            "\n  'type: expression' -> 'calculation_method: derived'"
+            "\nThe old metric parameter names will be fully deprecated in v1.4."
+            f"\nPlease remove them from the metric definition of metric '{self.metric_name}'"
+            "\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849"
+        )
+
+        return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+@dataclass
+class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
+    def code(self):
+        return "D007"
+
+    def message(self):
+        description = (
+            "Starting in v1.3, the 'name' of an exposure should contain only letters, "
+            "numbers, and underscores. Exposures support a new property, 'label', which may "
+            f"contain spaces, capital letters, and special characters. {self.exposure} does not "
+            "follow this pattern. Please update the 'name', and use the 'label' property for a "
+            "human-friendly title. This will raise an error in a future version of dbt-core."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+# =======================================================
 # E - DB Adapter
 # =======================================================
 
@@ -365,7 +476,7 @@ class ConnectionReused(DebugLevel, pt.ConnectionReused):
 
 
 @dataclass
-class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
+class ConnectionLeftOpenInCleanup(DebugLevel, pt.ConnectionLeftOpenInCleanup):
     def code(self):
         return "E007"
 
@@ -374,7 +485,7 @@ class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
 
 
 @dataclass
-class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
+class ConnectionClosedInCleanup(DebugLevel, pt.ConnectionClosedInCleanup):
     def code(self):
         return "E008"
 
@@ -393,7 +504,7 @@ class RollbackFailed(DebugLevel, pt.RollbackFailed):  # noqa
 
 # TODO: can we combine this with ConnectionClosed?
 @dataclass
-class ConnectionClosed2(DebugLevel, pt.ConnectionClosed2):
+class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
     def code(self):
         return "E010"
 
@@ -403,7 +514,7 @@ class ConnectionClosed2(DebugLevel, pt.ConnectionClosed2):
 
 # TODO: can we combine this with ConnectionLeftOpen?
 @dataclass
-class ConnectionLeftOpen2(DebugLevel, pt.ConnectionLeftOpen2):
+class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
     def code(self):
         return "E011"
 
@@ -675,7 +786,13 @@ class CodeExecutionStatus(DebugLevel, pt.CodeExecutionStatus):
         return f"Execution status: {self.status} in {self.elapsed} seconds"
 
 
-# Skipped E040
+@dataclass
+class CatalogGenerationError(WarnLevel, pt.CatalogGenerationError):
+    def code(self):
+        return "E040"
+
+    def message(self) -> str:
+        return f"Encountered an error while generating catalog: {self.exc}"
 
 
 @dataclass
@@ -1218,22 +1335,193 @@ class PartialParsingDeletedExposure(DebugLevel, pt.PartialParsingDeletedExposure
         return f"Partial parsing: deleted exposure {self.unique_id}"
 
 
-# TODO: switch to storing structured info and calling get_target_failure_msg
 @dataclass
-class InvalidDisabledSourceInTestNode(
-    WarnLevel, EventStringFunctor, pt.InvalidDisabledSourceInTestNode
-):
+class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestNode):
     def code(self):
         return "I050"
 
     def message(self) -> str:
-        return ui.warning_tag(self.msg)
+
+        target_package_string = ""
+        if self.target_package != target_package_string:
+            target_package_string = "in package '{}' ".format(self.target_package)
+
+        msg = "{} '{}' ({}) depends on a {} named '{}' {}which is disabled".format(
+            self.resource_type_title,
+            self.unique_id,
+            self.original_file_path,
+            self.target_kind,
+            self.target_name,
+            target_package_string,
+        )
+
+        return warning_tag(msg)
 
 
 @dataclass
-class InvalidRefInTestNode(DebugLevel, EventStringFunctor, pt.InvalidRefInTestNode):
+class UnusedResourceConfigPath(WarnLevel, pt.UnusedResourceConfigPath):
     def code(self):
         return "I051"
+
+    def message(self) -> str:
+        path_list = "\n".join(f"- {u}" for u in self.unused_config_paths)
+        msg = (
+            "Configuration paths exist in your dbt_project.yml file which do not "
+            "apply to any resources.\n"
+            f"There are {len(self.unused_config_paths)} unused configuration paths:\n{path_list}"
+        )
+        return warning_tag(msg)
+
+
+@dataclass
+class SeedIncreased(WarnLevel, pt.SeedIncreased):
+    def code(self):
+        return "I052"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
+            f"<={MAXIMUM_SEED_SIZE_NAME}, so it has changed"
+        )
+        return msg
+
+
+@dataclass
+class SeedExceedsLimitSamePath(WarnLevel, pt.SeedExceedsLimitSamePath):
+    def code(self):
+        return "I053"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt "
+            f"cannot tell if it has changed: assuming they are the same"
+        )
+        return msg
+
+
+@dataclass
+class SeedExceedsLimitAndPathChanged(WarnLevel, pt.SeedExceedsLimitAndPathChanged):
+    def code(self):
+        return "I054"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in "
+            f"a different location, assuming it has changed"
+        )
+        return msg
+
+
+@dataclass
+class SeedExceedsLimitChecksumChanged(WarnLevel, pt.SeedExceedsLimitChecksumChanged):
+    def code(self):
+        return "I055"
+
+    def message(self) -> str:
+        msg = (
+            f"Found a seed ({self.package_name}.{self.name}) "
+            f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a "
+            f"checksum type of {self.checksum_name}, so it has changed"
+        )
+        return msg
+
+
+@dataclass
+class UnusedTables(WarnLevel, pt.UnusedTables):
+    def code(self):
+        return "I056"
+
+    def message(self) -> str:
+        msg = [
+            "During parsing, dbt encountered source overrides that had no target:",
+        ]
+        msg += self.unused_tables
+        msg.append("")
+        return warning_tag("\n".join(msg))
+
+
+@dataclass
+class WrongResourceSchemaFile(WarnLevel, pt.WrongResourceSchemaFile):
+    def code(self):
+        return "I057"
+
+    def message(self) -> str:
+        msg = line_wrap_message(
+            f"""\
+            '{self.patch_name}' is a {self.resource_type} node, but it is
+            specified in the {self.yaml_key} section of
+            {self.file_path}.
+            To fix this error, place the `{self.patch_name}`
+            specification under the {self.plural_resource_type} key instead.
+            """
+        )
+        return warning_tag(msg)
+
+
+@dataclass
+class NoNodeForYamlKey(WarnLevel, pt.NoNodeForYamlKey):
+    def code(self):
+        return "I058"
+
+    def message(self) -> str:
+        msg = (
+            f"Did not find matching node for patch with name '{self.patch_name}' "
+            f"in the '{self.yaml_key}' section of "
+            f"file '{self.file_path}'"
+        )
+        return warning_tag(msg)
+
+
+@dataclass
+class MacroPatchNotFound(WarnLevel, pt.MacroPatchNotFound):
+    def code(self):
+        return "I059"
+
+    def message(self) -> str:
+        msg = f'Found patch for macro "{self.patch_name}" which was not found'
+        return warning_tag(msg)
+
+
+@dataclass
+class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
+    def code(self):
+        return "I060"
+
+    def message(self) -> str:
+        # this is duplicated logic from exceptions.get_not_found_or_disabled_msg
+        # when we convert exceptions to be stuctured maybe it can be combined?
+        # convverting the bool to a string since None is also valid
+        if self.disabled == "None":
+            reason = "was not found or is disabled"
+        elif self.disabled == "True":
+            reason = "is disabled"
+        else:
+            reason = "was not found"
+
+        target_package_string = ""
+        if self.target_package is not None:
+            target_package_string = "in package '{}' ".format(self.target_package)
+
+        msg = "{} '{}' ({}) depends on a {} named '{}' {}which {}".format(
+            self.resource_type_title,
+            self.unique_id,
+            self.original_file_path,
+            self.target_kind,
+            self.target_name,
+            target_package_string,
+            reason,
+        )
+
+        return warning_tag(msg)
+
+
+@dataclass
+class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
+    def code(self):
+        return "I061"
 
     def message(self) -> str:
         return self.msg
@@ -1338,20 +1626,22 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
 
 
 @dataclass
-class MacroEventInfo(InfoLevel, EventStringFunctor, pt.MacroEventInfo):
+class JinjaLogInfo(InfoLevel, EventStringFunctor, pt.JinjaLogInfo):
     def code(self):
         return "M011"
 
     def message(self) -> str:
+        # This is for the log method used in macros so msg cannot be built here
         return self.msg
 
 
 @dataclass
-class MacroEventDebug(DebugLevel, EventStringFunctor, pt.MacroEventDebug):
+class JinjaLogDebug(DebugLevel, EventStringFunctor, pt.JinjaLogDebug):
     def code(self):
         return "M012"
 
     def message(self) -> str:
+        # This is for the log method used in macros so msg cannot be built here
         return self.msg
 
 
@@ -1417,7 +1707,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel, pt.DepsNotifyUpdatesAvailable):
     def message(self) -> str:
         return "Updates available for packages: {} \
                 \nUpdate your versions in packages.yml, then run dbt deps".format(
-            self.packages
+            self.packages.value
         )
 
 
@@ -1505,6 +1795,35 @@ class DepsSetDownloadDirectory(DebugLevel, pt.DepsSetDownloadDirectory):
         return f"Set downloads directory='{self.path}'"
 
 
+@dataclass
+class DepsUnpinned(WarnLevel, pt.DepsUnpinned):
+    def code(self):
+        return "M029"
+
+    def message(self) -> str:
+        if self.revision == "HEAD":
+            unpinned_msg = "not pinned, using HEAD (default branch)"
+        elif self.revision in ("main", "master"):
+            unpinned_msg = f'pinned to the "{self.revision}" branch'
+        else:
+            unpinned_msg = None
+
+        msg = (
+            f'The git package "{self.git}" \n\tis {unpinned_msg}.\n\tThis can introduce '
+            f"breaking changes into your project without warning!\n\nSee {PIN_PACKAGE_URL}"
+        )
+        return yellow(f"WARNING: {msg}")
+
+
+@dataclass
+class NoNodesForSelectionCriteria(WarnLevel, pt.NoNodesForSelectionCriteria):
+    def code(self):
+        return "M030"
+
+    def message(self) -> str:
+        return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+
+
 # =======================================================
 # Q - Node execution
 # =======================================================
@@ -1565,76 +1884,53 @@ class SQLRunnerException(DebugLevel, pt.SQLRunnerException):  # noqa
 
 
 @dataclass
-@dataclass
-class PrintErrorTestResult(ErrorLevel, pt.PrintErrorTestResult):
+class LogTestResult(DynamicLevel, pt.LogTestResult):
     def code(self):
         return "Q007"
 
     def message(self) -> str:
-        info = "ERROR"
+        if self.status == "error":
+            info = "ERROR"
+            status = red(info)
+        elif self.status == "pass":
+            info = "PASS"
+            status = green(info)
+        elif self.status == "warn":
+            info = f"WARN {self.num_failures}"
+            status = yellow(info)
+        else:  # self.status == "fail":
+            info = f"FAIL {self.num_failures}"
+            status = red(info)
         msg = f"{info} {self.name}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(info),
+            status=status,
             index=self.index,
             total=self.num_models,
             execution_time=self.execution_time,
         )
 
-
-@dataclass
-class PrintPassTestResult(InfoLevel, pt.PrintPassTestResult):
-    def code(self):
-        return "Q008"
-
-    def message(self) -> str:
-        info = "PASS"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.green(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
+    @classmethod
+    def status_to_level(cls, status):
+        # The statuses come from TestStatus
+        level_lookup = {
+            "fail": "error",
+            "pass": "info",
+            "warn": "warn",
+            "error": "error",
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return "info"
 
 
-@dataclass
-class PrintWarnTestResult(WarnLevel, pt.PrintWarnTestResult):
-    def code(self):
-        return "Q009"
-
-    def message(self) -> str:
-        info = f"WARN {self.num_failures}"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.yellow(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
+# Skipped Q008, Q009, Q010
 
 
 @dataclass
-class PrintFailureTestResult(ErrorLevel, pt.PrintFailureTestResult):
-    def code(self):
-        return "Q010"
-
-    def message(self) -> str:
-        info = f"FAIL {self.num_failures}"
-        msg = f"{info} {self.name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.red(info),
-            index=self.index,
-            total=self.num_models,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintStartLine(InfoLevel, pt.PrintStartLine):  # noqa
+class LogStartLine(InfoLevel, pt.LogStartLine):  # noqa
     def code(self):
         return "Q011"
 
@@ -1644,67 +1940,48 @@ class PrintStartLine(InfoLevel, pt.PrintStartLine):  # noqa
 
 
 @dataclass
-class PrintModelResultLine(InfoLevel, pt.PrintModelResultLine):
+class LogModelResult(DynamicLevel, pt.LogModelResult):
     def code(self):
         return "Q012"
 
     def message(self) -> str:
-        info = "OK created"
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
         msg = f"{info} {self.description}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
         )
 
 
-@dataclass
-class PrintModelErrorResultLine(ErrorLevel, pt.PrintModelErrorResultLine):
-    def code(self):
-        return "Q013"
-
-    def message(self) -> str:
-        info = "ERROR creating"
-        msg = f"{info} {self.description}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.red(self.status.upper()),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+# Skipped Q013, Q014
 
 
 @dataclass
-class PrintSnapshotErrorResultLine(ErrorLevel, pt.PrintSnapshotErrorResultLine):
-    def code(self):
-        return "Q014"
-
-    def message(self) -> str:
-        info = "ERROR snapshotting"
-        msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.red(self.status.upper()),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintSnapshotResultLine(InfoLevel, pt.PrintSnapshotResultLine):
+class LogSnapshotResult(DynamicLevel, pt.LogSnapshotResult):
     def code(self):
         return "Q015"
 
     def message(self) -> str:
-        info = "OK snapshotted"
+        if self.status == "error":
+            info = "ERROR snapshotting"
+            status = red(self.status.upper())
+        else:
+            info = "OK snapshotted"
+            status = green(self.status)
+
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1712,115 +1989,83 @@ class PrintSnapshotResultLine(InfoLevel, pt.PrintSnapshotResultLine):
 
 
 @dataclass
-class PrintSeedErrorResultLine(ErrorLevel, pt.PrintSeedErrorResultLine):
+class LogSeedResult(DynamicLevel, pt.LogSeedResult):
     def code(self):
         return "Q016"
 
     def message(self) -> str:
-        info = "ERROR loading"
+        if self.status == "error":
+            info = "ERROR loading"
+            status = red(self.status.upper())
+        else:
+            info = "OK loaded"
+            status = green(self.result_message)
         msg = f"{info} seed file {self.schema}.{self.relation}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(self.status.upper()),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
         )
 
 
-@dataclass
-class PrintSeedResultLine(InfoLevel, pt.PrintSeedResultLine):
-    def code(self):
-        return "Q017"
-
-    def message(self) -> str:
-        info = "OK loaded"
-        msg = f"{info} seed file {self.schema}.{self.relation}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.green(self.status),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+# Skipped Q017
 
 
 @dataclass
-class PrintFreshnessErrorLine(ErrorLevel, pt.PrintFreshnessErrorLine):
+class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
     def code(self):
         return "Q018"
 
     def message(self) -> str:
-        info = "ERROR"
+        if self.status == "runtime error":
+            info = "ERROR"
+            status = red(info)
+        elif self.status == "error":
+            info = "ERROR STALE"
+            status = red(info)
+        elif self.status == "warn":
+            info = "WARN"
+            status = yellow(info)
+        else:
+            info = "PASS"
+            status = green(info)
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
         return format_fancy_output_line(
             msg=msg,
-            status=ui.red(info),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
         )
 
-
-@dataclass
-class PrintFreshnessErrorStaleLine(ErrorLevel, pt.PrintFreshnessErrorStaleLine):
-    def code(self):
-        return "Q019"
-
-    def message(self) -> str:
-        info = "ERROR STALE"
-        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.red(info),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+    @classmethod
+    def status_to_level(cls, status):
+        # The statuses come from FreshnessStatus
+        level_lookup = {
+            "runtime error": "error",
+            "pass": "info",
+            "warn": "warn",
+            "error": "error",
+        }
+        if status in level_lookup:
+            return level_lookup[status]
+        else:
+            return "info"
 
 
-@dataclass
-class PrintFreshnessWarnLine(WarnLevel, pt.PrintFreshnessWarnLine):
-    def code(self):
-        return "Q020"
-
-    def message(self) -> str:
-        info = "WARN"
-        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.yellow(info),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
+# Skipped Q019, Q020, Q021
 
 
 @dataclass
-class PrintFreshnessPassLine(InfoLevel, pt.PrintFreshnessPassLine):
-    def code(self):
-        return "Q021"
-
-    def message(self) -> str:
-        info = "PASS"
-        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(
-            msg=msg,
-            status=ui.green(info),
-            index=self.index,
-            total=self.total,
-            execution_time=self.execution_time,
-        )
-
-
-@dataclass
-class PrintCancelLine(ErrorLevel, pt.PrintCancelLine):
+class LogCancelLine(ErrorLevel, pt.LogCancelLine):
     def code(self):
         return "Q022"
 
     def message(self) -> str:
         msg = "CANCEL query {}".format(self.conn_name)
-        return format_fancy_output_line(msg=msg, status=ui.red("CANCEL"), index=None, total=None)
+        return format_fancy_output_line(msg=msg, status=red("CANCEL"), index=None, total=None)
 
 
 @dataclass
@@ -1861,7 +2106,7 @@ class QueryCancelationUnsupported(InfoLevel, pt.QueryCancelationUnsupported):
             "cancellation. Some queries may still be "
             "running!"
         )
-        return ui.yellow(msg)
+        return yellow(msg)
 
 
 @dataclass
@@ -1910,7 +2155,7 @@ class NodeExecuting(DebugLevel, pt.NodeExecuting):
 
 
 @dataclass
-class PrintHookStartLine(InfoLevel, pt.PrintHookStartLine):  # noqa
+class LogHookStartLine(InfoLevel, pt.LogHookStartLine):  # noqa
     def code(self):
         return "Q032"
 
@@ -1922,7 +2167,7 @@ class PrintHookStartLine(InfoLevel, pt.PrintHookStartLine):  # noqa
 
 
 @dataclass
-class PrintHookEndLine(InfoLevel, pt.PrintHookEndLine):  # noqa
+class LogHookEndLine(InfoLevel, pt.LogHookEndLine):  # noqa
     def code(self):
         return "Q033"
 
@@ -1930,7 +2175,7 @@ class PrintHookEndLine(InfoLevel, pt.PrintHookEndLine):  # noqa
         msg = "OK hook: {}".format(self.statement)
         return format_fancy_output_line(
             msg=msg,
-            status=ui.green(self.status),
+            status=green(self.status),
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1949,11 +2194,17 @@ class SkippingDetails(InfoLevel, pt.SkippingDetails):
         else:
             msg = f"SKIP {self.resource_type} {self.node_name}"
         return format_fancy_output_line(
-            msg=msg, status=ui.yellow("SKIP"), index=self.index, total=self.total
+            msg=msg, status=yellow("SKIP"), index=self.index, total=self.total
         )
 
 
-# Skipped Q035
+@dataclass
+class NothingToDo(WarnLevel, pt.NothingToDo):
+    def code(self):
+        return "Q035"
+
+    def message(self) -> str:
+        return "Nothing to do. Try checking your model configs and model specification args"
 
 
 @dataclass
@@ -1972,6 +2223,15 @@ class EndRunResult(DebugLevel, pt.EndRunResult):
 
     def message(self) -> str:
         return "Command end result"
+
+
+@dataclass
+class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
+    def code(self):
+        return "Q038"
+
+    def message(self) -> str:
+        return "No nodes selected!"
 
 
 # =======================================================
@@ -2003,7 +2263,7 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
 """.strip()
 
         return "{prefix}\n{error}\n\n{note}".format(
-            prefix=ui.red(prefix), error=str(self.exc).strip(), note=internal_error_string
+            prefix=red(prefix), error=str(self.exc).strip(), note=internal_error_string
         )
 
 
@@ -2017,7 +2277,7 @@ class GenericExceptionOnRun(ErrorLevel, pt.GenericExceptionOnRun):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(prefix=ui.red(prefix), error=str(self.exc).strip())
+        return "{prefix}\n{error}".format(prefix=red(prefix), error=str(self.exc).strip())
 
 
 @dataclass
@@ -2139,7 +2399,7 @@ class TimingInfoCollected(DebugLevel, pt.TimingInfoCollected):
 # This prints the stack trace at the debug level while allowing just the nice exception message
 # at the error level - or whatever other level chosen.  Used in multiple places.
 @dataclass
-class PrintDebugStackTrace(DebugLevel, pt.PrintDebugStackTrace):  # noqa
+class LogDebugStackTrace(DebugLevel, pt.LogDebugStackTrace):  # noqa
     def code(self):
         return "Z011"
 
@@ -2241,7 +2501,7 @@ class RunResultWarning(WarnLevel, pt.RunResultWarning):
 
     def message(self) -> str:
         info = "Warning"
-        return ui.yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+        return yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
 @dataclass
@@ -2251,7 +2511,7 @@ class RunResultFailure(ErrorLevel, pt.RunResultFailure):
 
     def message(self) -> str:
         info = "Failure"
-        return ui.red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+        return red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
 @dataclass
@@ -2270,6 +2530,7 @@ class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
         return "Z024"
 
     def message(self) -> str:
+        # This is the message on the result object, cannot be built here
         return f"  {self.msg}"
 
 
@@ -2302,13 +2563,16 @@ class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
         return f"  See test failures:\n  {border}\n  {msg}\n  {border}"
 
 
+# FirstRunResultError and AfterFirstRunResultError are just splitting the message from the result
+#  object into multiple log lines
+# TODO: is this reallly needed?  See printer.py
 @dataclass
 class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError):
     def code(self):
         return "Z028"
 
     def message(self) -> str:
-        return ui.yellow(self.msg)
+        return yellow(self.msg)
 
 
 @dataclass
@@ -2329,13 +2593,13 @@ class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
         if self.keyboard_interrupt:
-            message = ui.yellow("Exited because of keyboard interrupt.")
+            message = yellow("Exited because of keyboard interrupt.")
         elif self.num_errors > 0:
-            message = ui.red("Completed with {} and {}:".format(error_plural, warn_plural))
+            message = red("Completed with {} and {}:".format(error_plural, warn_plural))
         elif self.num_warnings > 0:
-            message = ui.yellow("Completed with {}:".format(warn_plural))
+            message = yellow("Completed with {}:".format(warn_plural))
         else:
-            message = ui.green("Completed successfully")
+            message = green("Completed successfully")
         return message
 
 
@@ -2343,14 +2607,14 @@ class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
 
 
 @dataclass
-class PrintSkipBecauseError(ErrorLevel, pt.PrintSkipBecauseError):
+class LogSkipBecauseError(ErrorLevel, pt.LogSkipBecauseError):
     def code(self):
         return "Z034"
 
     def message(self) -> str:
         msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model error"
         return format_fancy_output_line(
-            msg=msg, status=ui.red("ERROR SKIP"), index=self.index, total=self.total
+            msg=msg, status=red("ERROR SKIP"), index=self.index, total=self.total
         )
 
 
@@ -2446,31 +2710,10 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
         return "Got an exception trying to initialize tracking"
 
 
-# Skipped Z045
-
-
-@dataclass
-class GeneralWarningMsg(WarnLevel, EventStringFunctor, pt.GeneralWarningMsg):
-    def code(self):
-        return "Z046"
-
-    def message(self) -> str:
-        return self.log_fmt.format(self.msg) if self.log_fmt is not None else self.msg
-
-
-@dataclass
-class GeneralWarningException(WarnLevel, pt.GeneralWarningException):
-    def code(self):
-        return "Z047"
-
-    def message(self) -> str:
-        return self.log_fmt.format(str(self.exc)) if self.log_fmt is not None else str(self.exc)
-
-
 @dataclass
 class EventBufferFull(WarnLevel, pt.EventBufferFull):
     def code(self):
-        return "Z048"
+        return "Z045"
 
     def message(self) -> str:
         return (
@@ -2479,390 +2722,12 @@ class EventBufferFull(WarnLevel, pt.EventBufferFull):
         )
 
 
+# this is the message from the result object
 @dataclass
 class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):
     def code(self):
-        return "Z049"
+        return "Z046"
 
     def message(self) -> str:
+        # This is the message on the result object, cannot be formatted in event
         return self.msg
-
-
-# since mypy doesn't run on every file we need to suggest to mypy that every
-# class gets instantiated. But we don't actually want to run this code.
-# making the conditional `if False` causes mypy to skip it as dead code so
-# we need to skirt around that by computing something it doesn't check statically.
-#
-# TODO remove these lines once we run mypy everywhere.
-if 1 == 0:
-
-    # A - pre-project loading
-    MainReportVersion(version="")
-    MainReportArgs(args={})
-    MainTrackingUserState(user_state="")
-    MergedFromState(num_merged=0, sample=[])
-    MissingProfileTarget(profile_name="", target_name="")
-    InvalidVarsYAML()
-    DbtProjectError()
-    DbtProjectErrorException(exc="")
-    DbtProfileError()
-    DbtProfileErrorException(exc="")
-    ProfileListTitle()
-    ListSingleProfile(profile="")
-    NoDefinedProfiles()
-    ProfileHelpMessage()
-    StarterProjectPath(dir="")
-    ConfigFolderDirectory(dir="")
-    NoSampleProfileFound(adapter="")
-    ProfileWrittenWithSample(name="", path="")
-    ProfileWrittenWithTargetTemplateYAML(name="", path="")
-    ProfileWrittenWithProjectTemplateYAML(name="", path="")
-    SettingUpProfile()
-    InvalidProfileTemplateYAML()
-    ProjectNameAlreadyExists(name="")
-    ProjectCreated(project_name="")
-
-    # E - DB Adapter ======================
-    AdapterEventDebug()
-    AdapterEventInfo()
-    AdapterEventWarning()
-    AdapterEventError()
-    NewConnection(conn_type="", conn_name="")
-    ConnectionReused(conn_name="")
-    ConnectionLeftOpen(conn_name="")
-    ConnectionClosed(conn_name="")
-    RollbackFailed(conn_name="")
-    ConnectionClosed2(conn_name="")
-    ConnectionLeftOpen2(conn_name="")
-    Rollback(conn_name="")
-    CacheMiss(conn_name="", database="", schema="")
-    ListRelations(database="", schema="")
-    ConnectionUsed(conn_type="", conn_name="")
-    SQLQuery(conn_name="", sql="")
-    SQLQueryStatus(status="", elapsed=0.1)
-    SQLCommit(conn_name="")
-    ColTypeChange(
-        orig_type="", new_type="", table=ReferenceKeyMsg(database="", schema="", identifier="")
-    )
-    SchemaCreation(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    SchemaDrop(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    UncachedRelation(
-        dep_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        ref_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    AddLink(
-        dep_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        ref_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    AddRelation(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    DropMissingRelation(relation=ReferenceKeyMsg(database="", schema="", identifier=""))
-    DropCascade(
-        dropped=ReferenceKeyMsg(database="", schema="", identifier=""),
-        consequences=[ReferenceKeyMsg(database="", schema="", identifier="")],
-    )
-    DropRelation(dropped=ReferenceKeyMsg())
-    UpdateReference(
-        old_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        new_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        cached_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    TemporaryRelation(key=ReferenceKeyMsg(database="", schema="", identifier=""))
-    RenameSchema(
-        old_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-        new_key=ReferenceKeyMsg(database="", schema="", identifier=""),
-    )
-    DumpBeforeAddGraph(dump=dict())
-    DumpAfterAddGraph(dump=dict())
-    DumpBeforeRenameSchema(dump=dict())
-    DumpAfterRenameSchema(dump=dict())
-    AdapterImportError(exc="")
-    PluginLoadError(exc_info="")
-    NewConnectionOpening(connection_state="")
-    CodeExecution(conn_name="", code_content="")
-    CodeExecutionStatus(status="", elapsed=0.1)
-    WriteCatalogFailure(num_exceptions=0)
-    CatalogWritten(path="")
-    CannotGenerateDocs()
-    BuildingCatalog()
-    DatabaseErrorRunningHook(hook_type="")
-    HooksRunning(num_hooks=0, hook_type="")
-    HookFinished(stat_line="", execution="", execution_time=0)
-
-    # I - Project parsing ======================
-    ParseCmdStart()
-    ParseCmdCompiling()
-    ParseCmdWritingManifest()
-    ParseCmdDone()
-    ManifestDependenciesLoaded()
-    ManifestLoaderCreated()
-    ManifestLoaded()
-    ManifestChecked()
-    ManifestFlatGraphBuilt()
-    ParseCmdPerfInfoPath(path="")
-    GenericTestFileParse(path="")
-    MacroFileParse(path="")
-    PartialParsingFullReparseBecauseOfError()
-    PartialParsingExceptionFile(file="")
-    PartialParsingFile(file_id="")
-    PartialParsingException(exc_info={})
-    PartialParsingSkipParsing()
-    PartialParsingMacroChangeStartFullParse()
-    PartialParsingProjectEnvVarsChanged()
-    PartialParsingProfileEnvVarsChanged()
-    PartialParsingDeletedMetric(unique_id="")
-    ManifestWrongMetadataVersion(version="")
-    PartialParsingVersionMismatch(saved_version="", current_version="")
-    PartialParsingFailedBecauseConfigChange()
-    PartialParsingFailedBecauseProfileChange()
-    PartialParsingFailedBecauseNewProjectDependency()
-    PartialParsingFailedBecauseHashChanged()
-    PartialParsingNotEnabled()
-    ParsedFileLoadFailed(path="", exc="", exc_info="")
-    PartialParseSaveFileNotFound()
-    StaticParserCausedJinjaRendering(path="")
-    UsingExperimentalParser(path="")
-    SampleFullJinjaRendering(path="")
-    StaticParserFallbackJinjaRendering(path="")
-    StaticParsingMacroOverrideDetected(path="")
-    StaticParserSuccess(path="")
-    StaticParserFailure(path="")
-    ExperimentalParserSuccess(path="")
-    ExperimentalParserFailure(path="")
-    PartialParsingEnabled(deleted=0, added=0, changed=0)
-    PartialParsingAddedFile(file_id="")
-    PartialParsingDeletedFile(file_id="")
-    PartialParsingUpdatedFile(file_id="")
-    PartialParsingNodeMissingInSourceFile(file_id="")
-    PartialParsingMissingNodes(file_id="")
-    PartialParsingChildMapMissingUniqueID(unique_id="")
-    PartialParsingUpdateSchemaFile(file_id="")
-    PartialParsingDeletedSource(unique_id="")
-    PartialParsingDeletedExposure(unique_id="")
-    InvalidDisabledSourceInTestNode(msg="")
-    InvalidRefInTestNode(msg="")
-
-    # M - Deps generation ======================
-
-    GitSparseCheckoutSubdirectory(subdir="")
-    GitProgressCheckoutRevision(revision="")
-    GitProgressUpdatingExistingDependency(dir="")
-    GitProgressPullingNewDependency(dir="")
-    GitNothingToDo(sha="")
-    GitProgressUpdatedCheckoutRange(start_sha="", end_sha="")
-    GitProgressCheckedOutAt(end_sha="")
-    RegistryProgressGETRequest(url="")
-    RegistryProgressGETResponse(url="", resp_code=1234)
-    SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec="")
-    MacroEventInfo(msg="")
-    MacroEventDebug(msg="")
-    DepsNoPackagesFound()
-    DepsStartPackageInstall(package_name="")
-    DepsInstallInfo(version_name="")
-    DepsUpdateAvailable(version_latest="")
-    DepsUpToDate()
-    DepsListSubdirectory(subdirectory="")
-    DepsNotifyUpdatesAvailable(packages=ListOfStrings())
-    RetryExternalCall(attempt=0, max=0)
-    RecordRetryException(exc="")
-    RegistryIndexProgressGETRequest(url="")
-    RegistryIndexProgressGETResponse(url="", resp_code=1234)
-    RegistryResponseUnexpectedType(response=""),
-    RegistryResponseMissingTopKeys(response=""),
-    RegistryResponseMissingNestedKeys(response=""),
-    RegistryResponseExtraNestedKeys(response=""),
-    DepsSetDownloadDirectory(path="")
-
-    # Q - Node execution ======================
-
-    RunningOperationCaughtError(exc="")
-    CompileComplete()
-    FreshnessCheckComplete()
-    SeedHeader(header="")
-    SeedHeaderSeparator(len_header=0)
-    SQLRunnerException(exc="")
-    PrintErrorTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-    )
-    PrintPassTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-    )
-    PrintWarnTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-        num_failures=0,
-    )
-    PrintFailureTestResult(
-        name="",
-        index=0,
-        num_models=0,
-        execution_time=0,
-        num_failures=0,
-    )
-    PrintStartLine(description="", index=0, total=0, node_info=NodeInfo())
-    PrintModelResultLine(
-        description="",
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintModelErrorResultLine(
-        description="",
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintSnapshotErrorResultLine(
-        status="",
-        description="",
-        cfg={},
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintSnapshotResultLine(
-        status="",
-        description="",
-        cfg={},
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintSeedErrorResultLine(
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-        schema="",
-        relation="",
-    )
-    PrintSeedResultLine(
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-        schema="",
-        relation="",
-    )
-    PrintFreshnessErrorLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintFreshnessErrorStaleLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintFreshnessWarnLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintFreshnessPassLine(
-        source_name="",
-        table_name="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    PrintCancelLine(conn_name="")
-    DefaultSelector(name="")
-    NodeStart(unique_id="")
-    NodeFinished(unique_id="")
-    QueryCancelationUnsupported(type="")
-    ConcurrencyLine(num_threads=0, target_name="")
-    CompilingNode(unique_id="")
-    WritingInjectedSQLForNode(unique_id="")
-    NodeCompiling(unique_id="")
-    NodeExecuting(unique_id="")
-    PrintHookStartLine(
-        statement="",
-        index=0,
-        total=0,
-    )
-    PrintHookEndLine(
-        statement="",
-        status="",
-        index=0,
-        total=0,
-        execution_time=0,
-    )
-    SkippingDetails(
-        resource_type="",
-        schema="",
-        node_name="",
-        index=0,
-        total=0,
-    )
-    RunningOperationUncaughtError(exc="")
-    EndRunResult()
-
-    # W - Node testing ======================
-
-    CatchableExceptionOnRun(exc="")
-    InternalExceptionOnRun(build_path="", exc="")
-    GenericExceptionOnRun(build_path="", unique_id="", exc="")
-    NodeConnectionReleaseError(node_name="", exc="")
-    FoundStats(stat_line="")
-
-    # Z - misc ======================
-
-    MainKeyboardInterrupt()
-    MainEncounteredError(exc="")
-    MainStackTrace(stack_trace="")
-    SystemErrorRetrievingModTime(path="")
-    SystemCouldNotWrite(path="", reason="", exc="")
-    SystemExecutingCmd(cmd=[""])
-    SystemStdOutMsg(bmsg=b"")
-    SystemStdErrMsg(bmsg=b"")
-    SystemReportReturnCode(returncode=0)
-    TimingInfoCollected()
-    PrintDebugStackTrace()
-    CheckCleanPath(path="")
-    ConfirmCleanPath(path="")
-    ProtectedCleanPath(path="")
-    FinishedCleanPaths()
-    OpenCommand(open_cmd="", profiles_dir="")
-    EmptyLine()
-    ServingDocsPort(address="", port=0)
-    ServingDocsAccessInfo(port="")
-    ServingDocsExitInfo()
-    RunResultWarning(resource_type="", node_name="", path="")
-    RunResultFailure(resource_type="", node_name="", path="")
-    StatsLine(stats={})
-    RunResultError(msg="")
-    RunResultErrorNoMessage(status="")
-    SQLCompiledPath(path="")
-    CheckNodeTestFailure(relation_name="")
-    FirstRunResultError(msg="")
-    AfterFirstRunResultError(msg="")
-    EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
-    PrintSkipBecauseError(schema="", relation="", index=0, total=0)
-    EnsureGitInstalled()
-    DepsCreatingLocalSymlink()
-    DepsSymlinkNotAvailable()
-    DisableTracking()
-    SendingEvent(kwargs="")
-    SendEventFailure()
-    FlushEvents()
-    FlushEventsFailure()
-    TrackingInitializeFailure()
-    GeneralWarningMsg(msg="", log_fmt="")
-    GeneralWarningException(exc="", log_fmt="")
-    EventBufferFull()

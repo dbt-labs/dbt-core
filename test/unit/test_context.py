@@ -43,7 +43,6 @@ class TestVar(unittest.TestCase):
             fqn=["root", "model_one"],
             package_name="root",
             original_file_path="model_one.sql",
-            root_path="/usr/src/app",
             refs=[],
             sources=[],
             depends_on=DependsOn(),
@@ -202,6 +201,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "flags",
         "print",
         "diff_of_two_dicts",
+        "local_md5"
     }
 )
 
@@ -283,7 +283,6 @@ def model():
         fqn=["root", "model_one"],
         package_name="root",
         original_file_path="model_one.sql",
-        root_path="/usr/src/app",
         refs=[],
         sources=[],
         depends_on=DependsOn(),
@@ -346,7 +345,6 @@ def mock_model():
         fqn=["root", "model_one"],
         package_name="root",
         original_file_path="model_one.sql",
-        root_path="/usr/src/app",
         refs=[],
         sources=[],
         depends_on=DependsOn(),

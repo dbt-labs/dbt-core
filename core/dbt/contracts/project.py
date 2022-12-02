@@ -12,9 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any
 from mashumaro.types import SerializableType
 
-PIN_PACKAGE_URL = (
-    "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
-)
+
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
 

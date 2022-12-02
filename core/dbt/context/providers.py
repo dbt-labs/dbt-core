@@ -53,7 +53,6 @@ from dbt.exceptions import (
     raise_compiler_error,
     ref_invalid_args,
     metric_invalid_args,
-    ref_target_not_found,
     target_not_found,
     ref_bad_context,
     wrapped_exports,
@@ -476,10 +475,11 @@ class RuntimeRefResolver(BaseRefResolver):
         )
 
         if target_model is None or isinstance(target_model, Disabled):
-            ref_target_not_found(
-                self.model,
-                target_name,
-                target_package,
+            target_not_found(
+                node=self.model,
+                target_name=target_name,
+                target_kind="node",
+                target_package=target_package,
                 disabled=isinstance(target_model, Disabled),
             )
         self.validate(target_model, target_name, target_package)
@@ -803,6 +803,7 @@ class ProviderContext(ManifestContext):
             raise_compiler_error(
                 "can only load_agate_table for seeds (got a {})".format(self.model.resource_type)
             )
+        assert self.model.root_path
         path = os.path.join(self.model.root_path, self.model.original_file_path)
         column_types = self.model.config.column_types
         try:
@@ -1434,6 +1435,14 @@ class ExposureSourceResolver(BaseResolver):
         return ""
 
 
+class ExposureMetricResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        if len(args) not in (1, 2):
+            metric_invalid_args(self.model, args)
+        self.model.metrics.append(list(args))
+        return ""
+
+
 def generate_parse_exposure(
     exposure: ParsedExposure,
     config: RuntimeConfig,
@@ -1449,6 +1458,12 @@ def generate_parse_exposure(
             manifest,
         ),
         "source": ExposureSourceResolver(
+            None,
+            exposure,
+            project,
+            manifest,
+        ),
+        "metric": ExposureMetricResolver(
             None,
             exposure,
             project,

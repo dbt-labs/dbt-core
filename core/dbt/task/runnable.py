@@ -26,16 +26,17 @@ from dbt.logger import (
     ModelMetadata,
     NodeCount,
 )
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     EmptyLine,
-    PrintCancelLine,
+    LogCancelLine,
     DefaultSelector,
     NodeStart,
     NodeFinished,
     QueryCancelationUnsupported,
     ConcurrencyLine,
     EndRunResult,
+    NothingToDo,
 )
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
@@ -47,7 +48,6 @@ from dbt.exceptions import (
     NotImplementedException,
     RuntimeException,
     FailFastException,
-    warn_or_error,
 )
 
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph
@@ -57,7 +57,6 @@ import dbt.tracking
 import dbt.exceptions
 from dbt import flags
 import dbt.utils
-from dbt.ui import warning_tag
 
 RESULT_FILE_NAME = "run_results.json"
 MANIFEST_FILE_NAME = "manifest.json"
@@ -364,7 +363,7 @@ class GraphRunnableTask(ManifestTask):
                             continue
                     # if we don't have a manifest/don't have a node, print
                     # anyway.
-                    fire_event(PrintCancelLine(conn_name=conn_name))
+                    fire_event(LogCancelLine(conn_name=conn_name))
 
         pool.join()
 
@@ -414,9 +413,6 @@ class GraphRunnableTask(ManifestTask):
                 {"adapter_cache_construction_elapsed": cache_populate_time}
             )
 
-    def before_hooks(self, adapter):
-        pass
-
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
             self.populate_adapter_cache(adapter)
@@ -424,24 +420,24 @@ class GraphRunnableTask(ManifestTask):
     def after_run(self, adapter, results):
         pass
 
-    def after_hooks(self, adapter, results, elapsed):
+    def print_results_line(self, node_results, elapsed):
         pass
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
+        started = time.time()
         try:
-            self.before_hooks(adapter)
-            started = time.time()
             self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
             self.after_run(adapter, res)
-            elapsed = time.time() - started
-            self.after_hooks(adapter, res, elapsed)
-
         finally:
             adapter.cleanup_connections()
+            elapsed = time.time() - started
+            self.print_results_line(self.node_results, elapsed)
+            result = self.get_result(
+                results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
+            )
 
-        result = self.get_result(results=res, elapsed_time=elapsed, generated_at=datetime.utcnow())
         return result
 
     def write_result(self, result):
@@ -459,8 +455,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             with TextOnly():
                 fire_event(EmptyLine())
-            msg = "Nothing to do. Try checking your model configs and model specification args"
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
+            warn_or_error(NothingToDo())
             result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),

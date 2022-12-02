@@ -74,7 +74,7 @@ class PinnedPackage(BasePackage):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def install(self, project):
+    def install(self, project, renderer):
         raise NotImplementedError
 
     @abc.abstractmethod

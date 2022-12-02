@@ -113,6 +113,7 @@ def env_set_path(key: str) -> Optional[Path]:
 
 MACRO_DEBUGGING = env_set_truthy("DBT_MACRO_DEBUGGING")
 DEFER_MODE = env_set_truthy("DBT_DEFER_TO_STATE")
+FAVOR_STATE_MODE = env_set_truthy("DBT_FAVOR_STATE_STATE")
 ARTIFACT_STATE_PATH = env_set_path("DBT_ARTIFACT_STATE_PATH")
 ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
 
