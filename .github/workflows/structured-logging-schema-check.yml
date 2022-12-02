@@ -22,7 +22,7 @@ jobs:
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
