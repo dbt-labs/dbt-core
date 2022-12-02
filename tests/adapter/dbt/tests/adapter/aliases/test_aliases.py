@@ -50,7 +50,10 @@ class BaseAliases:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     def test_alias_model_name(self, project):
         results = run_dbt(["run"])
@@ -68,7 +71,10 @@ class BaseAliasErrors:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -94,7 +100,10 @@ class BaseSameAliasDifferentSchemas:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -121,14 +130,19 @@ class BaseSameAliasDifferentDatabases:
             "models": {
                 "test": {
                     "alias": "duped_alias",
-                    "model_b": {"schema": unique_schema + "_alt"},
+                    "model_b": {
+                        "schema": unique_schema + "_alt"
+                    },
                 },
             },
         }
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"cast.sql": MACROS__CAST_SQL, "expect_value.sql": MACROS__EXPECT_VALUE_SQL}
+        return {
+            "cast.sql": MACROS__CAST_SQL,
+            "expect_value.sql": MACROS__EXPECT_VALUE_SQL
+        }
 
     @pytest.fixture(scope="class")
     def models(self):

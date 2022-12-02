@@ -201,6 +201,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "flags",
         "print",
         "diff_of_two_dicts",
+        "local_md5"
     }
 )
 
