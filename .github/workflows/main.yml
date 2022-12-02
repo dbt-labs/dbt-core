@@ -39,7 +39,7 @@ jobs:
   code-quality:
     name: ${{ matrix.toxenv }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     strategy:
       fail-fast: false
@@ -74,7 +74,7 @@ jobs:
   unit:
     name: unit test / python ${{ matrix.python-version }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     strategy:
       fail-fast: false
@@ -120,7 +120,7 @@ jobs:
   build:
     name: build packages
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Check out the repository
@@ -168,7 +168,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-20.04, macos-latest, windows-latest]
         python-version: [3.7, 3.8, 3.9]
 
     steps:
