@@ -28,7 +28,8 @@ from dbt.exceptions import (
 )
 from dbt.graph import Graph
 from dbt.events.functions import fire_event
-from dbt.events.types import FoundStats, CompilingNode, WritingInjectedSQLForNode
+from dbt.events.types import FoundStats, WritingInjectedSQLForNode
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
 import dbt.tracking
@@ -356,8 +357,6 @@ class Compiler:
         if extra_context is None:
             extra_context = {}
 
-        fire_event(CompilingNode(unique_id=node.unique_id))
-
         data = node.to_dict(omit_none=True)
         data.update(
             {
@@ -511,7 +510,7 @@ class Compiler:
     def _write_node(self, node: NonSourceCompiledNode) -> ManifestNode:
         if not node.extra_ctes_injected or node.resource_type == NodeType.Snapshot:
             return node
-        fire_event(WritingInjectedSQLForNode(unique_id=node.unique_id))
+        fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
             node.compiled_path = node.write_node(

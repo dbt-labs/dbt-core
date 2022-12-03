@@ -126,12 +126,13 @@ def event_to_json(
 def event_to_dict(event: BaseEvent) -> dict:
     event_dict = dict()
     try:
-        # We could use to_json here, but it wouldn't sort the keys.
-        # The 'to_json' method just does json.dumps on the dict anyway.
         event_dict = event.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
     except AttributeError as exc:
         event_type = type(event).__name__
         raise Exception(f"type {event_type} is not serializable. {str(exc)}")
+    # We don't want an empty NodeInfo in output
+    if "node_info" in event_dict and event_dict["node_info"]["node_name"] == "":
+        del event_dict["node_info"]
     return event_dict
 
 

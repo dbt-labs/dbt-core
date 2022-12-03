@@ -43,6 +43,7 @@ from dbt.events.types import (
     NodeCompiling,
     NodeExecuting,
 )
+from dbt.events.contextvars import get_node_info
 from .printer import print_run_result_error
 
 from dbt.adapters.factory import register_adapter
@@ -312,11 +313,10 @@ class BaseRunner(metaclass=ABCMeta):
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node):
-            ctx.node._event_status["node_status"] = RunningStatus.Compiling
+            ctx.node.update_event_status(node_status=RunningStatus.Compiling)
             fire_event(
                 NodeCompiling(
                     node_info=ctx.node.node_info,
-                    unique_id=ctx.node.unique_id,
                 )
             )
             with collect_timing_info("compile") as timing_info:
@@ -328,11 +328,10 @@ class BaseRunner(metaclass=ABCMeta):
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model:
-                ctx.node._event_status["node_status"] = RunningStatus.Executing
+                ctx.node.update_event_status(node_status=RunningStatus.Executing)
                 fire_event(
                     NodeExecuting(
                         node_info=ctx.node.node_info,
-                        unique_id=ctx.node.unique_id,
                     )
                 )
                 with collect_timing_info("execute") as timing_info:
@@ -347,7 +346,11 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        fire_event(CatchableExceptionOnRun(exc=str(e), exc_info=traceback.format_exc()))
+        fire_event(
+            CatchableExceptionOnRun(
+                exc=str(e), exc_info=traceback.format_exc(), node_info=get_node_info()
+            )
+        )
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):

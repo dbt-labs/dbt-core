@@ -48,6 +48,7 @@ from dbt.events.types import (
     Rollback,
     RollbackFailed,
 )
+from dbt.events.contextvars import get_node_info
 from dbt import flags
 from dbt.utils import cast_to_str
 
@@ -169,7 +170,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         if conn.name == conn_name and conn.state == "open":
             return conn
 
-        fire_event(NewConnection(conn_name=conn_name, conn_type=self.TYPE))
+        fire_event(
+            NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info())
+        )
 
         if conn.state == "open":
             fire_event(ConnectionReused(conn_name=conn_name))
@@ -336,7 +339,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         except Exception:
             fire_event(
                 RollbackFailed(
-                    conn_name=cast_to_str(connection.name), exc_info=traceback.format_exc()
+                    conn_name=cast_to_str(connection.name),
+                    exc_info=traceback.format_exc(),
+                    node_info=get_node_info(),
                 )
             )
 
@@ -345,10 +350,16 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, "close"):
-            fire_event(ConnectionClosed(conn_name=cast_to_str(connection.name)))
+            fire_event(
+                ConnectionClosed(conn_name=cast_to_str(connection.name), node_info=get_node_info())
+            )
             connection.handle.close()
         else:
-            fire_event(ConnectionLeftOpen(conn_name=cast_to_str(connection.name)))
+            fire_event(
+                ConnectionLeftOpen(
+                    conn_name=cast_to_str(connection.name), node_info=get_node_info()
+                )
+            )
 
     @classmethod
     def _rollback(cls, connection: Connection) -> None:
@@ -359,7 +370,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 f'"{connection.name}", but it does not have one open!'
             )
 
-        fire_event(Rollback(conn_name=cast_to_str(connection.name)))
+        fire_event(Rollback(conn_name=cast_to_str(connection.name), node_info=get_node_info()))
         cls._rollback_handle(connection)
 
         connection.transaction_open = False
@@ -371,7 +382,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             return connection
 
         if connection.transaction_open and connection.handle:
-            fire_event(Rollback(conn_name=cast_to_str(connection.name)))
+            fire_event(Rollback(conn_name=cast_to_str(connection.name), node_info=get_node_info()))
             cls._rollback_handle(connection)
         connection.transaction_open = False
 

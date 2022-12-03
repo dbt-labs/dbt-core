@@ -4,6 +4,7 @@ from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import JinjaLogWarning
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType
 
 import dbt.dataclass_schema
@@ -996,7 +997,10 @@ def raise_duplicate_alias(
 
 
 def warn(msg, node=None):
-    dbt.events.functions.warn_or_error(JinjaLogWarning(msg=msg), node=node)
+    dbt.events.functions.warn_or_error(
+        JinjaLogWarning(msg=msg, node_info=get_node_info()),
+        node=node,
+    )
     return ""
 
 
