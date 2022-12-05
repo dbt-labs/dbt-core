@@ -18,6 +18,7 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import JinjaLogInfo, JinjaLogDebug
+from dbt.events.contextvars import get_node_info
 from dbt.version import __version__ as dbt_version
 
 # These modules are added to the context. Consider alternative
@@ -558,9 +559,9 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
         if info:
-            fire_event(JinjaLogInfo(msg=msg))
+            fire_event(JinjaLogInfo(msg=msg, node_info=get_node_info()))
         else:
-            fire_event(JinjaLogDebug(msg=msg))
+            fire_event(JinjaLogDebug(msg=msg, node_info=get_node_info()))
         return ""
 
     @contextproperty

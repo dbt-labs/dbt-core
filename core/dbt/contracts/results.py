@@ -11,11 +11,9 @@ from dbt.contracts.util import (
 from dbt.exceptions import InternalException
 from dbt.events.functions import fire_event
 from dbt.events.types import TimingInfoCollected
-from dbt.events.proto_types import RunResultMsg
-from dbt.logger import (
-    TimingProcessor,
-    JsonOnly,
-)
+from dbt.events.proto_types import RunResultMsg, TimingInfoMsg
+from dbt.events.contextvars import get_node_info
+from dbt.logger import TimingProcessor
 from dbt.utils import lowercase, cast_to_str, cast_to_int
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
@@ -48,7 +46,14 @@ class TimingInfo(dbtClassMixin):
     def end(self):
         self.completed_at = datetime.utcnow()
 
+    def to_msg(self):
+        timsg = TimingInfoMsg(
+            name=self.name, started_at=self.started_at, completed_at=self.completed_at
+        )
+        return timsg
 
+
+# This is a context manager
 class collect_timing_info:
     def __init__(self, name: str):
         self.timing_info = TimingInfo(name=name)
@@ -59,8 +64,13 @@ class collect_timing_info:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
-        with JsonOnly(), TimingProcessor(self.timing_info):
-            fire_event(TimingInfoCollected())
+        # Note: when legacy logger is removed, we can remove the following line
+        with TimingProcessor(self.timing_info):
+            fire_event(
+                TimingInfoCollected(
+                    timing_info=self.timing_info.to_msg(), node_info=get_node_info()
+                )
+            )
 
 
 class RunningStatus(StrEnum):
@@ -128,7 +138,8 @@ class BaseResult(dbtClassMixin):
         msg.thread = self.thread_id
         msg.execution_time = self.execution_time
         msg.num_failures = cast_to_int(self.failures)
-        # timing_info, adapter_response, message
+        msg.timing_info = [ti.to_msg() for ti in self.timing]
+        # adapter_response
         return msg
 
 

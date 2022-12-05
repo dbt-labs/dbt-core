@@ -48,6 +48,7 @@ from dbt.events.types import (
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
 )
+from dbt.events.contextvars import set_contextvars
 from dbt import flags
 from dbt.node_types import ModelLanguage, NodeType
 
@@ -201,6 +202,14 @@ class NodeInfoMixin:
         }
         node_info_msg = NodeInfo(**node_info)
         return node_info_msg
+
+    def update_event_status(self, **kwargs):
+        for k, v in kwargs.items():
+            self._event_status[k] = v
+        set_contextvars(node_info=self.node_info)
+
+    def clear_event_status(self):
+        self._event_status = dict()
 
 
 @dataclass
@@ -764,6 +773,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property

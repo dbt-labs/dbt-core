@@ -265,41 +265,46 @@ message ExposureNameDeprecation {
 // E001
 message AdapterEventDebug {
     EventInfo info = 1;
-    string name = 2;
-    string base_msg = 3;
-    repeated string args = 4;
+    NodeInfo node_info = 2;
+    string name = 3;
+    string base_msg = 4;
+    repeated string args = 5;
 }
 
 // E002
 message AdapterEventInfo {
     EventInfo info = 1;
-    string name = 2;
-    string base_msg = 3;
-    repeated string args = 4;
+    NodeInfo node_info = 2;
+    string name = 3;
+    string base_msg = 4;
+    repeated string args = 5;
 }
 
 // E003
 message AdapterEventWarning {
     EventInfo info = 1;
-    string name = 2;
-    string base_msg = 3;
-    repeated string args = 4;
+    NodeInfo node_info = 2;
+    string name = 3;
+    string base_msg = 4;
+    repeated string args = 5;
 }
 
 // E004
 message AdapterEventError {
     EventInfo info = 1;
-    string name = 2;
-    string base_msg = 3;
-    repeated string args = 4;
-    string exc_info = 5;
+    NodeInfo node_info = 2;
+    string name = 3;
+    string base_msg = 4;
+    repeated string args = 5;
+    string exc_info = 6;
 }
 
 // E005
 message NewConnection {
     EventInfo info = 1;
-    string conn_type = 2;
-    string conn_name = 3;
+    NodeInfo node_info = 2;
+    string conn_type = 3;
+    string conn_name = 4;
 }
 
 // E006
@@ -323,26 +328,30 @@ message ConnectionClosedInCleanup {
 // E009
 message RollbackFailed {
     EventInfo info = 1;
-    string conn_name = 2;
-    string exc_info = 3;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
+    string exc_info = 4;
 }
 
 // E010
 message ConnectionClosed {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E011
 message ConnectionLeftOpen {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E012
 message Rollback {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E013
@@ -364,28 +373,32 @@ message ListRelations {
 // E015
 message ConnectionUsed {
     EventInfo info = 1;
-    string conn_type = 2;
-    string conn_name = 3;
+    NodeInfo node_info = 2;
+    string conn_type = 3;
+    string conn_name = 4;
 }
 
 // E016
 message SQLQuery {
     EventInfo info = 1;
-    string conn_name = 2;
-    string sql = 3;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
+    string sql = 4;
 }
 
 // E017
 message SQLQueryStatus {
     EventInfo info = 1;
-    string status = 2;
-    float elapsed = 3;
+    NodeInfo node_info = 2;
+    string status = 3;
+    float elapsed = 4;
 }
 
 // E018
 message SQLCommit {
     EventInfo info = 1;
-    string conn_name = 2;
+    NodeInfo node_info = 2;
+    string conn_name = 3;
 }
 
 // E019
@@ -507,7 +520,8 @@ message PluginLoadError {
 // E037
 message NewConnectionOpening {
     EventInfo info = 1;
-    string connection_state = 2;
+    NodeInfo node_info = 2;
+    string connection_state = 3;
 }
 
 // E038
@@ -946,7 +960,8 @@ message NodeNotFoundOrDisabled {
 // I061
 message JinjaLogWarning {
     EventInfo info = 1;
-    string msg = 2;
+    NodeInfo node_info = 2;
+    string msg = 3;
 }
 
 // M - Deps generation
@@ -1018,13 +1033,15 @@ message SelectorReportInvalidSelector {
 // M011
 message JinjaLogInfo {
     EventInfo info = 1;
-    string msg = 2;
+    NodeInfo node_info = 2;
+    string msg = 3;
 }
 
 // M012
 message JinjaLogDebug {
     EventInfo info = 1;
-    string msg = 2;
+    NodeInfo node_info = 2;
+    string msg = 3;
 }
 
 // M013
@@ -1270,14 +1287,12 @@ message DefaultSelector {
 message NodeStart {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
 }
 
 // Q025
 message NodeFinished {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
     RunResultMsg run_result = 4;
 }
 
@@ -1292,32 +1307,27 @@ message ConcurrencyLine {
     EventInfo info = 1;
     int32 num_threads = 2;
     string target_name = 3;
+    int32 node_count = 4;
 }
 
-// Q028
-message CompilingNode {
-    EventInfo info = 1;
-    string unique_id = 2;
-}
+// Skipped Q028
 
 // Q029
 message WritingInjectedSQLForNode {
     EventInfo info = 1;
-    string unique_id = 2;
+    NodeInfo node_info = 2;
 }
 
 // Q030
 message NodeCompiling {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
 }
 
 // Q031
 message NodeExecuting {
     EventInfo info = 1;
     NodeInfo node_info = 2;
-    string unique_id = 3;
 }
 
 // Q032
@@ -1383,8 +1393,9 @@ message NoNodesSelected {
 // W002
 message CatchableExceptionOnRun {
     EventInfo info = 1;
-    string exc = 2;
-    string exc_info = 3;
+    NodeInfo node_info = 2;
+    string exc = 3;
+    string exc_info = 4;
 }
 
 // W003
@@ -1476,6 +1487,8 @@ message SystemReportReturnCode {
 // Z010
 message TimingInfoCollected {
     EventInfo info = 1;
+    NodeInfo node_info = 2;
+    TimingInfoMsg timing_info = 3;
 }
 
 // Z011

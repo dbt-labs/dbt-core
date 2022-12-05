@@ -14,9 +14,9 @@ from dbt.events.base_types import (
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 
-# The generated classes quote the included message classes, requiring the following line
+# The generated classes quote the included message classes, requiring the following lines
 from dbt.events.proto_types import EventInfo, RunResultMsg, ListOfStrings  # noqa
-from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg  # noqa
+from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg, TimingInfoMsg  # noqa
 from dbt.events import proto_types as pt
 
 from dbt.node_types import NodeType
@@ -2083,7 +2083,7 @@ class NodeStart(DebugLevel, pt.NodeStart):
         return "Q024"
 
     def message(self) -> str:
-        return f"Began running node {self.unique_id}"
+        return f"Began running node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2092,7 +2092,7 @@ class NodeFinished(DebugLevel, pt.NodeFinished):
         return "Q025"
 
     def message(self) -> str:
-        return f"Finished running node {self.unique_id}"
+        return f"Finished running node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2118,13 +2118,7 @@ class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-@dataclass
-class CompilingNode(DebugLevel, pt.CompilingNode):
-    def code(self):
-        return "Q028"
-
-    def message(self) -> str:
-        return f"Compiling {self.unique_id}"
+# Skipped Q028
 
 
 @dataclass
@@ -2133,7 +2127,7 @@ class WritingInjectedSQLForNode(DebugLevel, pt.WritingInjectedSQLForNode):
         return "Q029"
 
     def message(self) -> str:
-        return f'Writing injected SQL for node "{self.unique_id}"'
+        return f'Writing injected SQL for node "{self.node_info.unique_id}"'
 
 
 @dataclass
@@ -2142,7 +2136,7 @@ class NodeCompiling(DebugLevel, pt.NodeCompiling):
         return "Q030"
 
     def message(self) -> str:
-        return f"Began compiling node {self.unique_id}"
+        return f"Began compiling node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2151,7 +2145,7 @@ class NodeExecuting(DebugLevel, pt.NodeExecuting):
         return "Q031"
 
     def message(self) -> str:
-        return f"Began executing node {self.unique_id}"
+        return f"Began executing node {self.node_info.unique_id}"
 
 
 @dataclass
@@ -2393,7 +2387,7 @@ class TimingInfoCollected(DebugLevel, pt.TimingInfoCollected):
         return "Z010"
 
     def message(self) -> str:
-        return "finished collecting timing info"
+        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {self.timing_info.started_at} => {self.timing_info.completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message

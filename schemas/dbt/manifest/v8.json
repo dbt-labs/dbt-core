@@ -244,7 +244,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2022-11-01T18:01:47.759437Z"
+          "default": "2022-11-30T05:36:16.443035Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -255,7 +255,7 @@
               "type": "null"
             }
           ],
-          "default": "94cf6dd0-d59b-4139-bf79-70055cb9bb34"
+          "default": "ff51bdcd-689d-45b3-8dbb-5a8016382eef"
         },
         "env": {
           "type": "object",
@@ -519,7 +519,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.764821
+          "default": 1669786576.4447858
         },
         "config_call_dict": {
           "type": "object",
@@ -1066,7 +1066,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.767402
+          "default": 1669786576.445715
         },
         "config_call_dict": {
           "type": "object",
@@ -1425,7 +1425,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.768972
+          "default": 1669786576.4462662
         },
         "config_call_dict": {
           "type": "object",
@@ -1672,7 +1672,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.7706041
+          "default": 1669786576.446837
         },
         "config_call_dict": {
           "type": "object",
@@ -1929,7 +1929,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.772256
+          "default": 1669786576.447436
         },
         "config_call_dict": {
           "type": "object",
@@ -2176,7 +2176,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.7739131
+          "default": 1669786576.448
         },
         "config_call_dict": {
           "type": "object",
@@ -2419,7 +2419,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.7757251
+          "default": 1669786576.448638
         },
         "config_call_dict": {
           "type": "object",
@@ -2714,7 +2714,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.7787
+          "default": 1669786576.449645
         },
         "config_call_dict": {
           "type": "object",
@@ -3136,7 +3136,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.780513
+          "default": 1669786576.450196
         },
         "config_call_dict": {
           "type": "object",
@@ -3379,7 +3379,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.782298
+          "default": 1669786576.450721
         },
         "config_call_dict": {
           "type": "object",
@@ -3583,7 +3583,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.7835789
+          "default": 1669786576.451207
         },
         "config_call_dict": {
           "type": "object",
@@ -3795,7 +3795,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.784904
+          "default": 1669786576.451676
         },
         "config_call_dict": {
           "type": "object",
@@ -4017,7 +4017,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.78629
+          "default": 1669786576.452158
         },
         "config_call_dict": {
           "type": "object",
@@ -4229,7 +4229,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.78762
+          "default": 1669786576.452618
         },
         "config_call_dict": {
           "type": "object",
@@ -4441,7 +4441,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.789003
+          "default": 1669786576.453086
         },
         "config_call_dict": {
           "type": "object",
@@ -4649,7 +4649,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.790516
+          "default": 1669786576.4535701
         },
         "config_call_dict": {
           "type": "object",
@@ -4882,7 +4882,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.792015
+          "default": 1669786576.454068
         },
         "config_call_dict": {
           "type": "object",
@@ -5081,7 +5081,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.794882
+          "default": 1669786576.454986
         },
         "config_call_dict": {
           "type": "object",
@@ -5462,7 +5462,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.797194
+          "default": 1669786576.455929
         }
       },
       "additionalProperties": false,
@@ -5577,7 +5577,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2022-11-01T18:01:47.754102Z"
+          "default": "2022-11-30T05:36:16.440838Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -5588,7 +5588,7 @@
               "type": "null"
             }
           ],
-          "default": "94cf6dd0-d59b-4139-bf79-70055cb9bb34"
+          "default": "ff51bdcd-689d-45b3-8dbb-5a8016382eef"
         },
         "env": {
           "type": "object",
@@ -5948,7 +5948,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.798143
+          "default": 1669786576.45632
         },
         "supported_languages": {
           "oneOf": [
@@ -6199,13 +6199,23 @@
           },
           "default": []
         },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "default": []
+        },
         "created_at": {
           "type": "number",
-          "default": 1667325707.799795
+          "default": 1669786576.456964
         }
       },
       "additionalProperties": false,
-      "description": "ParsedExposure(fqn: List[str], unique_id: str, package_name: str, path: str, original_file_path: str, name: str, type: dbt.contracts.graph.unparsed.ExposureType, owner: dbt.contracts.graph.unparsed.ExposureOwner, resource_type: dbt.node_types.NodeType = <NodeType.Exposure: 'exposure'>, description: str = '', label: Optional[str] = None, maturity: Optional[dbt.contracts.graph.unparsed.MaturityType] = None, meta: Dict[str, Any] = <factory>, tags: List[str] = <factory>, config: dbt.contracts.graph.model_config.ExposureConfig = <factory>, unrendered_config: Dict[str, Any] = <factory>, url: Optional[str] = None, depends_on: dbt.contracts.graph.parsed.DependsOn = <factory>, refs: List[List[str]] = <factory>, sources: List[List[str]] = <factory>, created_at: float = <factory>)"
+      "description": "ParsedExposure(fqn: List[str], unique_id: str, package_name: str, path: str, original_file_path: str, name: str, type: dbt.contracts.graph.unparsed.ExposureType, owner: dbt.contracts.graph.unparsed.ExposureOwner, resource_type: dbt.node_types.NodeType = <NodeType.Exposure: 'exposure'>, description: str = '', label: Optional[str] = None, maturity: Optional[dbt.contracts.graph.unparsed.MaturityType] = None, meta: Dict[str, Any] = <factory>, tags: List[str] = <factory>, config: dbt.contracts.graph.model_config.ExposureConfig = <factory>, unrendered_config: Dict[str, Any] = <factory>, url: Optional[str] = None, depends_on: dbt.contracts.graph.parsed.DependsOn = <factory>, refs: List[List[str]] = <factory>, sources: List[List[str]] = <factory>, metrics: List[List[str]] = <factory>, created_at: float = <factory>)"
     },
     "ExposureOwner": {
       "type": "object",
@@ -6424,7 +6434,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1667325707.801514
+          "default": 1669786576.4576042
         }
       },
       "additionalProperties": false,
