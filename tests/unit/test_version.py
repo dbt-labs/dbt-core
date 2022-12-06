@@ -673,10 +673,16 @@ class TestGetVersionInformation:
 
 def mock_versions(mocker, installed="1.0.0", latest=None, plugins={}):
     mocker.patch("dbt.version.__version__", installed)
-    mock_plugins(mocker, plugins)
     mock_latest_versions(mocker, latest, plugins)
+    # mock_plugins must be called last to avoid erronously raising an ImportError.
+    mock_plugins(mocker, plugins)
 
 
+# NOTE: mock_plugins patches importlib.import_module, and should always be the last
+# patch to be mocked in order to avoid erronously raising an ImportError.
+# Explanation: As of Python 3.11, mock.patch indirectly uses importlib.import_module
+# and thus uses the mocked object (in this case, mock_import) instead of the real
+# implementation in subsequent mock.patch calls. Issue: https://github.com/python/cpython/issues/98771
 def mock_plugins(mocker, plugins):
     mock_find_spec = mocker.patch("importlib.util.find_spec")
     path = "/tmp/dbt/adapters"
