@@ -54,7 +54,7 @@ jobs:
       with:
         fetch-depth: 0
         ref: ${{ github.head_ref }}
-        repo: ${{ github.event.pull_request.base.repo.full_name }}
+        repository: ${{ github.event.pull_request.base.repo.full_name }}
 
     - name: set shas
       id: set_shas
