@@ -32,7 +32,7 @@ env:
 
 jobs:
   check_gen:
-    if: ${{ github.event.pull_request.base.repo.fork == false }}
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
     name: check if generation needed
     runs-on: ubuntu-latest
     outputs:
