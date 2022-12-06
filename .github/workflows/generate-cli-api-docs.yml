@@ -49,6 +49,7 @@ jobs:
         echo "env.DOCS_DIR:       ${{ env.DOCS_DIR }}"
         echo ">>>>> fork debugging"
         echo "env.isfork:         ${{ github.event.pull_request.head.repo.fork }}"
+        echo "isfork:             ${{ github.event.pull_request.base.repo.fork == false }}"
         echo "env.GHPR:           ${{ env.DOCS_DIR }}"
 
     - name: git checkout
