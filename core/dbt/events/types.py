@@ -2704,18 +2704,6 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
         return "Got an exception trying to initialize tracking"
 
 
-@dataclass
-class EventBufferFull(WarnLevel, pt.EventBufferFull):
-    def code(self):
-        return "Z045"
-
-    def message(self) -> str:
-        return (
-            "Internal logging/event buffer full."
-            "Earliest logs/events will be dropped as new ones are fired (FIFO)."
-        )
-
-
 # this is the message from the result object
 @dataclass
 class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):

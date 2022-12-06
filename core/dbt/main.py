@@ -1106,14 +1106,6 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        "--event-buffer-size",
-        dest="event_buffer_size",
-        help="""
-        Sets the max number of events to buffer in EVENT_HISTORY
-        """,
-    )
-
-    p.add_argument(
         "-q",
         "--quiet",
         action="store_true",

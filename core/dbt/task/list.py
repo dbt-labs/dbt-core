@@ -9,8 +9,7 @@ from dbt.events.functions import warn_or_error
 from dbt.events.types import NoNodesSelected
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import log_manager
-import logging
-import dbt.events.functions as event_logger
+from dbt.events.eventmgr import EventLevel
 
 
 class ListTask(GraphRunnableTask):
@@ -62,9 +61,8 @@ class ListTask(GraphRunnableTask):
         #  - mutating the initialized, not-yet-configured STDOUT event logger
         #    because it's being configured too late -- bad! TODO refactor!
         log_manager.stderr_console()
-        event_logger.STDOUT_LOG.level = logging.WARN
         super().pre_init_hook(args)
-        return logging.WARN
+        return EventLevel.WARN
 
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()

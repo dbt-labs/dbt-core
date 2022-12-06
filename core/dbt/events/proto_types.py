@@ -2160,13 +2160,6 @@ class TrackingInitializeFailure(betterproto.Message):
 
 
 @dataclass
-class EventBufferFull(betterproto.Message):
-    """Z045"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
 class RunResultWarningMessage(betterproto.Message):
     """Z046"""
 

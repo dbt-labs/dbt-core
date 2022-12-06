@@ -1,3 +1,4 @@
+from io import StringIO
 import os
 import shutil
 import yaml
@@ -87,7 +88,8 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 # will turn the logs into json, so you have to be prepared for that.
 def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
     try:
-        stringbuf = capture_stdout_logs()
+        stringbuf = StringIO()
+        capture_stdout_logs(stringbuf)
         res = run_dbt(args, expect_pass=expect_pass)
         stdout = stringbuf.getvalue()
 

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 import os
 import threading
 from datetime import datetime
@@ -43,6 +44,16 @@ def get_thread_name() -> str:
     return threading.current_thread().name
 
 
+# EventLevel is an Enum, but mixing in the 'str' type is suggested in the Python
+# documentation, and provides support for json conversion, which fails otherwise.
+class EventLevel(str, Enum):
+    DEBUG = "debug"
+    TEST = "test"
+    INFO = "info"
+    WARN = "warn"
+    ERROR = "error"
+
+
 @dataclass
 class BaseEvent:
     """BaseEvent for proto message generated python events"""
@@ -62,15 +73,15 @@ class BaseEvent:
         self.info.code = self.code()
         self.info.name = type(self).__name__
 
-    def level_tag(self) -> str:
-        return "debug"
-
     # This is here because although we know that info should always
     # exist, mypy doesn't.
-    def log_level(self) -> str:
+    def log_level(self) -> EventLevel:
         return self.info.level  # type: ignore
 
-    def message(self):
+    def level_tag(self) -> EventLevel:
+        return EventLevel.DEBUG
+
+    def message(self) -> str:
         raise Exception("message() not implemented for event")
 
 
@@ -85,32 +96,32 @@ class DynamicLevel(BaseEvent):
 class TestLevel(BaseEvent):
     __test__ = False
 
-    def level_tag(self) -> str:
-        return "test"
+    def level_tag(self) -> EventLevel:
+        return EventLevel.TEST
 
 
 @dataclass  # type: ignore[misc]
 class DebugLevel(BaseEvent):
-    def level_tag(self) -> str:
-        return "debug"
+    def level_tag(self) -> EventLevel:
+        return EventLevel.DEBUG
 
 
 @dataclass  # type: ignore[misc]
 class InfoLevel(BaseEvent):
-    def level_tag(self) -> str:
-        return "info"
+    def level_tag(self) -> EventLevel:
+        return EventLevel.INFO
 
 
 @dataclass  # type: ignore[misc]
 class WarnLevel(BaseEvent):
-    def level_tag(self) -> str:
-        return "warn"
+    def level_tag(self) -> EventLevel:
+        return EventLevel.WARN
 
 
 @dataclass  # type: ignore[misc]
 class ErrorLevel(BaseEvent):
-    def level_tag(self) -> str:
-        return "error"
+    def level_tag(self) -> EventLevel:
+        return EventLevel.ERROR
 
 
 # Included to ensure classes with str-type message members are initialized correctly.

@@ -430,7 +430,6 @@ def test_invocation_args_to_dict_in_macro_runtime_context(
     )
 
     # Comes from dbt/flags.py as they are the only values set that aren't None at default
-    assert ctx["invocation_args_dict"]["event_buffer_size"] == 100000
     assert ctx["invocation_args_dict"]["printer_width"] == 80
 
     # Comes from unit/utils.py config_from_parts_or_dicts method
