@@ -137,9 +137,17 @@ class GraphRunnableTask(ManifestTask):
 
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
-        if self.args.selector_name:
+
+        if hasattr(self.args, "selector"):
+            selector_name = self.args.selector
+        elif hasattr(self.args, "selector_name"):
+            selector_name = self.args.selector_name
+        else:
+            selector_name = None
+
+        if selector_name:
             # use pre-defined selector (--selector)
-            spec = self.config.get_selector(self.args.selector_name)
+            spec = self.config.get_selector(selector_name)
         elif not (self.selection_arg or self.exclusion_arg) and default_selector_name:
             # use pre-defined selector (--selector) with default: true
             fire_event(DefaultSelector(name=default_selector_name))
