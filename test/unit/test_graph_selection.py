@@ -130,7 +130,7 @@ def test_run_specs(include, exclude, expected):
     #  to the default value for the indirect selection parameter in 
     # dbt.cli.params.indirect_selection
     #
-    # Doing that is actually a little tricky, so I'm punting it to a new ticket GH# TODO
+    # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
     spec = graph_cli.parse_difference(include, exclude, "eager")
     selected, _ = selector.select_nodes(spec)
 

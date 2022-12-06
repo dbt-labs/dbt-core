@@ -70,7 +70,7 @@ class LinkerTest(unittest.TestCase):
         #  to the default value for the indirect selection parameter in 
         # dbt.cli.params.indirect_selection
         #
-        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH# TODO
+        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
         spec = parse_difference(include, exclude, "eager")
         return selector.get_graph_queue(spec)
 
