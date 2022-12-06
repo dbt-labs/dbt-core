@@ -1,5 +1,4 @@
 # special support for CLI argument parsing.
-from dbt import flags
 from copy import deepcopy
 import itertools
 from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
@@ -71,16 +70,11 @@ def parse_union_from_default(
 
 
 def parse_difference(
-    include: Optional[List[str]], exclude: Optional[List[str]], flags: Any = flags
+    include: Optional[List[str]], exclude: Optional[List[str]], indirect_selection: Any
 ) -> SelectionDifference:
 
     if include == ():
         include = None
-
-    if hasattr(flags, "INDIRECT_SELECTION"):
-        indirect_selection = flags.INDIRECT_SELECTION
-    else:
-        indirect_selection = IndirectSelection.Eager
 
     included = parse_union_from_default(
         include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(indirect_selection)

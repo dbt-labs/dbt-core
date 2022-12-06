@@ -137,6 +137,12 @@ class GraphRunnableTask(ManifestTask):
 
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
+        # TODO:  The "eager" string below needs to be replaced with programatic access
+        #  to the default value for the indirect selection parameter in
+        # dbt.cli.params.indirect_selection
+        #
+        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH# TODO
+        indirect_selection = getattr(self.args, "INDIRECT_SELECTION", "eager")
 
         if self.args.selector:
             # use pre-defined selector (--selector)
@@ -147,17 +153,7 @@ class GraphRunnableTask(ManifestTask):
             spec = self.config.get_selector(default_selector_name)
         else:
             # use --select and --exclude args
-
-            # N.B.  We have boith self.args and self.config.args.. I have no idea why but they appear to be interchangeable)
-            import argparse
-            from dbt.cli.flags import Flags as cli_flags
-
-            if type(self.args) == argparse.Namespace:
-                spec = parse_difference(self.selection_arg, self.exclusion_arg)
-            elif type(self.args) == cli_flags:
-                spec = parse_difference(self.selection_arg, self.exclusion_arg, self.args)
-            else:
-                raise InternalException("args are of incompatible type")
+            spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
         return spec
 
     @abstractmethod
