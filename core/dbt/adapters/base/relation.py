@@ -28,8 +28,8 @@ class BaseRelation(FakeAPIObject, Hashable):
     quote_character: str = '"'
     # Python 3.11 requires that these use default_factory instead of simple default
     # ValueError: mutable default <class 'dbt.contracts.relation.Policy'> for field include_policy is not allowed: use default_factory
-    include_policy: Policy = field(default_factory=Policy)
-    quote_policy: Policy = field(default_factory=Policy)
+    include_policy: Policy = field(default_factory=lambda: Policy())
+    quote_policy: Policy = field(default_factory=lambda: Policy())
     dbt_created: bool = False
 
     def _is_exactish_match(self, field: ComponentName, value: str) -> bool:
@@ -53,11 +53,11 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @classmethod
     def get_default_quote_policy(cls) -> Policy:
-        return cls._get_field_named("quote_policy").default_factory
+        return cls._get_field_named("quote_policy").default_factory()
 
     @classmethod
     def get_default_include_policy(cls) -> Policy:
-        return cls._get_field_named("include_policy").default_factory
+        return cls._get_field_named("include_policy").default_factory()
 
     def get(self, key, default=None):
         """Override `.get` to return a metadata object so we don't break
@@ -189,9 +189,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         source_quoting = source.quoting.to_dict(omit_none=True)
         source_quoting.pop("column", None)
         quote_policy = deep_merge(
-            cls.get_default_quote_policy()().to_dict(
-                omit_none=True
-            ),  # [mypy] error: "Policy" not callable  [operator]
+            cls.get_default_quote_policy().to_dict(omit_none=True),
             source_quoting,
             kwargs.get("quote_policy", {}),
         )
