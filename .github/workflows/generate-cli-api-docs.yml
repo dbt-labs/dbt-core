@@ -34,6 +34,7 @@ jobs:
   check_gen:
     name: check if generation needed
     runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
     outputs:
       cli_dir_changed: ${{ steps.check_cli.outputs.cli_dir_changed }}
       docs_dir_changed: ${{ steps.check_docs.outputs.docs_dir_changed }}
@@ -44,8 +45,6 @@ jobs:
         echo "env.CLI_DIR:        ${{ env.CLI_DIR }}"
         echo "env.DOCS_BUILD_DIR: ${{ env.DOCS_BUILD_DIR }}"
         echo "env.DOCS_DIR:       ${{ env.DOCS_DIR }}"
-        echo ">>>>> git log"
-        git log --pretty=oneline | head -5
 
     - name: git checkout
       uses: actions/checkout@v3
