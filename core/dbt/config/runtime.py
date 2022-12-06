@@ -8,7 +8,6 @@ from typing import Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
-from .utils import parse_cli_vars
 from dbt import flags
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet, DictDefaultEmptyStr
@@ -125,7 +124,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict(omit_none=True)
 
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
 
         return cls(
             project_name=project.project_name,
@@ -234,7 +233,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
         # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
         profile = cls.get_profile(
             project_root,
             cli_vars,
@@ -541,7 +540,7 @@ class UnsetProfileConfig(RuntimeConfig):
         :param args: The parsed command-line arguments.
         :returns RuntimeConfig: The new configuration.
         """
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
 
         return cls(
             project_name=project.project_name,

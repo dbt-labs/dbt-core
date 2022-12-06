@@ -71,6 +71,10 @@ class DebugTask(BaseTask):
             else:
                 self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
+        # N.B. parse_cli_vars is embedded into the param when using click.
+        # replace this with:
+        # cli_vars: Dict[str, Any] = getattr(args, "vars", {})
+        # when this task is refactored for click
         self.cli_vars = parse_cli_vars(getattr(self.args, "vars", "{}"))
 
         # set by _load_*

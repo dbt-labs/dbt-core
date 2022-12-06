@@ -22,7 +22,7 @@ from dbt.node_types import NodeType
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
-from .utils import normalize, config_from_parts_or_dicts
+from .utils import normalize
 
 INITIAL_ROOT = os.getcwd()
 
@@ -165,7 +165,7 @@ class BaseConfigTest(unittest.TestCase):
             },
             'empty_profile_data': {}
         }
-        self.args = Args(profiles_dir=self.profiles_dir, cli_vars='{}',
+        self.args = Args(profiles_dir=self.profiles_dir, cli_vars={},
                          version_check=True, project_dir=self.project_dir)
         self.env_override = {
             'env_value_type': 'postgres',
@@ -510,7 +510,7 @@ class TestProfileFile(BaseFileTest):
 
     def test_cli_and_env_vars(self):
         self.args.target = 'cli-and-env-vars'
-        self.args.vars = '{"cli_value_host": "cli-postgres-host"}'
+        self.args.vars = {"cli_value_host": "cli-postgres-host"}
         renderer = dbt.config.renderer.ProfileRenderer({'cli_value_host': 'cli-postgres-host'})
         with mock.patch.dict(os.environ, self.env_override):
             profile = self.from_args(renderer=renderer)
@@ -1307,7 +1307,7 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
 
     def test_cli_and_env_vars(self):
         self.args.target = 'cli-and-env-vars'
-        self.args.vars = '{"cli_value_host": "cli-postgres-host", "cli_version": "0.1.2"}'
+        self.args.vars = {"cli_value_host": "cli-postgres-host", "cli_version": "0.1.2"}
         with mock.patch.dict(os.environ, self.env_override), temp_cd(self.project_dir):
             config = dbt.config.RuntimeConfig.from_args(self.args)
 
