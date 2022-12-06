@@ -40,12 +40,16 @@ jobs:
 
     steps:
     - name: "[DEBUG] print variables"
+      env:
+        GHPR: ${{ toJson(github.event.pull_request) }}
       run: |
         echo "env.CLI_DIR:        ${{ env.CLI_DIR }}"
         echo "env.DOCS_BUILD_DIR: ${{ env.DOCS_BUILD_DIR }}"
         echo "env.DOCS_DIR:       ${{ env.DOCS_DIR }}"
         echo ">>>>> git log"
         git log --pretty=oneline | head -5
+        echo ">>>>> fork debugging"
+        echo "env.GHPR:           ${{ env.DOCS_DIR }}"
 
     - name: git checkout
       uses: actions/checkout@v3
