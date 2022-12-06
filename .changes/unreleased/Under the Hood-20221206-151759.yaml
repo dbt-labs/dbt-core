@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: '`dbt run` works with Click cli'
+time: 2022-12-06T15:17:59.765623-06:00
+custom:
+  Author: iknox-fa
+  Issue: "5551"
+  PR: "6396"
