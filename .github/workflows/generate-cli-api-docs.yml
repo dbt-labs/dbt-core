@@ -32,6 +32,7 @@ env:
 
 jobs:
   check_gen:
+    if: ${{ github.event.pull_request.base.repo.fork }} == "false"
     name: check if generation needed
     runs-on: ubuntu-latest
     outputs:
@@ -47,6 +48,7 @@ jobs:
         echo "env.DOCS_BUILD_DIR: ${{ env.DOCS_BUILD_DIR }}"
         echo "env.DOCS_DIR:       ${{ env.DOCS_DIR }}"
         echo ">>>>> fork debugging"
+        echo "env.isfork:         ${{ github.event.pull_request.head.repo.fork }}"
         echo "env.GHPR:           ${{ env.DOCS_DIR }}"
 
     - name: git checkout
