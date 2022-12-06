@@ -1,4 +1,3 @@
-import betterproto
 from colorama import Style
 from dataclasses import dataclass
 from datetime import datetime
@@ -62,17 +61,33 @@ class LoggerConfig:
 
 
 class _Logger:
-    def __init__(self):
-        self.name: str
-        self.filter: Filter
-        self.scrubber: Scrubber
-        self.level: EventLevel
-        self.event_manager: EventManager
-        self._python_logger: logging.Logger = None
-        self._stream: TextIO
+    def __init__(self, event_manager: "EventManager", config: LoggerConfig) -> None:
+        self.name: str = config.name
+        self.filter: Filter = config.filter
+        self.scrubber: Scrubber = config.scrubber
+        self.level: EventLevel = config.level
+        self.event_manager: EventManager = event_manager
+        self._python_logger: Optional[logging.Logger] = config.logger
+        self._stream: Optional[TextIO] = config.output_stream
+
+        if config.output_file_name:
+            log = logging.getLogger(config.name)
+            log.setLevel(_log_level_map[config.level])
+            handler = RotatingFileHandler(
+                filename=str(config.output_file_name),
+                encoding="utf8",
+                maxBytes=10 * 1024 * 1024,  # 10 mb
+                backupCount=5,
+            )
+
+            handler.setFormatter(logging.Formatter(fmt="%(message)s"))
+            log.handlers.clear()
+            log.addHandler(handler)
+
+            self._python_logger = log
 
     def create_line(self, e: BaseEvent) -> str:
-        ...
+        raise NotImplementedError()
 
     def write_line(self, e: BaseEvent):
         line = self.create_line(e)
@@ -91,10 +106,10 @@ class _Logger:
 
 
 class _TextLogger(_Logger):
-    def __init__(self):
-        super().__init__()
-        self.use_colors = True
-        self.use_debug_format = False
+    def __init__(self, event_manager: "EventManager", config: LoggerConfig) -> None:
+        super().__init__(event_manager, config)
+        self.use_colors = config.use_colors
+        self.use_debug_format = config.line_format == LineFormat.DebugText
 
     def create_line(self, e: BaseEvent) -> str:
         return self.create_debug_line(e) if self.use_debug_format else self.create_info_line(e)
@@ -131,63 +146,16 @@ class _TextLogger(_Logger):
 
 class _JsonLogger(_Logger):
     def create_line(self, e: BaseEvent) -> str:
-        event_dict = self.event_to_dict(e)
+        from dbt.events.functions import event_to_dict
+
+        event_dict = event_to_dict(e)
         raw_log_line = json.dumps(event_dict, sort_keys=True)
         line = self.scrubber(raw_log_line)  # type: ignore
         return line
 
-    def event_to_dict(self, event: BaseEvent) -> dict:
-        event_dict = dict()
-        try:
-            # We could use to_json here, but it wouldn't sort the keys.
-            # The 'to_json' method just does json.dumps on the dict anyway.
-            event_dict = event.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
-        except AttributeError as exc:
-            event_type = type(event).__name__
-            raise Exception(f"type {event_type} is not serializable. {str(exc)}")
-        return event_dict
-
-
-# Factory function which creates a logger from a config, hiding the gross details.
-def _create_logger(config: LoggerConfig):
-    logger: _Logger
-    if config.line_format == LineFormat.Json:
-        logger = _JsonLogger()
-    else:
-        logger = _TextLogger()
-        logger.use_colors = config.use_colors
-        logger.use_debug_format = config.line_format == LineFormat.DebugText
-
-    logger.name = config.name
-    logger.filter = config.filter
-    logger.scrubber = config.scrubber
-    logger.level = config.level
-
-    if config.logger:
-        logger._python_logger = config.logger
-    elif config.output_stream:
-        logger._stream = config.output_stream
-    else:
-        log = logging.getLogger(logger.name)
-        log.setLevel(_log_level_map[config.level])
-        handler = RotatingFileHandler(
-            filename=str(config.output_file_name),
-            encoding="utf8",
-            maxBytes=10 * 1024 * 1024,  # 10 mb
-            backupCount=5,
-        )
-
-        handler.setFormatter(logging.Formatter(fmt="%(message)s"))
-        log.handlers.clear()
-        log.addHandler(handler)
-
-        logger._python_logger = log
-
-    return logger
-
 
 class EventManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.loggers: List[_Logger] = []
         self.callbacks: List[Callable[[BaseEvent], None]] = []
         self.invocation_id: str = str(uuid4())
@@ -201,7 +169,11 @@ class EventManager:
             callback(e)
 
     def add_logger(self, config: LoggerConfig):
-        logger = _create_logger(config)
+        logger = (
+            _JsonLogger(self, config)
+            if config.line_format == LineFormat.Json
+            else _TextLogger(self, config)
+        )
         logger.event_manager = self
         self.loggers.append(logger)
 
