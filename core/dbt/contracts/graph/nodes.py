@@ -308,26 +308,26 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         # between them.
         resource_type = dct["resource_type"]
         if resource_type == "model":
-            return ParsedModelNode.from_dict(dct)
+            return ModelNode.from_dict(dct)
         elif resource_type == "analysis":
-            return ParsedAnalysisNode.from_dict(dct)
+            return AnalysisNode.from_dict(dct)
         elif resource_type == "seed":
-            return ParsedSeedNode.from_dict(dct)
+            return SeedNode.from_dict(dct)
         elif resource_type == "rpc":
-            return ParsedRPCNode.from_dict(dct)
+            return RPCNode.from_dict(dct)
         elif resource_type == "sql":
-            return ParsedSqlNode.from_dict(dct)
+            return SqlNode.from_dict(dct)
         elif resource_type == "test":
             if "test_metadata" in dct:
-                return ParsedGenericTestNode.from_dict(dct)
+                return GenericTestNode.from_dict(dct)
             else:
-                return ParsedSingularTestNode.from_dict(dct)
+                return SingularTestNode.from_dict(dct)
         elif resource_type == "operation":
-            return ParsedHookNode.from_dict(dct)
+            return HookNode.from_dict(dct)
         elif resource_type == "seed":
-            return ParsedSeedNode.from_dict(dct)
+            return SeedNode.from_dict(dct)
         elif resource_type == "snapshot":
-            return ParsedSnapshotNode.from_dict(dct)
+            return SnapshotNode.from_dict(dct)
         else:
             return cls.from_dict(dct)
 
@@ -397,29 +397,29 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
 
 @dataclass
-class ParsedAnalysisNode(ParsedNode):
+class AnalysisNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
-class ParsedHookNode(ParsedNode):
+class HookNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
-class ParsedModelNode(ParsedNode):
+class ModelNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
-class ParsedRPCNode(ParsedNode):
+class RPCNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
-class ParsedSqlNode(ParsedNode):
+class SqlNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
@@ -460,7 +460,7 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
 
 
 @dataclass
-class ParsedSeedNode(ParsedNode):
+class SeedNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
     # seeds need the root_path because the contents are not loaded initially
@@ -492,7 +492,7 @@ class HasTestMetadata(dbtClassMixin):
 
 
 @dataclass
-class ParsedSingularTestNode(ParsedNode):
+class SingularTestNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -504,7 +504,7 @@ class ParsedSingularTestNode(ParsedNode):
 
 
 @dataclass
-class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
+class GenericTestNode(ParsedNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
@@ -536,7 +536,7 @@ class IntermediateSnapshotNode(ParsedNode):
 
 
 @dataclass
-class ParsedSnapshotNode(ParsedNode):
+class SnapshotNode(ParsedNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
 
@@ -564,7 +564,7 @@ class ParsedMacroPatch(ParsedPatch):
 
 
 @dataclass
-class ParsedMacro(UnparsedBaseNode, HasUniqueID):
+class Macro(UnparsedBaseNode, HasUniqueID):
     name: str
     macro_sql: str
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
@@ -588,7 +588,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.docs = patch.docs
         self.arguments = patch.arguments
 
-    def same_contents(self, other: Optional["ParsedMacro"]) -> bool:
+    def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False
         # the only thing that makes one macro different from another with the
@@ -597,7 +597,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
 
 
 @dataclass
-class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
+class Documentation(UnparsedDocumentation, HasUniqueID):
     name: str
     block_contents: str
 
@@ -605,7 +605,7 @@ class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
     def search_name(self):
         return self.name
 
-    def same_contents(self, other: Optional["ParsedDocumentation"]) -> bool:
+    def same_contents(self, other: Optional["Documentation"]) -> bool:
         if other is None:
             return False
         # the only thing that makes one doc different from another with the
@@ -683,7 +683,7 @@ class ParsedSourceMandatory(
 
 
 @dataclass
-class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
+class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
@@ -704,7 +704,7 @@ class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
             del dct["_event_status"]
         return dct
 
-    def same_database_representation(self, other: "ParsedSourceDefinition") -> bool:
+    def same_database_representation(self, other: "SourceDefinition") -> bool:
         return (
             self.database == other.database
             and self.schema == other.schema
@@ -712,26 +712,26 @@ class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
             and True
         )
 
-    def same_quoting(self, other: "ParsedSourceDefinition") -> bool:
+    def same_quoting(self, other: "SourceDefinition") -> bool:
         return self.quoting == other.quoting
 
-    def same_freshness(self, other: "ParsedSourceDefinition") -> bool:
+    def same_freshness(self, other: "SourceDefinition") -> bool:
         return (
             self.freshness == other.freshness
             and self.loaded_at_field == other.loaded_at_field
             and True
         )
 
-    def same_external(self, other: "ParsedSourceDefinition") -> bool:
+    def same_external(self, other: "SourceDefinition") -> bool:
         return self.external == other.external
 
-    def same_config(self, old: "ParsedSourceDefinition") -> bool:
+    def same_config(self, old: "SourceDefinition") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
 
-    def same_contents(self, old: Optional["ParsedSourceDefinition"]) -> bool:
+    def same_contents(self, old: Optional["SourceDefinition"]) -> bool:
         # existing when it didn't before is a change!
         if old is None:
             return True
@@ -798,7 +798,7 @@ class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 
 
 @dataclass
-class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
+class Exposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
     type: ExposureType
     owner: ExposureOwner
@@ -825,34 +825,34 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     def search_name(self):
         return self.name
 
-    def same_depends_on(self, old: "ParsedExposure") -> bool:
+    def same_depends_on(self, old: "Exposure") -> bool:
         return set(self.depends_on.nodes) == set(old.depends_on.nodes)
 
-    def same_description(self, old: "ParsedExposure") -> bool:
+    def same_description(self, old: "Exposure") -> bool:
         return self.description == old.description
 
-    def same_label(self, old: "ParsedExposure") -> bool:
+    def same_label(self, old: "Exposure") -> bool:
         return self.label == old.label
 
-    def same_maturity(self, old: "ParsedExposure") -> bool:
+    def same_maturity(self, old: "Exposure") -> bool:
         return self.maturity == old.maturity
 
-    def same_owner(self, old: "ParsedExposure") -> bool:
+    def same_owner(self, old: "Exposure") -> bool:
         return self.owner == old.owner
 
-    def same_exposure_type(self, old: "ParsedExposure") -> bool:
+    def same_exposure_type(self, old: "Exposure") -> bool:
         return self.type == old.type
 
-    def same_url(self, old: "ParsedExposure") -> bool:
+    def same_url(self, old: "Exposure") -> bool:
         return self.url == old.url
 
-    def same_config(self, old: "ParsedExposure") -> bool:
+    def same_config(self, old: "Exposure") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
 
-    def same_contents(self, old: Optional["ParsedExposure"]) -> bool:
+    def same_contents(self, old: Optional["Exposure"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:
@@ -879,7 +879,7 @@ class MetricReference(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
+class Metric(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
     description: str
     label: str
@@ -911,43 +911,43 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def search_name(self):
         return self.name
 
-    def same_model(self, old: "ParsedMetric") -> bool:
+    def same_model(self, old: "Metric") -> bool:
         return self.model == old.model
 
-    def same_window(self, old: "ParsedMetric") -> bool:
+    def same_window(self, old: "Metric") -> bool:
         return self.window == old.window
 
-    def same_dimensions(self, old: "ParsedMetric") -> bool:
+    def same_dimensions(self, old: "Metric") -> bool:
         return self.dimensions == old.dimensions
 
-    def same_filters(self, old: "ParsedMetric") -> bool:
+    def same_filters(self, old: "Metric") -> bool:
         return self.filters == old.filters
 
-    def same_description(self, old: "ParsedMetric") -> bool:
+    def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
 
-    def same_label(self, old: "ParsedMetric") -> bool:
+    def same_label(self, old: "Metric") -> bool:
         return self.label == old.label
 
-    def same_calculation_method(self, old: "ParsedMetric") -> bool:
+    def same_calculation_method(self, old: "Metric") -> bool:
         return self.calculation_method == old.calculation_method
 
-    def same_expression(self, old: "ParsedMetric") -> bool:
+    def same_expression(self, old: "Metric") -> bool:
         return self.expression == old.expression
 
-    def same_timestamp(self, old: "ParsedMetric") -> bool:
+    def same_timestamp(self, old: "Metric") -> bool:
         return self.timestamp == old.timestamp
 
-    def same_time_grains(self, old: "ParsedMetric") -> bool:
+    def same_time_grains(self, old: "Metric") -> bool:
         return self.time_grains == old.time_grains
 
-    def same_config(self, old: "ParsedMetric") -> bool:
+    def same_config(self, old: "Metric") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
 
-    def same_contents(self, old: Optional["ParsedMetric"]) -> bool:
+    def same_contents(self, old: Optional["Metric"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:
@@ -970,39 +970,39 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
 
 
 ManifestNode = Union[
-    ParsedAnalysisNode,
-    ParsedSingularTestNode,
-    ParsedHookNode,
-    ParsedModelNode,
-    ParsedRPCNode,
-    ParsedSqlNode,
-    ParsedGenericTestNode,
-    ParsedSeedNode,
-    ParsedSnapshotNode,
+    AnalysisNode,
+    SingularTestNode,
+    HookNode,
+    ModelNode,
+    RPCNode,
+    SqlNode,
+    GenericTestNode,
+    SeedNode,
+    SnapshotNode,
 ]
 
 ResultNode = Union[
     ManifestNode,
-    ParsedSourceDefinition,
+    SourceDefinition,
 ]
 
 GraphMemberNode = Union[
     ResultNode,
-    ParsedExposure,
-    ParsedMetric,
+    Exposure,
+    Metric,
 ]
 
 
-ParsedResource = Union[
-    ParsedDocumentation,
-    ParsedMacro,
+Resource = Union[
+    Documentation,
+    Macro,
     ParsedNode,
-    ParsedExposure,
-    ParsedMetric,
-    ParsedSourceDefinition,
+    Exposure,
+    Metric,
+    SourceDefinition,
 ]
 
-ParsedTestNode = Union[
-    ParsedSingularTestNode,
-    ParsedGenericTestNode,
+TestNode = Union[
+    SingularTestNode,
+    GenericTestNode,
 ]

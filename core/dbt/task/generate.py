@@ -8,7 +8,7 @@ from dbt.dataclass_schema import ValidationError
 from .compile import CompileTask
 
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.graph.parsed import ResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,

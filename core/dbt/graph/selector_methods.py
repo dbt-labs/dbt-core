@@ -8,13 +8,13 @@ from dbt.dataclass_schema import StrEnum
 from .graph import UniqueId
 
 from dbt.contracts.graph.manifest import Manifest, WritableManifest
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     HasTestMetadata,
-    ParsedSingularTestNode,
-    ParsedExposure,
-    ParsedMetric,
-    ParsedGenericTestNode,
-    ParsedSourceDefinition,
+    SingularTestNode,
+    Exposure,
+    Metric,
+    GenericTestNode,
+    SourceDefinition,
     ResultNode,
     ManifestNode,
 )
@@ -72,7 +72,7 @@ def is_selected_node(fqn: List[str], node_selector: str):
     return True
 
 
-SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure, ParsedMetric]
+SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -95,7 +95,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 
     def source_nodes(
         self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedSourceDefinition]]:
+    ) -> Iterator[Tuple[UniqueId, SourceDefinition]]:
 
         for key, source in self.manifest.sources.items():
             unique_id = UniqueId(key)
@@ -103,9 +103,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, source
 
-    def exposure_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedExposure]]:
+    def exposure_nodes(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, Exposure]]:
 
         for key, exposure in self.manifest.exposures.items():
             unique_id = UniqueId(key)
@@ -113,9 +111,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, exposure
 
-    def metric_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedMetric]]:
+    def metric_nodes(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, Metric]]:
 
         for key, metric in self.manifest.metrics.items():
             unique_id = UniqueId(key)
@@ -141,7 +137,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
-    ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode, ParsedMetric]]]:
+    ) -> Iterator[Tuple[UniqueId, Union[Exposure, ManifestNode, Metric]]]:
         yield from chain(
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
@@ -391,9 +387,9 @@ class TestTypeSelectorMethod(SelectorMethod):
         search_type: Type
         # continue supporting 'schema' + 'data' for backwards compatibility
         if selector in ("generic", "schema"):
-            search_type = ParsedGenericTestNode
+            search_type = GenericTestNode
         elif selector in ("singular", "data"):
-            search_type = ParsedSingularTestNode
+            search_type = SingularTestNode
         else:
             raise RuntimeException(
                 f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'

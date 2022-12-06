@@ -5,7 +5,7 @@ from typing import Optional, List, Any, Dict, Sequence
 
 from dbt.dataclass_schema import dbtClassMixin
 
-from dbt.contracts.graph.parsed import ResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.results import (
     RunResult,
     RunResultsArtifact,

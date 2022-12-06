@@ -25,7 +25,7 @@ from dbt.events.types import (
 from dbt.node_types import NodeType
 
 from dbt.graph import ResourceTypeSelector
-from dbt.contracts.graph.parsed import ParsedSourceDefinition
+from dbt.contracts.graph.nodes import SourceDefinition
 
 
 RESULT_FILE_NAME = "sources.json"
@@ -141,7 +141,7 @@ class FreshnessSelector(ResourceTypeSelector):
     def node_is_match(self, node):
         if not super().node_is_match(node):
             return False
-        if not isinstance(node, ParsedSourceDefinition):
+        if not isinstance(node, SourceDefinition):
             return False
         return node.has_freshness
 

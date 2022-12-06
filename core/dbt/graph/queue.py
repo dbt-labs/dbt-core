@@ -5,10 +5,10 @@ from queue import PriorityQueue
 from typing import Dict, Set, List, Generator, Optional
 
 from .graph import UniqueId
-from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition,
-    ParsedExposure,
-    ParsedMetric,
+from dbt.contracts.graph.nodes import (
+    SourceDefinition,
+    Exposure,
+    Metric,
     GraphMemberNode,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -52,7 +52,7 @@ class GraphQueue:
         if node.resource_type != NodeType.Model:
             return False
         # must be a Model - tell mypy this won't be a Source or Exposure or Metric
-        assert not isinstance(node, (ParsedSourceDefinition, ParsedExposure, ParsedMetric))
+        assert not isinstance(node, (SourceDefinition, Exposure, Metric))
         if node.is_ephemeral:
             return False
         return True

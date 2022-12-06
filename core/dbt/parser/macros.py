@@ -4,7 +4,7 @@ import jinja2
 
 from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.contracts.graph.parsed import ParsedMacro
+from dbt.contracts.graph.nodes import Macro
 from dbt.contracts.files import FilePath, SourceFile
 from dbt.exceptions import ParsingException
 from dbt.events.functions import fire_event
@@ -16,7 +16,7 @@ from dbt.utils import MACRO_PREFIX
 from dbt import flags
 
 
-class MacroParser(BaseParser[ParsedMacro]):
+class MacroParser(BaseParser[Macro]):
     # This is only used when creating a MacroManifest separate
     # from the normal parsing flow.
     def get_paths(self) -> List[FilePath]:
@@ -32,12 +32,10 @@ class MacroParser(BaseParser[ParsedMacro]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def parse_macro(
-        self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str
-    ) -> ParsedMacro:
+    def parse_macro(self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str) -> Macro:
         unique_id = self.generate_unique_id(name)
 
-        return ParsedMacro(
+        return Macro(
             path=base_node.path,
             macro_sql=block.full_block,
             original_file_path=base_node.original_file_path,
@@ -47,7 +45,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             unique_id=unique_id,
         )
 
-    def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[ParsedMacro]:
+    def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[Macro]:
         try:
             blocks: List[jinja.BlockTag] = [
                 t

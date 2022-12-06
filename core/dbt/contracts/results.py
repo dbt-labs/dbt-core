@@ -1,5 +1,5 @@
 from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.parsed import ParsedSourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
@@ -283,7 +283,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
 
 @dataclass
 class SourceFreshnessResult(NodeResult):
-    node: ParsedSourceDefinition
+    node: SourceDefinition
     status: FreshnessStatus
     max_loaded_at: datetime
     snapshotted_at: datetime

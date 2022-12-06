@@ -126,17 +126,17 @@ These have executable SQL attached.
 Models
 - Are generated from SQL files in the 'models' directory
 - have a unique_id starting with 'model.'
-- Final object is a ParsedModelNode
+- Final object is a ModelNode
 
-Data Tests
+Singular Tests
 - Are generated from SQL files in 'tests' directory
 - have a unique_id starting with 'test.'
-- Final object is a ParsedDataTestNode
+- Final object is a SingularTestNode
 
-Schema Tests
+Generic Tests
 - Are generated from 'tests' in schema yaml files, which ultimately derive from tests in the 'macros' directory
 - Have a unique_id starting with 'test.'
-- Final object is a ParsedSchemaTestNode
+- Final object is a GenericTestNode
 - fqn is <project>.schema_test.<generated name>
 
 Hooks
@@ -146,35 +146,35 @@ Hooks
 
 Analysis
 - comes from SQL files in 'analysis' directory
-- Final object is a ParsedAnalysisNode
+- Final object is a AnalysisNode
 
 RPC Node
 - This is a "node" representing the bit of Jinja-SQL that gets passed into the run_sql or compile_sql methods. When you're using the Cloud IDE, and you're working in a scratch tab, and you just want to compile/run what you have there: it needs to be parsed and executed, but it's not actually a model/node in the project, so it's this special thing. This is a temporary addition to the running manifest.
 
-- Object is a ParsedRPCNode
+- Object is a RPCNode
 
 ### sources
 
 - comes from 'sources' sections in yaml files
-- Final object is a ParsedSourceDefinition node
+- Final object is a SourceDefinition node
 - have a unique_id starting with 'source.'
 
 ### macros
 
 - comes from SQL files in 'macros' directory
-- Final object is a ParsedMacro node
+- Final object is a Macro node
 - have a unique_id starting with 'macro.'
 - Test macros are used in schema tests
 
 ### docs
 
 - comes from .md files in 'docs' directory
-- Final object is a ParsedDocumentation
+- Final object is a Documentation
 
 ### exposures
 
 - comes from 'exposures' sections in yaml files
-- Final object is a ParsedExposure node
+- Final object is a Exposure node
 
 ## Temporary patch files
 

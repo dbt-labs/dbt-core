@@ -5,7 +5,7 @@ from dbt.clients.jinja import QueryStringGenerator
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.connection import AdapterRequiredConfig, QueryComment
-from dbt.contracts.graph.parsed import ResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import RuntimeException
 

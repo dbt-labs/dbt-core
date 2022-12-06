@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from dbt.contracts.graph.manifest import SourceFile
-from dbt.contracts.graph.parsed import ParsedSqlNode, ParsedMacro
+from dbt.contracts.graph.nodes import SqlNode, Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
@@ -21,11 +21,11 @@ class SqlBlock(FileBlock):
         return self.block_name
 
 
-class SqlBlockParser(SimpleSQLParser[ParsedSqlNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedSqlNode:
+class SqlBlockParser(SimpleSQLParser[SqlNode]):
+    def parse_from_dict(self, dct, validate=True) -> SqlNode:
         if validate:
-            ParsedSqlNode.validate(dct)
-        return ParsedSqlNode.from_dict(dct)
+            SqlNode.validate(dct)
+        return SqlNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:
@@ -42,14 +42,14 @@ class SqlBlockParser(SimpleSQLParser[ParsedSqlNode]):
 
         return os.path.join("sql", block.name)
 
-    def parse_remote(self, sql: str, name: str) -> ParsedSqlNode:
+    def parse_remote(self, sql: str, name: str) -> SqlNode:
         source_file = SourceFile.remote(sql, self.project.project_name, "sql")
         contents = SqlBlock(block_name=name, file=source_file)
         return self.parse_node(contents)
 
 
 class SqlMacroParser(MacroParser):
-    def parse_remote(self, contents) -> Iterable[ParsedMacro]:
+    def parse_remote(self, contents) -> Iterable[Macro]:
         base = UnparsedMacro(
             path="from remote system",
             original_file_path="from remote system",

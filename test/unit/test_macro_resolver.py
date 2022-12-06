@@ -1,15 +1,15 @@
 import unittest
 from unittest import mock
 
-from dbt.contracts.graph.parsed import (
-    ParsedMacro
+from dbt.contracts.graph.nodes import (
+    Macro
 )
 from dbt.context.macro_resolver import MacroResolver
 
 
 def mock_macro(name, package_name):
     macro = mock.MagicMock(
-        __class__=ParsedMacro,
+        __class__=Macro,
         package_name=package_name,
         resource_type='macro',
         unique_id=f'macro.{package_name}.{name}',

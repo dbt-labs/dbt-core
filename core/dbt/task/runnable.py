@@ -40,7 +40,7 @@ from dbt.events.types import (
 )
 from dbt.events.contextvars import log_contextvars
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedSourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
@@ -329,7 +329,7 @@ class GraphRunnableTask(ManifestTask):
         if self.manifest is None:
             raise InternalException("manifest was None in _handle_result")
 
-        if isinstance(node, ParsedSourceDefinition):
+        if isinstance(node, SourceDefinition):
             self.manifest.update_source(node)
         else:
             self.manifest.update_node(node)

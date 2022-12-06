@@ -12,10 +12,10 @@ from dbt.clients import jinja
 from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest, UniqueID
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     ParsedNode,
     ManifestNode,
-    ParsedGenericTestNode,
+    GenericTestNode,
     GraphMemberNode,
     InjectedCTE,
 )
@@ -175,7 +175,7 @@ class Compiler:
         context = generate_runtime_model_context(node, self.config, manifest)
         context.update(extra_context)
 
-        if isinstance(node, ParsedGenericTestNode):
+        if isinstance(node, GenericTestNode):
             # for test nodes, add a special keyword args value to the context
             jinja.add_rendered_test_kwargs(context, node)
 

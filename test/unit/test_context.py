@@ -10,11 +10,11 @@ from dbt.adapters import postgres
 from dbt.adapters import factory
 from dbt.adapters.base import AdapterConfig
 from dbt.clients.jinja import MacroStack
-from dbt.contracts.graph.parsed import (
-    ParsedModelNode,
+from dbt.contracts.graph.nodes import (
+    ModelNode,
     NodeConfig,
     DependsOn,
-    ParsedMacro,
+    Macro,
 )
 from dbt.config.project import VarProvider
 from dbt.context import base, target, configured, providers, docs, manifest, macros
@@ -33,7 +33,7 @@ from .mock_adapter import adapter_factory
 
 class TestVar(unittest.TestCase):
     def setUp(self):
-        self.model = ParsedModelNode(
+        self.model = ModelNode(
             alias="model_one",
             name="model_one",
             database="dbt",
@@ -273,7 +273,7 @@ PROJECT_DATA = {
 
 
 def model():
-    return ParsedModelNode(
+    return ModelNode(
         alias="model_one",
         name="model_one",
         database="dbt",
@@ -315,7 +315,7 @@ def test_base_context():
 
 def mock_macro(name, package_name):
     macro = mock.MagicMock(
-        __class__=ParsedMacro,
+        __class__=Macro,
         package_name=package_name,
         resource_type="macro",
         unique_id=f"macro.{package_name}.{name}",
@@ -335,7 +335,7 @@ def mock_manifest(config):
 
 def mock_model():
     return mock.MagicMock(
-        __class__=ParsedModelNode,
+        __class__=ModelNode,
         alias="model_one",
         name="model_one",
         database="dbt",

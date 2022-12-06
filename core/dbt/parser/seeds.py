@@ -1,17 +1,17 @@
 from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.parsed import ParsedSeedNode
+from dbt.contracts.graph.nodes import SeedNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
 
 
-class SeedParser(SimpleSQLParser[ParsedSeedNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedSeedNode:
+class SeedParser(SimpleSQLParser[SeedNode]):
+    def parse_from_dict(self, dct, validate=True) -> SeedNode:
         # seeds need the root_path because the contents are not loaded
         dct["root_path"] = self.project.project_root
         if validate:
-            ParsedSeedNode.validate(dct)
-        return ParsedSeedNode.from_dict(dct)
+            SeedNode.validate(dct)
+        return SeedNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:
@@ -21,5 +21,5 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def render_with_context(self, parsed_node: ParsedSeedNode, config: ContextConfig) -> None:
+    def render_with_context(self, parsed_node: SeedNode, config: ContextConfig) -> None:
         """Seeds don't need to do any rendering."""

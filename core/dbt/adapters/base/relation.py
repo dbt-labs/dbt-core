@@ -2,7 +2,7 @@ from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
 
-from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedNode
+from dbt.contracts.graph.nodes import SourceDefinition, ParsedNode
 from dbt.contracts.relation import (
     RelationType,
     ComponentName,
@@ -183,7 +183,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         )
 
     @classmethod
-    def create_from_source(cls: Type[Self], source: ParsedSourceDefinition, **kwargs: Any) -> Self:
+    def create_from_source(cls: Type[Self], source: SourceDefinition, **kwargs: Any) -> Self:
         source_quoting = source.quoting.to_dict(omit_none=True)
         source_quoting.pop("column", None)
         quote_policy = deep_merge(
@@ -242,13 +242,13 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from(
         cls: Type[Self],
         config: HasQuoting,
-        node: Union[ParsedNode, ParsedSourceDefinition],
+        node: Union[ParsedNode, SourceDefinition],
         **kwargs: Any,
     ) -> Self:
         if node.resource_type == NodeType.Source:
-            if not isinstance(node, ParsedSourceDefinition):
+            if not isinstance(node, SourceDefinition):
                 raise InternalException(
-                    "type mismatch, expected ParsedSourceDefinition but got {}".format(type(node))
+                    "type mismatch, expected SourceDefinition but got {}".format(type(node))
                 )
             return cls.create_from_source(node, **kwargs)
         else:

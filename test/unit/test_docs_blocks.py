@@ -3,7 +3,7 @@ import unittest
 
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedDocumentation
+from dbt.contracts.graph.nodes import Documentation
 from dbt.node_types import NodeType
 from dbt.parser import docs
 from dbt.parser.search import FileBlock
@@ -155,7 +155,7 @@ class DocumentationParserTest(unittest.TestCase):
         docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
         self.assertEqual(len(docs_values), 2)
         for result in docs_values:
-            self.assertIsInstance(result, ParsedDocumentation)
+            self.assertIsInstance(result, Documentation)
             self.assertEqual(result.package_name, 'some_package')
             self.assertEqual(result.original_file_path, self.testfile_path)
             self.assertEqual(result.resource_type, NodeType.Documentation)
@@ -179,7 +179,7 @@ class DocumentationParserTest(unittest.TestCase):
         docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
         self.assertEqual(len(docs_values), 2)
         for result in docs_values:
-            self.assertIsInstance(result, ParsedDocumentation)
+            self.assertIsInstance(result, Documentation)
         self.assertEqual(docs_values[0].name, 'snowplow_sessions')
         self.assertEqual(docs_values[1].name, 'snowplow_sessions__session_id')
 
@@ -196,7 +196,7 @@ class DocumentationParserTest(unittest.TestCase):
         docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
         self.assertEqual(len(docs_values), 2)
         for result in docs_values:
-            self.assertIsInstance(result, ParsedDocumentation)
+            self.assertIsInstance(result, Documentation)
             self.assertEqual(result.package_name, 'some_package')
             self.assertEqual(result.original_file_path, self.testfile_path)
             self.assertEqual(result.resource_type, NodeType.Documentation)

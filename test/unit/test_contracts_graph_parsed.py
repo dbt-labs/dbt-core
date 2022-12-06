@@ -13,23 +13,23 @@ from dbt.contracts.graph.model_config import (
     EmptySnapshotConfig,
     Hook,
 )
-from dbt.contracts.graph.parsed import (
-    ParsedModelNode,
+from dbt.contracts.graph.nodes import (
+    ModelNode,
     DependsOn,
     ColumnInfo,
-    ParsedGenericTestNode,
-    ParsedSnapshotNode,
+    GenericTestNode,
+    SnapshotNode,
     IntermediateSnapshotNode,
     ParsedNodePatch,
-    ParsedMacro,
-    ParsedExposure,
-    ParsedMetric,
-    ParsedSeedNode,
+    Macro,
+    Exposure,
+    Metric,
+    SeedNode,
     Docs,
     MacroDependsOn,
-    ParsedSourceDefinition,
-    ParsedDocumentation,
-    ParsedHookNode,
+    SourceDefinition,
+    Documentation,
+    HookNode,
     ExposureOwner,
     TestMetadata,
 )
@@ -172,7 +172,7 @@ def base_parsed_model_dict():
 
 @pytest.fixture
 def basic_parsed_model_object():
-    return ParsedModelNode(
+    return ModelNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -279,7 +279,7 @@ def complex_parsed_model_dict():
 
 @pytest.fixture
 def complex_parsed_model_object():
-    return ParsedModelNode(
+    return ModelNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -342,14 +342,14 @@ def test_invalid_bad_tags(base_parsed_model_dict):
     # bad top-level field
     bad_tags = base_parsed_model_dict
     bad_tags['tags'] = 100
-    assert_fails_validation(bad_tags, ParsedModelNode)
+    assert_fails_validation(bad_tags, ModelNode)
 
 
 def test_invalid_bad_materialized(base_parsed_model_dict):
     # bad nested field
     bad_materialized = base_parsed_model_dict
     bad_materialized['config']['materialized'] = None
-    assert_fails_validation(bad_materialized, ParsedModelNode)
+    assert_fails_validation(bad_materialized, ModelNode)
 
 
 unchanged_nodes = [
@@ -468,7 +468,7 @@ def basic_parsed_seed_dict():
 
 @pytest.fixture
 def basic_parsed_seed_object():
-    return ParsedSeedNode(
+    return SeedNode(
         name='foo',
         resource_type=NodeType.Seed,
         path='/root/seeds/seed.csv',
@@ -570,7 +570,7 @@ def complex_parsed_seed_dict():
 
 @pytest.fixture
 def complex_parsed_seed_object():
-    return ParsedSeedNode(
+    return SeedNode(
         name='foo',
         resource_type=NodeType.Seed,
         path='/root/seeds/seed.csv',
@@ -608,7 +608,7 @@ def test_seed_basic(basic_parsed_seed_dict, basic_parsed_seed_object, minimal_pa
     assert_symmetric(basic_parsed_seed_object, basic_parsed_seed_dict)
     assert basic_parsed_seed_object.get_materialization() == 'seed'
 
-    assert_from_dict(basic_parsed_seed_object, minimal_parsed_seed_dict, ParsedSeedNode)
+    assert_from_dict(basic_parsed_seed_object, minimal_parsed_seed_dict, SeedNode)
 
 
 def test_seed_complex(complex_parsed_seed_dict, complex_parsed_seed_object):
@@ -719,7 +719,7 @@ def basic_parsed_model_patch_object():
 
 @pytest.fixture
 def patched_model_object():
-    return ParsedModelNode(
+    return ModelNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -824,7 +824,7 @@ def base_parsed_hook_dict():
 
 @pytest.fixture
 def base_parsed_hook_object():
-    return ParsedHookNode(
+    return HookNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -911,7 +911,7 @@ def complex_parsed_hook_dict():
 
 @pytest.fixture
 def complex_parsed_hook_object():
-    return ParsedHookNode(
+    return HookNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -952,11 +952,11 @@ def test_basic_parsed_hook(minimal_parsed_hook_dict, base_parsed_hook_dict, base
     node_dict = base_parsed_hook_dict
     minimum = minimal_parsed_hook_dict
 
-    assert_symmetric(node, node_dict, ParsedHookNode)
+    assert_symmetric(node, node_dict, HookNode)
     assert node.empty is False
     assert node.is_refable is False
     assert node.get_materialization() == 'view'
-    assert_from_dict(node, minimum, ParsedHookNode)
+    assert_from_dict(node, minimum, HookNode)
     pickle.loads(pickle.dumps(node))
 
 
@@ -973,7 +973,7 @@ def test_complex_parsed_hook(complex_parsed_hook_dict, complex_parsed_hook_objec
 def test_invalid_hook_index_type(base_parsed_hook_dict):
     bad_index = base_parsed_hook_dict
     bad_index['index'] = 'a string!?'
-    assert_fails_validation(bad_index, ParsedHookNode)
+    assert_fails_validation(bad_index, HookNode)
 
 
 @pytest.fixture
@@ -1051,7 +1051,7 @@ def basic_parsed_schema_test_dict():
 
 @pytest.fixture
 def basic_parsed_schema_test_object():
-    return ParsedGenericTestNode(
+    return GenericTestNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -1143,7 +1143,7 @@ def complex_parsed_schema_test_object():
         severity='WARN'
     )
     cfg._extra.update({'extra_key': 'extra value'})
-    return ParsedGenericTestNode(
+    return GenericTestNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -1180,20 +1180,20 @@ def test_basic_schema_test_node(minimal_parsed_schema_test_dict, basic_parsed_sc
     node = basic_parsed_schema_test_object
     node_dict = basic_parsed_schema_test_dict
     minimum = minimal_parsed_schema_test_dict
-    assert_symmetric(node, node_dict, ParsedGenericTestNode)
+    assert_symmetric(node, node_dict, GenericTestNode)
 
     assert node.empty is False
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.get_materialization() == 'test'
 
-    assert_from_dict(node, minimum, ParsedGenericTestNode)
+    assert_from_dict(node, minimum, GenericTestNode)
     pickle.loads(pickle.dumps(node))
 
 
 def test_complex_schema_test_node(complex_parsed_schema_test_dict, complex_parsed_schema_test_object):
     # this tests for the presence of _extra keys
-    node = complex_parsed_schema_test_object  # ParsedGenericTestNode
+    node = complex_parsed_schema_test_object  # GenericTestNode
     assert(node.config._extra['extra_key'])
     node_dict = complex_parsed_schema_test_dict
     assert_symmetric(node, node_dict)
@@ -1204,13 +1204,13 @@ def test_invalid_column_name_type(complex_parsed_schema_test_dict):
     # bad top-level field
     bad_column_name = complex_parsed_schema_test_dict
     bad_column_name['column_name'] = {}
-    assert_fails_validation(bad_column_name, ParsedGenericTestNode)
+    assert_fails_validation(bad_column_name, GenericTestNode)
 
 
 def test_invalid_severity(complex_parsed_schema_test_dict):
     invalid_config_value = complex_parsed_schema_test_dict
     invalid_config_value['config']['severity'] = 'WERROR'
-    assert_fails_validation(invalid_config_value, ParsedGenericTestNode)
+    assert_fails_validation(invalid_config_value, GenericTestNode)
 
 
 @pytest.fixture
@@ -1494,7 +1494,7 @@ def basic_timestamp_snapshot_dict():
 
 @pytest.fixture
 def basic_timestamp_snapshot_object():
-    return ParsedSnapshotNode(
+    return SnapshotNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -1634,7 +1634,7 @@ def basic_check_snapshot_dict():
 
 @pytest.fixture
 def basic_check_snapshot_object():
-    return ParsedSnapshotNode(
+    return SnapshotNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -1719,10 +1719,10 @@ def test_timestamp_snapshot_ok(basic_timestamp_snapshot_dict, basic_timestamp_sn
     node = basic_timestamp_snapshot_object
     inter = basic_intermediate_timestamp_snapshot_object
 
-    assert_symmetric(node, node_dict, ParsedSnapshotNode)
-#   node_from_dict = ParsedSnapshotNode.from_dict(inter.to_dict(omit_none=True))
+    assert_symmetric(node, node_dict, SnapshotNode)
+#   node_from_dict = SnapshotNode.from_dict(inter.to_dict(omit_none=True))
 #   node_from_dict.created_at = 1
-    assert ParsedSnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
+    assert SnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
     assert node.is_refable is True
     assert node.is_ephemeral is False
     pickle.loads(pickle.dumps(node))
@@ -1733,8 +1733,8 @@ def test_check_snapshot_ok(basic_check_snapshot_dict, basic_check_snapshot_objec
     node = basic_check_snapshot_object
     inter = basic_intermediate_check_snapshot_object
 
-    assert_symmetric(node, node_dict, ParsedSnapshotNode)
-    assert ParsedSnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
+    assert_symmetric(node, node_dict, SnapshotNode)
+    assert SnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
     assert node.is_refable is True
     assert node.is_ephemeral is False
     pickle.loads(pickle.dumps(node))
@@ -1743,7 +1743,7 @@ def test_check_snapshot_ok(basic_check_snapshot_dict, basic_check_snapshot_objec
 def test_invalid_snapshot_bad_resource_type(basic_timestamp_snapshot_dict):
     bad_resource_type = basic_timestamp_snapshot_dict
     bad_resource_type['resource_type'] = str(NodeType.Model)
-    assert_fails_validation(bad_resource_type, ParsedSnapshotNode)
+    assert_fails_validation(bad_resource_type, SnapshotNode)
 
 
 def test_basic_parsed_node_patch(basic_parsed_model_patch_object, basic_parsed_model_patch_dict):
@@ -1792,7 +1792,7 @@ def test_populated_parsed_node_patch(populated_parsed_node_patch_dict, populated
 
 
 class TestParsedMacro(ContractTestCase):
-    ContractType = ParsedMacro
+    ContractType = Macro
 
     def _ok_dict(self):
         return {
@@ -1843,7 +1843,7 @@ class TestParsedMacro(ContractTestCase):
 
 
 class TestParsedDocumentation(ContractTestCase):
-    ContractType = ParsedDocumentation
+    ContractType = Documentation
 
     def _ok_dict(self):
         return {
@@ -1931,7 +1931,7 @@ def basic_parsed_source_definition_dict():
 
 @pytest.fixture
 def basic_parsed_source_definition_object():
-    return ParsedSourceDefinition(
+    return SourceDefinition(
         columns={},
         database='some_db',
         description='',
@@ -1990,7 +1990,7 @@ def complex_parsed_source_definition_dict():
 
 @pytest.fixture
 def complex_parsed_source_definition_object():
-    return ParsedSourceDefinition(
+    return SourceDefinition(
         columns={},
         database='some_db',
         description='',
@@ -2019,32 +2019,32 @@ def test_basic_source_definition(minimum_parsed_source_definition_dict, basic_pa
     node_dict = basic_parsed_source_definition_dict
     minimum = minimum_parsed_source_definition_dict
 
-    assert_symmetric(node, node_dict, ParsedSourceDefinition)
+    assert_symmetric(node, node_dict, SourceDefinition)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.has_freshness is False
 
-    assert_from_dict(node, minimum, ParsedSourceDefinition)
+    assert_from_dict(node, minimum, SourceDefinition)
     pickle.loads(pickle.dumps(node))
 
 
 def test_invalid_missing(minimum_parsed_source_definition_dict):
     bad_missing_name = minimum_parsed_source_definition_dict
     del bad_missing_name['name']
-    assert_fails_validation(bad_missing_name, ParsedSourceDefinition)
+    assert_fails_validation(bad_missing_name, SourceDefinition)
 
 
 def test_invalid_bad_resource_type(minimum_parsed_source_definition_dict):
     bad_resource_type = minimum_parsed_source_definition_dict
     bad_resource_type['resource_type'] = str(NodeType.Model)
-    assert_fails_validation(bad_resource_type, ParsedSourceDefinition)
+    assert_fails_validation(bad_resource_type, SourceDefinition)
 
 
 def test_complex_source_definition(complex_parsed_source_definition_dict, complex_parsed_source_definition_object):
     node = complex_parsed_source_definition_object
     node_dict = complex_parsed_source_definition_dict
-    assert_symmetric(node, node_dict, ParsedSourceDefinition)
+    assert_symmetric(node, node_dict, SourceDefinition)
 
     assert node.is_ephemeral is False
     assert node.is_refable is False
@@ -2150,7 +2150,7 @@ def basic_parsed_exposure_dict():
 
 @pytest.fixture
 def basic_parsed_exposure_object():
-    return ParsedExposure(
+    return Exposure(
         name='my_exposure',
         type=ExposureType.Notebook,
         fqn=['test', 'exposures', 'my_exposure'],
@@ -2207,7 +2207,7 @@ def complex_parsed_exposure_dict():
 
 @pytest.fixture
 def complex_parsed_exposure_object():
-    return ParsedExposure(
+    return Exposure(
         name='my_exposure',
         type=ExposureType.Analysis,
         owner=ExposureOwner(email='test@example.com', name='A Name'),
@@ -2228,13 +2228,13 @@ def complex_parsed_exposure_object():
 
 
 def test_basic_parsed_exposure(minimal_parsed_exposure_dict, basic_parsed_exposure_dict, basic_parsed_exposure_object):
-    assert_symmetric(basic_parsed_exposure_object, basic_parsed_exposure_dict, ParsedExposure)
-    assert_from_dict(basic_parsed_exposure_object, minimal_parsed_exposure_dict, ParsedExposure)
+    assert_symmetric(basic_parsed_exposure_object, basic_parsed_exposure_dict, Exposure)
+    assert_from_dict(basic_parsed_exposure_object, minimal_parsed_exposure_dict, Exposure)
     pickle.loads(pickle.dumps(basic_parsed_exposure_object))
 
 
 def test_complex_parsed_exposure(complex_parsed_exposure_dict, complex_parsed_exposure_object):
-    assert_symmetric(complex_parsed_exposure_object, complex_parsed_exposure_dict, ParsedExposure)
+    assert_symmetric(complex_parsed_exposure_object, complex_parsed_exposure_dict, Exposure)
 
 
 unchanged_parsed_exposures = [
@@ -2325,7 +2325,7 @@ def basic_parsed_metric_dict():
 
 @pytest.fixture
 def basic_parsed_metric_object():
-    return ParsedMetric(
+    return Metric(
         name='my_metric',
         calculation_method='count',
         fqn=['test', 'metrics', 'my_metric'],

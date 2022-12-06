@@ -16,7 +16,7 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import HasUniqueID, ManifestNode
+from dbt.contracts.graph.nodes import HasUniqueID, ManifestNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
