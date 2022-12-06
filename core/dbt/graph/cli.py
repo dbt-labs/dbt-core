@@ -71,11 +71,19 @@ def parse_union_from_default(
 
 
 def parse_difference(
-    include: Optional[List[str]], exclude: Optional[List[str]]
+    include: Optional[List[str]], exclude: Optional[List[str]], flags: Any = flags
 ) -> SelectionDifference:
 
+    if include == ():
+        include = None
+
+    if hasattr(flags, "INDIRECT_SELECTION"):
+        indirect_selection = flags.INDIRECT_SELECTION
+    else:
+        indirect_selection = IndirectSelection.Eager
+
     included = parse_union_from_default(
-        include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
+        include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(indirect_selection)
     )
     excluded = parse_union_from_default(
         exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection.Eager

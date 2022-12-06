@@ -154,7 +154,17 @@ class GraphRunnableTask(ManifestTask):
             spec = self.config.get_selector(default_selector_name)
         else:
             # use --select and --exclude args
-            spec = parse_difference(self.selection_arg, self.exclusion_arg)
+
+            # N.B.  We have boith self.args and self.config.args.. I have no idea why but they appear to be interchangeable)
+            import argparse
+            from dbt.cli.flags import Flags as cli_flags
+
+            if type(self.args) == argparse.Namespace:
+                spec = parse_difference(self.selection_arg, self.exclusion_arg)
+            elif type(self.args) == cli_flags:
+                spec = parse_difference(self.selection_arg, self.exclusion_arg, self.args)
+            else:
+                raise InternalException("args are of incompatible type")
         return spec
 
     @abstractmethod
