@@ -18,16 +18,6 @@ from dbt.task.run import RunTask
 from typing import Optional
 
 
-def make_context(args, command) -> Optional[click.Context]:
-    ctx = command.make_context(command.name, args)
-
-    ctx.invoked_subcommand = ctx.protected_args[0] if ctx.protected_args else None
-    return ctx
-
-def handle_and_check(args):
-    ctx = make_context(args, cli)
-    res, success = cli.invoke(ctx)
-    return res, success
 
 def cli_runner():
     # Alias "list" to "ls"
