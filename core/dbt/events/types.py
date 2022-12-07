@@ -1914,6 +1914,7 @@ class LogTestResult(DynamicLevel, pt.LogTestResult):
     @classmethod
     def status_to_level(cls, status):
         # The statuses come from TestStatus
+        # TODO should this return EventLevel enum instead?
         level_lookup = {
             "fail": "error",
             "pass": "info",
@@ -2043,6 +2044,7 @@ class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
     @classmethod
     def status_to_level(cls, status):
         # The statuses come from FreshnessStatus
+        # TODO should this return EventLevel enum instead?
         level_lookup = {
             "runtime error": "error",
             "pass": "info",
