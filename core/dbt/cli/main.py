@@ -13,19 +13,7 @@ from dbt.profiler import profiler
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
 from dbt.tracking import initialize_from_flags, track_run
-from typing import Optional
 
-
-def make_context(args, command) -> Optional[click.Context]:
-    ctx = command.make_context(command.name, args)
-
-    ctx.invoked_subcommand = ctx.protected_args[0] if ctx.protected_args else None
-    return ctx
-
-def handle_and_check(args):
-    ctx = make_context(args, cli)
-    res, success = cli.invoke(ctx)
-    return res, success
 
 def cli_runner():
     # Alias "list" to "ls"
@@ -340,7 +328,6 @@ def parse(ctx, **kwargs):
 @p.version_check
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-<<<<<<< HEAD
 
     config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
     task = RunTask(ctx.obj["flags"], config)
@@ -348,11 +335,6 @@ def run(ctx, **kwargs):
     results = task.run()
     success = task.interpret_results(results)
     return results, success
-=======
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
-    return None, True
->>>>>>> 951dd851f (first pass: dbt.cli.main.handle_and_check)
 
 
 # dbt run operation
