@@ -128,7 +128,7 @@ class _TextLogger(_Logger):
             log_line = f"\n\n{separator} {datetime.utcnow()} | {self.event_manager.invocation_id} {separator}\n"
         ts: str = datetime.utcnow().strftime("%H:%M:%S.%f")
         scrubbed_msg: str = self.scrubber(e.message())  # type: ignore
-        log_line += f"{self._get_color_tag()}{ts} [{e.log_level():<5}]{self._get_thread_name()} {scrubbed_msg}"
+        log_line += f"{self._get_color_tag()}{ts} [{e.log_level().value:<5}]{self._get_thread_name()} {scrubbed_msg}"
         return log_line
 
     def _get_color_tag(self) -> str:
