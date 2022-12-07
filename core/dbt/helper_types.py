@@ -80,15 +80,12 @@ class NVEnum(StrEnum):
     def __eq__(self, other):
         return isinstance(other, NVEnum)
 
-    def __call__(self):
-        return self.novalue
-
 
 @dataclass
 class NoValue(dbtClassMixin):
     """Sometimes, you want a way to say none that isn't None"""
 
-    novalue: NVEnum = field(default_factory=NVEnum.novalue)
+    novalue: NVEnum = field(default_factory=lambda: NVEnum.novalue)
 
 
 dbtClassMixin.register_field_encoders(
