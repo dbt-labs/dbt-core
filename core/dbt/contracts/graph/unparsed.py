@@ -518,6 +518,12 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
 
+        if data.get("timestamp") is None and data.get("time_grains") is not None:
+            raise ValidationError(f"The metric '{data['name']} has time_grains defined but is missing a timestamp dimension.")
+
+        if data.get("timestamp") is None and data.get("window") is not None:
+            raise ValidationError(f"The metric '{data['name']} has a window defined but is missing a timestamp dimension.")
+
         if data.get("model") is None and data.get("calculation_method") != "derived":
             raise ValidationError("Non-derived metrics require a 'model' property")
 
