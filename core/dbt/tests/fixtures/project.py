@@ -6,7 +6,7 @@ from datetime import datetime
 import warnings
 import yaml
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, DatabaseException
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
@@ -494,10 +494,10 @@ def project(
     # a `load_dependencies` method.
     # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
     # the macros have errors (which is what we're actually testing for...) they end up
-    # throwing CompilationExceptions
+    # throwing CompilationExceptions or DatabaseExceptions
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError, CompilationException):
+    except (KeyError, AttributeError, CompilationException, DatabaseException):
         pass
     os.chdir(orig_cwd)
     cleanup_event_logger()
