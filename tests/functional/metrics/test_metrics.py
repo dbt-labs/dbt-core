@@ -49,6 +49,7 @@ class TestSimpleMetrics:
         ]
         assert metric_ids == expected_metric_ids
 
+
 class TestSimpleMetricsNoTimestamp:
     @pytest.fixture(scope="class")
     def models(self):
@@ -56,6 +57,7 @@ class TestSimpleMetricsNoTimestamp:
             "people_metrics.yml": metric_without_timestamp_or_timegrains_yml,
             "people.sql": models_people_sql,
         }
+        
     def test_simple_metric_no_timestamp(
         self,
         project,
@@ -72,7 +74,7 @@ class TestSimpleMetricsNoTimestamp:
 
         # make sure the 'expression' metric depends on the two upstream metrics
         metric_test = manifest.metrics["metric.test.number_of_people"]
-        assert metric_test.timestamp == None
+        assert metric_test.timestamp is None
 
 
 class TestInvalidRefMetrics:
@@ -283,6 +285,7 @@ class TestDerivedMetricOldAttrNames(TestDerivedMetric):
             "downstream_model.sql": downstream_model_sql,
         }
 
+
 class TestInvalidTimestampTimeGrainsMetrics:
     @pytest.fixture(scope="class")
     def models(self):
@@ -300,6 +303,7 @@ class TestInvalidTimestampTimeGrainsMetrics:
         # initial run
         with pytest.raises(ParsingException):
             run_dbt(["run"])
+
 
 class TestInvalidTimestampWindowMetrics:
     @pytest.fixture(scope="class")
