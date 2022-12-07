@@ -54,7 +54,7 @@ setup(
         "hologram>=0.0.14,<=0.0.15",
         "isodate>=0.6,<0.7",
         "logbook>=1.5,<1.6",
-        "mashumaro[msgpack]==3.1.1",
+        "mashumaro[msgpack]==3.2",
         "minimal-snowplow-tracker==0.0.2",
         "networkx>=2.3,<2.8.1;python_version<'3.8'",
         "networkx>=2.3,<3;python_version>='3.8'",
