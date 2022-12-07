@@ -1,15 +1,15 @@
-from dbt.contracts.graph.parsed import ParsedSingularTestNode
+from dbt.contracts.graph.nodes import SingularTestNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
 from dbt.utils import get_pseudo_test_path
 
 
-class SingularTestParser(SimpleSQLParser[ParsedSingularTestNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedSingularTestNode:
+class SingularTestParser(SimpleSQLParser[SingularTestNode]):
+    def parse_from_dict(self, dct, validate=True) -> SingularTestNode:
         if validate:
-            ParsedSingularTestNode.validate(dct)
-        return ParsedSingularTestNode.from_dict(dct)
+            SingularTestNode.validate(dct)
+        return SingularTestNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:

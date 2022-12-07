@@ -28,17 +28,14 @@ from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.manifest import Manifest, Disabled
-from dbt.contracts.graph.compiled import (
-    CompiledResource,
-    CompiledSeedNode,
+from dbt.contracts.graph.nodes import (
+    Macro,
+    Exposure,
+    Metric,
+    SeedNode,
+    SourceDefinition,
+    Resource,
     ManifestNode,
-)
-from dbt.contracts.graph.parsed import (
-    ParsedMacro,
-    ParsedExposure,
-    ParsedMetric,
-    ParsedSeedNode,
-    ParsedSourceDefinition,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.events.functions import get_metadata_vars
@@ -512,7 +509,7 @@ class OperationRefResolver(RuntimeRefResolver):
     def create_relation(self, target_model: ManifestNode, name: str) -> RelationProxy:
         if target_model.is_ephemeral_model:
             # In operations, we can't ref() ephemeral nodes, because
-            # ParsedMacros do not support set_cte
+            # Macros do not support set_cte
             raise_compiler_error(
                 "Operations can not ref() ephemeral nodes, but {} is ephemeral".format(
                     target_model.name
@@ -584,9 +581,9 @@ class ModelConfiguredVar(Var):
         self,
         context: Dict[str, Any],
         config: RuntimeConfig,
-        node: CompiledResource,
+        node: Resource,
     ) -> None:
-        self._node: CompiledResource
+        self._node: Resource
         self._config: RuntimeConfig = config
         super().__init__(context, config.cli_vars, node=node)
 
@@ -690,7 +687,7 @@ class ProviderContext(ManifestContext):
             raise InternalException(f"Invalid provider given to context: {provider}")
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
-        self.model: Union[ParsedMacro, ManifestNode] = model
+        self.model: Union[Macro, ManifestNode] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
         self.context_config: Optional[ContextConfig] = context_config
@@ -779,7 +776,7 @@ class ProviderContext(ManifestContext):
     @contextmember
     def write(self, payload: str) -> str:
         # macros/source defs aren't 'writeable'.
-        if isinstance(self.model, (ParsedMacro, ParsedSourceDefinition)):
+        if isinstance(self.model, (Macro, SourceDefinition)):
             raise_compiler_error('cannot "write" macros or sources')
         self.model.build_path = self.model.write_node(self.config.target_path, "run", payload)
         return ""
@@ -799,7 +796,7 @@ class ProviderContext(ManifestContext):
 
     @contextmember
     def load_agate_table(self) -> agate.Table:
-        if not isinstance(self.model, (ParsedSeedNode, CompiledSeedNode)):
+        if not isinstance(self.model, SeedNode):
             raise_compiler_error(
                 "can only load_agate_table for seeds (got a {})".format(self.model.resource_type)
             )
@@ -1220,7 +1217,13 @@ class ProviderContext(ManifestContext):
         if return_value is not None:
             # Save the env_var value in the manifest and the var name in the source_file.
             # If this is compiling, do not save because it's irrelevant to parsing.
-            if self.model and not hasattr(self.model, "compiled"):
+            compiling = (
+                True
+                if hasattr(self.model, "compiled")
+                and getattr(self.model, "compiled", False) is True
+                else False
+            )
+            if self.model and not compiling:
                 # If the environment variable is set from a default, store a string indicating
                 # that so we can skip partial parsing.  Otherwise the file will be scheduled for
                 # reparsing. If the default changes, the file will have been updated and therefore
@@ -1275,7 +1278,7 @@ class MacroContext(ProviderContext):
 
     def __init__(
         self,
-        model: ParsedMacro,
+        model: Macro,
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
@@ -1390,7 +1393,7 @@ def generate_parser_model_context(
 
 
 def generate_generate_name_macro_context(
-    macro: ParsedMacro,
+    macro: Macro,
     config: RuntimeConfig,
     manifest: Manifest,
 ) -> Dict[str, Any]:
@@ -1408,7 +1411,7 @@ def generate_runtime_model_context(
 
 
 def generate_runtime_macro_context(
-    macro: ParsedMacro,
+    macro: Macro,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: Optional[str],
@@ -1444,7 +1447,7 @@ class ExposureMetricResolver(BaseResolver):
 
 
 def generate_parse_exposure(
-    exposure: ParsedExposure,
+    exposure: Exposure,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: str,
@@ -1494,7 +1497,7 @@ class MetricRefResolver(BaseResolver):
 
 
 def generate_parse_metrics(
-    metric: ParsedMetric,
+    metric: Metric,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: str,

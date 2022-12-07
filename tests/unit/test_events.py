@@ -19,7 +19,7 @@ import dbt.events.functions as event_funcs
 import dbt.flags as flags
 import inspect
 import json
-from dbt.contracts.graph.parsed import ParsedModelNode, NodeConfig, DependsOn
+from dbt.contracts.graph.nodes import ModelNode, NodeConfig, DependsOn
 from dbt.contracts.files import FileHash
 from mashumaro.types import SerializableType
 from typing import Generic, TypeVar, Dict
@@ -103,7 +103,7 @@ class TestEventCodes:
 
 
 def MockNode():
-    return ParsedModelNode(
+    return ModelNode(
         alias="model_one",
         name="model_one",
         database="dbt",

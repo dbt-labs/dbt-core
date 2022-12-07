@@ -12,7 +12,7 @@ from dbt.exceptions import (
     InternalException,
     InvalidSelectorException,
 )
-from dbt.contracts.graph.compiled import GraphMemberNode
+from dbt.contracts.graph.nodes import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.state import PreviousState
 

@@ -13,7 +13,7 @@ from typing import (
 )
 
 from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
-from dbt.contracts.graph.parsed import UnpatchedSourceDefinition
+from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
     TestDef,
     UnparsedAnalysisUpdate,

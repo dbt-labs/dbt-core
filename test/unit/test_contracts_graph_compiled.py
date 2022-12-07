@@ -2,10 +2,10 @@ import pickle
 import pytest
 
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.compiled import (
-    CompiledModelNode, InjectedCTE, CompiledGenericTestNode
+from dbt.contracts.graph.nodes import (
+    ModelNode, InjectedCTE, GenericTestNode
 )
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     DependsOn, NodeConfig, TestConfig, TestMetadata, ColumnInfo
 )
 from dbt.node_types import NodeType
@@ -22,7 +22,7 @@ from .utils import (
 
 @pytest.fixture
 def basic_uncompiled_model():
-    return CompiledModelNode(
+    return ModelNode(
         package_name='test',
         path='/root/models/foo.sql',
         original_file_path='models/foo.sql',
@@ -54,7 +54,7 @@ def basic_uncompiled_model():
 
 @pytest.fixture
 def basic_compiled_model():
-    return CompiledModelNode(
+    return ModelNode(
         package_name='test',
         path='/root/models/foo.sql',
         original_file_path='models/foo.sql',
@@ -210,19 +210,19 @@ def basic_compiled_dict():
 def test_basic_uncompiled_model(minimal_uncompiled_dict, basic_uncompiled_dict, basic_uncompiled_model):
     node_dict = basic_uncompiled_dict
     node = basic_uncompiled_model
-    assert_symmetric(node, node_dict, CompiledModelNode)
+    assert_symmetric(node, node_dict, ModelNode)
     assert node.empty is False
     assert node.is_refable is True
     assert node.is_ephemeral is False
 
-    assert_from_dict(node, minimal_uncompiled_dict, CompiledModelNode)
+    assert_from_dict(node, minimal_uncompiled_dict, ModelNode)
     pickle.loads(pickle.dumps(node))
 
 
 def test_basic_compiled_model(basic_compiled_dict, basic_compiled_model):
     node_dict = basic_compiled_dict
     node = basic_compiled_model
-    assert_symmetric(node, node_dict, CompiledModelNode)
+    assert_symmetric(node, node_dict, ModelNode)
     assert node.empty is False
     assert node.is_refable is True
     assert node.is_ephemeral is False
@@ -231,13 +231,13 @@ def test_basic_compiled_model(basic_compiled_dict, basic_compiled_model):
 def test_invalid_extra_fields_model(minimal_uncompiled_dict):
     bad_extra = minimal_uncompiled_dict
     bad_extra['notvalid'] = 'nope'
-    assert_fails_validation(bad_extra, CompiledModelNode)
+    assert_fails_validation(bad_extra, ModelNode)
 
 
 def test_invalid_bad_type_model(minimal_uncompiled_dict):
     bad_type = minimal_uncompiled_dict
     bad_type['resource_type'] = str(NodeType.Macro)
-    assert_fails_validation(bad_type, CompiledModelNode)
+    assert_fails_validation(bad_type, ModelNode)
 
 
 unchanged_compiled_models = [
@@ -346,7 +346,7 @@ def minimal_schema_test_dict():
 
 @pytest.fixture
 def basic_uncompiled_schema_test_node():
-    return CompiledGenericTestNode(
+    return GenericTestNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -379,7 +379,7 @@ def basic_uncompiled_schema_test_node():
 
 @pytest.fixture
 def basic_compiled_schema_test_node():
-    return CompiledGenericTestNode(
+    return GenericTestNode(
         package_name='test',
         path='/root/x/path.sql',
         original_file_path='/root/path.sql',
@@ -522,19 +522,19 @@ def test_basic_uncompiled_schema_test(basic_uncompiled_schema_test_node, basic_u
     node = basic_uncompiled_schema_test_node
     node_dict = basic_uncompiled_schema_test_dict
     minimum = minimal_schema_test_dict
-    assert_symmetric(node, node_dict, CompiledGenericTestNode)
+    assert_symmetric(node, node_dict, GenericTestNode)
     assert node.empty is False
     assert node.is_refable is False
     assert node.is_ephemeral is False
 
-    assert_from_dict(node, minimum, CompiledGenericTestNode)
+    assert_from_dict(node, minimum, GenericTestNode)
 
 
 def test_basic_compiled_schema_test(basic_compiled_schema_test_node, basic_compiled_schema_test_dict):
     node = basic_compiled_schema_test_node
     node_dict = basic_compiled_schema_test_dict
 
-    assert_symmetric(node, node_dict, CompiledGenericTestNode)
+    assert_symmetric(node, node_dict, GenericTestNode)
     assert node.empty is False
     assert node.is_refable is False
     assert node.is_ephemeral is False
@@ -543,13 +543,13 @@ def test_basic_compiled_schema_test(basic_compiled_schema_test_node, basic_compi
 def test_invalid_extra_schema_test_fields(minimal_schema_test_dict):
     bad_extra = minimal_schema_test_dict
     bad_extra['extra'] = 'extra value'
-    assert_fails_validation(bad_extra, CompiledGenericTestNode)
+    assert_fails_validation(bad_extra, GenericTestNode)
 
 
 def test_invalid_resource_type_schema_test(minimal_schema_test_dict):
     bad_type = minimal_schema_test_dict
     bad_type['resource_type'] = str(NodeType.Model)
-    assert_fails_validation(bad_type, CompiledGenericTestNode)
+    assert_fails_validation(bad_type, GenericTestNode)
 
 
 unchanged_schema_tests = [

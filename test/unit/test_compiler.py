@@ -6,8 +6,7 @@ import dbt.compilation
 from dbt.adapters.postgres import Plugin
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import NodeConfig, DependsOn, ParsedModelNode
-from dbt.contracts.graph.compiled import CompiledModelNode, InjectedCTE
+from dbt.contracts.graph.nodes import NodeConfig, DependsOn, ModelNode, InjectedCTE
 from dbt.node_types import NodeType
 
 from datetime import datetime
@@ -86,7 +85,7 @@ class CompilerTest(unittest.TestCase):
         manifest = Manifest(
             macros={},
             nodes={
-                'model.root.view': ParsedModelNode(
+                'model.root.view': ModelNode(
                     name='view',
                     database='dbt',
                     schema='analytics',
@@ -102,7 +101,7 @@ class CompilerTest(unittest.TestCase):
                     raw_code='with cte as (select * from something_else) select * from {{ref("ephemeral")}}',
                     checksum=FileHash.from_contents(''),
                 ),
-                'model.root.ephemeral': ParsedModelNode(
+                'model.root.ephemeral': ModelNode(
                     name='ephemeral',
                     database='dbt',
                     schema='analytics',
@@ -148,7 +147,7 @@ class CompilerTest(unittest.TestCase):
         manifest = Manifest(
             macros={},
             nodes={
-                'model.root.view': ParsedModelNode(
+                'model.root.view': ModelNode(
                     name='view',
                     database='dbt',
                     schema='analytics',
@@ -165,7 +164,7 @@ class CompilerTest(unittest.TestCase):
                              'select * from source_table'),
                     checksum=FileHash.from_contents(''),
                 ),
-                'model.root.view_no_cte': ParsedModelNode(
+                'model.root.view_no_cte': ModelNode(
                     name='view_no_cte',
                     database='dbt',
                     schema='analytics',
@@ -224,7 +223,7 @@ class CompilerTest(unittest.TestCase):
         manifest = Manifest(
             macros={},
             nodes={
-                'model.root.view': ParsedModelNode(
+                'model.root.view': ModelNode(
                     name='view',
                     database='dbt',
                     schema='analytics',
@@ -240,7 +239,7 @@ class CompilerTest(unittest.TestCase):
                     raw_code='select * from {{ref("ephemeral")}}',
                     checksum=FileHash.from_contents(''),
                 ),
-                'model.root.ephemeral': ParsedModelNode(
+                'model.root.ephemeral': ModelNode(
                     name='ephemeral',
                     database='dbt',
                     schema='analytics',
@@ -284,7 +283,7 @@ class CompilerTest(unittest.TestCase):
 
     def test__prepend_ctes__cte_not_compiled(self):
         ephemeral_config = self.model_config.replace(materialized='ephemeral')
-        parsed_ephemeral = ParsedModelNode(
+        parsed_ephemeral = ModelNode(
             name='ephemeral',
             database='dbt',
             schema='analytics',
@@ -304,7 +303,7 @@ class CompilerTest(unittest.TestCase):
             raw_code='select * from source_table',
             checksum=FileHash.from_contents(''),
         )
-        compiled_ephemeral = CompiledModelNode(
+        compiled_ephemeral = ModelNode(
             name='ephemeral',
             database='dbt',
             schema='analytics',
@@ -331,7 +330,7 @@ class CompilerTest(unittest.TestCase):
         manifest = Manifest(
             macros={},
             nodes={
-                'model.root.view': CompiledModelNode(
+                'model.root.view': ModelNode(
                     name='view',
                     database='dbt',
                     schema='analytics',
@@ -400,7 +399,7 @@ class CompilerTest(unittest.TestCase):
         manifest = Manifest(
             macros={},
             nodes={
-                'model.root.view': ParsedModelNode(
+                'model.root.view': ModelNode(
                     name='view',
                     database='dbt',
                     schema='analytics',
@@ -417,7 +416,7 @@ class CompilerTest(unittest.TestCase):
                     checksum=FileHash.from_contents(''),
 
                 ),
-                'model.root.ephemeral': ParsedModelNode(
+                'model.root.ephemeral': ModelNode(
                     name='ephemeral',
                     database='dbt',
                     schema='analytics',
@@ -433,7 +432,7 @@ class CompilerTest(unittest.TestCase):
                     raw_code='select * from {{ref("ephemeral_level_two")}}',
                     checksum=FileHash.from_contents(''),
                 ),
-                'model.root.ephemeral_level_two': ParsedModelNode(
+                'model.root.ephemeral_level_two': ModelNode(
                     name='ephemeral_level_two',
                     database='dbt',
                     schema='analytics',
@@ -488,7 +487,7 @@ class CompilerTest(unittest.TestCase):
         manifest = Manifest(
             macros={},
             nodes={
-                'model.root.view': ParsedModelNode(
+                'model.root.view': ModelNode(
                     name='view',
                     database='dbt',
                     schema='analytics',
@@ -504,7 +503,7 @@ class CompilerTest(unittest.TestCase):
                     raw_code='select * from {{ref("ephemeral")}}',
                     checksum=FileHash.from_contents(''),
                 ),
-                'model.root.inner_ephemeral': ParsedModelNode(
+                'model.root.inner_ephemeral': ModelNode(
                     name='inner_ephemeral',
                     database='dbt',
                     schema='analytics',
@@ -520,7 +519,7 @@ class CompilerTest(unittest.TestCase):
                     raw_code='select * from source_table',
                     checksum=FileHash.from_contents(''),
                 ),
-                 'model.root.ephemeral': ParsedModelNode(
+                 'model.root.ephemeral': ModelNode(
                     name='ephemeral',
                     database='dbt',
                     schema='analytics',

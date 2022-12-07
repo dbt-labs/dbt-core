@@ -4,9 +4,8 @@ import jinja2
 
 from dbt.exceptions import ParsingException
 from dbt.clients import jinja
-from dbt.contracts.graph.parsed import ParsedGenericTestNode
+from dbt.contracts.graph.nodes import GenericTestNode, Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.contracts.files import SourceFile
 from dbt.events.functions import fire_event
 from dbt.events.types import GenericTestFileParse
@@ -17,7 +16,7 @@ from dbt.utils import MACRO_PREFIX
 from dbt import flags
 
 
-class GenericTestParser(BaseParser[ParsedGenericTestNode]):
+class GenericTestParser(BaseParser[GenericTestNode]):
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Macro
@@ -28,10 +27,10 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
 
     def parse_generic_test(
         self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str
-    ) -> ParsedMacro:
+    ) -> Macro:
         unique_id = self.generate_unique_id(name)
 
-        return ParsedMacro(
+        return Macro(
             path=base_node.path,
             macro_sql=block.full_block,
             original_file_path=base_node.original_file_path,
@@ -41,7 +40,7 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             unique_id=unique_id,
         )
 
-    def parse_unparsed_generic_test(self, base_node: UnparsedMacro) -> Iterable[ParsedMacro]:
+    def parse_unparsed_generic_test(self, base_node: UnparsedMacro) -> Iterable[Macro]:
         try:
             blocks: List[jinja.BlockTag] = [
                 t

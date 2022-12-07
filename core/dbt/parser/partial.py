@@ -873,7 +873,7 @@ class PartialParsing:
         source_name = source_dict["name"]
         # There may be multiple sources for each source dict, since
         # there will be a separate source node for each table.
-        # ParsedSourceDefinition name = table name, dict name is source_name
+        # SourceDefinition name = table name, dict name is source_name
         sources = schema_file.sources.copy()
         for unique_id in sources:
             if unique_id in self.saved_manifest.sources:

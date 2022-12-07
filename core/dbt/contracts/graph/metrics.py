@@ -12,7 +12,7 @@ class MetricReference(object):
 
 class ResolvedMetricReference(MetricReference):
     """
-    Simple proxy over a ParsedMetric which delegates property
+    Simple proxy over a Metric which delegates property
     lookups to the underlying node. Also adds helper functions
     for working with metrics (ie. __str__ and templating functions)
     """

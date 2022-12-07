@@ -25,8 +25,7 @@ from dbt.utils import (
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
-from dbt.contracts.graph.compiled import CompiledGenericTestNode
-from dbt.contracts.graph.parsed import ParsedGenericTestNode
+from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
     InternalException,
@@ -620,7 +619,7 @@ GENERIC_TEST_KWARGS_NAME = "_dbt_generic_test_kwargs"
 
 def add_rendered_test_kwargs(
     context: Dict[str, Any],
-    node: Union[ParsedGenericTestNode, CompiledGenericTestNode],
+    node: GenericTestNode,
     capture_macros: bool = False,
 ) -> None:
     """Render each of the test kwargs in the given context using the native

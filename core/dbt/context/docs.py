@@ -5,9 +5,8 @@ from dbt.exceptions import (
     doc_target_not_found,
 )
 from dbt.config.runtime import RuntimeConfig
-from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedMacro
+from dbt.contracts.graph.nodes import Macro, ResultNode
 
 from dbt.context.base import contextmember
 from dbt.context.configured import SchemaYamlContext
@@ -17,7 +16,7 @@ class DocsRuntimeContext(SchemaYamlContext):
     def __init__(
         self,
         config: RuntimeConfig,
-        node: Union[ParsedMacro, CompileResultNode],
+        node: Union[Macro, ResultNode],
         manifest: Manifest,
         current_project: str,
     ) -> None:
@@ -55,7 +54,7 @@ class DocsRuntimeContext(SchemaYamlContext):
         else:
             doc_invalid_args(self.node, args)
 
-        # ParsedDocumentation
+        # Documentation
         target_doc = self.manifest.resolve_doc(
             doc_name,
             doc_package_name,

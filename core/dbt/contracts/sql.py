@@ -5,7 +5,7 @@ from typing import Optional, List, Any, Dict, Sequence
 
 from dbt.dataclass_schema import dbtClassMixin
 
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.results import (
     RunResult,
     RunResultsArtifact,
@@ -32,7 +32,7 @@ class RemoteResult(VersionedSchema):
 class RemoteCompileResultMixin(RemoteResult):
     raw_code: str
     compiled_code: str
-    node: CompileResultNode
+    node: ResultNode
     timing: List[TimingInfo]
 
 

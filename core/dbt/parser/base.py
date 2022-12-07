@@ -16,7 +16,7 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
+from dbt.contracts.graph.nodes import HasUniqueID, ManifestNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
@@ -30,7 +30,7 @@ FinalValue = TypeVar("FinalValue", bound=HasUniqueID)
 IntermediateValue = TypeVar("IntermediateValue", bound=HasUniqueID)
 
 IntermediateNode = TypeVar("IntermediateNode", bound=Any)
-FinalNode = TypeVar("FinalNode", bound=ManifestNodes)
+FinalNode = TypeVar("FinalNode", bound=ManifestNode)
 
 
 ConfiguredBlockType = TypeVar("ConfiguredBlockType", bound=FileBlock)
@@ -365,7 +365,7 @@ class ConfiguredParser(
             msg = validator_error_message(exc)
             raise ParsingException(msg, node=node) from exc
 
-    def add_result_node(self, block: FileBlock, node: ManifestNodes):
+    def add_result_node(self, block: FileBlock, node: ManifestNode):
         if node.config.enabled:
             self.manifest.add_node(block.file, node)
         else:
