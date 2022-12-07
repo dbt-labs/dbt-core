@@ -56,6 +56,12 @@ RawVersion = Union[str, float]
 
 
 @dataclass
+class TarballPackage(Package):
+    tarball: str
+    name: str
+
+
+@dataclass
 class GitPackage(Package):
     git: str
     revision: Optional[RawVersion] = None
@@ -82,7 +88,7 @@ class RegistryPackage(Package):
             return [str(self.version)]
 
 
-PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
+PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
