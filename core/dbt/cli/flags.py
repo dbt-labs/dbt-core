@@ -33,8 +33,6 @@ class Flags:
                 # https://docs.python.org/3/library/dataclasses.html#frozen-instances
                 if hasattr(self, param_name):
                     raise Exception(f"Duplicate flag names found in click command: {param_name}")
-                # TODO: remove when lower case params are no longer required
-                object.__setattr__(self, param_name.lower(), param_value)
                 object.__setattr__(self, param_name.upper(), param_value)
                 if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT:
                     params_assigned_from_default.add(param_name)
