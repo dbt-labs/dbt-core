@@ -211,15 +211,33 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         dbtParser = PythonParseVisitor(node)
         dbtParser.visit(tree)
         config_keys_used = []
+        config_keys_defaults = []
         for (func, args, kwargs) in dbtParser.dbt_function_calls:
             if func == "get":
-                config_keys_used.append(args[0])
+                num_args = len(args)
+                if num_args == 0:
+                    raise ParsingException(
+                        "dbt.config.get() requires at least one argument",
+                        node=node,
+                    )
+                if num_args > 2:
+                    raise ParsingException(
+                        f"dbt.config.get() takes at most 2 arguments ({num_args} given)",
+                        node=node,
+                    )
+                key = args[0]
+                default_value = args[1] if num_args == 2 else None
+                config_keys_used.append(key)
+                config_keys_defaults.append(default_value)
                 continue
 
             context[func](*args, **kwargs)
         if config_keys_used:
             # this is being used in macro build_config_dict
-            context["config"](config_keys_used=config_keys_used)
+            context["config"](
+                config_keys_used=config_keys_used,
+                config_keys_defaults=config_keys_defaults,
+            )
 
     def render_update(self, node: ModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
