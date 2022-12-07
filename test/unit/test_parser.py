@@ -40,6 +40,7 @@ from dbt.parser.models import (
 import itertools
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode, MockSource, MockDocumentation
 
+import dataclasses
 
 def get_abs_os_path(unix_path):
     return normalize(os.path.abspath(unix_path))
@@ -719,6 +720,54 @@ def model(dbt, session):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
         with self.assertRaises(CompilationException):
             self.parser.parse_file(block)
+
+    def test_parse_prql_file(self):
+        prql_code = """
+from (dbt source.salesforce.in_process)
+join (dbt ref.foo.bar) [id]
+filter salary > 100
+        """.strip()
+        block = self.file_block_for(prql_code, 'nested/prql_model.prql')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+        node = list(self.parser.manifest.nodes.values())[0]
+        compiled_sql = """
+SELECT
+"{{ source('salesforce', 'in_process') }}".*,
+"{{ ref('foo', 'bar') }}".*,
+id
+FROM
+{{ source('salesforce', 'in_process') }}
+JOIN {{ ref('foo', 'bar') }} USING(id)
+WHERE
+salary > 100
+        """.strip()
+        expected = ParsedModelNode(
+            alias='prql_model',
+            name='prql_model',
+            database='test',
+            schema='analytics',
+            resource_type=NodeType.Model,
+            unique_id='model.snowplow.prql_model',
+            fqn=['snowplow', 'nested', 'prql_model'],
+            package_name='snowplow',
+            original_file_path=normalize('models/nested/prql_model.prql'),
+            root_path=get_abs_os_path('./dbt_packages/snowplow'),
+            config=NodeConfig(materialized='view'),
+            path=normalize('nested/prql_model.prql'),
+            language='sql',  # It's compiled into SQL
+            raw_code=compiled_sql,
+            checksum=block.file.checksum,
+            unrendered_config={'packages': set()},
+            config_call_dict={},
+            refs=[["foo", "bar"], ["foo", "bar"]],
+            sources=[['salesforce', 'in_process']],
+        )
+        assertEqualNodes(node, expected)
+        file_id = 'snowplow://' + normalize('models/nested/prql_model.prql')
+        self.assertIn(file_id, self.parser.manifest.files)
+        self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.prql_model'])
 
     def test_parse_ref_with_non_string(self):
         py_code = """

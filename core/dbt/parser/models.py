@@ -31,6 +31,7 @@ import ast
 from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import ParsingException, validator_error_message, UndefinedMacroException
 
+from .language_provider import PrqlProvider
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
 dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
@@ -236,6 +237,26 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 msg = validator_error_message(exc)
                 raise ParsingException(msg, node=node) from exc
             return
+
+        if node.language == ModelLanguage.prql:
+            provider = PrqlProvider()
+            try:
+                context = self._context_for(node, config)
+                references = provider.list_references(node.raw_code)
+                sql = provider.compile(node.raw_code, references)
+                # This is currently kinda a hack; I'm not happy about it.
+                #
+                # The original intention was to use the result of `.compile` and pass
+                # that to the Model. But currently the parsing seems extremely coupled
+                # to the `ModelParser` object. So possibly we should instead inherit
+                # from that, and there should be one of those for each language?
+                node.raw_code = sql
+                node.language = ModelLanguage.sql
+
+            except ValidationError as exc:
+                # we got a ValidationError - probably bad types in config()
+                msg = validator_error_message(exc)
+                raise ParsingException(msg, node=node) from exc
 
         elif not flags.STATIC_PARSER:
             # jinja rendering

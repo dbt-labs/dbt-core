@@ -60,6 +60,9 @@ class GraphTest(unittest.TestCase):
         # Create file filesystem searcher
         self.filesystem_search = patch('dbt.parser.read_files.filesystem_search')
         def mock_filesystem_search(project, relative_dirs, extension, ignore_spec):
+            # Adding in `and "prql" not in extension` will cause a bunch of tests to
+            # fail; need to understand more on how these are constructed to debug.
+            # Possibly `sql not in extension` is a way of having it only run once.
             if 'sql' not in extension:
                 return []
             if 'models' not in relative_dirs:
@@ -140,16 +143,16 @@ class GraphTest(unittest.TestCase):
         return dbt.compilation.Compiler(project)
 
     def use_models(self, models):
-        for k, v in models.items():
+        for k, (source, lang) in models.items():
             path = FilePath(
                 searched_path='models',
                 project_root=os.path.normcase(os.getcwd()),
-                relative_path='{}.sql'.format(k),
+                relative_path=f'{k}.{lang}',
                 modification_time=0.0,
             )
             # FileHash can't be empty or 'search_key' will be None
-            source_file = SourceFile(path=path, checksum=FileHash.from_contents('abc'))
-            source_file.contents = v
+            source_file = SourceFile(path=path, checksum=FileHash.from_contents('abc'), language=lang)
+            source_file.contents = source
             self.mock_models.append(source_file)
 
     def load_manifest(self, config):
@@ -162,7 +165,7 @@ class GraphTest(unittest.TestCase):
 
     def test__single_model(self):
         self.use_models({
-            'model_one': 'select * from events',
+            'model_one':( 'select * from events', 'sql'),
         })
 
         config = self.get_config()
@@ -181,8 +184,8 @@ class GraphTest(unittest.TestCase):
 
     def test__two_models_simple_ref(self):
         self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
+            'model_one':( 'select * from events', 'sql'),
+            'model_two':( "select * from {{ref('model_one')}}", 'sql'),
         })
 
         config = self.get_config()
@@ -205,10 +208,10 @@ class GraphTest(unittest.TestCase):
 
     def test__model_materializations(self):
         self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
-            'model_three': "select * from events",
-            'model_four': "select * from events",
+            'model_one':( 'select * from events', 'sql'),
+            'model_two':( "select * from {{ref('model_one')}}", 'sql'),
+            'model_three':( 'select * from events', 'sql'),
+            'model_four':( 'select * from events', 'sql'),
         })
 
         cfg = {
@@ -241,7 +244,7 @@ class GraphTest(unittest.TestCase):
 
     def test__model_incremental(self):
         self.use_models({
-            'model_one': 'select * from events'
+            'model_one':( 'select * from events', 'sql'),
         })
 
         cfg = {
@@ -269,15 +272,15 @@ class GraphTest(unittest.TestCase):
 
     def test__dependency_list(self):
         self.use_models({
-            'model_1': 'select * from events',
-            'model_2': 'select * from {{ ref("model_1") }}',
-            'model_3': '''
+            'model_1':( 'select * from events', 'sql'),
+            'model_2':( 'select * from {{ ref("model_1") }}', 'sql'),
+            'model_3': ('''
                 select * from {{ ref("model_1") }}
                 union all
                 select * from {{ ref("model_2") }}
-            ''',
-            'model_4': 'select * from {{ ref("model_3") }}'
-        })
+            ''', "sql"),
+            'model_4':( 'select * from {{ ref("model_3") }}', 'sql'),
+})
 
         config = self.get_config()
         manifest = self.load_manifest(config)
@@ -328,3 +331,22 @@ class GraphTest(unittest.TestCase):
         manifest.metadata.dbt_version = '99999.99.99'
         is_partial_parsable, _ = loader.is_partial_parsable(manifest)
         self.assertFalse(is_partial_parsable)
+
+    def test_models_prql(self):
+        self.use_models({
+            'model_prql':( 'from employees', 'prql'),
+        })
+
+        config = self.get_config()
+        manifest = self.load_manifest(config)
+
+        compiler = self.get_compiler(config)
+        linker = compiler.compile(manifest)
+
+        self.assertEqual(
+            list(linker.nodes()),
+            ['model.test_models_compile.model_prql'])
+
+        self.assertEqual(
+            list(linker.edges()),
+            [])

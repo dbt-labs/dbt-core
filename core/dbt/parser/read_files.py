@@ -175,7 +175,7 @@ def read_files(project, files, parser_files, saved_files):
         project,
         files,
         project.model_paths,
-        [".sql", ".py"],
+        [".sql", ".py", ".prql"],
         ParseFileType.Model,
         saved_files,
         dbt_ignore_spec,

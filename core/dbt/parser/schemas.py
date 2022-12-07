@@ -270,6 +270,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 path=path,
                 original_file_path=target.original_file_path,
                 raw_code=raw_code,
+                language="sql",
             )
             raise ParsingException(msg, node=node) from exc
 
