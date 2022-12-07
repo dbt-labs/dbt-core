@@ -253,9 +253,7 @@ class BaseRelation(FakeAPIObject, Hashable):
             return cls.create_from_source(node, **kwargs)
         else:
             if not isinstance(node, (ParsedNode)):
-                raise InternalException(
-                    f"type mismatch, expected ParsedNode but got {type(node)}"
-                )
+                raise InternalException(f"type mismatch, expected ParsedNode but got {type(node)}")
             return cls.create_from_node(config, node, **kwargs)
 
     @classmethod
