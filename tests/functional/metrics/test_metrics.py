@@ -18,6 +18,7 @@ from tests.functional.metrics.fixtures import (
     invalid_derived_metric_contains_model_yml,
     derived_metric_yml,
     derived_metric_old_attr_names_yml,
+    metric_without_timestamp_or_timegrains_yml
 )
 
 
@@ -44,6 +45,31 @@ class TestSimpleMetrics:
             "metric.test.collective_window",
         ]
         assert metric_ids == expected_metric_ids
+
+class TestSimpleMetricsNoTimestamp:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": metric_without_timestamp_or_timegrains_yml,
+            "people.sql": models_people_sql,
+        }
+    def test_simple_metric_no_timestamp(
+        self,
+        project,
+    ):
+        # initial run
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        metric_ids = list(manifest.metrics.keys())
+        expected_metric_ids = [
+            "metric.test.number_of_people",
+        ]
+        assert metric_ids == expected_metric_ids
+
+        # make sure the 'expression' metric depends on the two upstream metrics
+        metric_test = manifest.metrics["metric.test.number_of_people"]
+        assert metric_test.timestamp == None
 
 
 class TestInvalidRefMetrics:
