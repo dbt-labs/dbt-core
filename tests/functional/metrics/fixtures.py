@@ -686,7 +686,7 @@ metrics:
     label: "Number of people"
     description: Total count of people
     model: "ref('people')"
-    window: 
+    window:
       count: 14
       period: day
     calculation_method: count
