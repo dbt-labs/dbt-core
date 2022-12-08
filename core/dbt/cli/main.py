@@ -8,6 +8,7 @@ from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile
+from dbt.cli.context import DBTContext
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
 from dbt.task.deps import DepsTask
@@ -20,6 +21,11 @@ def cli_runner():
     ls = copy(cli.commands["list"])
     ls.hidden = True
     cli.add_command(ls, "ls")
+
+    # TODO: set context_class this on all commands outside this method
+    cli.context_class = DBTContext
+    for command in cli.commands.values():
+        command.context_class = DBTContext
 
     # Run the cli
     cli()
