@@ -300,7 +300,12 @@ class GraphTest(unittest.TestCase):
         })
         manifest.expect.side_effect = lambda n: MagicMock(unique_id=n)
         selector = NodeSelector(graph, manifest)
-        queue = selector.get_graph_queue(parse_difference(None, None))
+        # TODO:  The "eager" string below needs to be replaced with programatic access
+        #  to the default value for the indirect selection parameter in 
+        # dbt.cli.params.indirect_selection
+        #
+        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
+        queue = selector.get_graph_queue(parse_difference(None, None, "eager"))
 
         for model_id in model_ids:
             self.assertFalse(queue.empty())

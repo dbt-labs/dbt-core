@@ -79,5 +79,12 @@ class Flags:
             else True,
         )
 
+        # Support lower cased access for legacy code
+        params = set(
+            x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")
+        )
+        for param in params:
+            object.__setattr__(self, param.lower(), getattr(self, param))
+
     def __str__(self) -> str:
         return str(pf(self.__dict__))

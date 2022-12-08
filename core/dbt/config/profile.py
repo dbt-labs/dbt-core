@@ -399,11 +399,13 @@ class Profile(HasCredentials):
         )
 
     @classmethod
-    def render_from_args(
+    def render(
         cls,
-        args: Any,
         renderer: ProfileRenderer,
         project_profile_name: Optional[str],
+        profile_name_override: Optional[str] = None,
+        target_override: Optional[str] = None,
+        threads_override: Optional[int] = None,
     ) -> "Profile":
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
@@ -419,9 +421,7 @@ class Profile(HasCredentials):
             target could not be found.
         :returns Profile: The new Profile object.
         """
-        threads_override = getattr(args, "threads", None)
-        target_override = getattr(args, "target", None)
-        profile_name_override = getattr(args, "profile", None)
+
         raw_profiles = read_profile(flags.PROFILES_DIR)
         profile_name = cls.pick_profile_name(profile_name_override, project_profile_name)
         return cls.from_raw_profiles(

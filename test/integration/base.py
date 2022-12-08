@@ -540,7 +540,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         final_args = []
 
-        if os.getenv('DBT_TEST_SINGLE_THREADED') in ('y', 'Y', '1'):
+        if os.getenv('DBT_SINGLE_THREADED') in ('y', 'Y', '1'):
             final_args.append('--single-threaded')
 
         final_args.extend(args)

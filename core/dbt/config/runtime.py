@@ -8,12 +8,12 @@ from typing import Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
-from .utils import parse_cli_vars
 from dbt import flags
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet, DictDefaultEmptyStr
 from dbt.config.profile import read_user_config
 from dbt.config.project import load_raw_project
+from dbt.config.utils import parse_cli_vars
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.relation import ComponentName
@@ -48,6 +48,25 @@ def load_project(
     return project
 
 
+def load_profile(
+    project_root: str,
+    cli_vars: Dict[str, Any],
+    profile_name_override: Optional[str] = None,
+    target_override: Optional[str] = None,
+    threads_override: Optional[int] = None,
+) -> Profile:
+    raw_project = load_raw_project(project_root)
+    raw_profile_name = raw_project.get("profile")
+    profile_renderer = ProfileRenderer(cli_vars)
+    profile_name = profile_renderer.render_value(raw_profile_name)
+    profile = Profile.render(
+        profile_renderer, profile_name, profile_name_override, target_override, threads_override
+    )
+    # Save env_vars encountered in rendering for partial parsing
+    profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
+    return profile
+
+
 def _project_quoting_dict(proj: Project, profile: Profile) -> Dict[ComponentName, bool]:
     src: Dict[str, Any] = profile.credentials.translate_aliases(proj.quoting)
     result: Dict[ComponentName, bool] = {}
@@ -68,6 +87,21 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
     def __post_init__(self):
         self.validate()
+
+    @classmethod
+    def get_profile(
+        cls,
+        project_root: str,
+        cli_vars: Dict[str, Any],
+        args: Any,
+    ) -> Profile:
+        return load_profile(
+            project_root,
+            cli_vars,
+            args.profile,
+            args.target,
+            args.threads,
+        )
 
     # Called by 'new_project' and 'from_args'
     @classmethod
@@ -91,7 +125,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict(omit_none=True)
 
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
 
         return cls(
             project_name=project.project_name,
@@ -197,41 +231,16 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             raise DbtProjectError(validator_error_message(e)) from e
 
     @classmethod
-    def _get_rendered_profile(
-        cls,
-        args: Any,
-        profile_renderer: ProfileRenderer,
-        profile_name: Optional[str],
-    ) -> Profile:
-
-        return Profile.render_from_args(args, profile_renderer, profile_name)
-
-    @classmethod
-    def get_profile(
-        cls: Type["RuntimeConfig"], args: Any, cli_vars: Dict[str, Any], raw_profile_name: str
-    ) -> Profile:
-        # build the profile using the base renderer and the one fact we know
-        # Note: only the named profile section is rendered. The rest of the
-        # profile is ignored.
-        profile_renderer = ProfileRenderer(cli_vars)
-        profile_name = profile_renderer.render_value(raw_profile_name)
-        profile = cls._get_rendered_profile(args, profile_renderer, profile_name)
-        # Save env_vars encountered in rendering for partial parsing
-        profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
-        return profile
-
-    @classmethod
     def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
         # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
-        raw_project = load_raw_project(project_root)
-        raw_profile_name: str = raw_project.get("profile")  # type: ignore
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
-
-        profile = cls.get_profile(args, cli_vars, raw_profile_name)
-
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
+        profile = cls.get_profile(
+            project_root,
+            cli_vars,
+            args,
+        )
         project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
-
         return (project, profile)
 
     # Called in main.py, lib.py, task/base.py
@@ -532,7 +541,7 @@ class UnsetProfileConfig(RuntimeConfig):
         :param args: The parsed command-line arguments.
         :returns RuntimeConfig: The new configuration.
         """
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
 
         return cls(
             project_name=project.project_name,
@@ -582,18 +591,25 @@ class UnsetProfileConfig(RuntimeConfig):
         )
 
     @classmethod
-    def _get_rendered_profile(
+    def get_profile(
         cls,
+        project_root: str,
+        cli_vars: Dict[str, Any],
         args: Any,
-        profile_renderer: ProfileRenderer,
-        profile_name: Optional[str],
     ) -> Profile:
+        """
+        Moving all logic regarding constructing a complete UnsetProfile to this function
+        This way we can have a clean load_profile function to call by the new CLI and remove
+        all logic for UnsetProfile once we migrate to new click CLI
+        """
 
         profile = UnsetProfile()
         # The profile (for warehouse connection) is not needed, but we want
         # to get the UserConfig, which is also in profiles.yml
-        user_config = read_user_config(flags.PROFILES_DIR)
+        user_config = read_user_config(project_root)
         profile.user_config = user_config
+        profile_renderer = ProfileRenderer(cli_vars)
+        profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
         return profile
 
     @classmethod
@@ -636,6 +652,9 @@ def get_project_and_cli_vars_from_args(args, project_dir: str) -> Tuple[Project,
     user_config = read_user_config(flags.PROFILES_DIR)
     profile.user_config = user_config
 
+    # parse_cli_vars is embedded into the param when using click.
+    # replace this with cli_vars: Dict[str, Any] = getattr(args, "vars", {})
+    # when this task is refactored for click
     cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
     project_root: str = args.project_dir or project_dir
     project = load_project(project_root, args.version_check, profile, cli_vars)
