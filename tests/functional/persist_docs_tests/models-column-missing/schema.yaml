@@ -1,0 +1,8 @@
+version: 2
+models:
+  - name: missing_column
+    columns:
+      - name: id
+        description: "test id column description"
+      - name: column_that_does_not_exist
+        description: "comment that cannot be created"
