@@ -7,7 +7,6 @@ from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
-from dbt.config.runtime import load_project, load_profile
 from dbt.cli.context import DBTContext
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
@@ -26,10 +25,7 @@ def cli_runner():
     ls.hidden = True
     cli.add_command(ls, "ls")
 
-    # TODO: set context_class this on all commands outside this method
     cli.context_class = DBTContext
-    for command in cli.commands.values():
-        command.context_class = DBTContext
 
     # Run the cli
     cli()
@@ -71,7 +67,7 @@ def cli(ctx, **kwargs):
     For more documentation on these commands, visit: docs.getdbt.com
     """
     # Get primatives
-    flags = Flags()
+    flags = ctx.obj["flags"]
 
     # Logging
     # N.B. Legacy logger is not supported
@@ -97,21 +93,6 @@ def cli(ctx, **kwargs):
     if flags.VERSION:
         click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
         return
-
-    # Profile
-    # TODO: fix flags.THREADS access 
-    profile = load_profile(
-        flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, None
-    )
-
-    # Project
-    project = load_project(flags.PROJECT_DIR, flags.VERSION_CHECK, profile, flags.VARS)
-
-    # Context for downstream commands
-    ctx.obj = {}
-    ctx.obj["flags"] = flags
-    ctx.obj["profile"] = profile
-    ctx.obj["project"] = project
 
 
 # dbt build
@@ -257,7 +238,7 @@ def debug(ctx, **kwargs):
 @p.vars
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
-    flags = Flags()
+    flags = ctx.obj["flags"]
     project = ctx.obj["project"]
 
     task = DepsTask.from_project(project, flags.VARS)
