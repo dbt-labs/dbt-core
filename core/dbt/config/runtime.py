@@ -654,7 +654,7 @@ def get_project_and_cli_vars_from_args(args, project_dir: str) -> Tuple[Project,
 
     # parse_cli_vars is embedded into the param when using click.
     # replace this with cli_vars: Dict[str, Any] = getattr(args, "vars", {})
-    # when this task is refactored for click
+    # when this tasks are refactored for click
     cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
     project_root: str = args.project_dir or project_dir
     project = load_project(project_root, args.version_check, profile, cli_vars)
