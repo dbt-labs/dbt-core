@@ -99,8 +99,9 @@ def cli(ctx, **kwargs):
         return
 
     # Profile
+    # TODO: fix flags.THREADS access 
     profile = load_profile(
-        flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, flags.THREADS
+        flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, None
     )
 
     # Project
