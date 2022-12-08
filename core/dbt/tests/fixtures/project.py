@@ -243,7 +243,7 @@ def selectors_yml(project_root, selectors):
 def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
-        profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None
+        profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None, threads=None
     )
     flags.set_from_args(args, {})
     runtime_config = RuntimeConfig.from_args(args)
