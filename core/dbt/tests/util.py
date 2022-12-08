@@ -75,7 +75,6 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 
     print("\n\nInvoking dbt with {}".format(args))
     ctx = DBTContext(cli, args=args)
-    # ctx.set_project('test')
     res, success = cli.invoke(ctx)
 
     if expect_pass is not None:
