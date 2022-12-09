@@ -45,7 +45,7 @@
     {#-- Process schema changes. Returns dict of changes if successful. Use source columns for upserting/merging --#}
     {% set dest_columns = process_schema_changes(on_schema_change, temp_relation, existing_relation) %}
 
-    {% if dest_columns and dest_columns.get("full_refresh") %}
+    {% if dest_columns is mapping and dest_columns.get("full_refresh") %}
       {% set build_sql = get_create_table_as_sql(False, intermediate_relation, sql) %}
       {% set need_swap = true %}
     {% else %}
