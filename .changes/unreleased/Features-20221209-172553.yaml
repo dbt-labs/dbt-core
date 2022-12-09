@@ -1,0 +1,7 @@
+kind: Features
+body: add full_refresh option to on_schema_change for incremental models
+time: 2022-12-09T17:25:53.084631+01:00
+custom:
+  Author: pol-defont-reaulx
+  Issue: "4473"
+  PR: "6412"
