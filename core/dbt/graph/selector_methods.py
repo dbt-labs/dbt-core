@@ -428,6 +428,9 @@ class StateSelectorMethod(SelectorMethod):
         return modified
 
     def recursively_check_macros_modified(self, node, visited_macros):
+        if not hasattr(node, "depends_on"):
+            return False
+
         for macro_uid in node.depends_on.macros:
             if macro_uid in visited_macros:
                 continue

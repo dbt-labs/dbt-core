@@ -432,10 +432,6 @@ def basic_parsed_seed_dict():
         'raw_code': '',
         'unique_id': 'seed.test.foo',
         'fqn': ['test', 'seeds', 'foo'],
-        'refs': [],
-        'sources': [],
-        'metrics': [],
-        'depends_on': {'macros': [], 'nodes': []},
         'database': 'test_db',
         'description': '',
         'schema': 'test_schema',
@@ -478,10 +474,6 @@ def basic_parsed_seed_object():
         raw_code='',
         unique_id='seed.test.foo',
         fqn=['test', 'seeds', 'foo'],
-        refs=[],
-        sources=[],
-        metrics=[],
-        depends_on=DependsOn(),
         database='test_db',
         description='',
         schema='test_schema',
@@ -531,10 +523,6 @@ def complex_parsed_seed_dict():
         'raw_code': '',
         'unique_id': 'seed.test.foo',
         'fqn': ['test', 'seeds', 'foo'],
-        'refs': [],
-        'sources': [],
-        'metrics': [],
-        'depends_on': {'macros': [], 'nodes': []},
         'database': 'test_db',
         'description': 'a description',
         'schema': 'test_schema',
@@ -580,10 +568,6 @@ def complex_parsed_seed_object():
         raw_code='',
         unique_id='seed.test.foo',
         fqn=['test', 'seeds', 'foo'],
-        refs=[],
-        sources=[],
-        metrics=[],
-        depends_on=DependsOn(),
         database='test_db',
         description='a description',
         schema='test_schema',
@@ -605,7 +589,10 @@ def complex_parsed_seed_object():
 
 
 def test_seed_basic(basic_parsed_seed_dict, basic_parsed_seed_object, minimal_parsed_seed_dict):
+    dct = basic_parsed_seed_object.to_dict()
+
     assert_symmetric(basic_parsed_seed_object, basic_parsed_seed_dict)
+
     assert basic_parsed_seed_object.get_materialization() == 'seed'
 
     assert_from_dict(basic_parsed_seed_object, minimal_parsed_seed_dict, SeedNode)

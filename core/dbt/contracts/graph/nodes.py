@@ -169,7 +169,6 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
 
 class ParsedNodeMixins(dbtClassMixin):
     resource_type: NodeType
-    depends_on: DependsOn
     config: NodeConfig
 
     @property
@@ -196,10 +195,6 @@ class ParsedNodeMixins(dbtClassMixin):
     @property
     def is_ephemeral_model(self):
         return self.is_refable and self.is_ephemeral
-
-    @property
-    def depends_on_nodes(self):
-        return self.depends_on.nodes
 
     def patch(self, patch: "ParsedNodePatch"):
         """Given a ParsedNodePatch, add the new information to the node."""
@@ -256,18 +251,13 @@ class NodeInfoMixin:
 
 
 @dataclass
-class ParsedNodeDefaults(NodeInfoMixin, CompiledNode, ParsedNodeMandatory):
+class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     tags: List[str] = field(default_factory=list)
-    refs: List[List[str]] = field(default_factory=list)
-    sources: List[List[str]] = field(default_factory=list)
-    metrics: List[List[str]] = field(default_factory=list)
-    depends_on: DependsOn = field(default_factory=DependsOn)
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
-    compiled_path: Optional[str] = None
     build_path: Optional[str] = None
     deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
@@ -397,29 +387,42 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
 
 @dataclass
-class AnalysisNode(ParsedNode):
+class ParsedNodeWithSQLDefaults(CompiledNode, ParsedNode):
+    refs: List[List[str]] = field(default_factory=list)
+    sources: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    compiled_path: Optional[str] = None
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+
+@dataclass
+class AnalysisNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
-class HookNode(ParsedNode):
+class HookNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
-class ModelNode(ParsedNode):
+class ModelNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
-class RPCNode(ParsedNode):
+class RPCNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
-class SqlNode(ParsedNode):
+class SqlNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
@@ -460,7 +463,7 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
 
 
 @dataclass
-class SeedNode(ParsedNode):
+class SeedNode(ParsedNode):  # No SQLDefaults!
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
     # seeds need the root_path because the contents are not loaded initially
@@ -474,6 +477,10 @@ class SeedNode(ParsedNode):
 
     def same_body(self: T, other: T) -> bool:
         return same_seeds(self, other)
+
+    @property
+    def depends_on_nodes(self):
+        return []
 
 
 @dataclass
@@ -492,7 +499,7 @@ class HasTestMetadata(dbtClassMixin):
 
 
 @dataclass
-class SingularTestNode(ParsedNode):
+class SingularTestNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -504,7 +511,7 @@ class SingularTestNode(ParsedNode):
 
 
 @dataclass
-class GenericTestNode(ParsedNode, HasTestMetadata):
+class GenericTestNode(ParsedNodeWithSQLDefaults, HasTestMetadata):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
@@ -524,7 +531,7 @@ class GenericTestNode(ParsedNode, HasTestMetadata):
 
 
 @dataclass
-class IntermediateSnapshotNode(ParsedNode):
+class IntermediateSnapshotNode(ParsedNodeWithSQLDefaults):
     # at an intermediate stage in parsing, where we've built something better
     # than an unparsed node for rendering in parse mode, it's pretty possible
     # that we won't have critical snapshot-related information that is only
@@ -536,7 +543,7 @@ class IntermediateSnapshotNode(ParsedNode):
 
 
 @dataclass
-class SnapshotNode(ParsedNode):
+class SnapshotNode(ParsedNodeWithSQLDefaults):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
 
@@ -968,6 +975,19 @@ class Metric(UnparsedBaseNode, HasUniqueID, HasFqn):
             and True
         )
 
+
+# ManifestNode without SeedNode, which doesn't have the
+# SQL related attributes
+ManifestSQLNode = Union[
+    AnalysisNode,
+    SingularTestNode,
+    HookNode,
+    ModelNode,
+    RPCNode,
+    SqlNode,
+    GenericTestNode,
+    SnapshotNode,
+]
 
 ManifestNode = Union[
     AnalysisNode,

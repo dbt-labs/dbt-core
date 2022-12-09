@@ -67,6 +67,7 @@ from dbt.contracts.graph.nodes import (
     ColumnInfo,
     Exposure,
     Metric,
+    SeedNode,
     ManifestNode,
 )
 from dbt.contracts.util import Writable
@@ -1191,6 +1192,10 @@ def _process_metrics_for_node(
     node: Union[ManifestNode, Metric, Exposure],
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
+
+    if isinstance(node, SeedNode):
+        return
+
     for metric in node.metrics:
         target_metric: Optional[Union[Disabled, Metric]] = None
         target_metric_name: str
@@ -1232,6 +1237,10 @@ def _process_metrics_for_node(
 
 def _process_refs_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
     """Given a manifest and a node in that manifest, process its refs"""
+
+    if isinstance(node, SeedNode):
+        return
+
     for ref in node.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str
@@ -1323,6 +1332,10 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
 
 
 def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
+
+    if isinstance(node, SeedNode):
+        return
+
     target_source: Optional[Union[Disabled, SourceDefinition]] = None
     for source_name, table_name in node.sources:
         target_source = manifest.resolve_source(
