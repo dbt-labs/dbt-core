@@ -272,7 +272,8 @@ class Compiler:
 
         # Just to make it plain that nothing is actually injected for this case
         if not model.extra_ctes:
-            model.extra_ctes_injected = True
+            if not isinstance(model, SeedNode):
+                model.extra_ctes_injected = True
             manifest.update_node(model)
             return (model, model.extra_ctes)
 
@@ -498,7 +499,10 @@ class Compiler:
 
     # writes the "compiled_code" into the target/compiled directory
     def _write_node(self, node: ManifestSQLNode) -> ManifestSQLNode:
-        if not node.extra_ctes_injected or node.resource_type == NodeType.Snapshot:
+        if not node.extra_ctes_injected or node.resource_type in (
+            NodeType.Snapshot,
+            NodeType.Seed,
+        ):
             return node
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 

@@ -398,6 +398,10 @@ class ParsedNodeWithSQLDefaults(CompiledNode, ParsedNode):
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
+    @property
+    def depends_on_macros(self):
+        return self.depends_on.macros
+
 
 @dataclass
 class AnalysisNode(ParsedNodeWithSQLDefaults):
@@ -481,6 +485,18 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     @property
     def depends_on_nodes(self):
         return []
+
+    @property
+    def depends_on_macros(self):
+        return []
+
+    @property
+    def extra_ctes(self):
+        return []
+
+    @property
+    def extra_ctes_injected(self):
+        return False
 
 
 @dataclass
@@ -601,6 +617,10 @@ class Macro(UnparsedBaseNode, HasUniqueID):
         # the only thing that makes one macro different from another with the
         # same name/package is its content
         return self.macro_sql == other.macro_sql
+
+    @property
+    def depends_on_macros(self):
+        return self.depends_on.macros
 
 
 @dataclass
