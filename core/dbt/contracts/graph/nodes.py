@@ -1010,15 +1010,8 @@ ManifestSQLNode = Union[
 ]
 
 ManifestNode = Union[
-    AnalysisNode,
-    SingularTestNode,
-    HookNode,
-    ModelNode,
-    RPCNode,
-    SqlNode,
-    GenericTestNode,
+    ManifestSQLNode,
     SeedNode,
-    SnapshotNode,
 ]
 
 ResultNode = Union[
@@ -1032,14 +1025,10 @@ GraphMemberNode = Union[
     Metric,
 ]
 
-
 Resource = Union[
+    GraphMemberNode,
     Documentation,
     Macro,
-    ParsedNode,
-    Exposure,
-    Metric,
-    SourceDefinition,
 ]
 
 TestNode = Union[

@@ -320,7 +320,7 @@ def _sort_values(dct):
 
 
 def build_node_edges(nodes: List[ManifestNode]):
-    """Build the forward and backward edges on the given list of ParsedNodes
+    """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
     """

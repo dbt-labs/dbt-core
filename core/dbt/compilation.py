@@ -13,7 +13,6 @@ from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
-    ParsedNode,
     ManifestNode,
     ManifestSQLNode,
     GenericTestNode,
@@ -188,7 +187,7 @@ class Compiler:
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
 
-    def _get_relation_name(self, node: ParsedNode):
+    def _get_relation_name(self, node: ManifestNode):
         relation_name = None
         if node.is_relational and not node.is_ephemeral_model:
             adapter = get_adapter(self.config)

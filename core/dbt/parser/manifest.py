@@ -62,13 +62,13 @@ from dbt.contracts.graph.manifest import (
 )
 from dbt.contracts.graph.nodes import (
     SourceDefinition,
-    ParsedNode,
     Macro,
     ColumnInfo,
     Exposure,
     Metric,
     SeedNode,
     ManifestNode,
+    ResultNode,
 )
 from dbt.contracts.util import Writable
 from dbt.exceptions import (
@@ -1041,7 +1041,7 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
 
 
 def _get_node_column(node, column_name):
-    """Given a ParsedNode, add some fields that might be missing. Return a
+    """Given a ManifestNode, add some fields that might be missing. Return a
     reference to the dict that refers to the given column, creating it if
     it doesn't yet exist.
     """
@@ -1054,7 +1054,7 @@ def _get_node_column(node, column_name):
     return column
 
 
-DocsContextCallback = Callable[[Union[ParsedNode, SourceDefinition]], Dict[str, Any]]
+DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 
 # node and column descriptions
