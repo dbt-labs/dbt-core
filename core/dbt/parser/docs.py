@@ -38,6 +38,7 @@ class DocumentationParser(Parser[Documentation]):
             unique_id=unique_id,
             name=block.name,
             block_contents=contents,
+            resource_type=NodeType.Documentation,
         )
         return [doc]
 

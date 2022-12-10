@@ -29,11 +29,11 @@ from dbt.contracts.graph.nodes import (
     GenericTestNode,
     Exposure,
     Metric,
-    HasUniqueID,
     UnpatchedSourceDefinition,
     ManifestNode,
     GraphMemberNode,
     ResultNode,
+    BaseNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
@@ -1235,7 +1235,7 @@ class WritableManifest(ArtifactMixin):
         return dct
 
 
-def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
+def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])
 

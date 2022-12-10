@@ -16,7 +16,7 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HasUniqueID, ManifestNode
+from dbt.contracts.graph.nodes import ManifestNode, BaseNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
@@ -26,8 +26,8 @@ from dbt.parser.search import FileBlock
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
 # ParsedNode to be operable.
-FinalValue = TypeVar("FinalValue", bound=HasUniqueID)
-IntermediateValue = TypeVar("IntermediateValue", bound=HasUniqueID)
+FinalValue = TypeVar("FinalValue", bound=BaseNode)
+IntermediateValue = TypeVar("IntermediateValue", bound=BaseNode)
 
 IntermediateNode = TypeVar("IntermediateNode", bound=Any)
 FinalNode = TypeVar("FinalNode", bound=ManifestNode)
