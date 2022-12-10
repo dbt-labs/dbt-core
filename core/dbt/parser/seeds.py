@@ -9,6 +9,9 @@ class SeedParser(SimpleSQLParser[SeedNode]):
     def parse_from_dict(self, dct, validate=True) -> SeedNode:
         # seeds need the root_path because the contents are not loaded
         dct["root_path"] = self.project.project_root
+        if "language" in dct:
+            del dct["language"]
+        # raw_code is not currently used, but it might be in the future
         if validate:
             SeedNode.validate(dct)
         return SeedNode.from_dict(dct)

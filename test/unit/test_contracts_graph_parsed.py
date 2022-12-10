@@ -428,7 +428,6 @@ def basic_parsed_seed_dict():
         'path': '/root/seeds/seed.csv',
         'original_file_path': 'seeds/seed.csv',
         'package_name': 'test',
-        'language': 'sql',
         'raw_code': '',
         'unique_id': 'seed.test.foo',
         'fqn': ['test', 'seeds', 'foo'],
@@ -470,7 +469,6 @@ def basic_parsed_seed_object():
         path='/root/seeds/seed.csv',
         original_file_path='seeds/seed.csv',
         package_name='test',
-        language='sql',
         raw_code='',
         unique_id='seed.test.foo',
         fqn=['test', 'seeds', 'foo'],
@@ -499,7 +497,6 @@ def minimal_parsed_seed_dict():
         'path': '/root/seeds/seed.csv',
         'original_file_path': 'seeds/seed.csv',
         'package_name': 'test',
-        'language': 'sql',
         'raw_code': '',
         'unique_id': 'seed.test.foo',
         'fqn': ['test', 'seeds', 'foo'],
@@ -519,7 +516,6 @@ def complex_parsed_seed_dict():
         'path': '/root/seeds/seed.csv',
         'original_file_path': 'seeds/seed.csv',
         'package_name': 'test',
-        'language': 'sql',
         'raw_code': '',
         'unique_id': 'seed.test.foo',
         'fqn': ['test', 'seeds', 'foo'],
@@ -564,7 +560,6 @@ def complex_parsed_seed_object():
         path='/root/seeds/seed.csv',
         original_file_path='seeds/seed.csv',
         package_name='test',
-        language='sql',
         raw_code='',
         unique_id='seed.test.foo',
         fqn=['test', 'seeds', 'foo'],
@@ -1791,7 +1786,6 @@ class TestParsedMacro(ContractTestCase):
             'macro_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'resource_type': 'macro',
             'unique_id': 'macro.test.foo',
-            'tags': [],
             'depends_on': {'macros': []},
             'meta': {},
             'description': 'my macro description',
@@ -1809,7 +1803,6 @@ class TestParsedMacro(ContractTestCase):
             macro_sql='{% macro foo() %}select 1 as id{% endmacro %}',
             resource_type=NodeType.Macro,
             unique_id='macro.test.foo',
-            tags=[],
             depends_on=MacroDependsOn(),
             meta={},
             description='my macro description',
@@ -1836,6 +1829,7 @@ class TestParsedDocumentation(ContractTestCase):
         return {
             'block_contents': 'some doc contents',
             'name': 'foo',
+            'resource_type': 'docs block',
             'original_file_path': '/root/docs/doc.md',
             'package_name': 'test',
             'path': '/root/docs',
@@ -1850,7 +1844,8 @@ class TestParsedDocumentation(ContractTestCase):
             original_file_path='/root/docs/doc.md',
             name='foo',
             unique_id='test.foo',
-            block_contents='some doc contents'
+            block_contents='some doc contents',
+            resource_type=NodeType.Documentation,
         )
         self.assert_symmetric(doc, doc_dict)
         pickle.loads(pickle.dumps(doc))
@@ -2100,6 +2095,7 @@ def minimal_parsed_exposure_dict():
         'original_file_path': 'models/something.yml',
         'description': '',
         'created_at': 1.0,
+        'resource_type': 'exposure',
     }
 
 
@@ -2139,6 +2135,7 @@ def basic_parsed_exposure_dict():
 def basic_parsed_exposure_object():
     return Exposure(
         name='my_exposure',
+        resource_type=NodeType.Exposure,
         type=ExposureType.Notebook,
         fqn=['test', 'exposures', 'my_exposure'],
         unique_id='exposure.test.my_exposure',
@@ -2196,6 +2193,7 @@ def complex_parsed_exposure_dict():
 def complex_parsed_exposure_object():
     return Exposure(
         name='my_exposure',
+        resource_type=NodeType.Exposure,
         type=ExposureType.Analysis,
         owner=ExposureOwner(email='test@example.com', name='A Name'),
         maturity=MaturityType.Low,
@@ -2314,6 +2312,7 @@ def basic_parsed_metric_dict():
 def basic_parsed_metric_object():
     return Metric(
         name='my_metric',
+        resource_type=NodeType.Metric,
         calculation_method='count',
         fqn=['test', 'metrics', 'my_metric'],
         unique_id='metric.test.my_metric',

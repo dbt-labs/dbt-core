@@ -505,8 +505,6 @@ class ManifestTest(unittest.TestCase):
             tags=[],
             path='seed.csv',
             original_file_path='seed.csv',
-            language='sql',
-            raw_code='-- csv --',
             checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},

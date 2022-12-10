@@ -66,40 +66,19 @@ from .model_config import (
 
 
 @dataclass
-class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
-    """Used in all ManifestNodes and SourceDefinition"""
-
-    name: str
-    description: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-    data_type: Optional[str] = None
-    quote: Optional[bool] = None
-    tags: List[str] = field(default_factory=list)
-    _extra: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class BaseNode(dbtClassMixin, Replaceable):
-    """All nodes have these attributes"""
+    """All nodes or node-like objects in this file should have this as a base class"""
 
     name: str
-    resource_type: NodeType = field(
-        metadata={
-            "restrict": [
-                NodeType.Model,
-                NodeType.Analysis,
-                NodeType.Snapshot,
-                NodeType.Operation,
-                NodeType.Seed,
-                NodeType.RPCCall,
-                NodeType.SqlOperation,
-            ]
-        }
-    )
+    resource_type: NodeType
     package_name: str
     path: str
     original_file_path: str
     unique_id: str
+
+    @property
+    def search_name(self):
+        return self.name
 
     @property
     def file_id(self):
@@ -132,12 +111,25 @@ class BaseNode(dbtClassMixin, Replaceable):
 
 @dataclass
 class GraphNode(BaseNode):
-    """Macro and Documentation don't have fqn"""
+    """Nodes in the DAG. Macro and Documentation don't have fqn."""
 
     fqn: List[str]
 
     def same_fqn(self, other) -> bool:
         return self.fqn == other.fqn
+
+
+@dataclass
+class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+    """Used in all ManifestNodes and SourceDefinition"""
+
+    name: str
+    description: str = ""
+    meta: Dict[str, Any] = field(default_factory=dict)
+    data_type: Optional[str] = None
+    quote: Optional[bool] = None
+    tags: List[str] = field(default_factory=list)
+    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 # Metrics, exposures,
@@ -159,18 +151,14 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
 
 @dataclass
 class MacroDependsOn(dbtClassMixin, Replaceable):
+    """Used only in the Macro class"""
+
     macros: List[str] = field(default_factory=list)
 
     # 'in' on lists is O(n) so this is O(n^2) for # of macros
     def add_macro(self, value: str):
         if value not in self.macros:
             self.macros.append(value)
-
-
-@dataclass
-class InjectedCTE(dbtClassMixin, Replaceable):
-    id: str
-    sql: str
 
 
 @dataclass
@@ -236,6 +224,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
+    raw_code: str = ""
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
@@ -317,6 +306,9 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
 
         return True
 
+    def same_body(self, other) -> bool:
+        return self.raw_code == other.raw_code
+
     def same_database_representation(self, other) -> bool:
         # compare the config representation, not the node's config value. This
         # compares the configured value, rather than the ultimate value (so
@@ -347,12 +339,33 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.description = patch.description
         self.columns = patch.columns
 
+    def same_contents(self, old) -> bool:
+        if old is None:
+            return False
+
+        return (
+            self.same_body(old)
+            and self.same_config(old)
+            and self.same_persisted_description(old)
+            and self.same_fqn(old)
+            and self.same_database_representation(old)
+            and True
+        )
+
+
+@dataclass
+class InjectedCTE(dbtClassMixin, Replaceable):
+    """Used in CompiledNodes as part of ephemeral model processing"""
+
+    id: str
+    sql: str
+
 
 @dataclass
 class CompiledNode(ParsedNode):
-    """Contains attributes necessary for SQL files and nodes with refs, sources, etc."""
+    """Contains attributes necessary for SQL files and nodes with refs, sources, etc,
+    so all ManifestNodes except SeedNode."""
 
-    raw_code: str = ""
     language: str = "sql"
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
@@ -369,9 +382,6 @@ class CompiledNode(ParsedNode):
     @property
     def empty(self):
         return not self.raw_code.strip()
-
-    def same_body(self, other) -> bool:
-        return self.raw_code == other.raw_code
 
     def set_cte(self, cte_id: str, sql: str):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
@@ -407,19 +417,6 @@ class CompiledNode(ParsedNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
-
-    def same_contents(self, old) -> bool:
-        if old is None:
-            return False
-
-        return (
-            self.same_body(old)
-            and self.same_config(old)
-            and self.same_persisted_description(old)
-            and self.same_fqn(old)
-            and self.same_database_representation(old)
-            and True
-        )
 
 
 # ====================================
@@ -532,7 +529,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
 # ====================================
 
 
-class ShouldStoreFailures:
+class TestShouldStoreFailures:
     @property
     def should_store_failures(self):
         return (
@@ -543,7 +540,7 @@ class ShouldStoreFailures:
 
 
 @dataclass
-class SingularTestNode(CompiledNode, ShouldStoreFailures):
+class SingularTestNode(CompiledNode, TestShouldStoreFailures):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -577,7 +574,7 @@ class HasTestMetadata(dbtClassMixin):
 
 
 @dataclass
-class GenericTestNode(CompiledNode, HasTestMetadata, ShouldStoreFailures):
+class GenericTestNode(CompiledNode, HasTestMetadata, TestShouldStoreFailures):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
@@ -608,7 +605,8 @@ class IntermediateSnapshotNode(CompiledNode):
     # that we won't have critical snapshot-related information that is only
     # defined in config blocks. To fix that, we have an intermediate type that
     # uses a regular node config, which the snapshot parser will then convert
-    # into a full ParsedSnapshotNode after rendering.
+    # into a full ParsedSnapshotNode after rendering. Note: it currently does
+    # not work to set snapshot config in schema files because of the validation.
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
@@ -628,8 +626,6 @@ class SnapshotNode(CompiledNode):
 class Macro(BaseNode):
     macro_sql: str
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
-    # TODO: can macros even have tags?
-    tags: List[str] = field(default_factory=list)
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -867,13 +863,9 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 
 
 @dataclass
-class ExposureRequired(GraphNode):
+class Exposure(GraphNode):
     type: ExposureType
     owner: ExposureOwner
-
-
-@dataclass
-class Exposure(ExposureRequired):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Exposure]})
     description: str = ""
     label: Optional[str] = None
@@ -956,7 +948,7 @@ class MetricReference(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class MetricRequired(GraphNode):
+class Metric(GraphNode):
     name: str
     description: str
     label: str
@@ -966,10 +958,6 @@ class MetricRequired(GraphNode):
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
-
-
-@dataclass
-class Metric(MetricRequired):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
     window: Optional[MetricTime] = None
     model: Optional[str] = None
@@ -1095,6 +1083,7 @@ ManifestSQLNode = Union[
     SnapshotNode,
 ]
 
+# All SQL nodes plus SeedNode (csv files)
 ManifestNode = Union[
     ManifestSQLNode,
     SeedNode,
@@ -1105,12 +1094,14 @@ ResultNode = Union[
     SourceDefinition,
 ]
 
+# All nodes that can be in the DAG
 GraphMemberNode = Union[
     ResultNode,
     Exposure,
     Metric,
 ]
 
+# All "nodes" (or node-like objects) in this file
 Resource = Union[
     GraphMemberNode,
     Documentation,
