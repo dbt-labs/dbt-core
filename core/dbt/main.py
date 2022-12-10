@@ -191,14 +191,15 @@ def handle_and_check(args):
         if parsed.record_timing_info:
             profiler_enabled = True
 
-        with profiler(enable=profiler_enabled, outfile=parsed.record_timing_info):
+        if profiler_enabled:
+            with profiler(enable=profiler_enabled, outfile=parsed.record_timing_info):
 
-            with adapter_management():
+                with adapter_management():
 
-                task, res = run_from_args(parsed)
-                success = task.interpret_results(res)
+                    task, res = run_from_args(parsed)
+                    success = task.interpret_results(res)
 
-            return res, success
+                return res, success
 
 
 @contextmanager

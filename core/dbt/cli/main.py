@@ -55,7 +55,7 @@ def cli(ctx, **kwargs):
 
     # Profiling
     if incomplete_flags.RECORD_TIMING_INFO:
-        ctx.with_resource(profiler(enable=True, outfile=incomplete_flags.RECORD_TIMING_INFO))
+        ctx.with_resource(profiler(outfile=incomplete_flags.RECORD_TIMING_INFO))
 
     # Adapter management
     ctx.with_resource(adapter_management())
