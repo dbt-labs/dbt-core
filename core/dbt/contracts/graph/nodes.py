@@ -12,7 +12,6 @@ from typing import (
     Sequence,
     Tuple,
     Iterator,
-    TypeVar,
 )
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
@@ -103,43 +102,6 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 class InjectedCTE(dbtClassMixin, Replaceable):
     id: str
     sql: str
-
-
-@dataclass
-class CompiledNode:
-    compiled: bool = False
-    compiled_code: Optional[str] = None
-    extra_ctes_injected: bool = False
-    extra_ctes: List[InjectedCTE] = field(default_factory=list)
-    relation_name: Optional[str] = None
-    _pre_injected_sql: Optional[str] = None
-
-    def set_cte(self, cte_id: str, sql: str):
-        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
-        do if extra_ctes were an OrderedDict
-        """
-        for cte in self.extra_ctes:
-            if cte.id == cte_id:
-                cte.sql = sql
-                break
-        else:
-            self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
-
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
-        if "_pre_injected_sql" in dct:
-            del dct["_pre_injected_sql"]
-        # Remove compiled attributes
-        if "compiled" in dct and dct["compiled"] is False:
-            del dct["compiled"]
-            del dct["extra_ctes_injected"]
-            del dct["extra_ctes"]
-            # "omit_none" means these might not be in the dictionary
-            if "compiled_code" in dct:
-                del dct["compiled_code"]
-            if "relation_name" in dct:
-                del dct["relation_name"]
-        return dct
 
 
 @dataclass
@@ -277,9 +239,6 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
         return full_path
 
 
-T = TypeVar("T", bound="ParsedNode")
-
-
 @dataclass
 class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
     def _serialize(self):
@@ -333,10 +292,10 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return bool(self.config.persist_docs.get("relation"))
         return False
 
-    def same_body(self: T, other: T) -> bool:
+    def same_body(self, other) -> bool:
         return self.raw_code == other.raw_code
 
-    def same_persisted_description(self: T, other: T) -> bool:
+    def same_persisted_description(self, other) -> bool:
         # the check on configs will handle the case where we have different
         # persist settings, so we only have to care about the cases where they
         # are the same..
@@ -353,7 +312,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
         return True
 
-    def same_database_representation(self, other: T) -> bool:
+    def same_database_representation(self, other) -> bool:
         # compare the config representation, not the node's config value. This
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
@@ -366,13 +325,13 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
                 return False
         return True
 
-    def same_config(self, old: T) -> bool:
+    def same_config(self, old) -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
 
-    def same_contents(self: T, old: Optional[T]) -> bool:
+    def same_contents(self, old) -> bool:
         if old is None:
             return False
 
@@ -387,12 +346,45 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
 
 @dataclass
-class ParsedNodeWithSQLDefaults(CompiledNode, ParsedNode):
+class CompiledNode(ParsedNode):
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     compiled_path: Optional[str] = None
+    compiled: bool = False
+    compiled_code: Optional[str] = None
+    extra_ctes_injected: bool = False
+    extra_ctes: List[InjectedCTE] = field(default_factory=list)
+    relation_name: Optional[str] = None
+    _pre_injected_sql: Optional[str] = None
+
+    def set_cte(self, cte_id: str, sql: str):
+        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
+        do if extra_ctes were an OrderedDict
+        """
+        for cte in self.extra_ctes:
+            if cte.id == cte_id:
+                cte.sql = sql
+                break
+        else:
+            self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
+
+    def __post_serialize__(self, dct):
+        dct = super().__post_serialize__(dct)
+        if "_pre_injected_sql" in dct:
+            del dct["_pre_injected_sql"]
+        # Remove compiled attributes
+        if "compiled" in dct and dct["compiled"] is False:
+            del dct["compiled"]
+            del dct["extra_ctes_injected"]
+            del dct["extra_ctes"]
+            # "omit_none" means these might not be in the dictionary
+            if "compiled_code" in dct:
+                del dct["compiled_code"]
+            if "relation_name" in dct:
+                del dct["relation_name"]
+        return dct
 
     @property
     def depends_on_nodes(self):
@@ -403,67 +395,41 @@ class ParsedNodeWithSQLDefaults(CompiledNode, ParsedNode):
         return self.depends_on.macros
 
 
+# ====================================
+# CompiledNode subclasses
+# ====================================
+
+
 @dataclass
-class AnalysisNode(ParsedNodeWithSQLDefaults):
+class AnalysisNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
-class HookNode(ParsedNodeWithSQLDefaults):
+class HookNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
-class ModelNode(ParsedNodeWithSQLDefaults):
+class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
-class RPCNode(ParsedNodeWithSQLDefaults):
+class RPCNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
-class SqlNode(ParsedNodeWithSQLDefaults):
+class SqlNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
-def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
-    # for seeds, we check the hashes. If the hashes are different types,
-    # no match. If the hashes are both the same 'path', log a warning and
-    # assume they are the same
-    # if the current checksum is a path, we want to log a warning.
-    result = first.checksum == second.checksum
-
-    if first.checksum.name == "path":
-        msg: str
-        if second.checksum.name != "path":
-            warn_or_error(
-                SeedIncreased(package_name=first.package_name, name=first.name), node=first
-            )
-        elif result:
-            warn_or_error(
-                SeedExceedsLimitSamePath(package_name=first.package_name, name=first.name),
-                node=first,
-            )
-        elif not result:
-            warn_or_error(
-                SeedExceedsLimitAndPathChanged(package_name=first.package_name, name=first.name),
-                node=first,
-            )
-        else:
-            warn_or_error(
-                SeedExceedsLimitChecksumChanged(
-                    package_name=first.package_name,
-                    name=first.name,
-                    checksum_name=second.checksum.name,
-                ),
-                node=first,
-            )
-
-    return result
+# ====================================
+# Seed node
+# ====================================
 
 
 @dataclass
@@ -474,13 +440,48 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
 
+    def same_seeds(self, other: "SeedNode") -> bool:
+        # for seeds, we check the hashes. If the hashes are different types,
+        # no match. If the hashes are both the same 'path', log a warning and
+        # assume they are the same
+        # if the current checksum is a path, we want to log a warning.
+        result = self.checksum == other.checksum
+
+        if self.checksum.name == "path":
+            msg: str
+            if other.checksum.name != "path":
+                warn_or_error(
+                    SeedIncreased(package_name=self.package_name, name=self.name), node=self
+                )
+            elif result:
+                warn_or_error(
+                    SeedExceedsLimitSamePath(package_name=self.package_name, name=self.name),
+                    node=self,
+                )
+            elif not result:
+                warn_or_error(
+                    SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
+                    node=self,
+                )
+            else:
+                warn_or_error(
+                    SeedExceedsLimitChecksumChanged(
+                        package_name=self.package_name,
+                        name=self.name,
+                        checksum_name=other.checksum.name,
+                    ),
+                    node=self,
+                )
+
+        return result
+
     @property
     def empty(self):
         """Seeds are never empty"""
         return False
 
-    def same_body(self: T, other: T) -> bool:
-        return same_seeds(self, other)
+    def same_body(self, other) -> bool:
+        return self.same_seeds(other)
 
     @property
     def depends_on_nodes(self):
@@ -499,23 +500,13 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
         return False
 
 
-@dataclass
-class TestMetadata(dbtClassMixin, Replaceable):
-    name: str
-    # kwargs are the args that are left in the test builder after
-    # removing configs. They are set from the test builder when
-    # the test node is created.
-    kwargs: Dict[str, Any] = field(default_factory=dict)
-    namespace: Optional[str] = None
+# ====================================
+# Singular Test node
+# ====================================
 
 
 @dataclass
-class HasTestMetadata(dbtClassMixin):
-    test_metadata: TestMetadata
-
-
-@dataclass
-class SingularTestNode(ParsedNodeWithSQLDefaults):
+class SingularTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -526,8 +517,30 @@ class SingularTestNode(ParsedNodeWithSQLDefaults):
         return "singular"
 
 
+# ====================================
+# Generic Test node
+# ====================================
+
+
 @dataclass
-class GenericTestNode(ParsedNodeWithSQLDefaults, HasTestMetadata):
+class TestMetadata(dbtClassMixin, Replaceable):
+    name: str
+    # kwargs are the args that are left in the test builder after
+    # removing configs. They are set from the test builder when
+    # the test node is created.
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    namespace: Optional[str] = None
+
+
+# This has to be separated out because it has no default and so
+# has to be included as a superclass, not an attribute
+@dataclass
+class HasTestMetadata(dbtClassMixin):
+    test_metadata: TestMetadata
+
+
+@dataclass
+class GenericTestNode(CompiledNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
@@ -546,8 +559,13 @@ class GenericTestNode(ParsedNodeWithSQLDefaults, HasTestMetadata):
         return "generic"
 
 
+# ====================================
+# Snapshot node
+# ====================================
+
+
 @dataclass
-class IntermediateSnapshotNode(ParsedNodeWithSQLDefaults):
+class IntermediateSnapshotNode(CompiledNode):
     # at an intermediate stage in parsing, where we've built something better
     # than an unparsed node for rendering in parse mode, it's pretty possible
     # that we won't have critical snapshot-related information that is only
@@ -559,31 +577,14 @@ class IntermediateSnapshotNode(ParsedNodeWithSQLDefaults):
 
 
 @dataclass
-class SnapshotNode(ParsedNodeWithSQLDefaults):
+class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
 
 
-@dataclass
-class ParsedPatch(HasYamlMetadata, Replaceable):
-    name: str
-    description: str
-    meta: Dict[str, Any]
-    docs: Docs
-    config: Dict[str, Any]
-
-
-# The parsed node update is only the 'patch', not the test. The test became a
-# regular parsed node. Note that description and columns must be present, but
-# may be empty.
-@dataclass
-class ParsedNodePatch(ParsedPatch):
-    columns: Dict[str, ColumnInfo]
-
-
-@dataclass
-class ParsedMacroPatch(ParsedPatch):
-    arguments: List[MacroArgument] = field(default_factory=list)
+# ====================================
+# Macro
+# ====================================
 
 
 @dataclass
@@ -603,7 +604,7 @@ class Macro(UnparsedBaseNode, HasUniqueID):
     created_at: float = field(default_factory=lambda: time.time())
     supported_languages: Optional[List[ModelLanguage]] = None
 
-    def patch(self, patch: ParsedMacroPatch):
+    def patch(self, patch: "ParsedMacroPatch"):
         self.patch_path: Optional[str] = patch.file_id
         self.description = patch.description
         self.created_at = time.time()
@@ -623,6 +624,11 @@ class Macro(UnparsedBaseNode, HasUniqueID):
         return self.depends_on.macros
 
 
+# ====================================
+# Documentation node
+# ====================================
+
+
 @dataclass
 class Documentation(UnparsedDocumentation, HasUniqueID):
     name: str
@@ -638,6 +644,11 @@ class Documentation(UnparsedDocumentation, HasUniqueID):
         # the only thing that makes one doc different from another with the
         # same name/package is its content
         return self.block_contents == other.block_contents
+
+
+# ====================================
+# Source node
+# ====================================
 
 
 def normalize_test(testdef: TestDef) -> Dict[str, Any]:
@@ -824,6 +835,11 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         return f"{self.source_name}.{self.name}"
 
 
+# ====================================
+# Exposure node
+# ====================================
+
+
 @dataclass
 class Exposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
@@ -897,6 +913,11 @@ class Exposure(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_config(old)
             and True
         )
+
+
+# ====================================
+# Metric node
+# ====================================
 
 
 @dataclass
@@ -994,6 +1015,38 @@ class Metric(UnparsedBaseNode, HasUniqueID, HasFqn):
             and self.same_config(old)
             and True
         )
+
+
+# ====================================
+# Patches
+# ====================================
+
+
+@dataclass
+class ParsedPatch(HasYamlMetadata, Replaceable):
+    name: str
+    description: str
+    meta: Dict[str, Any]
+    docs: Docs
+    config: Dict[str, Any]
+
+
+# The parsed node update is only the 'patch', not the test. The test became a
+# regular parsed node. Note that description and columns must be present, but
+# may be empty.
+@dataclass
+class ParsedNodePatch(ParsedPatch):
+    columns: Dict[str, ColumnInfo]
+
+
+@dataclass
+class ParsedMacroPatch(ParsedPatch):
+    arguments: List[MacroArgument] = field(default_factory=list)
+
+
+# ====================================
+# Node unions/categories
+# ====================================
 
 
 # ManifestNode without SeedNode, which doesn't have the
