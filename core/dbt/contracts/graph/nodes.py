@@ -523,6 +523,10 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     def extra_ctes_injected(self):
         return False
 
+    @property
+    def language(self):
+        return "sql"
+
 
 # ====================================
 # Singular Test node
