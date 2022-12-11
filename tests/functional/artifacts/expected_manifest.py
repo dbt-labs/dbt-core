@@ -820,9 +820,9 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             "test.test.unique_model_id.67b76558ff": [],
         },
         "docs": {
-            "dbt.__overview__": ANY,
-            "test.macro_info": ANY,
-            "test.macro_arg_info": ANY,
+            "doc.dbt.__overview__": ANY,
+            "doc.test.macro_info": ANY,
+            "doc.test.macro_arg_info": ANY,
         },
         "disabled": {},
     }
@@ -1184,8 +1184,8 @@ def expected_references_manifest(project):
         "metrics": {},
         "selectors": {},
         "docs": {
-            "dbt.__overview__": ANY,
-            "test.column_info": {
+            "doc.dbt.__overview__": ANY,
+            "doc.test.column_info": {
                 "block_contents": "An ID field",
                 "name": "column_info",
                 "original_file_path": docs_path,
@@ -1193,7 +1193,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.column_info",
             },
-            "test.ephemeral_summary": {
+            "doc.test.ephemeral_summary": {
                 "block_contents": ("A summmary table of the ephemeral copy of the seed data"),
                 "name": "ephemeral_summary",
                 "original_file_path": docs_path,
@@ -1201,7 +1201,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.ephemeral_summary",
             },
-            "test.source_info": {
+            "doc.test.source_info": {
                 "block_contents": "My source",
                 "name": "source_info",
                 "original_file_path": docs_path,
@@ -1209,7 +1209,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.source_info",
             },
-            "test.summary_count": {
+            "doc.test.summary_count": {
                 "block_contents": "The number of instances of the first name",
                 "name": "summary_count",
                 "original_file_path": docs_path,
@@ -1217,7 +1217,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.summary_count",
             },
-            "test.summary_first_name": {
+            "doc.test.summary_first_name": {
                 "block_contents": "The first name being summarized",
                 "name": "summary_first_name",
                 "original_file_path": docs_path,
@@ -1225,7 +1225,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.summary_first_name",
             },
-            "test.table_info": {
+            "doc.test.table_info": {
                 "block_contents": "My table",
                 "name": "table_info",
                 "original_file_path": docs_path,
@@ -1233,7 +1233,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.table_info",
             },
-            "test.view_summary": {
+            "doc.test.view_summary": {
                 "block_contents": (
                     "A view of the summary of the ephemeral copy of the seed data"
                 ),
@@ -1243,7 +1243,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.view_summary",
             },
-            "test.macro_info": {
+            "doc.test.macro_info": {
                 "block_contents": "My custom test that I wrote that does nothing",
                 "name": "macro_info",
                 "original_file_path": os.path.join("macros", "macro.md"),
@@ -1251,7 +1251,7 @@ def expected_references_manifest(project):
                 "path": "macro.md",
                 "unique_id": "test.macro_info",
             },
-            "test.notebook_info": {
+            "doc.test.notebook_info": {
                 "block_contents": "A description of the complex exposure",
                 "name": "notebook_info",
                 "original_file_path": docs_path,
@@ -1259,7 +1259,7 @@ def expected_references_manifest(project):
                 "path": "docs.md",
                 "unique_id": "test.notebook_info",
             },
-            "test.macro_arg_info": {
+            "doc.test.macro_arg_info": {
                 "block_contents": "The model for my custom test",
                 "name": "macro_arg_info",
                 "original_file_path": os.path.join("macros", "macro.md"),
@@ -1304,7 +1304,6 @@ def expected_references_manifest(project):
                 "patch_path": "test://" + os.path.join("macros", "schema.yml"),
                 "resource_type": "macro",
                 "unique_id": "macro.test.test_nothing",
-                "tags": [],
                 "supported_languages": None,
                 "arguments": [
                     {
