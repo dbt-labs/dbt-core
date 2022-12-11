@@ -12,7 +12,7 @@ changeFormat: |
   {{- range $issueNbr := $changes }}
     {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
     {{- $IssueList = append $IssueList $changeLink  }}
-  {{- end }}
+  {{- end -}}
   - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
 
 kinds:
@@ -26,7 +26,7 @@ kinds:
       {{- range $issueNbr := $changes }}
         {{- $changeLink := "[dbt-docs/#nbr](https://github.com/dbt-labs/dbt-docs/issues/nbr)" | replace "nbr" $issueNbr }}
         {{- $IssueList = append $IssueList $changeLink }}
-      {{- end }}
+      {{- end -}}
       - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
   - label: Under the Hood
   - label: Dependencies
@@ -36,7 +36,7 @@ kinds:
       {{- range $pullrequest := $changes }}
         {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $pullrequest }}
         {{- $PRList = append $PRList $changeLink  }}
-      {{- end }}
+      {{- end -}}
       - {{.Body}} ({{ range $index, $element := $PRList }}{{if $index}}, {{end}}{{$element}}{{end}})
     skipGlobalChoices: true
     additionalChoices:
@@ -55,7 +55,7 @@ kinds:
       {{- range $pullrequest := $changes }}
         {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $pullrequest }}
         {{- $PRList = append $PRList $changeLink  }}
-      {{- end }}
+      {{- end -}}
       - {{.Body}} ({{ range $index, $element := $PRList }}{{if $index}}, {{end}}{{$element}}{{end}})
     skipGlobalChoices: true
     additionalChoices:
