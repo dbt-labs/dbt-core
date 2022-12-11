@@ -241,6 +241,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
+    relation_name: Optional[str] = None
     raw_code: str = ""
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
@@ -393,7 +394,6 @@ class CompiledNode(ParsedNode):
     compiled_code: Optional[str] = None
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
-    relation_name: Optional[str] = None
     _pre_injected_sql: Optional[str] = None
 
     @property
@@ -423,8 +423,6 @@ class CompiledNode(ParsedNode):
             # "omit_none" means these might not be in the dictionary
             if "compiled_code" in dct:
                 del dct["compiled_code"]
-            if "relation_name" in dct:
-                del dct["relation_name"]
         return dct
 
     @property
