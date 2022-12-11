@@ -207,9 +207,15 @@ We use [changie](https://changie.dev) to generate `CHANGELOG` entries. **Note:**
 
 Follow the steps to [install `changie`](https://changie.dev/guide/installation/) for your system.
 
-Once changie is installed and your PR is created for a new feature, simply run `changie new` and changie will walk you through the process of creating a changelog entry.  Commit the file that's created and your changelog entry is complete!
+Once changie is installed and your PR is created for a new feature, simply run the following command and changie will walk you through the process of creating a changelog entry:
 
-If you are contributing to a feature already in progress, you will modify the changie yaml file in `dbt/.changes/unreleased` related to your change.  If you need help finding this file, please ask!
+```bash
+changie new
+```
+
+Commit the file that's created and your changelog entry is complete!
+
+If you are contributing to a feature already in progress, you will modify the changie yaml file in dbt/.changes/unreleased/ related to your change. If you need help finding this file, please ask within the discussion for the pull request!
 
 You don't need to worry about which `dbt-core` version your change will go into. Just create the changelog entry with `changie`, and open your PR against the `main` branch. All merged changes will be included in the next minor version of `dbt-core`. The Core maintainers _may_ choose to "backport" specific changes in order to patch older minor versions. In that case, a maintainer will take care of that backport after merging your PR, before releasing the new version of `dbt-core`.
 

@@ -6,7 +6,7 @@ changelogPath: CHANGELOG.md
 versionExt: md
 versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
-changeFormat: |
+changeFormat: |-
   {{- $IssueList := list }}
   {{- $changes := splitList " " $.Custom.Issue }}
   {{- range $issueNbr := $changes }}
@@ -20,7 +20,7 @@ kinds:
   - label: Features
   - label: Fixes
   - label: Docs
-    changeFormat: |
+    changeFormat: |-
       {{- $IssueList := list }}
       {{- $changes := splitList " " $.Custom.Issue }}
       {{- range $issueNbr := $changes }}
@@ -30,7 +30,7 @@ kinds:
       - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
   - label: Under the Hood
   - label: Dependencies
-    changeFormat: |
+    changeFormat: |-
       {{- $PRList := list }}
       {{- $changes := splitList " " $.Custom.PR }}
       {{- range $pullrequest := $changes }}
@@ -49,7 +49,7 @@ kinds:
         type: string
         minLength: 1
   - label: Security
-    changeFormat: |
+    changeFormat: |-
       {{- $PRList := list }}
       {{- $changes := splitList " " $.Custom.PR }}
       {{- range $pullrequest := $changes }}
