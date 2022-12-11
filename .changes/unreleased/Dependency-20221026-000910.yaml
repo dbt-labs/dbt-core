@@ -3,4 +3,4 @@ body: "Update colorama requirement from <0.4.6,>=0.3.9 to >=0.3.9,<0.4.7 in /cor
 time: 2022-10-26T00:09:10.00000Z
 custom:
   Author: dependabot[bot]
-  PR: 6144
+  PR: "6144"
