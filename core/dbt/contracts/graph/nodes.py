@@ -59,6 +59,23 @@ from .model_config import (
     SnapshotConfig,
 )
 
+# =====================================================================
+# This contains the classes for all of the nodes and node-like objects
+# in the manifest. In the "nodes" dictionary of the manifest we find
+# all of the objects in the ManifestNode union below. In addition the
+# manifest contains "macros", "sources", "metrics", "exposures", "docs",
+# and "disabled" dictionaries.
+#
+# The SeedNode is a ManifestNode, but can't be compiled because it has
+# no SQL.
+#
+# All objects defined in this file should have BaseNode as a parent
+# class.
+#
+# The two objects which do not show up in the DAG are Macro and
+# Documentation.
+# =====================================================================
+
 
 # ==================================================
 # Various parent classes and node attribute classes
