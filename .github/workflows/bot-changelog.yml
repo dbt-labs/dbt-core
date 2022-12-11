@@ -40,7 +40,7 @@ jobs:
       matrix:
         include:
           - label: "dependencies"
-            changie_kind: "Dependency"
+            changie_kind: "Dependencies"
           - label: "snyk"
             changie_kind: "Security"
     runs-on: ubuntu-latest
