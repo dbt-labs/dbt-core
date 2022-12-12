@@ -226,7 +226,15 @@ We use [changie](https://changie.dev) to generate `CHANGELOG` entries.  Do not e
 
 Follow the steps to [install `changie`](https://changie.dev/guide/installation/) for your system.
 
-Once changie is installed and your PR is created, simply run `changie new` and changie will walk you through the process of creating a changelog entry.  Commit the file that's created and your changelog entry is complete!
+Once changie is installed and your PR is created for a new feature, simply run the following command and changie will walk you through the process of creating a changelog entry:
+
+```shell
+changie new
+```
+
+Commit the file that's created and your changelog entry is complete!
+
+If you are contributing to a feature already in progress, you will modify the changie yaml file in dbt/.changes/unreleased/ related to your change. If you need help finding this file, please ask within the discussion for the pull request!
 
 ## Submitting a Pull Request
 
