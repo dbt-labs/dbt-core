@@ -13,7 +13,6 @@ from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet, DictDefaultEmptyStr
 from dbt.config.profile import read_user_config
 from dbt.config.project import load_raw_project
-from dbt.config.utils import parse_cli_vars
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.relation import ComponentName
@@ -642,20 +641,3 @@ def _is_config_used(path, fqns):
             if len(path) <= len(fqn) and fqn[: len(path)] == path:
                 return True
     return False
-
-
-# TODO: remove after tasks no longer require a from_args method
-def get_project_and_cli_vars_from_args(args, project_dir: str) -> Tuple[Project, Dict[str, Any]]:
-    profile = UnsetProfile()
-    # The profile (for warehouse connection) is not needed, but we want
-    # to get the UserConfig, which is also in profiles.yml
-    user_config = read_user_config(flags.PROFILES_DIR)
-    profile.user_config = user_config
-
-    # parse_cli_vars is embedded into the param when using click.
-    # replace this with cli_vars: Dict[str, Any] = getattr(args, "vars", {})
-    # when tasks are refactored for click
-    cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
-    project_root: str = args.project_dir or project_dir
-    project = load_project(project_root, args.version_check, profile, cli_vars)
-    return project, cli_vars

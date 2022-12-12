@@ -4,7 +4,6 @@ import shutil
 from typing import List
 
 from dbt import deprecations
-from dbt.config.runtime import get_project_and_cli_vars_from_args
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     CheckCleanPath,
@@ -14,7 +13,6 @@ from dbt.events.types import (
 )
 from dbt.task.base import (
     BaseTask,
-    get_nearest_project_dir,
     move_to_nearest_project_dir,
 )
 
@@ -40,12 +38,6 @@ class CleanTask(BaseTask):
                 fire_event(ProtectedCleanPath(path=path))
 
         fire_event(FinishedCleanPaths())
-
-    @classmethod
-    def from_args(cls, args) -> "CleanTask":
-        nearest_project_dir: str = get_nearest_project_dir(args.project_dir)
-        project, cli_vars = get_project_and_cli_vars_from_args(args, nearest_project_dir)
-        return cls(args, project, cli_vars)
 
 
 def is_protected_path(path, model_paths: List[str], test_paths: List[str]) -> bool:
