@@ -209,7 +209,7 @@ Follow the steps to [install `changie`](https://changie.dev/guide/installation/)
 
 Once changie is installed and your PR is created for a new feature, simply run the following command and changie will walk you through the process of creating a changelog entry:
 
-```bash
+```shell
 changie new
 ```
 
