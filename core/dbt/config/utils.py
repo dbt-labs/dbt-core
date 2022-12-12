@@ -12,9 +12,9 @@ from dbt.events.types import InvalidVarsYAML
 from dbt.exceptions import ValidationException, raise_compiler_error
 
 
-def parse_cli_vars(var_string: str) -> Dict[str, Any]:
+def parse_cli_vars(var: str) -> Dict[str, Any]:
     try:
-        cli_vars = yaml_helper.load_yaml_text(var_string)
+        cli_vars = yaml_helper.load_yaml_text(var)
         var_type = type(cli_vars)
         if var_type is dict:
             return cli_vars
@@ -64,7 +64,13 @@ def get_project_config(
         flags.set_from_args(args, user_config)
         if cli_vars is None:
             cli_vars = {}
-        profile = Profile.render_from_args(args, ProfileRenderer(cli_vars), profile_name)
+        profile = Profile.render(
+            ProfileRenderer(cli_vars),
+            profile_name,
+            args.THREADS,
+            args.TARGET,
+            args.PROFILE,
+        )
     # Generate a project
     project = Project.from_project_root(
         project_path,

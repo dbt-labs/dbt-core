@@ -113,6 +113,10 @@ class DepsTask(BaseTask):
         # into the modules directory
         nearest_project_dir = move_to_nearest_project_dir(args.project_dir)
 
+        # N.B. parse_cli_vars is embedded into the param when using click.
+        # replace this with:
+        # cli_vars: Dict[str, Any] = getattr(args, "vars", {})
+        # when this task is refactored for click
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
         project_root: str = args.project_dir or nearest_project_dir
         profile: UnsetProfile = cls._get_unset_profile()

@@ -6,11 +6,13 @@ import click
 from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
+from dbt.config import RuntimeConfig
+from dbt.config.runtime import load_project, load_profile
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
-from dbt.tracking import initialize_from_flags, track_run
-from dbt.config.runtime import load_project
 from dbt.task.deps import DepsTask
+from dbt.task.run import RunTask
+from dbt.tracking import initialize_from_flags, track_run
 
 
 def cli_runner():
@@ -46,6 +48,7 @@ def cli_runner():
 @p.printer_width
 @p.quiet
 @p.record_timing_info
+@p.single_threaded
 @p.static_parser
 @p.use_colors
 @p.use_experimental_parser
@@ -57,15 +60,8 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    ctx.obj = {}
+    # Get primatives
     flags = Flags()
-
-    # Version info
-    if flags.VERSION:
-        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        return
-    else:
-        del ctx.params["version"]
 
     # Logging
     # N.B. Legacy logger is not supported
@@ -75,6 +71,7 @@ def cli(ctx, **kwargs):
         flags.USE_COLORS,
         flags.DEBUG,
     )
+
     # Tracking
     initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
     ctx.with_resource(track_run(run_command=ctx.invoked_subcommand))
@@ -83,13 +80,27 @@ def cli(ctx, **kwargs):
     if flags.RECORD_TIMING_INFO:
         ctx.with_resource(profiler(enable=True, outfile=flags.RECORD_TIMING_INFO))
 
-    # TODO need profile to exisit
-    profile = None
-
-    # project need profile to render because it requires knowing Target
-    ctx.obj["project"] = load_project(flags.PROJECT_DIR, flags.VERSION_CHECK, profile, flags.VARS)
     # Adapter management
     ctx.with_resource(adapter_management())
+
+    # Version info
+    if flags.VERSION:
+        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
+        return
+
+    # Profile
+    profile = load_profile(
+        flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, flags.THREADS
+    )
+
+    # Project
+    project = load_project(flags.PROJECT_DIR, flags.VERSION_CHECK, profile, flags.VARS)
+
+    # Context for downstream commands
+    ctx.obj = {}
+    ctx.obj["flags"] = flags
+    ctx.obj["profile"] = profile
+    ctx.obj["project"] = project
 
 
 # dbt build
@@ -100,10 +111,10 @@ def cli(ctx, **kwargs):
 @p.fail_fast
 @p.full_refresh
 @p.indirect_selection
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.show
 @p.state
@@ -146,10 +157,10 @@ def docs(ctx, **kwargs):
 @p.compile_docs
 @p.defer
 @p.exclude
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -185,11 +196,11 @@ def docs_serve(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.full_refresh
-@p.models
 @p.parse_only
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -259,13 +270,13 @@ def init(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.indirect_selection
-@p.models
 @p.output
 @p.output_keys
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -302,10 +313,10 @@ def parse(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.full_refresh
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -315,8 +326,13 @@ def parse(ctx, **kwargs):
 @p.version_check
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = RunTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt run operation
@@ -339,10 +355,10 @@ def run_operation(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.full_refresh
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.show
 @p.state
@@ -362,10 +378,10 @@ def seed(ctx, **kwargs):
 @click.pass_context
 @p.defer
 @p.exclude
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -388,11 +404,11 @@ def source(ctx, **kwargs):
 @source.command("freshness")
 @click.pass_context
 @p.exclude
-@p.models
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -411,10 +427,10 @@ def freshness(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.indirect_selection
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.store_failures

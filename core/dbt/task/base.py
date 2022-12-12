@@ -78,8 +78,6 @@ class BaseTask(metaclass=ABCMeta):
     def __init__(self, args, config, project=None):
         self.args = args
         self.config = config
-        if hasattr(config, "args"):
-            self.config.args.single_threaded = False
         self.project = config if isinstance(config, Project) else project
 
     @classmethod

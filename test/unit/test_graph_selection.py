@@ -126,7 +126,12 @@ def test_run_specs(include, exclude, expected):
     graph = _get_graph()
     manifest = _get_manifest(graph)
     selector = graph_selector.NodeSelector(graph, manifest)
-    spec = graph_cli.parse_difference(include, exclude)
+    # TODO:  The "eager" string below needs to be replaced with programatic access
+    #  to the default value for the indirect selection parameter in 
+    # dbt.cli.params.indirect_selection
+    #
+    # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
+    spec = graph_cli.parse_difference(include, exclude, "eager")
     selected, _ = selector.select_nodes(spec)
 
     assert selected == expected

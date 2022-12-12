@@ -75,7 +75,7 @@ def project_from_dict(project, profile, packages=None, selectors=None, cli_vars=
 
 
 
-def config_from_parts_or_dicts(project, profile, packages=None, selectors=None, cli_vars='{}'):
+def config_from_parts_or_dicts(project, profile, packages=None, selectors=None, cli_vars={}):
     from dbt.config import Project, Profile, RuntimeConfig
     from copy import deepcopy
 

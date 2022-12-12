@@ -30,6 +30,11 @@ class RunOperationTask(ManifestTask):
         return package_name, macro_name
 
     def _get_kwargs(self) -> Dict[str, Any]:
+        # N.B. parse_cli_vars is embedded into the param when using click.
+        # replace this with:
+        # return self.args.args
+        # when this task is refactored for click
+        # or remove the function completely as it's basically a noop
         return parse_cli_vars(self.args.args)
 
     def compile_manifest(self) -> None:

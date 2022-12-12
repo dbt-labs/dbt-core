@@ -141,14 +141,6 @@ macro_debugging = click.option(
     hidden=True,
 )
 
-models = click.option(
-    "-m",
-    "-s",
-    "models",
-    envvar=None,
-    help="Specify the nodes to include.",
-    multiple=True,
-)
 
 output = click.option(
     "--output",
@@ -270,12 +262,34 @@ resource_type = click.option(
     default="default",
 )
 
+select = click.option(
+    "-m",
+    "-s",
+    "select",
+    envvar=None,
+    help="Specify the nodes to include.",
+    multiple=True,
+)
+
 selector = click.option(
     "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
 )
 
 show = click.option(
     "--show", envvar=None, help="Show a sample of the loaded data in the terminal", is_flag=True
+)
+
+# TODO:  The env var is a correction!
+# The original env var was `DBT_TEST_SINGLE_THREADED`.
+# This broke the existing naming convention.
+# This will need to be communicated as a change to the community!
+#
+# N.B. This flag is only used for testing, hence it's hidden from help text.
+single_threaded = click.option(
+    "--single-threaded/--no-single-threaded",
+    envvar="DBT_SINGLE_THREADED",
+    default=False,
+    hidden=True,
 )
 
 skip_profile_setup = click.option(
