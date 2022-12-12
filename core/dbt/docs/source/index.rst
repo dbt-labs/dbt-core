@@ -66,5 +66,7 @@ For make context, We would need to pass in the arguments that we want to invoke 
 
 For the full code example, you can refer to `example.py <https://github.com/dbt-labs/dbt-core/blob/feature/click-cli/core/dbt/cli/example.py>`_
 
+API documentation
+-----------------
 
 .. dbt_click:: dbt.cli.main:cli
