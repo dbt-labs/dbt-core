@@ -7,7 +7,9 @@ from dbt.adapters.factory import adapter_management
 from dbt.cli import params as p
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
-from dbt.cli.context import DBTContext
+from dbt.config.project import Project
+from dbt.config.profile import Profile
+from dbt.config.runtime import load_project, load_profile
 from dbt.events.functions import setup_event_logger
 from dbt.profiler import profiler
 from dbt.tracking import initialize_from_flags, track_run
@@ -19,16 +21,61 @@ from typing import Optional
 
 
 
+# CLI invocation
 def cli_runner():
     # Alias "list" to "ls"
     ls = copy(cli.commands["list"])
     ls.hidden = True
     cli.add_command(ls, "ls")
 
-    cli.context_class = DBTContext
-
     # Run the cli
     cli()
+
+
+class dbtUsageException(Exception):
+    pass
+
+
+# Programmatic invocation
+class dbtRunner:
+    def __init__(self, project: Project = None, profile: Profile = None):
+        self.project = project
+        self.profile = profile
+
+    def invoke(self, args):
+        dbt_ctx = cli.make_context(cli.name, args)
+        dbt_ctx.obj = {}
+        dbt_ctx.obj["project"] = self.project
+        dbt_ctx.obj["profile"] = self.profile
+
+        try:
+            return cli.invoke(dbt_ctx)
+        except (click.NoSuchOption, click.UsageError) as e:
+            raise dbtUsageException(e.message)
+
+
+# TODO: refactor - consider decorator, or post-init on a dbtContext
+def _initialize_context(ctx):
+    flags = Flags()
+
+    # Tracking
+    initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
+    ctx.with_resource(track_run(run_command=flags.WHICH))
+
+    ctx.obj = ctx.obj or {}
+
+    # Profile
+    # TODO: generalize safe access to threads
+    threads = getattr(flags, "THREADS", None)
+    profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
+    # Project
+    if ctx.obj.get("project") is None:
+        project = load_project(flags.PROJECT_DIR, flags.VERSION_CHECK, profile, flags.VARS)
+        ctx.obj["project"] = project
+
+    # Context for downstream commands
+    ctx.obj["flags"] = flags
+    ctx.obj["profile"] = profile
 
 
 # dbt
@@ -67,7 +114,12 @@ def cli(ctx, **kwargs):
     For more documentation on these commands, visit: docs.getdbt.com
     """
     # Get primatives
-    flags = ctx.obj["flags"]
+    flags = Flags()
+
+    # Version info
+    if flags.VERSION:
+        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
+        return
 
     # Logging
     # N.B. Legacy logger is not supported
@@ -78,21 +130,12 @@ def cli(ctx, **kwargs):
         flags.DEBUG,
     )
 
-    # Tracking
-    initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
-    ctx.with_resource(track_run(run_command=ctx.invoked_subcommand))
-
     # Profiling
     if flags.RECORD_TIMING_INFO:
         ctx.with_resource(profiler(enable=True, outfile=flags.RECORD_TIMING_INFO))
 
     # Adapter management
     ctx.with_resource(adapter_management())
-
-    # Version info
-    if flags.VERSION:
-        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        return
 
 
 # dbt build
@@ -238,6 +281,7 @@ def debug(ctx, **kwargs):
 @p.vars
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
+    _initialize_context(ctx)
     flags = ctx.obj["flags"]
     project = ctx.obj["project"]
 
@@ -324,6 +368,7 @@ def parse(ctx, **kwargs):
 @p.version_check
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
+    _initialize_context(ctx)
     config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
     task = RunTask(ctx.obj["flags"], config)
 
