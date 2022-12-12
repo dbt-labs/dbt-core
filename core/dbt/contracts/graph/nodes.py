@@ -112,7 +112,7 @@ class BaseNode(dbtClassMixin, Replaceable):
     # will this node map to an object in the database?
     @property
     def is_relational(self):
-        return self.resource_type in NodeType.refable() or self.should_store_failures
+        return self.resource_type in NodeType.refable()
 
     @property
     def is_ephemeral(self):
@@ -551,15 +551,19 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
 class TestShouldStoreFailures:
     @property
     def should_store_failures(self):
-        return (
-            self.config.store_failures
-            if self.config.store_failures is not None
-            else flags.STORE_FAILURES
-        )
+        if self.config.store_failures:
+            return self.config.store_failures
+        return flags.STORE_FAILURES
+
+    @property
+    def is_relational(self):
+        if self.should_store_failures:
+            return True
+        return False
 
 
 @dataclass
-class SingularTestNode(CompiledNode, TestShouldStoreFailures):
+class SingularTestNode(TestShouldStoreFailures, CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -593,7 +597,7 @@ class HasTestMetadata(dbtClassMixin):
 
 
 @dataclass
-class GenericTestNode(CompiledNode, HasTestMetadata, TestShouldStoreFailures):
+class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
