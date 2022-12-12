@@ -291,7 +291,7 @@ def upgrade_manifest_json(manifest: dict) -> dict:
     for doc_content in manifest.get("docs", {}).values():
         if "root_path" in doc_content:
             del doc_content["root_path"]
-        doc_content["resource_type"] = "docs block"
+        doc_content["resource_type"] = "doc"
     return manifest
 
 

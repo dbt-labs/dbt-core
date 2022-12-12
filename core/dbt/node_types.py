@@ -13,7 +13,7 @@ class NodeType(StrEnum):
     # TODO: rm?
     RPCCall = "rpc"
     SqlOperation = "sql operation"
-    Documentation = "docs block"
+    Documentation = "doc"
     Source = "source"
     Macro = "macro"
     Exposure = "exposure"

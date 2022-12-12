@@ -1829,7 +1829,7 @@ class TestParsedDocumentation(ContractTestCase):
         return {
             'block_contents': 'some doc contents',
             'name': 'foo',
-            'resource_type': 'docs block',
+            'resource_type': 'doc',
             'original_file_path': '/root/docs/doc.md',
             'package_name': 'test',
             'path': '/root/docs',

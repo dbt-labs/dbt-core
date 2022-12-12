@@ -1196,7 +1196,7 @@ def expected_references_manifest(project):
             "doc.dbt.__overview__": ANY,
             "doc.test.column_info": {
                 "block_contents": "An ID field",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "column_info",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1205,7 +1205,7 @@ def expected_references_manifest(project):
             },
             "doc.test.ephemeral_summary": {
                 "block_contents": ("A summmary table of the ephemeral copy of the seed data"),
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "ephemeral_summary",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1214,7 +1214,7 @@ def expected_references_manifest(project):
             },
             "doc.test.source_info": {
                 "block_contents": "My source",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "source_info",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1223,7 +1223,7 @@ def expected_references_manifest(project):
             },
             "doc.test.summary_count": {
                 "block_contents": "The number of instances of the first name",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "summary_count",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1232,7 +1232,7 @@ def expected_references_manifest(project):
             },
             "doc.test.summary_first_name": {
                 "block_contents": "The first name being summarized",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "summary_first_name",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1241,7 +1241,7 @@ def expected_references_manifest(project):
             },
             "doc.test.table_info": {
                 "block_contents": "My table",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "table_info",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1252,7 +1252,7 @@ def expected_references_manifest(project):
                 "block_contents": (
                     "A view of the summary of the ephemeral copy of the seed data"
                 ),
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "view_summary",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1261,7 +1261,7 @@ def expected_references_manifest(project):
             },
             "doc.test.macro_info": {
                 "block_contents": "My custom test that I wrote that does nothing",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "macro_info",
                 "original_file_path": os.path.join("macros", "macro.md"),
                 "package_name": "test",
@@ -1270,7 +1270,7 @@ def expected_references_manifest(project):
             },
             "doc.test.notebook_info": {
                 "block_contents": "A description of the complex exposure",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "notebook_info",
                 "original_file_path": docs_path,
                 "package_name": "test",
@@ -1279,7 +1279,7 @@ def expected_references_manifest(project):
             },
             "doc.test.macro_arg_info": {
                 "block_contents": "The model for my custom test",
-                "resource_type": "docs block",
+                "resource_type": "doc",
                 "name": "macro_arg_info",
                 "original_file_path": os.path.join("macros", "macro.md"),
                 "package_name": "test",
