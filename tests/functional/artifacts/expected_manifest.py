@@ -464,6 +464,9 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "docs": {"node_color": None, "show": True},
                 "checksum": checksum_file(seed_path),
                 "unrendered_config": unrendered_seed_config,
+                "relation_name": relation_name_node_format.format(
+                    project.database, my_schema_name, "seed"
+                ),
             },
             "test.test.not_null_model_id.d01cc630e6": {
                 "alias": "not_null_model_id",
@@ -493,7 +496,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}",
                 "language": "sql",
                 "refs": [["model"]],
-                "relation_name": None,
+                "relation_name": relation_name_node_format.format(
+                    project.database, test_audit_schema, "not_null_model_id"),
                 "resource_type": "test",
                 "schema": test_audit_schema,
                 "database": project.database,
@@ -589,7 +593,9 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "raw_code": "{{ test.test_nothing(**_dbt_generic_test_kwargs) }}",
                 "language": "sql",
                 "refs": [["model"]],
-                "relation_name": None,
+                "relation_name": relation_name_node_format.format(
+                    project.database, test_audit_schema, "test_nothing_model_"
+                ),
                 "resource_type": "test",
                 "schema": test_audit_schema,
                 "database": project.database,
@@ -639,7 +645,9 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}",
                 "language": "sql",
                 "refs": [["model"]],
-                "relation_name": None,
+                "relation_name": relation_name_node_format.format(
+                    project.database, test_audit_schema, "unique_model_id"
+                ),
                 "resource_type": "test",
                 "schema": test_audit_schema,
                 "database": project.database,
@@ -1058,6 +1066,9 @@ def expected_references_manifest(project):
                 "unique_id": "seed.test.seed",
                 "checksum": checksum_file(seed_path),
                 "unrendered_config": get_unrendered_seed_config(),
+                "relation_name": '"{0}"."{1}".seed'.format(
+                    project.database, my_schema_name
+                ),
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",

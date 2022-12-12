@@ -38,6 +38,8 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
         # the target schema must be set if we got here, so overwrite the node's
         # schema
         node.schema = node.config.target_schema
+        # We need to set relation_name again, since database/schema might have changed
+        self._update_node_relation_name(node)
 
         return node
 
