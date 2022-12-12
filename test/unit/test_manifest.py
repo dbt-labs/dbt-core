@@ -46,7 +46,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
-    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict',
+    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name',
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {

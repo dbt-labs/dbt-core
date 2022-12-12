@@ -173,9 +173,13 @@ def assertEqualNodes(node_one, node_two):
     node_one_dict = node_one.to_dict()
     if 'created_at' in node_one_dict:
         del node_one_dict['created_at']
+    if "relation_name" in node_one_dict:
+        del node_one_dict["relation_name"]
     node_two_dict = node_two.to_dict()
     if 'created_at' in node_two_dict:
         del node_two_dict['created_at']
+    if "relation_name" in node_two_dict:
+        del node_two_dict["relation_name"]
     # we don't reall care the order of packages, doing this because it is hard to
     # make config.packages a set instead of a list
     if 'config' in node_one_dict and 'packages' in node_one_dict['config']:
@@ -1333,6 +1337,7 @@ class AnalysisParserTest(BaseParserTest):
             raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={},
+            relation_name=None,
         )
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' +  normalize('analyses/nested/analysis_1.sql')
