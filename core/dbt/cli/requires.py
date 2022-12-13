@@ -5,7 +5,9 @@ from dbt.events.functions import setup_event_logger
 from dbt.exceptions import DbtProjectError
 from dbt.profiler import profiler
 from dbt.tracking import initialize_from_flags, track_run
+
 from click import Context
+from functools import update_wrapper
 
 
 def preflight(func):
@@ -40,7 +42,7 @@ def preflight(func):
 
         return func(*args, **kwargs)
 
-    return wrapper
+    return update_wrapper(wrapper, func)
 
 
 def profile(func):
@@ -60,7 +62,7 @@ def profile(func):
 
         return func(*args, **kwargs)
 
-    return wrapper
+    return update_wrapper(wrapper, func)
 
 
 def project(func):
@@ -82,4 +84,4 @@ def project(func):
 
         return func(*args, **kwargs)
 
-    return wrapper
+    return update_wrapper(wrapper, func)
