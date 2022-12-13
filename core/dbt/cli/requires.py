@@ -50,7 +50,7 @@ def profile(func):
 
         if ctx.obj.get("profile") is None:
             flags = ctx.obj["flags"]
-            # TODO: Generalize safe access to flags.THREADS: 
+            # TODO: Generalize safe access to flags.THREADS:
             # https://github.com/dbt-labs/dbt-core/issues/6259
             threads = getattr(flags, "THREADS", None)
             profile = load_profile(
