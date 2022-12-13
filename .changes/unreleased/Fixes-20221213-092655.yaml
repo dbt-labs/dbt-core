@@ -1,0 +1,6 @@
+kind: Fixes
+body: Late-rendering for `pre_` and `post_hook`s in `dbt_project.yml`
+time: 2022-12-13T09:26:55.11397-07:00
+custom:
+  Author: dbeatty10
+  Issue: "6411"
