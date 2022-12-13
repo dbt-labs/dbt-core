@@ -152,7 +152,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
 # Metrics, exposures,
 @dataclass
 class HasRelationMetadata(dbtClassMixin, Replaceable):
-    database: str
+    database: Optional[str]
     schema: str
 
     # Can't set database to None like it ought to be
