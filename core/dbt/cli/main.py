@@ -3,23 +3,14 @@ from copy import copy
 from pprint import pformat as pf  # This is temporary for RAT-ing
 
 import click
-from dbt.adapters.factory import adapter_management
-from dbt.cli import params as p
-from dbt.cli.flags import Flags
+from dbt.cli import requires, params as p
 from dbt.config import RuntimeConfig
 from dbt.config.project import Project
 from dbt.config.profile import Profile
-from dbt.config.runtime import load_project, load_profile
-from dbt.events.functions import setup_event_logger
-from dbt.profiler import profiler
-from dbt.tracking import initialize_from_flags, track_run
-
+from dbt.contracts.graph.manifest import Manifest
 from dbt.task.clean import CleanTask
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
-from typing import Optional
-
-
 
 # CLI invocation
 def cli_runner():
@@ -38,44 +29,24 @@ class dbtUsageException(Exception):
 
 # Programmatic invocation
 class dbtRunner:
-    def __init__(self, project: Project = None, profile: Profile = None):
+    def __init__(
+        self, project: Project = None, profile: Profile = None, manifest: Manifest = None
+    ):
         self.project = project
         self.profile = profile
+        self.manifest = manifest
 
     def invoke(self, args):
         dbt_ctx = cli.make_context(cli.name, args)
         dbt_ctx.obj = {}
         dbt_ctx.obj["project"] = self.project
         dbt_ctx.obj["profile"] = self.profile
+        dbt_ctx.obj["manifest"] = self.manifest
 
         try:
             return cli.invoke(dbt_ctx)
         except (click.NoSuchOption, click.UsageError) as e:
             raise dbtUsageException(e.message)
-
-
-# TODO: refactor - consider decorator, or post-init on a dbtContext
-def _initialize_context(ctx):
-    flags = Flags()
-
-    # Tracking
-    initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
-    ctx.with_resource(track_run(run_command=flags.WHICH))
-
-    ctx.obj = ctx.obj or {}
-
-    # Profile
-    # TODO: generalize safe access to threads
-    threads = getattr(flags, "THREADS", None)
-    profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
-    # Project
-    if ctx.obj.get("project") is None:
-        project = load_project(flags.PROJECT_DIR, flags.VERSION_CHECK, profile, flags.VARS)
-        ctx.obj["project"] = project
-
-    # Context for downstream commands
-    ctx.obj["flags"] = flags
-    ctx.obj["profile"] = profile
 
 
 # dbt
@@ -113,29 +84,10 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    # Get primatives
-    flags = Flags()
-
     # Version info
-    if flags.VERSION:
+    if ctx.params["version"]:
         click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
         return
-
-    # Logging
-    # N.B. Legacy logger is not supported
-    setup_event_logger(
-        flags.LOG_PATH,
-        flags.LOG_FORMAT,
-        flags.USE_COLORS,
-        flags.DEBUG,
-    )
-
-    # Profiling
-    if flags.RECORD_TIMING_INFO:
-        ctx.with_resource(profiler(enable=True, outfile=flags.RECORD_TIMING_INFO))
-
-    # Adapter management
-    ctx.with_resource(adapter_management())
 
 
 # dbt build
@@ -159,10 +111,11 @@ def cli(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
 def build(ctx, **kwargs):
     """Run all Seeds, Models, Snapshots, and tests in DAG order"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt clean
@@ -173,12 +126,12 @@ def build(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
 def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
-    flags = Flags()
-    project = ctx.obj["project"]
-
-    task = CleanTask(flags, project)
+    task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
 
     results = task.run()
     success = task.interpret_results(results)
@@ -208,10 +161,11 @@ def docs(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
 def docs_generate(ctx, **kwargs):
     """Generate the documentation website for your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt docs serve
@@ -224,10 +178,11 @@ def docs_generate(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt compile
@@ -248,10 +203,10 @@ def docs_serve(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
 def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the target/ directory."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
     return None, True
 
 
@@ -265,10 +220,11 @@ def compile(ctx, **kwargs):
 @p.target
 @p.vars
 @p.version_check
+@requires.preflight
 def debug(ctx, **kwargs):
     """Show some helpful information about dbt for debugging. Not to be confused with the --debug option which increases verbosity."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt deps
@@ -279,9 +235,11 @@ def debug(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
-    _initialize_context(ctx)
     flags = ctx.obj["flags"]
     project = ctx.obj["project"]
 
@@ -301,10 +259,11 @@ def deps(ctx, **kwargs):
 @p.skip_profile_setup
 @p.target
 @p.vars
+@requires.preflight
 def init(ctx, **kwargs):
     """Initialize a new DBT project."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt list
@@ -323,10 +282,11 @@ def init(ctx, **kwargs):
 @p.state
 @p.target
 @p.vars
+@requires.preflight
 def list(ctx, **kwargs):
     """List the resources in your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt parse
@@ -342,10 +302,11 @@ def list(ctx, **kwargs):
 @p.vars
 @p.version_check
 @p.write_manifest
+@requires.preflight
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt run
@@ -366,9 +327,11 @@ def parse(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-    _initialize_context(ctx)
     config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
     task = RunTask(ctx.obj["flags"], config)
 
@@ -386,10 +349,11 @@ def run(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
 def run_operation(ctx, **kwargs):
     """Run the named macro with any supplied arguments."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt seed
@@ -409,10 +373,11 @@ def run_operation(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
 def seed(ctx, **kwargs):
     """Load data from csv files into your data warehouse."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt snapshot
@@ -429,10 +394,11 @@ def seed(ctx, **kwargs):
 @p.target
 @p.threads
 @p.vars
+@requires.preflight
 def snapshot(ctx, **kwargs):
     """Execute snapshots defined in your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt source
@@ -456,10 +422,11 @@ def source(ctx, **kwargs):
 @p.target
 @p.threads
 @p.vars
+@requires.preflight
 def freshness(ctx, **kwargs):
     """Snapshots the current freshness of the project's sources"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # dbt test
@@ -481,10 +448,11 @@ def freshness(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
+    return None, True
 
 
 # Support running as a module
