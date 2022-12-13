@@ -385,7 +385,7 @@ def _build_build_subparser(subparsers, base_subparser):
     )
     sub.add_argument(
         "--indirect-selection",
-        choices=["eager", "cautious"],
+        choices=["eager", "cautious", "buildable"],
         default="eager",
         dest="indirect_selection",
         help="""
@@ -763,7 +763,7 @@ def _build_test_subparser(subparsers, base_subparser):
     )
     sub.add_argument(
         "--indirect-selection",
-        choices=["eager", "cautious"],
+        choices=["eager", "cautious", "buildable"],
         default="eager",
         dest="indirect_selection",
         help="""
@@ -869,7 +869,7 @@ def _build_list_subparser(subparsers, base_subparser):
     )
     sub.add_argument(
         "--indirect-selection",
-        choices=["eager", "cautious"],
+        choices=["eager", "cautious", "buildable"],
         default="eager",
         dest="indirect_selection",
         help="""
