@@ -13,11 +13,12 @@ from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
-    ParsedNode,
     ManifestNode,
+    ManifestSQLNode,
     GenericTestNode,
     GraphMemberNode,
     InjectedCTE,
+    SeedNode,
 )
 from dbt.exceptions import (
     dependency_not_found,
@@ -167,7 +168,7 @@ class Compiler:
     # a dict for jinja rendering of SQL
     def _create_node_context(
         self,
-        node: ManifestNode,
+        node: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Dict[str, Any],
     ) -> Dict[str, Any]:
@@ -185,14 +186,6 @@ class Compiler:
         adapter = get_adapter(self.config)
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
-
-    def _get_relation_name(self, node: ParsedNode):
-        relation_name = None
-        if node.is_relational and not node.is_ephemeral_model:
-            adapter = get_adapter(self.config)
-            relation_cls = adapter.Relation
-            relation_name = str(relation_cls.create_from(self.config, node))
-        return relation_name
 
     def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
         """
@@ -252,10 +245,10 @@ class Compiler:
 
     def _recursively_prepend_ctes(
         self,
-        model: ManifestNode,
+        model: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]],
-    ) -> Tuple[ManifestNode, List[InjectedCTE]]:
+    ) -> Tuple[ManifestSQLNode, List[InjectedCTE]]:
         """This method is called by the 'compile_node' method. Starting
         from the node that it is passed in, it will recursively call
         itself using the 'extra_ctes'.  The 'ephemeral' models do
@@ -270,7 +263,8 @@ class Compiler:
 
         # Just to make it plain that nothing is actually injected for this case
         if not model.extra_ctes:
-            model.extra_ctes_injected = True
+            if not isinstance(model, SeedNode):
+                model.extra_ctes_injected = True
             manifest.update_node(model)
             return (model, model.extra_ctes)
 
@@ -289,6 +283,7 @@ class Compiler:
                     f"could not be resolved: {cte.id}"
                 )
             cte_model = manifest.nodes[cte.id]
+            assert not isinstance(cte_model, SeedNode)
 
             if not cte_model.is_ephemeral_model:
                 raise InternalException(f"{cte.id} is not ephemeral")
@@ -332,16 +327,16 @@ class Compiler:
 
         return model, prepended_ctes
 
-    # Sets compiled fields in the ManifestNode passed in,
+    # Sets compiled fields in the ManifestSQLNode passed in,
     # creates a "context" dictionary for jinja rendering,
     # and then renders the "compiled_code" using the node, the
     # raw_code and the context.
     def _compile_node(
         self,
-        node: ManifestNode,
+        node: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
-    ) -> ManifestNode:
+    ) -> ManifestSQLNode:
         if extra_context is None:
             extra_context = {}
 
@@ -382,8 +377,6 @@ class Compiler:
                 context,
                 node,
             )
-
-        node.relation_name = self._get_relation_name(node)
 
         node.compiled = True
 
@@ -494,8 +487,11 @@ class Compiler:
         return Graph(linker.graph)
 
     # writes the "compiled_code" into the target/compiled directory
-    def _write_node(self, node: ManifestNode) -> ManifestNode:
-        if not node.extra_ctes_injected or node.resource_type == NodeType.Snapshot:
+    def _write_node(self, node: ManifestSQLNode) -> ManifestSQLNode:
+        if not node.extra_ctes_injected or node.resource_type in (
+            NodeType.Snapshot,
+            NodeType.Seed,
+        ):
             return node
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
@@ -507,11 +503,11 @@ class Compiler:
 
     def compile_node(
         self,
-        node: ManifestNode,
+        node: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
         write: bool = True,
-    ) -> ManifestNode:
+    ) -> ManifestSQLNode:
         """This is the main entry point into this code. It's called by
         CompileRunner.compile, GenericRPCRunner.compile, and
         RunTask.get_hook_sql. It calls '_compile_node' to convert

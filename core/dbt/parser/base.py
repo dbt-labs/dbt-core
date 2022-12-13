@@ -16,7 +16,7 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import HasUniqueID, ManifestNode
+from dbt.contracts.graph.nodes import ManifestNode, BaseNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
 from dbt.exceptions import ParsingException, validator_error_message, InternalException
 from dbt import hooks
@@ -26,8 +26,8 @@ from dbt.parser.search import FileBlock
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
 # ParsedNode to be operable.
-FinalValue = TypeVar("FinalValue", bound=HasUniqueID)
-IntermediateValue = TypeVar("IntermediateValue", bound=HasUniqueID)
+FinalValue = TypeVar("FinalValue", bound=BaseNode)
+IntermediateValue = TypeVar("IntermediateValue", bound=BaseNode)
 
 IntermediateNode = TypeVar("IntermediateNode", bound=Any)
 FinalNode = TypeVar("FinalNode", bound=ManifestNode)
@@ -253,12 +253,13 @@ class ConfiguredParser(
         self._mangle_hooks(final_config_dict)
         parsed_node.config = parsed_node.config.from_dict(final_config_dict)
 
-    def update_parsed_node_name(
+    def update_parsed_node_relation_names(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
         self._update_node_database(parsed_node, config_dict)
         self._update_node_schema(parsed_node, config_dict)
         self._update_node_alias(parsed_node, config_dict)
+        self._update_node_relation_name(parsed_node)
 
     def update_parsed_node_config(
         self,
@@ -317,7 +318,7 @@ class ConfiguredParser(
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config_dict(parsed_node, config_dict)
         # This updates the node database/schema/alias
-        self.update_parsed_node_name(parsed_node, config_dict)
+        self.update_parsed_node_relation_names(parsed_node, config_dict)
 
         # tests don't have hooks
         if parsed_node.resource_type == NodeType.Test:
@@ -387,6 +388,19 @@ class ConfiguredParser(
         result = self.transform(node)
         self.add_result_node(block, result)
         return result
+
+    def _update_node_relation_name(self, node: ManifestNode):
+        # Seed and Snapshot nodes and Models that are not ephemeral,
+        # and TestNodes that store_failures.
+        # TestNodes do not get a relation_name without store failures
+        # because no schema is created.
+        if node.is_relational and not node.is_ephemeral_model:
+            adapter = get_adapter(self.root_project)
+            relation_cls = adapter.Relation
+            node.relation_name = str(relation_cls.create_from(self.root_project, node))
+        else:
+            # Set it to None in case it changed with a config update
+            node.relation_name = None
 
     @abc.abstractmethod
     def parse_file(self, file_block: FileBlock) -> None:

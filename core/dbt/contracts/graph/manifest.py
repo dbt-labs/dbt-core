@@ -29,11 +29,11 @@ from dbt.contracts.graph.nodes import (
     GenericTestNode,
     Exposure,
     Metric,
-    HasUniqueID,
     UnpatchedSourceDefinition,
     ManifestNode,
     GraphMemberNode,
     ResultNode,
+    BaseNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
@@ -320,7 +320,7 @@ def _sort_values(dct):
 
 
 def build_node_edges(nodes: List[ManifestNode]):
-    """Build the forward and backward edges on the given list of ParsedNodes
+    """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
     """
@@ -338,10 +338,10 @@ def build_node_edges(nodes: List[ManifestNode]):
 # Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
     forward_edges: Dict[str, List[str]] = {
-        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on.macros
+        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
     }
     for node in nodes:
-        for unique_id in node.depends_on.macros:
+        for unique_id in node.depends_on_macros:
             if unique_id in forward_edges.keys():
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges)
@@ -1235,7 +1235,7 @@ class WritableManifest(ArtifactMixin):
         return dct
 
 
-def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
+def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])
 

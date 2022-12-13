@@ -2400,7 +2400,7 @@ class LogDebugStackTrace(DebugLevel, pt.LogDebugStackTrace):  # noqa
         return "Z011"
 
     def message(self) -> str:
-        return ""
+        return f"{self.exc_info}"
 
 
 # We don't write "clean" events to the log, because the clean command

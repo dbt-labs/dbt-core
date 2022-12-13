@@ -8,7 +8,6 @@ from typing import (
     Generic,
     TypeVar,
     Tuple,
-    Union,
     Dict,
     Any,
 )
@@ -17,7 +16,7 @@ from typing_extensions import Protocol
 import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
-from dbt.contracts.graph.nodes import ParsedNode, SourceDefinition, ManifestNode
+from dbt.contracts.graph.nodes import ResultNode, ManifestNode
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.relation import Policy, HasQuoting
@@ -47,11 +46,7 @@ class RelationProtocol(Protocol):
         ...
 
     @classmethod
-    def create_from(
-        cls: Type[Self],
-        config: HasQuoting,
-        node: Union[ParsedNode, SourceDefinition],
-    ) -> Self:
+    def create_from(cls: Type[Self], config: HasQuoting, node: ResultNode) -> Self:
         ...
 
 

@@ -1,8 +1,8 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set
 
-from dbt.contracts.graph.nodes import SourceDefinition, ParsedNode
+from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
     RelationType,
     ComponentName,
@@ -210,7 +210,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_ephemeral_from_node(
         cls: Type[Self],
         config: HasQuoting,
-        node: ParsedNode,
+        node: ManifestNode,
     ) -> Self:
         # Note that ephemeral models are based on the name.
         identifier = cls.add_ephemeral_prefix(node.name)
@@ -223,7 +223,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from_node(
         cls: Type[Self],
         config: HasQuoting,
-        node: ParsedNode,
+        node: ManifestNode,
         quote_policy: Optional[Dict[str, bool]] = None,
         **kwargs: Any,
     ) -> Self:
@@ -244,7 +244,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from(
         cls: Type[Self],
         config: HasQuoting,
-        node: Union[ParsedNode, SourceDefinition],
+        node: ResultNode,
         **kwargs: Any,
     ) -> Self:
         if node.resource_type == NodeType.Source:
@@ -254,8 +254,11 @@ class BaseRelation(FakeAPIObject, Hashable):
                 )
             return cls.create_from_source(node, **kwargs)
         else:
+            # Can't use ManifestNode here because of parameterized generics
             if not isinstance(node, (ParsedNode)):
-                raise InternalException(f"type mismatch, expected ParsedNode but got {type(node)}")
+                raise InternalException(
+                    f"type mismatch, expected ManifestNode but got {type(node)}"
+                )
             return cls.create_from_node(config, node, **kwargs)
 
     @classmethod

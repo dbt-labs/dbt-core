@@ -237,18 +237,43 @@ def rename_sql_attr(node_content: dict) -> dict:
     return node_content
 
 
+def upgrade_node_content(node_content):
+    rename_sql_attr(node_content)
+    if node_content["resource_type"] != "seed" and "root_path" in node_content:
+        del node_content["root_path"]
+
+
+def upgrade_seed_content(node_content):
+    # Remove compilation related attributes
+    for attr_name in (
+        "language",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "compiled_path",
+        "compiled",
+        "compiled_code",
+        "extra_ctes_injected",
+        "extra_ctes",
+        "relation_name",
+    ):
+        if attr_name in node_content:
+            del node_content[attr_name]
+
+
 def upgrade_manifest_json(manifest: dict) -> dict:
     for node_content in manifest.get("nodes", {}).values():
-        node_content = rename_sql_attr(node_content)
-        if node_content["resource_type"] != "seed" and "root_path" in node_content:
-            del node_content["root_path"]
+        upgrade_node_content(node_content)
+        if node_content["resource_type"] == "seed":
+            upgrade_seed_content(node_content)
     for disabled in manifest.get("disabled", {}).values():
         # There can be multiple disabled nodes for the same unique_id
         # so make sure all the nodes get the attr renamed
         for node_content in disabled:
-            rename_sql_attr(node_content)
-            if node_content["resource_type"] != "seed" and "root_path" in node_content:
-                del node_content["root_path"]
+            upgrade_node_content(node_content)
+            if node_content["resource_type"] == "seed":
+                upgrade_seed_content(node_content)
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
@@ -266,6 +291,7 @@ def upgrade_manifest_json(manifest: dict) -> dict:
     for doc_content in manifest.get("docs", {}).values():
         if "root_path" in doc_content:
             del doc_content["root_path"]
+        doc_content["resource_type"] = "doc"
     return manifest
 
 
