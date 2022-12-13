@@ -1,6 +1,7 @@
 import inspect  # This is temporary for RAT-ing
 from copy import copy
 from pprint import pformat as pf  # This is temporary for RAT-ing
+from typing import List, Tuple, Optional
 
 import click
 from dbt.cli import requires, params as p
@@ -36,14 +37,13 @@ class dbtRunner:
         self.profile = profile
         self.manifest = manifest
 
-    def invoke(self, args):
-        dbt_ctx = cli.make_context(cli.name, args)
-        dbt_ctx.obj = {}
-        dbt_ctx.obj["project"] = self.project
-        dbt_ctx.obj["profile"] = self.profile
-        dbt_ctx.obj["manifest"] = self.manifest
-
+    def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
         try:
+            dbt_ctx = cli.make_context(cli.name, args)
+            dbt_ctx.obj = {}
+            dbt_ctx.obj["project"] = self.project
+            dbt_ctx.obj["profile"] = self.profile
+            dbt_ctx.obj["manifest"] = self.manifest
             return cli.invoke(dbt_ctx)
         except (click.NoSuchOption, click.UsageError) as e:
             raise dbtUsageException(e.message)
