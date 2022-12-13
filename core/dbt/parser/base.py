@@ -390,11 +390,16 @@ class ConfiguredParser(
         return result
 
     def _update_node_relation_name(self, node: ManifestNode):
-        if not node.is_ephemeral_model:
+        # Seed and Snapshot nodes and Models that are not ephemeral,
+        # and TestNodes that store_failures.
+        # TestNodes do not get a relation_name without store failures
+        # because no schema is created.
+        if node.is_relational and not node.is_ephemeral_model:
             adapter = get_adapter(self.root_project)
             relation_cls = adapter.Relation
             node.relation_name = str(relation_cls.create_from(self.root_project, node))
         else:
+            # Set it to None in case it changed with a config update
             node.relation_name = None
 
     @abc.abstractmethod

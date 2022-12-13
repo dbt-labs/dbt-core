@@ -496,8 +496,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}",
                 "language": "sql",
                 "refs": [["model"]],
-                "relation_name": relation_name_node_format.format(
-                    project.database, test_audit_schema, "not_null_model_id"),
+                "relation_name": None,
                 "resource_type": "test",
                 "schema": test_audit_schema,
                 "database": project.database,
@@ -593,9 +592,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "raw_code": "{{ test.test_nothing(**_dbt_generic_test_kwargs) }}",
                 "language": "sql",
                 "refs": [["model"]],
-                "relation_name": relation_name_node_format.format(
-                    project.database, test_audit_schema, "test_nothing_model_"
-                ),
+                "relation_name": None,
                 "resource_type": "test",
                 "schema": test_audit_schema,
                 "database": project.database,
@@ -645,9 +642,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}",
                 "language": "sql",
                 "refs": [["model"]],
-                "relation_name": relation_name_node_format.format(
-                    project.database, test_audit_schema, "unique_model_id"
-                ),
+                "relation_name": None,
                 "resource_type": "test",
                 "schema": test_audit_schema,
                 "database": project.database,
