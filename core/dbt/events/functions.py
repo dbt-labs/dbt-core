@@ -114,7 +114,9 @@ def cleanup_event_logger():
 # currently fire before logs can be configured by setup_event_logger(), we
 # create a default configuration with default settings and no file output.
 EVENT_MANAGER: EventManager = EventManager()
-EVENT_MANAGER.add_logger(_get_logbook_log_config() if flags.ENABLE_LEGACY_LOGGER else _get_stdout_config())
+EVENT_MANAGER.add_logger(
+    _get_logbook_log_config() if flags.ENABLE_LEGACY_LOGGER else _get_stdout_config()
+)
 
 
 # This global, and the following two functions for capturing stdout logs are
