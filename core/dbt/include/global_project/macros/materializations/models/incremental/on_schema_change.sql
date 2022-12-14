@@ -1,6 +1,6 @@
 {% macro incremental_validate_on_schema_change(on_schema_change, default='ignore') %}
 
-   {% if on_schema_change not in ['sync_all_columns', 'append_new_columns', 'fail', 'ignore'] %}
+   {% if on_schema_change not in ['sync_all_columns', 'append_new_columns', 'full_refresh', 'fail', 'ignore'] %}
 
      {% set log_message = 'Invalid value for on_schema_change (%s) specified. Setting default value of %s.' % (on_schema_change, default) %}
      {% do log(log_message) %}
@@ -127,6 +127,9 @@
           {% endset %}
 
           {% do exceptions.raise_compiler_error(fail_msg) %}
+
+        {% elif on_schema_change == 'full_refresh' %}
+          {{ return({"full_refresh": True}) }}
 
         {# -- unless we ignore, run the sync operation per the config #}
         {% else %}
