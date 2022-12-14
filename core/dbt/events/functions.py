@@ -18,10 +18,6 @@ import uuid
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
-# The default event manager will not log anything, but some tests run code that
-# generates events, without configuring the event manager.
-EVENT_MANAGER: EventManager = EventManager()
-
 
 def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = None):
     cleanup_event_logger()
@@ -113,6 +109,16 @@ def cleanup_event_logger():
     EVENT_MANAGER.loggers.clear()
     EVENT_MANAGER.callbacks.clear()
 
+
+# The default event manager will not log anything, but some tests run code that
+# generates events, without configuring the event manager, so we create an empty
+# manager here until there is a better testing strategy in place.
+EVENT_MANAGER: EventManager = EventManager()
+
+# Since dbt-rpc does not do its own log setup, we set up logbook if legacy
+# logging is enabled.
+if flags.ENABLE_LEGACY_LOGGER:
+    EVENT_MANAGER.add_logger(_get_logbook_log_config(None))
 
 # This global, and the following two functions for capturing stdout logs are
 # an unpleasant hack we intend to remove as part of API-ification. The GitHub
