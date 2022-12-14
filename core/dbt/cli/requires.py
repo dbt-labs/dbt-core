@@ -85,3 +85,30 @@ def project(func):
         return func(*args, **kwargs)
 
     return update_wrapper(wrapper, func)
+
+
+def manifest(func):
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
+
+        if ctx.obj.get("manifest") is None:
+            # TODO: Decouple target from profile, and remove the need for profile here:
+            # https://github.com/dbt-labs/dbt-core/issues/6257
+            if not ctx.obj.get("project"):
+                raise DbtProjectError("project required for manifest")
+
+            from dbt.config import RuntimeConfig
+            from dbt.parser.manifest import ManifestLoader
+            from dbt.adapters.factory import register_adapter
+
+            runtimeConfig = RuntimeConfig.from_parts(
+                ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"]
+            )
+            register_adapter(runtimeConfig)
+            manifest = ManifestLoader.get_full_manifest(runtimeConfig)
+            ctx.obj["manifest"] = manifest
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)

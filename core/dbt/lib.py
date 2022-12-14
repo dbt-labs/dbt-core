@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from dbt.contracts.results import RunningStatus, collect_timing_info
 from dbt.events.functions import fire_event
 from dbt.events.types import NodeCompiling, NodeExecuting
@@ -6,6 +7,7 @@ from dbt.exceptions import RuntimeException
 from dbt import flags
 from dbt.task.sql import SqlCompileRunner
 from dataclasses import dataclass
+from dbt.config.runtime import load_profile, load_project
 
 
 @dataclass
@@ -15,6 +17,7 @@ class RuntimeArgs:
     single_threaded: bool
     profile: str
     target: str
+    threads: Optional[int] = None
 
 
 class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
@@ -59,6 +62,12 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
             ctx.timing.append(timing_info)
 
         return result
+
+
+def load_profile_project(project_dir, profile):
+    profile = load_profile(project_dir, {}, profile)
+    project = load_project(project_dir, False, profile, {})
+    return profile, project
 
 
 def get_dbt_config(project_dir, args=None, single_threaded=False):

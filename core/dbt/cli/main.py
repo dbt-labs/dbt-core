@@ -326,11 +326,20 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
 
     config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
     task = RunTask(ctx.obj["flags"], config)
+
+    # hacky implementation before manifest is refacotred
+    # this is exactly what we do in lib.py, will be removed after
+    def no_op(*args, **kwargs):
+        pass
+
+    task.load_manifest = no_op
+    task.manifest = ctx.obj["manifest"]
 
     results = task.run()
     success = task.interpret_results(results)
