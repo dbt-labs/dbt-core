@@ -40,7 +40,7 @@ class CleanTask(BaseTask):
         fire_event(FinishedCleanPaths())
 
 
-def is_protected_path(path, model_paths: List[str], test_paths: List[str]) -> bool:
+def is_protected_path(path: str, model_paths: List[str], test_paths: List[str]) -> bool:
     """This function identifies protected paths."""
     abs_path = os.path.abspath(path)
     protected_paths = model_paths + test_paths + ["."]
@@ -48,7 +48,7 @@ def is_protected_path(path, model_paths: List[str], test_paths: List[str]) -> bo
     return abs_path in set(protected_abs_paths) or is_project_path(abs_path)
 
 
-def is_project_path(path) -> bool:
+def is_project_path(path: str) -> bool:
     """This function identifies project paths."""
     proj_path = os.path.abspath(".")
     return not os.path.commonprefix([proj_path, os.path.abspath(path)]) == proj_path
