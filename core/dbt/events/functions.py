@@ -38,7 +38,7 @@ def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = Non
         EVENT_MANAGER.add_logger(_get_logfile_config(os.path.join(log_path, "dbt.log")))
 
 
-def _get_stdout_config(level: Optional[EventLevel]) -> LoggerConfig:
+def _get_stdout_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     fmt = LineFormat.PlainText
     if flags.LOG_FORMAT == "json":
         fmt = LineFormat.Json
@@ -90,7 +90,7 @@ def _logfile_filter(log_cache_events: bool, evt: BaseEvent) -> bool:
     )
 
 
-def _get_logbook_log_config(level: Optional[EventLevel]) -> LoggerConfig:
+def _get_logbook_log_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     config = _get_stdout_config(level)
     config.name = "logbook_log"
     config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e, Cache)
@@ -110,15 +110,14 @@ def cleanup_event_logger():
     EVENT_MANAGER.callbacks.clear()
 
 
-# The default event manager will not log anything, but some tests run code that
-# generates events, without configuring the event manager, so we create an empty
-# manager here until there is a better testing strategy in place.
+# Since dbt-rpc does not do its own log setup, and since some events can
+# currently fire before logs can be configured by setup_event_logger(), we
+# create a default configuration with default settings and no file output.
 EVENT_MANAGER: EventManager = EventManager()
+EVENT_MANAGER.add_logger(
+    _get_logbook_log_config() if flags.ENABLE_LEGACY_LOGGER else _get_stdout_config()
+)
 
-# Since dbt-rpc does not do its own log setup, we set up logbook if legacy
-# logging is enabled.
-if flags.ENABLE_LEGACY_LOGGER:
-    EVENT_MANAGER.add_logger(_get_logbook_log_config(None))
 
 # This global, and the following two functions for capturing stdout logs are
 # an unpleasant hack we intend to remove as part of API-ification. The GitHub
