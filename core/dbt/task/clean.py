@@ -31,7 +31,7 @@ class CleanTask(BaseTask):
             deprecations.warn("install-packages-path")
         for path in self.project.clean_targets:
             fire_event(CheckCleanPath(path=path))
-            if not is_protected_path(path, self.config.model_paths, self.config.test_paths):
+            if not is_protected_path(path, self.project.model_paths, self.project.test_paths):
                 shutil.rmtree(path, True)
                 fire_event(ConfirmCleanPath(path=path))
             else:
