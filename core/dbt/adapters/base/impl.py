@@ -617,7 +617,6 @@ class BaseAdapter(metaclass=AdapterMeta):
                 arg_name="from_relation",
                 got_value=from_relation,
                 expected_type=self.Relation,
-                version="0.13.0",
             )
 
         if not isinstance(to_relation, self.Relation):
@@ -626,7 +625,6 @@ class BaseAdapter(metaclass=AdapterMeta):
                 arg_name="to_relation",
                 got_value=to_relation,
                 expected_type=self.Relation,
-                version="0.13.0",
             )
 
         from_columns = {col.name: col for col in self.get_columns_in_relation(from_relation)}
@@ -652,7 +650,6 @@ class BaseAdapter(metaclass=AdapterMeta):
                 arg_name="relation",
                 got_value=relation,
                 expected_type=self.Relation,
-                version="0.13.0",
             )
 
         columns = self.get_columns_in_relation(relation)
@@ -683,7 +680,6 @@ class BaseAdapter(metaclass=AdapterMeta):
                 arg_name="from_relation",
                 got_value=from_relation,
                 expected_type=self.Relation,
-                version="0.13.0",
             )
 
         if not isinstance(to_relation, self.Relation):
@@ -692,7 +688,6 @@ class BaseAdapter(metaclass=AdapterMeta):
                 arg_name="to_relation",
                 got_value=to_relation,
                 expected_type=self.Relation,
-                version="0.13.0",
             )
 
         self.expand_column_types(from_relation, to_relation)

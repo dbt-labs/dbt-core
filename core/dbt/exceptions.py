@@ -879,20 +879,17 @@ class DisallowSecretEnvVar(ParsingException):
 
 
 class InvalidMacroArgType(CompilationException):
-    def __init__(
-        self, method_name: str, arg_name: str, got_value: Any, expected_type, version: str
-    ):
+    def __init__(self, method_name: str, arg_name: str, got_value: Any, expected_type):
         self.method_name = method_name
         self.arg_name = arg_name
         self.got_value = got_value
         self.expected_type = expected_type
-        self.version = version
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         got_type = type(self.got_value)
         msg = (
-            f"As of {self.version}, 'adapter.{self.method_name}' expects argument "
+            f"'adapter.{self.method_name}' expects argument "
             f"'{self.arg_name}' to be of type '{self.expected_type}', instead got "
             f"{self.got_value} ({got_type})"
         )
@@ -2319,13 +2316,11 @@ def invalid_bool_error(got_value, macro_name) -> NoReturn:
     raise InvalidBoolean(return_value=got_value, macro_name=macro_name)
 
 
-def invalid_type_error(
-    method_name, arg_name, got_value, expected_type, version="0.13.0"
-) -> NoReturn:
+def invalid_type_error(method_name, arg_name, got_value, expected_type) -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros
     has changed.
     """
-    raise InvalidMacroArgType(method_name, arg_name, got_value, expected_type, version)
+    raise InvalidMacroArgType(method_name, arg_name, got_value, expected_type)
 
 
 def disallow_secret_env_var(env_var_name) -> NoReturn:
