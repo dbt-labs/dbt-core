@@ -225,6 +225,8 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
+        args.pop("MP_CONTEXT", None)
+        args.pop("mp_context", None)
         return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
 
     def write(self, path: str):
