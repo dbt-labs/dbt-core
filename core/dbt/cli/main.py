@@ -13,6 +13,7 @@ from dbt.task.clean import CleanTask
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
 
+
 # CLI invocation
 def cli_runner():
     # Alias "list" to "ls"
@@ -136,6 +137,7 @@ def clean(ctx, **kwargs):
     results = task.run()
     success = task.interpret_results(results)
     return results, success
+
 
 # dbt docs
 @cli.group()
