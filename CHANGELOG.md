@@ -72,9 +72,6 @@
 - Bump black from 22.8.0 to 22.10.0 ([#6019](https://github.com/dbt-labs/dbt-core/pull/6019))
 - Bump mashumaro[msgpack] from 3.0.4 to 3.1.1 in /core ([#6108](https://github.com/dbt-labs/dbt-core/pull/6108))
 - Update colorama requirement from <0.4.6,>=0.3.9 to >=0.3.9,<0.4.7 in /core ([#6144](https://github.com/dbt-labs/dbt-core/pull/6144))
-
-### Dependency
-
 - Bump mashumaro[msgpack] from 3.1.1 to 3.2 in /core ([#4904](https://github.com/dbt-labs/dbt-core/issues/4904))
 
 ### Contributors
