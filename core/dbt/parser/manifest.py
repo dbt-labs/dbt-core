@@ -22,7 +22,6 @@ from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
     PartialParsingFullReparseBecauseOfError,
     PartialParsingExceptionFile,
-    PartialParsingFile,
     PartialParsingException,
     PartialParsingSkipParsing,
     PartialParsingMacroChangeStartFullParse,
@@ -287,7 +286,6 @@ class ManifestLoader:
                         if source_file:
                             parse_file_type = source_file.parse_file_type
                             fire_event(PartialParsingExceptionFile(file=file_id))
-                            fire_event(PartialParsingFile(file_id=source_file.file_id))
                     exc_info["parse_file_type"] = parse_file_type
                     fire_event(PartialParsingException(exc_info=exc_info))
 

@@ -870,14 +870,6 @@ class PartialParsingExceptionFile(betterproto.Message):
 
 
 @dataclass
-class PartialParsingFile(betterproto.Message):
-    """I015"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    file_id: str = betterproto.string_field(2)
-
-
-@dataclass
 class PartialParsingException(betterproto.Message):
     """I016"""
 
@@ -913,14 +905,6 @@ class PartialParsingProfileEnvVarsChanged(betterproto.Message):
     """I020"""
 
     info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingDeletedMetric(betterproto.Message):
-    """I021"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    unique_id: str = betterproto.string_field(2)
 
 
 @dataclass
@@ -1075,75 +1059,12 @@ class PartialParsingEnabled(betterproto.Message):
 
 
 @dataclass
-class PartialParsingAddedFile(betterproto.Message):
+class PartialParsingFile(betterproto.Message):
     """I041"""
 
     info: "EventInfo" = betterproto.message_field(1)
     file_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingDeletedFile(betterproto.Message):
-    """I042"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    file_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingUpdatedFile(betterproto.Message):
-    """I043"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    file_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingNodeMissingInSourceFile(betterproto.Message):
-    """I044"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    file_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingMissingNodes(betterproto.Message):
-    """I045"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    file_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingChildMapMissingUniqueID(betterproto.Message):
-    """I046"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    unique_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingUpdateSchemaFile(betterproto.Message):
-    """I047"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    file_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingDeletedSource(betterproto.Message):
-    """I048"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    unique_id: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingDeletedExposure(betterproto.Message):
-    """I049"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    unique_id: str = betterproto.string_field(2)
+    operation: str = betterproto.string_field(3)
 
 
 @dataclass

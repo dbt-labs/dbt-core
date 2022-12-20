@@ -664,12 +664,6 @@ message PartialParsingExceptionFile {
     string file = 2;
 }
 
-// I015
-message PartialParsingFile {
-    EventInfo info = 1;
-    string file_id = 2;
-}
-
 // I016
 message PartialParsingException {
     EventInfo info = 1;
@@ -696,11 +690,7 @@ message PartialParsingProfileEnvVarsChanged {
     EventInfo info = 1;
 }
 
-// I021
-message PartialParsingDeletedMetric {
-    EventInfo info = 1;
-    string unique_id = 2;
-}
+// Skipped I021
 
 // I022
 message ManifestWrongMetadataVersion {
@@ -816,58 +806,13 @@ message PartialParsingEnabled {
 }
 
 // I041
-message PartialParsingAddedFile {
+message PartialParsingFile {
     EventInfo info = 1;
     string file_id = 2;
+    string operation = 3;
 }
 
-// I042
-message PartialParsingDeletedFile {
-    EventInfo info = 1;
-    string file_id = 2;
-}
-
-// I043
-message PartialParsingUpdatedFile {
-    EventInfo info = 1;
-    string file_id = 2;
-}
-
-// I044
-message PartialParsingNodeMissingInSourceFile {
-    EventInfo info = 1;
-    string file_id=2;
-}
-
-// I045
-message PartialParsingMissingNodes {
-    EventInfo info = 1;
-    string file_id = 2;
-}
-
-// I046
-message PartialParsingChildMapMissingUniqueID {
-    EventInfo info = 1;
-    string unique_id = 2;
-}
-
-// I047
-message PartialParsingUpdateSchemaFile {
-    EventInfo info = 1;
-    string file_id = 2;
-}
-
-// I048
-message PartialParsingDeletedSource {
-    EventInfo info = 1;
-    string unique_id = 2;
-}
-
-// I049
-message PartialParsingDeletedExposure {
-    EventInfo info = 1;
-    string unique_id = 2;
-}
+// Skipped I042, I043, I044, I045, I046, I047, I048, I049
 
 // I050
 message InvalidDisabledTargetInTestNode {
