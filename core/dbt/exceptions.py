@@ -269,7 +269,7 @@ class IncompatibleSchemaError(DbtRuntimeError):
     MESSAGE = "Incompatible Schema"
 
 
-class JinjaRenderingException(CompilationError):
+class JinjaRenderingError(CompilationError):
     pass
 
 
@@ -2666,5 +2666,38 @@ class ValidationException(DbtValidationError):
     pass
 
 
-# class IncompatibleSchemaException(IncompatibleSchemaError):
-#     pass
+class IncompatibleSchemaException(IncompatibleSchemaError):
+    pass
+
+
+class JinjaRenderingException(JinjaRenderingError):
+    pass
+
+
+# note to self: I only need to do this for classes that existed before I
+# converted from functions.  new things dont need this deprecation
+
+
+# class ParsingException(RuntimeException):
+# class JSONValidationException(ValidationException):
+# class UndefinedMacroException(CompilationException):
+# class UnknownAsyncIDException(Exception):
+# class AliasException(ValidationException):
+# class DependencyException(Exception):
+# class DbtConfigError(RuntimeException):
+# class FailFastException(RuntimeException):
+# class DbtProjectError(DbtConfigError):
+# class DbtSelectorsError(DbtConfigError):
+# class DbtProfileError(DbtConfigError):
+# class SemverException(Exception):
+# class VersionsNotCompatibleException(SemverException):
+# class NotImplementedException(Exception):
+# class FailedToConnectException(DatabaseException):
+# class CommandError(RuntimeException):
+# class ExecutableError(CommandError):
+# class WorkingDirectoryError(CommandError):
+# class CommandResultError(CommandError):
+# class InvalidConnectionException(RuntimeException):
+# class InvalidSelectorException(RuntimeException):
+# class DuplicateYamlKeyException(CompilationException):
+# class ConnectionException(Exception):

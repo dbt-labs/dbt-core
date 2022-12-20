@@ -6,7 +6,7 @@ import yaml
 from dbt.clients.jinja import get_rendered
 from dbt.clients.jinja import get_template
 from dbt.clients.jinja import extract_toplevel_blocks
-from dbt.exceptions import CompilationError, JinjaRenderingException
+from dbt.exceptions import CompilationError, JinjaRenderingError
 
 
 @contextmanager
@@ -55,12 +55,12 @@ jinja_tests = [
     (
         '''foo: "{{ 'bar' | as_bool }}"''',
         returns('bar'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ 'bar' | as_number }}"''',
         returns('bar'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ 'bar' | as_native }}"''',
@@ -116,7 +116,7 @@ jinja_tests = [
     (
         '''foo: "{{ 1 | as_bool }}"''',
         returns('1'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ 1 | as_number }}"''',
@@ -136,7 +136,7 @@ jinja_tests = [
     (
         '''foo: "{{ '1' | as_bool }}"''',
         returns('1'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ '1' | as_number }}"''',
@@ -171,7 +171,7 @@ jinja_tests = [
     (
         '''foo: "{{ True | as_number }}"''',
         returns('True'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ True | as_native }}"''',
@@ -197,7 +197,7 @@ jinja_tests = [
     (
         '''foo: "{{ true | as_number }}"''',
         returns("True"),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ true | as_native }}"''',
@@ -254,7 +254,7 @@ jinja_tests = [
     (
         '''foo: "{{ True | as_number }}"''',
         returns("True"),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ True | as_native }}"''',
