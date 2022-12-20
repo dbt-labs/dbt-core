@@ -2362,3 +2362,14 @@ def materialization_not_available(model, adapter_type):
 def macro_not_found(model, target_macro_id):
     msg = f"'{model.unique_id}' references macro '{target_macro_id}' which is not defined!"
     raise CompilationException(msg=msg, node=model)
+
+
+# adapters use this to format messages.  it should be deprecated but live on for now
+def validator_error_message(exc):
+    """Given a dbt.dataclass_schema.ValidationError (which is basically a
+    jsonschema.ValidationError), return the relevant parts as a string
+    """
+    if not isinstance(exc, dbt.dataclass_schema.ValidationError):
+        return str(exc)
+    path = "[%s]" % "][".join(map(repr, exc.relative_path))
+    return "at path {}: {}".format(path, exc.message)
