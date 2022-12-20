@@ -7,7 +7,7 @@ from dbt import deprecations
 from dbt.exceptions import (
     InternalDbtError,
     DbtRuntimeError,
-    IncompatibleSchemaException,
+    IncompatibleSchemaError,
 )
 from dbt.version import __version__
 from dbt.events.functions import get_invocation_id, get_metadata_vars
@@ -332,7 +332,7 @@ class VersionedSchema(dbtClassMixin):
                 previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
                 if not cls.is_compatible_version(previous_schema_version):
-                    raise IncompatibleSchemaException(
+                    raise IncompatibleSchemaError(
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )

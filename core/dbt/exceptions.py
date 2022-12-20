@@ -241,7 +241,7 @@ class JSONValidationException(DbtValidationError):
         return (JSONValidationException, (self.typename, self.errors))
 
 
-class IncompatibleSchemaException(DbtRuntimeError):
+class IncompatibleSchemaError(DbtRuntimeError):
     def __init__(self, expected: str, found: Optional[str]):
         self.expected = expected
         self.found = found
@@ -2662,5 +2662,9 @@ class RecursionException(RecursionError):
     pass
 
 
-# class ValidationException(DbtValidationError):
+class ValidationException(DbtValidationError):
+    pass
+
+
+# class IncompatibleSchemaException(IncompatibleSchemaError):
 #     pass

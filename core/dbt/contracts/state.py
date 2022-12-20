@@ -3,7 +3,7 @@ from .graph.manifest import WritableManifest
 from .results import RunResultsArtifact
 from .results import FreshnessExecutionResultArtifact
 from typing import Optional
-from dbt.exceptions import IncompatibleSchemaException
+from dbt.exceptions import IncompatibleSchemaError
 
 
 class PreviousState:
@@ -19,7 +19,7 @@ class PreviousState:
         if manifest_path.exists() and manifest_path.is_file():
             try:
                 self.manifest = WritableManifest.read_and_check_versions(str(manifest_path))
-            except IncompatibleSchemaException as exc:
+            except IncompatibleSchemaError as exc:
                 exc.add_filename(str(manifest_path))
                 raise
 
@@ -27,7 +27,7 @@ class PreviousState:
         if results_path.exists() and results_path.is_file():
             try:
                 self.results = RunResultsArtifact.read_and_check_versions(str(results_path))
-            except IncompatibleSchemaException as exc:
+            except IncompatibleSchemaError as exc:
                 exc.add_filename(str(results_path))
                 raise
 
@@ -37,7 +37,7 @@ class PreviousState:
                 self.sources = FreshnessExecutionResultArtifact.read_and_check_versions(
                     str(sources_path)
                 )
-            except IncompatibleSchemaException as exc:
+            except IncompatibleSchemaError as exc:
                 exc.add_filename(str(sources_path))
                 raise
 
@@ -47,6 +47,6 @@ class PreviousState:
                 self.sources_current = FreshnessExecutionResultArtifact.read_and_check_versions(
                     str(sources_current_path)
                 )
-            except IncompatibleSchemaException as exc:
+            except IncompatibleSchemaError as exc:
                 exc.add_filename(str(sources_current_path))
                 raise

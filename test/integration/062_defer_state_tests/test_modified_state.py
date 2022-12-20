@@ -6,7 +6,7 @@ import string
 
 import pytest
 
-from dbt.exceptions import CompilationError, IncompatibleSchemaException
+from dbt.exceptions import CompilationError, IncompatibleSchemaError
 
 
 class TestModifiedState(DBTIntegrationTest):
@@ -206,6 +206,6 @@ class TestModifiedState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_previous_version_manifest(self):
         # This tests that a different schema version in the file throws an error
-        with self.assertRaises(IncompatibleSchemaException) as exc:
+        with self.assertRaises(IncompatibleSchemaError) as exc:
             results = self.run_dbt(['ls', '-s',  'state:modified',  '--state',  './previous_state'])
             self.assertEqual(exc.CODE, 10014)
