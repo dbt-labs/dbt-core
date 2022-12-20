@@ -23,9 +23,9 @@ from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatu
 from dbt.exceptions import (
     CompilationException,
     InternalException,
+    MissingMaterialization,
     RuntimeException,
     ValidationException,
-    missing_materialization,
 )
 from dbt.events.functions import fire_event, get_invocation_id, info
 from dbt.events.types import (
@@ -252,7 +252,7 @@ class ModelRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            missing_materialization(model, self.adapter.type())
+            raise MissingMaterialization(model=model, adapter_type=self.adapter.type())
 
         if "config" not in context:
             raise InternalException(
@@ -400,7 +400,7 @@ class RunTask(CompileTask):
                     thread_id="main",
                     timing=[],
                     message=f"{hook_type.value} failed, error:\n {exc.msg}",
-                    adapter_response=exc.msg,
+                    adapter_response={},
                     execution_time=0,
                     failures=1,
                 )

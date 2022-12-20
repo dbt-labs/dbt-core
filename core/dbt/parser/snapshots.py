@@ -4,7 +4,7 @@ from typing import List
 from dbt.dataclass_schema import ValidationError
 
 from dbt.contracts.graph.nodes import IntermediateSnapshotNode, SnapshotNode
-from dbt.exceptions import ParsingException, validator_error_message
+from dbt.exceptions import InvalidSnapshopConfig
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
 from dbt.parser.search import BlockContents, BlockSearcher, FileBlock
@@ -68,7 +68,7 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
         except ValidationError as exc:
-            raise ParsingException(validator_error_message(exc), node)
+            raise InvalidSnapshopConfig(exc, node)
 
     def parse_file(self, file_block: FileBlock) -> None:
         blocks = BlockSearcher(

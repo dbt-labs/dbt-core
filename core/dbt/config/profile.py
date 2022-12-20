@@ -9,12 +9,14 @@ from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
-from dbt.exceptions import CompilationException
-from dbt.exceptions import DbtProfileError
-from dbt.exceptions import DbtProjectError
-from dbt.exceptions import ValidationException
-from dbt.exceptions import RuntimeException
-from dbt.exceptions import validator_error_message
+from dbt.exceptions import (
+    CompilationException,
+    DbtProfileError,
+    DbtProjectError,
+    ValidationException,
+    RuntimeException,
+    ProfileConfigInvalid,
+)
 from dbt.events.types import MissingProfileTarget
 from dbt.events.functions import fire_event
 from dbt.utils import coerce_dict_str
@@ -156,7 +158,7 @@ class Profile(HasCredentials):
             dct = self.to_profile_info(serialize_credentials=True)
             ProfileConfig.validate(dct)
         except ValidationError as exc:
-            raise DbtProfileError(validator_error_message(exc)) from exc
+            raise ProfileConfigInvalid(exc) from exc
 
     @staticmethod
     def _credentials_from_profile(
