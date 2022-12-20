@@ -6,7 +6,7 @@ from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import JinjaLogWarning
 
 from dbt.exceptions import (
-    RuntimeException,
+    DbtRuntimeError,
     MissingConfig,
     MissingMaterialization,
     MissingRelation,
@@ -130,7 +130,7 @@ def wrapper(model):
         def inner(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except RuntimeException as exc:
+            except DbtRuntimeError as exc:
                 exc.add_node(model)
                 raise exc
 

@@ -7,7 +7,7 @@ from dbt.dataclass_schema import StrEnum, dbtClassMixin
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.exceptions import RuntimeException, InvalidSelectorException
+from dbt.exceptions import DbtRuntimeError, InvalidSelectorException
 
 
 RAW_SELECTOR_PATTERN = re.compile(
@@ -46,7 +46,7 @@ def _match_to_int(match: Dict[str, str], key: str) -> Optional[int]:
     try:
         return int(raw)
     except ValueError as exc:
-        raise RuntimeException(f"Invalid node spec - could not handle parent depth {raw}") from exc
+        raise DbtRuntimeError(f"Invalid node spec - could not handle parent depth {raw}") from exc
 
 
 SelectionSpec = Union[
@@ -72,7 +72,7 @@ class SelectionCriteria:
 
     def __post_init__(self):
         if self.children and self.childrens_parents:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Invalid node spec {self.raw} - "@" prefix and "+" suffix ' "are incompatible"
             )
 
@@ -111,7 +111,7 @@ class SelectionCriteria:
         indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> "SelectionCriteria":
         if "value" not in dct:
-            raise RuntimeException(f'Invalid node spec "{raw}" - no search value!')
+            raise DbtRuntimeError(f'Invalid node spec "{raw}" - no search value!')
         method_name, method_arguments = cls.parse_method(dct)
 
         parents_depth = _match_to_int(dct, "parents_depth")
@@ -162,7 +162,7 @@ class SelectionCriteria:
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
-            raise RuntimeException(f'Invalid selector spec "{raw}"')
+            raise DbtRuntimeError(f'Invalid selector spec "{raw}"')
 
         return cls.selection_criteria_from_dict(
             raw, result.groupdict(), indirect_selection=indirect_selection

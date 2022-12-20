@@ -17,7 +17,7 @@ from dbt.exceptions import (
     GitCheckoutError,
     GitCloningError,
     GitCloningProblem,
-    RuntimeException,
+    DbtRuntimeError,
 )
 from packaging import version
 
@@ -144,7 +144,7 @@ def clone_and_checkout(
     else:
         matches = re.match("Cloning into '(.+)'", err.decode("utf-8"))
         if matches is None:
-            raise RuntimeException(f'Error cloning {repo} - never saw "Cloning into ..." from git')
+            raise DbtRuntimeError(f'Error cloning {repo} - never saw "Cloning into ..." from git')
         directory = matches.group(1)
         fire_event(GitProgressPullingNewDependency(dir=directory))
     full_path = os.path.join(cwd, directory)

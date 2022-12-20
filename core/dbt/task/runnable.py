@@ -46,7 +46,7 @@ from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     InternalDbtError,
     NotImplementedException,
-    RuntimeException,
+    DbtRuntimeError,
     FailFastException,
 )
 
@@ -251,7 +251,7 @@ class GraphRunnableTask(ManifestTask):
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
             # next 'tick' - should be soon since our thread is about to finish!
-            self._raise_next_tick = RuntimeException(result.message)
+            self._raise_next_tick = DbtRuntimeError(result.message)
 
         return result
 

@@ -23,7 +23,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.exceptions import (
     GraphDependencyNotFound,
     InternalDbtError,
-    RuntimeException,
+    DbtRuntimeError,
 )
 from dbt.graph import Graph
 from dbt.events.functions import fire_event
@@ -257,7 +257,7 @@ class Compiler:
         inserting CTEs into the SQL.
         """
         if model.compiled_code is None:
-            raise RuntimeException("Cannot inject ctes into an unparsed node", model)
+            raise DbtRuntimeError("Cannot inject ctes into an unparsed node", model)
         if model.extra_ctes_injected:
             return (model, model.extra_ctes)
 

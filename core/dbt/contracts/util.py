@@ -6,7 +6,7 @@ from dbt.clients.system import write_json, read_json
 from dbt import deprecations
 from dbt.exceptions import (
     InternalDbtError,
-    RuntimeException,
+    DbtRuntimeError,
     IncompatibleSchemaException,
 )
 from dbt.version import __version__
@@ -123,7 +123,7 @@ class Readable:
         try:
             data = read_json(path)
         except (EnvironmentError, ValueError) as exc:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 
@@ -320,7 +320,7 @@ class VersionedSchema(dbtClassMixin):
         try:
             data = read_json(path)
         except (EnvironmentError, ValueError) as exc:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 

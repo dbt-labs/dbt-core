@@ -31,7 +31,7 @@ from dbt.exceptions import (
     NullRelationDropAttempted,
     RelationReturnedMultipleResults,
     RenameToNoneAttempted,
-    RuntimeException,
+    DbtRuntimeError,
     SnapshotTargetIncomplete,
     SnapshotTargetNotSnapshotTable,
     UnexpectedNull,
@@ -981,7 +981,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             else:
                 package_name = 'the "{}" package'.format(project)
 
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 'dbt could not find a macro with the name "{}" in {}'.format(
                     macro_name, package_name
                 )
@@ -1156,7 +1156,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         elif location == "prepend":
             return f"'{value}' || {add_to}"
         else:
-            raise RuntimeException(f'Got an unexpected location value of "{location}"')
+            raise DbtRuntimeError(f'Got an unexpected location value of "{location}"')
 
     def get_rows_different_sql(
         self,
@@ -1238,7 +1238,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         valid_strategies.append("default")
         builtin_strategies = self.builtin_incremental_strategies()
         if strategy in builtin_strategies and strategy not in valid_strategies:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f"The incremental strategy '{strategy}' is not valid for this adapter"
             )
 
@@ -1246,7 +1246,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         macro_name = f"get_incremental_{strategy}_sql"
         # The model_context should have MacroGenerator callable objects for all macros
         if macro_name not in model_context:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(
                     macro_name, self.config.project_name
                 )

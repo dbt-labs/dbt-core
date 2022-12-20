@@ -28,7 +28,7 @@ from dbt.exceptions import (
     ConfigContractBroken,
     DbtProjectError,
     NonUniquePackageName,
-    RuntimeException,
+    DbtRuntimeError,
     UninstalledPackagesFound,
 )
 from dbt.events.functions import warn_or_error
@@ -426,7 +426,7 @@ class UnsetProfile(Profile):
 
     def __getattribute__(self, name):
         if name in {"profile_name", "target_name", "threads"}:
-            raise RuntimeException(f'Error: disallowed attribute "{name}" - no profile!')
+            raise DbtRuntimeError(f'Error: disallowed attribute "{name}" - no profile!')
 
         return Profile.__getattribute__(self, name)
 
@@ -453,7 +453,7 @@ class UnsetProfileConfig(RuntimeConfig):
     def __getattribute__(self, name):
         # Override __getattribute__ to check that the attribute isn't 'banned'.
         if name in {"profile_name", "target_name"}:
-            raise RuntimeException(f'Error: disallowed attribute "{name}" - no profile!')
+            raise DbtRuntimeError(f'Error: disallowed attribute "{name}" - no profile!')
 
         # avoid every attribute access triggering infinite recursion
         return RuntimeConfig.__getattribute__(self, name)

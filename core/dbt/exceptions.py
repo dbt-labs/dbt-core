@@ -79,7 +79,7 @@ class InternalDbtError(Exception):
         return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
 
 
-class RuntimeException(RuntimeError, Exception):
+class DbtRuntimeError(RuntimeError, Exception):
     CODE = 10001
     MESSAGE = "Runtime error"
 
@@ -172,12 +172,12 @@ class RuntimeException(RuntimeError, Exception):
         return result
 
 
-class RPCFailureResult(RuntimeException):
+class RPCFailureResult(DbtRuntimeError):
     CODE = 10002
     MESSAGE = "RPC execution error"
 
 
-class RPCTimeoutException(RuntimeException):
+class RPCTimeoutException(DbtRuntimeError):
     CODE = 10008
     MESSAGE = "RPC timeout error"
 
@@ -196,7 +196,7 @@ class RPCTimeoutException(RuntimeException):
         return result
 
 
-class RPCKilledException(RuntimeException):
+class RPCKilledException(DbtRuntimeError):
     CODE = 10009
     MESSAGE = "RPC process killed"
 
@@ -212,7 +212,7 @@ class RPCKilledException(RuntimeException):
         }
 
 
-class RPCCompiling(RuntimeException):
+class RPCCompiling(DbtRuntimeError):
     CODE = 10010
     MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
@@ -222,7 +222,7 @@ class RPCCompiling(RuntimeException):
         super().__init__(msg, node)
 
 
-class RPCLoadException(RuntimeException):
+class RPCLoadException(DbtRuntimeError):
     CODE = 10011
     MESSAGE = (
         'RPC server failed to compile project, call the "status" method for' " compile status"
@@ -237,7 +237,7 @@ class RPCLoadException(RuntimeException):
         return {"cause": self.cause, "message": self.msg}
 
 
-class DatabaseException(RuntimeException):
+class DatabaseException(DbtRuntimeError):
     CODE = 10003
     MESSAGE = "Database Error"
 
@@ -247,14 +247,14 @@ class DatabaseException(RuntimeException):
         if hasattr(self.node, "build_path") and self.node.build_path:
             lines.append(f"compiled Code at {self.node.build_path}")
 
-        return lines + RuntimeException.process_stack(self)
+        return lines + DbtRuntimeError.process_stack(self)
 
     @property
     def type(self):
         return "Database"
 
 
-class CompilationException(RuntimeException):
+class CompilationException(DbtRuntimeError):
     CODE = 10004
     MESSAGE = "Compilation Error"
 
@@ -274,16 +274,16 @@ class CompilationException(RuntimeException):
             )
 
 
-class RecursionException(RuntimeException):
+class RecursionException(DbtRuntimeError):
     pass
 
 
-class ValidationException(RuntimeException):
+class ValidationException(DbtRuntimeError):
     CODE = 10005
     MESSAGE = "Validation Error"
 
 
-class ParsingException(RuntimeException):
+class ParsingException(DbtRuntimeError):
     CODE = 10015
     MESSAGE = "Parsing Error"
 
@@ -306,7 +306,7 @@ class JSONValidationException(ValidationException):
         return (JSONValidationException, (self.typename, self.errors))
 
 
-class IncompatibleSchemaException(RuntimeException):
+class IncompatibleSchemaException(DbtRuntimeError):
     def __init__(self, expected: str, found: Optional[str]):
         self.expected = expected
         self.found = found
@@ -369,7 +369,7 @@ class DependencyException(Exception):
     MESSAGE = "Dependency Error"
 
 
-class DbtConfigError(RuntimeException):
+class DbtConfigError(DbtRuntimeError):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
@@ -387,7 +387,7 @@ class DbtConfigError(RuntimeException):
             return f"{msg}\n\nError encountered in {self.path}"
 
 
-class FailFastException(RuntimeException):
+class FailFastException(DbtRuntimeError):
     CODE = 10013
     MESSAGE = "FailFast Error"
 
@@ -436,7 +436,7 @@ class FailedToConnectException(DatabaseException):
     pass
 
 
-class CommandError(RuntimeException):
+class CommandError(DbtRuntimeError):
     def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command"):
         cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
         super().__init__(msg)
@@ -483,7 +483,7 @@ class CommandResultError(CommandError):
         return f"{self.msg} running: {self.cmd}"
 
 
-class InvalidConnectionException(RuntimeException):
+class InvalidConnectionException(DbtRuntimeError):
     def __init__(self, thread_id, known: List):
         self.thread_id = thread_id
         self.known = known
@@ -492,7 +492,7 @@ class InvalidConnectionException(RuntimeException):
         )
 
 
-class InvalidSelectorException(RuntimeException):
+class InvalidSelectorException(DbtRuntimeError):
     def __init__(self, name: str):
         self.name = name
         super().__init__(name)
@@ -679,7 +679,7 @@ class MissingCloseTag(CompilationException):
         return msg
 
 
-class GitCloningProblem(RuntimeException):
+class GitCloningProblem(DbtRuntimeError):
     def __init__(self, repo: str):
         self.repo = scrub_secrets(repo, env_secrets())
         super().__init__(msg=self.get_message())

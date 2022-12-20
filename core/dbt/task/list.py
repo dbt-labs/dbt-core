@@ -7,7 +7,7 @@ from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
 from dbt.events.functions import warn_or_error
 from dbt.events.types import NoNodesSelected
-from dbt.exceptions import RuntimeException, InternalDbtError
+from dbt.exceptions import DbtRuntimeError, InternalDbtError
 from dbt.logger import log_manager
 from dbt.events.eventmgr import EventLevel
 
@@ -44,9 +44,9 @@ class ListTask(GraphRunnableTask):
         super().__init__(args, config)
         if self.args.models:
             if self.args.select:
-                raise RuntimeException('"models" and "select" are mutually exclusive arguments')
+                raise DbtRuntimeError('"models" and "select" are mutually exclusive arguments')
             if self.args.resource_types:
-                raise RuntimeException(
+                raise DbtRuntimeError(
                     '"models" and "resource_type" are mutually exclusive ' "arguments"
                 )
 
@@ -83,7 +83,7 @@ class ListTask(GraphRunnableTask):
             elif node in self.manifest.metrics:
                 yield self.manifest.metrics[node]
             else:
-                raise RuntimeException(
+                raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{node}"'
                     f"Expected a source or a node!"
                 )

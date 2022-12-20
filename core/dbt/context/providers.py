@@ -60,7 +60,7 @@ from dbt.exceptions import (
     ParsingException,
     RefBadContext,
     RefInvalidArgs,
-    RuntimeException,
+    DbtRuntimeError,
     TargetNotFound,
     ValidationException,
 )
@@ -338,7 +338,7 @@ class ParseConfigObject(Config):
         # it's ok to have a parse context with no context config, but you must
         # not call it!
         if self.context_config is None:
-            raise RuntimeException("At parse time, did not receive a context config")
+            raise DbtRuntimeError("At parse time, did not receive a context config")
         self.context_config.add_config_call(opts)
         return ""
 
@@ -1248,7 +1248,7 @@ class ProviderContext(ManifestContext):
             and self.context_macro_stack.call_stack[1] == "macro.dbt.statement"
             and "materialization" in self.context_macro_stack.call_stack[0]
         ):
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f"submit_python_job is not intended to be called here, at model {parsed_model['alias']}, with macro call_stack {self.context_macro_stack.call_stack}."
             )
         return self.adapter.submit_python_job(parsed_model, compiled_code)

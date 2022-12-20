@@ -18,7 +18,7 @@ from dbt.contracts.results import (
 from dbt.exceptions import (
     NotImplementedException,
     CompilationException,
-    RuntimeException,
+    DbtRuntimeError,
     InternalDbtError,
 )
 from dbt.logger import log_manager
@@ -99,12 +99,12 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(LogDbtProjectError(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
+            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
             all_profile_names = list(read_profiles(flags.PROFILES_DIR).keys())
             fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
+            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
         return cls(args, config)
 
     @abstractmethod
@@ -123,7 +123,7 @@ def get_nearest_project_dir(args):
         if os.path.exists(project_file):
             return args.project_dir
         else:
-            raise dbt.exceptions.RuntimeException(
+            raise dbt.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
             )
@@ -137,7 +137,7 @@ def get_nearest_project_dir(args):
             return cwd
         cwd = os.path.dirname(cwd)
 
-    raise dbt.exceptions.RuntimeException(
+    raise dbt.exceptions.DbtRuntimeError(
         "fatal: Not a dbt project (or any of the parent directories). "
         "Missing dbt_project.yml file"
     )
@@ -344,7 +344,7 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def handle_exception(self, e, ctx):
-        catchable_errors = (CompilationException, RuntimeException)
+        catchable_errors = (CompilationException, DbtRuntimeError)
         if isinstance(e, catchable_errors):
             error = self._handle_catchable_exception(e, ctx)
         elif isinstance(e, InternalDbtError):

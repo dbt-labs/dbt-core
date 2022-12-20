@@ -24,7 +24,7 @@ from dbt.exceptions import (
     SemverException,
     ProjectContractBroken,
     ProjectContractInvalid,
-    RuntimeException,
+    DbtRuntimeError,
 )
 from dbt.graph import SelectionSpec
 from dbt.helper_types import NoValue
@@ -667,7 +667,7 @@ class Project:
 
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f"Could not find selector named {name}, expected one of {list(self.selectors)}"
             )
         return self.selectors[name]["definition"]

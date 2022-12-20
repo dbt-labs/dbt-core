@@ -14,7 +14,7 @@ from dbt.exceptions import (
     DbtProfileError,
     DbtProjectError,
     ValidationException,
-    RuntimeException,
+    DbtRuntimeError,
     ProfileConfigInvalid,
 )
 from dbt.events.types import MissingProfileTarget
@@ -75,7 +75,7 @@ def read_user_config(directory: str) -> UserConfig:
             if user_config is not None:
                 UserConfig.validate(user_config)
                 return UserConfig.from_dict(user_config)
-    except (RuntimeException, ValidationError):
+    except (DbtRuntimeError, ValidationError):
         pass
     return UserConfig()
 
@@ -182,8 +182,8 @@ class Profile(HasCredentials):
             data = cls.translate_aliases(profile)
             cls.validate(data)
             credentials = cls.from_dict(data)
-        except (RuntimeException, ValidationError) as e:
-            msg = str(e) if isinstance(e, RuntimeException) else e.message
+        except (DbtRuntimeError, ValidationError) as e:
+            msg = str(e) if isinstance(e, DbtRuntimeError) else e.message
             raise DbtProfileError(
                 'Credentials in profile "{}", target "{}" invalid: {}'.format(
                     profile_name, target_name, msg

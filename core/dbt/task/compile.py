@@ -6,7 +6,7 @@ from .base import BaseRunner
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
-from dbt.exceptions import InternalDbtError, RuntimeException
+from dbt.exceptions import InternalDbtError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.events.functions import fire_event
 from dbt.events.types import CompileComplete
@@ -63,12 +63,12 @@ class CompileTask(GraphRunnableTask):
 
         state = self.previous_state
         if state is None:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 "Received a --defer argument, but no value was provided to --state"
             )
 
         if state.manifest is None:
-            raise RuntimeException(f'Could not find manifest in --state path: "{self.args.state}"')
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{self.args.state}"')
         return state.manifest
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):

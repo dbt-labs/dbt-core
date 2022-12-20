@@ -24,7 +24,7 @@ from dbt.exceptions import (
     CompilationException,
     InternalDbtError,
     MissingMaterialization,
-    RuntimeException,
+    DbtRuntimeError,
     ValidationException,
 )
 from dbt.events.functions import fire_event, get_invocation_id
@@ -213,7 +213,7 @@ class ModelRunner(CompileRunner):
     def _build_run_model_result(self, model, context):
         result = context["load_result"]("main")
         if not result:
-            raise RuntimeException("main is not being called during running model")
+            raise DbtRuntimeError("main is not being called during running model")
         adapter_response = {}
         if isinstance(result.response, dbtClassMixin):
             adapter_response = result.response.to_dict(omit_none=True)
@@ -395,7 +395,7 @@ class RunTask(CompileTask):
     ) -> None:
         try:
             self.run_hooks(adapter, hook_type, extra_context)
-        except RuntimeException as exc:
+        except DbtRuntimeError as exc:
             fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
             self.node_results.append(
                 BaseResult(

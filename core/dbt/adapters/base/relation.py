@@ -83,7 +83,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         if not search:
             # nothing was passed in
-            raise dbt.exceptions.RuntimeException(
+            raise dbt.exceptions.DbtRuntimeError(
                 "Tried to match relation, but no search path was passed!"
             )
 
