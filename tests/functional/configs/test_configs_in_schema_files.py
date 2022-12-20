@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt, get_manifest, check_relations_equal, write_file
 
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingException
 
 models_alt__schema_yml = """
 version: 2
@@ -248,5 +248,5 @@ class TestSchemaFileConfigs:
         # copy a schema file with config key in top-level of test and in config dict
         #       shutil.copyfile('extra-alt/untagged2.yml', 'models-alt/untagged.yml')
         write_file(extra_alt__untagged2_yml, project.project_root, "models", "untagged.yml")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["run"])

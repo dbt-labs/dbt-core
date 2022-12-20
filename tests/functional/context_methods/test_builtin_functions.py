@@ -3,7 +3,7 @@ import json
 import os
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 
 macros__validate_set_sql = """
 {% macro validate_set() %}
@@ -142,9 +142,9 @@ class TestContextBuiltinExceptions:
     # Assert compilation errors are raised with _strict equivalents
     def test_builtin_function_exception(self, project):
         write_file(models__set_exception_sql, project.project_root, "models", "raise.sql")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["compile"])
 
         write_file(models__zip_exception_sql, project.project_root, "models", "raise.sql")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["compile"])

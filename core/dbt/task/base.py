@@ -27,7 +27,7 @@ from dbt.events.types import (
     LogDbtProjectError,
     LogDbtProfileError,
     CatchableExceptionOnRun,
-    InternalExceptionOnRun,
+    InternalErrorOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
     LogDebugStackTrace,
@@ -328,7 +328,7 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        fire_event(InternalExceptionOnRun(build_path=self.node.build_path, exc=str(e)))
+        fire_event(InternalErrorOnRun(build_path=self.node.build_path, exc=str(e)))
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):

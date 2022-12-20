@@ -12,7 +12,7 @@ from dbt.exceptions import (
     CrossDbReferenceProhibited,
     IndexConfigNotDict,
     InvalidIndexConfig,
-    RuntimeException,
+    DbtRuntimeError,
     UnexpectedDbReference,
 )
 import dbt.utils
@@ -107,7 +107,7 @@ class PostgresAdapter(SQLAdapter):
         schemas = super()._get_catalog_schemas(manifest)
         try:
             return schemas.flatten()
-        except RuntimeException as exc:
+        except DbtRuntimeError as exc:
             raise CrossDbReferenceProhibited(self.type(), exc.msg)
 
     def _link_cached_relations(self, manifest):

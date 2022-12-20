@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
@@ -144,7 +144,7 @@ class ModelTest(BasePPTest):
         # referred to in schema file
         self.copy_file('test-files/models-schema2.yml', 'models/schema.yml')
         self.rm_file('models/model_three.sql')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put model back again
@@ -212,7 +212,7 @@ class ModelTest(BasePPTest):
 
         # Remove the macro
         self.rm_file('macros/my_macro.sql')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # put back macro file, got back to schema file with no macro
@@ -310,7 +310,7 @@ class TestSources(BasePPTest):
 
         # remove sources schema file
         self.rm_file(normalize('models/sources.yml'))
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             results = self.run_dbt(["--partial-parse", "run"])
 
         # put back sources and add an exposures file
@@ -319,7 +319,7 @@ class TestSources(BasePPTest):
 
         # remove seed referenced in exposures file
         self.rm_file(normalize('seeds/raw_customers.csv'))
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             results = self.run_dbt(["--partial-parse", "run"])
 
         # put back seed and remove depends_on from exposure
@@ -333,7 +333,7 @@ class TestSources(BasePPTest):
 
         # Change seed name to wrong name
         self.copy_file('test-files/schema-sources5.yml', 'models/sources.yml')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put back seed name to right name

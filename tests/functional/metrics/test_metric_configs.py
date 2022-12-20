@@ -1,7 +1,7 @@
 import pytest
 from hologram import ValidationError
 from dbt.contracts.graph.model_config import MetricConfig
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt, update_config_file, get_manifest
 
 
@@ -106,7 +106,7 @@ class TestMetricConfigsInheritence(MetricConfigTests):
         assert config_test_table == pytest.expected_config
 
 
-# Test CompilationException if a model references a disabled metric
+# Test CompilationError if a model references a disabled metric
 class TestDisabledMetricRef(MetricConfigTests):
     @pytest.fixture(scope="class")
     def models(self):
@@ -134,7 +134,7 @@ class TestDisabledMetricRef(MetricConfigTests):
         }
 
         update_config_file(new_enabled_config, project.project_root, "dbt_project.yml")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["parse"])
 
 

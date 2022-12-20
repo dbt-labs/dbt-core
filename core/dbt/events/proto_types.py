@@ -2239,7 +2239,7 @@ class CatchableExceptionOnRunMsg(betterproto.Message):
 
 
 @dataclass
-class InternalExceptionOnRun(betterproto.Message):
+class InternalErrorOnRun(betterproto.Message):
     """W003"""
 
     build_path: str = betterproto.string_field(1)

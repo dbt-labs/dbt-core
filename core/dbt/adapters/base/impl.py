@@ -641,7 +641,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         expected columns.
 
         :param Relation relation: The relation to check
-        :raises CompilationException: If the columns are
+        :raises InvalidMacroArgType: If the columns are
             incorrect.
         """
         if not isinstance(relation, self.Relation):

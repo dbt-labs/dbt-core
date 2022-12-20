@@ -1795,14 +1795,14 @@ message CatchableExceptionOnRunMsg {
 }
 
 // W003
-message InternalExceptionOnRun {
+message InternalErrorOnRun {
     string build_path = 1;
     string exc = 2;
 }
 
-message InternalExceptionOnRunMsg {
+message InternalErrorOnRunMsg {
     EventInfo info = 1;
-    InternalExceptionOnRun data = 2;
+    InternalErrorOnRun data = 2;
 }
 
 // W004

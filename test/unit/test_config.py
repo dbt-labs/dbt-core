@@ -928,7 +928,7 @@ class TestRunOperationTask(BaseFileTest):
 
     def test_run_operation_task_with_bad_path(self):
         self.args.project_dir = 'bad_path'
-        with self.assertRaises(dbt.exceptions.RuntimeException):
+        with self.assertRaises(dbt.exceptions.DbtRuntimeError):
             new_task = RunOperationTask.from_args(self.args)
 
 

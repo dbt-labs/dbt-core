@@ -344,7 +344,7 @@ sample_values = [
     # W - Node testing ======================
 
     CatchableExceptionOnRun(exc=""),
-    InternalExceptionOnRun(build_path="", exc=""),
+    InternalErrorOnRun(build_path="", exc=""),
     GenericExceptionOnRun(build_path="", unique_id="", exc=""),
     NodeConnectionReleaseError(node_name="", exc=""),
     FoundStats(stat_line=""),

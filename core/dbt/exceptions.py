@@ -447,7 +447,7 @@ class ConnectionException(Exception):
 
 
 # event level exception
-class EventCompilationException(CompilationError):
+class EventCompilationError(CompilationError):
     def __init__(self, msg: str, node):
         self.msg = scrub_secrets(msg, env_secrets())
         self.node = node
@@ -2558,7 +2558,7 @@ def invalid_bool_error(got_value, macro_name) -> NoReturn:
     reason=REASON,
 )
 def invalid_type_error(method_name, arg_name, got_value, expected_type) -> NoReturn:
-    """Raise a CompilationException when an adapter method available to macros
+    """Raise a InvalidMacroArgType when an adapter method available to macros
     has changed.
     """
     raise InvalidMacroArgType(method_name, arg_name, got_value, expected_type)

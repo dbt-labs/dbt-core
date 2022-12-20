@@ -95,7 +95,7 @@ from tests.functional.schema_tests.fixtures import (
     alt_local_utils__macros__type_timestamp_sql,
     all_quotes_schema__schema_yml,
 )
-from dbt.exceptions import ParsingException, CompilationException, DuplicateResourceName
+from dbt.exceptions import ParsingException, CompilationError, DuplicateResourceName
 from dbt.contracts.results import TestStatus
 
 
@@ -922,7 +922,7 @@ class TestGenericTestsConfigCustomMacros:
         project,
     ):
         """This test has a reference to a custom macro its configs"""
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
         assert "Invalid generic test configuration" in str(exc)
 

@@ -80,7 +80,7 @@ class TestDeferState(DBTIntegrationTest):
         results = self.run_dbt(['snapshot'])
 
         # no state, snapshot fails
-        with pytest.raises(dbt.exceptions.RuntimeException):
+        with pytest.raises(dbt.exceptions.DbtRuntimeError):
             results = self.run_dbt(['snapshot', '--state', 'state', '--defer'])
 
         # copy files

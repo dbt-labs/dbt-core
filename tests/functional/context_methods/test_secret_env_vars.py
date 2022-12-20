@@ -2,7 +2,7 @@ import pytest
 import os
 
 from dbt.constants import SECRET_ENV_PREFIX
-from dbt.exceptions import ParsingException, InternalException
+from dbt.exceptions import ParsingException, InternalDbtError
 from tests.functional.context_methods.first_dependency import FirstDependencyProject
 from dbt.tests.util import run_dbt, run_dbt_and_capture
 
@@ -130,7 +130,7 @@ class TestCloneFailSecretScrubbed:
         }
 
     def test_fail_clone_with_scrubbing(self, project):
-        with pytest.raises(InternalException) as excinfo:
+        with pytest.raises(InternalDbtError) as excinfo:
             _, log_output = run_dbt_and_capture(["deps"])
 
         assert "abc123" not in str(excinfo.value)
@@ -149,7 +149,7 @@ class TestCloneFailSecretNotRendered(TestCloneFailSecretScrubbed):
         }
 
     def test_fail_clone_with_scrubbing(self, project):
-        with pytest.raises(InternalException) as excinfo:
+        with pytest.raises(InternalDbtError) as excinfo:
             _, log_output = run_dbt_and_capture(["deps"])
 
         # we should not see any manipulated form of the secret value (abc123) here

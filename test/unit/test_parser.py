@@ -18,7 +18,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode, Macro, DependsOn, SingularTestNode, SnapshotNode,
     AnalysisNode, UnpatchedSourceDefinition
 )
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingException
 from dbt.node_types import NodeType
 from dbt.parser import (
     ModelParser, MacroParser, SingularTestParser, GenericTestParser,
@@ -664,7 +664,7 @@ class ModelParserTest(BaseParserTest):
 
     def test_sql_model_parse_error(self):
         block = self.file_block_for(sql_model_parse_error, 'nested/model_1.sql')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             self.parser.parse_file(block)
 
     def test_python_model_parse(self):
@@ -1027,7 +1027,7 @@ class SnapshotParserTest(BaseParserTest):
     def test_parse_error(self):
         block = self.file_block_for('{% snapshot foo %}select 1 as id{%snapshot bar %}{% endsnapshot %}',
                                     'nested/snap_1.sql')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             self.parser.parse_file(block)
 
     def test_single_block(self):

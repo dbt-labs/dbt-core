@@ -6,7 +6,7 @@ import string
 
 import pytest
 
-from dbt.exceptions import CompilationException, IncompatibleSchemaException
+from dbt.exceptions import CompilationError, IncompatibleSchemaException
 
 
 class TestModifiedState(DBTIntegrationTest):
@@ -95,7 +95,7 @@ class TestModifiedState(DBTIntegrationTest):
         assert len(results) == 1
         assert results[0] == 'test.seed'
 
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             self.run_dbt(['--warn-error', 'ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'])
         assert '>1MB' in str(exc.value)
 

@@ -2,7 +2,7 @@ import pytest
 
 from pathlib import Path
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 
 from dbt.tests.util import (
     run_dbt,
@@ -422,7 +422,7 @@ class TestDuplicateHooksInConfigs(object):
         return {"hooks.sql": models__hooks_error}
 
     def test_run_duplicate_hook_defs(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
         assert "pre_hook" in str(exc.value)
         assert "pre-hook" in str(exc.value)

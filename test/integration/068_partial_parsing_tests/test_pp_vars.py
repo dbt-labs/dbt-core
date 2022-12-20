@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import ParsingException
 from dbt.constants import SECRET_ENV_PREFIX
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType

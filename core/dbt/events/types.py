@@ -1879,7 +1879,7 @@ class CatchableExceptionOnRun(DebugLevel, pt.CatchableExceptionOnRun):  # noqa
 
 
 @dataclass
-class InternalExceptionOnRun(DebugLevel, pt.InternalExceptionOnRun):
+class InternalErrorOnRun(DebugLevel, pt.InternalErrorOnRun):
     def code(self):
         return "W003"
 

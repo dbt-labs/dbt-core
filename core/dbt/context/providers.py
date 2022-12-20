@@ -173,7 +173,7 @@ class BaseDatabaseWrapper:
                     # this uses the namespace from the context
                     macro = self._namespace.get_from_package(package_name, search_name)
                 except CompilationError:
-                    # Only raise CompilationException if macro is not found in
+                    # Only raise CompilationError if macro is not found in
                     # any package
                     macro = None
 

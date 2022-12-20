@@ -494,7 +494,7 @@ def project(
     # a `load_dependencies` method.
     # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
     # the macros have errors (which is what we're actually testing for...) they end up
-    # throwing CompilationExceptions or DatabaseExceptions
+    # throwing CompilationErrorss or DatabaseErrors
     try:
         project.drop_test_schema()
     except (KeyError, AttributeError, CompilationError, DatabaseError):

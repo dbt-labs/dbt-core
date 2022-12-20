@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import CompilationException, DuplicateResourceName
+from dbt.exceptions import CompilationError, DuplicateResourceName
 from dbt.tests.fixtures.project import write_project_files
 from dbt.tests.util import run_dbt, get_manifest
 
@@ -54,7 +54,7 @@ class TestDuplicateModelEnabled:
 
     def test_duplicate_model_enabled(self, project):
         message = "dbt found two models with the name"
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["compile"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         assert message in exc_str

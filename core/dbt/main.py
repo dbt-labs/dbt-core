@@ -220,7 +220,7 @@ def track_run(task):
 def run_from_args(parsed):
     log_cache_events(getattr(parsed, "log_cache_events", False))
 
-    # this will convert DbtConfigErrors into RuntimeExceptions
+    # this will convert DbtConfigErrors into DbtRuntimeError
     # task could be any one of the task objects
     task = parsed.cls.from_args(args=parsed)
 
