@@ -21,7 +21,19 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate,
     UnparsedExposure,
 )
-from dbt.exceptions import raise_compiler_error, raise_parsing_error, UndefinedMacroException
+from dbt.exceptions import (
+    CustomMacroPopulatingConfigValues,
+    SameKeyNested,
+    TagNotString,
+    TagsNotListOfStrings,
+    TestArgIncludesModel,
+    TestArgsNotDict,
+    TestDefinitionDictLength,
+    TestInvalidType,
+    TestNameNotString,
+    UnexpectedTestNamePattern,
+    UndefinedMacroException,
+)
 from dbt.parser.search import FileBlock
 
 
@@ -222,9 +234,7 @@ class TestBuilder(Generic[Testable]):
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
-            raise_compiler_error(
-                'Test arguments include "model", which is a reserved argument',
-            )
+            raise TestArgIncludesModel()
         self.package_name: str = package_name
         self.target: Testable = target
 
@@ -232,9 +242,7 @@ class TestBuilder(Generic[Testable]):
 
         match = self.TEST_NAME_PATTERN.match(test_name)
         if match is None:
-            raise_compiler_error(
-                "Test name string did not match expected pattern: {}".format(test_name)
-            )
+            raise UnexpectedTestNamePattern(test_name)
 
         groups = match.groupdict()
         self.name: str = groups["test_name"]
@@ -251,9 +259,7 @@ class TestBuilder(Generic[Testable]):
             value = self.args.pop(key, None)
             # 'modifier' config could be either top level arg or in config
             if value and "config" in self.args and key in self.args["config"]:
-                raise_compiler_error(
-                    "Test cannot have the same key at the top-level and in config"
-                )
+                raise SameKeyNested()
             if not value and "config" in self.args:
                 value = self.args["config"].pop(key, None)
             if isinstance(value, str):
@@ -261,22 +267,12 @@ class TestBuilder(Generic[Testable]):
                 try:
                     value = get_rendered(value, render_ctx, native=True)
                 except UndefinedMacroException as e:
-
-                    # Generic tests do not include custom macros in the Jinja
-                    # rendering context, so this will almost always fail. As it
-                    # currently stands, the error message is inscrutable, which
-                    # has caused issues for some projects migrating from
-                    # pre-0.20.0 to post-0.20.0.
-                    # See https://github.com/dbt-labs/dbt-core/issues/4103
-                    # and https://github.com/dbt-labs/dbt-core/issues/5294
-                    raise_compiler_error(
-                        f"The {self.target.name}.{column_name} column's "
-                        f'"{self.name}" test references an undefined '
-                        f"macro in its {key} configuration argument. "
-                        f"The macro {e.msg}.\n"
-                        "Please note that the generic test configuration parser "
-                        "currently does not support using custom macros to "
-                        "populate configuration values"
+                    raise CustomMacroPopulatingConfigValues(
+                        target_name=self.target.name,
+                        column_name=column_name,
+                        name=self.name,
+                        key=key,
+                        err_msg=e.msg
                     )
 
             if value is not None:
@@ -314,9 +310,7 @@ class TestBuilder(Generic[Testable]):
     @staticmethod
     def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(test, dict):
-            raise_parsing_error(
-                "test must be dict or str, got {} (value {})".format(type(test), test)
-            )
+            raise TestInvalidType(test)
 
         # If the test is a dictionary with top-level keys, the test name is "test_name"
         # and the rest are arguments
@@ -330,20 +324,13 @@ class TestBuilder(Generic[Testable]):
         else:
             test = list(test.items())
             if len(test) != 1:
-                raise_parsing_error(
-                    "test definition dictionary must have exactly one key, got"
-                    " {} instead ({} keys)".format(test, len(test))
-                )
+                raise TestDefinitionDictLength(test)
             test_name, test_args = test[0]
 
         if not isinstance(test_args, dict):
-            raise_parsing_error(
-                "test arguments must be dict, got {} (value {})".format(type(test_args), test_args)
-            )
+            raise TestArgsNotDict(test_args)
         if not isinstance(test_name, str):
-            raise_parsing_error(
-                "test name must be a str, got {} (value {})".format(type(test_name), test_name)
-            )
+            raise TestNameNotString(test_name)
         test_args = deepcopy(test_args)
         if name is not None:
             test_args["column_name"] = name
@@ -434,12 +421,10 @@ class TestBuilder(Generic[Testable]):
         if isinstance(tags, str):
             tags = [tags]
         if not isinstance(tags, list):
-            raise_compiler_error(
-                f"got {tags} ({type(tags)}) for tags, expected a list of strings"
-            )
+            raise TagsNotListOfStrings(tags)
         for tag in tags:
             if not isinstance(tag, str):
-                raise_compiler_error(f"got {tag} ({type(tag)}) for tag, expected a str")
+                raise TagNotString(tag)
         return tags[:]
 
     def macro_name(self) -> str:

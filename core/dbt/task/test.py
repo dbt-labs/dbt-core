@@ -21,7 +21,11 @@ from dbt.events.types import (
     LogTestResult,
     LogStartLine,
 )
-from dbt.exceptions import InternalException, invalid_bool_error, missing_materialization
+from dbt.exceptions import (
+    InternalException,
+    InvalidBoolean,
+    MissingMaterialization,
+)
 from dbt.graph import (
     ResourceTypeSelector,
 )
@@ -47,7 +51,7 @@ class TestResultData(dbtClassMixin):
             try:
                 return bool(strtobool(field))  # type: ignore
             except ValueError:
-                raise invalid_bool_error(field, "get_test_sql")
+                raise InvalidBoolean(field, "get_test_sql")
 
         # need this so we catch both true bools and 0/1
         return bool(field)
@@ -97,7 +101,7 @@ class TestRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            missing_materialization(test, self.adapter.type())
+            raise MissingMaterialization(model=test, adapter_type=self.adapter.type())
 
         if "config" not in context:
             raise InternalException(

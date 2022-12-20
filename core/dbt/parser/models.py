@@ -29,7 +29,13 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 # New for Python models :p
 import ast
 from dbt.dataclass_schema import ValidationError
-from dbt.exceptions import ParsingException, validator_error_message, UndefinedMacroException
+from dbt.exceptions import (
+    InvalidModelConfig,
+    ParsingException,
+    PythonLiteralEval,
+    PythonParsingException,
+    UndefinedMacroException,
+)
 
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
@@ -91,12 +97,7 @@ class PythonParseVisitor(ast.NodeVisitor):
         try:
             return ast.literal_eval(node)
         except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError) as exc:
-            msg = validator_error_message(
-                f"Error when trying to literal_eval an arg to dbt.ref(), dbt.source(), dbt.config() or dbt.config.get() \n{exc}\n"
-                "https://docs.python.org/3/library/ast.html#ast.literal_eval\n"
-                "In dbt python model, `dbt.ref`, `dbt.source`, `dbt.config`, `dbt.config.get` function args only support Python literal structures"
-            )
-            raise ParsingException(msg, node=self.dbt_node) from exc
+            raise PythonLiteralEval(exc, node=self.dbt_node) from exc
 
     def _get_call_literals(self, node):
         # List of literals
@@ -199,8 +200,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         try:
             tree = ast.parse(node.raw_code, filename=node.original_file_path)
         except SyntaxError as exc:
-            msg = validator_error_message(exc)
-            raise ParsingException(f"{msg}\n{exc.text}", node=node) from exc
+            raise PythonParsingException(exc, node=node) from exc
 
         # We are doing a validator and a parser because visit_FunctionDef in parser
         # would actually make the parser not doing the visit_Calls any more
@@ -251,8 +251,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
-                msg = validator_error_message(exc)
-                raise ParsingException(msg, node=node) from exc
+                raise InvalidModelConfig(exc, node=node) from exc
             return
 
         elif not flags.STATIC_PARSER:

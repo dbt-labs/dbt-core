@@ -22,7 +22,7 @@ from dbt.contracts.results import (
     ColumnMetadata,
     CatalogArtifact,
 )
-from dbt.exceptions import InternalException
+from dbt.exceptions import InternalException, AmbiguousCatalogMatch
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -119,7 +119,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
                 if unique_id in sources:
-                    dbt.exceptions.raise_ambiguous_catalog_match(
+                    raise AmbiguousCatalogMatch(
                         unique_id,
                         sources[unique_id].to_dict(omit_none=True),
                         table.to_dict(omit_none=True),

@@ -159,9 +159,10 @@ def event_to_dict(event: BaseEvent) -> dict:
 
 def warn_or_error(event, node=None):
     if flags.WARN_ERROR:
-        from dbt.exceptions import raise_compiler_error
+        # TODO: resolve this circular import when at top
+        from dbt.exceptions import EventCompilationException
 
-        raise_compiler_error(scrub_secrets(event.info.msg, env_secrets()), node)
+        raise EventCompilationException(event.info.msg, node)
     else:
         fire_event(event)
 

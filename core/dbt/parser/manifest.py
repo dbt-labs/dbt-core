@@ -71,9 +71,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
 )
 from dbt.contracts.util import Writable
-from dbt.exceptions import (
-    target_not_found,
-)
+from dbt.exceptions import TargetNotFound, AmbiguousAlias
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -989,7 +987,7 @@ def invalid_target_fail_unless_test(
                 )
             )
     else:
-        target_not_found(
+        raise TargetNotFound(
             node=node,
             target_name=target_name,
             target_kind=target_kind,
@@ -1017,11 +1015,11 @@ def _check_resource_uniqueness(
 
         existing_node = names_resources.get(name)
         if existing_node is not None:
-            dbt.exceptions.raise_duplicate_resource_name(existing_node, node)
+            raise dbt.exceptions.DuplicateResourceName(existing_node, node)
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
-            dbt.exceptions.raise_ambiguous_alias(existing_alias, node, full_node_name)
+            raise AmbiguousAlias(node_1=existing_alias, node_2=node, duped_name=full_node_name)
 
         names_resources[name] = node
         alias_resources[full_node_name] = node

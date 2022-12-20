@@ -243,7 +243,7 @@ class GraphRunnableTask(ManifestTask):
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastException(
-                message="Failing early due to test failure or runtime error",
+                msg="Failing early due to test failure or runtime error",
                 result=result,
                 node=getattr(result, "node", None),
             )

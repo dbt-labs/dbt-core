@@ -18,7 +18,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ManifestNode, BaseNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
-from dbt.exceptions import ParsingException, validator_error_message, InternalException
+from dbt.exceptions import InternalException, InvalidConfigUpdate, InvalidDictParse
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.search import FileBlock
@@ -216,7 +216,6 @@ class ConfiguredParser(
         try:
             return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:
-            msg = validator_error_message(exc)
             # this is a bit silly, but build an UnparsedNode just for error
             # message reasons
             node = self._create_error_node(
@@ -225,7 +224,7 @@ class ConfiguredParser(
                 original_file_path=block.path.original_file_path,
                 raw_code=block.contents,
             )
-            raise ParsingException(msg, node=node)
+            raise InvalidDictParse(exc, node=node)
 
     def _context_for(self, parsed_node: IntermediateNode, config: ContextConfig) -> Dict[str, Any]:
         return generate_parser_model_context(parsed_node, self.root_project, self.manifest, config)
@@ -364,8 +363,7 @@ class ConfiguredParser(
             self.update_parsed_node_config(node, config, context=context)
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
-            msg = validator_error_message(exc)
-            raise ParsingException(msg, node=node) from exc
+            raise InvalidConfigUpdate(exc, node=node) from exc
 
     def add_result_node(self, block: FileBlock, node: ManifestNode):
         if node.config.enabled:

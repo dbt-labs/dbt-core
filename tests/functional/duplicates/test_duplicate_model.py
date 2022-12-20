@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, DuplicateResourceName
 from dbt.tests.fixtures.project import write_project_files
 from dbt.tests.util import run_dbt, get_manifest
 
@@ -108,7 +108,7 @@ class TestDuplicateModelEnabledAcrossPackages:
     def test_duplicate_model_enabled_across_packages(self, project):
         run_dbt(["deps"])
         message = "dbt found two models with the name"
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(DuplicateResourceName) as exc:
             run_dbt(["run"])
         assert message in str(exc.value)
 
