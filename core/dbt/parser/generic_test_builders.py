@@ -32,7 +32,7 @@ from dbt.exceptions import (
     TestInvalidType,
     TestNameNotString,
     UnexpectedTestNamePattern,
-    UndefinedMacroException,
+    UndefinedMacroError,
 )
 from dbt.parser.search import FileBlock
 
@@ -266,7 +266,7 @@ class TestBuilder(Generic[Testable]):
 
                 try:
                     value = get_rendered(value, render_ctx, native=True)
-                except UndefinedMacroException as e:
+                except UndefinedMacroError as e:
                     raise CustomMacroPopulatingConfigValues(
                         target_name=self.target.name,
                         column_name=column_name,

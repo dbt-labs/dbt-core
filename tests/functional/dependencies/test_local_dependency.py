@@ -335,7 +335,7 @@ class TestSimpleDependencyDuplicateName(BaseDependencyTest):
         )
 
     def test_local_dependency_same_name(self, prepare_dependencies, project):
-        with pytest.raises(dbt.exceptions.DependencyException):
+        with pytest.raises(dbt.exceptions.DependencyError):
             run_dbt(["deps"], expect_pass=False)
 
     def test_local_dependency_same_name_sneaky(self, prepare_dependencies, project):

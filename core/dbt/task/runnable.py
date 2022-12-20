@@ -47,7 +47,7 @@ from dbt.exceptions import (
     InternalDbtError,
     NotImplementedException,
     DbtRuntimeError,
-    FailFastException,
+    FailFastError,
 )
 
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph
@@ -242,7 +242,7 @@ class GraphRunnableTask(ManifestTask):
         fail_fast = flags.FAIL_FAST
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
-            self._raise_next_tick = FailFastException(
+            self._raise_next_tick = FailFastError(
                 msg="Failing early due to test failure or runtime error",
                 result=result,
                 node=getattr(result, "node", None),
@@ -383,7 +383,7 @@ class GraphRunnableTask(ManifestTask):
         try:
             self.run_queue(pool)
 
-        except FailFastException as failure:
+        except FailFastError as failure:
             self._cancel_connections(pool)
             print_run_result_error(failure.result)
             raise

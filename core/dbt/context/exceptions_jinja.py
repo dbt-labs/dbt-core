@@ -17,7 +17,7 @@ from dbt.exceptions import (
     CompilationError,
     DatabaseError,
     DependencyNotFound,
-    DependencyException,
+    DependencyError,
     DuplicatePatchPath,
     DuplicateResourceName,
     InvalidPropertyYML,
@@ -74,7 +74,7 @@ def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:
 
 
 def raise_dependency_error(msg) -> NoReturn:
-    raise DependencyException(scrub_secrets(msg, env_secrets()))
+    raise DependencyError(scrub_secrets(msg, env_secrets()))
 
 
 def raise_duplicate_patch_name(patch_1, existing_patch_path) -> NoReturn:

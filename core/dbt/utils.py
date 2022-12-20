@@ -403,7 +403,7 @@ def translate_aliases(
 
     :returns: A dict containing all the values in kwargs referenced by their
         canonical key.
-    :raises: `AliasException`, if a canonical key is defined more than once.
+    :raises: `AliasError`, if a canonical key is defined more than once.
     """
     translator = Translator(aliases, recurse)
     return translator.translate(kwargs)

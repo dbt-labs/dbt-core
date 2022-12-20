@@ -10,7 +10,7 @@ from dbt.contracts.project import (
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 from dbt.exceptions import (
-    DependencyException,
+    DependencyError,
     PackageNotFound,
     PackageVersionNotFound,
     VersionsNotCompatibleException,
@@ -97,7 +97,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
             range_ = semver.reduce_versions(*self.versions)
         except VersionsNotCompatibleException as e:
             new_msg = "Version error for package {}: {}".format(self.name, e)
-            raise DependencyException(new_msg) from e
+            raise DependencyError(new_msg) from e
 
         should_version_check = bool(flags.VERSION_CHECK)
         dbt_version = get_installed_version()

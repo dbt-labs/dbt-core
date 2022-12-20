@@ -273,7 +273,7 @@ class JinjaRenderingError(CompilationError):
     pass
 
 
-class UndefinedMacroException(CompilationError):
+class UndefinedMacroError(CompilationError):
     def __str__(self, prefix: str = "! ") -> str:
         msg = super().__str__(prefix)
         return (
@@ -283,7 +283,7 @@ class UndefinedMacroException(CompilationError):
         )
 
 
-class UnknownAsyncIDException(Exception):
+class UnknownAsyncIDError(Exception):
     CODE = 10012
     MESSAGE = "RPC server got an unknown async ID"
 
@@ -294,12 +294,11 @@ class UnknownAsyncIDException(Exception):
         return f"{self.MESSAGE}: {self.task_id}"
 
 
-class AliasException(DbtValidationError):
+class AliasError(DbtValidationError):
     pass
 
 
-class DependencyException(Exception):
-    # this can happen due to raise_dependency_error and its callers
+class DependencyError(Exception):
     CODE = 10006
     MESSAGE = "Dependency Error"
 
@@ -322,7 +321,7 @@ class DbtConfigError(DbtRuntimeError):
             return f"{msg}\n\nError encountered in {self.path}"
 
 
-class FailFastException(DbtRuntimeError):
+class FailFastError(DbtRuntimeError):
     CODE = 10013
     MESSAGE = "FailFast Error"
 
@@ -1327,7 +1326,7 @@ class DuplicateMacroPatchName(CompilationError):
 
 
 # core level exceptions
-class DuplicateAlias(AliasException):
+class DuplicateAlias(AliasError):
     def __init__(self, kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str):
         self.kwargs = kwargs
         self.aliases = aliases
@@ -1557,7 +1556,7 @@ class UnexpectedNonTimestamp(DatabaseError):
 
 
 # deps exceptions
-class MultipleVersionGitDeps(DependencyException):
+class MultipleVersionGitDeps(DependencyError):
     def __init__(self, git: str, requested):
         self.git = git
         self.requested = requested
@@ -1568,7 +1567,7 @@ class MultipleVersionGitDeps(DependencyException):
         super().__init__(msg)
 
 
-class DuplicateProjectDependency(DependencyException):
+class DuplicateProjectDependency(DependencyError):
     def __init__(self, project_name: str):
         self.project_name = project_name
         msg = (
@@ -1578,7 +1577,7 @@ class DuplicateProjectDependency(DependencyException):
         super().__init__(msg)
 
 
-class DuplicateDependencyToRoot(DependencyException):
+class DuplicateDependencyToRoot(DependencyError):
     def __init__(self, project_name: str):
         self.project_name = project_name
         msg = (
@@ -1589,7 +1588,7 @@ class DuplicateDependencyToRoot(DependencyException):
         super().__init__(msg)
 
 
-class MismatchedDependencyTypes(DependencyException):
+class MismatchedDependencyTypes(DependencyError):
     def __init__(self, new, old):
         self.new = new
         self.old = old
@@ -1600,7 +1599,7 @@ class MismatchedDependencyTypes(DependencyException):
         super().__init__(msg)
 
 
-class PackageVersionNotFound(DependencyException):
+class PackageVersionNotFound(DependencyError):
     def __init__(
         self,
         package_name: str,
@@ -1636,7 +1635,7 @@ class PackageVersionNotFound(DependencyException):
         return msg
 
 
-class PackageNotFound(DependencyException):
+class PackageNotFound(DependencyError):
     def __init__(self, package_name: str):
         self.package_name = package_name
         msg = f"Package {self.package_name} was not found in the package index"
@@ -2303,7 +2302,7 @@ def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:
     reason=REASON,
 )
 def raise_dependency_error(msg) -> NoReturn:
-    raise DependencyException(scrub_secrets(msg, env_secrets()))
+    raise DependencyError(scrub_secrets(msg, env_secrets()))
 
 
 @deprecated(
@@ -2674,18 +2673,33 @@ class JinjaRenderingException(JinjaRenderingError):
     pass
 
 
+class UndefinedMacroException(UndefinedMacroError):
+    pass
+
+
+class UnknownAsyncIDException(UnknownAsyncIDError):
+    pass
+
+
+class AliasException(AliasError):
+    pass
+
+
+class DependencyException(DependencyError):
+    pass
+
+
+class FailFastException(FailFastError):
+    pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
 # class ParsingException(RuntimeException):
 # class JSONValidationException(ValidationException):
-# class UndefinedMacroException(CompilationException):
-# class UnknownAsyncIDException(Exception):
-# class AliasException(ValidationException):
-# class DependencyException(Exception):
 # class DbtConfigError(RuntimeException):
-# class FailFastException(RuntimeException):
 # class DbtProjectError(DbtConfigError):
 # class DbtSelectorsError(DbtConfigError):
 # class DbtProfileError(DbtConfigError):

@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationError, UndefinedMacroException
+from dbt.exceptions import CompilationError
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus

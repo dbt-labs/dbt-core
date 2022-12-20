@@ -34,7 +34,7 @@ from dbt.exceptions import (
     ParsingException,
     PythonLiteralEval,
     PythonParsingException,
-    UndefinedMacroException,
+    UndefinedMacroError,
 )
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
@@ -177,7 +177,7 @@ def verify_python_model_code(node):
         )
         if rendered_python != node.raw_code:
             raise ParsingException("")
-    except (UndefinedMacroException, ParsingException):
+    except (UndefinedMacroError, ParsingException):
         raise ParsingException("No jinja in python model code is allowed", node=node)
 
 

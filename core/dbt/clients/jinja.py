@@ -38,7 +38,7 @@ from dbt.exceptions import (
     MaterializtionMacroNotUsed,
     NoSupportedLanguagesFound,
     UndefinedCompilation,
-    UndefinedMacroException,
+    UndefinedMacroError,
 )
 from dbt import flags
 from dbt.node_types import ModelLanguage
@@ -515,7 +515,7 @@ def catch_jinja(node=None) -> Iterator[None]:
         e.translated = False
         raise CompilationError(str(e), node) from e
     except jinja2.exceptions.UndefinedError as e:
-        raise UndefinedMacroException(str(e), node) from e
+        raise UndefinedMacroError(str(e), node) from e
     except CompilationError as exc:
         exc.add_node(node)
         raise
