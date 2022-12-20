@@ -236,7 +236,7 @@ def run_sql_with_adapter(adapter, sql, fetch=None):
         return adapter.run_sql_for_tests(sql, fetch, conn)
 
 
-# Get a Relation object from the identifer (name of table/view).
+# Get a Relation object from the identifier (name of table/view).
 # Uses the default database and schema. If you need a relation
 # with a different schema, it should be constructed in the test.
 # Uses:
