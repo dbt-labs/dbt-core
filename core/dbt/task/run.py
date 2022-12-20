@@ -25,7 +25,7 @@ from dbt.exceptions import (
     InternalDbtError,
     MissingMaterialization,
     DbtRuntimeError,
-    ValidationException,
+    DbtValidationError,
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
@@ -267,7 +267,7 @@ class ModelRunner(CompileRunner):
         model_lang_supported = model.language in materialization_macro.supported_languages
         if mat_has_supported_langs and not model_lang_supported:
             str_langs = [str(lang) for lang in materialization_macro.supported_languages]
-            raise ValidationException(
+            raise DbtValidationError(
                 f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
                 f'got "{model.language}"'
             )

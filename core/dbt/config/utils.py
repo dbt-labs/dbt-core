@@ -9,7 +9,7 @@ from dbt.config import Profile, Project, read_user_config
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.events.functions import fire_event
 from dbt.events.types import InvalidVarsYAML
-from dbt.exceptions import ValidationException, VarsArgNotYamlDict
+from dbt.exceptions import DbtValidationError, VarsArgNotYamlDict
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
@@ -20,7 +20,7 @@ def parse_cli_vars(var_string: str) -> Dict[str, Any]:
             return cli_vars
         else:
             raise VarsArgNotYamlDict(var_type)
-    except ValidationException:
+    except DbtValidationError:
         fire_event(InvalidVarsYAML())
         raise
 

@@ -62,7 +62,7 @@ from dbt.exceptions import (
     RefInvalidArgs,
     DbtRuntimeError,
     TargetNotFound,
-    ValidationException,
+    DbtValidationError,
 )
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
@@ -751,7 +751,7 @@ class ProviderContext(ManifestContext):
                         return
                     elif value == arg:
                         return
-                raise ValidationException(
+                raise DbtValidationError(
                     'Expected value "{}" to be one of {}'.format(value, ",".join(map(str, args)))
                 )
 

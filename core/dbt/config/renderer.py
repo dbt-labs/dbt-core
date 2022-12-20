@@ -8,7 +8,7 @@ from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.contracts.connection import HasCredentials
-from dbt.exceptions import DbtProjectError, CompilationError, RecursionException
+from dbt.exceptions import DbtProjectError, CompilationError, RecursionError
 from dbt.utils import deep_map_render
 
 
@@ -47,7 +47,7 @@ class BaseRenderer:
     def render_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             return deep_map_render(self.render_entry, data)
-        except RecursionException:
+        except RecursionError:
             raise DbtProjectError(
                 f"Cycle detected: {self.name} input has a reference to itself", project=data
             )

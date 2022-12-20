@@ -13,7 +13,7 @@ from dbt.exceptions import (
     CompilationError,
     DbtProfileError,
     DbtProjectError,
-    ValidationException,
+    DbtValidationError,
     DbtRuntimeError,
     ProfileConfigInvalid,
 )
@@ -60,9 +60,9 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
                 msg = f"The profiles.yml file at {path} is empty"
                 raise DbtProfileError(INVALID_PROFILE_MESSAGE.format(error_string=msg))
             return yaml_content
-        except ValidationException as e:
+        except DbtValidationError as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
-            raise ValidationException(msg) from e
+            raise DbtValidationError(msg) from e
 
     return {}
 

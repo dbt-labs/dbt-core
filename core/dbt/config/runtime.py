@@ -258,7 +258,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         :param args: The arguments as parsed from the cli.
         :raises DbtProjectError: If the project is invalid or missing.
         :raises DbtProfileError: If the profile is invalid or missing.
-        :raises ValidationException: If the cli variables are invalid.
+        :raises DbtValidationError: If the cli variables are invalid.
         """
         project, profile = cls.collect_parts(args)
 
@@ -602,7 +602,7 @@ class UnsetProfileConfig(RuntimeConfig):
         :param args: The arguments as parsed from the cli.
         :raises DbtProjectError: If the project is invalid or missing.
         :raises DbtProfileError: If the profile is invalid or missing.
-        :raises ValidationException: If the cli variables are invalid.
+        :raises DbtValidationError: If the cli variables are invalid.
         """
         project, profile = cls.collect_parts(args)
 

@@ -62,7 +62,7 @@ from dbt.exceptions import (
     PropertyYMLInvalidTag,
     PropertyYMLMissingVersion,
     PropertyYMLVersionNotInt,
-    ValidationException,
+    DbtValidationError,
     YamlLoadFailure,
     YamlParseDictFailure,
     YamlParseListFailure,
@@ -102,7 +102,7 @@ def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
     try:
         # source_file.contents can sometimes be None
         return load_yaml_text(source_file.contents or "", source_file.path)
-    except ValidationException as e:
+    except DbtValidationError as e:
         raise YamlLoadFailure(source_file.project_name, source_file.path.relative_path, e)
 
 

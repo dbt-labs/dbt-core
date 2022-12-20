@@ -209,11 +209,11 @@ class CompilationError(DbtRuntimeError):
             )
 
 
-class RecursionException(DbtRuntimeError):
+class RecursionError(DbtRuntimeError):
     pass
 
 
-class ValidationException(DbtRuntimeError):
+class DbtValidationError(DbtRuntimeError):
     CODE = 10005
     MESSAGE = "Validation Error"
 
@@ -228,7 +228,7 @@ class ParsingException(DbtRuntimeError):
 
 
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
-class JSONValidationException(ValidationException):
+class JSONValidationException(DbtValidationError):
     def __init__(self, typename, errors):
         self.typename = typename
         self.errors = errors
@@ -294,7 +294,7 @@ class UnknownAsyncIDException(Exception):
         return f"{self.MESSAGE}: {self.task_id}"
 
 
-class AliasException(ValidationException):
+class AliasException(DbtValidationError):
     pass
 
 
@@ -1088,7 +1088,7 @@ class YamlParseDictFailure(ParsingException):
 
 
 class YamlLoadFailure(ParsingException):
-    def __init__(self, project_name: Optional[str], path: str, exc: ValidationException):
+    def __init__(self, project_name: Optional[str], path: str, exc: DbtValidationError):
         self.project_name = project_name
         self.path = path
         self.exc = exc
@@ -2639,3 +2639,28 @@ def validator_error_message(exc):
         return str(exc)
     path = "[%s]" % "][".join(map(repr, exc.relative_path))
     return "at path {}: {}".format(path, exc.message)
+
+
+# these subclass new names to not immediately break adapters
+class InternalException(InternalDbtError):
+    pass
+
+
+class RuntimeException(DbtRuntimeError):
+    pass
+
+
+class DatabaseException(DatabaseError):
+    pass
+
+
+class CompilationException(CompilationError):
+    pass
+
+
+class RecursionException(RecursionError):
+    pass
+
+
+# class ValidationException(DbtValidationError):
+#     pass
