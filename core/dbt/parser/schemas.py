@@ -55,7 +55,7 @@ from dbt.exceptions import (
     DuplicatePatchPath,
     DuplicateSourcePatchName,
     JSONValidationException,
-    InternalException,
+    InternalDbtError,
     InvalidSchemaConfig,
     InvalidTestConfig,
     ParsingException,
@@ -858,7 +858,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         elif patch.yaml_key == "analyses":
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
         else:
-            raise InternalException(
+            raise InternalDbtError(
                 f"Unexpected yaml_key {patch.yaml_key} for patch in "
                 f"file {source_file.path.original_file_path}"
             )
@@ -997,7 +997,7 @@ class ExposureParser(YamlReader):
         )
 
         if not isinstance(config, ExposureConfig):
-            raise InternalException(
+            raise InternalDbtError(
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
@@ -1100,7 +1100,7 @@ class MetricParser(YamlReader):
         )
 
         if not isinstance(config, MetricConfig):
-            raise InternalException(
+            raise InternalDbtError(
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 

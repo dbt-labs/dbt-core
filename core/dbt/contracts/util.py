@@ -5,7 +5,7 @@ from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 from dbt.clients.system import write_json, read_json
 from dbt import deprecations
 from dbt.exceptions import (
-    InternalException,
+    InternalDbtError,
     RuntimeException,
     IncompatibleSchemaException,
 )
@@ -357,7 +357,7 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
     def validate(cls, data):
         super().validate(data)
         if cls.dbt_schema_version is None:
-            raise InternalException("Cannot call from_dict with no schema version!")
+            raise InternalDbtError("Cannot call from_dict with no schema version!")
 
 
 class Identifier(ValidatedStringMixin):

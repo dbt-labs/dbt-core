@@ -22,7 +22,7 @@ from dbt.events.types import (
     LogStartLine,
 )
 from dbt.exceptions import (
-    InternalException,
+    InternalDbtError,
     InvalidBoolean,
     MissingMaterialization,
 )
@@ -104,7 +104,7 @@ class TestRunner(CompileRunner):
             raise MissingMaterialization(materialization=test.get_materialization(), adapter_type=self.adapter.type())
 
         if "config" not in context:
-            raise InternalException(
+            raise InternalDbtError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
 
@@ -118,14 +118,14 @@ class TestRunner(CompileRunner):
         table = result["table"]
         num_rows = len(table.rows)
         if num_rows != 1:
-            raise InternalException(
+            raise InternalDbtError(
                 f"dbt internally failed to execute {test.unique_id}: "
                 f"Returned {num_rows} rows, but expected "
                 f"1 row"
             )
         num_cols = len(table.columns)
         if num_cols != 3:
-            raise InternalException(
+            raise InternalDbtError(
                 f"dbt internally failed to execute {test.unique_id}: "
                 f"Returned {num_cols} columns, but expected "
                 f"3 columns"
@@ -203,7 +203,7 @@ class TestTask(RunTask):
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise InternalDbtError("manifest and graph must be set to get perform node selection")
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,

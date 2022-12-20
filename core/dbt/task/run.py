@@ -22,7 +22,7 @@ from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
 from dbt.exceptions import (
     CompilationException,
-    InternalException,
+    InternalDbtError,
     MissingMaterialization,
     RuntimeException,
     ValidationException,
@@ -106,7 +106,7 @@ def get_hook(source, index):
 
 def track_model_run(index, num_nodes, run_model_result):
     if tracking.active_user is None:
-        raise InternalException("cannot track model run with no active user")
+        raise InternalDbtError("cannot track model run with no active user")
     invocation_id = get_invocation_id()
     tracking.track_model_run(
         {
@@ -258,7 +258,7 @@ class ModelRunner(CompileRunner):
             )
 
         if "config" not in context:
-            raise InternalException(
+            raise InternalDbtError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
         context_config = context["config"]
@@ -315,7 +315,7 @@ class RunTask(CompileTask):
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
 
         if self.manifest is None:
-            raise InternalException("self.manifest was None in get_hooks_by_type")
+            raise InternalDbtError("self.manifest was None in get_hooks_by_type")
 
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)
@@ -457,7 +457,7 @@ class RunTask(CompileTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise InternalDbtError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

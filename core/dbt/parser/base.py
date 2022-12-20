@@ -18,7 +18,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ManifestNode, BaseNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
-from dbt.exceptions import InternalException, InvalidConfigUpdate, InvalidDictParse
+from dbt.exceptions import InternalDbtError, InvalidConfigUpdate, InvalidDictParse
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.search import FileBlock
@@ -76,7 +76,7 @@ class RelationUpdate:
             root_project_name=config.project_name,
         )
         if macro is None:
-            raise InternalException(f"No macro with name generate_{component}_name found")
+            raise InternalDbtError(f"No macro with name generate_{component}_name found")
 
         root_context = generate_generate_name_macro_context(macro, config, manifest)
         self.updater = MacroGenerator(macro, root_context)
@@ -345,7 +345,7 @@ class ConfiguredParser(
                 self.project.project_name,
             )
         else:
-            raise InternalException(
+            raise InternalDbtError(
                 f"Got an unexpected project version={config_version}, expected 2"
             )
 

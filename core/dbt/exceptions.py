@@ -38,7 +38,7 @@ class Exception(builtins.Exception):
         }
 
 
-class InternalException(Exception):
+class InternalDbtError(Exception):
     def __init__(self, msg: str):
         self.stack: List = []
         self.msg = scrub_secrets(msg, env_secrets())
@@ -692,7 +692,7 @@ class GitCloningProblem(RuntimeException):
         return msg
 
 
-class BadSpecError(InternalException):
+class BadSpecError(InternalDbtError):
     def __init__(self, repo, revision, error):
         self.repo = repo
         self.revision = revision
@@ -704,7 +704,7 @@ class BadSpecError(InternalException):
         return msg
 
 
-class GitCloningError(InternalException):
+class GitCloningError(InternalDbtError):
     def __init__(self, repo: str, revision: str, error: CommandResultError):
         self.repo = repo
         self.revision = revision
@@ -1955,7 +1955,7 @@ class AmbiguousCatalogMatch(CompilationException):
         return msg
 
 
-class CacheInconsistency(InternalException):
+class CacheInconsistency(InternalDbtError):
     def __init__(self, msg: str):
         self.msg = msg
         formatted_msg = f"Cache inconsistency detected: {self.msg}"

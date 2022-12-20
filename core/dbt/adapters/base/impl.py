@@ -22,7 +22,7 @@ import agate
 import pytz
 
 from dbt.exceptions import (
-    InternalException,
+    InternalDbtError,
     InvalidMacroArgType,
     InvalidMacroResult,
     InvalidQuoteConfigType,
@@ -75,7 +75,7 @@ FRESHNESS_MACRO_NAME = "collect_freshness"
 
 def _expect_row_value(key: str, row: agate.Row):
     if key not in row.keys():
-        raise InternalException(
+        raise InternalDbtError(
             'Got a row without "{}" column, columns: {}'.format(key, row.keys())
         )
     return row[key]

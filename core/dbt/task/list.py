@@ -7,7 +7,7 @@ from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
 from dbt.events.functions import warn_or_error
 from dbt.events.types import NoNodesSelected
-from dbt.exceptions import RuntimeException, InternalException
+from dbt.exceptions import RuntimeException, InternalDbtError
 from dbt.logger import log_manager
 from dbt.events.eventmgr import EventLevel
 
@@ -72,7 +72,7 @@ class ListTask(GraphRunnableTask):
             warn_or_error(NoNodesSelected())
             return
         if self.manifest is None:
-            raise InternalException("manifest is None in _iterate_selected_nodes")
+            raise InternalDbtError("manifest is None in _iterate_selected_nodes")
         for node in nodes:
             if node in self.manifest.nodes:
                 yield self.manifest.nodes[node]
@@ -143,7 +143,7 @@ class ListTask(GraphRunnableTask):
         elif output == "path":
             generator = self.generate_paths
         else:
-            raise InternalException("Invalid output {}".format(output))
+            raise InternalDbtError("Invalid output {}".format(output))
 
         return self.output_results(generator())
 
@@ -181,7 +181,7 @@ class ListTask(GraphRunnableTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise InternalDbtError("manifest and graph must be set to get perform node selection")
         if self.resource_types == [NodeType.Test]:
             return TestSelector(
                 graph=self.graph,

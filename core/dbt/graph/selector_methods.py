@@ -19,7 +19,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
-    InternalException,
+    InternalDbtError,
     RuntimeException,
 )
 from dbt.node_types import NodeType
@@ -407,7 +407,7 @@ class StateSelectorMethod(SelectorMethod):
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
         if self.previous_state is None or self.previous_state.manifest is None:
-            raise InternalException("No comparison manifest in _macros_modified")
+            raise InternalDbtError("No comparison manifest in _macros_modified")
         old_macros = self.previous_state.manifest.macros
         new_macros = self.manifest.macros
 
@@ -538,7 +538,7 @@ class StateSelectorMethod(SelectorMethod):
 class ResultSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.results is None:
-            raise InternalException("No comparison run_results")
+            raise InternalDbtError("No comparison run_results")
         matches = set(
             result.unique_id for result in self.previous_state.results if result.status == selector
         )
@@ -551,13 +551,11 @@ class SourceStatusSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
 
         if self.previous_state is None or self.previous_state.sources is None:
-            raise InternalException(
+            raise InternalDbtError(
                 "No previous state comparison freshness results in sources.json"
             )
         elif self.previous_state.sources_current is None:
-            raise InternalException(
-                "No current state comparison freshness results in sources.json"
-            )
+            raise InternalDbtError("No current state comparison freshness results in sources.json")
 
         current_state_sources = {
             result.unique_id: getattr(result, "max_loaded_at", 0)
@@ -633,7 +631,7 @@ class MethodManager:
     def get_method(self, method: MethodName, method_arguments: List[str]) -> SelectorMethod:
 
         if method not in self.SELECTOR_METHODS:
-            raise InternalException(
+            raise InternalDbtError(
                 f'Method name "{method}" is a valid node selection '
                 f"method name, but it is not handled"
             )

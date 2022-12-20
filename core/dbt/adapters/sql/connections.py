@@ -151,7 +151,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def begin(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is True:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.InternalDbtError(
                 'Tried to begin a new transaction on connection "{}", but '
                 "it already had one open!".format(connection.name)
             )
@@ -164,7 +164,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def commit(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is False:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.InternalDbtError(
                 'Tried to commit transaction on connection "{}", but '
                 "it does not have one open!".format(connection.name)
             )

@@ -46,7 +46,7 @@ from dbt.utils import ExitCodes, args_to_dict
 from dbt.config.profile import read_user_config
 from dbt.exceptions import (
     Exception as dbtException,
-    InternalException,
+    InternalDbtError,
     NotImplementedException,
     FailedToConnectException,
 )
@@ -92,7 +92,7 @@ class DBTArgumentParser(argparse.ArgumentParser):
     ):
         mutex_group = self.add_mutually_exclusive_group()
         if not name.startswith("--"):
-            raise InternalException(
+            raise InternalDbtError(
                 'cannot handle optional argument without "--" prefix: ' f'got "{name}"'
             )
         if dest is None:
