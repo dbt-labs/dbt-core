@@ -14,7 +14,7 @@ from dbt.exceptions import (
     AmbiguousCatalogMatch,
     CacheInconsistency,
     DataclassNotDict,
-    CompilationException,
+    CompilationError,
     DatabaseError,
     DependencyNotFound,
     DependencyException,
@@ -62,7 +62,7 @@ def raise_dataclass_not_dict(obj) -> NoReturn:
 
 
 def raise_compiler_error(msg, node=None) -> NoReturn:
-    raise CompilationException(msg, node)
+    raise CompilationError(msg, node)
 
 
 def raise_database_error(msg, node=None) -> NoReturn:

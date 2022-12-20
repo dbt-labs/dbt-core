@@ -10,7 +10,7 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
 from dbt.exceptions import (
-    CompilationException,
+    CompilationError,
     DbtProfileError,
     DbtProjectError,
     ValidationException,
@@ -299,7 +299,7 @@ class Profile(HasCredentials):
 
         try:
             profile_data = renderer.render_data(raw_profile_data)
-        except CompilationException as exc:
+        except CompilationError as exc:
             raise DbtProfileError(str(exc)) from exc
         return target_name, profile_data
 

@@ -9,7 +9,7 @@ from typing_extensions import Protocol
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import CompilationException, DataclassNotDict
+from dbt.exceptions import CompilationError, DataclassNotDict
 from dbt.utils import deep_merge
 
 
@@ -88,13 +88,11 @@ class Path(FakeAPIObject):
     def __post_init__(self):
         # handle pesky jinja2.Undefined sneaking in here and messing up rende
         if not isinstance(self.database, (type(None), str)):
-            raise CompilationException("Got an invalid path database: {}".format(self.database))
+            raise CompilationError("Got an invalid path database: {}".format(self.database))
         if not isinstance(self.schema, (type(None), str)):
-            raise CompilationException("Got an invalid path schema: {}".format(self.schema))
+            raise CompilationError("Got an invalid path schema: {}".format(self.schema))
         if not isinstance(self.identifier, (type(None), str)):
-            raise CompilationException(
-                "Got an invalid path identifier: {}".format(self.identifier)
-            )
+            raise CompilationError("Got an invalid path identifier: {}".format(self.identifier))
 
     def get_lowered_part(self, key: ComponentName) -> Optional[str]:
         part = self.get_part(key)

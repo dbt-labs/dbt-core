@@ -11,7 +11,7 @@ from dbt.contracts.util import (
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingException
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -222,7 +222,7 @@ class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
 
     def __post_init__(self):
         if self.name == "" or self.data_type == "":
-            raise CompilationException("External partition columns must have names and data types")
+            raise CompilationError("External partition columns must have names and data types")
 
 
 @dataclass

@@ -50,7 +50,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
-    CompilationException,
+    CompilationError,
     DuplicateMacroPatchName,
     DuplicatePatchPath,
     DuplicateSourcePatchName,
@@ -285,13 +285,13 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
             )
             raise ParsingException(msg) from exc
 
-        except CompilationException as exc:
+        except CompilationError as exc:
             context = _trimmed(str(target))
             msg = (
                 "Invalid generic test configuration given in "
                 f"{target.original_file_path}: \n{exc.msg}\n\t@: {context}"
             )
-            raise CompilationException(msg) from exc
+            raise CompilationError(msg) from exc
 
         original_name = os.path.basename(target.original_file_path)
         compiled_path = get_pseudo_test_path(builder.compiled_name, original_name)

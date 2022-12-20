@@ -9,7 +9,7 @@ from dbt.dataclass_schema import (
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
 from dbt.contracts.graph.utils import validate_color
-from dbt.exceptions import InternalDbtError, CompilationException
+from dbt.exceptions import InternalDbtError, CompilationError
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -227,7 +227,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
             msg = (
                 'Error, tried to delete config key "{}": Cannot delete ' "built-in keys"
             ).format(key)
-            raise CompilationException(msg)
+            raise CompilationError(msg)
         else:
             del self._extra[key]
 

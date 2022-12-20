@@ -17,7 +17,7 @@ from dbt.contracts.results import (
 )
 from dbt.exceptions import (
     NotImplementedException,
-    CompilationException,
+    CompilationError,
     DbtRuntimeError,
     InternalDbtError,
 )
@@ -344,7 +344,7 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def handle_exception(self, e, ctx):
-        catchable_errors = (CompilationException, DbtRuntimeError)
+        catchable_errors = (CompilationError, DbtRuntimeError)
         if isinstance(e, catchable_errors):
             error = self._handle_catchable_exception(e, ctx)
         elif isinstance(e, InternalDbtError):

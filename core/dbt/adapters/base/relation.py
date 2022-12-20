@@ -354,7 +354,7 @@ class InformationSchema(BaseRelation):
 
     def __post_init__(self):
         if not isinstance(self.information_schema_view, (type(None), str)):
-            raise dbt.exceptions.CompilationException(
+            raise dbt.exceptions.CompilationError(
                 "Got an invalid name: {}".format(self.information_schema_view)
             )
 

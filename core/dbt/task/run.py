@@ -21,7 +21,7 @@ from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
 from dbt.exceptions import (
-    CompilationException,
+    CompilationError,
     InternalDbtError,
     MissingMaterialization,
     DbtRuntimeError,
@@ -135,14 +135,14 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
             'Invalid return value from materialization, "relations" '
             "not found, got keys: {}".format(list(inp))
         )
-        raise CompilationException(msg, node=model) from None
+        raise CompilationError(msg, node=model) from None
 
     if not isinstance(relations_value, list):
         msg = (
             'Invalid return value from materialization, "relations" '
             "not a list, got: {}".format(relations_value)
         )
-        raise CompilationException(msg, node=model) from None
+        raise CompilationError(msg, node=model) from None
 
     relations: List[BaseRelation] = []
     for relation in relations_value:
@@ -151,7 +151,7 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
                 "Invalid return value from materialization, "
                 '"relations" contains non-Relation: {}'.format(relation)
             )
-            raise CompilationException(msg, node=model)
+            raise CompilationError(msg, node=model)
 
         assert isinstance(relation, BaseRelation)
         relations.append(relation)
@@ -234,7 +234,7 @@ class ModelRunner(CompileRunner):
                 'The materialization ("{}") did not explicitly return a '
                 "list of relations to add to the cache.".format(str(model.get_materialization()))
             )
-            raise CompilationException(msg, node=model)
+            raise CompilationError(msg, node=model)
 
         if isinstance(result, dict):
             return _validate_materialization_relations_dict(result, model)
@@ -243,7 +243,7 @@ class ModelRunner(CompileRunner):
             "Invalid return value from materialization, expected a dict "
             'with key "relations", got: {}'.format(str(result))
         )
-        raise CompilationException(msg, node=model)
+        raise CompilationError(msg, node=model)
 
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)

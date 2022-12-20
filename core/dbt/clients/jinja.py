@@ -30,7 +30,7 @@ from dbt.contracts.graph.nodes import GenericTestNode
 from dbt.exceptions import (
     CaughtMacroException,
     CaughtMacroExceptionWithNode,
-    CompilationException,
+    CompilationError,
     InternalDbtError,
     InvalidMaterializationArg,
     JinjaRenderingException,
@@ -301,7 +301,7 @@ class MacroGenerator(BaseMacroGenerator):
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
             raise CaughtMacroExceptionWithNode(exc=e, node=self.macro)
-        except CompilationException as e:
+        except CompilationError as e:
             e.stack.append(self.macro)
             raise e
 
@@ -513,10 +513,10 @@ def catch_jinja(node=None) -> Iterator[None]:
         yield
     except jinja2.exceptions.TemplateSyntaxError as e:
         e.translated = False
-        raise CompilationException(str(e), node) from e
+        raise CompilationError(str(e), node) from e
     except jinja2.exceptions.UndefinedError as e:
         raise UndefinedMacroException(str(e), node) from e
-    except CompilationException as exc:
+    except CompilationError as exc:
         exc.add_node(node)
         raise
 

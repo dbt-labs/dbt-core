@@ -41,7 +41,7 @@ from dbt.contracts.graph.nodes import (
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.events.functions import get_metadata_vars
 from dbt.exceptions import (
-    CompilationException,
+    CompilationError,
     ConflictingConfigKeys,
     DisallowSecretEnvVar,
     EnvVarMissing,
@@ -144,7 +144,7 @@ class BaseDatabaseWrapper:
                 f'`adapter.dispatch("{suggest_macro_name}", '
                 f'macro_namespace="{suggest_macro_namespace}")`?'
             )
-            raise CompilationException(msg)
+            raise CompilationError(msg)
 
         if packages is not None:
             raise MacroInvalidDispatchArg(macro_name)
@@ -159,7 +159,7 @@ class BaseDatabaseWrapper:
                 search_packages = [self.config.project_name, namespace]
         else:
             # Not a string and not None so must be a list
-            raise CompilationException(
+            raise CompilationError(
                 f"In adapter.dispatch, got a list macro_namespace argument "
                 f'("{macro_namespace}"), but macro_namespace should be None or a string.'
             )
@@ -172,7 +172,7 @@ class BaseDatabaseWrapper:
                 try:
                     # this uses the namespace from the context
                     macro = self._namespace.get_from_package(package_name, search_name)
-                except CompilationException:
+                except CompilationError:
                     # Only raise CompilationException if macro is not found in
                     # any package
                     macro = None
@@ -187,7 +187,7 @@ class BaseDatabaseWrapper:
 
         searched = ", ".join(repr(a) for a in attempts)
         msg = f"In dispatch: No macro named '{macro_name}' found\n    Searched for: {searched}"
-        raise CompilationException(msg)
+        raise CompilationError(msg)
 
 
 class BaseResolver(metaclass=abc.ABCMeta):
@@ -223,12 +223,12 @@ class BaseRefResolver(BaseResolver):
 
     def validate_args(self, name: str, package: Optional[str]):
         if not isinstance(name, str):
-            raise CompilationException(
+            raise CompilationError(
                 f"The name argument to ref() must be a string, got {type(name)}"
             )
 
         if package is not None and not isinstance(package, str):
-            raise CompilationException(
+            raise CompilationError(
                 f"The package argument to ref() must be a string or None, got {type(package)}"
             )
 
@@ -253,12 +253,12 @@ class BaseSourceResolver(BaseResolver):
 
     def validate_args(self, source_name: str, table_name: str):
         if not isinstance(source_name, str):
-            raise CompilationException(
+            raise CompilationError(
                 f"The source name (first) argument to source() must be a "
                 f"string, got {type(source_name)}"
             )
         if not isinstance(table_name, str):
-            raise CompilationException(
+            raise CompilationError(
                 f"The table name (second) argument to source() must be a "
                 f"string, got {type(table_name)}"
             )
@@ -282,12 +282,12 @@ class BaseMetricResolver(BaseResolver):
 
     def validate_args(self, name: str, package: Optional[str]):
         if not isinstance(name, str):
-            raise CompilationException(
+            raise CompilationError(
                 f"The name argument to metric() must be a string, got {type(name)}"
             )
 
         if package is not None and not isinstance(package, str):
-            raise CompilationException(
+            raise CompilationError(
                 f"The package argument to metric() must be a string or None, got {type(package)}"
             )
 
@@ -782,7 +782,7 @@ class ProviderContext(ManifestContext):
         try:
             return func(*args, **kwargs)
         except Exception:
-            raise CompilationException(message_if_exception, self.model)
+            raise CompilationError(message_if_exception, self.model)
 
     @contextmember
     def load_agate_table(self) -> agate.Table:
@@ -1185,7 +1185,7 @@ class ProviderContext(ManifestContext):
             "https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch)"
             " adapter_macro was called for: {macro_name}".format(macro_name=name)
         )
-        raise CompilationException(msg)
+        raise CompilationError(msg)
 
     @contextmember
     def env_var(self, var: str, default: Optional[str] = None) -> str:
