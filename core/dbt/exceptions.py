@@ -172,72 +172,7 @@ class DbtRuntimeError(RuntimeError, Exception):
         return result
 
 
-class RPCFailureResult(DbtRuntimeError):
-    CODE = 10002
-    MESSAGE = "RPC execution error"
-
-
-class RPCTimeoutException(DbtRuntimeError):
-    CODE = 10008
-    MESSAGE = "RPC timeout error"
-
-    def __init__(self, timeout: Optional[float]):
-        super().__init__(self.MESSAGE)
-        self.timeout = timeout
-
-    def data(self):
-        result = super().data()
-        result.update(
-            {
-                "timeout": self.timeout,
-                "message": f"RPC timed out after {self.timeout}s",
-            }
-        )
-        return result
-
-
-class RPCKilledException(DbtRuntimeError):
-    CODE = 10009
-    MESSAGE = "RPC process killed"
-
-    def __init__(self, signum: int):
-        self.signum = signum
-        self.msg = f"RPC process killed by signal {self.signum}"
-        super().__init__(self.msg)
-
-    def data(self):
-        return {
-            "signum": self.signum,
-            "message": self.msg,
-        }
-
-
-class RPCCompiling(DbtRuntimeError):
-    CODE = 10010
-    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
-
-    def __init__(self, msg: str = None, node=None):
-        if msg is None:
-            msg = "compile in progress"
-        super().__init__(msg, node)
-
-
-class RPCLoadException(DbtRuntimeError):
-    CODE = 10011
-    MESSAGE = (
-        'RPC server failed to compile project, call the "status" method for' " compile status"
-    )
-
-    def __init__(self, cause: Dict[str, Any]):
-        self.cause = cause
-        self.msg = f'{self.MESSAGE}: {self.cause["message"]}'
-        super().__init__(self.msg)
-
-    def data(self):
-        return {"cause": self.cause, "message": self.msg}
-
-
-class DatabaseException(DbtRuntimeError):
+class DatabaseError(DbtRuntimeError):
     CODE = 10003
     MESSAGE = "Database Error"
 
@@ -432,7 +367,7 @@ class NotImplementedException(Exception):
         super().__init__(self.formatted_msg)
 
 
-class FailedToConnectException(DatabaseException):
+class FailedToConnectException(DatabaseError):
     pass
 
 
@@ -1598,7 +1533,7 @@ class ApproximateMatch(CompilationException):
 
 
 # adapters exceptions
-class UnexpectedNull(DatabaseException):
+class UnexpectedNull(DatabaseError):
     def __init__(self, field_name: str, source):
         self.field_name = field_name
         self.source = source
@@ -1609,7 +1544,7 @@ class UnexpectedNull(DatabaseException):
         super().__init__(msg)
 
 
-class UnexpectedNonTimestamp(DatabaseException):
+class UnexpectedNonTimestamp(DatabaseError):
     def __init__(self, field_name: str, source, dt: Any):
         self.field_name = field_name
         self.source = source
@@ -2185,6 +2120,72 @@ class RelationWrongType(CompilationException):
         return msg
 
 
+class RPCFailureResult(DbtRuntimeError):
+    CODE = 10002
+    MESSAGE = "RPC execution error"
+
+
+class RPCTimeoutException(DbtRuntimeError):
+    CODE = 10008
+    MESSAGE = "RPC timeout error"
+
+    def __init__(self, timeout: Optional[float]):
+        super().__init__(self.MESSAGE)
+        self.timeout = timeout
+
+    def data(self):
+        result = super().data()
+        result.update(
+            {
+                "timeout": self.timeout,
+                "message": f"RPC timed out after {self.timeout}s",
+            }
+        )
+        return result
+
+
+# not modifying these since rpc should be deprecated soon
+class RPCKilledException(DbtRuntimeError):
+    CODE = 10009
+    MESSAGE = "RPC process killed"
+
+    def __init__(self, signum: int):
+        self.signum = signum
+        self.msg = f"RPC process killed by signal {self.signum}"
+        super().__init__(self.msg)
+
+    def data(self):
+        return {
+            "signum": self.signum,
+            "message": self.msg,
+        }
+
+
+class RPCCompiling(DbtRuntimeError):
+    CODE = 10010
+    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
+
+    def __init__(self, msg: str = None, node=None):
+        if msg is None:
+            msg = "compile in progress"
+        super().__init__(msg, node)
+
+
+class RPCLoadException(DbtRuntimeError):
+    CODE = 10011
+    MESSAGE = (
+        'RPC server failed to compile project, call the "status" method for' " compile status"
+    )
+
+    def __init__(self, cause: Dict[str, Any]):
+        self.cause = cause
+        self.msg = f'{self.MESSAGE}: {self.cause["message"]}'
+        super().__init__(self.msg)
+
+    def data(self):
+        return {"cause": self.cause, "message": self.msg}
+
+
 # These are copies of what's in dbt/context/exceptions_jinja.py to not immediately break adapters
 # utilizing these functions as exceptions.  These are direct copies to avoid circular imports.
 # They will be removed in 1 (or 2?) versions.  Issue to be created to ensure it happens.
@@ -2284,7 +2285,7 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
     reason=REASON,
 )
 def raise_database_error(msg, node=None) -> NoReturn:
-    raise DatabaseException(msg, node)
+    raise DatabaseError(msg, node)
 
 
 @deprecated(
