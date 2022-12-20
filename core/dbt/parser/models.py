@@ -37,7 +37,6 @@ from dbt.exceptions import (
     UndefinedMacroException,
 )
 
-
 dbt_function_key_words = set(["ref", "source", "config", "get"])
 dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
 
@@ -197,41 +196,46 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         return block.path.relative_path
 
     def parse_python_model(self, node, config, context):
+        config_keys_used = []
+        config_keys_defaults = []
+
         try:
             tree = ast.parse(node.raw_code, filename=node.original_file_path)
         except SyntaxError as exc:
             raise PythonParsingException(exc, node=node) from exc
 
-        # We are doing a validator and a parser because visit_FunctionDef in parser
-        # would actually make the parser not doing the visit_Calls any more
-        dbtValidator = PythonValidationVisitor()
-        dbtValidator.visit(tree)
-        dbtValidator.check_error(node)
+        # Only parse if AST tree has instructions in body
+        if tree.body:
+            # We are doing a validator and a parser because visit_FunctionDef in parser
+            # would actually make the parser not doing the visit_Calls any more
+            dbt_validator = PythonValidationVisitor()
+            dbt_validator.visit(tree)
+            dbt_validator.check_error(node)
 
-        dbtParser = PythonParseVisitor(node)
-        dbtParser.visit(tree)
-        config_keys_used = []
-        config_keys_defaults = []
-        for (func, args, kwargs) in dbtParser.dbt_function_calls:
-            if func == "get":
-                num_args = len(args)
-                if num_args == 0:
-                    raise ParsingException(
-                        "dbt.config.get() requires at least one argument",
-                        node=node,
-                    )
-                if num_args > 2:
-                    raise ParsingException(
-                        f"dbt.config.get() takes at most 2 arguments ({num_args} given)",
-                        node=node,
-                    )
-                key = args[0]
-                default_value = args[1] if num_args == 2 else None
-                config_keys_used.append(key)
-                config_keys_defaults.append(default_value)
-                continue
+            dbt_parser = PythonParseVisitor(node)
+            dbt_parser.visit(tree)
 
-            context[func](*args, **kwargs)
+            for (func, args, kwargs) in dbt_parser.dbt_function_calls:
+                if func == "get":
+                    num_args = len(args)
+                    if num_args == 0:
+                        raise ParsingException(
+                            "dbt.config.get() requires at least one argument",
+                            node=node,
+                        )
+                    if num_args > 2:
+                        raise ParsingException(
+                            f"dbt.config.get() takes at most 2 arguments ({num_args} given)",
+                            node=node,
+                        )
+                    key = args[0]
+                    default_value = args[1] if num_args == 2 else None
+                    config_keys_used.append(key)
+                    config_keys_defaults.append(default_value)
+                    continue
+
+                context[func](*args, **kwargs)
+
         if config_keys_used:
             # this is being used in macro build_config_dict
             context["config"](
