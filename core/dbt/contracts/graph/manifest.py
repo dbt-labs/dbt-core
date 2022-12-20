@@ -102,7 +102,7 @@ class DocLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> Documentation:
         if unique_id not in manifest.docs:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
@@ -135,7 +135,7 @@ class SourceLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SourceDefinition:
         if unique_id not in manifest.sources:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
@@ -173,7 +173,7 @@ class RefableLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
         if unique_id not in manifest.nodes:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return manifest.nodes[unique_id]
@@ -206,7 +206,7 @@ class MetricLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Metric:
         if unique_id not in manifest.metrics:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
@@ -839,7 +839,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.metrics[unique_id]
         else:
             # something terrible has happened
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 "Expected node {} not found in manifest".format(unique_id)
             )
 

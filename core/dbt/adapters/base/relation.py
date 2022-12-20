@@ -11,7 +11,7 @@ from dbt.contracts.relation import (
     Policy,
     Path,
 )
-from dbt.exceptions import ApproximateMatch, InternalDbtError, MultipleDatabasesNotAllowed
+from dbt.exceptions import ApproximateMatch, DbtInternalError, MultipleDatabasesNotAllowed
 from dbt.node_types import NodeType
 from dbt.utils import filter_null_values, deep_merge, classproperty
 
@@ -249,14 +249,14 @@ class BaseRelation(FakeAPIObject, Hashable):
     ) -> Self:
         if node.resource_type == NodeType.Source:
             if not isinstance(node, SourceDefinition):
-                raise InternalDbtError(
+                raise DbtInternalError(
                     "type mismatch, expected SourceDefinition but got {}".format(type(node))
                 )
             return cls.create_from_source(node, **kwargs)
         else:
             # Can't use ManifestNode here because of parameterized generics
             if not isinstance(node, (ParsedNode)):
-                raise InternalDbtError(
+                raise DbtInternalError(
                     f"type mismatch, expected ManifestNode but got {type(node)}"
                 )
             return cls.create_from_node(config, node, **kwargs)

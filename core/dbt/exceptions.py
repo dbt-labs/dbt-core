@@ -38,7 +38,7 @@ class Exception(builtins.Exception):
         }
 
 
-class InternalDbtError(Exception):
+class DbtInternalError(Exception):
     def __init__(self, msg: str):
         self.stack: List = []
         self.msg = scrub_secrets(msg, env_secrets())
@@ -626,7 +626,7 @@ class GitCloningProblem(DbtRuntimeError):
         return msg
 
 
-class BadSpecError(InternalDbtError):
+class BadSpecError(DbtInternalError):
     def __init__(self, repo, revision, error):
         self.repo = repo
         self.revision = revision
@@ -638,7 +638,7 @@ class BadSpecError(InternalDbtError):
         return msg
 
 
-class GitCloningError(InternalDbtError):
+class GitCloningError(DbtInternalError):
     def __init__(self, repo: str, revision: str, error: CommandResultError):
         self.repo = repo
         self.revision = revision
@@ -1889,7 +1889,7 @@ class AmbiguousCatalogMatch(CompilationError):
         return msg
 
 
-class CacheInconsistency(InternalDbtError):
+class CacheInconsistency(DbtInternalError):
     def __init__(self, msg: str):
         self.msg = msg
         formatted_msg = f"Cache inconsistency detected: {self.msg}"
@@ -2641,7 +2641,7 @@ def validator_error_message(exc):
 
 
 # these subclass new names to not immediately break adapters
-class InternalException(InternalDbtError):
+class InternalException(DbtInternalError):
     pass
 
 

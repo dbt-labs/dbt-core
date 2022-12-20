@@ -6,7 +6,7 @@ from .base import BaseRunner
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
-from dbt.exceptions import InternalDbtError, DbtRuntimeError
+from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.events.functions import fire_event
 from dbt.events.types import CompileComplete
@@ -43,7 +43,7 @@ class CompileTask(GraphRunnableTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalDbtError("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
@@ -76,7 +76,7 @@ class CompileTask(GraphRunnableTask):
         if deferred_manifest is None:
             return
         if self.manifest is None:
-            raise InternalDbtError(
+            raise DbtInternalError(
                 "Expected to defer to manifest, but there is no runtime manifest to defer from!"
             )
         self.manifest.merge_from_artifact(

@@ -44,7 +44,7 @@ from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
-    InternalDbtError,
+    DbtInternalError,
     NotImplementedException,
     DbtRuntimeError,
     FailFastError,
@@ -83,7 +83,7 @@ class ManifestTask(ConfiguredTask):
 
     def compile_manifest(self):
         if self.manifest is None:
-            raise InternalDbtError("compile_manifest called before manifest was loaded")
+            raise DbtInternalError("compile_manifest called before manifest was loaded")
 
         # we cannot get adapter in init since it will break rpc #5579
         adapter = get_adapter(self.config)
@@ -160,7 +160,7 @@ class GraphRunnableTask(ManifestTask):
     def _runtime_initialize(self):
         super()._runtime_initialize()
         if self.manifest is None or self.graph is None:
-            raise InternalDbtError("_runtime_initialize never loaded the manifest and graph!")
+            raise DbtInternalError("_runtime_initialize never loaded the manifest and graph!")
 
         self.job_queue = self.get_graph_queue()
 
@@ -172,7 +172,7 @@ class GraphRunnableTask(ManifestTask):
             elif uid in self.manifest.sources:
                 self._flattened_nodes.append(self.manifest.sources[uid])
             else:
-                raise InternalDbtError(
+                raise DbtInternalError(
                     f"Node selection returned {uid}, expected a node or a source"
                 )
 
@@ -276,7 +276,7 @@ class GraphRunnableTask(ManifestTask):
     def run_queue(self, pool):
         """Given a pool, submit jobs from the queue to the pool."""
         if self.job_queue is None:
-            raise InternalDbtError("Got to run_queue with no job queue set")
+            raise DbtInternalError("Got to run_queue with no job queue set")
 
         def callback(result):
             """Note: mark_done, at a minimum, must happen here or dbt will
@@ -285,7 +285,7 @@ class GraphRunnableTask(ManifestTask):
             self._handle_result(result)
 
             if self.job_queue is None:
-                raise InternalDbtError("Got to run_queue callback with no job queue set")
+                raise DbtInternalError("Got to run_queue callback with no job queue set")
             self.job_queue.mark_done(result.node.unique_id)
 
         while not self.job_queue.empty():
@@ -327,7 +327,7 @@ class GraphRunnableTask(ManifestTask):
         node = result.node
 
         if self.manifest is None:
-            raise InternalDbtError("manifest was None in _handle_result")
+            raise DbtInternalError("manifest was None in _handle_result")
 
         if isinstance(node, SourceDefinition):
             self.manifest.update_source(node)
@@ -400,7 +400,7 @@ class GraphRunnableTask(ManifestTask):
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
-            raise InternalDbtError("graph is None in _mark_dependent_errors")
+            raise DbtInternalError("graph is None in _mark_dependent_errors")
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
@@ -453,7 +453,7 @@ class GraphRunnableTask(ManifestTask):
         self._runtime_initialize()
 
         if self._flattened_nodes is None:
-            raise InternalDbtError("after _runtime_initialize, _flattened_nodes was still None")
+            raise DbtInternalError("after _runtime_initialize, _flattened_nodes was still None")
 
         if len(self._flattened_nodes) == 0:
             with TextOnly():
@@ -509,7 +509,7 @@ class GraphRunnableTask(ManifestTask):
 
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
-            raise InternalDbtError("manifest was None in get_model_schemas")
+            raise DbtInternalError("manifest was None in get_model_schemas")
         result: Set[BaseRelation] = set()
 
         for node in self.manifest.nodes.values():

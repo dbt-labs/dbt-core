@@ -92,13 +92,13 @@ DOCS_PREFIX = "dbt_docs__"
 
 def get_dbt_macro_name(name):
     if name is None:
-        raise dbt.exceptions.InternalDbtError("Got None for a macro name!")
+        raise dbt.exceptions.DbtInternalError("Got None for a macro name!")
     return f"{MACRO_PREFIX}{name}"
 
 
 def get_dbt_docs_name(name):
     if name is None:
-        raise dbt.exceptions.InternalDbtError("Got None for a doc name!")
+        raise dbt.exceptions.DbtInternalError("Got None for a doc name!")
     return f"{DOCS_PREFIX}{name}"
 
 

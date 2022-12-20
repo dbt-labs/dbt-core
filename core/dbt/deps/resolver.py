@@ -5,7 +5,7 @@ from dbt.exceptions import (
     DuplicateDependencyToRoot,
     DuplicateProjectDependency,
     MismatchedDependencyTypes,
-    InternalDbtError,
+    DbtInternalError,
 )
 
 from dbt.config import Project, RuntimeConfig
@@ -80,7 +80,7 @@ class PackageListing:
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise InternalDbtError("Invalid package type {}".format(type(contract)))
+                raise DbtInternalError("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod

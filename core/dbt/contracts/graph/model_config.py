@@ -9,7 +9,7 @@ from dbt.dataclass_schema import (
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
 from dbt.contracts.graph.utils import validate_color
-from dbt.exceptions import InternalDbtError, CompilationError
+from dbt.exceptions import DbtInternalError, CompilationError
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -30,7 +30,7 @@ def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
     try:
         return cls(value)
     except ValueError as exc:
-        raise InternalDbtError(f"Invalid {cls} value: {value}") from exc
+        raise DbtInternalError(f"Invalid {cls} value: {value}") from exc
 
 
 def _set_meta_value(obj: M, key: str, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -140,17 +140,17 @@ def _merge_field_value(
         return _listify(self_value) + _listify(other_value)
     elif merge_behavior == MergeBehavior.Update:
         if not isinstance(self_value, dict):
-            raise InternalDbtError(f"expected dict, got {self_value}")
+            raise DbtInternalError(f"expected dict, got {self_value}")
         if not isinstance(other_value, dict):
-            raise InternalDbtError(f"expected dict, got {other_value}")
+            raise DbtInternalError(f"expected dict, got {other_value}")
         value = self_value.copy()
         value.update(other_value)
         return value
     elif merge_behavior == MergeBehavior.DictKeyAppend:
         if not isinstance(self_value, dict):
-            raise InternalDbtError(f"expected dict, got {self_value}")
+            raise DbtInternalError(f"expected dict, got {self_value}")
         if not isinstance(other_value, dict):
-            raise InternalDbtError(f"expected dict, got {other_value}")
+            raise DbtInternalError(f"expected dict, got {other_value}")
         new_dict = {}
         for key in self_value.keys():
             new_dict[key] = _listify(self_value[key])
@@ -172,7 +172,7 @@ def _merge_field_value(
         return new_dict
 
     else:
-        raise InternalDbtError(f"Got an invalid merge_behavior: {merge_behavior}")
+        raise DbtInternalError(f"Got an invalid merge_behavior: {merge_behavior}")
 
 
 def insensitive_patterns(*patterns: str):

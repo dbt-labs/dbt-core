@@ -10,7 +10,7 @@ from dbt.adapters.protocol import AdapterConfig, AdapterProtocol, RelationProtoc
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.events.functions import fire_event
 from dbt.events.types import AdapterImportError, PluginLoadError
-from dbt.exceptions import InternalDbtError, DbtRuntimeError
+from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
@@ -132,7 +132,7 @@ class AdapterContainer:
             try:
                 plugin = self.plugins[plugin_name]
             except KeyError:
-                raise InternalDbtError(f"No plugin found for {plugin_name}") from None
+                raise DbtInternalError(f"No plugin found for {plugin_name}") from None
             plugins.append(plugin)
             seen.add(plugin_name)
             for dep in plugin.dependencies:
@@ -151,7 +151,7 @@ class AdapterContainer:
             try:
                 path = self.packages[package_name]
             except KeyError:
-                raise InternalDbtError(f"No internal package listing found for {package_name}")
+                raise DbtInternalError(f"No internal package listing found for {package_name}")
             paths.append(path)
         return paths
 

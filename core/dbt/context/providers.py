@@ -45,7 +45,7 @@ from dbt.exceptions import (
     ConflictingConfigKeys,
     DisallowSecretEnvVar,
     EnvVarMissing,
-    InternalDbtError,
+    DbtInternalError,
     InvalidInlineModelConfig,
     InvalidNumberSourceArgs,
     InvalidPersistDocsValueType,
@@ -674,7 +674,7 @@ class ProviderContext(ManifestContext):
         context_config: Optional[ContextConfig],
     ) -> None:
         if provider is None:
-            raise InternalDbtError(f"Invalid provider given to context: {provider}")
+            raise DbtInternalError(f"Invalid provider given to context: {provider}")
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
         self.model: Union[Macro, ManifestNode] = model

@@ -15,7 +15,7 @@ from dbt.contracts.results import (
     SourceFreshnessResult,
     FreshnessStatus,
 )
-from dbt.exceptions import DbtRuntimeError, InternalDbtError
+from dbt.exceptions import DbtRuntimeError, DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     FreshnessCheckComplete,
@@ -100,7 +100,7 @@ class FreshnessRunner(BaseRunner):
         # therefore loaded_at_field should be a str. If this invariant is
         # broken, raise!
         if compiled_node.loaded_at_field is None:
-            raise InternalDbtError(
+            raise DbtInternalError(
                 "Got to execute for source freshness of a source that has no loaded_at_field!"
             )
 
@@ -158,7 +158,7 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalDbtError("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return FreshnessSelector(
             graph=self.graph,
             manifest=self.manifest,

@@ -3,7 +3,7 @@ from collections import namedtuple
 
 from dbt.exceptions import (
     BlockDefinitionNotAtTop,
-    InternalDbtError,
+    DbtInternalError,
     MissingCloseTag,
     MissingControlFlowStartTag,
     NestedTags,
@@ -261,7 +261,7 @@ class TagIterator:
             elif block_type_name is not None:
                 yield self.handle_tag(match)
             else:
-                raise InternalDbtError(
+                raise DbtInternalError(
                     "Invalid regex match in next_block, expected block start, "
                     "expr start, or comment start"
                 )

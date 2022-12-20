@@ -97,7 +97,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def set_thread_connection(self, conn: Connection) -> None:
         key = self.get_thread_identifier()
         if key in self.thread_connections:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 "In set_thread_connection, existing connection exists for {}"
             )
         self.thread_connections[key] = conn
@@ -365,7 +365,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
         if connection.transaction_open is False:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Tried to rollback transaction on connection "
                 f'"{connection.name}", but it does not have one open!'
             )

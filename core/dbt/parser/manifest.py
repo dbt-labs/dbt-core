@@ -1113,7 +1113,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
@@ -1157,7 +1157,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
@@ -1208,7 +1208,7 @@ def _process_metrics_for_node(
         elif len(metric) == 2:
             target_metric_package, target_metric_name = metric
         else:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Metric references should always be 1 or 2 arguments - got {len(metric)}"
             )
 
@@ -1253,7 +1253,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalDbtError(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 

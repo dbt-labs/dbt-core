@@ -22,7 +22,7 @@ from dbt.contracts.results import (
     ColumnMetadata,
     CatalogArtifact,
 )
-from dbt.exceptions import InternalDbtError, AmbiguousCatalogMatch
+from dbt.exceptions import DbtInternalError, AmbiguousCatalogMatch
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -201,7 +201,7 @@ def get_unique_id_mapping(
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
         if self.manifest is None:
-            raise InternalDbtError("manifest should not be None in _get_manifest")
+            raise DbtInternalError("manifest should not be None in _get_manifest")
         return self.manifest
 
     def run(self) -> CatalogArtifact:
@@ -232,7 +232,7 @@ class GenerateTask(CompileTask):
                 shutil.copytree(asset_path, to_asset_path)
 
         if self.manifest is None:
-            raise InternalDbtError("self.manifest was None in run!")
+            raise DbtInternalError("self.manifest was None in run!")
 
         adapter = get_adapter(self.config)
         with adapter.connection_named("generate_catalog"):

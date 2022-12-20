@@ -22,7 +22,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.exceptions import (
     GraphDependencyNotFound,
-    InternalDbtError,
+    DbtInternalError,
     DbtRuntimeError,
 )
 from dbt.graph import Graph
@@ -278,7 +278,7 @@ class Compiler:
         # ephemeral model.
         for cte in model.extra_ctes:
             if cte.id not in manifest.nodes:
-                raise InternalDbtError(
+                raise DbtInternalError(
                     f"During compilation, found a cte reference that "
                     f"could not be resolved: {cte.id}"
                 )
@@ -286,7 +286,7 @@ class Compiler:
             assert not isinstance(cte_model, SeedNode)
 
             if not cte_model.is_ephemeral_model:
-                raise InternalDbtError(f"{cte.id} is not ephemeral")
+                raise DbtInternalError(f"{cte.id} is not ephemeral")
 
             # This model has already been compiled, so it's been
             # through here before

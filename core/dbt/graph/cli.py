@@ -7,7 +7,7 @@ from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 from typing import Dict, List, Optional, Tuple, Any, Union
 
 from dbt.contracts.selection import SelectorDefinition, SelectorFile
-from dbt.exceptions import InternalDbtError, DbtValidationError
+from dbt.exceptions import DbtInternalError, DbtValidationError
 
 from .selector_spec import (
     SelectionUnion,
@@ -89,7 +89,7 @@ RawDefinition = Union[str, Dict[str, Any]]
 def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
     result: List[RawDefinition] = []
     if key not in dct:
-        raise InternalDbtError(f"Expected to find key {key} in dict, only found {list(dct)}")
+        raise DbtInternalError(f"Expected to find key {key} in dict, only found {list(dct)}")
     values = dct[key]
     if not isinstance(values, list):
         raise DbtValidationError(f'Invalid value for key "{key}". Expected a list.')

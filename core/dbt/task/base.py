@@ -19,7 +19,7 @@ from dbt.exceptions import (
     NotImplementedException,
     CompilationError,
     DbtRuntimeError,
-    InternalDbtError,
+    DbtInternalError,
 )
 from dbt.logger import log_manager
 from dbt.events.functions import fire_event
@@ -347,7 +347,7 @@ class BaseRunner(metaclass=ABCMeta):
         catchable_errors = (CompilationError, DbtRuntimeError)
         if isinstance(e, catchable_errors):
             error = self._handle_catchable_exception(e, ctx)
-        elif isinstance(e, InternalDbtError):
+        elif isinstance(e, DbtInternalError):
             error = self._handle_internal_exception(e, ctx)
         else:
             error = self._handle_generic_exception(e, ctx)
@@ -437,7 +437,7 @@ class BaseRunner(metaclass=ABCMeta):
                 )
                 print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
-                    raise InternalDbtError(
+                    raise DbtInternalError(
                         "Skip cause not set but skip was somehow caused by an ephemeral failure"
                     )
                 # set an error so dbt will exit with an error code

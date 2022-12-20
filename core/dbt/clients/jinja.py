@@ -31,7 +31,7 @@ from dbt.exceptions import (
     CaughtMacroException,
     CaughtMacroExceptionWithNode,
     CompilationError,
-    InternalDbtError,
+    DbtInternalError,
     InvalidMaterializationArg,
     JinjaRenderingError,
     MacroReturn,
@@ -246,7 +246,7 @@ class BaseMacroGenerator:
     def call_macro(self, *args, **kwargs):
         # called from __call__ methods
         if self.context is None:
-            raise InternalDbtError("Context is still None in call_macro!")
+            raise DbtInternalError("Context is still None in call_macro!")
         assert self.context is not None
 
         macro = self.get_macro()
@@ -273,7 +273,7 @@ class MacroStack(threading.local):
     def pop(self, name):
         got = self.call_stack.pop()
         if got != name:
-            raise InternalDbtError(f"popped {got}, expected {name}")
+            raise DbtInternalError(f"popped {got}, expected {name}")
 
 
 class MacroGenerator(BaseMacroGenerator):
