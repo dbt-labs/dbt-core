@@ -142,13 +142,10 @@ class VersionSpecifier(VersionSpecification):
                     return 1
                 if b is None:
                     return -1
-            # This suppresses the LegacyVersion deprecation warning
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=DeprecationWarning)
-                if packaging_version.parse(a) > packaging_version.parse(b):
-                    return 1
-                elif packaging_version.parse(a) < packaging_version.parse(b):
-                    return -1
+            if packaging_version.parse(a) > packaging_version.parse(b):
+                return 1
+            elif packaging_version.parse(a) < packaging_version.parse(b):
+                return -1
 
         equal = (
             self.matcher == Matchers.GREATER_THAN_OR_EQUAL
