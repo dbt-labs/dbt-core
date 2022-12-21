@@ -1027,25 +1027,7 @@ class PartialParsingMacroChangeStartFullParse(
         return "Change detected to override macro used during parsing. Starting full parse."
 
 
-@dataclass
-class PartialParsingProjectEnvVarsChanged(InfoLevel, pt.PartialParsingProjectEnvVarsChanged):
-    def code(self):
-        return "I019"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because env vars used in dbt_project.yml have changed"
-
-
-@dataclass
-class PartialParsingProfileEnvVarsChanged(InfoLevel, pt.PartialParsingProfileEnvVarsChanged):
-    def code(self):
-        return "I020"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because env vars used in profiles.yml have changed"
-
-
-# Skipped I021
+# Skipped I019, I020, I021
 
 
 @dataclass
@@ -1074,48 +1056,15 @@ class PartialParsingVersionMismatch(InfoLevel, pt.PartialParsingVersionMismatch)
 
 
 @dataclass
-class PartialParsingFailedBecauseConfigChange(
-    InfoLevel, pt.PartialParsingFailedBecauseConfigChange
-):
+class UnableToPartialParse(InfoLevel, pt.UnableToPartialParse):
     def code(self):
         return "I024"
 
     def message(self) -> str:
-        return (
-            "Unable to do partial parsing because config vars, "
-            "config profile, or config target have changed"
-        )
+        return f"unable to do partial parsing because {self.reason}"
 
 
-@dataclass
-class PartialParsingFailedBecauseProfileChange(
-    InfoLevel, pt.PartialParsingFailedBecauseProfileChange
-):
-    def code(self):
-        return "I025"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because profile has changed"
-
-
-@dataclass
-class PartialParsingFailedBecauseNewProjectDependency(
-    InfoLevel, pt.PartialParsingFailedBecauseNewProjectDependency
-):
-    def code(self):
-        return "I026"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because a project dependency has been added"
-
-
-@dataclass
-class PartialParsingFailedBecauseHashChanged(InfoLevel, pt.PartialParsingFailedBecauseHashChanged):
-    def code(self):
-        return "I027"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because a project config has changed"
+# Skipped I025, I026, I026, I027
 
 
 @dataclass

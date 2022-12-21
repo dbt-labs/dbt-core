@@ -680,17 +680,7 @@ message PartialParsingMacroChangeStartFullParse {
     EventInfo info = 1;
 }
 
-// I019
-message PartialParsingProjectEnvVarsChanged {
-    EventInfo info = 1;
-}
-
-// I020
-message PartialParsingProfileEnvVarsChanged {
-    EventInfo info = 1;
-}
-
-// Skipped I021
+// Skipped I019, I020, I021
 
 // I022
 message ManifestWrongMetadataVersion {
@@ -706,24 +696,13 @@ message PartialParsingVersionMismatch {
 }
 
 // I024
-message PartialParsingFailedBecauseConfigChange {
+message UnableToPartialParse {
     EventInfo info = 1;
+    string reason = 2;
 }
 
-// I025
-message PartialParsingFailedBecauseProfileChange {
-    EventInfo info = 1;
-}
+// Skipped I025, I026, I027
 
-// I026
-message PartialParsingFailedBecauseNewProjectDependency {
-    EventInfo info = 1;
-}
-
-// I027
-message PartialParsingFailedBecauseHashChanged {
-    EventInfo info = 1;
-}
 
 // I028
 message PartialParsingNotEnabled {

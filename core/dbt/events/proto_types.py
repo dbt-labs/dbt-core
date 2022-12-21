@@ -894,20 +894,6 @@ class PartialParsingMacroChangeStartFullParse(betterproto.Message):
 
 
 @dataclass
-class PartialParsingProjectEnvVarsChanged(betterproto.Message):
-    """I019"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingProfileEnvVarsChanged(betterproto.Message):
-    """I020"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
 class ManifestWrongMetadataVersion(betterproto.Message):
     """I022"""
 
@@ -925,31 +911,11 @@ class PartialParsingVersionMismatch(betterproto.Message):
 
 
 @dataclass
-class PartialParsingFailedBecauseConfigChange(betterproto.Message):
+class UnableToPartialParse(betterproto.Message):
     """I024"""
 
     info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingFailedBecauseProfileChange(betterproto.Message):
-    """I025"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingFailedBecauseNewProjectDependency(betterproto.Message):
-    """I026"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingFailedBecauseHashChanged(betterproto.Message):
-    """I027"""
-
-    info: "EventInfo" = betterproto.message_field(1)
+    reason: str = betterproto.string_field(2)
 
 
 @dataclass

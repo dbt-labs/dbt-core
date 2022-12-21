@@ -27,16 +27,11 @@ from dbt.events.types import (
     PartialParsingMacroChangeStartFullParse,
     ManifestWrongMetadataVersion,
     PartialParsingVersionMismatch,
-    PartialParsingFailedBecauseConfigChange,
-    PartialParsingFailedBecauseProfileChange,
-    PartialParsingFailedBecauseNewProjectDependency,
-    PartialParsingFailedBecauseHashChanged,
+    UnableToPartialParse,
     PartialParsingNotEnabled,
     ParsedFileLoadFailed,
     PartialParseSaveFileNotFound,
     InvalidDisabledTargetInTestNode,
-    PartialParsingProjectEnvVarsChanged,
-    PartialParsingProfileEnvVarsChanged,
     NodeNotFoundOrDisabled,
 )
 from dbt.logger import DbtProcessState
@@ -571,27 +566,33 @@ class ManifestLoader:
             # If the version is wrong, the other checks might not work
             return False, ReparseReason.version_mismatch
         if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
-            fire_event(PartialParsingFailedBecauseConfigChange())
+            fire_event(
+                UnableToPartialParse(
+                    reason="config vars, config profile, or config target have changed"
+                )
+            )
             valid = False
             reparse_reason = ReparseReason.vars_changed
         if self.manifest.state_check.profile_hash != manifest.state_check.profile_hash:
             # Note: This should be made more granular. We shouldn't need to invalidate
             # partial parsing if a non-used profile section has changed.
-            fire_event(PartialParsingFailedBecauseProfileChange())
+            fire_event(UnableToPartialParse(reason="profile has changed"))
             valid = False
             reparse_reason = ReparseReason.profile_changed
         if (
             self.manifest.state_check.project_env_vars_hash
             != manifest.state_check.project_env_vars_hash
         ):
-            fire_event(PartialParsingProjectEnvVarsChanged())
+            fire_event(
+                UnableToPartialParse(reason="env vars used in dbt_project.yml have changed")
+            )
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
         if (
             self.manifest.state_check.profile_env_vars_hash
             != manifest.state_check.profile_env_vars_hash
         ):
-            fire_event(PartialParsingProfileEnvVarsChanged())
+            fire_event(UnableToPartialParse(reason="env vars used in profiles.yml have changed"))
             valid = False
             reparse_reason = ReparseReason.prof_env_vars_changed
 
@@ -601,7 +602,7 @@ class ManifestLoader:
             if k not in manifest.state_check.project_hashes
         }
         if missing_keys:
-            fire_event(PartialParsingFailedBecauseNewProjectDependency())
+            fire_event(UnableToPartialParse(reason="a project dependency has been added"))
             valid = False
             reparse_reason = ReparseReason.deps_changed
 
@@ -609,7 +610,7 @@ class ManifestLoader:
             if key in manifest.state_check.project_hashes:
                 old_value = manifest.state_check.project_hashes[key]
                 if new_value != old_value:
-                    fire_event(PartialParsingFailedBecauseHashChanged())
+                    fire_event(UnableToPartialParse(reason="a project config has changed"))
                     valid = False
                     reparse_reason = ReparseReason.project_config_changed
         return valid, reparse_reason
