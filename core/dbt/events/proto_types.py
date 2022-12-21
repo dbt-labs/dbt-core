@@ -855,14 +855,7 @@ class MacroFileParse(betterproto.Message):
 
 
 @dataclass
-class PartialParsingFullReparseBecauseOfError(betterproto.Message):
-    """I013"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingExceptionFile(betterproto.Message):
+class PartialParsingExceptionProcessingFile(betterproto.Message):
     """I014"""
 
     info: "EventInfo" = betterproto.message_field(1)
@@ -884,30 +877,6 @@ class PartialParsingSkipParsing(betterproto.Message):
     """I017"""
 
     info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class PartialParsingMacroChangeStartFullParse(betterproto.Message):
-    """I018"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-
-
-@dataclass
-class ManifestWrongMetadataVersion(betterproto.Message):
-    """I022"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    version: str = betterproto.string_field(2)
-
-
-@dataclass
-class PartialParsingVersionMismatch(betterproto.Message):
-    """I023"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    saved_version: str = betterproto.string_field(2)
-    current_version: str = betterproto.string_field(3)
 
 
 @dataclass
@@ -933,13 +902,6 @@ class ParsedFileLoadFailed(betterproto.Message):
     path: str = betterproto.string_field(2)
     exc: str = betterproto.string_field(3)
     exc_info: str = betterproto.string_field(4)
-
-
-@dataclass
-class PartialParseSaveFileNotFound(betterproto.Message):
-    """I030"""
-
-    info: "EventInfo" = betterproto.message_field(1)
 
 
 @dataclass

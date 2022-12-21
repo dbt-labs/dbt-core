@@ -975,19 +975,11 @@ class MacroFileParse(DebugLevel, pt.MacroFileParse):
         return f"Parsing {self.path}"
 
 
-@dataclass
-class PartialParsingFullReparseBecauseOfError(
-    InfoLevel, pt.PartialParsingFullReparseBecauseOfError
-):
-    def code(self):
-        return "I013"
-
-    def message(self) -> str:
-        return "Partial parsing enabled but an error occurred. Switching to a full re-parse."
+# Skipping I013
 
 
 @dataclass
-class PartialParsingExceptionFile(DebugLevel, pt.PartialParsingExceptionFile):
+class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExceptionProcessingFile):
     def code(self):
         return "I014"
 
@@ -1016,43 +1008,7 @@ class PartialParsingSkipParsing(DebugLevel, pt.PartialParsingSkipParsing):
         return "Partial parsing enabled, no changes found, skipping parsing"
 
 
-@dataclass
-class PartialParsingMacroChangeStartFullParse(
-    InfoLevel, pt.PartialParsingMacroChangeStartFullParse
-):
-    def code(self):
-        return "I018"
-
-    def message(self) -> str:
-        return "Change detected to override macro used during parsing. Starting full parse."
-
-
-# Skipped I019, I020, I021
-
-
-@dataclass
-class ManifestWrongMetadataVersion(DebugLevel, pt.ManifestWrongMetadataVersion):
-    def code(self):
-        return "I022"
-
-    def message(self) -> str:
-        return (
-            "Manifest metadata did not contain correct version. "
-            f"Contained '{self.version}' instead."
-        )
-
-
-@dataclass
-class PartialParsingVersionMismatch(InfoLevel, pt.PartialParsingVersionMismatch):
-    def code(self):
-        return "I023"
-
-    def message(self) -> str:
-        return (
-            "Unable to do partial parsing because of a dbt version mismatch. "
-            f"Saved manifest version: {self.saved_version}. "
-            f"Current version: {self.current_version}."
-        )
+# Skipped I018, I019, I020, I021, I022, I023
 
 
 @dataclass
@@ -1061,7 +1017,7 @@ class UnableToPartialParse(InfoLevel, pt.UnableToPartialParse):
         return "I024"
 
     def message(self) -> str:
-        return f"unable to do partial parsing because {self.reason}"
+        return f"Unable to do partial parsing because {self.reason}"
 
 
 # Skipped I025, I026, I026, I027
@@ -1085,13 +1041,7 @@ class ParsedFileLoadFailed(DebugLevel, pt.ParsedFileLoadFailed):  # noqa
         return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
 
 
-@dataclass
-class PartialParseSaveFileNotFound(InfoLevel, pt.PartialParseSaveFileNotFound):
-    def code(self):
-        return "I030"
-
-    def message(self) -> str:
-        return "Partial parse save file not found. Starting full parse."
+# Skipped I030
 
 
 @dataclass
