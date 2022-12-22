@@ -131,7 +131,7 @@ log_path = click.option(
     "--log-path",
     envvar="DBT_LOG_PATH",
     help="Configure the 'log-path'. Only applies this setting for the current run. Overrides the 'DBT_LOG_PATH' if it is set.",
-    default=Path.cwd() / "logs",
+    default=lambda: Path.cwd() / "logs",
     type=click.Path(resolve_path=True, path_type=Path),
 )
 
@@ -214,7 +214,7 @@ profiles_dir = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",
     help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
-    default=default_profiles_dir(),
+    default=default_profiles_dir,
     type=click.Path(exists=True),
 )
 
@@ -222,7 +222,7 @@ project_dir = click.option(
     "--project-dir",
     envvar=None,
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
-    default=default_project_dir(),
+    default=default_project_dir,
     type=click.Path(exists=True),
 )
 
