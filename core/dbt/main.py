@@ -351,7 +351,7 @@ def _build_init_subparser(subparsers, base_subparser):
         dest="skip_profile_setup",
         action="store_true",
         help="""
-        Skip interative profile setup.
+        Skip interactive profile setup.
         """,
     )
     sub.set_defaults(cls=init_task.InitTask, which="init", rpc_method=None)
