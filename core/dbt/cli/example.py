@@ -3,7 +3,6 @@ from dbt.config.runtime import load_profile, load_project
 
 if __name__ == "__main__":
     project_dir = "/Users/chenyuli/git/jaffle_shop"
-    # Bypass cli group context configuration entirely and invoke deps directly
     cli_args = ["run", "--project-dir", project_dir]
 
     # initialize the dbt runner
