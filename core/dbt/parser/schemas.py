@@ -99,11 +99,11 @@ schema_file_keys = (
 
 def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
     """If loading the yaml fails, raise an exception."""
-    path = source_file.path.relative_path
     try:
-        return load_yaml_text(source_file.contents, source_file.path)
+        # source_file.contents can sometimes be None
+        return load_yaml_text(source_file.contents or "", source_file.path)
     except ValidationException as e:
-        raise YamlLoadFailure(source_file.project_name, path, e)
+        raise YamlLoadFailure(source_file.project_name, source_file.path.relative_path, e)
 
 
 class ParserRef:
