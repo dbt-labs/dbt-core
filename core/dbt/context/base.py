@@ -636,9 +636,8 @@ class BaseContext(metaclass=ContextMeta):
             {% endif %}
 
         This supports all flags defined in flags submodule (core/dbt/flags.py)
-        TODO: Replace with object that provides read-only access to flag values
         """
-        return flags
+        return flags.get_flag_obj()
 
     @contextmember
     @staticmethod
