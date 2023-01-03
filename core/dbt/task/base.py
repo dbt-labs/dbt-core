@@ -98,8 +98,7 @@ class BaseTask(metaclass=ABCMeta):
     @classmethod
     def from_args(cls, args):
         try:
-            # This is usually RuntimeConfig but will be UnsetProfileConfig
-            # for the clean or deps tasks
+            # This is usually RuntimeConfig
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
             fire_event(DbtProjectError())

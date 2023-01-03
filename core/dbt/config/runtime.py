@@ -1,7 +1,7 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     Any,
@@ -415,8 +415,8 @@ class UnsetCredentials(Credentials):
         return ()
 
 
-# This is used by UnsetProfileConfig, for commands which do
-# not require a profile, i.e. dbt deps and clean
+# This is used by commands which do not require
+# a profile, i.e. dbt deps and clean
 class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
@@ -435,189 +435,12 @@ class UnsetProfile(Profile):
         return Profile.__getattribute__(self, name)
 
 
-# This class is used by the dbt deps and clean commands, because they don't
-# require a functioning profile.
-@dataclass
-class UnsetProfileConfig(RuntimeConfig):
-    """This class acts a lot _like_ a RuntimeConfig, except if your profile is
-    missing, any access to profile members results in an exception.
-    """
-
-    profile_name: str = field(repr=False)
-    target_name: str = field(repr=False)
-
-    def __post_init__(self):
-        # instead of futzing with InitVar overrides or rewriting __init__, just
-        # `del` the attrs we don't want  users touching.
-        del self.profile_name
-        del self.target_name
-        # don't call super().__post_init__(), as that calls validate(), and
-        # this object isn't very valid
-
-    def __getattribute__(self, name):
-        # Override __getattribute__ to check that the attribute isn't 'banned'.
-        if name in {"profile_name", "target_name"}:
-            raise RuntimeException(f'Error: disallowed attribute "{name}" - no profile!')
-
-        # avoid every attribute access triggering infinite recursion
-        return RuntimeConfig.__getattribute__(self, name)
-
-    def to_target_dict(self):
-        # re-override the poisoned profile behavior
-        return DictDefaultEmptyStr({})
-
-    def to_project_config(self, with_packages=False):
-        """Return a dict representation of the config that could be written to
-        disk with `yaml.safe_dump` to get this configuration.
-
-        Overrides dbt.config.Project.to_project_config to omit undefined profile
-        attributes.
-
-        :param with_packages bool: If True, include the serialized packages
-            file in the root.
-        :returns dict: The serialized profile.
-        """
-        result = deepcopy(
-            {
-                "name": self.project_name,
-                "version": self.version,
-                "project-root": self.project_root,
-                "profile": "",
-                "model-paths": self.model_paths,
-                "macro-paths": self.macro_paths,
-                "seed-paths": self.seed_paths,
-                "test-paths": self.test_paths,
-                "analysis-paths": self.analysis_paths,
-                "docs-paths": self.docs_paths,
-                "asset-paths": self.asset_paths,
-                "target-path": self.target_path,
-                "snapshot-paths": self.snapshot_paths,
-                "clean-targets": self.clean_targets,
-                "log-path": self.log_path,
-                "quoting": self.quoting,
-                "models": self.models,
-                "on-run-start": self.on_run_start,
-                "on-run-end": self.on_run_end,
-                "dispatch": self.dispatch,
-                "seeds": self.seeds,
-                "snapshots": self.snapshots,
-                "sources": self.sources,
-                "tests": self.tests,
-                "metrics": self.metrics,
-                "exposures": self.exposures,
-                "vars": self.vars.to_dict(),
-                "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
-                "config-version": self.config_version,
-            }
-        )
-        if self.query_comment:
-            result["query-comment"] = self.query_comment.to_dict(omit_none=True)
-
-        if with_packages:
-            result.update(self.packages.to_dict(omit_none=True))
-
-        return result
-
-    @classmethod
-    def from_parts(
-        cls,
-        project: Project,
-        profile: Profile,
-        args: Any,
-        dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None,
-    ) -> "RuntimeConfig":
-        """Instantiate a RuntimeConfig from its components.
-
-        :param profile: Ignored.
-        :param project: A parsed dbt Project.
-        :param args: The parsed command-line arguments.
-        :returns RuntimeConfig: The new configuration.
-        """
-        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
-
-        return cls(
-            project_name=project.project_name,
-            version=project.version,
-            project_root=project.project_root,
-            model_paths=project.model_paths,
-            macro_paths=project.macro_paths,
-            seed_paths=project.seed_paths,
-            test_paths=project.test_paths,
-            analysis_paths=project.analysis_paths,
-            docs_paths=project.docs_paths,
-            asset_paths=project.asset_paths,
-            target_path=project.target_path,
-            snapshot_paths=project.snapshot_paths,
-            clean_targets=project.clean_targets,
-            log_path=project.log_path,
-            packages_install_path=project.packages_install_path,
-            quoting=project.quoting,  # we never use this anyway.
-            models=project.models,
-            on_run_start=project.on_run_start,
-            on_run_end=project.on_run_end,
-            dispatch=project.dispatch,
-            seeds=project.seeds,
-            snapshots=project.snapshots,
-            dbt_version=project.dbt_version,
-            packages=project.packages,
-            manifest_selectors=project.manifest_selectors,
-            selectors=project.selectors,
-            query_comment=project.query_comment,
-            sources=project.sources,
-            tests=project.tests,
-            metrics=project.metrics,
-            exposures=project.exposures,
-            vars=project.vars,
-            config_version=project.config_version,
-            unrendered=project.unrendered,
-            project_env_vars=project.project_env_vars,
-            profile_env_vars=profile.profile_env_vars,
-            profile_name="",
-            target_name="",
-            user_config=UserConfig(),
-            threads=getattr(args, "threads", 1),
-            credentials=UnsetCredentials(),
-            args=args,
-            cli_vars=cli_vars,
-            dependencies=dependencies,
-        )
-
-    @classmethod
-    def get_profile(
-        cls,
-        project_root: str,
-        cli_vars: Dict[str, Any],
-        args: Any,
-    ) -> Profile:
-        """
-        Moving all logic regarding constructing a complete UnsetProfile to this function
-        This way we can have a clean load_profile function to call by the new CLI and remove
-        all logic for UnsetProfile once we migrate to new click CLI
-        """
-
-        profile = UnsetProfile()
-        # The profile (for warehouse connection) is not needed, but we want
-        # to get the UserConfig, which is also in profiles.yml
-        user_config = read_user_config(project_root)
-        profile.user_config = user_config
-        profile_renderer = ProfileRenderer(cli_vars)
-        profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
-        return profile
-
-    @classmethod
-    def from_args(cls: Type[RuntimeConfig], args: Any) -> "RuntimeConfig":
-        """Given arguments, read in dbt_project.yml from the current directory,
-        read in packages.yml if it exists, and use them to find the profile to
-        load.
-
-        :param args: The arguments as parsed from the cli.
-        :raises DbtProjectError: If the project is invalid or missing.
-        :raises DbtProfileError: If the profile is invalid or missing.
-        :raises ValidationException: If the cli variables are invalid.
-        """
-        project, profile = cls.collect_parts(args)
-
-        return cls.from_parts(project=project, profile=profile, args=args)
+UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
+Configuration paths exist in your dbt_project.yml file which do not \
+apply to any resources.
+There are {} unused configuration paths:
+{}
+"""
 
 
 def _is_config_used(path, fqns):

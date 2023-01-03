@@ -1,15 +1,10 @@
-from typing import Dict, Any, Optional
-
-from dbt import flags
+from typing import Any, Optional
 
 import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
-from dbt.config.profile import read_user_config
-from dbt.config.runtime import load_project, UnsetProfile
 from dbt.config.renderer import DbtProjectYamlRenderer
-from dbt.config.utils import parse_cli_vars
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
 from dbt.deps.registry import RegistryPinnedPackage
@@ -32,20 +27,13 @@ from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
 
 from dbt.config import Project
-from dbt.task.base import NoneConfig
 
 
 class DepsTask(BaseTask):
-    ConfigType = NoneConfig
-
-    def __init__(
-        self,
-        args: Any,
-        project: Project,
-        cli_vars: Dict[str, Any],
-    ):
+    def __init__(self, args: Any, project: Project):
+        move_to_nearest_project_dir(project.project_root)
         super().__init__(args=args, config=None, project=project)
-        self.cli_vars = cli_vars
+        self.cli_vars = args.vars
 
     def track_package_install(
         self, package_name: str, source_type: str, version: Optional[str]
@@ -104,35 +92,3 @@ class DepsTask(BaseTask):
             if packages_to_upgrade:
                 fire_event(EmptyLine())
                 fire_event(DepsNotifyUpdatesAvailable(packages=ListOfStrings(packages_to_upgrade)))
-
-    @classmethod
-    def _get_unset_profile(cls) -> UnsetProfile:
-        profile = UnsetProfile()
-        # The profile (for warehouse connection) is not needed, but we want
-        # to get the UserConfig, which is also in profiles.yml
-        user_config = read_user_config(flags.PROFILES_DIR)
-        profile.user_config = user_config
-        return profile
-
-    @classmethod
-    def from_args(cls, args):
-        # deps needs to move to the project directory, as it does put files
-        # into the modules directory
-        nearest_project_dir = move_to_nearest_project_dir(args.project_dir)
-
-        # N.B. parse_cli_vars is embedded into the param when using click.
-        # replace this with:
-        # cli_vars: Dict[str, Any] = getattr(args, "vars", {})
-        # when this task is refactored for click
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
-        project_root: str = args.project_dir or nearest_project_dir
-        profile: UnsetProfile = cls._get_unset_profile()
-        project = load_project(project_root, args.version_check, profile, cli_vars)
-
-        return cls(args, project, cli_vars)
-
-    @classmethod
-    def from_project(cls, project: Project, cli_vars: Dict[str, Any]) -> "DepsTask":
-        move_to_nearest_project_dir(project.project_root)
-        # TODO: remove args=None once BaseTask does not require args
-        return cls(None, project, cli_vars)
