@@ -1,0 +1,7 @@
+kind: Fixes
+body: add pre-commit install to make dev script in Makefile
+time: 2022-12-12T11:59:12.175136-05:00
+custom:
+  Author: justbldwn
+  Issue: "6269"
+  PR: "6417"
