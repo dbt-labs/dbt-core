@@ -37,7 +37,7 @@ jobs:
   code-quality:
     name: code-quality
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Check out the repository
@@ -64,7 +64,7 @@ jobs:
   unit:
     name: unit test / python ${{ matrix.python-version }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     strategy:
       fail-fast: false
@@ -114,7 +114,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10"]
-        os: [ubuntu-latest]
+        os: [ubuntu-20.04]
         include:
           - python-version: 3.8
             os: windows-latest
@@ -180,7 +180,7 @@ jobs:
   build:
     name: build packages
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Check out the repository
