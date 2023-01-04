@@ -232,8 +232,6 @@ def get_flag_dict():
         "quiet": QUIET,
         "no_print": NO_PRINT,
         "cache_selected_only": CACHE_SELECTED_ONLY,
-        "target_path": TARGET_PATH,
-        "log_path": LOG_PATH,
     }
 
 
