@@ -111,7 +111,7 @@ sample_values = [
     MainTrackingUserState(user_state=""),
     MergedFromState(num_merged=0, sample=[]),
     MissingProfileTarget(profile_name="", target_name=""),
-    InvalidVarsYAML(),
+    InvalidOptionYAML(option_name="vars"),
     LogDbtProjectError(),
     LogDbtProfileError(),
     StarterProjectPath(dir=""),

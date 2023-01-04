@@ -5,17 +5,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from importlib import import_module
 from pathlib import Path
 from typing import Tuple, AbstractSet, Union
+from hologram import FieldEncoder, JsonDict
+from mashumaro.types import SerializableType
+from typing import Callable, cast, Generic, Optional, TypeVar, List
 
 from dbt.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
     StrEnum,
 )
-from hologram import FieldEncoder, JsonDict
-from mashumaro.types import SerializableType
-from typing import Callable, cast, Generic, Optional, TypeVar
+from dbt.exceptions import ValidationException
 
 
 class Port(int, SerializableType):
@@ -86,6 +88,59 @@ class NoValue(dbtClassMixin):
     """Sometimes, you want a way to say none that isn't None"""
 
     novalue: NVEnum = field(default_factory=lambda: NVEnum.novalue)
+
+
+@dataclass
+class IncludeExclude(dbtClassMixin):
+    INCLUDE_ALL = ("all", "*")
+
+    include: Union[str, List[str]]
+    exclude: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if isinstance(self.include, str) and self.include not in self.INCLUDE_ALL:
+            raise ValidationException(
+                f"include must be one of {self.INCLUDE_ALL} or a list of strings"
+            )
+
+        if self.exclude and self.include not in self.INCLUDE_ALL:
+            raise ValidationException(
+                f"exclude can only be specified if include is one of {self.INCLUDE_ALL}"
+            )
+
+        if isinstance(self.include, list):
+            self._validate_items(self.include)
+
+        if isinstance(self.exclude, list):
+            self._validate_items(self.exclude)
+
+    def _validate_items(self, items: List[str]):
+        pass
+
+
+# TODO: find a better spot for this
+class WarnErrorOptions(IncludeExclude):
+    # TODO: this method can be removed once the click CLI is in use
+    @classmethod
+    def from_yaml_string(cls, warn_error_options_str: str):
+
+        # TODO: resolve circular import
+        from dbt.config.utils import parse_cli_yaml_string
+
+        warn_error_options = parse_cli_yaml_string(warn_error_options_str, "warn-error-options")
+        return cls(
+            include=warn_error_options.get("include", []),
+            exclude=warn_error_options.get("exclude", []),
+        )
+
+    def _validate_items(self, items: List[str]):
+        mod = import_module("dbt.events.types")
+        valid_exception_names = set(
+            [name for name, cls in mod.__dict__.items() if isinstance(cls, type)]
+        )
+        for item in items:
+            if item not in valid_exception_names:
+                raise ValidationException(f"{item} is not a valid dbt error name.")
 
 
 dbtClassMixin.register_field_encoders(

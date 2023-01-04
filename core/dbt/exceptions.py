@@ -1703,15 +1703,16 @@ class UninstalledPackagesFoundError(CompilationError):
         return msg
 
 
-class VarsArgNotYamlDictError(CompilationError):
-    def __init__(self, var_type):
+class OptionNotYamlDict(CompilationError):
+    def __init__(self, var_type, option_name):
         self.var_type = var_type
+        self.option_name = option_name
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         type_name = self.var_type.__name__
 
-        msg = f"The --vars argument must be a YAML dictionary, but was of type '{type_name}'"
+        msg = f"The --{self.option_name} argument must be a YAML dictionary, but was of type '{type_name}'"
         return msg
 
 

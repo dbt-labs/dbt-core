@@ -29,6 +29,7 @@ STORE_FAILURES = False  # subcommand
 USE_EXPERIMENTAL_PARSER = None
 STATIC_PARSER = None
 WARN_ERROR = None
+WARN_ERROR_OPTIONS = None
 WRITE_JSON = None
 PARTIAL_PARSE = None
 USE_COLORS = None
@@ -66,6 +67,7 @@ flag_defaults = {
     "USE_EXPERIMENTAL_PARSER": False,
     "STATIC_PARSER": True,
     "WARN_ERROR": False,
+    "WARN_ERROR_OPTIONS": "{}",
     "WRITE_JSON": True,
     "PARTIAL_PARSE": True,
     "USE_COLORS": True,
@@ -130,7 +132,7 @@ def set_from_args(args, user_config):
     # N.B. Multiple `globals` are purely for line length.
     # Because `global` is a parser directive (as opposed to a language construct)
     # black insists in putting them all on one line
-    global STRICT_MODE, FULL_REFRESH, WARN_ERROR, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
+    global STRICT_MODE, FULL_REFRESH, WARN_ERROR, WARN_ERROR_OPTIONS, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
     global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
     global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, QUIET, NO_PRINT, CACHE_SELECTED_ONLY
@@ -146,6 +148,7 @@ def set_from_args(args, user_config):
     USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
     STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
     WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
+    WARN_ERROR_OPTIONS = get_flag_value("WARN_ERROR_OPTIONS", args, user_config)
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
     PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
     USE_COLORS = get_flag_value("USE_COLORS", args, user_config)
@@ -229,6 +232,7 @@ def get_flag_dict():
         "use_experimental_parser": USE_EXPERIMENTAL_PARSER,
         "static_parser": STATIC_PARSER,
         "warn_error": WARN_ERROR,
+        "warn_error_options": WARN_ERROR_OPTIONS,
         "write_json": WRITE_JSON,
         "partial_parse": PARTIAL_PARSE,
         "use_colors": USE_COLORS,
