@@ -1,6 +1,13 @@
-import os
+# Do not import the os package because we expose this package in jinja
+from os import name as os_name, path as os_path, getenv as os_getenv
 import multiprocessing
+<<<<<<< HEAD
 if os.name != 'nt':
+=======
+from argparse import Namespace
+
+if os_name != "nt":
+>>>>>>> 1d23bd53a ([Backport 1.2.latest] Partial parsing bug with empty schema file - ensure None is not passe… (#6514))
     # https://bugs.python.org/issue41567
     import multiprocessing.popen_spawn_posix  # type: ignore
 from pathlib import Path
@@ -9,10 +16,15 @@ from typing import Optional
 # PROFILES_DIR must be set before the other flags
 # It also gets set in main.py and in set_from_args because the rpc server
 # doesn't go through exactly the same main arg processing.
+<<<<<<< HEAD
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
 PROFILES_DIR = os.path.expanduser(
     os.getenv('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
 )
+=======
+DEFAULT_PROFILES_DIR = os_path.join(os_path.expanduser("~"), ".dbt")
+PROFILES_DIR = os_path.expanduser(os_getenv("DBT_PROFILES_DIR", DEFAULT_PROFILES_DIR))
+>>>>>>> 1d23bd53a ([Backport 1.2.latest] Partial parsing bug with empty schema file - ensure None is not passe… (#6514))
 
 STRICT_MODE = False  # Only here for backwards compatibility
 FULL_REFRESH = False  # subcommand
@@ -76,7 +88,7 @@ def env_set_bool(env_value):
 
 
 def env_set_path(key: str) -> Optional[Path]:
-    value = os.getenv(key)
+    value = os_getenv(key)
     if value is None:
         return value
     else:
@@ -179,5 +191,21 @@ def get_flag_dict():
         "printer_width": PRINTER_WIDTH,
         "indirect_selection": INDIRECT_SELECTION,
         "log_cache_events": LOG_CACHE_EVENTS,
-        "event_buffer_size": EVENT_BUFFER_SIZE
+        "event_buffer_size": EVENT_BUFFER_SIZE,
+        "quiet": QUIET,
+        "no_print": NO_PRINT,
     }
+
+
+# This is used by core/dbt/context/base.py to return a flag object
+# in Jinja.
+def get_flag_obj():
+    new_flags = Namespace()
+    for k, v in get_flag_dict().items():
+        setattr(new_flags, k.upper(), v)
+    # The following 3 are CLI arguments only so they're not full-fledged flags,
+    # but we put in flags for users.
+    setattr(new_flags, "FULL_REFRESH", FULL_REFRESH)
+    setattr(new_flags, "STORE_FAILURES", STORE_FAILURES)
+    setattr(new_flags, "WHICH", WHICH)
+    return new_flags

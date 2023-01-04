@@ -107,7 +107,8 @@ def yaml_from_file(
     """
     path = source_file.path.relative_path
     try:
-        return load_yaml_text(source_file.contents)
+        # source_file.contents can sometimes be None
+        return load_yaml_text(source_file.contents or "")
     except ValidationException as e:
         reason = validator_error_message(e)
         raise ParsingException(
