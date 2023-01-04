@@ -17,9 +17,8 @@ from dbt import utils
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.model_config import Hook
-from dbt.contracts.graph.parsed import ParsedHookNode
+from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
 from dbt.exceptions import (
     CompilationException,
@@ -79,17 +78,17 @@ class BiggestName(str):
         return isinstance(other, self.__class__)
 
 
-def _hook_list() -> List[ParsedHookNode]:
+def _hook_list() -> List[HookNode]:
     return []
 
 
 def get_hooks_by_tags(
-    nodes: Iterable[CompileResultNode],
+    nodes: Iterable[ResultNode],
     match_tags: Set[str],
-) -> List[ParsedHookNode]:
+) -> List[HookNode]:
     matched_nodes = []
     for node in nodes:
-        if not isinstance(node, ParsedHookNode):
+        if not isinstance(node, HookNode):
             continue
         node_tags = node.tags
         if len(set(node_tags) & match_tags):
@@ -304,20 +303,20 @@ class RunTask(CompileTask):
         hook_obj = get_hook(statement, index=hook_index)
         return hook_obj.sql or ""
 
-    def _hook_keyfunc(self, hook: ParsedHookNode) -> Tuple[str, Optional[int]]:
+    def _hook_keyfunc(self, hook: HookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
         if package_name == self.config.project_name:
             package_name = BiggestName("")
         return package_name, hook.index
 
-    def get_hooks_by_type(self, hook_type: RunHookType) -> List[ParsedHookNode]:
+    def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
 
         if self.manifest is None:
             raise InternalException("self.manifest was None in get_hooks_by_type")
 
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)
-        hooks: List[ParsedHookNode] = get_hooks_by_tags(nodes, {hook_type})
+        hooks: List[HookNode] = get_hooks_by_tags(nodes, {hook_type})
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 

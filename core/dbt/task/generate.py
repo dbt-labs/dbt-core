@@ -8,7 +8,7 @@ from dbt.dataclass_schema import ValidationError
 from .compile import CompileTask
 
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,
@@ -174,7 +174,7 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
     return stats_collector
 
 
-def mapping_key(node: CompileResultNode) -> CatalogKey:
+def mapping_key(node: ResultNode) -> CatalogKey:
     dkey = dbt.utils.lowercase(node.database)
     return CatalogKey(dkey, node.schema.lower(), node.identifier.lower())
 

@@ -3,7 +3,7 @@
 # necessary for annotating constructors
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Tuple, AbstractSet, Union
@@ -85,7 +85,7 @@ class NVEnum(StrEnum):
 class NoValue(dbtClassMixin):
     """Sometimes, you want a way to say none that isn't None"""
 
-    novalue: NVEnum = NVEnum.novalue
+    novalue: NVEnum = field(default_factory=lambda: NVEnum.novalue)
 
 
 dbtClassMixin.register_field_encoders(

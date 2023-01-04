@@ -17,8 +17,7 @@ from typing_extensions import Protocol
 import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
-from dbt.contracts.graph.compiled import CompiledNode, ManifestNode, NonSourceCompiledNode
-from dbt.contracts.graph.parsed import ParsedNode, ParsedSourceDefinition
+from dbt.contracts.graph.nodes import ParsedNode, SourceDefinition, ManifestNode
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.relation import Policy, HasQuoting
@@ -51,7 +50,7 @@ class RelationProtocol(Protocol):
     def create_from(
         cls: Type[Self],
         config: HasQuoting,
-        node: Union[CompiledNode, ParsedNode, ParsedSourceDefinition],
+        node: Union[ParsedNode, SourceDefinition],
     ) -> Self:
         ...
 
@@ -65,7 +64,7 @@ class CompilerProtocol(Protocol):
         node: ManifestNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
-    ) -> NonSourceCompiledNode:
+    ) -> ManifestNode:
         ...
 
 

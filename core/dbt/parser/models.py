@@ -1,6 +1,6 @@
 from copy import deepcopy
 from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.parsed import ParsedModelNode
+from dbt.contracts.graph.nodes import ModelNode
 import dbt.flags as flags
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -181,11 +181,11 @@ def verify_python_model_code(node):
         raise ParsingException("No jinja in python model code is allowed", node=node)
 
 
-class ModelParser(SimpleSQLParser[ParsedModelNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedModelNode:
+class ModelParser(SimpleSQLParser[ModelNode]):
+    def parse_from_dict(self, dct, validate=True) -> ModelNode:
         if validate:
-            ParsedModelNode.validate(dct)
-        return ParsedModelNode.from_dict(dct)
+            ModelNode.validate(dct)
+        return ModelNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:
@@ -211,17 +211,35 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         dbtParser = PythonParseVisitor(node)
         dbtParser.visit(tree)
         config_keys_used = []
+        config_keys_defaults = []
         for (func, args, kwargs) in dbtParser.dbt_function_calls:
             if func == "get":
-                config_keys_used.append(args[0])
+                num_args = len(args)
+                if num_args == 0:
+                    raise ParsingException(
+                        "dbt.config.get() requires at least one argument",
+                        node=node,
+                    )
+                if num_args > 2:
+                    raise ParsingException(
+                        f"dbt.config.get() takes at most 2 arguments ({num_args} given)",
+                        node=node,
+                    )
+                key = args[0]
+                default_value = args[1] if num_args == 2 else None
+                config_keys_used.append(key)
+                config_keys_defaults.append(default_value)
                 continue
 
             context[func](*args, **kwargs)
         if config_keys_used:
             # this is being used in macro build_config_dict
-            context["config"](config_keys_used=config_keys_used)
+            context["config"](
+                config_keys_used=config_keys_used,
+                config_keys_defaults=config_keys_defaults,
+            )
 
-    def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
+    def render_update(self, node: ModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
         if node.language == ModelLanguage.python:
@@ -266,9 +284,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # top-level declaration of variables
         statically_parsed: Optional[Union[str, Dict[str, List[Any]]]] = None
         experimental_sample: Optional[Union[str, Dict[str, List[Any]]]] = None
-        exp_sample_node: Optional[ParsedModelNode] = None
+        exp_sample_node: Optional[ModelNode] = None
         exp_sample_config: Optional[ContextConfig] = None
-        jinja_sample_node: Optional[ParsedModelNode] = None
+        jinja_sample_node: Optional[ModelNode] = None
         jinja_sample_config: Optional[ContextConfig] = None
         result: List[str] = []
 
@@ -369,9 +387,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                     }
                 )
 
-    def run_static_parser(
-        self, node: ParsedModelNode
-    ) -> Optional[Union[str, Dict[str, List[Any]]]]:
+    def run_static_parser(self, node: ModelNode) -> Optional[Union[str, Dict[str, List[Any]]]]:
         # if any banned macros have been overridden by the user, we cannot use the static parser.
         if self._has_banned_macro(node):
             # this log line is used for integration testing. If you change
@@ -393,7 +409,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             return "cannot_parse"
 
     def run_experimental_parser(
-        self, node: ParsedModelNode
+        self, node: ModelNode
     ) -> Optional[Union[str, Dict[str, List[Any]]]]:
         # if any banned macros have been overridden by the user, we cannot use the static parser.
         if self._has_banned_macro(node):
@@ -419,7 +435,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             return "cannot_parse"
 
     # checks for banned macros
-    def _has_banned_macro(self, node: ParsedModelNode) -> bool:
+    def _has_banned_macro(self, node: ModelNode) -> bool:
         # first check if there is a banned macro defined in scope for this model file
         root_project_name = self.root_project.project_name
         project_name = node.package_name
@@ -439,9 +455,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     # this method updates the model node rendered and unrendered config as well
     # as the node object. Used to populate these values when circumventing jinja
     # rendering like the static parser.
-    def populate(
-        self, node: ParsedModelNode, config: ContextConfig, statically_parsed: Dict[str, Any]
-    ):
+    def populate(self, node: ModelNode, config: ContextConfig, statically_parsed: Dict[str, Any]):
         # manually fit configs in
         config._config_call_dict = _get_config_call_dict(statically_parsed)
 
@@ -489,9 +503,9 @@ def _shift_sources(static_parser_result: Dict[str, List[Any]]) -> Dict[str, List
 
 # returns a list of string codes to be sent as a tracking event
 def _get_exp_sample_result(
-    sample_node: ParsedModelNode,
+    sample_node: ModelNode,
     sample_config: ContextConfig,
-    node: ParsedModelNode,
+    node: ModelNode,
     config: ContextConfig,
 ) -> List[str]:
     result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
@@ -505,9 +519,9 @@ def _get_exp_sample_result(
 
 # returns a list of string codes to be sent as a tracking event
 def _get_stable_sample_result(
-    sample_node: ParsedModelNode,
+    sample_node: ModelNode,
     sample_config: ContextConfig,
-    node: ParsedModelNode,
+    node: ModelNode,
     config: ContextConfig,
 ) -> List[str]:
     result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
@@ -522,9 +536,9 @@ def _get_stable_sample_result(
 # returns a list of string codes that need a single digit prefix to be prepended
 # before being sent as a tracking event
 def _get_sample_result(
-    sample_node: ParsedModelNode,
+    sample_node: ModelNode,
     sample_config: ContextConfig,
-    node: ParsedModelNode,
+    node: ModelNode,
     config: ContextConfig,
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []

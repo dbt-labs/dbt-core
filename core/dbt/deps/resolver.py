@@ -7,16 +7,18 @@ from dbt.config import Project, RuntimeConfig
 from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 
 from dbt.contracts.project import (
     LocalPackage,
+    TarballPackage,
     GitPackage,
     RegistryPackage,
 )
 
-PackageContract = Union[LocalPackage, GitPackage, RegistryPackage]
+PackageContract = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
@@ -69,6 +71,8 @@ class PackageListing:
         for contract in src:
             if isinstance(contract, LocalPackage):
                 pkg = LocalUnpinnedPackage.from_contract(contract)
+            elif isinstance(contract, TarballPackage):
+                pkg = TarballUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, GitPackage):
                 pkg = GitUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, RegistryPackage):

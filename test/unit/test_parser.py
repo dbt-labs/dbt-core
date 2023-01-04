@@ -28,10 +28,10 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import (
     NodeConfig, TestConfig, SnapshotConfig
 )
-from dbt.contracts.graph.parsed import (
-    ParsedModelNode, ParsedMacro, ParsedNodePatch, DependsOn, ColumnInfo,
-    ParsedSingularTestNode, ParsedGenericTestNode, ParsedSnapshotNode, 
-    ParsedAnalysisNode, UnpatchedSourceDefinition
+from dbt.contracts.graph.nodes import (
+    ModelNode, Macro, DependsOn, ColumnInfo,
+    SingularTestNode, GenericTestNode, SnapshotNode, 
+    AnalysisNode, UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
 from dbt.parser.models import (
@@ -60,7 +60,7 @@ class BaseParserTest(unittest.TestCase):
             name_sql[name] = sql
 
         for name, sql in name_sql.items():
-            pm = ParsedMacro(
+            pm = Macro(
                 name=name,
                 resource_type=NodeType.Macro,
                 unique_id=f'macro.root.{name}',
@@ -510,7 +510,7 @@ class ModelParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
-        expected = ParsedModelNode(
+        expected = ModelNode(
             alias='model_1',
             name='model_1',
             database='test',
@@ -568,7 +568,7 @@ def model(dbt, session):
         node = list(self.parser.manifest.nodes.values())[0]
         # we decided to not detect and auto supply for now since import name doesn't always match library name
         python_packages = ['sklearn==0.1.0']
-        expected = ParsedModelNode(
+        expected = ModelNode(
             alias='py_model',
             name='py_model',
             database='test',
@@ -607,6 +607,25 @@ def model(dbt, session):
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
+
+    def test_python_model_config_default(self):
+            py_code = """
+def model(dbt, session):
+    dbt.config.get("param_None", None)
+    dbt.config.get("param_Str", "default")
+    dbt.config.get("param_List", [1, 2])
+    return df
+            """
+            block = self.file_block_for(py_code, 'nested/py_model.py')
+            self.parser.manifest.files[block.file.file_id] = block.file
+
+            self.parser.parse_file(block)
+            node = list(self.parser.manifest.nodes.values())[0]
+            default_values = node.config.to_dict()["config_keys_defaults"]
+            self.assertIsNone(default_values[0])
+            self.assertEqual(default_values[1], "default")
+            self.assertEqual(default_values[2], [1, 2])
+
 
     def test_wrong_python_model_def_miss_session(self):
         py_code = """
@@ -756,7 +775,7 @@ class StaticModelParserTest(BaseParserTest):
     # parser does not run in this case. That test is in integration test suite 072
     def test_built_in_macro_override_detection(self):
         macro_unique_id = 'macro.root.ref'
-        self.parser.manifest.macros[macro_unique_id] = ParsedMacro(
+        self.parser.manifest.macros[macro_unique_id] = Macro(
             name='ref',
             resource_type=NodeType.Macro,
             unique_id=macro_unique_id,
@@ -768,7 +787,7 @@ class StaticModelParserTest(BaseParserTest):
 
         raw_code = '{{ config(materialized="table") }}select 1 as id'
         block = self.file_block_for(raw_code, 'nested/model_1.sql')
-        node = ParsedModelNode(
+        node = ModelNode(
             alias='model_1',
             name='model_1',
             database='test',
@@ -803,7 +822,7 @@ class StaticModelParserUnitTest(BaseParserTest):
             manifest=self.manifest,
             root_project=self.root_project_config,
         )
-        self.example_node = ParsedModelNode(
+        self.example_node = ModelNode(
             alias='model_1',
             name='model_1',
             database='test',
@@ -982,7 +1001,7 @@ class SnapshotParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
-        expected = ParsedSnapshotNode(
+        expected = SnapshotNode(
             alias='foo',
             name='foo',
             # the `database` entry is overrridden by the target_database config
@@ -1051,7 +1070,7 @@ class SnapshotParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
         nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.name)
-        expect_foo = ParsedSnapshotNode(
+        expect_foo = SnapshotNode(
             alias='foo',
             name='foo',
             database='dbt',
@@ -1088,7 +1107,7 @@ class SnapshotParserTest(BaseParserTest):
                 'updated_at': 'last_update',
             },
         )
-        expect_bar = ParsedSnapshotNode(
+        expect_bar = SnapshotNode(
             alias='bar',
             name='bar',
             database='dbt',
@@ -1151,7 +1170,7 @@ class MacroParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assertEqual(len(self.parser.manifest.macros), 1)
         macro = list(self.parser.manifest.macros.values())[0]
-        expected = ParsedMacro(
+        expected = Macro(
             name='foo',
             resource_type=NodeType.Macro,
             unique_id='macro.snowplow.foo',
@@ -1173,7 +1192,7 @@ class MacroParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assertEqual(len(self.parser.manifest.macros), 2)
         macros = sorted(self.parser.manifest.macros.values(), key=lambda m: m.name)
-        expected_bar = ParsedMacro(
+        expected_bar = Macro(
             name='bar',
             resource_type=NodeType.Macro,
             unique_id='macro.snowplow.bar',
@@ -1182,7 +1201,7 @@ class MacroParserTest(BaseParserTest):
             path=normalize('macros/macro.sql'),
             macro_sql='{% macro bar(c, d) %}c + d{% endmacro %}',
         )
-        expected_foo = ParsedMacro(
+        expected_foo = Macro(
             name='foo',
             resource_type=NodeType.Macro,
             unique_id='macro.snowplow.foo',
@@ -1220,7 +1239,7 @@ class SingularTestParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
-        expected = ParsedSingularTestNode(
+        expected = SingularTestNode(
             alias='test_1',
             name='test_1',
             database='test',
@@ -1263,7 +1282,7 @@ class GenericTestParserTest(BaseParserTest):
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         node = list(self.parser.manifest.macros.values())[0]
-        expected = ParsedMacro(
+        expected = Macro(
             name='test_not_null',
             resource_type=NodeType.Macro,
             unique_id='macro.snowplow.test_not_null',
@@ -1297,7 +1316,7 @@ class AnalysisParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
-        expected = ParsedAnalysisNode(
+        expected = AnalysisNode(
             alias='analysis_1',
             name='analysis_1',
             database='test',
@@ -1319,5 +1338,3 @@ class AnalysisParserTest(BaseParserTest):
         file_id = 'snowplow://' +  normalize('analyses/nested/analysis_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['analysis.snowplow.analysis_1'])
-
-

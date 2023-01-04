@@ -10,10 +10,10 @@ from dbt.context.context_config import (
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.model_config import SourceConfig
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
-    ParsedSourceDefinition,
-    ParsedGenericTestNode,
+    SourceDefinition,
+    GenericTestNode,
 )
 from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
@@ -38,7 +38,7 @@ from dbt.parser.schemas import SchemaParser, ParserRef
 # generate multiple UnpatchedSourceDefinition nodes (one per
 # table) in the SourceParser.add_source_definitions. The
 # SourcePatcher takes an UnparsedSourceDefinition and the
-# SourcePatch and produces a ParsedSourceDefinition. Each
+# SourcePatch and produces a SourceDefinition. Each
 # SourcePatch can be applied to multiple UnpatchedSourceDefinitions.
 class SourcePatcher:
     def __init__(
@@ -50,16 +50,16 @@ class SourcePatcher:
         self.manifest = manifest
         self.schema_parsers: Dict[str, SchemaParser] = {}
         self.patches_used: Dict[SourceKey, Set[str]] = {}
-        self.sources: Dict[str, ParsedSourceDefinition] = {}
+        self.sources: Dict[str, SourceDefinition] = {}
 
     # This method calls the 'parse_source' method which takes
     # the UnpatchedSourceDefinitions in the manifest and combines them
-    # with SourcePatches to produce ParsedSourceDefinitions.
+    # with SourcePatches to produce SourceDefinitions.
     def construct_sources(self) -> None:
         for unique_id, unpatched in self.manifest.sources.items():
             schema_file = self.manifest.files[unpatched.file_id]
-            if isinstance(unpatched, ParsedSourceDefinition):
-                # In partial parsing, there will be ParsedSourceDefinitions
+            if isinstance(unpatched, SourceDefinition):
+                # In partial parsing, there will be SourceDefinitions
                 # which must be retained.
                 self.sources[unpatched.unique_id] = unpatched
                 continue
@@ -80,7 +80,7 @@ class SourcePatcher:
                 test_from = {"key": "sources", "name": patched.source.name}
                 schema_file.add_test(test.unique_id, test_from)
 
-            # Convert UnpatchedSourceDefinition to a ParsedSourceDefinition
+            # Convert UnpatchedSourceDefinition to a SourceDefinition
             parsed = self.parse_source(patched)
             if parsed.config.enabled:
                 self.sources[unique_id] = parsed
@@ -118,8 +118,8 @@ class SourcePatcher:
         table = UnparsedSourceTableDefinition.from_dict(table_dct)
         return unpatched.replace(source=source, table=table, patch_path=patch_path)
 
-    # This converts an UnpatchedSourceDefinition to a ParsedSourceDefinition
-    def parse_source(self, target: UnpatchedSourceDefinition) -> ParsedSourceDefinition:
+    # This converts an UnpatchedSourceDefinition to a SourceDefinition
+    def parse_source(self, target: UnpatchedSourceDefinition) -> SourceDefinition:
         source = target.source
         table = target.table
         refs = ParserRef.from_target(table)
@@ -156,7 +156,7 @@ class SourcePatcher:
 
         default_database = self.root_project.credentials.database
 
-        parsed_source = ParsedSourceDefinition(
+        parsed_source = SourceDefinition(
             package_name=target.package_name,
             database=(source.database or default_database),
             schema=(source.schema or source.name),
@@ -201,9 +201,7 @@ class SourcePatcher:
             self.schema_parsers[package_name] = schema_parser
         return schema_parser
 
-    def get_source_tests(
-        self, target: UnpatchedSourceDefinition
-    ) -> Iterable[ParsedGenericTestNode]:
+    def get_source_tests(self, target: UnpatchedSourceDefinition) -> Iterable[GenericTestNode]:
         for test, column in target.get_tests():
             yield self.parse_source_test(
                 target=target,
@@ -215,7 +213,7 @@ class SourcePatcher:
         self,
         unpatched: UnpatchedSourceDefinition,
     ) -> Optional[SourcePatch]:
-        if isinstance(unpatched, ParsedSourceDefinition):
+        if isinstance(unpatched, SourceDefinition):
             return None
         key = (unpatched.package_name, unpatched.source.name)
         patch: Optional[SourcePatch] = self.manifest.source_patches.get(key)
@@ -234,7 +232,7 @@ class SourcePatcher:
         target: UnpatchedSourceDefinition,
         test: Dict[str, Any],
         column: Optional[UnparsedColumn],
-    ) -> ParsedGenericTestNode:
+    ) -> GenericTestNode:
         column_name: Optional[str]
         if column is None:
             column_name = None
@@ -286,7 +284,7 @@ class SourcePatcher:
             patch_config_dict=precedence_configs,
         )
 
-    def _get_relation_name(self, node: ParsedSourceDefinition):
+    def _get_relation_name(self, node: SourceDefinition):
         adapter = get_adapter(self.root_project)
         relation_cls = adapter.Relation
         return str(relation_cls.create_from(self.root_project, node))

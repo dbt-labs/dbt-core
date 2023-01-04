@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Fix intermittent database connection failure in Windows CI test
+time: 2022-12-06T11:30:53.166009-07:00
+custom:
+  Author: MichelleArk dbeatty10
+  Issue: "6394"
+  PR: "6395"

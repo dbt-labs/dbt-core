@@ -56,6 +56,12 @@ RawVersion = Union[str, float]
 
 
 @dataclass
+class TarballPackage(Package):
+    tarball: str
+    name: str
+
+
+@dataclass
 class GitPackage(Package):
     git: str
     revision: Optional[RawVersion] = None
@@ -82,7 +88,7 @@ class RegistryPackage(Package):
             return [str(self.version)]
 
 
-PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
+PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
@@ -216,7 +222,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
         ),
     )
     packages: List[PackageSpec] = field(default_factory=list)
-    query_comment: Optional[Union[QueryComment, NoValue, str]] = NoValue()
+    query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
 
     @classmethod
     def validate(cls, data):

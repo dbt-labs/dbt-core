@@ -16,29 +16,24 @@ from typing import (
     TypeVar,
     Callable,
     Generic,
-    cast,
     AbstractSet,
     ClassVar,
 )
 from typing_extensions import Protocol
 from uuid import UUID
 
-from dbt.contracts.graph.compiled import (
-    CompileResultNode,
-    ManifestNode,
-    NonSourceCompiledNode,
-    GraphMemberNode,
-)
-from dbt.contracts.graph.parsed import (
-    ParsedMacro,
-    ParsedDocumentation,
-    ParsedSourceDefinition,
-    ParsedGenericTestNode,
-    ParsedExposure,
-    ParsedMetric,
+from dbt.contracts.graph.nodes import (
+    Macro,
+    Documentation,
+    SourceDefinition,
+    GenericTestNode,
+    Exposure,
+    Metric,
     HasUniqueID,
     UnpatchedSourceDefinition,
-    ManifestNodes,
+    ManifestNode,
+    GraphMemberNode,
+    ResultNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
@@ -96,7 +91,7 @@ class DocLookup(dbtClassMixin):
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_doc(self, doc: ParsedDocumentation):
+    def add_doc(self, doc: Documentation):
         if doc.name not in self.storage:
             self.storage[doc.name] = {}
         self.storage[doc.name][doc.package_name] = doc.unique_id
@@ -105,7 +100,7 @@ class DocLookup(dbtClassMixin):
         for doc in manifest.docs.values():
             self.add_doc(doc)
 
-    def perform_lookup(self, unique_id: UniqueID, manifest) -> ParsedDocumentation:
+    def perform_lookup(self, unique_id: UniqueID, manifest) -> Documentation:
         if unique_id not in manifest.docs:
             raise dbt.exceptions.InternalException(
                 f"Doc {unique_id} found in cache but not found in manifest"
@@ -127,7 +122,7 @@ class SourceLookup(dbtClassMixin):
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_source(self, source: ParsedSourceDefinition):
+    def add_source(self, source: SourceDefinition):
         if source.search_name not in self.storage:
             self.storage[source.search_name] = {}
 
@@ -138,7 +133,7 @@ class SourceLookup(dbtClassMixin):
             if hasattr(source, "source_name"):
                 self.add_source(source)
 
-    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ParsedSourceDefinition:
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SourceDefinition:
         if unique_id not in manifest.sources:
             raise dbt.exceptions.InternalException(
                 f"Source {unique_id} found in cache but not found in manifest"
@@ -198,7 +193,7 @@ class MetricLookup(dbtClassMixin):
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_metric(self, metric: ParsedMetric):
+    def add_metric(self, metric: Metric):
         if metric.search_name not in self.storage:
             self.storage[metric.search_name] = {}
 
@@ -209,7 +204,7 @@ class MetricLookup(dbtClassMixin):
             if hasattr(metric, "name"):
                 self.add_metric(metric)
 
-    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ParsedMetric:
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Metric:
         if unique_id not in manifest.metrics:
             raise dbt.exceptions.InternalException(
                 f"Metric {unique_id} found in cache but not found in manifest"
@@ -365,7 +360,7 @@ class Locality(enum.IntEnum):
 @dataclass
 class MacroCandidate:
     locality: Locality
-    macro: ParsedMacro
+    macro: Macro
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, MacroCandidate):
@@ -430,16 +425,14 @@ M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
-    def last(self) -> Optional[ParsedMacro]:
+    def last(self) -> Optional[Macro]:
         if not self:
             return None
         self.sort()
         return self[-1].macro
 
 
-def _get_locality(
-    macro: ParsedMacro, root_project_name: str, internal_packages: Set[str]
-) -> Locality:
+def _get_locality(macro: Macro, root_project_name: str, internal_packages: Set[str]) -> Locality:
     if macro.package_name == root_project_name:
         return Locality.Root
     elif macro.package_name in internal_packages:
@@ -465,16 +458,16 @@ class Disabled(Generic[D]):
     target: D
 
 
-MaybeMetricNode = Optional[Union[ParsedMetric, Disabled[ParsedMetric]]]
+MaybeMetricNode = Optional[Union[Metric, Disabled[Metric]]]
 
 
-MaybeDocumentation = Optional[ParsedDocumentation]
+MaybeDocumentation = Optional[Documentation]
 
 
 MaybeParsedSource = Optional[
     Union[
-        ParsedSourceDefinition,
-        Disabled[ParsedSourceDefinition],
+        SourceDefinition,
+        Disabled[SourceDefinition],
     ]
 ]
 
@@ -514,7 +507,7 @@ class MacroMethods:
 
     def find_macro_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
-    ) -> Optional[ParsedMacro]:
+    ) -> Optional[Macro]:
         """Find a macro in the graph by its name and package name, or None for
         any package. The root project name is used to determine priority:
          - locally defined macros come first
@@ -537,7 +530,7 @@ class MacroMethods:
 
     def find_generate_macro_by_name(
         self, component: str, root_project_name: str
-    ) -> Optional[ParsedMacro]:
+    ) -> Optional[Macro]:
         """
         The `generate_X_name` macros are similar to regular ones, but ignore
         imported packages.
@@ -606,11 +599,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     # is added it must all be added in the __reduce_ex__ method in the
     # args tuple in the right position.
     nodes: MutableMapping[str, ManifestNode] = field(default_factory=dict)
-    sources: MutableMapping[str, ParsedSourceDefinition] = field(default_factory=dict)
-    macros: MutableMapping[str, ParsedMacro] = field(default_factory=dict)
-    docs: MutableMapping[str, ParsedDocumentation] = field(default_factory=dict)
-    exposures: MutableMapping[str, ParsedExposure] = field(default_factory=dict)
-    metrics: MutableMapping[str, ParsedMetric] = field(default_factory=dict)
+    sources: MutableMapping[str, SourceDefinition] = field(default_factory=dict)
+    macros: MutableMapping[str, Macro] = field(default_factory=dict)
+    docs: MutableMapping[str, Documentation] = field(default_factory=dict)
+    exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
+    metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
     files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
@@ -658,7 +651,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         obj._lock = flags.MP_CONTEXT.Lock()
         return obj
 
-    def sync_update_node(self, new_node: NonSourceCompiledNode) -> NonSourceCompiledNode:
+    def sync_update_node(self, new_node: ManifestNode) -> ManifestNode:
         """update the node with a lock. The only time we should want to lock is
         when compiling an ephemeral ancestor of a node at runtime, because
         multiple threads could be just-in-time compiling the same ephemeral
@@ -671,21 +664,21 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         with self._lock:
             existing = self.nodes[new_node.unique_id]
             if getattr(existing, "compiled", False):
-                # already compiled -> must be a NonSourceCompiledNode
-                return cast(NonSourceCompiledNode, existing)
+                # already compiled
+                return existing
             _update_into(self.nodes, new_node)
             return new_node
 
-    def update_exposure(self, new_exposure: ParsedExposure):
+    def update_exposure(self, new_exposure: Exposure):
         _update_into(self.exposures, new_exposure)
 
-    def update_metric(self, new_metric: ParsedMetric):
+    def update_metric(self, new_metric: Metric):
         _update_into(self.metrics, new_metric)
 
     def update_node(self, new_node: ManifestNode):
         _update_into(self.nodes, new_node)
 
-    def update_source(self, new_source: ParsedSourceDefinition):
+    def update_source(self, new_source: SourceDefinition):
         _update_into(self.sources, new_source)
 
     def build_flat_graph(self):
@@ -738,7 +731,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     def find_materialization_macro_by_name(
         self, project_name: str, materialization_name: str, adapter_type: str
-    ) -> Optional[ParsedMacro]:
+    ) -> Optional[Macro]:
         candidates: CandidateList = CandidateList(
             chain.from_iterable(
                 self._materialization_candidates_for(
@@ -943,8 +936,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         search_name = f"{target_source_name}.{target_table_name}"
         candidates = _search_packages(current_project, node_package)
 
-        source: Optional[ParsedSourceDefinition] = None
-        disabled: Optional[List[ParsedSourceDefinition]] = None
+        source: Optional[SourceDefinition] = None
+        disabled: Optional[List[SourceDefinition]] = None
 
         for pkg in candidates:
             source = self.source_lookup.find(search_name, pkg, self)
@@ -968,8 +961,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         node_package: str,
     ) -> MaybeMetricNode:
 
-        metric: Optional[ParsedMetric] = None
-        disabled: Optional[List[ParsedMetric]] = None
+        metric: Optional[Metric] = None
+        disabled: Optional[List[Metric]] = None
 
         candidates = _search_packages(current_project, node_package, target_metric_package)
         for pkg in candidates:
@@ -992,7 +985,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         package: Optional[str],
         current_project: str,
         node_package: str,
-    ) -> Optional[ParsedDocumentation]:
+    ) -> Optional[Documentation]:
         """Resolve the given documentation. This follows the same algorithm as
         resolve_ref except the is_enabled checks are unnecessary as docs are
         always enabled.
@@ -1044,7 +1037,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     # Methods that were formerly in ParseResult
 
-    def add_macro(self, source_file: SourceFile, macro: ParsedMacro):
+    def add_macro(self, source_file: SourceFile, macro: Macro):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
             other_path = self.macros[macro.unique_id].original_file_path
@@ -1086,30 +1079,30 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.sources[source.unique_id] = source  # type: ignore
         source_file.sources.append(source.unique_id)
 
-    def add_node_nofile(self, node: ManifestNodes):
+    def add_node_nofile(self, node: ManifestNode):
         # nodes can't be overwritten!
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
 
-    def add_node(self, source_file: AnySourceFile, node: ManifestNodes, test_from=None):
+    def add_node(self, source_file: AnySourceFile, node: ManifestNode, test_from=None):
         self.add_node_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
-            if isinstance(node, ParsedGenericTestNode):
+            if isinstance(node, GenericTestNode):
                 assert test_from
                 source_file.add_test(node.unique_id, test_from)
-            if isinstance(node, ParsedMetric):
+            if isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
-            if isinstance(node, ParsedExposure):
+            if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
         else:
             source_file.nodes.append(node.unique_id)
 
-    def add_exposure(self, source_file: SchemaSourceFile, exposure: ParsedExposure):
+    def add_exposure(self, source_file: SchemaSourceFile, exposure: Exposure):
         _check_duplicates(exposure, self.exposures)
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_metric(self, source_file: SchemaSourceFile, metric: ParsedMetric):
+    def add_metric(self, source_file: SchemaSourceFile, metric: Metric):
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
         source_file.metrics.append(metric.unique_id)
@@ -1121,20 +1114,20 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         else:
             self.disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode, test_from=None):
+    def add_disabled(self, source_file: AnySourceFile, node: ResultNode, test_from=None):
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
-            if isinstance(node, ParsedGenericTestNode):
+            if isinstance(node, GenericTestNode):
                 assert test_from
                 source_file.add_test(node.unique_id, test_from)
-            if isinstance(node, ParsedMetric):
+            if isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
-            if isinstance(node, ParsedExposure):
+            if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
         else:
             source_file.nodes.append(node.unique_id)
 
-    def add_doc(self, source_file: SourceFile, doc: ParsedDocumentation):
+    def add_doc(self, source_file: SourceFile, doc: Documentation):
         _check_duplicates(doc, self.docs)
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
@@ -1192,27 +1185,27 @@ class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
     )
-    sources: Mapping[UniqueID, ParsedSourceDefinition] = field(
+    sources: Mapping[UniqueID, SourceDefinition] = field(
         metadata=dict(description=("The sources defined in the dbt project and its dependencies"))
     )
-    macros: Mapping[UniqueID, ParsedMacro] = field(
+    macros: Mapping[UniqueID, Macro] = field(
         metadata=dict(description=("The macros defined in the dbt project and its dependencies"))
     )
-    docs: Mapping[UniqueID, ParsedDocumentation] = field(
+    docs: Mapping[UniqueID, Documentation] = field(
         metadata=dict(description=("The docs defined in the dbt project and its dependencies"))
     )
-    exposures: Mapping[UniqueID, ParsedExposure] = field(
+    exposures: Mapping[UniqueID, Exposure] = field(
         metadata=dict(
             description=("The exposures defined in the dbt project and its dependencies")
         )
     )
-    metrics: Mapping[UniqueID, ParsedMetric] = field(
+    metrics: Mapping[UniqueID, Metric] = field(
         metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
     )
     selectors: Mapping[UniqueID, Any] = field(
         metadata=dict(description=("The selectors defined in selectors.yml"))
     )
-    disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(
+    disabled: Optional[Mapping[UniqueID, List[ResultNode]]] = field(
         metadata=dict(description="A mapping of the disabled nodes in the target")
     )
     parent_map: Optional[NodeEdgeMap] = field(

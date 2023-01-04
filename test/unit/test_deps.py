@@ -7,20 +7,22 @@ import dbt.deps
 import dbt.exceptions
 from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.clients.registry import is_compatible_version
 from dbt.deps.resolver import resolve_packages
 from dbt.contracts.project import (
     LocalPackage,
+    TarballPackage,
     GitPackage,
     RegistryPackage,
 )
-
 from dbt.contracts.project import PackageConfig
 from dbt.semver import VersionSpecifier
 from dbt.version import get_installed_version
 
 from dbt.dataclass_schema import ValidationError
+
 
 class TestLocalPackage(unittest.TestCase):
     def test_init(self):
@@ -31,6 +33,45 @@ class TestLocalPackage(unittest.TestCase):
         a_pinned = a.resolved()
         self.assertEqual(a_pinned.local, '/path/to/package')
         self.assertEqual(str(a_pinned), '/path/to/package')
+
+
+class TestTarballPackage(unittest.TestCase):
+    def test_TarballPackage(self):
+        from dbt.contracts.project import RegistryPackageMetadata
+        from mashumaro.exceptions import MissingField
+
+        dict_well_formed_contract = (
+            {'tarball': 'http://example.com', 
+             'name': 'my_cool_package'})
+
+        a_contract = (
+            TarballPackage.from_dict(dict_well_formed_contract))
+
+        # check contract and resolver
+        self.assertEqual(a_contract.tarball, 'http://example.com')
+        self.assertEqual(a_contract.name, 'my_cool_package')
+
+        a = TarballUnpinnedPackage.from_contract(a_contract)
+        self.assertEqual(a.tarball, 'http://example.com')
+        self.assertEqual(a.package, 'my_cool_package')
+        
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.source_type(), 'tarball')
+
+        # check bad contract (no name) fails
+        dict_missing_name_should_fail_on_contract = (
+            {'tarball': 'http://example.com'})
+        
+        with self.assertRaises(MissingField):
+            TarballPackage.from_dict(dict_missing_name_should_fail_on_contract)
+
+        # check RegistryPackageMetadata - it is used in TarballUnpinnedPackage
+        dct = {'name' : a.package,
+               'packages': [],  # note: required by RegistryPackageMetadata
+               'downloads' : {'tarball' : a_pinned.tarball}}
+
+        metastore = RegistryPackageMetadata.from_dict(dct)
+        self.assertEqual(metastore.downloads.tarball, 'http://example.com')
 
 
 class TestGitPackage(unittest.TestCase):

@@ -15,7 +15,6 @@ from typing import (
     List,
     Mapping,
     Iterator,
-    Union,
     Set,
 )
 
@@ -38,9 +37,8 @@ from dbt.adapters.protocol import (
 )
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
-from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
-from dbt.contracts.graph.parsed import ParsedSeedNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     CacheMiss,
@@ -62,9 +60,6 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_msg
-
-
-SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
 
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
@@ -243,9 +238,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return conn.name
 
     @contextmanager
-    def connection_named(
-        self, name: str, node: Optional[CompileResultNode] = None
-    ) -> Iterator[None]:
+    def connection_named(self, name: str, node: Optional[ResultNode] = None) -> Iterator[None]:
         try:
             if self.connections.query_header is not None:
                 self.connections.query_header.set(name, node)
@@ -257,7 +250,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 self.connections.query_header.reset()
 
     @contextmanager
-    def connection_for(self, node: CompileResultNode) -> Iterator[None]:
+    def connection_for(self, node: ResultNode) -> Iterator[None]:
         with self.connection_named(node.unique_id, node):
             yield
 
@@ -372,7 +365,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        nodes: Iterator[CompileResultNode] = chain(
+        nodes: Iterator[ResultNode] = chain(
             [
                 node
                 for node in manifest.nodes.values()

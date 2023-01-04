@@ -5,7 +5,7 @@ from dbt.clients.jinja import QueryStringGenerator
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.connection import AdapterRequiredConfig, QueryComment
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import RuntimeException
 
@@ -90,7 +90,7 @@ class MacroQueryStringSetter:
     def reset(self):
         self.set("master", None)
 
-    def set(self, name: str, node: Optional[CompileResultNode]):
+    def set(self, name: str, node: Optional[ResultNode]):
         wrapped: Optional[NodeWrapper] = None
         if node is not None:
             wrapped = NodeWrapper(node)

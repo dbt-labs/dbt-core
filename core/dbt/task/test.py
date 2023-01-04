@@ -5,15 +5,12 @@ from dbt.utils import _coerce_decimal
 from dbt.events.format import pluralize
 from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Union
 
 from .compile import CompileRunner
 from .run import RunTask
 
-from dbt.contracts.graph.compiled import (
-    CompiledSingularTestNode,
-    CompiledGenericTestNode,
-    CompiledTestNode,
+from dbt.contracts.graph.nodes import (
+    TestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
@@ -91,7 +88,7 @@ class TestRunner(CompileRunner):
         self.print_start_line()
 
     def execute_test(
-        self, test: Union[CompiledSingularTestNode, CompiledGenericTestNode], manifest: Manifest
+        self, test: TestNode, manifest: Manifest
     ) -> TestResultData:
         context = generate_runtime_model_context(test, self.config, manifest)
 
@@ -139,7 +136,7 @@ class TestRunner(CompileRunner):
         TestResultData.validate(test_result_dct)
         return TestResultData.from_dict(test_result_dct)
 
-    def execute(self, test: CompiledTestNode, manifest: Manifest):
+    def execute(self, test: TestNode, manifest: Manifest):
         result = self.execute_test(test, manifest)
 
         severity = test.config.severity.upper()

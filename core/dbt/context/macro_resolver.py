@@ -1,10 +1,10 @@
 from typing import Dict, MutableMapping, Optional
-from dbt.contracts.graph.parsed import ParsedMacro
+from dbt.contracts.graph.nodes import Macro
 from dbt.exceptions import raise_duplicate_macro_name, raise_compiler_error
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.clients.jinja import MacroGenerator
 
-MacroNamespace = Dict[str, ParsedMacro]
+MacroNamespace = Dict[str, Macro]
 
 
 # This class builds the MacroResolver by adding macros
@@ -21,7 +21,7 @@ MacroNamespace = Dict[str, ParsedMacro]
 class MacroResolver:
     def __init__(
         self,
-        macros: MutableMapping[str, ParsedMacro],
+        macros: MutableMapping[str, Macro],
         root_project_name: str,
         internal_package_names,
     ) -> None:
@@ -77,7 +77,7 @@ class MacroResolver:
     def _add_macro_to(
         self,
         package_namespaces: Dict[str, MacroNamespace],
-        macro: ParsedMacro,
+        macro: Macro,
     ):
         if macro.package_name in package_namespaces:
             namespace = package_namespaces[macro.package_name]
@@ -89,7 +89,7 @@ class MacroResolver:
             raise_duplicate_macro_name(macro, macro, macro.package_name)
         package_namespaces[macro.package_name][macro.name] = macro
 
-    def add_macro(self, macro: ParsedMacro):
+    def add_macro(self, macro: Macro):
         macro_name: str = macro.name
 
         # internal macros (from plugins) will be processed separately from

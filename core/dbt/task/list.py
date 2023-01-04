@@ -1,6 +1,6 @@
 import json
 
-from dbt.contracts.graph.parsed import ParsedExposure, ParsedSourceDefinition, ParsedMetric
+from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric
 from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
@@ -91,17 +91,17 @@ class ListTask(GraphRunnableTask):
     def generate_selectors(self):
         for node in self._iterate_selected_nodes():
             if node.resource_type == NodeType.Source:
-                assert isinstance(node, ParsedSourceDefinition)
+                assert isinstance(node, SourceDefinition)
                 # sources are searched for by pkg.source_name.table_name
                 source_selector = ".".join([node.package_name, node.source_name, node.name])
                 yield f"source:{source_selector}"
             elif node.resource_type == NodeType.Exposure:
-                assert isinstance(node, ParsedExposure)
+                assert isinstance(node, Exposure)
                 # exposures are searched for by pkg.exposure_name
                 exposure_selector = ".".join([node.package_name, node.name])
                 yield f"exposure:{exposure_selector}"
             elif node.resource_type == NodeType.Metric:
-                assert isinstance(node, ParsedMetric)
+                assert isinstance(node, Metric)
                 # metrics are searched for by pkg.metric_name
                 metric_selector = ".".join([node.package_name, node.name])
                 yield f"metric:{metric_selector}"
