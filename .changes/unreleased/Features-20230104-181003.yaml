@@ -1,0 +1,7 @@
+kind: Features
+body: '--warn-error-options: Treat warnings as errors for specific events, based on
+  user configuration'
+time: 2023-01-04T18:10:03.203142-05:00
+custom:
+  Author: MichelleArk
+  Issue: "6165"
