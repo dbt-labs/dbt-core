@@ -1,13 +1,9 @@
 # Do not import the os package because we expose this package in jinja
 from os import name as os_name, path as os_path, getenv as os_getenv
 import multiprocessing
-<<<<<<< HEAD
-if os.name != 'nt':
-=======
 from argparse import Namespace
 
 if os_name != "nt":
->>>>>>> 1d23bd53a ([Backport 1.2.latest] Partial parsing bug with empty schema file - ensure None is not passe… (#6514))
     # https://bugs.python.org/issue41567
     import multiprocessing.popen_spawn_posix  # type: ignore
 from pathlib import Path
@@ -16,15 +12,8 @@ from typing import Optional
 # PROFILES_DIR must be set before the other flags
 # It also gets set in main.py and in set_from_args because the rpc server
 # doesn't go through exactly the same main arg processing.
-<<<<<<< HEAD
-DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
-PROFILES_DIR = os.path.expanduser(
-    os.getenv('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
-)
-=======
 DEFAULT_PROFILES_DIR = os_path.join(os_path.expanduser("~"), ".dbt")
 PROFILES_DIR = os_path.expanduser(os_getenv("DBT_PROFILES_DIR", DEFAULT_PROFILES_DIR))
->>>>>>> 1d23bd53a ([Backport 1.2.latest] Partial parsing bug with empty schema file - ensure None is not passe… (#6514))
 
 STRICT_MODE = False  # Only here for backwards compatibility
 FULL_REFRESH = False  # subcommand
@@ -75,7 +64,7 @@ def env_set_truthy(key: str) -> Optional[str]:
     """Return the value if it was set to a "truthy" string value, or None
     otherwise.
     """
-    value = os.getenv(key)
+    value = os_getenv(key)
     if not value or value.lower() in ('0', 'false', 'f'):
         return None
     return value
@@ -148,7 +137,7 @@ def get_flag_value(flag, args, user_config):
     if flag_value is None:
         # Environment variables use pattern 'DBT_{flag name}'
         env_flag = f"DBT_{flag}"
-        env_value = os.getenv(env_flag)
+        env_value = os_getenv(env_flag)
         if env_value is not None and env_value != '':
             env_value = env_value.lower()
             # non Boolean values
@@ -169,7 +158,7 @@ def get_flag_value(flag, args, user_config):
     if flag in ['PRINTER_WIDTH', 'EVENT_BUFFER_SIZE']:  # must be ints
         flag_value = int(flag_value)
     if flag == 'PROFILES_DIR':
-        flag_value = os.path.abspath(flag_value)
+        flag_value = os_path.abspath(flag_value)
 
     return flag_value
 
@@ -192,8 +181,6 @@ def get_flag_dict():
         "indirect_selection": INDIRECT_SELECTION,
         "log_cache_events": LOG_CACHE_EVENTS,
         "event_buffer_size": EVENT_BUFFER_SIZE,
-        "quiet": QUIET,
-        "no_print": NO_PRINT,
     }
 
 
