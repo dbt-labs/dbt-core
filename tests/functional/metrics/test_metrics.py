@@ -57,7 +57,7 @@ class TestSimpleMetricsNoTimestamp:
             "people_metrics.yml": metric_without_timestamp_or_timegrains_yml,
             "people.sql": models_people_sql,
         }
-        
+
     def test_simple_metric_no_timestamp(
         self,
         project,
