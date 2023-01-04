@@ -30,7 +30,7 @@ env:
 jobs:
   checking-schemas:
     name: "Checking schemas"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Set up Python

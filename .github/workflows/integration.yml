@@ -56,7 +56,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository ||
       contains(github.event.pull_request.labels.*.name, 'ok to test')
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     outputs:
       matrix: ${{ steps.generate-matrix.outputs.result }}
@@ -199,7 +199,7 @@ jobs:
           path: integration_results.csv
 
   require-label-comment:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     needs: test
 

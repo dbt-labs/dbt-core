@@ -13,7 +13,7 @@ jobs:
   # will block merging, but not prevent developing
   fmt:
     name: Cargo fmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -31,7 +31,7 @@ jobs:
   # these tests make sure the runner logic is correct
   test-runner:
     name: Test Runner
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       # turns errors into warnings
       RUSTFLAGS: "-D warnings"
@@ -51,7 +51,7 @@ jobs:
   build-runner:
     needs: [test-runner]
     name: Build Runner
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       RUSTFLAGS: "-D warnings"
     steps:
@@ -74,7 +74,7 @@ jobs:
   measure-dev:
     needs: [build-runner]
     name: Measure Dev Branch
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: checkout dev
         uses: actions/checkout@v2
@@ -109,7 +109,7 @@ jobs:
   measure-baseline:
     needs: [build-runner]
     name: Measure Baseline Branch
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: checkout latest
         uses: actions/checkout@v2
@@ -149,7 +149,7 @@ jobs:
   calculate-regressions:
     needs: [measure-dev, measure-baseline]
     name: Compare Results
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/download-artifact@v2
         with:

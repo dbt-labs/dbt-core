@@ -28,7 +28,7 @@ jobs:
   unit:
     name: Unit test
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     env:
       TOXENV: "unit"
@@ -58,7 +58,7 @@ jobs:
   build:
     name: build packages
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Check out the repository
@@ -104,7 +104,7 @@ jobs:
 
     needs: [build, unit]
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Set up Python
@@ -148,7 +148,7 @@ jobs:
 
     needs: test-build
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - uses: actions/download-artifact@v2
@@ -183,7 +183,7 @@ jobs:
   pypi-release:
     name: Pypi release
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     needs: github-release
 
