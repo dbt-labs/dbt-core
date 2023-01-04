@@ -657,10 +657,7 @@ def args_to_dict(args):
             "store_failures",
             "use_experimental_parser",
         )
-        default_empty_yaml_dict_keys = (
-            "vars",
-            "warn_error_options"
-        )
+        default_empty_yaml_dict_keys = ("vars", "warn_error_options")
         if key in default_false_keys and var_args[key] is False:
             continue
         if key in default_empty_yaml_dict_keys and var_args[key] == "{}":
