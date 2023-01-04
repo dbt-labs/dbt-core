@@ -120,7 +120,7 @@ jobs:
   build:
     name: build packages
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Check out the repository
