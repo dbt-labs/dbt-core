@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Prune partial parsing logging events
+time: 2022-12-21T12:19:04.7402-05:00
+custom:
+  Author: gshank
+  Issue: "6313"

@@ -15,7 +15,7 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.exceptions import ConnectionException
+from dbt.exceptions import ConnectionException, DuplicateAlias
 from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
@@ -365,7 +365,7 @@ class Translator:
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                dbt.exceptions.raise_duplicate_alias(kwargs, self.aliases, canonical_key)
+                raise DuplicateAlias(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 

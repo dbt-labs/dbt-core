@@ -9,7 +9,6 @@ from .graph import UniqueId
 
 from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.nodes import (
-    HasTestMetadata,
     SingularTestNode,
     Exposure,
     Metric,
@@ -377,8 +376,8 @@ class ResourceTypeSelectorMethod(SelectorMethod):
 class TestNameSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, HasTestMetadata):
-                if real_node.test_metadata.name == selector:
+            if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
+                if real_node.test_metadata.name == selector:  # type: ignore[union-attr]
                     yield node
 
 
@@ -428,6 +427,9 @@ class StateSelectorMethod(SelectorMethod):
         return modified
 
     def recursively_check_macros_modified(self, node, visited_macros):
+        if not hasattr(node, "depends_on"):
+            return False
+
         for macro_uid in node.depends_on.macros:
             if macro_uid in visited_macros:
                 continue

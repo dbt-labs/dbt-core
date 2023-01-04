@@ -29,11 +29,11 @@ from dbt.contracts.graph.nodes import (
     GenericTestNode,
     Exposure,
     Metric,
-    HasUniqueID,
     UnpatchedSourceDefinition,
     ManifestNode,
     GraphMemberNode,
     ResultNode,
+    BaseNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
@@ -41,14 +41,14 @@ from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, s
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationException,
-    raise_duplicate_resource_name,
-    raise_compiler_error,
+    DuplicateResourceName,
+    DuplicateMacroInPackage,
+    DuplicateMaterializationName,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
 from dbt.events.types import MergedFromState
 from dbt.node_types import NodeType
-from dbt.ui import line_wrap_message
 from dbt import flags
 from dbt import tracking
 import dbt.utils
@@ -320,7 +320,7 @@ def _sort_values(dct):
 
 
 def build_node_edges(nodes: List[ManifestNode]):
-    """Build the forward and backward edges on the given list of ParsedNodes
+    """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
     """
@@ -338,10 +338,10 @@ def build_node_edges(nodes: List[ManifestNode]):
 # Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
     forward_edges: Dict[str, List[str]] = {
-        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on.macros
+        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
     }
     for node in nodes:
-        for unique_id in node.depends_on.macros:
+        for unique_id in node.depends_on_macros:
             if unique_id in forward_edges.keys():
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges)
@@ -398,12 +398,7 @@ class MaterializationCandidate(MacroCandidate):
             return NotImplemented
         equal = self.specificity == other.specificity and self.locality == other.locality
         if equal:
-            raise_compiler_error(
-                "Found two materializations with the name {} (packages {} and "
-                "{}). dbt cannot resolve this ambiguity".format(
-                    self.macro.name, self.macro.package_name, other.macro.package_name
-                )
-            )
+            raise DuplicateMaterializationName(self.macro, other)
 
         return equal
 
@@ -1040,26 +1035,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def add_macro(self, source_file: SourceFile, macro: Macro):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
-            other_path = self.macros[macro.unique_id].original_file_path
-            # subtract 2 for the "Compilation Error" indent
-            # note that the line wrap eats newlines, so if you want newlines,
-            # this is the result :(
-            msg = line_wrap_message(
-                f"""\
-                dbt found two macros named "{macro.name}" in the project
-                "{macro.package_name}".
-
-
-                To fix this error, rename or remove one of the following
-                macros:
-
-                    - {macro.original_file_path}
-
-                    - {other_path}
-                """,
-                subtract=2,
-            )
-            raise_compiler_error(msg)
+            raise DuplicateMacroInPackage(macro=macro, macro_mapping=self.macros)
 
         self.macros[macro.unique_id] = macro
         source_file.macros.append(macro.unique_id)
@@ -1235,9 +1211,9 @@ class WritableManifest(ArtifactMixin):
         return dct
 
 
-def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
+def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
     if value.unique_id in src:
-        raise_duplicate_resource_name(value, src[value.unique_id])
+        raise DuplicateResourceName(value, src[value.unique_id])
 
 
 K_T = TypeVar("K_T")

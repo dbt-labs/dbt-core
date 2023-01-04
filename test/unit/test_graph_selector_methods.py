@@ -118,8 +118,6 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
 
     fqn = [pkg] + fqn_extras + [name]
     return SeedNode(
-        language='sql',
-        raw_code='',
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -182,7 +180,6 @@ def make_macro(pkg, name, macro_sql, path=None, depends_on_macros=None):
         path=path,
         original_file_path=path,
         resource_type=NodeType.Macro,
-        tags=[],
         depends_on=MacroDependsOn(macros=depends_on_macros),
     )
 
@@ -338,6 +335,7 @@ def make_exposure(pkg, name, path=None, fqn_extras=None, owner=None):
     fqn = [pkg, 'exposures'] + fqn_extras + [name]
     return Exposure(
         name=name,
+        resource_type=NodeType.Exposure,
         type=ExposureType.Notebook,
         fqn=fqn,
         unique_id=f'exposure.{pkg}.{name}',
@@ -354,6 +352,7 @@ def make_metric(pkg, name, path=None):
 
     return Metric(
         name=name,
+        resource_type=NodeType.Metric,
         path='schema.yml',
         package_name=pkg,
         original_file_path=path,

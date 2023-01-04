@@ -47,6 +47,33 @@ _log_level_map = {
 }
 
 
+# We should consider fixing the problem, but log_level() can return a string for
+# DynamicLevel events, even thought it is supposed to return an EventLevel. This
+# function gets a string for the level, no matter what.
+def _get_level_str(e: BaseEvent) -> str:
+    return e.log_level().value if isinstance(e.log_level(), EventLevel) else str(e.log_level())
+
+
+# We need this function for now because the numeric log severity levels in
+# Python do not match those for logbook, so we have to explicitly call the
+# correct function by name.
+def send_to_logger(l, level: str, log_line: str):
+    if level == "test":
+        l.debug(log_line)
+    elif level == "debug":
+        l.debug(log_line)
+    elif level == "info":
+        l.info(log_line)
+    elif level == "warn":
+        l.warning(log_line)
+    elif level == "error":
+        l.error(log_line)
+    else:
+        raise AssertionError(
+            f"While attempting to log {log_line}, encountered the unhandled level: {level}"
+        )
+
+
 @dataclass
 class LoggerConfig:
     name: str
@@ -93,7 +120,7 @@ class _Logger:
         line = self.create_line(e)
         python_level = _log_level_map[e.log_level()]
         if self._python_logger is not None:
-            self._python_logger.log(python_level, line)
+            send_to_logger(self._python_logger, _get_level_str(e), line)
         elif self._stream is not None and _log_level_map[self.level] <= python_level:
             self._stream.write(line + "\n")
 
@@ -128,8 +155,7 @@ class _TextLogger(_Logger):
             log_line = f"\n\n{separator} {datetime.utcnow()} | {self.event_manager.invocation_id} {separator}\n"
         ts: str = datetime.utcnow().strftime("%H:%M:%S.%f")
         scrubbed_msg: str = self.scrubber(e.message())  # type: ignore
-        # log_level() for DynamicLevel events returns str instead of EventLevel
-        level = e.log_level().value if isinstance(e.log_level(), EventLevel) else e.log_level()
+        level = _get_level_str(e)
         log_line += (
             f"{self._get_color_tag()}{ts} [{level:<5}]{self._get_thread_name()} {scrubbed_msg}"
         )

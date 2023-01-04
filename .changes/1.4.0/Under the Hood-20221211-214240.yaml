@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Refactor and clean up manifest nodes
+time: 2022-12-11T21:42:40.560074-05:00
+custom:
+  Author: gshank
+  Issue: "6426"
+  PR: "6427"

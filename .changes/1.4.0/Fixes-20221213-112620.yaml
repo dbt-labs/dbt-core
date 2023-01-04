@@ -1,0 +1,6 @@
+kind: Fixes
+body: '[CT-1284] Change Python model default materialization to table'
+time: 2022-12-13T11:26:20.550017-08:00
+custom:
+  Author: aranke
+  Issue: "6345"

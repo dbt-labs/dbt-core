@@ -1,0 +1,6 @@
+kind: Fixes
+body: Account for disabled flags on models in schema files more completely
+time: 2022-09-16T10:48:54.162273-05:00
+custom:
+  Author: emmyoop
+  Issue: "3992"

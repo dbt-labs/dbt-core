@@ -20,24 +20,13 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
-    PartialParsingFullReparseBecauseOfError,
-    PartialParsingExceptionFile,
-    PartialParsingFile,
+    PartialParsingExceptionProcessingFile,
     PartialParsingException,
     PartialParsingSkipParsing,
-    PartialParsingMacroChangeStartFullParse,
-    ManifestWrongMetadataVersion,
-    PartialParsingVersionMismatch,
-    PartialParsingFailedBecauseConfigChange,
-    PartialParsingFailedBecauseProfileChange,
-    PartialParsingFailedBecauseNewProjectDependency,
-    PartialParsingFailedBecauseHashChanged,
+    UnableToPartialParse,
     PartialParsingNotEnabled,
     ParsedFileLoadFailed,
-    PartialParseSaveFileNotFound,
     InvalidDisabledTargetInTestNode,
-    PartialParsingProjectEnvVarsChanged,
-    PartialParsingProfileEnvVarsChanged,
     NodeNotFoundOrDisabled,
 )
 from dbt.logger import DbtProcessState
@@ -62,17 +51,16 @@ from dbt.contracts.graph.manifest import (
 )
 from dbt.contracts.graph.nodes import (
     SourceDefinition,
-    ParsedNode,
     Macro,
     ColumnInfo,
     Exposure,
     Metric,
+    SeedNode,
     ManifestNode,
+    ResultNode,
 )
 from dbt.contracts.util import Writable
-from dbt.exceptions import (
-    target_not_found,
-)
+from dbt.exceptions import TargetNotFound, AmbiguousAlias
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -261,7 +249,11 @@ class ManifestLoader:
                 except Exception as exc:
                     # pp_files should still be the full set and manifest is new manifest,
                     # since get_parsing_files failed
-                    fire_event(PartialParsingFullReparseBecauseOfError())
+                    fire_event(
+                        UnableToPartialParse(
+                            reason="an error occurred. Switching to full reparse."
+                        )
+                    )
 
                     # Get traceback info
                     tb_info = traceback.format_exc()
@@ -285,8 +277,7 @@ class ManifestLoader:
                             source_file = self.manifest.files[file_id]
                         if source_file:
                             parse_file_type = source_file.parse_file_type
-                            fire_event(PartialParsingExceptionFile(file=file_id))
-                            fire_event(PartialParsingFile(file_id=source_file.file_id))
+                            fire_event(PartialParsingExceptionProcessingFile(file=file_id))
                     exc_info["parse_file_type"] = parse_file_type
                     fire_event(PartialParsingException(exc_info=exc_info))
 
@@ -313,7 +304,11 @@ class ManifestLoader:
 
             # If we're partially parsing check that certain macros have not been changed
             if self.partially_parsing and self.skip_partial_parsing_because_of_macros():
-                fire_event(PartialParsingMacroChangeStartFullParse())
+                fire_event(
+                    UnableToPartialParse(
+                        reason="change detected to override macro. Starting full parse."
+                    )
+                )
 
                 # Get new Manifest with original file records and move over the macros
                 self.manifest = self.new_manifest  # contains newly read files
@@ -545,7 +540,7 @@ class ManifestLoader:
             # saved manifest not matching the code version.
             if self.manifest.metadata.dbt_version != __version__:
                 fire_event(
-                    ManifestWrongMetadataVersion(version=self.manifest.metadata.dbt_version)
+                    UnableToPartialParse(reason="saved manifest contained the wrong version")
                 )
                 self.manifest.metadata.dbt_version = __version__
             manifest_msgpack = self.manifest.to_msgpack()
@@ -564,35 +559,37 @@ class ManifestLoader:
 
         if manifest.metadata.dbt_version != __version__:
             # #3757 log both versions because of reports of invalid cases of mismatch.
-            fire_event(
-                PartialParsingVersionMismatch(
-                    saved_version=manifest.metadata.dbt_version, current_version=__version__
-                )
-            )
+            fire_event(UnableToPartialParse(reason="of a version mismatch"))
             # If the version is wrong, the other checks might not work
             return False, ReparseReason.version_mismatch
         if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
-            fire_event(PartialParsingFailedBecauseConfigChange())
+            fire_event(
+                UnableToPartialParse(
+                    reason="config vars, config profile, or config target have changed"
+                )
+            )
             valid = False
             reparse_reason = ReparseReason.vars_changed
         if self.manifest.state_check.profile_hash != manifest.state_check.profile_hash:
             # Note: This should be made more granular. We shouldn't need to invalidate
             # partial parsing if a non-used profile section has changed.
-            fire_event(PartialParsingFailedBecauseProfileChange())
+            fire_event(UnableToPartialParse(reason="profile has changed"))
             valid = False
             reparse_reason = ReparseReason.profile_changed
         if (
             self.manifest.state_check.project_env_vars_hash
             != manifest.state_check.project_env_vars_hash
         ):
-            fire_event(PartialParsingProjectEnvVarsChanged())
+            fire_event(
+                UnableToPartialParse(reason="env vars used in dbt_project.yml have changed")
+            )
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
         if (
             self.manifest.state_check.profile_env_vars_hash
             != manifest.state_check.profile_env_vars_hash
         ):
-            fire_event(PartialParsingProfileEnvVarsChanged())
+            fire_event(UnableToPartialParse(reason="env vars used in profiles.yml have changed"))
             valid = False
             reparse_reason = ReparseReason.prof_env_vars_changed
 
@@ -602,7 +599,7 @@ class ManifestLoader:
             if k not in manifest.state_check.project_hashes
         }
         if missing_keys:
-            fire_event(PartialParsingFailedBecauseNewProjectDependency())
+            fire_event(UnableToPartialParse(reason="a project dependency has been added"))
             valid = False
             reparse_reason = ReparseReason.deps_changed
 
@@ -610,7 +607,7 @@ class ManifestLoader:
             if key in manifest.state_check.project_hashes:
                 old_value = manifest.state_check.project_hashes[key]
                 if new_value != old_value:
-                    fire_event(PartialParsingFailedBecauseHashChanged())
+                    fire_event(UnableToPartialParse(reason="a project config has changed"))
                     valid = False
                     reparse_reason = ReparseReason.project_config_changed
         return valid, reparse_reason
@@ -663,7 +660,9 @@ class ManifestLoader:
                 )
                 reparse_reason = ReparseReason.load_file_failure
         else:
-            fire_event(PartialParseSaveFileNotFound())
+            fire_event(
+                UnableToPartialParse(reason="saved manifest not found. Starting full parse.")
+            )
             reparse_reason = ReparseReason.file_not_found
 
         # this event is only fired if a full reparse is needed
@@ -988,7 +987,7 @@ def invalid_target_fail_unless_test(
                 )
             )
     else:
-        target_not_found(
+        raise TargetNotFound(
             node=node,
             target_name=target_name,
             target_kind=target_kind,
@@ -1016,11 +1015,11 @@ def _check_resource_uniqueness(
 
         existing_node = names_resources.get(name)
         if existing_node is not None:
-            dbt.exceptions.raise_duplicate_resource_name(existing_node, node)
+            raise dbt.exceptions.DuplicateResourceName(existing_node, node)
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
-            dbt.exceptions.raise_ambiguous_alias(existing_alias, node, full_node_name)
+            raise AmbiguousAlias(node_1=existing_alias, node_2=node, duped_name=full_node_name)
 
         names_resources[name] = node
         alias_resources[full_node_name] = node
@@ -1040,7 +1039,7 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
 
 
 def _get_node_column(node, column_name):
-    """Given a ParsedNode, add some fields that might be missing. Return a
+    """Given a ManifestNode, add some fields that might be missing. Return a
     reference to the dict that refers to the given column, creating it if
     it doesn't yet exist.
     """
@@ -1053,7 +1052,7 @@ def _get_node_column(node, column_name):
     return column
 
 
-DocsContextCallback = Callable[[Union[ParsedNode, SourceDefinition]], Dict[str, Any]]
+DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 
 # node and column descriptions
@@ -1191,6 +1190,10 @@ def _process_metrics_for_node(
     node: Union[ManifestNode, Metric, Exposure],
 ):
     """Given a manifest and a node in that manifest, process its metrics"""
+
+    if isinstance(node, SeedNode):
+        return
+
     for metric in node.metrics:
         target_metric: Optional[Union[Disabled, Metric]] = None
         target_metric_name: str
@@ -1232,6 +1235,10 @@ def _process_metrics_for_node(
 
 def _process_refs_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
     """Given a manifest and a node in that manifest, process its refs"""
+
+    if isinstance(node, SeedNode):
+        return
+
     for ref in node.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str
@@ -1323,6 +1330,10 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
 
 
 def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
+
+    if isinstance(node, SeedNode):
+        return
+
     target_source: Optional[Union[Disabled, SourceDefinition]] = None
     for source_name, table_name in node.sources:
         target_source = manifest.resolve_source(

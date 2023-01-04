@@ -95,7 +95,7 @@ from tests.functional.schema_tests.fixtures import (
     alt_local_utils__macros__type_timestamp_sql,
     all_quotes_schema__schema_yml,
 )
-from dbt.exceptions import ParsingException, CompilationException
+from dbt.exceptions import ParsingException, CompilationException, DuplicateResourceName
 from dbt.contracts.results import TestStatus
 
 
@@ -904,9 +904,9 @@ class TestGenericTestsCollide:
         project,
     ):
         """These tests collide, since only the configs differ"""
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(DuplicateResourceName) as exc:
             run_dbt()
-        assert "dbt found two tests with the name" in str(exc)
+        assert "dbt found two tests with the name" in str(exc.value)
 
 
 class TestGenericTestsConfigCustomMacros:

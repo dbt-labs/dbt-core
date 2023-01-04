@@ -1,4 +1,3 @@
-import re
 import threading
 from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
@@ -9,7 +8,13 @@ from dbt.adapters.reference_keys import (
     _make_msg_from_ref_key,
     _ReferenceKey,
 )
-import dbt.exceptions
+from dbt.exceptions import (
+    DependentLinkNotCached,
+    NewNameAlreadyInCache,
+    NoneRelationFound,
+    ReferencedLinkNotCached,
+    TruncatedModelNameCausedCollision,
+)
 from dbt.events.functions import fire_event, fire_event_if
 from dbt.events.types import (
     AddLink,
@@ -150,11 +155,7 @@ class _CachedRelation:
         :raises InternalError: If the new key already exists.
         """
         if new_key in self.referenced_by:
-            dbt.exceptions.raise_cache_inconsistent(
-                'in rename of "{}" -> "{}", new name is in the cache already'.format(
-                    old_key, new_key
-                )
-            )
+            raise NewNameAlreadyInCache(old_key, new_key)
 
         if old_key not in self.referenced_by:
             return
@@ -270,15 +271,11 @@ class RelationsCache:
         if referenced is None:
             return
         if referenced is None:
-            dbt.exceptions.raise_cache_inconsistent(
-                "in add_link, referenced link key {} not in cache!".format(referenced_key)
-            )
+            raise ReferencedLinkNotCached(referenced_key)
 
         dependent = self.relations.get(dependent_key)
         if dependent is None:
-            dbt.exceptions.raise_cache_inconsistent(
-                "in add_link, dependent link key {} not in cache!".format(dependent_key)
-            )
+            raise DependentLinkNotCached(dependent_key)
 
         assert dependent is not None  # we just raised!
 
@@ -430,24 +427,7 @@ class RelationsCache:
         if new_key in self.relations:
             # Tell user when collision caused by model names truncated during
             # materialization.
-            match = re.search("__dbt_backup|__dbt_tmp$", new_key.identifier)
-            if match:
-                truncated_model_name_prefix = new_key.identifier[: match.start()]
-                message_addendum = (
-                    "\n\nName collisions can occur when the length of two "
-                    "models' names approach your database's builtin limit. "
-                    "Try restructuring your project such that no two models "
-                    "share the prefix '{}'.".format(truncated_model_name_prefix)
-                    + " Then, clean your warehouse of any removed models."
-                )
-            else:
-                message_addendum = ""
-
-            dbt.exceptions.raise_cache_inconsistent(
-                "in rename, new key {} already in cache: {}{}".format(
-                    new_key, list(self.relations.keys()), message_addendum
-                )
-            )
+            raise TruncatedModelNameCausedCollision(new_key, self.relations)
 
         if old_key not in self.relations:
             fire_event(TemporaryRelation(key=_make_msg_from_ref_key(old_key)))
@@ -505,9 +485,7 @@ class RelationsCache:
             ]
 
         if None in results:
-            dbt.exceptions.raise_cache_inconsistent(
-                "in get_relations, a None relation was found in the cache!"
-            )
+            raise NoneRelationFound()
         return results
 
     def clear(self):

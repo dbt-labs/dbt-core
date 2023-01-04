@@ -1,0 +1,6 @@
+kind: Features
+body: Allow partitions in external tables to be supplied as a list
+time: 2022-09-25T21:16:51.051239654+02:00
+custom:
+  Author: pgoslatara
+  Issue: "5929"

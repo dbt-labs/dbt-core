@@ -1,0 +1,6 @@
+kind: Docs
+body: Alphabetize `core/dbt/README.md`
+time: 2022-12-02T15:05:23.695333-07:00
+custom:
+  Author: dbeatty10
+  Issue: "6368"

@@ -18,10 +18,6 @@ import uuid
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
-# The default event manager will not log anything, but some tests run code that
-# generates events, without configuring the event manager.
-EVENT_MANAGER: EventManager = EventManager()
-
 
 def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = None):
     cleanup_event_logger()
@@ -42,7 +38,7 @@ def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = Non
         EVENT_MANAGER.add_logger(_get_logfile_config(os.path.join(log_path, "dbt.log")))
 
 
-def _get_stdout_config(level: Optional[EventLevel]) -> LoggerConfig:
+def _get_stdout_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     fmt = LineFormat.PlainText
     if flags.LOG_FORMAT == "json":
         fmt = LineFormat.Json
@@ -94,7 +90,7 @@ def _logfile_filter(log_cache_events: bool, evt: BaseEvent) -> bool:
     )
 
 
-def _get_logbook_log_config(level: Optional[EventLevel]) -> LoggerConfig:
+def _get_logbook_log_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     config = _get_stdout_config(level)
     config.name = "logbook_log"
     config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e, Cache)
@@ -112,6 +108,15 @@ def cleanup_event_logger():
     # during test runs, and closes the stream after the test is over.
     EVENT_MANAGER.loggers.clear()
     EVENT_MANAGER.callbacks.clear()
+
+
+# Since dbt-rpc does not do its own log setup, and since some events can
+# currently fire before logs can be configured by setup_event_logger(), we
+# create a default configuration with default settings and no file output.
+EVENT_MANAGER: EventManager = EventManager()
+EVENT_MANAGER.add_logger(
+    _get_logbook_log_config() if flags.ENABLE_LEGACY_LOGGER else _get_stdout_config()
+)
 
 
 # This global, and the following two functions for capturing stdout logs are
@@ -154,9 +159,10 @@ def event_to_dict(event: BaseEvent) -> dict:
 
 def warn_or_error(event, node=None):
     if flags.WARN_ERROR:
-        from dbt.exceptions import raise_compiler_error
+        # TODO: resolve this circular import when at top
+        from dbt.exceptions import EventCompilationException
 
-        raise_compiler_error(scrub_secrets(event.info.msg, env_secrets()), node)
+        raise EventCompilationException(event.info.msg, node)
     else:
         fire_event(event)
 
