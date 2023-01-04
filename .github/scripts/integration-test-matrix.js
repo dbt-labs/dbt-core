@@ -29,7 +29,7 @@ module.exports = ({ context }) => {
           ) {
             // always run tests on ubuntu by default
             include.push({
-              os: "ubuntu-latest",
+              os: "ubuntu-20.04",
               adapter,
               "python-version": pythonVersion,
             });
@@ -68,7 +68,7 @@ module.exports = ({ context }) => {
   for (const adapter of supportedAdapters) {
     for (const pythonVersion of supportedPythonVersions) {
       include.push({
-        os: 'ubuntu-latest',
+        os: 'ubuntu-20.04',
         adapter: adapter,
         "python-version": pythonVersion,
       });
