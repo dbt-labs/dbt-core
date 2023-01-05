@@ -975,19 +975,11 @@ class MacroFileParse(DebugLevel, pt.MacroFileParse):
         return f"Parsing {self.path}"
 
 
-@dataclass
-class PartialParsingFullReparseBecauseOfError(
-    InfoLevel, pt.PartialParsingFullReparseBecauseOfError
-):
-    def code(self):
-        return "I013"
-
-    def message(self) -> str:
-        return "Partial parsing enabled but an error occurred. Switching to a full re-parse."
+# Skipping I013
 
 
 @dataclass
-class PartialParsingExceptionFile(DebugLevel, pt.PartialParsingExceptionFile):
+class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExceptionProcessingFile):
     def code(self):
         return "I014"
 
@@ -995,13 +987,7 @@ class PartialParsingExceptionFile(DebugLevel, pt.PartialParsingExceptionFile):
         return f"Partial parsing exception processing file {self.file}"
 
 
-@dataclass
-class PartialParsingFile(DebugLevel, pt.PartialParsingFile):
-    def code(self):
-        return "I015"
-
-    def message(self) -> str:
-        return f"PP file: {self.file_id}"
+# Skipped I015
 
 
 @dataclass
@@ -1022,112 +1008,19 @@ class PartialParsingSkipParsing(DebugLevel, pt.PartialParsingSkipParsing):
         return "Partial parsing enabled, no changes found, skipping parsing"
 
 
-@dataclass
-class PartialParsingMacroChangeStartFullParse(
-    InfoLevel, pt.PartialParsingMacroChangeStartFullParse
-):
-    def code(self):
-        return "I018"
-
-    def message(self) -> str:
-        return "Change detected to override macro used during parsing. Starting full parse."
+# Skipped I018, I019, I020, I021, I022, I023
 
 
 @dataclass
-class PartialParsingProjectEnvVarsChanged(InfoLevel, pt.PartialParsingProjectEnvVarsChanged):
-    def code(self):
-        return "I019"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because env vars used in dbt_project.yml have changed"
-
-
-@dataclass
-class PartialParsingProfileEnvVarsChanged(InfoLevel, pt.PartialParsingProfileEnvVarsChanged):
-    def code(self):
-        return "I020"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because env vars used in profiles.yml have changed"
-
-
-@dataclass
-class PartialParsingDeletedMetric(DebugLevel, pt.PartialParsingDeletedMetric):
-    def code(self):
-        return "I021"
-
-    def message(self) -> str:
-        return f"Partial parsing: deleted metric {self.unique_id}"
-
-
-@dataclass
-class ManifestWrongMetadataVersion(DebugLevel, pt.ManifestWrongMetadataVersion):
-    def code(self):
-        return "I022"
-
-    def message(self) -> str:
-        return (
-            "Manifest metadata did not contain correct version. "
-            f"Contained '{self.version}' instead."
-        )
-
-
-@dataclass
-class PartialParsingVersionMismatch(InfoLevel, pt.PartialParsingVersionMismatch):
-    def code(self):
-        return "I023"
-
-    def message(self) -> str:
-        return (
-            "Unable to do partial parsing because of a dbt version mismatch. "
-            f"Saved manifest version: {self.saved_version}. "
-            f"Current version: {self.current_version}."
-        )
-
-
-@dataclass
-class PartialParsingFailedBecauseConfigChange(
-    InfoLevel, pt.PartialParsingFailedBecauseConfigChange
-):
+class UnableToPartialParse(InfoLevel, pt.UnableToPartialParse):
     def code(self):
         return "I024"
 
     def message(self) -> str:
-        return (
-            "Unable to do partial parsing because config vars, "
-            "config profile, or config target have changed"
-        )
+        return f"Unable to do partial parsing because {self.reason}"
 
 
-@dataclass
-class PartialParsingFailedBecauseProfileChange(
-    InfoLevel, pt.PartialParsingFailedBecauseProfileChange
-):
-    def code(self):
-        return "I025"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because profile has changed"
-
-
-@dataclass
-class PartialParsingFailedBecauseNewProjectDependency(
-    InfoLevel, pt.PartialParsingFailedBecauseNewProjectDependency
-):
-    def code(self):
-        return "I026"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because a project dependency has been added"
-
-
-@dataclass
-class PartialParsingFailedBecauseHashChanged(InfoLevel, pt.PartialParsingFailedBecauseHashChanged):
-    def code(self):
-        return "I027"
-
-    def message(self) -> str:
-        return "Unable to do partial parsing because a project config has changed"
+# Skipped I025, I026, I026, I027
 
 
 @dataclass
@@ -1148,13 +1041,7 @@ class ParsedFileLoadFailed(DebugLevel, pt.ParsedFileLoadFailed):  # noqa
         return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
 
 
-@dataclass
-class PartialParseSaveFileNotFound(InfoLevel, pt.PartialParseSaveFileNotFound):
-    def code(self):
-        return "I030"
-
-    def message(self) -> str:
-        return "Partial parse save file not found. Starting full parse."
+# Skipped I030
 
 
 @dataclass
@@ -1255,84 +1142,15 @@ class PartialParsingEnabled(DebugLevel, pt.PartialParsingEnabled):
 
 
 @dataclass
-class PartialParsingAddedFile(DebugLevel, pt.PartialParsingAddedFile):
+class PartialParsingFile(DebugLevel, pt.PartialParsingFile):
     def code(self):
         return "I041"
 
     def message(self) -> str:
-        return f"Partial parsing: added file: {self.file_id}"
+        return f"Partial parsing: {self.operation} file: {self.file_id}"
 
 
-@dataclass
-class PartialParsingDeletedFile(DebugLevel, pt.PartialParsingDeletedFile):
-    def code(self):
-        return "I042"
-
-    def message(self) -> str:
-        return f"Partial parsing: deleted file: {self.file_id}"
-
-
-@dataclass
-class PartialParsingUpdatedFile(DebugLevel, pt.PartialParsingUpdatedFile):
-    def code(self):
-        return "I043"
-
-    def message(self) -> str:
-        return f"Partial parsing: updated file: {self.file_id}"
-
-
-@dataclass
-class PartialParsingNodeMissingInSourceFile(DebugLevel, pt.PartialParsingNodeMissingInSourceFile):
-    def code(self):
-        return "I044"
-
-    def message(self) -> str:
-        return f"Partial parsing: nodes list not found in source_file {self.file_id}"
-
-
-@dataclass
-class PartialParsingMissingNodes(DebugLevel, pt.PartialParsingMissingNodes):
-    def code(self):
-        return "I045"
-
-    def message(self) -> str:
-        return f"No nodes found for source file {self.file_id}"
-
-
-@dataclass
-class PartialParsingChildMapMissingUniqueID(DebugLevel, pt.PartialParsingChildMapMissingUniqueID):
-    def code(self):
-        return "I046"
-
-    def message(self) -> str:
-        return f"Partial parsing: {self.unique_id} not found in child_map"
-
-
-@dataclass
-class PartialParsingUpdateSchemaFile(DebugLevel, pt.PartialParsingUpdateSchemaFile):
-    def code(self):
-        return "I047"
-
-    def message(self) -> str:
-        return f"Partial parsing: update schema file: {self.file_id}"
-
-
-@dataclass
-class PartialParsingDeletedSource(DebugLevel, pt.PartialParsingDeletedSource):
-    def code(self):
-        return "I048"
-
-    def message(self) -> str:
-        return f"Partial parsing: deleted source {self.unique_id}"
-
-
-@dataclass
-class PartialParsingDeletedExposure(DebugLevel, pt.PartialParsingDeletedExposure):
-    def code(self):
-        return "I049"
-
-    def message(self) -> str:
-        return f"Partial parsing: deleted exposure {self.unique_id}"
+# Skipped I042, I043, I044, I045, I046, I047, I048, I049
 
 
 @dataclass

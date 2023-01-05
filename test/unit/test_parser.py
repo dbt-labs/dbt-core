@@ -571,6 +571,8 @@ def model1(dbt, session):
     return dbt.ref("some_model")
 """
 
+python_model_empty_file = """    """
+
 python_model_multiple_returns = """
 def model(dbt, session):
     dbt.config(materialized='table')
@@ -749,6 +751,11 @@ class ModelParserTest(BaseParserTest):
         with self.assertRaises(ParsingException):
             self.parser.parse_file(block)
 
+    def test_python_model_empty_file(self):
+        block = self.file_block_for(python_model_empty_file, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.assertIsNone(self.parser.parse_file(block))
+
     def test_python_model_multiple_returns(self):
         block = self.file_block_for(python_model_multiple_returns, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
@@ -778,6 +785,13 @@ class ModelParserTest(BaseParserTest):
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.get_materialization(), "table")
+
+    def test_python_model_custom_materialization(self):
+        block = self.file_block_for(python_model_custom_materialization, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.get_materialization(), "view")
 
     def test_python_model_custom_materialization(self):
         block = self.file_block_for(python_model_custom_materialization, 'nested/py_model.py')

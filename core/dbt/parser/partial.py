@@ -10,16 +10,7 @@ from dbt.contracts.files import (
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     PartialParsingEnabled,
-    PartialParsingAddedFile,
-    PartialParsingDeletedFile,
-    PartialParsingUpdatedFile,
-    PartialParsingNodeMissingInSourceFile,
-    PartialParsingMissingNodes,
-    PartialParsingChildMapMissingUniqueID,
-    PartialParsingUpdateSchemaFile,
-    PartialParsingDeletedSource,
-    PartialParsingDeletedExposure,
-    PartialParsingDeletedMetric,
+    PartialParsingFile,
 )
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.node_types import NodeType
@@ -234,7 +225,7 @@ class PartialParsing:
         self.saved_files[file_id] = source_file
         # update pp_files to parse
         self.add_to_pp_files(source_file)
-        fire_event(PartialParsingAddedFile(file_id=file_id))
+        fire_event(PartialParsingFile(operation="added", file_id=file_id))
 
     def handle_added_schema_file(self, source_file):
         source_file.pp_dict = source_file.dict_from_yaml.copy()
@@ -282,7 +273,7 @@ class PartialParsing:
         if saved_source_file.parse_file_type == ParseFileType.Documentation:
             self.delete_doc_node(saved_source_file)
 
-        fire_event(PartialParsingDeletedFile(file_id=file_id))
+        fire_event(PartialParsingFile(operation="deleted", file_id=file_id))
 
     # Updates for non-schema files
     def update_in_saved(self, file_id):
@@ -297,7 +288,7 @@ class PartialParsing:
             self.update_doc_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
-        fire_event(PartialParsingUpdatedFile(file_id=file_id))
+        fire_event(PartialParsingFile(operation="updated", file_id=file_id))
 
     # Models, seeds, snapshots: patches and tests
     # analyses: patches, no tests
@@ -312,10 +303,6 @@ class PartialParsing:
         unique_ids = []
         if old_source_file.nodes:
             unique_ids = old_source_file.nodes
-        else:
-            # It's not clear when this would actually happen.
-            # Logging in case there are other associated errors.
-            fire_event(PartialParsingNodeMissingInSourceFile(file_id=old_source_file.file_id))
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
@@ -386,7 +373,6 @@ class PartialParsing:
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
         if not source_file.nodes:
-            fire_event(PartialParsingMissingNodes(file_id=source_file.file_id))
             return
         # There is generally only 1 node for SQL files, except for macros and snapshots
         for unique_id in source_file.nodes:
@@ -398,8 +384,6 @@ class PartialParsing:
         # Look at "children", i.e. nodes that reference this node
         if unique_id in self.saved_manifest.child_map:
             self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
-        else:
-            fire_event(PartialParsingChildMapMissingUniqueID(unique_id=unique_id))
 
     def schedule_nodes_for_parsing(self, unique_ids):
         for unique_id in unique_ids:
@@ -611,7 +595,7 @@ class PartialParsing:
         # schedule parsing
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
-        fire_event(PartialParsingUpdateSchemaFile(file_id=file_id))
+        fire_event(PartialParsingFile(operation="updated", file_id=file_id))
 
     # Delete schema files -- a variation on change_schema_file
     def delete_schema_file(self, file_id):
@@ -883,7 +867,6 @@ class PartialParsing:
                     self.deleted_manifest.sources[unique_id] = source
                     schema_file.sources.remove(unique_id)
                     self.schedule_referencing_nodes_for_parsing(unique_id)
-                    fire_event(PartialParsingDeletedSource(unique_id=unique_id))
 
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
@@ -912,7 +895,6 @@ class PartialParsing:
                         unique_id
                     )
                     schema_file.exposures.remove(unique_id)
-                    fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
@@ -931,7 +913,6 @@ class PartialParsing:
                         unique_id
                     )
                     schema_file.metrics.remove(unique_id)
-                    fire_event(PartialParsingDeletedMetric(unique_id=unique_id))
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
