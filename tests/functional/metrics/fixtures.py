@@ -642,3 +642,58 @@ metrics:
     meta:
         my_meta: 'testing'
 """
+
+metric_without_timestamp_or_timegrains_yml = """
+version: 2
+
+metrics:
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    calculation_method: count
+    expression: "*"
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+"""
+
+invalid_metric_without_timestamp_with_time_grains_yml = """
+version: 2
+
+metrics:
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    time_grains: [day, week, month]
+    calculation_method: count
+    expression: "*"
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+"""
+
+invalid_metric_without_timestamp_with_window_yml = """
+version: 2
+
+metrics:
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people')"
+    window:
+      count: 14
+      period: day
+    calculation_method: count
+    expression: "*"
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+"""

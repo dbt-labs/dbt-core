@@ -3,6 +3,7 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.exceptions import ParsingException
 
+
 from tests.functional.metrics.fixtures import (
     mock_purchase_data_csv,
     models_people_sql,
@@ -18,6 +19,9 @@ from tests.functional.metrics.fixtures import (
     invalid_derived_metric_contains_model_yml,
     derived_metric_yml,
     derived_metric_old_attr_names_yml,
+    metric_without_timestamp_or_timegrains_yml,
+    invalid_metric_without_timestamp_with_time_grains_yml,
+    invalid_metric_without_timestamp_with_window_yml
 )
 
 
@@ -44,6 +48,33 @@ class TestSimpleMetrics:
             "metric.test.collective_window",
         ]
         assert metric_ids == expected_metric_ids
+
+
+class TestSimpleMetricsNoTimestamp:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": metric_without_timestamp_or_timegrains_yml,
+            "people.sql": models_people_sql,
+        }
+
+    def test_simple_metric_no_timestamp(
+        self,
+        project,
+    ):
+        # initial run
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        metric_ids = list(manifest.metrics.keys())
+        expected_metric_ids = [
+            "metric.test.number_of_people",
+        ]
+        assert metric_ids == expected_metric_ids
+
+        # make sure the 'expression' metric depends on the two upstream metrics
+        metric_test = manifest.metrics["metric.test.number_of_people"]
+        assert metric_test.timestamp is None
 
 
 class TestInvalidRefMetrics:
@@ -253,3 +284,41 @@ class TestDerivedMetricOldAttrNames(TestDerivedMetric):
             "derived_metric.yml": derived_metric_old_attr_names_yml,
             "downstream_model.sql": downstream_model_sql,
         }
+
+
+class TestInvalidTimestampTimeGrainsMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metric_without_timestamp_with_time_grains_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that we get a ParsingException with an invalid metric definition.
+    # This metric definition is missing timestamp but HAS a time_grains property
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingException):
+            run_dbt(["run"])
+
+
+class TestInvalidTimestampWindowMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metric_without_timestamp_with_window_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that we get a ParsingException with an invalid metric definition.
+    # This metric definition is missing timestamp but HAS a window property
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingException):
+            run_dbt(["run"])

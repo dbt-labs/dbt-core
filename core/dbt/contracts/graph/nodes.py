@@ -976,12 +976,12 @@ class Metric(GraphNode):
     description: str
     label: str
     calculation_method: str
-    timestamp: str
     expression: str
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
+    timestamp: Optional[str] = None
     window: Optional[MetricTime] = None
     model: Optional[str] = None
     model_unique_id: Optional[str] = None

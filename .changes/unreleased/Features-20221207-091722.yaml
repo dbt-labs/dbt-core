@@ -1,0 +1,7 @@
+kind: Features
+body: Making timestamp optional for metrics
+time: 2022-12-07T09:17:22.571877-06:00
+custom:
+  Author: callum-mcdata
+  Issue: "6398"
+  PR: "9400"
