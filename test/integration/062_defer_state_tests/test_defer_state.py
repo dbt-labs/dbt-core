@@ -111,7 +111,7 @@ class TestDeferState(DBTIntegrationTest):
 
         # test generate docs
         # no state, wrong schema, empty nodes 
-        catalog=self.run_dbt(['docs','generate','--target', 'otherschema'])
+        catalog = self.run_dbt(['docs','generate','--target', 'otherschema'])
         assert not catalog.nodes
 
         # no state, run also fails
@@ -121,7 +121,7 @@ class TestDeferState(DBTIntegrationTest):
         results = self.run_dbt(['test', '-m', 'view_model+', '--state', 'state', '--defer', '--target', 'otherschema'])
 
         # defer docs generate with state, catalog refers schema from the happy times
-        catalog=self.run_dbt(['docs','generate', '-m', 'view_model+', '--state', 'state', '--defer','--target', 'otherschema'])
+        catalog = self.run_dbt(['docs','generate', '-m', 'view_model+', '--state', 'state', '--defer','--target', 'otherschema'])
         assert self.other_schema not in catalog.nodes["seed.test.seed"].metadata.schema
         assert self.unique_schema() in catalog.nodes["seed.test.seed"].metadata.schema
 

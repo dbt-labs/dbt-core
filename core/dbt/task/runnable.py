@@ -152,6 +152,10 @@ class GraphRunnableTask(ManifestTask):
     def get_node_selector(self) -> NodeSelector:
         raise NotImplementedException(f"get_node_selector not implemented for task {type(self)}")
 
+    @abstractmethod
+    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
+        raise NotImplementedException(f"defer_to_manifest not implemented for task {type(self)}")
+
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
         spec = self.get_selection_spec()
