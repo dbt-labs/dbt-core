@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix DBT_FAVOR_STATE env var
+time: 2023-01-04T14:10:47.637495-08:00
+custom:
+  Author: NiallRees
+  Issue: "5859"
+  PR: "6392"

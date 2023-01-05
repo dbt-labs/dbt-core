@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.4.0a1"
+package_version = "1.4.0b1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -47,14 +47,14 @@ setup(
     },
     install_requires=[
         "Jinja2==3.1.2",
-        "agate>=1.6,<1.6.4",
+        "agate>=1.6,<1.7.1",
         "betterproto==1.2.5",
         "click>=7.0,<9",
-        "colorama>=0.3.9,<0.4.6",
+        "colorama>=0.3.9,<0.4.7",
         "hologram>=0.0.14,<=0.0.15",
         "isodate>=0.6,<0.7",
         "logbook>=1.5,<1.6",
-        "mashumaro[msgpack]==3.0.4",
+        "mashumaro[msgpack]==3.2",
         "minimal-snowplow-tracker==0.0.2",
         "networkx>=2.3,<2.8.1;python_version<'3.8'",
         "networkx>=2.3,<3;python_version>='3.8'",
@@ -63,7 +63,7 @@ setup(
         "dbt-extractor~=0.4.1",
         "typing-extensions>=3.7.4",
         "werkzeug>=1,<3",
-        "pathspec~=0.9.0",
+        "pathspec>=0.9,<0.11",
         # the following are all to match snowflake-connector-python
         "requests<3.0.0",
         "idna>=2.5,<4",
@@ -81,6 +81,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     python_requires=">=3.7.2",
 )

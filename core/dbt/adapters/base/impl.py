@@ -15,7 +15,6 @@ from typing import (
     List,
     Mapping,
     Iterator,
-    Union,
     Set,
 )
 
@@ -23,13 +22,20 @@ import agate
 import pytz
 
 from dbt.exceptions import (
-    raise_database_error,
-    raise_compiler_error,
-    invalid_type_error,
-    get_relation_returned_multiple_results,
     InternalException,
+    InvalidMacroArgType,
+    InvalidMacroResult,
+    InvalidQuoteConfigType,
     NotImplementedException,
+    NullRelationCacheAttempted,
+    NullRelationDropAttempted,
+    RelationReturnedMultipleResults,
+    RenameToNoneAttempted,
     RuntimeException,
+    SnapshotTargetIncomplete,
+    SnapshotTargetNotSnapshotTable,
+    UnexpectedNull,
+    UnexpectedNonTimestamp,
 )
 
 from dbt.adapters.protocol import (
@@ -38,16 +44,15 @@ from dbt.adapters.protocol import (
 )
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
-from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
-from dbt.contracts.graph.parsed import ParsedSeedNode
-from dbt.exceptions import warn_or_error
-from dbt.events.functions import fire_event
+from dbt.contracts.graph.nodes import ResultNode
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     CacheMiss,
     ListRelations,
     CodeExecution,
     CodeExecutionStatus,
+    CatalogGenerationError,
 )
 from dbt.utils import filter_null_values, executor, cast_to_str
 
@@ -62,9 +67,6 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_msg
-
-
-SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
 
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
@@ -102,18 +104,10 @@ def _utc(dt: Optional[datetime], source: BaseRelation, field_name: str) -> datet
     assume the datetime is already for UTC and add the timezone.
     """
     if dt is None:
-        raise raise_database_error(
-            "Expected a non-null value when querying field '{}' of table "
-            " {} but received value 'null' instead".format(field_name, source)
-        )
+        raise UnexpectedNull(field_name, source)
 
     elif not hasattr(dt, "tzinfo"):
-        raise raise_database_error(
-            "Expected a timestamp value when querying field '{}' of table "
-            "{} but received value of type '{}' instead".format(
-                field_name, source, type(dt).__name__
-            )
-        )
+        raise UnexpectedNonTimestamp(field_name, source, dt)
 
     elif dt.tzinfo:
         return dt.astimezone(pytz.UTC)
@@ -243,9 +237,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return conn.name
 
     @contextmanager
-    def connection_named(
-        self, name: str, node: Optional[CompileResultNode] = None
-    ) -> Iterator[None]:
+    def connection_named(self, name: str, node: Optional[ResultNode] = None) -> Iterator[None]:
         try:
             if self.connections.query_header is not None:
                 self.connections.query_header.set(name, node)
@@ -257,7 +249,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 self.connections.query_header.reset()
 
     @contextmanager
-    def connection_for(self, node: CompileResultNode) -> Iterator[None]:
+    def connection_for(self, node: ResultNode) -> Iterator[None]:
         with self.connection_named(node.unique_id, node):
             yield
 
@@ -372,7 +364,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        nodes: Iterator[CompileResultNode] = chain(
+        nodes: Iterator[ResultNode] = chain(
             [
                 node
                 for node in manifest.nodes.values()
@@ -441,7 +433,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
             name = self.nice_connection_name()
-            raise_compiler_error("Attempted to cache a null relation for {}".format(name))
+            raise NullRelationCacheAttempted(name)
         self.cache.add(relation)
         # so jinja doesn't render things
         return ""
@@ -453,7 +445,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         if relation is None:
             name = self.nice_connection_name()
-            raise_compiler_error("Attempted to drop a null relation for {}".format(name))
+            raise NullRelationDropAttempted(name)
         self.cache.drop(relation)
         return ""
 
@@ -470,9 +462,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             name = self.nice_connection_name()
             src_name = _relation_name(from_relation)
             dst_name = _relation_name(to_relation)
-            raise_compiler_error(
-                "Attempted to rename {} to {} for {}".format(src_name, dst_name, name)
-            )
+            raise RenameToNoneAttempted(src_name, dst_name, name)
 
         self.cache.rename(from_relation, to_relation)
         return ""
@@ -622,7 +612,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         to_relation.
         """
         if not isinstance(from_relation, self.Relation):
-            invalid_type_error(
+            raise InvalidMacroArgType(
                 method_name="get_missing_columns",
                 arg_name="from_relation",
                 got_value=from_relation,
@@ -630,7 +620,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             )
 
         if not isinstance(to_relation, self.Relation):
-            invalid_type_error(
+            raise InvalidMacroArgType(
                 method_name="get_missing_columns",
                 arg_name="to_relation",
                 got_value=to_relation,
@@ -655,7 +645,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             incorrect.
         """
         if not isinstance(relation, self.Relation):
-            invalid_type_error(
+            raise InvalidMacroArgType(
                 method_name="valid_snapshot_target",
                 arg_name="relation",
                 got_value=relation,
@@ -676,24 +666,16 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         if missing:
             if extra:
-                msg = (
-                    'Snapshot target has ("{}") but not ("{}") - is it an '
-                    "unmigrated previous version archive?".format(
-                        '", "'.join(extra), '", "'.join(missing)
-                    )
-                )
+                raise SnapshotTargetIncomplete(extra, missing)
             else:
-                msg = 'Snapshot target is not a snapshot table (missing "{}")'.format(
-                    '", "'.join(missing)
-                )
-            raise_compiler_error(msg)
+                raise SnapshotTargetNotSnapshotTable(missing)
 
     @available.parse_none
     def expand_target_column_types(
         self, from_relation: BaseRelation, to_relation: BaseRelation
     ) -> None:
         if not isinstance(from_relation, self.Relation):
-            invalid_type_error(
+            raise InvalidMacroArgType(
                 method_name="expand_target_column_types",
                 arg_name="from_relation",
                 got_value=from_relation,
@@ -701,7 +683,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             )
 
         if not isinstance(to_relation, self.Relation):
-            invalid_type_error(
+            raise InvalidMacroArgType(
                 method_name="expand_target_column_types",
                 arg_name="to_relation",
                 got_value=to_relation,
@@ -783,7 +765,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 "schema": schema,
                 "database": database,
             }
-            get_relation_returned_multiple_results(kwargs, matches)
+            raise RelationReturnedMultipleResults(kwargs, matches)
 
         elif matches:
             return matches[0]
@@ -847,10 +829,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         elif quote_config is None:
             pass
         else:
-            raise_compiler_error(
-                f'The seed configuration value of "quote_columns" has an '
-                f"invalid type {type(quote_config)}"
-            )
+            raise InvalidQuoteConfigType(quote_config)
 
         if quote_columns:
             return self.quote(column)
@@ -1100,11 +1079,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
-            raise_compiler_error(
-                'Got an invalid result from "{}" macro: {}'.format(
-                    FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
-                )
-            )
+            raise InvalidMacroResult(FRESHNESS_MACRO_NAME, table)
         if table[0][0] is None:
             # no records in the table, so really the max_loaded_at was
             # infinitely long ago. Just call it 0:00 January 1 year UTC
@@ -1327,7 +1302,7 @@ def catch_as_completed(
         elif isinstance(exc, KeyboardInterrupt) or not isinstance(exc, Exception):
             raise exc
         else:
-            warn_or_error(f"Encountered an error while generating catalog: {str(exc)}")
+            warn_or_error(CatalogGenerationError(exc=str(exc)))
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions

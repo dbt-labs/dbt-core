@@ -89,6 +89,9 @@ class TestDeferState(DBTIntegrationTest):
         # defer test, it succeeds
         results = self.run_dbt(['snapshot', '--state', 'state', '--defer'])
 
+        # favor_state test, it succeeds
+        results = self.run_dbt(['snapshot', '--state', 'state', '--defer', '--favor-state'])
+
     def run_and_defer(self):
         results = self.run_dbt(['seed'])
         assert len(results) == 1
@@ -114,6 +117,40 @@ class TestDeferState(DBTIntegrationTest):
 
         # with state it should work though
         results = self.run_dbt(['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'])
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
+
+        with open('target/manifest.json') as fp:
+            data = json.load(fp)
+        assert data['nodes']['seed.test.seed']['deferred']
+
+        assert len(results) == 1
+
+    def run_and_defer_favor_state(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+        assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['test'])
+        assert len(results) == 2
+
+        # copy files over from the happy times when we had a good target
+        self.copy_state()
+
+        # test tests first, because run will change things
+        # no state, wrong schema, failure.
+        self.run_dbt(['test', '--target', 'otherschema'], expect_pass=False)
+
+        # no state, run also fails
+        self.run_dbt(['run', '--target', 'otherschema'], expect_pass=False)
+
+        # defer test, it succeeds
+        results = self.run_dbt(['test', '-m', 'view_model+', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'])
+
+        # with state it should work though
+        results = self.run_dbt(['run', '-m', 'view_model', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'])
         assert self.other_schema not in results[0].node.compiled_code
         assert self.unique_schema() in results[0].node.compiled_code
 
@@ -152,6 +189,35 @@ class TestDeferState(DBTIntegrationTest):
             expect_pass=False,
         )
 
+    def run_switchdirs_defer_favor_state(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+
+        # copy files over from the happy times when we had a good target
+        self.copy_state()
+
+        self.use_default_project({'model-paths': ['changed_models']})
+        # the sql here is just wrong, so it should fail
+        self.run_dbt(
+            ['run', '-m', 'view_model', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'],
+            expect_pass=False,
+        )
+        # but this should work since we just use the old happy model
+        self.run_dbt(
+            ['run', '-m', 'table_model', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'],
+            expect_pass=True,
+        )
+
+        self.use_default_project({'model-paths': ['changed_models_bad']})
+        # this should fail because the table model refs a broken ephemeral
+        # model, which it should see
+        self.run_dbt(
+            ['run', '-m', 'table_model', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'],
+            expect_pass=False,
+        )
+
     def run_defer_iff_not_exists(self):
         results = self.run_dbt(['seed', '--target', 'otherschema'])
         assert len(results) == 1
@@ -166,6 +232,23 @@ class TestDeferState(DBTIntegrationTest):
         assert len(results) == 2
 
         # because the seed now exists in our schema, we shouldn't defer it
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
+
+    def run_defer_iff_not_exists_favor_state(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+
+        # copy files over from the happy times when we had a good target
+        self.copy_state()
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        results = self.run_dbt(['run', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'])
+        assert len(results) == 2
+
+        # because the seed exists in other schema, we should defer it
         assert self.other_schema not in results[0].node.compiled_code
         assert self.unique_schema() in results[0].node.compiled_code
 
@@ -191,9 +274,38 @@ class TestDeferState(DBTIntegrationTest):
         assert self.other_schema not in results[0].node.compiled_code
         assert self.unique_schema() in results[0].node.compiled_code
 
+    def run_defer_deleted_upstream_favor_state(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+
+        # copy files over from the happy times when we had a good target
+        self.copy_state()
+
+        self.use_default_project({'model-paths': ['changed_models_missing']})
+
+        self.run_dbt(
+            ['run', '-m', 'view_model', '--state', 'state', '--defer', '--favor-state', '--target', 'otherschema'],
+            expect_pass=True,
+        )
+
+        # despite deferral, test should use models just created in our schema
+        results = self.run_dbt(['test', '--state', 'state', '--defer', '--favor-state'])
+        assert self.other_schema not in results[0].node.compiled_code
+        assert self.unique_schema() in results[0].node.compiled_code
+
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):
         self.run_and_defer()
+
+        # make sure these commands don't work with --defer
+        with pytest.raises(SystemExit):
+            self.run_dbt(['seed', '--defer'])
+
+    @use_profile('postgres')
+    def test_postgres_state_changetarget_favor_state(self):
+        self.run_and_defer_favor_state()
 
         # make sure these commands don't work with --defer
         with pytest.raises(SystemExit):
@@ -204,12 +316,24 @@ class TestDeferState(DBTIntegrationTest):
         self.run_switchdirs_defer()
 
     @use_profile('postgres')
+    def test_postgres_state_changedir_favor_state(self):
+        self.run_switchdirs_defer_favor_state()
+
+    @use_profile('postgres')
     def test_postgres_state_defer_iffnotexists(self):
         self.run_defer_iff_not_exists()
 
     @use_profile('postgres')
+    def test_postgres_state_defer_iffnotexists_favor_state(self):
+        self.run_defer_iff_not_exists_favor_state()
+
+    @use_profile('postgres')
     def test_postgres_state_defer_deleted_upstream(self):
         self.run_defer_deleted_upstream()
+
+    @use_profile('postgres')
+    def test_postgres_state_defer_deleted_upstream_favor_state(self):
+        self.run_defer_deleted_upstream_favor_state()
 
     @use_profile('postgres')
     def test_postgres_state_snapshot_defer(self):

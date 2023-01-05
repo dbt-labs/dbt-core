@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Restore important legacy logging behaviors, following refactor which removed
+  them
+time: 2022-12-13T21:41:06.815133-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6437"

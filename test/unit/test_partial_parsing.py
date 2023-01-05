@@ -5,7 +5,7 @@ import time
 import dbt.exceptions
 from dbt.parser.partial import PartialParsing
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedModelNode
+from dbt.contracts.graph.nodes import ModelNode
 from dbt.contracts.files import ParseFileType, SourceFile, SchemaSourceFile, FilePath, FileHash
 from dbt.node_types import NodeType
 from .utils import normalize
@@ -88,9 +88,8 @@ class TestPartialParsing(unittest.TestCase):
         self.partial_parsing = PartialParsing(self.saved_manifest, self.new_files)
 
     def get_model(self, name):
-        return ParsedModelNode(
+        return ModelNode(
             package_name='my_test',
-            root_path='/users/root/',
             path=f'{name}.sql',
             original_file_path=f'models/{name}.sql',
             language='sql',
@@ -107,9 +106,8 @@ class TestPartialParsing(unittest.TestCase):
         )
     
     def get_python_model(self, name):
-        return ParsedModelNode(
+        return ModelNode(
             package_name='my_test',
-            root_path='/users/root/',
             path=f'{name}.py',
             original_file_path=f'models/{name}.py',
             raw_code='import something',

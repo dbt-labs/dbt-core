@@ -501,6 +501,20 @@ def _add_defer_argument(*subparsers):
         )
 
 
+def _add_favor_state_argument(*subparsers):
+    for sub in subparsers:
+        sub.add_optional_argument_inverse(
+            "--favor-state",
+            enable_help="""
+            If set, defer to the state variable for resolving unselected nodes, even if node exist as a database object in the current environment.
+            """,
+            disable_help="""
+            If defer is set, expect standard defer behaviour.
+            """,
+            default=flags.FAVOR_STATE_MODE,
+        )
+
+
 def _build_run_subparser(subparsers, base_subparser):
     run_sub = subparsers.add_parser(
         "run",
@@ -1092,14 +1106,6 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        "--event-buffer-size",
-        dest="event_buffer_size",
-        help="""
-        Sets the max number of events to buffer in EVENT_HISTORY
-        """,
-    )
-
-    p.add_argument(
         "-q",
         "--quiet",
         action="store_true",
@@ -1173,6 +1179,8 @@ def parse_args(args, cls=DBTArgumentParser):
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub, compile_sub)
+    # --favor-state
+    _add_favor_state_argument(run_sub, test_sub, build_sub, snapshot_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub, build_sub)
 

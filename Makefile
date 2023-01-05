@@ -19,8 +19,8 @@ CI_FLAGS =\
 	LOG_DIR=./logs\
 	DBT_LOG_FORMAT=json
 
-.PHONY: dev
-dev: ## Installs dbt-* packages in develop mode along with development dependencies.
+.PHONY: dev_req
+dev_req: ## Installs dbt-* packages in develop mode along with only development dependencies.
 	@\
 	pip install -r dev-requirements.txt -r editable-requirements.txt
 
@@ -31,6 +31,10 @@ dev-poetry: ## Installs editable dbt-* packages for development with poetry.
 	@cd plugins/postgres && poetry install
 	@cd tests/adapter && poetry install
 
+.PHONY: dev
+dev: dev_req ## Installs dbt-* packages in develop mode along with development dependencies and pre-commit.
+	@\
+	pre-commit install
 
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.

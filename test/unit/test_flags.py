@@ -261,18 +261,3 @@ class TestFlags(TestCase):
         # cleanup
         os.environ.pop('DBT_LOG_PATH')
         delattr(self.args, 'log_path')
-
-        # event_buffer_size
-        self.user_config.event_buffer_size = 100
-        flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.EVENT_BUFFER_SIZE, 100)
-        os.environ['DBT_EVENT_BUFFER_SIZE'] = '80'
-        flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.EVENT_BUFFER_SIZE, 80)
-        setattr(self.args, 'event_buffer_size', '120')
-        flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.EVENT_BUFFER_SIZE, 120)
-        # cleanup
-        os.environ.pop('DBT_EVENT_BUFFER_SIZE')
-        delattr(self.args, 'event_buffer_size')
-        self.user_config.event_buffer_size = None

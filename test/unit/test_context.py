@@ -10,11 +10,11 @@ from dbt.adapters import postgres
 from dbt.adapters import factory
 from dbt.adapters.base import AdapterConfig
 from dbt.clients.jinja import MacroStack
-from dbt.contracts.graph.parsed import (
-    ParsedModelNode,
+from dbt.contracts.graph.nodes import (
+    ModelNode,
     NodeConfig,
     DependsOn,
-    ParsedMacro,
+    Macro,
 )
 from dbt.config.project import VarProvider
 from dbt.context import base, target, configured, providers, docs, manifest, macros
@@ -33,7 +33,7 @@ from .mock_adapter import adapter_factory
 
 class TestVar(unittest.TestCase):
     def setUp(self):
-        self.model = ParsedModelNode(
+        self.model = ModelNode(
             alias="model_one",
             name="model_one",
             database="dbt",
@@ -43,7 +43,6 @@ class TestVar(unittest.TestCase):
             fqn=["root", "model_one"],
             package_name="root",
             original_file_path="model_one.sql",
-            root_path="/usr/src/app",
             refs=[],
             sources=[],
             depends_on=DependsOn(),
@@ -202,6 +201,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "flags",
         "print",
         "diff_of_two_dicts",
+        "local_md5"
     }
 )
 
@@ -273,7 +273,7 @@ PROJECT_DATA = {
 
 
 def model():
-    return ParsedModelNode(
+    return ModelNode(
         alias="model_one",
         name="model_one",
         database="dbt",
@@ -283,7 +283,6 @@ def model():
         fqn=["root", "model_one"],
         package_name="root",
         original_file_path="model_one.sql",
-        root_path="/usr/src/app",
         refs=[],
         sources=[],
         depends_on=DependsOn(),
@@ -316,7 +315,7 @@ def test_base_context():
 
 def mock_macro(name, package_name):
     macro = mock.MagicMock(
-        __class__=ParsedMacro,
+        __class__=Macro,
         package_name=package_name,
         resource_type="macro",
         unique_id=f"macro.{package_name}.{name}",
@@ -336,7 +335,7 @@ def mock_manifest(config):
 
 def mock_model():
     return mock.MagicMock(
-        __class__=ParsedModelNode,
+        __class__=ModelNode,
         alias="model_one",
         name="model_one",
         database="dbt",
@@ -346,7 +345,6 @@ def mock_model():
         fqn=["root", "model_one"],
         package_name="root",
         original_file_path="model_one.sql",
-        root_path="/usr/src/app",
         refs=[],
         sources=[],
         depends_on=DependsOn(),
@@ -432,7 +430,6 @@ def test_invocation_args_to_dict_in_macro_runtime_context(
     )
 
     # Comes from dbt/flags.py as they are the only values set that aren't None at default
-    assert ctx["invocation_args_dict"]["event_buffer_size"] == 100000
     assert ctx["invocation_args_dict"]["printer_width"] == 80
 
     # Comes from unit/utils.py config_from_parts_or_dicts method

@@ -1,0 +1,6 @@
+kind: Docs
+body: Fix rendering of sample code for metrics
+time: 2022-11-16T15:57:43.204201+01:00
+custom:
+  Author: jtcohen6
+  Issue: "323"

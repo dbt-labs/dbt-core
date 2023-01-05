@@ -27,14 +27,14 @@ from dbt.context.providers import (
 from dbt.context.macro_resolver import MacroResolver
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ColumnInfo,
-    ParsedGenericTestNode,
+    GenericTestNode,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
-    ParsedExposure,
-    ParsedMetric,
+    Exposure,
+    Metric,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -50,19 +50,25 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
-    warn_invalid_patch,
-    validator_error_message,
-    JSONValidationException,
-    raise_invalid_property_yml_version,
-    ValidationException,
-    ParsingException,
-    raise_duplicate_patch_name,
-    raise_duplicate_macro_patch_name,
-    InternalException,
-    raise_duplicate_source_patch_name,
-    warn_or_error,
     CompilationException,
+    DuplicateMacroPatchName,
+    DuplicatePatchPath,
+    DuplicateSourcePatchName,
+    JSONValidationException,
+    InternalException,
+    InvalidSchemaConfig,
+    InvalidTestConfig,
+    ParsingException,
+    PropertyYMLInvalidTag,
+    PropertyYMLMissingVersion,
+    PropertyYMLVersionNotInt,
+    ValidationException,
+    YamlLoadFailure,
+    YamlParseDictFailure,
+    YamlParseListFailure,
 )
+from dbt.events.functions import warn_or_error
+from dbt.events.types import WrongResourceSchemaFile, NoNodeForYamlKey, MacroPatchNotFound
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
@@ -74,7 +80,6 @@ from dbt.parser.generic_test_builders import (
     TestBlock,
     Testable,
 )
-from dbt.ui import warning_tag
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
@@ -92,34 +97,13 @@ schema_file_keys = (
 )
 
 
-def error_context(
-    path: str,
-    key: str,
-    data: Any,
-    cause: Union[str, ValidationException, JSONValidationException],
-) -> str:
-    """Provide contextual information about an error while parsing"""
-    if isinstance(cause, str):
-        reason = cause
-    elif isinstance(cause, ValidationError):
-        reason = validator_error_message(cause)
-    else:
-        reason = cause.msg
-    return "Invalid {key} config given in {path} @ {key}: {data} - {reason}".format(
-        key=key, path=path, data=data, reason=reason
-    )
-
-
 def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
     """If loading the yaml fails, raise an exception."""
-    path = source_file.path.relative_path
     try:
-        return load_yaml_text(source_file.contents, source_file.path)
+        # source_file.contents can sometimes be None
+        return load_yaml_text(source_file.contents or "", source_file.path)
     except ValidationException as e:
-        reason = validator_error_message(e)
-        raise ParsingException(
-            "Error reading {}: {} - {}".format(source_file.project_name, path, reason)
-        )
+        raise YamlLoadFailure(source_file.project_name, source_file.path.relative_path, e)
 
 
 class ParserRef:
@@ -169,7 +153,7 @@ def _trimmed(inp: str) -> str:
     return inp[:44] + "..." + inp[-3:]
 
 
-class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
+class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
     def __init__(
         self,
         project,
@@ -196,10 +180,10 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
-    def parse_from_dict(self, dct, validate=True) -> ParsedGenericTestNode:
+    def parse_from_dict(self, dct, validate=True) -> GenericTestNode:
         if validate:
-            ParsedGenericTestNode.validate(dct)
-        return ParsedGenericTestNode.from_dict(dct)
+            GenericTestNode.validate(dct)
+        return GenericTestNode.from_dict(dct)
 
     def parse_column_tests(self, block: TestBlock, column: UnparsedColumn) -> None:
         if not column.tests:
@@ -220,7 +204,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
-    ) -> ParsedGenericTestNode:
+    ) -> GenericTestNode:
 
         HASH_LENGTH = 10
 
@@ -245,7 +229,6 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             "database": self.default_database,
             "fqn": fqn,
             "name": name,
-            "root_path": self.project.project_root,
             "resource_type": self.resource_type,
             "tags": tags,
             "path": path,
@@ -261,10 +244,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             "file_key_name": file_key_name,
         }
         try:
-            ParsedGenericTestNode.validate(dct)
-            return ParsedGenericTestNode.from_dict(dct)
+            GenericTestNode.validate(dct)
+            return GenericTestNode.from_dict(dct)
         except ValidationError as exc:
-            msg = validator_error_message(exc)
             # this is a bit silly, but build an UnparsedNode just for error
             # message reasons
             node = self._create_error_node(
@@ -273,7 +255,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 original_file_path=target.original_file_path,
                 raw_code=raw_code,
             )
-            raise ParsingException(msg, node=node) from exc
+            raise InvalidTestConfig(exc, node)
 
     # lots of time spent in this method
     def _parse_generic_test(
@@ -283,7 +265,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         tags: List[str],
         column_name: Optional[str],
         schema_file_id: str,
-    ) -> ParsedGenericTestNode:
+    ) -> GenericTestNode:
         try:
             builder = TestBuilder(
                 test=test,
@@ -415,10 +397,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 # env_vars should have been updated in the context env_var method
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
-                msg = validator_error_message(exc)
-                raise ParsingException(msg, node=node) from exc
+                raise InvalidSchemaConfig(exc, node=node) from exc
 
-    def parse_node(self, block: GenericTestBlock) -> ParsedGenericTestNode:
+    def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the
         same
@@ -433,7 +414,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         self.add_test_node(block, node)
         return node
 
-    def add_test_node(self, block: GenericTestBlock, node: ParsedGenericTestNode):
+    def add_test_node(self, block: GenericTestBlock, node: GenericTestNode):
         test_from = {"key": block.target.yaml_key, "name": block.target.name}
         if node.config.enabled:
             self.manifest.add_node(block.file, node, test_from)
@@ -442,7 +423,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
     def render_with_context(
         self,
-        node: ParsedGenericTestNode,
+        node: GenericTestNode,
         config: ContextConfig,
     ) -> None:
         """Given the parsed node and a ContextConfig to use during
@@ -556,25 +537,16 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
 def check_format_version(file_path, yaml_dct) -> None:
     if "version" not in yaml_dct:
-        raise_invalid_property_yml_version(
-            file_path,
-            "the yml property file {} is missing a version tag".format(file_path),
-        )
+        raise PropertyYMLMissingVersion(file_path)
 
     version = yaml_dct["version"]
     # if it's not an integer, the version is malformed, or not
     # set. Either way, only 'version: 2' is supported.
     if not isinstance(version, int):
-        raise_invalid_property_yml_version(
-            file_path,
-            "its 'version:' tag must be an integer (e.g. version: 2)."
-            " {} is not an integer".format(version),
-        )
+        raise PropertyYMLVersionNotInt(file_path, version)
+
     if version != 2:
-        raise_invalid_property_yml_version(
-            file_path,
-            "its 'version:' tag is set to {}.  Only 2 is supported".format(version),
-        )
+        raise PropertyYMLInvalidTag(file_path, version)
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
@@ -635,8 +607,9 @@ class YamlReader(metaclass=ABCMeta):
             # check that entry is a dict and that all dict values
             # are strings
             if coerce_dict_str(entry) is None:
-                msg = error_context(path, self.key, data, "expected a dict with string keys")
-                raise ParsingException(msg)
+                raise YamlParseListFailure(
+                    path, self.key, data, "expected a dict with string keys"
+                )
 
             if "name" not in entry:
                 raise ParsingException("Entry did not contain a name")
@@ -683,8 +656,7 @@ class SourceParser(YamlDocsReader):
             cls.validate(data)
             return cls.from_dict(data)
         except (ValidationError, JSONValidationException) as exc:
-            msg = error_context(path, self.key, data, exc)
-            raise ParsingException(msg) from exc
+            raise YamlParseDictFailure(path, self.key, data, exc)
 
     # The other parse method returns TestBlocks. This one doesn't.
     # This takes the yaml dictionaries in 'sources' keys and uses them
@@ -705,7 +677,7 @@ class SourceParser(YamlDocsReader):
                 # source patches must be unique
                 key = (patch.overrides, patch.name)
                 if key in self.manifest.source_patches:
-                    raise_duplicate_source_patch_name(patch, self.manifest.source_patches[key])
+                    raise DuplicateSourcePatchName(patch, self.manifest.source_patches[key])
                 self.manifest.source_patches[key] = patch
                 source_file.source_patches.append(key)
             else:
@@ -729,11 +701,11 @@ class SourceParser(YamlDocsReader):
                 table=table,
                 path=original_file_path,
                 original_file_path=original_file_path,
-                root_path=self.project.project_root,
                 package_name=package_name,
                 unique_id=unique_id,
                 resource_type=NodeType.Source,
                 fqn=fqn,
+                name=f"{source.name}_{table.name}",
             )
             self.manifest.add_source(self.yaml.file, source_def)
 
@@ -809,8 +781,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                     self.normalize_docs_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
-                msg = error_context(path, self.key, data, exc)
-                raise ParsingException(msg) from exc
+                raise YamlParseDictFailure(path, self.key, data, exc)
             else:
                 yield node
 
@@ -873,7 +844,15 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
-                    warn_invalid_patch(patch, resource_type)
+                    warn_or_error(
+                        WrongResourceSchemaFile(
+                            patch_name=patch.name,
+                            resource_type=resource_type,
+                            plural_resource_type=resource_type.pluralize(),
+                            yaml_key=patch.yaml_key,
+                            file_path=patch.original_file_path,
+                        )
+                    )
                     return
 
         elif patch.yaml_key == "analyses":
@@ -912,12 +891,13 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
                     node.patch(patch)
             else:
-                msg = (
-                    f"Did not find matching node for patch with name '{patch.name}' "
-                    f"in the '{patch.yaml_key}' section of "
-                    f"file '{source_file.path.original_file_path}'"
+                warn_or_error(
+                    NoNodeForYamlKey(
+                        patch_name=patch.name,
+                        yaml_key=patch.yaml_key,
+                        file_path=source_file.path.original_file_path,
+                    )
                 )
-                warn_or_error(msg, log_fmt=warning_tag("{}"))
                 return
 
         # patches can't be overwritten
@@ -925,7 +905,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         if node:
             if node.patch_path:
                 package_name, existing_file_path = node.patch_path.split("://")
-                raise_duplicate_patch_name(patch, existing_file_path)
+                raise DuplicatePatchPath(patch, existing_file_path)
 
             source_file.append_patch(patch.yaml_key, node.unique_id)
             # re-calculate the node config with the patch config.  Always do this
@@ -977,12 +957,11 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            msg = f'Found patch for macro "{patch.name}" ' f"which was not found"
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
+            warn_or_error(MacroPatchNotFound(patch_name=patch.name))
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")
-            raise_duplicate_macro_patch_name(patch, existing_file_path)
+            raise DuplicateMacroPatchName(patch, existing_file_path)
         source_file.macro_patches[patch.name] = unique_id
         macro.patch(patch)
 
@@ -1022,9 +1001,9 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
-        parsed = ParsedExposure(
+        parsed = Exposure(
+            resource_type=NodeType.Exposure,
             package_name=package_name,
-            root_path=self.project.project_root,
             path=path,
             original_file_path=self.yaml.path.original_file_path,
             unique_id=unique_id,
@@ -1049,7 +1028,7 @@ class ExposureParser(YamlReader):
         )
         depends_on_jinja = "\n".join("{{ " + line + "}}" for line in unparsed.depends_on)
         get_rendered(depends_on_jinja, ctx, parsed, capture_macros=True)
-        # parsed now has a populated refs/sources
+        # parsed now has a populated refs/sources/metrics
 
         if parsed.config.enabled:
             self.manifest.add_exposure(self.yaml.file, parsed)
@@ -1085,8 +1064,7 @@ class ExposureParser(YamlReader):
                 UnparsedExposure.validate(data)
                 unparsed = UnparsedExposure.from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
-                msg = error_context(self.yaml.path, self.key, data, exc)
-                raise ParsingException(msg) from exc
+                raise YamlParseDictFailure(self.yaml.path, self.key, data, exc)
 
             self.parse_exposure(unparsed)
 
@@ -1126,9 +1104,9 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
-        parsed = ParsedMetric(
+        parsed = Metric(
+            resource_type=NodeType.Metric,
             package_name=package_name,
-            root_path=self.project.project_root,
             path=path,
             original_file_path=self.yaml.path.original_file_path,
             unique_id=unique_id,
@@ -1203,6 +1181,5 @@ class MetricParser(YamlReader):
                 unparsed = UnparsedMetric.from_dict(data)
 
             except (ValidationError, JSONValidationException) as exc:
-                msg = error_context(self.yaml.path, self.key, data, exc)
-                raise ParsingException(msg) from exc
+                raise YamlParseDictFailure(self.yaml.path, self.key, data, exc)
             self.parse_metric(unparsed)

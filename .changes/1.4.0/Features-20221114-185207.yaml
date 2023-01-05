@@ -1,0 +1,6 @@
+kind: Features
+body: Added an md5 function to the base context
+time: 2022-11-14T18:52:07.788593+02:00
+custom:
+  Author: haritamar
+  Issue: "6246"

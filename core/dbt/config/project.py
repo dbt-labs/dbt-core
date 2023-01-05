@@ -16,19 +16,19 @@ import hashlib
 import os
 
 from dbt import flags, deprecations
-from dbt.clients.system import resolve_path_from_base
-from dbt.clients.system import path_exists
-from dbt.clients.system import load_file_contents
+from dbt.clients.system import path_exists, resolve_path_from_base, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import QueryComment
-from dbt.exceptions import DbtProjectError
-from dbt.exceptions import SemverException
-from dbt.exceptions import validator_error_message
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import (
+    DbtProjectError,
+    SemverException,
+    ProjectContractBroken,
+    ProjectContractInvalid,
+    RuntimeException,
+)
 from dbt.graph import SelectionSpec
 from dbt.helper_types import NoValue
-from dbt.semver import VersionSpecifier
-from dbt.semver import versions_compatible
+from dbt.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict
 from dbt.node_types import NodeType
@@ -325,7 +325,7 @@ class PartialProject(RenderComponents):
             ProjectContract.validate(rendered.project_dict)
             cfg = ProjectContract.from_dict(rendered.project_dict)
         except ValidationError as e:
-            raise DbtProjectError(validator_error_message(e)) from e
+            raise ProjectContractInvalid(e) from e
         # name/version are required in the Project definition, so we can assume
         # they are present
         name = cfg.name
@@ -642,7 +642,7 @@ class Project:
         try:
             ProjectContract.validate(self.to_project_config())
         except ValidationError as e:
-            raise DbtProjectError(validator_error_message(e)) from e
+            raise ProjectContractBroken(e) from e
 
     @classmethod
     def partial_load(cls, project_root: str, *, verify_version: bool = False) -> PartialProject:

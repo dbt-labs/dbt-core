@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow hooks to fail without halting execution flow
+time: 2022-11-07T09:53:14.340257-06:00
+custom:
+  Author: ChenyuLInx
+  Issue: "5625"

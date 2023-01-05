@@ -25,16 +25,19 @@ from dbt.utils import (
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
-from dbt.contracts.graph.compiled import CompiledGenericTestNode
-from dbt.contracts.graph.parsed import ParsedGenericTestNode
+from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
-    InternalException,
-    raise_compiler_error,
+    CaughtMacroException,
+    CaughtMacroExceptionWithNode,
     CompilationException,
-    invalid_materialization_argument,
-    MacroReturn,
+    InternalException,
+    InvalidMaterializationArg,
     JinjaRenderingException,
+    MacroReturn,
+    MaterializtionMacroNotUsed,
+    NoSupportedLanguagesFound,
+    UndefinedCompilation,
     UndefinedMacroException,
 )
 from dbt import flags
@@ -238,7 +241,7 @@ class BaseMacroGenerator:
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            raise_compiler_error(str(e))
+            raise CaughtMacroException(e)
 
     def call_macro(self, *args, **kwargs):
         # called from __call__ methods
@@ -297,7 +300,7 @@ class MacroGenerator(BaseMacroGenerator):
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            raise_compiler_error(str(e), self.macro)
+            raise CaughtMacroExceptionWithNode(exc=e, node=self.macro)
         except CompilationException as e:
             e.stack.append(self.macro)
             raise e
@@ -377,7 +380,7 @@ class MaterializationExtension(jinja2.ext.Extension):
                 node.defaults.append(languages)
 
             else:
-                invalid_materialization_argument(materialization_name, target.name)
+                raise InvalidMaterializationArg(materialization_name, target.name)
 
         if SUPPORTED_LANG_ARG not in node.args:
             node.args.append(SUPPORTED_LANG_ARG)
@@ -452,7 +455,7 @@ def create_undefined(node=None):
             return self
 
         def __reduce__(self):
-            raise_compiler_error(f"{self.name} is undefined", node=node)
+            raise UndefinedCompilation(name=self.name, node=node)
 
     return Undefined
 
@@ -620,7 +623,7 @@ GENERIC_TEST_KWARGS_NAME = "_dbt_generic_test_kwargs"
 
 def add_rendered_test_kwargs(
     context: Dict[str, Any],
-    node: Union[ParsedGenericTestNode, CompiledGenericTestNode],
+    node: GenericTestNode,
     capture_macros: bool = False,
 ) -> None:
     """Render each of the test kwargs in the given context using the native
@@ -652,13 +655,13 @@ def add_rendered_test_kwargs(
 
 def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
     if "materialization" not in node.name:
-        raise_compiler_error("Only materialization macros can be used with this function")
+        raise MaterializtionMacroNotUsed(node=node)
 
     no_kwargs = not node.defaults
     no_langs_found = SUPPORTED_LANG_ARG not in node.args
 
     if no_kwargs or no_langs_found:
-        raise_compiler_error(f"No supported_languages found in materialization macro {node.name}")
+        raise NoSupportedLanguagesFound(node=node)
 
     lang_idx = node.args.index(SUPPORTED_LANG_ARG)
     # indexing defaults from the end

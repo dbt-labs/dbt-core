@@ -16,6 +16,8 @@ Defines the base classes of `PinnedPackage` and `UnpinnedPackage`.
 
 `downloads_directory` sets the directory packages will be downloaded to.
 
+`_install` has retry logic if the download or untarring process hit exceptions (see `dbt.utils._connection_exception_retry`).
+
 ## `git.py`
 
 Extends `PinnedPackage` and `UnpinnedPackage` specific to dbt packages defined with git urls.
@@ -28,8 +30,10 @@ Extends `PinnedPackage` and `UnpinnedPackage` specific to dbt packages defined l
 
 Extends `PinnedPackage` and `UnpinnedPackage` specific to dbt packages defined on the dbt Hub registry.
 
-`install` has retry logic if the download or untarring process hit exceptions (see `dbt.utils._connection_exception_retry`).
 
 ## `resolver.py`
 
 Resolves the package definition into package objects to download.
+
+## `tarball.py`
+Extends `PinnedPackage` and `UnpinnedPackage` specific to dbt packages defined by a URL to a tarball hosted on an HTTP server.

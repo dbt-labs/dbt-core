@@ -21,7 +21,7 @@
 
 {% macro default__get_incremental_delete_insert_sql(arg_dict) %}
 
-  {% do return(get_delete_insert_merge_sql(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["unique_key"], arg_dict["dest_columns"])) %}
+  {% do return(get_delete_insert_merge_sql(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["unique_key"], arg_dict["dest_columns"], arg_dict["incremental_predicates"])) %}
 
 {% endmacro %}
 
@@ -35,7 +35,7 @@
 
 {% macro default__get_incremental_merge_sql(arg_dict) %}
 
-  {% do return(get_merge_sql(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["unique_key"], arg_dict["dest_columns"])) %}
+  {% do return(get_merge_sql(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["unique_key"], arg_dict["dest_columns"], arg_dict["incremental_predicates"])) %}
 
 {% endmacro %}
 
@@ -48,7 +48,7 @@
 
 {% macro default__get_incremental_insert_overwrite_sql(arg_dict) %}
 
-  {% do return(get_insert_overwrite_merge_sql(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["dest_columns"], arg_dict["predicates"])) %}
+  {% do return(get_insert_overwrite_merge_sql(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["dest_columns"], arg_dict["incremental_predicates"])) %}
 
 {% endmacro %}
 

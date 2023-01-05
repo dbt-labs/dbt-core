@@ -6,19 +6,67 @@ changelogPath: CHANGELOG.md
 versionExt: md
 versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
-changeFormat: '- {{.Body}} ([#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), [#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+changeFormat: |-
+  {{- $IssueList := list }}
+  {{- $changes := splitList " " $.Custom.Issue }}
+  {{- range $issueNbr := $changes }}
+    {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
+    {{- $IssueList = append $IssueList $changeLink  }}
+  {{- end -}}
+  - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
 
 kinds:
   - label: Breaking Changes
   - label: Features
   - label: Fixes
   - label: Docs
-    changeFormat: '- {{.Body}} ([dbt-docs/#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-docs/issues/{{.Custom.Issue}}), [dbt-docs/#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-docs/pull/{{.Custom.PR}}))'
+    changeFormat: |-
+      {{- $IssueList := list }}
+      {{- $changes := splitList " " $.Custom.Issue }}
+      {{- range $issueNbr := $changes }}
+        {{- $changeLink := "[dbt-docs/#nbr](https://github.com/dbt-labs/dbt-docs/issues/nbr)" | replace "nbr" $issueNbr }}
+        {{- $IssueList = append $IssueList $changeLink }}
+      {{- end -}}
+      - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
   - label: Under the Hood
   - label: Dependencies
-    changeFormat: '- {{.Body}} ({{if ne .Custom.Issue ""}}[#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), {{end}}[#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+    changeFormat: |-
+      {{- $PRList := list }}
+      {{- $changes := splitList " " $.Custom.PR }}
+      {{- range $pullrequest := $changes }}
+        {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $pullrequest }}
+        {{- $PRList = append $PRList $changeLink  }}
+      {{- end -}}
+      - {{.Body}} ({{ range $index, $element := $PRList }}{{if $index}}, {{end}}{{$element}}{{end}})
+    skipGlobalChoices: true
+    additionalChoices:
+      - key: Author
+        label: GitHub Username(s) (separated by a single space if multiple)
+        type: string
+        minLength: 3
+      - key: PR
+        label: GitHub Pull Request Number (separated by a single space if multiple)
+        type: string
+        minLength: 1
   - label: Security
-    changeFormat: '- {{.Body}} ({{if ne .Custom.Issue ""}}[#{{.Custom.Issue}}](https://github.com/dbt-labs/dbt-core/issues/{{.Custom.Issue}}), {{end}}[#{{.Custom.PR}}](https://github.com/dbt-labs/dbt-core/pull/{{.Custom.PR}}))'
+    changeFormat: |-
+      {{- $PRList := list }}
+      {{- $changes := splitList " " $.Custom.PR }}
+      {{- range $pullrequest := $changes }}
+        {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $pullrequest }}
+        {{- $PRList = append $PRList $changeLink  }}
+      {{- end -}}
+      - {{.Body}} ({{ range $index, $element := $PRList }}{{if $index}}, {{end}}{{$element}}{{end}})
+    skipGlobalChoices: true
+    additionalChoices:
+      - key: Author
+        label: GitHub Username(s) (separated by a single space if multiple)
+        type: string
+        minLength: 3
+      - key: PR
+        label: GitHub Pull Request Number (separated by a single space if multiple)
+        type: string
+        minLength: 1
 
 newlines:
   afterChangelogHeader: 1
@@ -33,42 +81,41 @@ custom:
   type: string
   minLength: 3
 - key: Issue
-  label: GitHub Issue Number
-  type: int
-  minInt: 1
-- key: PR
-  label: GitHub Pull Request Number
-  type: int
-  minInt: 1
+  label: GitHub Issue Number (separated by a single space if multiple)
+  type: string
+  minLength: 1
 
 footerFormat: |
   {{- $contributorDict := dict }}
   {{- /* any names added to this list should be all lowercase for later matching purposes */}}
-  {{- $core_team := list "michelleark" "peterallenwebb" "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "dependabot[bot]" "snyk-bot" "colin-rogers-dbt" }}
+  {{- $core_team := list "michelleark" "peterallenwebb" "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "aranke" "dependabot[bot]" "snyk-bot" "colin-rogers-dbt" }}
   {{- range $change := .Changes }}
     {{- $authorList := splitList " " $change.Custom.Author }}
-    {{- /* loop through all authors for a PR */}}
+    {{- /* loop through all authors for a single changelog */}}
     {{- range $author := $authorList }}
       {{- $authorLower := lower $author }}
       {{- /* we only want to include non-core team contributors */}}
       {{- if not (has $authorLower $core_team)}}
-        {{- /* Docs kind link back to dbt-docs instead of dbt-core PRs */}}
-        {{- $prLink := $change.Kind }}
-        {{- if eq $change.Kind "Docs" }}
-          {{- $prLink = "[dbt-docs/#pr](https://github.com/dbt-labs/dbt-docs/pull/pr)" | replace "pr" $change.Custom.PR }}
-        {{- else }}
-          {{- $prLink = "[#pr](https://github.com/dbt-labs/dbt-core/pull/pr)" | replace "pr" $change.Custom.PR }}
-        {{- end }}
-        {{- /* check if this contributor has other PRs associated with them already */}}
-        {{- if hasKey $contributorDict $author }}
-          {{- $prList := get $contributorDict $author }}
-          {{- $prList = append $prList $prLink  }}
-          {{- $contributorDict := set $contributorDict $author $prList }}
-        {{- else }}
-          {{- $prList := list $prLink }}
-          {{- $contributorDict := set $contributorDict $author $prList }}
-        {{- end }}
-      {{- end}}
+        {{- $changeList := splitList " " $change.Custom.Author }}
+          {{- /* Docs kind link back to dbt-docs instead of dbt-core issues */}}
+          {{- $changeLink := $change.Kind }}
+          {{- if or (eq $change.Kind "Dependencies") (eq $change.Kind "Security") }}
+            {{- $changeLink = "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $change.Custom.PR }}
+          {{- else if eq $change.Kind "Docs"}}
+            {{- $changeLink = "[dbt-docs/#nbr](https://github.com/dbt-labs/dbt-docs/issues/nbr)" | replace "nbr" $change.Custom.Issue }}
+          {{- else }}
+            {{- $changeLink = "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $change.Custom.Issue }}
+          {{- end }}
+          {{- /* check if this contributor has other changes associated with them already */}}
+          {{- if hasKey $contributorDict $author }}
+            {{- $contributionList := get $contributorDict $author }}
+            {{- $contributionList = append $contributionList $changeLink  }}
+            {{- $contributorDict := set $contributorDict $author $contributionList }}
+          {{- else }}
+            {{- $contributionList := list $changeLink }}
+            {{- $contributorDict := set $contributorDict $author $contributionList }}
+          {{- end }}
+        {{- end}}
     {{- end}}
   {{- end }}
   {{- /* no indentation here for formatting so the final markdown doesn't have unneeded indentations */}}

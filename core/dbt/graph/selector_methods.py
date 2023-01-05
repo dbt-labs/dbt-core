@@ -7,20 +7,15 @@ from dbt.dataclass_schema import StrEnum
 
 from .graph import UniqueId
 
-from dbt.contracts.graph.compiled import (
-    CompiledSingularTestNode,
-    CompiledGenericTestNode,
-    CompileResultNode,
-    ManifestNode,
-)
 from dbt.contracts.graph.manifest import Manifest, WritableManifest
-from dbt.contracts.graph.parsed import (
-    HasTestMetadata,
-    ParsedSingularTestNode,
-    ParsedExposure,
-    ParsedMetric,
-    ParsedGenericTestNode,
-    ParsedSourceDefinition,
+from dbt.contracts.graph.nodes import (
+    SingularTestNode,
+    Exposure,
+    Metric,
+    GenericTestNode,
+    SourceDefinition,
+    ResultNode,
+    ManifestNode,
 )
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
@@ -76,7 +71,7 @@ def is_selected_node(fqn: List[str], node_selector: str):
     return True
 
 
-SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure, ParsedMetric]
+SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -99,7 +94,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 
     def source_nodes(
         self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedSourceDefinition]]:
+    ) -> Iterator[Tuple[UniqueId, SourceDefinition]]:
 
         for key, source in self.manifest.sources.items():
             unique_id = UniqueId(key)
@@ -107,9 +102,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, source
 
-    def exposure_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedExposure]]:
+    def exposure_nodes(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, Exposure]]:
 
         for key, exposure in self.manifest.exposures.items():
             unique_id = UniqueId(key)
@@ -117,9 +110,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, exposure
 
-    def metric_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedMetric]]:
+    def metric_nodes(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, Metric]]:
 
         for key, metric in self.manifest.metrics.items():
             unique_id = UniqueId(key)
@@ -139,13 +130,13 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 
     def configurable_nodes(
         self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, CompileResultNode]]:
+    ) -> Iterator[Tuple[UniqueId, ResultNode]]:
         yield from chain(self.parsed_nodes(included_nodes), self.source_nodes(included_nodes))
 
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
-    ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode, ParsedMetric]]]:
+    ) -> Iterator[Tuple[UniqueId, Union[Exposure, ManifestNode, Metric]]]:
         yield from chain(
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
@@ -286,8 +277,6 @@ class PathSelectorMethod(SelectorMethod):
         root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
         for node, real_node in self.all_nodes(included_nodes):
-            if Path(real_node.root_path) != root:
-                continue
             ofp = Path(real_node.original_file_path)
             if ofp in paths:
                 yield node
@@ -387,26 +376,26 @@ class ResourceTypeSelectorMethod(SelectorMethod):
 class TestNameSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, HasTestMetadata):
-                if real_node.test_metadata.name == selector:
+            if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
+                if real_node.test_metadata.name == selector:  # type: ignore[union-attr]
                     yield node
 
 
 class TestTypeSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        search_types: Tuple[Type, ...]
+        search_type: Type
         # continue supporting 'schema' + 'data' for backwards compatibility
         if selector in ("generic", "schema"):
-            search_types = (ParsedGenericTestNode, CompiledGenericTestNode)
+            search_type = GenericTestNode
         elif selector in ("singular", "data"):
-            search_types = (ParsedSingularTestNode, CompiledSingularTestNode)
+            search_type = SingularTestNode
         else:
             raise RuntimeException(
                 f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'
             )
 
         for node, real_node in self.parsed_nodes(included_nodes):
-            if isinstance(real_node, search_types):
+            if isinstance(real_node, search_type):
                 yield node
 
 
@@ -438,6 +427,9 @@ class StateSelectorMethod(SelectorMethod):
         return modified
 
     def recursively_check_macros_modified(self, node, visited_macros):
+        if not hasattr(node, "depends_on"):
+            return False
+
         for macro_uid in node.depends_on.macros:
             if macro_uid in visited_macros:
                 continue

@@ -1,0 +1,7 @@
+kind: Fixes
+body: Repair a regression which prevented basic logging before the logging subsystem
+  is completely configured.
+time: 2022-12-14T15:53:07.396512-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6434"

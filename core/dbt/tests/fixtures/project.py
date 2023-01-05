@@ -6,11 +6,11 @@ from datetime import datetime
 import warnings
 import yaml
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, DatabaseException
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
-from dbt.events.functions import setup_event_logger
+from dbt.events.functions import setup_event_logger, cleanup_event_logger
 from dbt.tests.util import (
     write_file,
     run_sql_with_adapter,
@@ -229,6 +229,15 @@ def selectors_yml(project_root, selectors):
         write_file(data, project_root, "selectors.yml")
 
 
+# This fixture ensures that the logging infrastructure does not accidentally
+# reuse streams configured on previous test runs, which might now be closed.
+# It should be run before (and so included as a parameter by) any other fixture
+# which runs dbt-core functions that might fire events.
+@pytest.fixture(scope="class")
+def clean_up_logging():
+    cleanup_event_logger()
+
+
 # This creates an adapter that is used for running test setup, such as creating
 # the test schema, and sql commands that are run in tests prior to the first
 # dbt command. After a dbt command is run, the project.adapter property will
@@ -240,7 +249,7 @@ def selectors_yml(project_root, selectors):
 # otherwise this will fail. So to test errors in those areas, you need to copy the files
 # into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
-def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
+def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
         profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None
@@ -438,6 +447,7 @@ class TestProjInfo:
 # to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
 def project(
+    clean_up_logging,
     project_root,
     profiles_root,
     request,
@@ -484,9 +494,10 @@ def project(
     # a `load_dependencies` method.
     # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
     # the macros have errors (which is what we're actually testing for...) they end up
-    # throwing CompilationExceptions
+    # throwing CompilationExceptions or DatabaseExceptions
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError, CompilationException):
+    except (KeyError, AttributeError, CompilationException, DatabaseException):
         pass
     os.chdir(orig_cwd)
+    cleanup_event_logger()

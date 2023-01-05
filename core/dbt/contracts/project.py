@@ -12,9 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any
 from mashumaro.types import SerializableType
 
-PIN_PACKAGE_URL = (
-    "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
-)
+
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
 
@@ -58,6 +56,12 @@ RawVersion = Union[str, float]
 
 
 @dataclass
+class TarballPackage(Package):
+    tarball: str
+    name: str
+
+
+@dataclass
 class GitPackage(Package):
     git: str
     revision: Optional[RawVersion] = None
@@ -84,7 +88,7 @@ class RegistryPackage(Package):
             return [str(self.version)]
 
 
-PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
+PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
@@ -218,7 +222,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
         ),
     )
     packages: List[PackageSpec] = field(default_factory=list)
-    query_comment: Optional[Union[QueryComment, NoValue, str]] = NoValue()
+    query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
 
     @classmethod
     def validate(cls, data):
@@ -253,7 +257,6 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     static_parser: Optional[bool] = None
     indirect_selection: Optional[str] = None
     cache_selected_only: Optional[bool] = None
-    event_buffer_size: Optional[int] = None
 
 
 @dataclass

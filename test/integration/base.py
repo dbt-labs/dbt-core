@@ -1,6 +1,6 @@
+from io import StringIO
 import json
 import os
-import io
 import random
 import shutil
 import sys
@@ -26,7 +26,7 @@ from dbt.config import RuntimeConfig
 from dbt.context import providers
 from dbt.logger import log_manager
 from dbt.events.functions import (
-    capture_stdout_logs, fire_event, setup_event_logger, stop_capture_stdout_logs
+    capture_stdout_logs, fire_event, setup_event_logger, cleanup_event_logger, stop_capture_stdout_logs
 )
 from dbt.events.test_types import (
     IntegrationTestInfo,
@@ -440,6 +440,8 @@ class DBTIntegrationTest(unittest.TestCase):
         except EnvironmentError:
             msg = f"Could not clean up after test - {self.test_root_dir} not removable"
             fire_event(IntegrationTestException(msg=msg))
+        
+        cleanup_event_logger()
 
     def _get_schema_fqn(self, database, schema):
         schema_fqn = self.quote_as_configured(schema, 'schema')
@@ -524,7 +526,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def run_dbt_and_capture(self, *args, **kwargs):
         try:
-            stringbuf = capture_stdout_logs()
+            stringbuf = StringIO()
+            capture_stdout_logs(stringbuf)
             res = self.run_dbt(*args, **kwargs)
             stdout = stringbuf.getvalue()
 
@@ -548,8 +551,8 @@ class DBTIntegrationTest(unittest.TestCase):
         if profiles_dir:
             final_args.extend(['--profiles-dir', self.test_root_dir])
         final_args.append('--log-cache-events')
-        msg = f"Invoking dbt with {final_args}"
-        fire_event(IntegrationTestInfo(msg=msg))
+        # msg = f"Invoking dbt with {final_args}"
+        # fire_event(IntegrationTestInfo(msg=msg))
         return dbt.handle_and_check(final_args)
 
     def run_sql_file(self, path, kwargs=None):

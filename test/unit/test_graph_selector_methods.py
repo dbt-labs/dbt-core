@@ -6,18 +6,18 @@ from unittest import mock
 from pathlib import Path
 
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     DependsOn,
     MacroDependsOn,
     NodeConfig,
-    ParsedMacro,
-    ParsedModelNode,
-    ParsedExposure,
-    ParsedMetric,
-    ParsedSeedNode,
-    ParsedSingularTestNode,
-    ParsedGenericTestNode,
-    ParsedSourceDefinition,
+    Macro,
+    ModelNode,
+    Exposure,
+    Metric,
+    SeedNode,
+    SingularTestNode,
+    GenericTestNode,
+    SourceDefinition,
     TestConfig,
     TestMetadata,
     ColumnInfo,
@@ -42,7 +42,7 @@ from dbt.graph.selector_methods import (
     MetricSelectorMethod,
 )
 import dbt.exceptions
-import dbt.contracts.graph.parsed
+import dbt.contracts.graph.nodes
 from .utils import replace_config
 
 
@@ -77,7 +77,7 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         source_values.append([src.source_name, src.name])
         depends_on_nodes.append(src.unique_id)
 
-    return ParsedModelNode(
+    return ModelNode(
         language='sql',
         raw_code=sql,
         database='dbt',
@@ -87,7 +87,6 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         fqn=fqn,
         unique_id=f'model.{pkg}.{name}',
         package_name=pkg,
-        root_path='/usr/dbt/some-project',
         path=path,
         original_file_path=f'models/{path}',
         config=NodeConfig(**config_kwargs),
@@ -118,9 +117,7 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
         checksum = FileHash.from_contents('')
 
     fqn = [pkg] + fqn_extras + [name]
-    return ParsedSeedNode(
-        language='sql',
-        raw_code='',
+    return SeedNode(
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -128,7 +125,6 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
         fqn=fqn,
         unique_id=f'seed.{pkg}.{name}',
         package_name=pkg,
-        root_path='/usr/dbt/some-project',
         path=path,
         original_file_path=f'data/{path}',
         tags=tags,
@@ -150,13 +146,12 @@ def make_source(pkg, source_name, table_name, path=None, loader=None, identifier
 
     fqn = [pkg] + fqn_extras + [source_name, table_name]
 
-    return ParsedSourceDefinition(
+    return SourceDefinition(
         fqn=fqn,
         database='dbt',
         schema='dbt_schema',
         unique_id=f'source.{pkg}.{source_name}.{table_name}',
         package_name=pkg,
-        root_path='/usr/dbt/some-project',
         path=path,
         original_file_path=path,
         name=table_name,
@@ -177,16 +172,14 @@ def make_macro(pkg, name, macro_sql, path=None, depends_on_macros=None):
     if depends_on_macros is None:
         depends_on_macros = []
     
-    return ParsedMacro(
+    return Macro(
         name=name,
         macro_sql=macro_sql,
         unique_id=f'macro.{pkg}.{name}',
         package_name=pkg,
-        root_path='/usr/dbt/some-project',
         path=path,
         original_file_path=path,
         resource_type=NodeType.Macro,
-        tags=[],
         depends_on=MacroDependsOn(macros=depends_on_macros),
     )
 
@@ -204,7 +197,7 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
     ref_values = []
     source_values = []
     # this doesn't really have to be correct
-    if isinstance(test_model, ParsedSourceDefinition):
+    if isinstance(test_model, SourceDefinition):
         kwargs['model'] = "{{ source('" + test_model.source_name + \
             "', '" + test_model.name + "') }}"
         source_values.append([test_model.source_name, test_model.name])
@@ -251,7 +244,7 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
         source_values.append([source.source_name, source.name])
         depends_on_nodes.append(source.unique_id)
 
-    return ParsedGenericTestNode(
+    return GenericTestNode(
         language='sql',
         raw_code=raw_code,
         test_metadata=TestMetadata(
@@ -266,7 +259,6 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
         fqn=['minimal', 'schema_test', node_name],
         unique_id=f'test.{pkg}.{node_name}',
         package_name=pkg,
-        root_path='/usr/dbt/some-project',
         path=f'schema_test/{node_name}.sql',
         original_file_path=f'models/{path}',
         resource_type=NodeType.Test,
@@ -308,7 +300,7 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
         source_values.append([src.source_name, src.name])
         depends_on_nodes.append(src.unique_id)
 
-    return ParsedSingularTestNode(
+    return SingularTestNode(
         language='sql',
         raw_code=sql,
         database='dbt',
@@ -318,7 +310,6 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
         fqn=fqn,
         unique_id=f'test.{pkg}.{name}',
         package_name=pkg,
-        root_path='/usr/dbt/some-project',
         path=path,
         original_file_path=f'tests/{path}',
         config=TestConfig(**config_kwargs),
@@ -342,14 +333,14 @@ def make_exposure(pkg, name, path=None, fqn_extras=None, owner=None):
         owner = ExposureOwner(email='test@example.com')
 
     fqn = [pkg, 'exposures'] + fqn_extras + [name]
-    return ParsedExposure(
+    return Exposure(
         name=name,
+        resource_type=NodeType.Exposure,
         type=ExposureType.Notebook,
         fqn=fqn,
         unique_id=f'exposure.{pkg}.{name}',
         package_name=pkg,
         path=path,
-        root_path='/usr/src/app',
         original_file_path=path,
         owner=owner,
     )
@@ -359,11 +350,11 @@ def make_metric(pkg, name, path=None):
     if path is None:
         path = 'schema.yml'
 
-    return ParsedMetric(
+    return Metric(
         name=name,
+        resource_type=NodeType.Metric,
         path='schema.yml',
         package_name=pkg,
-        root_path='/usr/src/app',
         original_file_path=path,
         unique_id=f'metric.{pkg}.{name}',
         fqn=[pkg, 'metrics', name],
@@ -978,12 +969,14 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
     change_node(manifest, seed.replace(checksum=FileHash(
         name='path', checksum=seed.original_file_path)))
     method = statemethod(manifest, previous_state)
-    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+    with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'modified')
         warn_or_error_patch.assert_called_once()
-        msg = warn_or_error_patch.call_args[0][0]
+        event = warn_or_error_patch.call_args[0][0]
+        assert event.info.name == 'SeedExceedsLimitSamePath'
+        msg = event.info.msg
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
-    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+    with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
         warn_or_error_patch.assert_not_called()
 
@@ -992,13 +985,15 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
     change_node(manifest, seed.replace(checksum=FileHash(
         name='path', checksum=seed.original_file_path)))
     method = statemethod(manifest, previous_state)
-    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+    with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert search_manifest_using_method(
             manifest, method, 'modified') == {'seed'}
         warn_or_error_patch.assert_called_once()
-        msg = warn_or_error_patch.call_args[0][0]
+        event = warn_or_error_patch.call_args[0][0]
+        assert event.info.name == 'SeedIncreased'
+        msg = event.info.msg
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
-    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+    with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
         warn_or_error_patch.assert_not_called()
 
@@ -1007,11 +1002,11 @@ def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state
     change_node(previous_state.manifest, seed.replace(
         checksum=FileHash(name='path', checksum=seed.original_file_path)))
     method = statemethod(manifest, previous_state)
-    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+    with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert search_manifest_using_method(
             manifest, method, 'modified') == {'seed'}
         warn_or_error_patch.assert_not_called()
-    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+    with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
         warn_or_error_patch.assert_not_called()
 

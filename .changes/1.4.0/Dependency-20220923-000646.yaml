@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update pathspec requirement from ~=0.9.0 to >=0.9,<0.11 in /core"
+time: 2022-09-23T00:06:46.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: "5917"

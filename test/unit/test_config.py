@@ -1084,35 +1084,6 @@ class TestRuntimeConfig(BaseConfigTest):
         with self.assertRaises(dbt.exceptions.DbtProjectError):
             self.get_project()
 
-    def test__no_unused_resource_config_paths(self):
-        self.default_project_data.update({
-            'models': model_config,
-            'seeds': {},
-        })
-        project = self.from_parts()
-
-        resource_fqns = {'models': model_fqns}
-        unused = project.get_unused_resource_config_paths(resource_fqns, [])
-        self.assertEqual(len(unused), 0)
-
-    def test__unused_resource_config_paths(self):
-        self.default_project_data.update({
-            'models': model_config['my_package_name'],
-            'seeds': {},
-        })
-        project = self.from_parts()
-
-        resource_fqns = {'models': model_fqns}
-        unused = project.get_unused_resource_config_paths(resource_fqns, [])
-        self.assertEqual(len(unused), 3)
-
-    def test__get_unused_resource_config_paths_empty(self):
-        project = self.from_parts()
-        unused = project.get_unused_resource_config_paths({'models': frozenset((
-            ('my_test_project', 'foo', 'bar'),
-            ('my_test_project', 'foo', 'baz'),
-        ))}, [])
-        self.assertEqual(len(unused), 0)
 
     def test__warn_for_unused_resource_config_paths_empty(self):
         project = self.from_parts()
@@ -1172,26 +1143,17 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
         else:
             return err
 
-    def test__get_unused_resource_config_paths(self):
-        project = self.from_parts()
-        unused = project.get_unused_resource_config_paths(self.used, [])
-        self.assertEqual(len(unused), 1)
-        self.assertEqual(unused[0], ('models', 'my_test_project', 'baz'))
 
-    @mock.patch.object(dbt.config.runtime, 'warn_or_error')
-    def test__warn_for_unused_resource_config_paths(self, warn_or_error):
+    def test__warn_for_unused_resource_config_paths(self):
         project = self.from_parts()
-        project.warn_for_unused_resource_config_paths(self.used, [])
-        warn_or_error.assert_called_once()
-
-    def test__warn_for_unused_resource_config_paths_disabled(self):
-        project = self.from_parts()
-        unused = project.get_unused_resource_config_paths(
-            self.used,
-            frozenset([('my_test_project', 'baz')])
-        )
-
-        self.assertEqual(len(unused), 0)
+        with mock.patch('dbt.config.runtime.warn_or_error') as warn_or_error_patch:
+            project.warn_for_unused_resource_config_paths(self.used, [])
+            warn_or_error_patch.assert_called_once()
+            event = warn_or_error_patch.call_args[0][0]
+            assert event.info.name == 'UnusedResourceConfigPath'
+            msg = event.info.msg
+            expected_msg = "- models.my_test_project.baz"
+            assert expected_msg in msg
 
 
 class TestRuntimeConfigFiles(BaseFileTest):

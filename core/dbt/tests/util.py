@@ -1,3 +1,4 @@
+from io import StringIO
 import os
 import shutil
 import yaml
@@ -87,7 +88,8 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 # will turn the logs into json, so you have to be prepared for that.
 def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
     try:
-        stringbuf = capture_stdout_logs()
+        stringbuf = StringIO()
+        capture_stdout_logs(stringbuf)
         res = run_dbt(args, expect_pass=expect_pass)
         stdout = stringbuf.getvalue()
 
@@ -234,7 +236,7 @@ def run_sql_with_adapter(adapter, sql, fetch=None):
         return adapter.run_sql_for_tests(sql, fetch, conn)
 
 
-# Get a Relation object from the identifer (name of table/view).
+# Get a Relation object from the identifier (name of table/view).
 # Uses the default database and schema. If you need a relation
 # with a different schema, it should be constructed in the test.
 # Uses:

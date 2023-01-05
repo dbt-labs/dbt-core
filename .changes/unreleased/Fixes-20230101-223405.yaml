@@ -1,0 +1,6 @@
+kind: Fixes
+body: Bug when partial parsing with an empty schema file
+time: 2023-01-01T22:34:05.97322-05:00
+custom:
+  Author: gshank
+  Issue: "4850"

@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Combine certain logging events with different levels
+time: 2022-10-28T11:03:44.887836-04:00
+custom:
+  Author: gshank
+  Issue: "6173"

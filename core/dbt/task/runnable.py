@@ -26,20 +26,21 @@ from dbt.logger import (
     ModelMetadata,
     NodeCount,
 )
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     EmptyLine,
-    PrintCancelLine,
+    LogCancelLine,
     DefaultSelector,
     NodeStart,
     NodeFinished,
     QueryCancelationUnsupported,
     ConcurrencyLine,
     EndRunResult,
+    NothingToDo,
 )
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.events.contextvars import log_contextvars
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedSourceDefinition
+from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
@@ -47,7 +48,6 @@ from dbt.exceptions import (
     NotImplementedException,
     RuntimeException,
     FailFastException,
-    warn_or_error,
 )
 
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph
@@ -57,7 +57,6 @@ import dbt.tracking
 import dbt.exceptions
 from dbt import flags
 import dbt.utils
-from dbt.ui import warning_tag
 
 RESULT_FILE_NAME = "run_results.json"
 MANIFEST_FILE_NAME = "manifest.json"
@@ -108,7 +107,7 @@ class GraphRunnableTask(ManifestTask):
     def __init__(self, args, config):
         super().__init__(args, config)
         self.job_queue: Optional[GraphQueue] = None
-        self._flattened_nodes: Optional[List[CompileResultNode]] = None
+        self._flattened_nodes: Optional[List[ResultNode]] = None
 
         self.run_count: int = 0
         self.num_nodes: int = 0
@@ -206,47 +205,45 @@ class GraphRunnableTask(ManifestTask):
 
     def call_runner(self, runner):
         uid_context = UniqueID(runner.node.unique_id)
-        with RUNNING_STATE, uid_context:
+        with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
             startctx = TimestampNamed("node_started_at")
             index = self.index_offset(runner.node_index)
-            runner.node._event_status["started_at"] = datetime.utcnow().isoformat()
-            runner.node._event_status["node_status"] = RunningStatus.Started
+            runner.node.update_event_status(
+                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+            )
             extended_metadata = ModelMetadata(runner.node, index)
 
             with startctx, extended_metadata:
                 fire_event(
                     NodeStart(
                         node_info=runner.node.node_info,
-                        unique_id=runner.node.unique_id,
                     )
                 )
             status: Dict[str, str] = {}
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
-                runner.node._event_status["node_status"] = result.status
-                runner.node._event_status["finished_at"] = datetime.utcnow().isoformat()
+                runner.node.update_event_status(
+                    node_status=result.status, finished_at=datetime.utcnow().isoformat()
+                )
             finally:
                 finishctx = TimestampNamed("finished_at")
                 with finishctx, DbtModelState(status):
                     fire_event(
                         NodeFinished(
                             node_info=runner.node.node_info,
-                            unique_id=runner.node.unique_id,
                             run_result=result.to_msg(),
                         )
                     )
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
-            del runner.node._event_status["started_at"]
-            del runner.node._event_status["finished_at"]
-            del runner.node._event_status["node_status"]
+            runner.node.clear_event_status()
 
         fail_fast = flags.FAIL_FAST
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastException(
-                message="Failing early due to test failure or runtime error",
+                msg="Failing early due to test failure or runtime error",
                 result=result,
                 node=getattr(result, "node", None),
             )
@@ -332,7 +329,7 @@ class GraphRunnableTask(ManifestTask):
         if self.manifest is None:
             raise InternalException("manifest was None in _handle_result")
 
-        if isinstance(node, ParsedSourceDefinition):
+        if isinstance(node, SourceDefinition):
             self.manifest.update_source(node)
         else:
             self.manifest.update_node(node)
@@ -364,7 +361,7 @@ class GraphRunnableTask(ManifestTask):
                             continue
                     # if we don't have a manifest/don't have a node, print
                     # anyway.
-                    fire_event(PrintCancelLine(conn_name=conn_name))
+                    fire_event(LogCancelLine(conn_name=conn_name))
 
         pool.join()
 
@@ -372,8 +369,13 @@ class GraphRunnableTask(ManifestTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
+        # following line can be removed when legacy logger is removed
         with NodeCount(self.num_nodes):
-            fire_event(ConcurrencyLine(num_threads=num_threads, target_name=target_name))
+            fire_event(
+                ConcurrencyLine(
+                    num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
+                )
+            )
         with TextOnly():
             fire_event(EmptyLine())
 
@@ -414,9 +416,6 @@ class GraphRunnableTask(ManifestTask):
                 {"adapter_cache_construction_elapsed": cache_populate_time}
             )
 
-    def before_hooks(self, adapter):
-        pass
-
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
         with adapter.connection_named("master"):
             self.populate_adapter_cache(adapter)
@@ -424,24 +423,24 @@ class GraphRunnableTask(ManifestTask):
     def after_run(self, adapter, results):
         pass
 
-    def after_hooks(self, adapter, results, elapsed):
+    def print_results_line(self, node_results, elapsed):
         pass
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
+        started = time.time()
         try:
-            self.before_hooks(adapter)
-            started = time.time()
             self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
             self.after_run(adapter, res)
-            elapsed = time.time() - started
-            self.after_hooks(adapter, res, elapsed)
-
         finally:
             adapter.cleanup_connections()
+            elapsed = time.time() - started
+            self.print_results_line(self.node_results, elapsed)
+            result = self.get_result(
+                results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
+            )
 
-        result = self.get_result(results=res, elapsed_time=elapsed, generated_at=datetime.utcnow())
         return result
 
     def write_result(self, result):
@@ -459,8 +458,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             with TextOnly():
                 fire_event(EmptyLine())
-            msg = "Nothing to do. Try checking your model configs and model specification args"
-            warn_or_error(msg, log_fmt=warning_tag("{}"))
+            warn_or_error(NothingToDo())
             result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),

@@ -105,7 +105,7 @@ The `ENTRYPOINT` for this Dockerfile is the command `dbt` so you can bind-mount 
 docker run \
 --network=host
 --mount type=bind,source=path/to/project,target=/usr/app \
---mount type=bind,source=path/to/profiles.yml,target=/root/.dbt/ \
+--mount type=bind,source=path/to/profiles.yml,target=/root/.dbt/profiles.yml \
 my-dbt \
 ls
 ```

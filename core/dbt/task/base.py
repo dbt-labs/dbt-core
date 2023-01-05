@@ -22,7 +22,6 @@ from dbt.exceptions import (
     InternalException,
 )
 from dbt.logger import log_manager
-import dbt.events.functions as event_logger
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DbtProjectError,
@@ -37,12 +36,13 @@ from dbt.events.types import (
     InternalExceptionOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
-    PrintDebugStackTrace,
+    LogDebugStackTrace,
     SkippingDetails,
-    PrintSkipBecauseError,
+    LogSkipBecauseError,
     NodeCompiling,
     NodeExecuting,
 )
+from dbt.events.contextvars import get_node_info
 from .printer import print_run_result_error
 
 from dbt.adapters.factory import register_adapter
@@ -85,9 +85,6 @@ class BaseTask(metaclass=ABCMeta):
         """A hook called before the task is initialized."""
         if args.log_format == "json":
             log_manager.format_json()
-            # we're mutating the initialized, but not-yet-configured event logger
-            # because it's being configured too late -- bad! TODO refactor!
-            event_logger.format_json = True
         else:
             log_manager.format_text()
 
@@ -95,9 +92,6 @@ class BaseTask(metaclass=ABCMeta):
     def set_log_format(cls):
         if flags.LOG_FORMAT == "json":
             log_manager.format_json()
-            # we're mutating the initialized, but not-yet-configured event logger
-            # because it's being configured too late -- bad! TODO refactor!
-            event_logger.format_json = True
         else:
             log_manager.format_text()
 
@@ -312,11 +306,10 @@ class BaseRunner(metaclass=ABCMeta):
     def compile_and_execute(self, manifest, ctx):
         result = None
         with self.adapter.connection_for(self.node):
-            ctx.node._event_status["node_status"] = RunningStatus.Compiling
+            ctx.node.update_event_status(node_status=RunningStatus.Compiling)
             fire_event(
                 NodeCompiling(
                     node_info=ctx.node.node_info,
-                    unique_id=ctx.node.unique_id,
                 )
             )
             with collect_timing_info("compile") as timing_info:
@@ -328,11 +321,10 @@ class BaseRunner(metaclass=ABCMeta):
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model:
-                ctx.node._event_status["node_status"] = RunningStatus.Executing
+                ctx.node.update_event_status(node_status=RunningStatus.Executing)
                 fire_event(
                     NodeExecuting(
                         node_info=ctx.node.node_info,
-                        unique_id=ctx.node.unique_id,
                     )
                 )
                 with collect_timing_info("execute") as timing_info:
@@ -347,7 +339,11 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        fire_event(CatchableExceptionOnRun(exc=str(e), exc_info=traceback.format_exc()))
+        fire_event(
+            CatchableExceptionOnRun(
+                exc=str(e), exc_info=traceback.format_exc(), node_info=get_node_info()
+            )
+        )
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
@@ -362,7 +358,7 @@ class BaseRunner(metaclass=ABCMeta):
                 exc=str(e),
             )
         )
-        fire_event(PrintDebugStackTrace(exc_info=traceback.format_exc()))
+        fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
 
         return str(e)
 
@@ -451,7 +447,7 @@ class BaseRunner(metaclass=ABCMeta):
             # failure, print a special 'error skip' message.
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
-                    PrintSkipBecauseError(
+                    LogSkipBecauseError(
                         schema=schema_name,
                         relation=node_name,
                         index=self.node_index,

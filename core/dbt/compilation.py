@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from typing import List, Dict, Any, Tuple, cast, Optional
+from typing import List, Dict, Any, Tuple, Optional
 
 import networkx as nx  # type: ignore
 import pickle
@@ -12,36 +12,28 @@ from dbt.clients import jinja
 from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest, UniqueID
-from dbt.contracts.graph.compiled import (
-    COMPILED_TYPES,
-    CompiledGenericTestNode,
+from dbt.contracts.graph.nodes import (
+    ManifestNode,
+    ManifestSQLNode,
+    GenericTestNode,
     GraphMemberNode,
     InjectedCTE,
-    ManifestNode,
-    NonSourceCompiledNode,
+    SeedNode,
 )
-from dbt.contracts.graph.parsed import ParsedNode
 from dbt.exceptions import (
-    dependency_not_found,
+    GraphDependencyNotFound,
     InternalException,
     RuntimeException,
 )
 from dbt.graph import Graph
 from dbt.events.functions import fire_event
-from dbt.events.types import FoundStats, CompilingNode, WritingInjectedSQLForNode
+from dbt.events.types import FoundStats, WritingInjectedSQLForNode
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
 import dbt.tracking
 
 graph_file_name = "graph.gpickle"
-
-
-def _compiled_type_for(model: ParsedNode):
-    if type(model) not in COMPILED_TYPES:
-        raise InternalException(
-            f"Asked to compile {type(model)} node, but it has no compiled form"
-        )
-    return COMPILED_TYPES[type(model)]
 
 
 def print_compile_stats(stats):
@@ -176,7 +168,7 @@ class Compiler:
     # a dict for jinja rendering of SQL
     def _create_node_context(
         self,
-        node: NonSourceCompiledNode,
+        node: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Dict[str, Any],
     ) -> Dict[str, Any]:
@@ -184,7 +176,7 @@ class Compiler:
         context = generate_runtime_model_context(node, self.config, manifest)
         context.update(extra_context)
 
-        if isinstance(node, CompiledGenericTestNode):
+        if isinstance(node, GenericTestNode):
             # for test nodes, add a special keyword args value to the context
             jinja.add_rendered_test_kwargs(context, node)
 
@@ -194,14 +186,6 @@ class Compiler:
         adapter = get_adapter(self.config)
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
-
-    def _get_relation_name(self, node: ParsedNode):
-        relation_name = None
-        if node.is_relational and not node.is_ephemeral_model:
-            adapter = get_adapter(self.config)
-            relation_cls = adapter.Relation
-            relation_name = str(relation_cls.create_from(self.config, node))
-        return relation_name
 
     def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
         """
@@ -261,10 +245,10 @@ class Compiler:
 
     def _recursively_prepend_ctes(
         self,
-        model: NonSourceCompiledNode,
+        model: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]],
-    ) -> Tuple[NonSourceCompiledNode, List[InjectedCTE]]:
+    ) -> Tuple[ManifestSQLNode, List[InjectedCTE]]:
         """This method is called by the 'compile_node' method. Starting
         from the node that it is passed in, it will recursively call
         itself using the 'extra_ctes'.  The 'ephemeral' models do
@@ -279,7 +263,8 @@ class Compiler:
 
         # Just to make it plain that nothing is actually injected for this case
         if not model.extra_ctes:
-            model.extra_ctes_injected = True
+            if not isinstance(model, SeedNode):
+                model.extra_ctes_injected = True
             manifest.update_node(model)
             return (model, model.extra_ctes)
 
@@ -298,6 +283,7 @@ class Compiler:
                     f"could not be resolved: {cte.id}"
                 )
             cte_model = manifest.nodes[cte.id]
+            assert not isinstance(cte_model, SeedNode)
 
             if not cte_model.is_ephemeral_model:
                 raise InternalException(f"{cte.id} is not ephemeral")
@@ -305,8 +291,6 @@ class Compiler:
             # This model has already been compiled, so it's been
             # through here before
             if getattr(cte_model, "compiled", False):
-                assert isinstance(cte_model, tuple(COMPILED_TYPES.values()))
-                cte_model = cast(NonSourceCompiledNode, cte_model)
                 new_prepended_ctes = cte_model.extra_ctes
 
             # if the cte_model isn't compiled, i.e. first time here
@@ -343,20 +327,18 @@ class Compiler:
 
         return model, prepended_ctes
 
-    # creates a compiled_node from the ManifestNode passed in,
+    # Sets compiled fields in the ManifestSQLNode passed in,
     # creates a "context" dictionary for jinja rendering,
     # and then renders the "compiled_code" using the node, the
     # raw_code and the context.
     def _compile_node(
         self,
-        node: ManifestNode,
+        node: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
-    ) -> NonSourceCompiledNode:
+    ) -> ManifestSQLNode:
         if extra_context is None:
             extra_context = {}
-
-        fire_event(CompilingNode(unique_id=node.unique_id))
 
         data = node.to_dict(omit_none=True)
         data.update(
@@ -367,9 +349,8 @@ class Compiler:
                 "extra_ctes": [],
             }
         )
-        compiled_node = _compiled_type_for(node).from_dict(data)
 
-        if compiled_node.language == ModelLanguage.python:
+        if node.language == ModelLanguage.python:
             # TODO could we also 'minify' this code at all? just aesthetic, not functional
 
             # quoating seems like something very specific to sql so far
@@ -377,7 +358,7 @@ class Compiler:
             # TODO try to find better way to do this, given that
             original_quoting = self.config.quoting
             self.config.quoting = {key: False for key in original_quoting.keys()}
-            context = self._create_node_context(compiled_node, manifest, extra_context)
+            context = self._create_node_context(node, manifest, extra_context)
 
             postfix = jinja.get_rendered(
                 "{{ py_script_postfix(model) }}",
@@ -385,23 +366,21 @@ class Compiler:
                 node,
             )
             # we should NOT jinja render the python model's 'raw code'
-            compiled_node.compiled_code = f"{node.raw_code}\n\n{postfix}"
+            node.compiled_code = f"{node.raw_code}\n\n{postfix}"
             # restore quoting settings in the end since context is lazy evaluated
             self.config.quoting = original_quoting
 
         else:
-            context = self._create_node_context(compiled_node, manifest, extra_context)
-            compiled_node.compiled_code = jinja.get_rendered(
+            context = self._create_node_context(node, manifest, extra_context)
+            node.compiled_code = jinja.get_rendered(
                 node.raw_code,
                 context,
                 node,
             )
 
-        compiled_node.relation_name = self._get_relation_name(node)
+        node.compiled = True
 
-        compiled_node.compiled = True
-
-        return compiled_node
+        return node
 
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
@@ -420,7 +399,7 @@ class Compiler:
             elif dependency in manifest.metrics:
                 linker.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
             else:
-                dependency_not_found(node, dependency)
+                raise GraphDependencyNotFound(node, dependency)
 
     def link_graph(self, linker: Linker, manifest: Manifest, add_test_edges: bool = False):
         for source in manifest.sources.values():
@@ -508,10 +487,13 @@ class Compiler:
         return Graph(linker.graph)
 
     # writes the "compiled_code" into the target/compiled directory
-    def _write_node(self, node: NonSourceCompiledNode) -> ManifestNode:
-        if not node.extra_ctes_injected or node.resource_type == NodeType.Snapshot:
+    def _write_node(self, node: ManifestSQLNode) -> ManifestSQLNode:
+        if not node.extra_ctes_injected or node.resource_type in (
+            NodeType.Snapshot,
+            NodeType.Seed,
+        ):
             return node
-        fire_event(WritingInjectedSQLForNode(unique_id=node.unique_id))
+        fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
             node.compiled_path = node.write_node(
@@ -521,11 +503,11 @@ class Compiler:
 
     def compile_node(
         self,
-        node: ManifestNode,
+        node: ManifestSQLNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
         write: bool = True,
-    ) -> NonSourceCompiledNode:
+    ) -> ManifestSQLNode:
         """This is the main entry point into this code. It's called by
         CompileRunner.compile, GenericRPCRunner.compile, and
         RunTask.get_hook_sql. It calls '_compile_node' to convert

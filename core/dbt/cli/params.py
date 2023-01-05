@@ -80,14 +80,6 @@ enable_legacy_logger = click.option(
     hidden=True,
 )
 
-event_buffer_size = click.option(
-    "--event-buffer-size",
-    envvar="DBT_EVENT_BUFFER_SIZE",
-    help="Sets the max number of events to buffer in EVENT_HISTORY.",
-    default=100000,
-    type=click.INT,
-)
-
 exclude = click.option("--exclude", envvar=None, help="Specify the nodes to exclude.")
 
 fail_fast = click.option(

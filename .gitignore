@@ -11,6 +11,7 @@ __pycache__/
 env*/
 dbt_env/
 build/
+!core/dbt/docs/build
 develop-eggs/
 dist/
 downloads/

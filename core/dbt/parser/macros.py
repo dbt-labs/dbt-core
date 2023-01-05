@@ -4,7 +4,7 @@ import jinja2
 
 from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.contracts.graph.parsed import ParsedMacro
+from dbt.contracts.graph.nodes import Macro
 from dbt.contracts.files import FilePath, SourceFile
 from dbt.exceptions import ParsingException
 from dbt.events.functions import fire_event
@@ -13,9 +13,10 @@ from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
 from dbt.utils import MACRO_PREFIX
+from dbt import flags
 
 
-class MacroParser(BaseParser[ParsedMacro]):
+class MacroParser(BaseParser[Macro]):
     # This is only used when creating a MacroManifest separate
     # from the normal parsing flow.
     def get_paths(self) -> List[FilePath]:
@@ -31,23 +32,20 @@ class MacroParser(BaseParser[ParsedMacro]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def parse_macro(
-        self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str
-    ) -> ParsedMacro:
+    def parse_macro(self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str) -> Macro:
         unique_id = self.generate_unique_id(name)
 
-        return ParsedMacro(
+        return Macro(
             path=base_node.path,
             macro_sql=block.full_block,
             original_file_path=base_node.original_file_path,
             package_name=base_node.package_name,
-            root_path=base_node.root_path,
             resource_type=base_node.resource_type,
             name=name,
             unique_id=unique_id,
         )
 
-    def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[ParsedMacro]:
+    def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[Macro]:
         try:
             blocks: List[jinja.BlockTag] = [
                 t
@@ -95,7 +93,8 @@ class MacroParser(BaseParser[ParsedMacro]):
         source_file = block.file
         assert isinstance(source_file.contents, str)
         original_file_path = source_file.path.original_file_path
-        fire_event(MacroFileParse(path=original_file_path))
+        if flags.MACRO_DEBUGGING:
+            fire_event(MacroFileParse(path=original_file_path))
 
         # this is really only used for error messages
         base_node = UnparsedMacro(
@@ -103,7 +102,6 @@ class MacroParser(BaseParser[ParsedMacro]):
             original_file_path=original_file_path,
             package_name=self.project.project_name,
             raw_code=source_file.contents,
-            root_path=self.project.project_root,
             resource_type=NodeType.Macro,
             language="sql",
         )

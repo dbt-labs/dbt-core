@@ -1,7 +1,7 @@
 # flake8: noqa
 from dbt.events.test_types import UnitTestInfo
 from dbt.events import AdapterLogger
-from dbt.events.functions import event_to_json, LOG_VERSION, reset_event_history
+from dbt.events.functions import event_to_json, LOG_VERSION, event_to_dict
 from dbt.events.types import *
 from dbt.events.test_types import *
 
@@ -13,13 +13,13 @@ from dbt.events.base_types import (
     ErrorLevel,
     TestLevel,
 )
-from dbt.events.proto_types import NodeInfo, RunResultMsg, ReferenceKeyMsg
+from dbt.events.proto_types import ListOfStrings, NodeInfo, RunResultMsg, ReferenceKeyMsg
 from importlib import reload
 import dbt.events.functions as event_funcs
 import dbt.flags as flags
 import inspect
 import json
-from dbt.contracts.graph.parsed import ParsedModelNode, NodeConfig, DependsOn
+from dbt.contracts.graph.nodes import ModelNode, NodeConfig, DependsOn
 from dbt.contracts.files import FileHash
 from mashumaro.types import SerializableType
 from typing import Generic, TypeVar, Dict
@@ -29,10 +29,8 @@ import re
 def get_all_subclasses(cls):
     all_subclasses = []
     for subclass in cls.__subclasses__():
-        # If the test breaks because of abcs this list might have to be updated.
-        if subclass in [TestLevel, DebugLevel, WarnLevel, InfoLevel, ErrorLevel]:
-            continue
-        all_subclasses.append(subclass)
+        if subclass not in [TestLevel, DebugLevel, WarnLevel, InfoLevel, ErrorLevel, DynamicLevel]:
+            all_subclasses.append(subclass)
         all_subclasses.extend(get_all_subclasses(subclass))
     return set(all_subclasses)
 
@@ -81,7 +79,7 @@ class TestAdapterLogger:
         event = AdapterEventDebug(name="dbt_tests", base_msg=[1,2,3], args=(3,))
         assert isinstance(event.base_msg, str)
 
-        event = MacroEventDebug(msg=[1,2,3])
+        event = JinjaLogDebug(msg=[1,2,3])
         assert isinstance(event.msg, str)
 
 
@@ -93,41 +91,19 @@ class TestEventCodes:
         all_concrete = get_all_subclasses(BaseEvent)
         all_codes = set()
 
-        for event in all_concrete:
-            if not inspect.isabstract(event):
-                # must be in the form 1 capital letter, 3 digits
-                assert re.match("^[A-Z][0-9]{3}", event.code)
-                # cannot have been used already
-                assert (
-                    event.info.code not in all_codes
-                ), f"{event.code} is assigned more than once. Check types.py for duplicates."
-                all_codes.add(event.info.code)
-
-
-class TestEventBuffer:
-    def setUp(self) -> None:
-        flags.EVENT_BUFFER_SIZE = 10
-        reload(event_funcs)
-
-    # ensure events are populated to the buffer exactly once
-    def test_buffer_populates(self):
-        self.setUp()
-        event_funcs.fire_event(UnitTestInfo(msg="Test Event 1"))
-        event_funcs.fire_event(UnitTestInfo(msg="Test Event 2"))
-        event1 = event_funcs.EVENT_HISTORY[-2]
-        assert event_funcs.EVENT_HISTORY.count(event1) == 1
-
-    # ensure events drop from the front of the buffer when buffer maxsize is reached
-    def test_buffer_FIFOs(self):
-        reset_event_history()
-        event_funcs.EVENT_HISTORY.clear()
-        for n in range(1, (flags.EVENT_BUFFER_SIZE + 2)):
-            event_funcs.fire_event(UnitTestInfo(msg=f"Test Event {n}"))
-        assert event_funcs.EVENT_HISTORY.count(UnitTestInfo(msg="Test Event 1")) == 0
+        for event_cls in all_concrete:
+            code = event_cls.code(event_cls)
+            # must be in the form 1 capital letter, 3 digits
+            assert re.match("^[A-Z][0-9]{3}", code)
+            # cannot have been used already
+            assert (
+                code not in all_codes
+            ), f"{code} is assigned more than once. Check types.py for duplicates."
+            all_codes.add(code)
 
 
 def MockNode():
-    return ParsedModelNode(
+    return ModelNode(
         alias="model_one",
         name="model_one",
         database="dbt",
@@ -164,56 +140,62 @@ def MockNode():
 
 
 sample_values = [
-    MainReportVersion(version="", log_version=LOG_VERSION),
-    MainKeyboardInterrupt(),
-    MainEncounteredError(exc=""),
-    MainStackTrace(stack_trace=""),
+    # A - pre-project loading
+    MainReportVersion(version=""),
+    MainReportArgs(args={}),
     MainTrackingUserState(user_state=""),
-    ParseCmdStart(),
-    ParseCmdCompiling(),
-    ParseCmdWritingManifest(),
-    ParseCmdDone(),
-    ManifestDependenciesLoaded(),
-    ManifestLoaderCreated(),
-    ManifestLoaded(),
-    ManifestChecked(),
-    ManifestFlatGraphBuilt(),
-    ParseCmdPerfInfoPath(path=""),
-    GitSparseCheckoutSubdirectory(subdir=""),
-    GitProgressCheckoutRevision(revision=""),
-    GitProgressUpdatingExistingDependency(dir=""),
-    GitProgressPullingNewDependency(dir=""),
-    GitNothingToDo(sha=""),
-    GitProgressUpdatedCheckoutRange(start_sha="", end_sha=""),
-    GitProgressCheckedOutAt(end_sha=""),
-    SystemErrorRetrievingModTime(path=""),
-    SystemCouldNotWrite(path="", reason="", exc=""),
-    SystemExecutingCmd(cmd=[""]),
-    SystemStdOutMsg(bmsg=b""),
-    SystemStdErrMsg(bmsg=b""),
-    SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec=""),
-    MacroEventInfo(msg=""),
-    MacroEventDebug(msg=""),
+    MergedFromState(num_merged=0, sample=[]),
+    MissingProfileTarget(profile_name="", target_name=""),
+    InvalidVarsYAML(),
+    DbtProjectError(),
+    DbtProjectErrorException(exc=""),
+    DbtProfileError(),
+    DbtProfileErrorException(exc=""),
+    ProfileListTitle(),
+    ListSingleProfile(profile=""),
+    NoDefinedProfiles(),
+    ProfileHelpMessage(),
+    StarterProjectPath(dir=""),
+    ConfigFolderDirectory(dir=""),
+    NoSampleProfileFound(adapter=""),
+    ProfileWrittenWithSample(name="", path=""),
+    ProfileWrittenWithTargetTemplateYAML(name="", path=""),
+    ProfileWrittenWithProjectTemplateYAML(name="", path=""),
+    SettingUpProfile(),
+    InvalidProfileTemplateYAML(),
+    ProjectNameAlreadyExists(name=""),
+    ProjectCreated(project_name=""),
+
+    # D - Deprecations ======================
+    PackageRedirectDeprecation(old_name="", new_name=""),
+    PackageInstallPathDeprecation(),
+    ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
+    ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
+    AdapterDeprecationWarning(old_name="", new_name=""),
+    MetricAttributesRenamed(metric_name=""),
+    ExposureNameDeprecation(exposure=""),
+
+    # E - DB Adapter ======================
+    AdapterEventDebug(),
+    AdapterEventInfo(),
+    AdapterEventWarning(),
+    AdapterEventError(),
     NewConnection(conn_type="", conn_name=""),
     ConnectionReused(conn_name=""),
-    ConnectionLeftOpen(conn_name=""),
-    ConnectionClosed(conn_name=""),
+    ConnectionLeftOpenInCleanup(conn_name=""),
+    ConnectionClosedInCleanup(conn_name=""),
     RollbackFailed(conn_name=""),
-    ConnectionClosed2(conn_name=""),
-    ConnectionLeftOpen2(conn_name=""),
+    ConnectionClosed(conn_name=""),
+    ConnectionLeftOpen(conn_name=""),
     Rollback(conn_name=""),
     CacheMiss(conn_name="", database="", schema=""),
-    ListRelations(database="", schema="", relations=[]),
+    ListRelations(database="", schema=""),
     ConnectionUsed(conn_type="", conn_name=""),
     SQLQuery(conn_name="", sql=""),
     SQLQueryStatus(status="", elapsed=0.1),
-    CodeExecution(conn_name="", code_content=""),
-    CodeExecutionStatus(status="", elapsed=0.1),
     SQLCommit(conn_name=""),
     ColTypeChange(
-        orig_type="",
-        new_type="",
-        table=ReferenceKeyMsg(database="", schema="", identifier=""),
+        orig_type="", new_type="", table=ReferenceKeyMsg(database="", schema="", identifier="")
     ),
     SchemaCreation(relation=ReferenceKeyMsg(database="", schema="", identifier="")),
     SchemaDrop(relation=ReferenceKeyMsg(database="", schema="", identifier="")),
@@ -231,6 +213,7 @@ sample_values = [
         dropped=ReferenceKeyMsg(database="", schema="", identifier=""),
         consequences=[ReferenceKeyMsg(database="", schema="", identifier="")],
     ),
+    DropRelation(dropped=ReferenceKeyMsg()),
     UpdateReference(
         old_key=ReferenceKeyMsg(database="", schema="", identifier=""),
         new_key=ReferenceKeyMsg(database="", schema="", identifier=""),
@@ -246,30 +229,39 @@ sample_values = [
     DumpBeforeRenameSchema(dump=dict()),
     DumpAfterRenameSchema(dump=dict()),
     AdapterImportError(exc=""),
-    PluginLoadError(),
-    SystemReportReturnCode(returncode=0),
+    PluginLoadError(exc_info=""),
     NewConnectionOpening(connection_state=""),
-    TimingInfoCollected(),
-    MergedFromState(num_merged=0, sample=[]),
-    MissingProfileTarget(profile_name="", target_name=""),
-    InvalidVarsYAML(),
+    CodeExecution(conn_name="", code_content=""),
+    CodeExecutionStatus(status="", elapsed=0.1),
+    CatalogGenerationError(exc=""),
+    WriteCatalogFailure(num_exceptions=0),
+    CatalogWritten(path=""),
+    CannotGenerateDocs(),
+    BuildingCatalog(),
+    DatabaseErrorRunningHook(hook_type=""),
+    HooksRunning(num_hooks=0, hook_type=""),
+    HookFinished(stat_line="", execution="", execution_time=0),
+
+    # I - Project parsing ======================
+    ParseCmdStart(),
+    ParseCmdCompiling(),
+    ParseCmdWritingManifest(),
+    ParseCmdDone(),
+    ManifestDependenciesLoaded(),
+    ManifestLoaderCreated(),
+    ManifestLoaded(),
+    ManifestChecked(),
+    ManifestFlatGraphBuilt(),
+    ParseCmdPerfInfoPath(path=""),
     GenericTestFileParse(path=""),
     MacroFileParse(path=""),
-    PartialParsingFullReparseBecauseOfError(),
+    PartialParsingExceptionProcessingFile(file=""),
     PartialParsingFile(file_id=""),
-    PartialParsingExceptionFile(file=""),
     PartialParsingException(exc_info={}),
     PartialParsingSkipParsing(),
-    PartialParsingMacroChangeStartFullParse(),
-    ManifestWrongMetadataVersion(version=""),
-    PartialParsingVersionMismatch(saved_version="", current_version=""),
-    PartialParsingFailedBecauseConfigChange(),
-    PartialParsingFailedBecauseProfileChange(),
-    PartialParsingFailedBecauseNewProjectDependency(),
-    PartialParsingFailedBecauseHashChanged(),
-    PartialParsingDeletedMetric(unique_id=""),
-    ParsedFileLoadFailed(path="", exc=""),
-    PartialParseSaveFileNotFound(),
+    UnableToPartialParse(reason="something went wrong"),
+    PartialParsingNotEnabled(),
+    ParsedFileLoadFailed(path="", exc="", exc_info=""),
     StaticParserCausedJinjaRendering(path=""),
     UsingExperimentalParser(path=""),
     SampleFullJinjaRendering(path=""),
@@ -280,60 +272,180 @@ sample_values = [
     ExperimentalParserSuccess(path=""),
     ExperimentalParserFailure(path=""),
     PartialParsingEnabled(deleted=0, added=0, changed=0),
-    PartialParsingAddedFile(file_id=""),
-    PartialParsingDeletedFile(file_id=""),
-    PartialParsingUpdatedFile(file_id=""),
-    PartialParsingNodeMissingInSourceFile(file_id=""),
-    PartialParsingMissingNodes(file_id=""),
-    PartialParsingChildMapMissingUniqueID(unique_id=""),
-    PartialParsingUpdateSchemaFile(file_id=""),
-    PartialParsingDeletedSource(unique_id=""),
-    PartialParsingDeletedExposure(unique_id=""),
-    InvalidDisabledSourceInTestNode(msg=""),
-    InvalidRefInTestNode(msg=""),
+    PartialParsingFile(file_id=""),
+    InvalidDisabledTargetInTestNode(
+        resource_type_title="",
+        unique_id="",
+        original_file_path="",
+        target_kind="",
+        target_name="",
+        target_package="",
+    ),
+    UnusedResourceConfigPath(unused_config_paths=[]),
+    SeedIncreased(package_name="", name=""),
+    SeedExceedsLimitSamePath(package_name="", name=""),
+    SeedExceedsLimitAndPathChanged(package_name="", name=""),
+    SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name=""),
+    UnusedTables(unused_tables=[]),
+    WrongResourceSchemaFile(patch_name="", resource_type="", file_path="", plural_resource_type=""),
+    NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
+    MacroPatchNotFound(patch_name=""),
+    NodeNotFoundOrDisabled(
+        original_file_path="",
+        unique_id="",
+        resource_type_title="",
+        target_name="",
+        target_kind="",
+        target_package="",
+        disabled="",
+    ),
+    JinjaLogWarning(),
+
+    # M - Deps generation ======================
+
+    GitSparseCheckoutSubdirectory(subdir=""),
+    GitProgressCheckoutRevision(revision=""),
+    GitProgressUpdatingExistingDependency(dir=""),
+    GitProgressPullingNewDependency(dir=""),
+    GitNothingToDo(sha=""),
+    GitProgressUpdatedCheckoutRange(start_sha="", end_sha=""),
+    GitProgressCheckedOutAt(end_sha=""),
+    RegistryProgressGETRequest(url=""),
+    RegistryProgressGETResponse(url="", resp_code=1234),
+    SelectorReportInvalidSelector(valid_selectors="", spec_method="", raw_spec=""),
+    JinjaLogInfo(msg=""),
+    JinjaLogDebug(msg=""),
+    DepsNoPackagesFound(),
+    DepsStartPackageInstall(package_name=""),
+    DepsInstallInfo(version_name=""),
+    DepsUpdateAvailable(version_latest=""),
+    DepsUpToDate(),
+    DepsListSubdirectory(subdirectory=""),
+    DepsNotifyUpdatesAvailable(packages=ListOfStrings()),
+    RetryExternalCall(attempt=0, max=0),
+    RecordRetryException(exc=""),
+    RegistryIndexProgressGETRequest(url=""),
+    RegistryIndexProgressGETResponse(url="", resp_code=1234),
+    RegistryResponseUnexpectedType(response=""),
+    RegistryResponseMissingTopKeys(response=""),
+    RegistryResponseMissingNestedKeys(response=""),
+    RegistryResponseExtraNestedKeys(response=""),
+    DepsSetDownloadDirectory(path=""),
+
+    # Q - Node execution ======================
+
     RunningOperationCaughtError(exc=""),
+    CompileComplete(),
+    FreshnessCheckComplete(),
+    SeedHeader(header=""),
+    SeedHeaderSeparator(len_header=0),
+    SQLRunnerException(exc=""),
+    LogTestResult(
+        name="",
+        index=0,
+        num_models=0,
+        execution_time=0,
+        num_failures=0,
+    ),
+    LogStartLine(description="", index=0, total=0, node_info=NodeInfo()),
+    LogModelResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
+    LogSnapshotResult(
+        status="",
+        description="",
+        cfg={},
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
+    LogSeedResult(
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+        schema="",
+        relation="",
+    ),
+    LogFreshnessResult(
+        source_name="",
+        table_name="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
+    LogCancelLine(conn_name=""),
+    DefaultSelector(name=""),
+    NodeStart(node_info=NodeInfo()),
+    NodeFinished(node_info=NodeInfo()),
+    QueryCancelationUnsupported(type=""),
+    ConcurrencyLine(num_threads=0, target_name=""),
+    WritingInjectedSQLForNode(node_info=NodeInfo()),
+    NodeCompiling(node_info=NodeInfo()),
+    NodeExecuting(node_info=NodeInfo()),
+    LogHookStartLine(
+        statement="",
+        index=0,
+        total=0,
+    ),
+    LogHookEndLine(
+        statement="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
+    SkippingDetails(
+        resource_type="",
+        schema="",
+        node_name="",
+        index=0,
+        total=0,
+    ),
+    NothingToDo(),
     RunningOperationUncaughtError(exc=""),
-    DbtProjectError(),
-    DbtProjectErrorException(exc=""),
-    DbtProfileError(),
-    DbtProfileErrorException(exc=""),
-    ProfileListTitle(),
-    ListSingleProfile(profile=""),
-    NoDefinedProfiles(),
-    ProfileHelpMessage(),
+    EndRunResult(),
+    NoNodesSelected(),
+    DepsUnpinned(revision="", git=""),
+    NoNodesForSelectionCriteria(spec_raw=""),
+
+    # W - Node testing ======================
+
     CatchableExceptionOnRun(exc=""),
     InternalExceptionOnRun(build_path="", exc=""),
     GenericExceptionOnRun(build_path="", unique_id="", exc=""),
     NodeConnectionReleaseError(node_name="", exc=""),
+    FoundStats(stat_line=""),
+
+    # Z - misc ======================
+
+    MainKeyboardInterrupt(),
+    MainEncounteredError(exc=""),
+    MainStackTrace(stack_trace=""),
+    SystemErrorRetrievingModTime(path=""),
+    SystemCouldNotWrite(path="", reason="", exc=""),
+    SystemExecutingCmd(cmd=[""]),
+    SystemStdOutMsg(bmsg=b""),
+    SystemStdErrMsg(bmsg=b""),
+    SystemReportReturnCode(returncode=0),
+    TimingInfoCollected(),
+    LogDebugStackTrace(),
     CheckCleanPath(path=""),
     ConfirmCleanPath(path=""),
     ProtectedCleanPath(path=""),
     FinishedCleanPaths(),
     OpenCommand(open_cmd="", profiles_dir=""),
-    DepsNoPackagesFound(),
-    DepsStartPackageInstall(package_name=""),
-    DepsInstallInfo(version_name=""),
-    DepsUpdateAvailable(version_latest=""),
-    DepsListSubdirectory(subdirectory=""),
-    DepsNotifyUpdatesAvailable(packages=[]),
-    DatabaseErrorRunningHook(hook_type=""),
     EmptyLine(),
-    HooksRunning(num_hooks=0, hook_type=""),
-    HookFinished(stat_line="", execution="", execution_time=0),
-    WriteCatalogFailure(num_exceptions=0),
-    CatalogWritten(path=""),
-    CannotGenerateDocs(),
-    BuildingCatalog(),
-    CompileComplete(),
-    FreshnessCheckComplete(),
     ServingDocsPort(address="", port=0),
     ServingDocsAccessInfo(port=""),
     ServingDocsExitInfo(),
-    SeedHeader(header=""),
-    SeedHeaderSeparator(len_header=0),
     RunResultWarning(resource_type="", node_name="", path=""),
     RunResultFailure(resource_type="", node_name="", path=""),
-    StatsLine(stats={"pass": 0, "warn": 0, "error": 0, "skip": 0, "total": 0}),
+    StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0,"total": 0}),
     RunResultError(msg=""),
     RunResultErrorNoMessage(status=""),
     SQLCompiledPath(path=""),
@@ -341,116 +453,29 @@ sample_values = [
     FirstRunResultError(msg=""),
     AfterFirstRunResultError(msg=""),
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False),
-    PrintStartLine(description="", index=0, total=0, node_info=NodeInfo()),
-    PrintHookStartLine(statement="", index=0, total=0, node_info=NodeInfo()),
-    PrintHookEndLine(
-        statement="", status="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    SkippingDetails(
-        resource_type="", schema="", node_name="", index=0, total=0, node_info=NodeInfo()
-    ),
-    PrintErrorTestResult(name="", index=0, num_models=0, execution_time=0, node_info=NodeInfo()),
-    PrintPassTestResult(name="", index=0, num_models=0, execution_time=0, node_info=NodeInfo()),
-    PrintWarnTestResult(
-        name="", index=0, num_models=0, execution_time=0, num_failures=0, node_info=NodeInfo()
-    ),
-    PrintFailureTestResult(
-        name="", index=0, num_models=0, execution_time=0, num_failures=0, node_info=NodeInfo()
-    ),
-    PrintSkipBecauseError(schema="", relation="", index=0, total=0),
-    PrintModelErrorResultLine(
-        description="", status="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintModelResultLine(
-        description="", status="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintSnapshotErrorResultLine(
-        status="", description="", cfg={}, index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintSnapshotResultLine(
-        status="", description="", cfg={}, index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintSeedErrorResultLine(
-        status="", index=0, total=0, execution_time=0, schema="", relation="", node_info=NodeInfo()
-    ),
-    PrintSeedResultLine(
-        status="", index=0, total=0, execution_time=0, schema="", relation="", node_info=NodeInfo()
-    ),
-    PrintFreshnessErrorLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintFreshnessErrorStaleLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintFreshnessWarnLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintFreshnessPassLine(
-        source_name="", table_name="", index=0, total=0, execution_time=0, node_info=NodeInfo()
-    ),
-    PrintCancelLine(conn_name=""),
-    DefaultSelector(name=""),
-    NodeStart(unique_id="", node_info=NodeInfo()),
-    NodeCompiling(unique_id="", node_info=NodeInfo()),
-    NodeExecuting(unique_id="", node_info=NodeInfo()),
-    NodeFinished(unique_id="", node_info=NodeInfo(), run_result=RunResultMsg()),
-    QueryCancelationUnsupported(type=""),
-    ConcurrencyLine(num_threads=0, target_name=""),
-    StarterProjectPath(dir=""),
-    ConfigFolderDirectory(dir=""),
-    NoSampleProfileFound(adapter=""),
-    ProfileWrittenWithSample(name="", path=""),
-    ProfileWrittenWithTargetTemplateYAML(name="", path=""),
-    ProfileWrittenWithProjectTemplateYAML(name="", path=""),
-    SettingUpProfile(),
-    InvalidProfileTemplateYAML(),
-    ProjectNameAlreadyExists(name=""),
-    ProjectCreated(project_name="", docs_url="", slack_url=""),
-    DepsSetDownloadDirectory(path=""),
+    LogSkipBecauseError(schema="", relation="", index=0, total=0),
     EnsureGitInstalled(),
     DepsCreatingLocalSymlink(),
     DepsSymlinkNotAvailable(),
-    FoundStats(stat_line=""),
-    CompilingNode(unique_id=""),
-    WritingInjectedSQLForNode(unique_id=""),
     DisableTracking(),
     SendingEvent(kwargs=""),
     SendEventFailure(),
     FlushEvents(),
     FlushEventsFailure(),
     TrackingInitializeFailure(),
-    RetryExternalCall(attempt=0, max=0),
-    GeneralWarningMsg(msg="", log_fmt=""),
-    GeneralWarningException(exc="", log_fmt=""),
-    PartialParsingProfileEnvVarsChanged(),
-    AdapterEventDebug(name="", base_msg="", args=()),
-    AdapterEventInfo(name="", base_msg="", args=()),
-    AdapterEventWarning(name="", base_msg="", args=()),
-    AdapterEventError(name="", base_msg="", args=()),
-    PrintDebugStackTrace(),
-    MainReportArgs(args={}),
-    RegistryProgressGETRequest(url=""),
-    RegistryIndexProgressGETRequest(url=""),
-    RegistryIndexProgressGETResponse(url="", resp_code=1),
-    RegistryResponseUnexpectedType(response=""),
-    RegistryResponseMissingTopKeys(response=""),
-    RegistryResponseMissingNestedKeys(response=""),
-    RegistryResponseExtraNestedKeys(response=""),
-    DepsUpToDate(),
-    PartialParsingNotEnabled(),
-    SQLRunnerException(exc=""),
-    DropRelation(dropped=ReferenceKeyMsg(database="", schema="", identifier="")),
-    PartialParsingProjectEnvVarsChanged(),
-    RegistryProgressGETResponse(url="", resp_code=1),
-    IntegrationTestDebug(msg=""),
-    IntegrationTestInfo(msg=""),
-    IntegrationTestWarn(msg=""),
-    IntegrationTestError(msg=""),
-    IntegrationTestException(msg=""),
-    EventBufferFull(),
-    RecordRetryException(exc=""),
-    UnitTestInfo(msg=""),
+    RunResultWarningMessage(),
+
+    # T - tests ======================
+    IntegrationTestInfo(),
+    IntegrationTestDebug(),
+    IntegrationTestWarn(),
+    IntegrationTestError(),
+    IntegrationTestException(),
+    UnitTestInfo(),
+
 ]
+
+
 
 
 class TestEventJSONSerialization:
@@ -459,13 +484,8 @@ class TestEventJSONSerialization:
     # event types that take `Any` are not possible to test in this way since some will serialize
     # just fine and others won't.
     def test_all_serializable(self):
-        no_test = [DummyCacheEvent]
-
         all_non_abstract_events = set(
-            filter(
-                lambda x: not inspect.isabstract(x) and x not in no_test,
-                get_all_subclasses(BaseEvent),
-            )
+            get_all_subclasses(BaseEvent),
         )
         all_event_values_list = list(map(lambda x: x.__class__, sample_values))
         diff = all_non_abstract_events.difference(set(all_event_values_list))
@@ -479,7 +499,7 @@ class TestEventJSONSerialization:
 
         # if we have everything we need to test, try to serialize everything
         for event in sample_values:
-            event_dict = event.to_dict()
+            event_dict = event_to_dict(event)
             try:
                 event_json = event_to_json(event)
             except Exception as e:
@@ -487,30 +507,3 @@ class TestEventJSONSerialization:
 
 
 T = TypeVar("T")
-
-
-@dataclass
-class Counter(Generic[T], SerializableType):
-    dummy_val: T
-    count: int = 0
-
-    def next(self) -> T:
-        self.count = self.count + 1
-        return self.dummy_val
-
-    # mashumaro serializer
-    def _serialize() -> Dict[str, int]:
-        return {"count": count}
-
-
-@dataclass
-class DummyCacheEvent(InfoLevel, Cache, SerializableType):
-    code = "X999"
-    counter: Counter
-
-    def message(self) -> str:
-        return f"state: {self.counter.next()}"
-
-    # mashumaro serializer
-    def _serialize() -> str:
-        return "DummyCacheEvent"

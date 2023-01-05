@@ -477,6 +477,8 @@ class TestMacros(BasePPTest):
         # initial run so we have a msgpack file
         self.setup_directories()
         self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
+        # use empty_schema file for bug #4850
+        self.copy_file('test-files/empty_schema.yml', 'models/eschema.yml')
         results = self.run_dbt()
 
         # add a new ref override macro
