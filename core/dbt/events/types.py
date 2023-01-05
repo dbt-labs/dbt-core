@@ -392,7 +392,6 @@ class MetricAttributesRenamed(WarnLevel, pt.MetricAttributesRenamed):  # noqa
             "\n  'sql'              -> 'expression'"
             "\n  'type'             -> 'calculation_method'"
             "\n  'type: expression' -> 'calculation_method: derived'"
-            "\nThe old metric parameter names will be fully deprecated in v1.4."
             f"\nPlease remove them from the metric definition of metric '{self.metric_name}'"
             "\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849"
         )

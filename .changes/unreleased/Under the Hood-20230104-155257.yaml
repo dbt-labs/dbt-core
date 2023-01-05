@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Updating the deprecation warning in the metric attributes renamed event
+time: 2023-01-04T15:52:57.916398-06:00
+custom:
+  Author: callum-mcdata
+  Issue: "6507"
