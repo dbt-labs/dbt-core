@@ -6,9 +6,9 @@ cffi==1.15.1
 charset-normalizer==2.1.1
 click==8.1.3
 colorama==0.4.4
-dbt-core==1.0.9rc1
+dbt-core==1.0.9
 dbt-extractor==0.4.1
-dbt-postgres==1.0.9rc1
+dbt-postgres==1.0.9
 future==0.18.2
 hologram==0.0.14
 idna==3.4
