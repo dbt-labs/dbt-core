@@ -28,8 +28,8 @@ from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
 from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
-    CaughtMacroException,
-    CaughtMacroExceptionWithNode,
+    CaughtMacroError,
+    CaughtMacroErrorWithNode,
     CompilationError,
     DbtInternalError,
     InvalidMaterializationArg,
@@ -241,7 +241,7 @@ class BaseMacroGenerator:
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            raise CaughtMacroException(e)
+            raise CaughtMacroError(e)
 
     def call_macro(self, *args, **kwargs):
         # called from __call__ methods
@@ -300,7 +300,7 @@ class MacroGenerator(BaseMacroGenerator):
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            raise CaughtMacroExceptionWithNode(exc=e, node=self.macro)
+            raise CaughtMacroErrorWithNode(exc=e, node=self.macro)
         except CompilationError as e:
             e.stack.append(self.macro)
             raise e

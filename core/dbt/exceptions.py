@@ -490,14 +490,14 @@ class UndefinedCompilation(CompilationError):
         super().__init__(msg=self.msg)
 
 
-class CaughtMacroExceptionWithNode(CompilationError):
+class CaughtMacroErrorWithNode(CompilationError):
     def __init__(self, exc, node):
         self.exc = exc
         self.node = node
         super().__init__(msg=str(exc))
 
 
-class CaughtMacroException(CompilationError):
+class CaughtMacroError(CompilationError):
     def __init__(self, exc):
         self.exc = exc
         super().__init__(msg=str(exc))
@@ -702,8 +702,6 @@ class SymbolicLinkError(CompilationError):
 
 
 # context level exceptions
-
-
 class ZipStrictWrongType(CompilationError):
     def __init__(self, exc):
         self.exc = exc
@@ -1343,8 +1341,6 @@ class DuplicateAlias(AliasError):
 
 
 # Postgres Exceptions
-
-
 class UnexpectedDbReference(NotImplementedError):
     def __init__(self, adapter, database, expected):
         self.adapter = adapter
@@ -1531,7 +1527,6 @@ class ApproximateMatch(CompilationError):
         return msg
 
 
-# adapters exceptions
 class UnexpectedNull(DatabaseError):
     def __init__(self, field_name: str, source):
         self.field_name = field_name
@@ -1643,8 +1638,6 @@ class PackageNotFound(DependencyError):
 
 
 # config level exceptions
-
-
 class ProfileConfigInvalid(DbtProfileError):
     def __init__(self, exc: ValidationError):
         self.exc = exc
@@ -2119,6 +2112,7 @@ class RelationWrongType(CompilationError):
         return msg
 
 
+# not modifying these since rpc should be deprecated soon
 class RPCFailureResult(DbtRuntimeError):
     CODE = 10002
     MESSAGE = "RPC execution error"
@@ -2143,7 +2137,6 @@ class RPCTimeoutException(DbtRuntimeError):
         return result
 
 
-# not modifying these since rpc should be deprecated soon
 class RPCKilledException(DbtRuntimeError):
     CODE = 10009
     MESSAGE = "RPC process killed"
@@ -2583,6 +2576,8 @@ def raise_parsing_error(msg, node=None) -> NoReturn:
     raise ParsingError(msg, node)
 
 
+# These are the exceptions functions that were not called within dbt-core but will remain
+# here deprecated to give a chance for adapters to rework
 @deprecated(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
