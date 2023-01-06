@@ -16,7 +16,7 @@ from dbt.contracts.results import (
     FreshnessStatus,
 )
 from dbt.exceptions import RuntimeException, InternalException
-from dbt.events.functions import fire_event, info
+from dbt.events.functions import fire_event
 from dbt.events.types import (
     FreshnessCheckComplete,
     LogStartLine,
@@ -56,7 +56,6 @@ class FreshnessRunner(BaseRunner):
         level = LogFreshnessResult.status_to_level(str(result.status))
         fire_event(
             LogFreshnessResult(
-                info=info(level=level),
                 status=result.status,
                 source_name=source_name,
                 table_name=table_name,
@@ -64,7 +63,8 @@ class FreshnessRunner(BaseRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
-            )
+            ),
+            level=level,
         )
 
     def error_result(self, node, message, start_time, timing_info):

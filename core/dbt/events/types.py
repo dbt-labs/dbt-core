@@ -11,6 +11,7 @@ from dbt.events.base_types import (
     Cache,
     AdapterEventStringFunctor,
     EventStringFunctor,
+    EventLevel,
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 
@@ -1645,17 +1646,16 @@ class LogTestResult(DynamicLevel, pt.LogTestResult):
     @classmethod
     def status_to_level(cls, status):
         # The statuses come from TestStatus
-        # TODO should this return EventLevel enum instead?
         level_lookup = {
-            "fail": "error",
-            "pass": "info",
-            "warn": "warn",
-            "error": "error",
+            "fail": EventLevel.ERROR,
+            "pass": EventLevel.INFO,
+            "warn": EventLevel.WARN,
+            "error": EventLevel.ERROR,
         }
         if status in level_lookup:
             return level_lookup[status]
         else:
-            return "info"
+            return EventLevel.INFO
 
 
 # Skipped Q008, Q009, Q010
@@ -1777,15 +1777,15 @@ class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
         # The statuses come from FreshnessStatus
         # TODO should this return EventLevel enum instead?
         level_lookup = {
-            "runtime error": "error",
-            "pass": "info",
-            "warn": "warn",
-            "error": "error",
+            "runtime error": EventLevel.ERROR,
+            "pass": EventLevel.INFO,
+            "warn": EventLevel.WARN,
+            "error": EventLevel.ERROR,
         }
         if status in level_lookup:
             return level_lookup[status]
         else:
-            return "info"
+            return EventLevel.INFO
 
 
 # Skipped Q019, Q020, Q021
