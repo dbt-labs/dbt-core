@@ -825,9 +825,7 @@ message PartialParsingSkipParsingMsg {
     PartialParsingSkipParsing data = 2;
 }
 
-
 // Skipped I018, I019, I020, I021, I022, I023
-
 
 // I024
 message UnableToPartialParse {

@@ -185,7 +185,7 @@ sample_values = [
     MacroFileParse(path=""),
     PartialParsingExceptionProcessingFile(file=""),
     PartialParsingFile(file_id=""),
-    PartialParsingException(exc_info={}),
+    PartialParsingError(exc_info={}),
     PartialParsingSkipParsing(),
     UnableToPartialParse(reason="something went wrong"),
     PartialParsingNotEnabled(),

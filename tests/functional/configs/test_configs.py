@@ -3,7 +3,7 @@ from hologram import ValidationError
 import pytest
 import os
 
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
 from dbt.tests.util import run_dbt, update_config_file, write_file, check_relations_equal
 from tests.functional.configs.fixtures import BaseConfigProject, simple_snapshot
 
@@ -109,7 +109,7 @@ class TestInvalidSnapshotsMaterializationProj(object):
         snapshots_dir = os.path.join(project.project_root, "snapshots")
         write_file(simple_snapshot, snapshots_dir, "mysnapshot.sql")
 
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt()
 
 

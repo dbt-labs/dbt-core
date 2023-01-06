@@ -1012,7 +1012,7 @@ class PartialParsingExceptionProcessingFileMsg(betterproto.Message):
 
 
 @dataclass
-class PartialParsingException(betterproto.Message):
+class PartialParsingError(betterproto.Message):
     """I016"""
 
     exc_info: Dict[str, str] = betterproto.map_field(

@@ -218,7 +218,7 @@ class DbtValidationError(DbtRuntimeError):
     MESSAGE = "Validation Error"
 
 
-class ParsingException(DbtRuntimeError):
+class ParsingError(DbtRuntimeError):
     CODE = 10015
     MESSAGE = "Parsing Error"
 
@@ -818,7 +818,7 @@ class PackageNotFoundForMacro(CompilationError):
         super().__init__(msg=msg)
 
 
-class DisallowSecretEnvVar(ParsingException):
+class DisallowSecretEnvVar(ParsingError):
     def __init__(self, env_var_name: str):
         self.env_var_name = env_var_name
         super().__init__(msg=self.get_message())
@@ -985,7 +985,7 @@ class DuplicateMacroName(CompilationError):
 
 
 # parser level exceptions
-class InvalidDictParse(ParsingException):
+class InvalidDictParse(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.exc = exc
         self.node = node
@@ -993,7 +993,7 @@ class InvalidDictParse(ParsingException):
         super().__init__(msg=msg)
 
 
-class InvalidConfigUpdate(ParsingException):
+class InvalidConfigUpdate(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.exc = exc
         self.node = node
@@ -1001,7 +1001,7 @@ class InvalidConfigUpdate(ParsingException):
         super().__init__(msg=msg)
 
 
-class PythonParsingException(ParsingException):
+class PythonParsingError(ParsingError):
     def __init__(self, exc: SyntaxError, node):
         self.exc = exc
         self.node = node
@@ -1013,7 +1013,7 @@ class PythonParsingException(ParsingException):
         return msg
 
 
-class PythonLiteralEval(ParsingException):
+class PythonLiteralEval(ParsingError):
     def __init__(self, exc: Exception, node):
         self.exc = exc
         self.node = node
@@ -1029,14 +1029,14 @@ class PythonLiteralEval(ParsingException):
         return msg
 
 
-class InvalidModelConfig(ParsingException):
+class InvalidModelConfig(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class YamlParseListFailure(ParsingException):
+class YamlParseListFailure(ParsingError):
     def __init__(
         self,
         path: str,
@@ -1061,7 +1061,7 @@ class YamlParseListFailure(ParsingException):
         return msg
 
 
-class YamlParseDictFailure(ParsingException):
+class YamlParseDictFailure(ParsingError):
     def __init__(
         self,
         path: str,
@@ -1086,7 +1086,7 @@ class YamlParseDictFailure(ParsingException):
         return msg
 
 
-class YamlLoadFailure(ParsingException):
+class YamlLoadFailure(ParsingError):
     def __init__(self, project_name: Optional[str], path: str, exc: DbtValidationError):
         self.project_name = project_name
         self.path = path
@@ -1101,21 +1101,21 @@ class YamlLoadFailure(ParsingException):
         return msg
 
 
-class InvalidTestConfig(ParsingException):
+class InvalidTestConfig(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class InvalidSchemaConfig(ParsingException):
+class InvalidSchemaConfig(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class InvalidSnapshopConfig(ParsingException):
+class InvalidSnapshopConfig(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
@@ -1187,7 +1187,7 @@ class TagNotString(CompilationError):
         super().__init__(msg=msg)
 
 
-class TestNameNotString(ParsingException):
+class TestNameNotString(ParsingError):
     def __init__(self, test_name: Any):
         self.test_name = test_name
         super().__init__(msg=self.get_message())
@@ -1198,7 +1198,7 @@ class TestNameNotString(ParsingException):
         return msg
 
 
-class TestArgsNotDict(ParsingException):
+class TestArgsNotDict(ParsingError):
     def __init__(self, test_args: Any):
         self.test_args = test_args
         super().__init__(msg=self.get_message())
@@ -1209,7 +1209,7 @@ class TestArgsNotDict(ParsingException):
         return msg
 
 
-class TestDefinitionDictLength(ParsingException):
+class TestDefinitionDictLength(ParsingError):
     def __init__(self, test):
         self.test = test
         super().__init__(msg=self.get_message())
@@ -1223,7 +1223,7 @@ class TestDefinitionDictLength(ParsingException):
         return msg
 
 
-class TestInvalidType(ParsingException):
+class TestInvalidType(ParsingError):
     def __init__(self, test: Any):
         self.test = test
         super().__init__(msg=self.get_message())
@@ -1234,7 +1234,7 @@ class TestInvalidType(ParsingException):
 
 
 # This is triggered across multiple files
-class EnvVarMissing(ParsingException):
+class EnvVarMissing(ParsingError):
     def __init__(self, var: str):
         self.var = var
         super().__init__(msg=self.get_message())
@@ -2580,7 +2580,7 @@ def disallow_secret_env_var(env_var_name) -> NoReturn:
     reason=REASON,
 )
 def raise_parsing_error(msg, node=None) -> NoReturn:
-    raise ParsingException(msg, node)
+    raise ParsingError(msg, node)
 
 
 @deprecated(
@@ -2693,11 +2693,14 @@ class FailFastException(FailFastError):
     pass
 
 
+class ParsingException(ParsingError):
+    pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class ParsingException(RuntimeException):
 # class JSONValidationException(ValidationException):
 # class DbtConfigError(RuntimeException):
 # class DbtProjectError(DbtConfigError):

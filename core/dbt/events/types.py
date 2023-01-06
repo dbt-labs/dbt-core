@@ -814,7 +814,7 @@ class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExcepti
 
 
 @dataclass
-class PartialParsingException(DebugLevel, pt.PartialParsingException):
+class PartialParsingError(DebugLevel, pt.PartialParsingError):
     def code(self):
         return "I016"
 

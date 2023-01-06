@@ -95,7 +95,7 @@ from tests.functional.schema_tests.fixtures import (
     alt_local_utils__macros__type_timestamp_sql,
     all_quotes_schema__schema_yml,
 )
-from dbt.exceptions import ParsingException, CompilationError, DuplicateResourceName
+from dbt.exceptions import ParsingError, CompilationError, DuplicateResourceName
 from dbt.contracts.results import TestStatus
 
 
@@ -410,7 +410,7 @@ class TestMalformedSchemaTests:
         self,
         project,
     ):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt()
 
 
@@ -987,7 +987,7 @@ class TestInvalidSchema:
         self,
         project,
     ):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt()
         assert re.search(r"'models' is not a list", str(exc))
 

@@ -31,9 +31,9 @@ import ast
 from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import (
     InvalidModelConfig,
-    ParsingException,
+    ParsingError,
     PythonLiteralEval,
-    PythonParsingException,
+    PythonParsingError,
     UndefinedMacroError,
 )
 
@@ -66,13 +66,13 @@ class PythonValidationVisitor(ast.NodeVisitor):
 
     def check_error(self, node):
         if self.num_model_def != 1:
-            raise ParsingException(
+            raise ParsingError(
                 f"dbt allows exactly one model defined per python file, found {self.num_model_def}",
                 node=node,
             )
 
         if len(self.dbt_errors) != 0:
-            raise ParsingException("\n".join(self.dbt_errors), node=node)
+            raise ParsingError("\n".join(self.dbt_errors), node=node)
 
 
 class PythonParseVisitor(ast.NodeVisitor):
@@ -176,9 +176,9 @@ def verify_python_model_code(node):
             node,
         )
         if rendered_python != node.raw_code:
-            raise ParsingException("")
-    except (UndefinedMacroError, ParsingException):
-        raise ParsingException("No jinja in python model code is allowed", node=node)
+            raise ParsingError("")
+    except (UndefinedMacroError, ParsingError):
+        raise ParsingError("No jinja in python model code is allowed", node=node)
 
 
 class ModelParser(SimpleSQLParser[ModelNode]):
@@ -202,7 +202,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         try:
             tree = ast.parse(node.raw_code, filename=node.original_file_path)
         except SyntaxError as exc:
-            raise PythonParsingException(exc, node=node) from exc
+            raise PythonParsingError(exc, node=node) from exc
 
         # Only parse if AST tree has instructions in body
         if tree.body:

@@ -18,7 +18,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode, Macro, DependsOn, SingularTestNode, SnapshotNode,
     AnalysisNode, UnpatchedSourceDefinition
 )
-from dbt.exceptions import CompilationError, ParsingException
+from dbt.exceptions import CompilationError, ParsingError
 from dbt.node_types import NodeType
 from dbt.parser import (
     ModelParser, MacroParser, SingularTestParser, GenericTestParser,
@@ -724,31 +724,31 @@ class ModelParserTest(BaseParserTest):
     def test_python_model_single_argument(self):
         block = self.file_block_for(python_model_single_argument, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_no_argument(self):
         block = self.file_block_for(python_model_no_argument, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_incorrect_argument_name(self):
         block = self.file_block_for(python_model_incorrect_argument_name, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_multiple_models(self):
         block = self.file_block_for(python_model_multiple_models, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_incorrect_function_name(self):
         block = self.file_block_for(python_model_incorrect_function_name, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_empty_file(self):
@@ -759,13 +759,13 @@ class ModelParserTest(BaseParserTest):
     def test_python_model_multiple_returns(self):
         block = self.file_block_for(python_model_multiple_returns, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_no_return(self):
         block = self.file_block_for(python_model_no_return, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_single_return(self):
@@ -776,7 +776,7 @@ class ModelParserTest(BaseParserTest):
     def test_python_model_incorrect_ref(self):
         block = self.file_block_for(python_model_incorrect_ref, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
     def test_python_model_default_materialization(self):

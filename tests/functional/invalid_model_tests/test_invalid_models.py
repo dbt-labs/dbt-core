@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import CompilationError, ParsingException
+from dbt.exceptions import CompilationError, ParsingError
 
 from dbt.tests.util import (
     run_dbt,
@@ -129,7 +129,7 @@ class TestMalformedEnabledParam(InvalidModelBase):
         }
 
     def test_view_disabled(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["seed"])
 
         assert "enabled" in str(exc.value)

@@ -22,7 +22,7 @@ from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
     PartialParsingExceptionProcessingFile,
-    PartialParsingException,
+    PartialParsingError,
     PartialParsingSkipParsing,
     UnableToPartialParse,
     PartialParsingNotEnabled,
@@ -280,7 +280,7 @@ class ManifestLoader:
                             parse_file_type = source_file.parse_file_type
                             fire_event(PartialParsingExceptionProcessingFile(file=file_id))
                     exc_info["parse_file_type"] = parse_file_type
-                    fire_event(PartialParsingException(exc_info=exc_info))
+                    fire_event(PartialParsingError(exc_info=exc_info))
 
                     # Send event
                     if dbt.tracking.active_user is not None:

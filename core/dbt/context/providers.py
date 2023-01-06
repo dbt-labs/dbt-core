@@ -57,7 +57,7 @@ from dbt.exceptions import (
     MissingConfig,
     OperationsCannotRefEphemeralNodes,
     PackageNotInDeps,
-    ParsingException,
+    ParsingError,
     RefBadContext,
     RefInvalidArgs,
     DbtRuntimeError,
@@ -1475,7 +1475,7 @@ class MetricRefResolver(BaseResolver):
 
     def validate_args(self, name, package):
         if not isinstance(name, str):
-            raise ParsingException(
+            raise ParsingError(
                 f"In a metrics section in {self.model.original_file_path} "
                 "the name argument to ref() must be a string"
             )

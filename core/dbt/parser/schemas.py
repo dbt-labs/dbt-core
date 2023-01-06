@@ -58,7 +58,7 @@ from dbt.exceptions import (
     DbtInternalError,
     InvalidSchemaConfig,
     InvalidTestConfig,
-    ParsingException,
+    ParsingError,
     PropertyYMLInvalidTag,
     PropertyYMLMissingVersion,
     PropertyYMLVersionNotInt,
@@ -278,12 +278,12 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 self.store_env_vars(target, schema_file_id, self.schema_yaml_vars.env_vars)
                 self.schema_yaml_vars.env_vars = {}
 
-        except ParsingException as exc:
+        except ParsingError as exc:
             context = _trimmed(str(target))
             msg = "Invalid test config given in {}:\n\t{}\n\t@: {}".format(
                 target.original_file_path, exc.msg, context
             )
-            raise ParsingException(msg) from exc
+            raise ParsingError(msg) from exc
 
         except CompilationError as exc:
             context = _trimmed(str(target))
@@ -594,7 +594,7 @@ class YamlReader(metaclass=ABCMeta):
     def get_key_dicts(self) -> Iterable[Dict[str, Any]]:
         data = self.yaml.data.get(self.key, [])
         if not isinstance(data, list):
-            raise ParsingException(
+            raise ParsingError(
                 "{} must be a list, got {} instead: ({})".format(
                     self.key, type(data), _trimmed(str(data))
                 )
@@ -612,7 +612,7 @@ class YamlReader(metaclass=ABCMeta):
                 )
 
             if "name" not in entry:
-                raise ParsingException("Entry did not contain a name")
+                raise ParsingError("Entry did not contain a name")
 
             # Render the data (except for tests and descriptions).
             # See the SchemaYamlRenderer
@@ -631,8 +631,8 @@ class YamlReader(metaclass=ABCMeta):
         try:
             # This does a deep_map which will fail if there are circular references
             dct = self.renderer.render_data(dct)
-        except ParsingException as exc:
-            raise ParsingException(
+        except ParsingError as exc:
+            raise ParsingError(
                 f"Failed to render {self.yaml.file.path.original_file_path} from "
                 f"project {self.project.project_name}: {exc}"
             ) from exc
@@ -790,7 +790,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
     def normalize_attribute(self, data, path, attribute):
         if attribute in data:
             if "config" in data and attribute in data["config"]:
-                raise ParsingException(
+                raise ParsingError(
                     f"""
                     In {path}: found {attribute} dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
@@ -877,7 +877,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                         "unique id cannot be enabled in the schema file. They must be enabled "
                         "in `dbt_project.yml` or in the sql files."
                     )
-                    raise ParsingException(msg)
+                    raise ParsingError(msg)
 
                 # all nodes in the disabled dict have the same unique_id so just grab the first one
                 # to append with the uniqe id

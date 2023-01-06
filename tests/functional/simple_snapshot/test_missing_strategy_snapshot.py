@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
@@ -43,7 +43,7 @@ def macros():
 
 
 def test_missing_strategy(project):
-    with pytest.raises(ParsingException) as exc:
+    with pytest.raises(ParsingError) as exc:
         run_dbt(["compile"], expect_pass=False)
 
     assert "Snapshots must be configured with a 'strategy'" in str(exc.value)

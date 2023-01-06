@@ -2,7 +2,7 @@ import pytest
 import os
 
 from dbt.constants import SECRET_ENV_PREFIX
-from dbt.exceptions import ParsingException, DbtInternalError
+from dbt.exceptions import ParsingError, DbtInternalError
 from tests.functional.context_methods.first_dependency import FirstDependencyProject
 from dbt.tests.util import run_dbt, run_dbt_and_capture
 
@@ -30,7 +30,7 @@ class TestDisallowSecretModel:
         return {"context.sql": secret_bad__context_sql}
 
     def test_disallow_secret(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["compile"])
 
 
