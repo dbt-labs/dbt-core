@@ -417,7 +417,7 @@ class CommandResultError(CommandError):
         return f"{self.msg} running: {self.cmd}"
 
 
-class InvalidConnectionException(DbtRuntimeError):
+class InvalidConnectionError(DbtRuntimeError):
     def __init__(self, thread_id, known: List):
         self.thread_id = thread_id
         self.known = known
@@ -2717,11 +2717,14 @@ class FailedToConnectException(FailedToConnectError):
     pass
 
 
+# class InvalidConnectionException(InvalidConnectionError):
+# pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class InvalidConnectionException(RuntimeException):
 # class InvalidSelectorException(RuntimeException):
 # class DuplicateYamlKeyException(CompilationException):
 # class ConnectionException(Exception):
