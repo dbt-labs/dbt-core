@@ -21,7 +21,7 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import QueryComment
 from dbt.exceptions import (
     DbtProjectError,
-    SemverException,
+    SemverError,
     ProjectContractBroken,
     ProjectContractInvalid,
     DbtRuntimeError,
@@ -219,7 +219,7 @@ def _get_required_version(
 
     try:
         dbt_version = _parse_versions(dbt_raw_version)
-    except SemverException as e:
+    except SemverError as e:
         raise DbtProjectError(str(e)) from e
 
     if verify_version:

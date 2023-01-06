@@ -228,7 +228,7 @@ class ParsingError(DbtRuntimeError):
 
 
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
-class JSONValidationException(DbtValidationError):
+class JSONValidationError(DbtValidationError):
     def __init__(self, typename, errors):
         self.typename = typename
         self.errors = errors
@@ -238,7 +238,7 @@ class JSONValidationException(DbtValidationError):
 
     def __reduce__(self):
         # see https://stackoverflow.com/a/36342588 for why this is necessary
-        return (JSONValidationException, (self.typename, self.errors))
+        return (JSONValidationError, (self.typename, self.errors))
 
 
 class IncompatibleSchemaError(DbtRuntimeError):
@@ -346,7 +346,7 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
-class SemverException(Exception):
+class SemverError(Exception):
     def __init__(self, msg: str = None):
         self.msg = msg
         if msg is not None:
@@ -355,7 +355,7 @@ class SemverException(Exception):
             super().__init__()
 
 
-class VersionsNotCompatibleException(SemverException):
+class VersionsNotCompatibleException(SemverError):
     pass
 
 
@@ -2697,23 +2697,21 @@ class ParsingException(ParsingError):
     pass
 
 
+class JSONValidationException(JSONValidationError):
+    pass
+
+
+class SemverException(SemverError):
+    pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class JSONValidationException(ValidationException):
-# class DbtConfigError(RuntimeException):
-# class DbtProjectError(DbtConfigError):
-# class DbtSelectorsError(DbtConfigError):
-# class DbtProfileError(DbtConfigError):
-# class SemverException(Exception):
 # class VersionsNotCompatibleException(SemverException):
 # class NotImplementedException(Exception):
 # class FailedToConnectException(DatabaseException):
-# class CommandError(RuntimeException):
-# class ExecutableError(CommandError):
-# class WorkingDirectoryError(CommandError):
-# class CommandResultError(CommandError):
 # class InvalidConnectionException(RuntimeException):
 # class InvalidSelectorException(RuntimeException):
 # class DuplicateYamlKeyException(CompilationException):

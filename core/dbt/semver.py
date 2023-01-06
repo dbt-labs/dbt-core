@@ -94,7 +94,7 @@ class VersionSpecifier(VersionSpecification):
         match = _VERSION_REGEX.match(version_string)
 
         if not match:
-            raise dbt.exceptions.SemverException(
+            raise dbt.exceptions.SemverError(
                 f'"{version_string}" is not a valid semantic version.'
             )
 

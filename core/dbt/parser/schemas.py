@@ -54,7 +54,7 @@ from dbt.exceptions import (
     DuplicateMacroPatchName,
     DuplicatePatchPath,
     DuplicateSourcePatchName,
-    JSONValidationException,
+    JSONValidationError,
     DbtInternalError,
     InvalidSchemaConfig,
     InvalidTestConfig,
@@ -655,7 +655,7 @@ class SourceParser(YamlDocsReader):
         try:
             cls.validate(data)
             return cls.from_dict(data)
-        except (ValidationError, JSONValidationException) as exc:
+        except (ValidationError, JSONValidationError) as exc:
             raise YamlParseDictFailure(path, self.key, data, exc)
 
     # The other parse method returns TestBlocks. This one doesn't.
@@ -780,7 +780,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                     self.normalize_meta_attribute(data, path)
                     self.normalize_docs_attribute(data, path)
                 node = self._target_type().from_dict(data)
-            except (ValidationError, JSONValidationException) as exc:
+            except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictFailure(path, self.key, data, exc)
             else:
                 yield node
@@ -1063,7 +1063,7 @@ class ExposureParser(YamlReader):
             try:
                 UnparsedExposure.validate(data)
                 unparsed = UnparsedExposure.from_dict(data)
-            except (ValidationError, JSONValidationException) as exc:
+            except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictFailure(self.yaml.path, self.key, data, exc)
 
             self.parse_exposure(unparsed)
@@ -1180,6 +1180,6 @@ class MetricParser(YamlReader):
                 UnparsedMetric.validate(data)
                 unparsed = UnparsedMetric.from_dict(data)
 
-            except (ValidationError, JSONValidationException) as exc:
+            except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictFailure(self.yaml.path, self.key, data, exc)
             self.parse_metric(unparsed)
