@@ -436,7 +436,7 @@ class DuplicateYamlKeyError(CompilationError):
     pass
 
 
-class ConnectionException(Exception):
+class ConnectionError(Exception):
     """
     There was a problem with the connection that returned a bad response,
     timed out, or resulted in a file that is corrupt.
@@ -2725,11 +2725,9 @@ class InvalidSelectorException(InvalidSelectorError):
     pass
 
 
-# class DuplicateYamlKeyException(DuplicateYamlKeyError):
-# pass
-
-# note to self: I only need to do this for classes that existed before I
-# converted from functions.  new things dont need this deprecation
+class DuplicateYamlKeyException(DuplicateYamlKeyError):
+    pass
 
 
-# class ConnectionException(Exception):
+class ConnectionException(ConnectionError):
+    pass

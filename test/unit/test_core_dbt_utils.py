@@ -2,7 +2,7 @@ import requests
 import tarfile
 import unittest
 
-from dbt.exceptions import ConnectionException
+from dbt.exceptions import ConnectionError
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 
@@ -19,7 +19,7 @@ class TestCoreDbtUtils(unittest.TestCase):
 
     def test_connection_exception_retry_max(self):
         Counter._reset()
-        with self.assertRaises(ConnectionException):
+        with self.assertRaises(ConnectionError):
             connection_exception_retry(lambda: Counter._add_with_exception(), 5)
         self.assertEqual(6, counter) # 6 = original attempt plus 5 retries
 

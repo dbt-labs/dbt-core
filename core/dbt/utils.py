@@ -15,7 +15,7 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.exceptions import ConnectionException, DuplicateAlias
+from dbt.exceptions import ConnectionError, DuplicateAlias
 from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
@@ -624,7 +624,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise ConnectionException("External connection exception occurred: " + str(exc))
+            raise ConnectionError("External connection exception occurred: " + str(exc))
 
 
 # This is used to serialize the args in the run_results and in the logs.
