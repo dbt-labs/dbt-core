@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: '[CT-1694] Deprecate event tracking tests'
+time: 2023-01-06T11:44:12.210821-08:00
+custom:
+  Author: aranke
+  Issue: "6467"
