@@ -7,7 +7,7 @@ from dbt.dataclass_schema import StrEnum, dbtClassMixin
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.exceptions import DbtRuntimeError, InvalidSelectorException
+from dbt.exceptions import DbtRuntimeError, InvalidSelectorError
 
 
 RAW_SELECTOR_PATTERN = re.compile(
@@ -95,9 +95,7 @@ class SelectionCriteria:
         try:
             method_name = MethodName(method_parts[0])
         except ValueError as exc:
-            raise InvalidSelectorException(
-                f"'{method_parts[0]}' is not a valid method name"
-            ) from exc
+            raise InvalidSelectorError(f"'{method_parts[0]}' is not a valid method name") from exc
 
         method_arguments: List[str] = method_parts[1:]
 

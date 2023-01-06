@@ -426,7 +426,7 @@ class InvalidConnectionError(DbtRuntimeError):
         )
 
 
-class InvalidSelectorException(DbtRuntimeError):
+class InvalidSelectorError(DbtRuntimeError):
     def __init__(self, name: str):
         self.name = name
         super().__init__(name)
@@ -2717,14 +2717,17 @@ class FailedToConnectException(FailedToConnectError):
     pass
 
 
-# class InvalidConnectionException(InvalidConnectionError):
-# pass
+class InvalidConnectionException(InvalidConnectionError):
+    pass
+
+
+class InvalidSelectorException(InvalidSelectorError):
+    pass
 
 
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class InvalidSelectorException(RuntimeException):
 # class DuplicateYamlKeyException(CompilationException):
 # class ConnectionException(Exception):

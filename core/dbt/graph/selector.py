@@ -10,7 +10,7 @@ from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionC
 from dbt.node_types import NodeType
 from dbt.exceptions import (
     DbtInternalError,
-    InvalidSelectorException,
+    InvalidSelectorError,
 )
 from dbt.contracts.graph.nodes import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
@@ -78,7 +78,7 @@ class NodeSelector(MethodManager):
         nodes = self.graph.nodes()
         try:
             collected = self.select_included(nodes, spec)
-        except InvalidSelectorException:
+        except InvalidSelectorError:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
             fire_event(
                 SelectorReportInvalidSelector(
