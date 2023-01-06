@@ -137,7 +137,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A context manager that handles exceptions raised by the
             underlying database.
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`exception_handler` is not implemented for this adapter!"
         )
 
@@ -273,7 +273,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:
         """Cancel all open connections on the adapter. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`cancel_open` is not implemented for this adapter!"
         )
 
@@ -288,7 +288,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        raise dbt.exceptions.NotImplementedException("`open` is not implemented for this adapter!")
+        raise dbt.exceptions.NotImplementedError("`open` is not implemented for this adapter!")
 
     def release(self) -> None:
         with self.lock:
@@ -320,16 +320,12 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def begin(self) -> None:
         """Begin a transaction. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            "`begin` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`begin` is not implemented for this adapter!")
 
     @abc.abstractmethod
     def commit(self) -> None:
         """Commit a transaction. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            "`commit` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`commit` is not implemented for this adapter!")
 
     @classmethod
     def _rollback_handle(cls, connection: Connection) -> None:
@@ -415,6 +411,4 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        raise dbt.exceptions.NotImplementedException(
-            "`execute` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`execute` is not implemented for this adapter!")

@@ -359,7 +359,7 @@ class VersionsNotCompatibleError(SemverError):
     pass
 
 
-class NotImplementedException(Exception):
+class NotImplementedError(Exception):
     def __init__(self, msg: str):
         self.msg = msg
         self.formatted_msg = f"ERROR: {self.msg}"
@@ -1345,7 +1345,7 @@ class DuplicateAlias(AliasError):
 # Postgres Exceptions
 
 
-class UnexpectedDbReference(NotImplementedException):
+class UnexpectedDbReference(NotImplementedError):
     def __init__(self, adapter, database, expected):
         self.adapter = adapter
         self.database = database
@@ -2338,7 +2338,7 @@ def raise_invalid_property_yml_version(path, issue) -> NoReturn:
     reason=REASON,
 )
 def raise_not_implemented(msg) -> NoReturn:
-    raise NotImplementedException(msg)
+    raise NotImplementedError(msg)
 
 
 @deprecated(
@@ -2709,11 +2709,14 @@ class VersionsNotCompatibleException(VersionsNotCompatibleError):
     pass
 
 
+class NotImplementedException(NotImplementedError):
+    pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class NotImplementedException(Exception):
 # class FailedToConnectException(DatabaseException):
 # class InvalidConnectionException(RuntimeException):
 # class InvalidSelectorException(RuntimeException):

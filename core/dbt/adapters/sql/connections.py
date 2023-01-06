@@ -27,9 +27,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def cancel(self, connection: Connection):
         """Cancel the given connection."""
-        raise dbt.exceptions.NotImplementedException(
-            "`cancel` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`cancel` is not implemented for this adapter!")
 
     def cancel_open(self) -> List[str]:
         names = []
@@ -95,7 +93,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def get_response(cls, cursor: Any) -> AdapterResponse:
         """Get the status of the cursor."""
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`get_response` is not implemented for this adapter!"
         )
 

@@ -51,7 +51,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
         raise error
 
     def ephemeral_result(self, node, start_time, timing_info):
-        raise dbt.exceptions.NotImplementedException("cannot execute ephemeral nodes remotely!")
+        raise dbt.exceptions.NotImplementedError("cannot execute ephemeral nodes remotely!")
 
 
 class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):

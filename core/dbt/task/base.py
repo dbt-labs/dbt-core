@@ -16,7 +16,7 @@ from dbt.contracts.results import (
     RunningStatus,
 )
 from dbt.exceptions import (
-    NotImplementedException,
+    NotImplementedError,
     CompilationError,
     DbtRuntimeError,
     DbtInternalError,
@@ -109,7 +109,7 @@ class BaseTask(metaclass=ABCMeta):
 
     @abstractmethod
     def run(self):
-        raise dbt.exceptions.NotImplementedException("Not Implemented")
+        raise dbt.exceptions.NotImplementedError("Not Implemented")
 
     def interpret_results(self, results):
         return True
@@ -402,16 +402,16 @@ class BaseRunner(metaclass=ABCMeta):
         return None
 
     def before_execute(self):
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def execute(self, compiled_node, manifest):
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def run(self, compiled_node, manifest):
         return self.execute(compiled_node, manifest)
 
     def after_execute(self, result):
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def _skip_caused_by_ephemeral_failure(self):
         if self.skip_cause is None or self.skip_cause.node is None:

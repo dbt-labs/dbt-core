@@ -45,7 +45,7 @@ from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     DbtInternalError,
-    NotImplementedException,
+    NotImplementedError,
     DbtRuntimeError,
     FailFastError,
 )
@@ -150,7 +150,7 @@ class GraphRunnableTask(ManifestTask):
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
-        raise NotImplementedException(f"get_node_selector not implemented for task {type(self)}")
+        raise NotImplementedError(f"get_node_selector not implemented for task {type(self)}")
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
@@ -182,7 +182,7 @@ class GraphRunnableTask(ManifestTask):
         return False
 
     def get_runner_type(self, node):
-        raise NotImplementedException("Not Implemented")
+        raise NotImplementedError("Not Implemented")
 
     def result_path(self):
         return os.path.join(self.config.target_path, RESULT_FILE_NAME)

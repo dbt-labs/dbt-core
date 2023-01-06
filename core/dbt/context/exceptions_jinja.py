@@ -21,7 +21,7 @@ from dbt.exceptions import (
     DuplicatePatchPath,
     DuplicateResourceName,
     InvalidPropertyYML,
-    NotImplementedException,
+    NotImplementedError,
     RelationWrongType,
 )
 
@@ -90,7 +90,7 @@ def raise_invalid_property_yml_version(path, issue) -> NoReturn:
 
 
 def raise_not_implemented(msg) -> NoReturn:
-    raise NotImplementedException(msg)
+    raise NotImplementedError(msg)
 
 
 def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:

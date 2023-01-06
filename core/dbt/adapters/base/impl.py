@@ -26,7 +26,7 @@ from dbt.exceptions import (
     InvalidMacroArgType,
     InvalidMacroResult,
     InvalidQuoteConfigType,
-    NotImplementedException,
+    NotImplementedError,
     NullRelationCacheAttempted,
     NullRelationDropAttempted,
     RelationReturnedMultipleResults,
@@ -474,12 +474,12 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
-        raise NotImplementedException("`date_function` is not implemented for this adapter!")
+        raise NotImplementedError("`date_function` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
     def is_cancelable(cls) -> bool:
-        raise NotImplementedException("`is_cancelable` is not implemented for this adapter!")
+        raise NotImplementedError("`is_cancelable` is not implemented for this adapter!")
 
     ###
     # Abstract methods about schemas
@@ -487,7 +487,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractmethod
     def list_schemas(self, database: str) -> List[str]:
         """Get a list of existing schemas in database"""
-        raise NotImplementedException("`list_schemas` is not implemented for this adapter!")
+        raise NotImplementedError("`list_schemas` is not implemented for this adapter!")
 
     @available.parse(lambda *a, **k: False)
     def check_schema_exists(self, database: str, schema: str) -> bool:
@@ -510,13 +510,13 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         *Implementors must call self.cache.drop() to preserve cache state!*
         """
-        raise NotImplementedException("`drop_relation` is not implemented for this adapter!")
+        raise NotImplementedError("`drop_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
     def truncate_relation(self, relation: BaseRelation) -> None:
         """Truncate the given relation."""
-        raise NotImplementedException("`truncate_relation` is not implemented for this adapter!")
+        raise NotImplementedError("`truncate_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
@@ -525,15 +525,13 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         Implementors must call self.cache.rename() to preserve cache state.
         """
-        raise NotImplementedException("`rename_relation` is not implemented for this adapter!")
+        raise NotImplementedError("`rename_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_list
     def get_columns_in_relation(self, relation: BaseRelation) -> List[BaseColumn]:
         """Get a list of the columns in the given Relation."""
-        raise NotImplementedException(
-            "`get_columns_in_relation` is not implemented for this adapter!"
-        )
+        raise NotImplementedError("`get_columns_in_relation` is not implemented for this adapter!")
 
     @available.deprecated("get_columns_in_relation", lambda *a, **k: [])
     def get_columns_in_table(self, schema: str, identifier: str) -> List[BaseColumn]:
@@ -555,7 +553,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param self.Relation current: A relation that currently exists in the
             database with columns of unspecified types.
         """
-        raise NotImplementedException(
+        raise NotImplementedError(
             "`expand_target_column_types` is not implemented for this adapter!"
         )
 
@@ -570,7 +568,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :return: The relations in schema
         :rtype: List[self.Relation]
         """
-        raise NotImplementedException(
+        raise NotImplementedError(
             "`list_relations_without_caching` is not implemented for this adapter!"
         )
 
@@ -787,20 +785,20 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse_none
     def create_schema(self, relation: BaseRelation):
         """Create the given schema if it does not exist."""
-        raise NotImplementedException("`create_schema` is not implemented for this adapter!")
+        raise NotImplementedError("`create_schema` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
     def drop_schema(self, relation: BaseRelation):
         """Drop the given schema (and everything in it) if it exists."""
-        raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
+        raise NotImplementedError("`drop_schema` is not implemented for this adapter!")
 
     @available
     @classmethod
     @abc.abstractmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
-        raise NotImplementedException("`quote` is not implemented for this adapter!")
+        raise NotImplementedError("`quote` is not implemented for this adapter!")
 
     @available
     def quote_as_configured(self, identifier: str, quote_key: str) -> str:
@@ -850,7 +848,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_text_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_text_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -862,7 +860,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_number_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_number_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -874,9 +872,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            "`convert_boolean_type` is not implemented for this adapter!"
-        )
+        raise NotImplementedError("`convert_boolean_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -888,9 +884,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            "`convert_datetime_type` is not implemented for this adapter!"
-        )
+        raise NotImplementedError("`convert_datetime_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -902,7 +896,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_date_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_date_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -914,7 +908,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_time_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_time_type` is not implemented for this adapter!")
 
     @available
     @classmethod
@@ -1214,7 +1208,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.generate_python_submission_response(submission_result)
 
     def generate_python_submission_response(self, submission_result: Any) -> AdapterResponse:
-        raise NotImplementedException(
+        raise NotImplementedError(
             "Your adapter need to implement generate_python_submission_response"
         )
 
