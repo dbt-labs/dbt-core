@@ -867,93 +867,15 @@ class HookFinished(InfoLevel, pt.HookFinished):
 
 
 @dataclass
-class ParseCmdStart(InfoLevel, pt.ParseCmdStart):
+class ParseCmdOut(InfoLevel, pt.ParseCmdOut):
     def code(self):
         return "I001"
 
     def message(self) -> str:
-        return "Start parsing."
+        return self.msg
 
 
-@dataclass
-class ParseCmdCompiling(InfoLevel, pt.ParseCmdCompiling):
-    def code(self):
-        return "I002"
-
-    def message(self) -> str:
-        return "Compiling."
-
-
-@dataclass
-class ParseCmdWritingManifest(InfoLevel, pt.ParseCmdWritingManifest):
-    def code(self):
-        return "I003"
-
-    def message(self) -> str:
-        return "Writing manifest."
-
-
-@dataclass
-class ParseCmdDone(InfoLevel, pt.ParseCmdDone):
-    def code(self):
-        return "I004"
-
-    def message(self) -> str:
-        return "Done."
-
-
-@dataclass
-class ManifestDependenciesLoaded(InfoLevel, pt.ManifestDependenciesLoaded):
-    def code(self):
-        return "I005"
-
-    def message(self) -> str:
-        return "Dependencies loaded"
-
-
-@dataclass
-class ManifestLoaderCreated(InfoLevel, pt.ManifestLoaderCreated):
-    def code(self):
-        return "I006"
-
-    def message(self) -> str:
-        return "ManifestLoader created"
-
-
-@dataclass
-class ManifestLoaded(InfoLevel, pt.ManifestLoaded):
-    def code(self):
-        return "I007"
-
-    def message(self) -> str:
-        return "Manifest loaded"
-
-
-@dataclass
-class ManifestChecked(InfoLevel, pt.ManifestChecked):
-    def code(self):
-        return "I008"
-
-    def message(self) -> str:
-        return "Manifest checked"
-
-
-@dataclass
-class ManifestFlatGraphBuilt(InfoLevel, pt.ManifestFlatGraphBuilt):
-    def code(self):
-        return "I009"
-
-    def message(self) -> str:
-        return "Flat graph built"
-
-
-@dataclass
-class ParseCmdPerfInfoPath(InfoLevel, pt.ParseCmdPerfInfoPath):
-    def code(self):
-        return "I010"
-
-    def message(self) -> str:
-        return f"Performance info: {self.path}"
+# Skipping I002, I003, I004, I005, I006, I007, I008, I009, I010
 
 
 @dataclass
@@ -1290,7 +1212,7 @@ class NoNodeForYamlKey(WarnLevel, pt.NoNodeForYamlKey):
 
 
 @dataclass
-class MacroPatchNotFound(WarnLevel, pt.MacroPatchNotFound):
+class MacroNotFoundForPatch(WarnLevel, pt.MacroNotFoundForPatch):
     def code(self):
         return "I059"
 
@@ -2164,7 +2086,7 @@ class SystemExecutingCmd(DebugLevel, pt.SystemExecutingCmd):
 
 
 @dataclass
-class SystemStdOutMsg(DebugLevel, pt.SystemStdOutMsg):
+class SystemStdOut(DebugLevel, pt.SystemStdOut):
     def code(self):
         return "Z007"
 
@@ -2173,7 +2095,7 @@ class SystemStdOutMsg(DebugLevel, pt.SystemStdOutMsg):
 
 
 @dataclass
-class SystemStdErrMsg(DebugLevel, pt.SystemStdErrMsg):
+class SystemStdErr(DebugLevel, pt.SystemStdErr):
     def code(self):
         return "Z008"
 

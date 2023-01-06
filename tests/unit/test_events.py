@@ -243,16 +243,7 @@ sample_values = [
     HookFinished(stat_line="", execution="", execution_time=0),
 
     # I - Project parsing ======================
-    ParseCmdStart(),
-    ParseCmdCompiling(),
-    ParseCmdWritingManifest(),
-    ParseCmdDone(),
-    ManifestDependenciesLoaded(),
-    ManifestLoaderCreated(),
-    ManifestLoaded(),
-    ManifestChecked(),
-    ManifestFlatGraphBuilt(),
-    ParseCmdPerfInfoPath(path=""),
+    ParseCmdOut(msg="testing"),
     GenericTestFileParse(path=""),
     MacroFileParse(path=""),
     PartialParsingExceptionProcessingFile(file=""),

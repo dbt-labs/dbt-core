@@ -19,8 +19,8 @@ from dbt.events.types import (
     SystemErrorRetrievingModTime,
     SystemCouldNotWrite,
     SystemExecutingCmd,
-    SystemStdOutMsg,
-    SystemStdErrMsg,
+    SystemStdOut,
+    SystemStdErr,
     SystemReportReturnCode,
 )
 import dbt.exceptions
@@ -441,8 +441,8 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    fire_event(SystemStdOutMsg(bmsg=out))
-    fire_event(SystemStdErrMsg(bmsg=err))
+    fire_event(SystemStdOut(bmsg=out))
+    fire_event(SystemStdErr(bmsg=err))
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))

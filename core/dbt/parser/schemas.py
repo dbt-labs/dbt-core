@@ -68,7 +68,7 @@ from dbt.exceptions import (
     YamlParseListFailure,
 )
 from dbt.events.functions import warn_or_error
-from dbt.events.types import WrongResourceSchemaFile, NoNodeForYamlKey, MacroPatchNotFound
+from dbt.events.types import WrongResourceSchemaFile, NoNodeForYamlKey, MacroNotFoundForPatch
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
@@ -957,7 +957,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            warn_or_error(MacroPatchNotFound(patch_name=patch.name))
+            warn_or_error(MacroNotFoundForPatch(patch_name=patch.name))
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")
