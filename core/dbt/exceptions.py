@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Mapping, NoReturn, Optional, Union
 
 # from dbt.contracts.graph import ManifestNode # or ParsedNode?
 from dbt.dataclass_schema import ValidationError
+from dbt.internal_deprecations import deprecated
 from dbt.events.functions import warn_or_error
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import JinjaLogWarning
@@ -2139,6 +2140,16 @@ class RelationWrongType(CompilationException):
 # They will be removed in 1 (or 2?) versions.  Issue to be created to ensure it happens.
 
 # TODO: add deprecation to functions
+DEPRECATION_VERSION = "1.5.0"
+SUGGESTED_ACTION = "using `raise {exception}` directly instead"
+REASON = "Not doing it this way"
+
+
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="JinjaLogWarning"),
+    reason=REASON,
+)
 def warn(msg, node=None):
     warn_or_error(JinjaLogWarning(msg=msg, node_info=get_node_info()))
     return ""

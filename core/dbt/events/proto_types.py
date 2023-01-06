@@ -341,6 +341,17 @@ class ExposureNameDeprecation(betterproto.Message):
 
 
 @dataclass
+class FunctionDeprecated(betterproto.Message):
+    """D008"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    function_name: str = betterproto.string_field(2)
+    reason: str = betterproto.string_field(3)
+    suggested_action: str = betterproto.string_field(4)
+    version: str = betterproto.string_field(5)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 

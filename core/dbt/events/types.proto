@@ -260,6 +260,15 @@ message ExposureNameDeprecation {
     string exposure = 2;
 }
 
+//D008
+message FunctionDeprecated {
+    EventInfo info = 1;
+    string function_name = 2;
+    string reason = 3;
+    string suggested_action = 4;
+    string version = 5;
+}
+
 // E - DB Adapter
 
 // E001
