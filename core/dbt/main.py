@@ -1013,7 +1013,7 @@ def parse_args(args, cls=DBTArgumentParser):
         default=None,
         help="""
         If dbt would normally warn, instead raise an exception. Examples
-        include --models that selects nothing, deprecations, configurations
+        include --select that selects nothing, deprecations, configurations
         with no associated models, invalid test configurations, and missing
         sources/refs in tests.
         """,
@@ -1024,7 +1024,7 @@ def parse_args(args, cls=DBTArgumentParser):
         default=None,
         help="""
         If dbt would normally warn, instead raise an exception based on
-        include/exclude configuration. Examples include --models that selects
+        include/exclude configuration. Examples include --select that selects
         nothing, deprecations, configurations with no associated models,
         invalid test configurations, and missing sources/refs in tests.
         This argument should be a YAML string, with keys 'include' or 'exclude'.

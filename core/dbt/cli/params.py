@@ -360,7 +360,7 @@ version_check = click.option(
 warn_error = click.option(
     "--warn-error",
     envvar="DBT_WARN_ERROR",
-    help="If dbt would normally warn, instead raise an exception. Examples include --models that selects nothing, deprecations, configurations with no associated models, invalid test configurations, and missing sources/refs in tests.",
+    help="If dbt would normally warn, instead raise an exception. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations, and missing sources/refs in tests.",
     default=None,
     flag_value=True,
 )
@@ -369,7 +369,7 @@ warn_error_options = click.option(
     "--warn-error-options",
     envvar="DBT_WARN_ERROR_OPTIONS",
     default=None,
-    help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include --models that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
+    help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
     and missing sources/refs in tests. This argument should be a YAML string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'""",
     type=WarnErrorOptionsType(),
 )
