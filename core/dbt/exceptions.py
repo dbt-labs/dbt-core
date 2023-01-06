@@ -355,7 +355,7 @@ class SemverError(Exception):
             super().__init__()
 
 
-class VersionsNotCompatibleException(SemverError):
+class VersionsNotCompatibleError(SemverError):
     pass
 
 
@@ -2705,11 +2705,14 @@ class SemverException(SemverError):
     pass
 
 
+class VersionsNotCompatibleException(VersionsNotCompatibleError):
+    pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class VersionsNotCompatibleException(SemverException):
 # class NotImplementedException(Exception):
 # class FailedToConnectException(DatabaseException):
 # class InvalidConnectionException(RuntimeException):

@@ -13,7 +13,7 @@ from dbt.exceptions import (
     DependencyError,
     PackageNotFound,
     PackageVersionNotFound,
-    VersionsNotCompatibleException,
+    VersionsNotCompatibleError,
 )
 
 
@@ -95,7 +95,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
         self._check_in_index()
         try:
             range_ = semver.reduce_versions(*self.versions)
-        except VersionsNotCompatibleException as e:
+        except VersionsNotCompatibleError as e:
             new_msg = "Version error for package {}: {}".format(self.name, e)
             raise DependencyError(new_msg) from e
 

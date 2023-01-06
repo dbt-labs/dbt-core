@@ -2,7 +2,7 @@ import unittest
 import itertools
 
 from typing import List
-from dbt.exceptions import VersionsNotCompatibleException
+from dbt.exceptions import VersionsNotCompatibleError
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier, \
     VersionRange, reduce_versions, versions_compatible, \
     resolve_to_specific_version, filter_installable
@@ -40,7 +40,7 @@ class TestSemver(unittest.TestCase):
 
     def assertInvalidVersionSet(self, inputs):
         for permutation in itertools.permutations(inputs):
-            with self.assertRaises(VersionsNotCompatibleException):
+            with self.assertRaises(VersionsNotCompatibleError):
                 reduce_versions(*permutation)
 
     def test__versions_compatible(self):
