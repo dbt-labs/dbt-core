@@ -432,7 +432,7 @@ class InvalidSelectorError(DbtRuntimeError):
         super().__init__(name)
 
 
-class DuplicateYamlKeyException(CompilationError):
+class DuplicateYamlKeyError(CompilationError):
     pass
 
 
@@ -2725,9 +2725,11 @@ class InvalidSelectorException(InvalidSelectorError):
     pass
 
 
+# class DuplicateYamlKeyException(DuplicateYamlKeyError):
+# pass
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class DuplicateYamlKeyException(CompilationException):
 # class ConnectionException(Exception):
