@@ -366,7 +366,7 @@ class NotImplementedError(Exception):
         super().__init__(self.formatted_msg)
 
 
-class FailedToConnectException(DatabaseError):
+class FailedToConnectError(DatabaseError):
     pass
 
 
@@ -2713,11 +2713,14 @@ class NotImplementedException(NotImplementedError):
     pass
 
 
+class FailedToConnectException(FailedToConnectError):
+    pass
+
+
 # note to self: I only need to do this for classes that existed before I
 # converted from functions.  new things dont need this deprecation
 
 
-# class FailedToConnectException(DatabaseException):
 # class InvalidConnectionException(RuntimeException):
 # class InvalidSelectorException(RuntimeException):
 # class DuplicateYamlKeyException(CompilationException):

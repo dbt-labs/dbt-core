@@ -211,7 +211,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             connect should trigger a retry.
         :type retryable_exceptions: Iterable[Type[Exception]]
         :param int retry_limit: How many times to retry the call to connect. If this limit
-            is exceeded before a successful call, a FailedToConnectException will be raised.
+            is exceeded before a successful call, a FailedToConnectError will be raised.
             Must be non-negative.
         :param retry_timeout: Time to wait between attempts to connect. Can also take a
             Callable that takes the number of attempts so far, beginning at 0, and returns an int
@@ -220,14 +220,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :param int _attempts: Parameter used to keep track of the number of attempts in calling the
             connect function across recursive calls. Passed as an argument to retry_timeout if it
             is a Callable. This parameter should not be set by the initial caller.
-        :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry attempts without
+        :raises dbt.exceptions.FailedToConnectError: Upon exhausting all retry attempts without
             successfully acquiring a handle.
         :return: The given connection with its appropriate state and handle attributes set
             depending on whether we successfully acquired a handle or not.
         """
         timeout = retry_timeout(_attempts) if callable(retry_timeout) else retry_timeout
         if timeout < 0:
-            raise dbt.exceptions.FailedToConnectException(
+            raise dbt.exceptions.FailedToConnectError(
                 "retry_timeout cannot be negative or return a negative time."
             )
 
@@ -235,7 +235,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             # This guard is not perfect others may add to the recursion limit (e.g. built-ins).
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.exceptions.FailedToConnectException("retry_limit cannot be negative")
+            raise dbt.exceptions.FailedToConnectError("retry_limit cannot be negative")
 
         try:
             connection.handle = connect()
@@ -246,7 +246,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             if retry_limit <= 0:
                 connection.handle = None
                 connection.state = ConnectionState.FAIL
-                raise dbt.exceptions.FailedToConnectException(str(e))
+                raise dbt.exceptions.FailedToConnectError(str(e))
 
             logger.debug(
                 f"Got a retryable error when attempting to open a {cls.TYPE} connection.\n"
@@ -268,7 +268,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         except Exception as e:
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.exceptions.FailedToConnectException(str(e))
+            raise dbt.exceptions.FailedToConnectError(str(e))
 
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:

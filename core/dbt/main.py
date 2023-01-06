@@ -48,7 +48,7 @@ from dbt.exceptions import (
     Exception as dbtException,
     DbtInternalError,
     NotImplementedError,
-    FailedToConnectException,
+    FailedToConnectError,
 )
 
 
@@ -207,7 +207,7 @@ def track_run(task):
     try:
         yield
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
-    except (NotImplementedError, FailedToConnectException) as e:
+    except (NotImplementedError, FailedToConnectError) as e:
         fire_event(MainEncounteredError(exc=str(e)))
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
     except Exception:
