@@ -149,6 +149,7 @@ def set_from_args(args, user_config):
     STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
     WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
     WARN_ERROR_OPTIONS = get_flag_value("WARN_ERROR_OPTIONS", args, user_config)
+    _check_mutually_exclusive(["WARN_ERROR", "WARN_ERROR_OPTIONS"], args, user_config)
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
     PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
     USE_COLORS = get_flag_value("USE_COLORS", args, user_config)
@@ -181,7 +182,7 @@ def _set_overrides_from_env():
 
 
 def get_flag_value(flag, args, user_config):
-    flag_value = _load_flag_value(flag, args, user_config)
+    flag_value, _ = _load_flag_value(flag, args, user_config)
 
     if flag == "PRINTER_WIDTH":  # must be ints
         flag_value = int(flag_value)
@@ -191,20 +192,36 @@ def get_flag_value(flag, args, user_config):
     return flag_value
 
 
+def _check_mutually_exclusive(group, args, user_config):
+    set_flag = None
+    for flag in group:
+        flag_set_by_user = not _flag_value_from_default(flag, args, user_config)
+        if flag_set_by_user and set_flag:
+            raise ValueError(f"{flag.lower()}: not allowed with argument {set_flag.lower()}")
+        elif flag_set_by_user:
+            set_flag = flag
+
+
+def _flag_value_from_default(flag, args, user_config):
+    _, from_default = _load_flag_value(flag, args, user_config)
+
+    return from_default
+
+
 def _load_flag_value(flag, args, user_config):
     lc_flag = flag.lower()
     flag_value = getattr(args, lc_flag, None)
     if flag_value is not None:
-        return flag_value
+        return flag_value, False
 
     flag_value = _get_flag_value_from_env(flag)
     if flag_value is not None:
-        return flag_value
+        return flag_value, False
 
     if user_config is not None and getattr(user_config, lc_flag, None) is not None:
-        return getattr(user_config, lc_flag)
+        return getattr(user_config, lc_flag), False
 
-    return flag_defaults[flag]
+    return flag_defaults[flag], True
 
 
 def _get_flag_value_from_env(flag):
