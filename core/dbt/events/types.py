@@ -756,7 +756,7 @@ class PluginLoadError(DebugLevel, pt.PluginLoadError):  # noqa
         return "E036"
 
     def message(self):
-        pass
+        return f"{self.exc_info}"
 
 
 @dataclass

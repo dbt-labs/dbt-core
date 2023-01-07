@@ -1242,7 +1242,7 @@ class PartialParsingSkipParsing(betterproto.Message):
 
 
 @dataclass
-class PartialPArsingSkipParsingMsg(betterproto.Message):
+class PartialParsingSkipParsingMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "PartialParsingSkipParsing" = betterproto.message_field(2)
 

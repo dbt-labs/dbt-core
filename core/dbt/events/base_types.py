@@ -90,13 +90,15 @@ class EventMsg(Protocol):
     data: BaseEvent
 
 
-def build_msg_from_base_event(event: BaseEvent, level: EventLevel = None):
+def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
 
     msg_class_name = f"{type(event).__name__}Msg"
     msg_cls = getattr(pt, msg_class_name)
 
+    # level in EventInfo must be a string, not an EventLevel
+    msg_level: str = level.value if level else event.level_tag().value
     event_info = pt.EventInfo(
-        level=str(level or event.level_tag()),
+        level=msg_level,
         msg=event.message(),
         invocation_id=get_invocation_id(),
         extra=get_global_metadata_vars(),

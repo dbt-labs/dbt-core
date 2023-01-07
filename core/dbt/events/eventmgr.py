@@ -9,7 +9,7 @@ import threading
 from typing import Any, Callable, List, Optional, TextIO
 from uuid import uuid4
 
-from dbt.events.base_types import BaseEvent, EventLevel, build_msg_from_base_event, EventMsg
+from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
 
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
@@ -44,14 +44,6 @@ _log_level_map = {
     EventLevel.INFO: 20,
     EventLevel.WARN: 30,
     EventLevel.ERROR: 40,
-}
-
-_msg_level_map = {
-    "debug": 10,
-    "test": 10,
-    "info": 20,
-    "warn": 30,
-    "error": 40,
 }
 
 
@@ -119,7 +111,7 @@ class _Logger:
 
     def write_line(self, msg: EventMsg):
         line = self.create_line(msg)
-        python_level = _msg_level_map[msg.info.level]
+        python_level = _log_level_map[EventLevel(msg.info.level)]
         if self._python_logger is not None:
             send_to_logger(self._python_logger, msg.info.level, line)
         elif self._stream is not None and _log_level_map[self.level] <= python_level:
@@ -194,7 +186,7 @@ class EventManager:
         self.invocation_id: str = str(uuid4())
 
     def fire_event(self, e: BaseEvent, level: EventLevel = None) -> None:
-        msg = build_msg_from_base_event(e, level=level)
+        msg = msg_from_base_event(e, level=level)
         for logger in self.loggers:
             if logger.filter(msg):  # type: ignore
                 logger.write_line(msg)

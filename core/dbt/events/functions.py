@@ -63,8 +63,8 @@ def _stdout_filter(
     return (
         not isinstance(msg.data, NoStdOut)
         and (not isinstance(msg.data, Cache) or log_cache_events)
-        and (msg.info.level != "debug" or debug_mode)
-        and (msg.info.level == "error" or not quiet_mode)
+        and (EventLevel(msg.info.level) != EventLevel.DEBUG or debug_mode)
+        and (EventLevel(msg.info.level) == EventLevel.ERROR or not quiet_mode)
         and not (flags.LOG_FORMAT == "json" and type(msg.data) == EmptyLine)
     )
 
@@ -151,7 +151,11 @@ def msg_to_dict(msg: EventMsg) -> dict:
         event_type = type(msg).__name__
         raise Exception(f"type {event_type} is not serializable. {str(exc)}")
     # We don't want an empty NodeInfo in output
-    if "node_info" in msg_dict["data"] and msg_dict["data"]["node_info"]["node_name"] == "":
+    if (
+        "data" in msg_dict
+        and "node_info" in msg_dict["data"]
+        and msg_dict["data"]["node_info"]["node_name"] == ""
+    ):
         del msg_dict["data"]["node_info"]
     return msg_dict
 
