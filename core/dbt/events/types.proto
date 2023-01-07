@@ -588,7 +588,8 @@ message SQLQueryStatusMsg {
 
 // E018
 message SQLCommit {
-    string conn_name = 1;
+    NodeInfo node_info = 1;
+    string conn_name = 2;
 }
 
 message SQLCommitMsg {

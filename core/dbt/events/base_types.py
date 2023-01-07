@@ -97,6 +97,7 @@ def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
 
     # level in EventInfo must be a string, not an EventLevel
     msg_level: str = level.value if level else event.level_tag().value
+    assert msg_level is not None
     event_info = pt.EventInfo(
         level=msg_level,
         msg=event.message(),

@@ -759,7 +759,8 @@ class SQLQueryStatusMsg(betterproto.Message):
 class SQLCommit(betterproto.Message):
     """E018"""
 
-    conn_name: str = betterproto.string_field(1)
+    node_info: "NodeInfo" = betterproto.message_field(1)
+    conn_name: str = betterproto.string_field(2)
 
 
 @dataclass

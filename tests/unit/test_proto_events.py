@@ -57,7 +57,6 @@ def test_exception_events():
     event = RollbackFailed(conn_name="test", exc_info="something failed")
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
-    print(f"msg_dict: {msg_dict}")
     msg_json = msg.to_json()
     assert set(msg_dict.keys()) == {"info", "data"}
     assert set(msg_dict["data"].keys()) == {"conn_name", "exc_info"}
