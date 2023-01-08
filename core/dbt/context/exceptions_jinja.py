@@ -36,7 +36,9 @@ def missing_config(model, name) -> NoReturn:
 
 
 def missing_materialization(model, adapter_type) -> NoReturn:
-    raise MissingMaterialization(model=model, adapter_type=adapter_type)
+    raise MissingMaterialization(
+        materialization=model.config.materialized, adapter_type=adapter_type
+    )
 
 
 def missing_relation(relation, model=None) -> NoReturn:

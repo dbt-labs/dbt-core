@@ -355,7 +355,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_bad_package_spec(self):
         func = dbt.exceptions.bad_package_spec
-        exception = dbt.exceptions.BadSpecException
+        exception = dbt.exceptions.BadSpecError
         repo = ""
         spec = ""
         error = argparse.Namespace()
