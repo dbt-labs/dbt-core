@@ -165,7 +165,7 @@ def warn_or_error(event, node=None):
         # TODO: resolve this circular import when at top
         from dbt.exceptions import EventCompilationException
 
-        raise EventCompilationException(event.info.msg, node)
+        raise EventCompilationException(event.message(), node)
     else:
         fire_event(event)
 
