@@ -34,6 +34,7 @@ def test_basic(project, logs_dir):
         if "[debug]" in log_line:
             continue
         log_dct = json.loads(log_line)
+        log_data = log_dct["data"]
         log_event = log_dct['info']['name']
         if log_event == "NodeStart":
             node_start = True
@@ -41,11 +42,11 @@ def test_basic(project, logs_dir):
             node_finished = True
         if node_start and not node_finished:
             if log_event == 'NodeExecuting':
-                assert "node_info" in log_dct
+                assert "node_info" in log_data
             if log_event == "JinjaLogDebug":
-                assert "node_info" in log_dct
+                assert "node_info" in log_data
             if log_event == "SQLQuery":
-                assert "node_info" in log_dct
+                assert "node_info" in log_data
             if log_event == "TimingInfoCollected":
-                assert "node_info" in log_dct
-                assert "timing_info" in log_dct
+                assert "node_info" in log_data
+                assert "timing_info" in log_data
