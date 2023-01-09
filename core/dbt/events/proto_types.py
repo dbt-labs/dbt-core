@@ -200,78 +200,14 @@ class DbtProjectErrorExceptionMsg(betterproto.Message):
 class DbtProfileError(betterproto.Message):
     """A011"""
 
-    pass
+    exc: str = betterproto.string_field(1)
+    profiles: List[str] = betterproto.string_field(2)
 
 
 @dataclass
 class DbtProfileErrorMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "DbtProfileError" = betterproto.message_field(2)
-
-
-@dataclass
-class DbtProfileErrorException(betterproto.Message):
-    """A012"""
-
-    exc: str = betterproto.string_field(1)
-
-
-@dataclass
-class DbtProfileErrorExceptionMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DbtProfileErrorException" = betterproto.message_field(2)
-
-
-@dataclass
-class ProfileListTitle(betterproto.Message):
-    """A013"""
-
-    pass
-
-
-@dataclass
-class ProfileListTitleMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ProfileListTitle" = betterproto.message_field(2)
-
-
-@dataclass
-class ListSingleProfile(betterproto.Message):
-    """A014"""
-
-    profile: str = betterproto.string_field(1)
-
-
-@dataclass
-class ListSingleProfileMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ListSingleProfile" = betterproto.message_field(2)
-
-
-@dataclass
-class NoDefinedProfiles(betterproto.Message):
-    """A015"""
-
-    pass
-
-
-@dataclass
-class NoDefinedProfilesMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "NoDefinedProfiles" = betterproto.message_field(2)
-
-
-@dataclass
-class ProfileHelpMessage(betterproto.Message):
-    """A016"""
-
-    pass
-
-
-@dataclass
-class ProfileHelpMessageMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ProfileHelpMessage" = betterproto.message_field(2)
 
 
 @dataclass
@@ -508,11 +444,16 @@ class ExposureNameDeprecationMsg(betterproto.Message):
 class FunctionDeprecated(betterproto.Message):
     """D008"""
 
+    function_name: str = betterproto.string_field(1)
+    reason: str = betterproto.string_field(2)
+    suggested_action: str = betterproto.string_field(3)
+    version: str = betterproto.string_field(4)
+
+
+@dataclass
+class FunctionDeprecatedMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    function_name: str = betterproto.string_field(2)
-    reason: str = betterproto.string_field(3)
-    suggested_action: str = betterproto.string_field(4)
-    version: str = betterproto.string_field(5)
+    data: "FunctionDeprecated" = betterproto.message_field(2)
 
 
 @dataclass

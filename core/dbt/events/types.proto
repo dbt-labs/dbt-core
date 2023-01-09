@@ -152,6 +152,8 @@ message DbtProjectErrorExceptionMsg {
 
 // A011
 message DbtProfileError {
+    string exc = 1;
+    repeated string profiles = 2;
 }
 
 message DbtProfileErrorMsg {
@@ -159,52 +161,7 @@ message DbtProfileErrorMsg {
     DbtProfileError data = 2;
 }
 
-// A012
-message DbtProfileErrorException {
-    string exc = 1;
-}
-
-message DbtProfileErrorExceptionMsg {
-    EventInfo info = 1;
-    DbtProfileErrorException data = 2;
-}
-
-// A013
-message ProfileListTitle {
-}
-
-message ProfileListTitleMsg {
-    EventInfo info = 1;
-    ProfileListTitle data = 2;
-}
-
-// A014
-message ListSingleProfile {
-    string profile = 1;
-}
-
-message ListSingleProfileMsg {
-    EventInfo info = 1;
-    ListSingleProfile data = 2;
-}
-
-// A015
-message NoDefinedProfiles {
-}
-
-message NoDefinedProfilesMsg {
-    EventInfo info = 1;
-    NoDefinedProfiles data = 2;
-}
-
-// A016
-message ProfileHelpMessage {
-}
-
-message ProfileHelpMessageMsg {
-    EventInfo info = 1;
-    ProfileHelpMessage data = 2;
-}
+// Skipped A012, A013, A014, A015, A016
 
 // A017
 message StarterProjectPath {
@@ -386,11 +343,15 @@ message ExposureNameDeprecationMsg {
 
 //D008
 message FunctionDeprecated {
+    string function_name = 1;
+    string reason = 2;
+    string suggested_action = 3;
+    string version = 4;
+}
+
+message FunctionDeprecatedMsg {
     EventInfo info = 1;
-    string function_name = 2;
-    string reason = 3;
-    string suggested_action = 4;
-    string version = 5;
+    FunctionDeprecated data = 2;
 }
 
 // E - DB Adapter

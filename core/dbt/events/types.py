@@ -140,56 +140,20 @@ class DbtProfileError(ErrorLevel, pt.DbtProfileError):
         return "A011"
 
     def message(self) -> str:
-        return "Encountered an error while reading profiles:"
+        msg = "Encountered an error while reading profiles:\n" f"  ERROR: {str(self.exc)}"
+        if self.profiles:
+            msg += "Defined profiles:\n"
+            for profile in self.profiles:
+                msg += f" - {profile}"
+        else:
+            msg += "There are no profiles defined in your profiles.yml file"
 
-
-@dataclass
-class DbtProfileErrorException(ErrorLevel, pt.DbtProfileErrorException):
-    def code(self):
-        return "A012"
-
-    def message(self) -> str:
-        return f"  ERROR: {str(self.exc)}"
-
-
-@dataclass
-class ProfileListTitle(InfoLevel, pt.ProfileListTitle):
-    def code(self):
-        return "A013"
-
-    def message(self) -> str:
-        return "Defined profiles:"
-
-
-@dataclass
-class ListSingleProfile(InfoLevel, pt.ListSingleProfile):
-    def code(self):
-        return "A014"
-
-    def message(self) -> str:
-        return f" - {self.profile}"
-
-
-@dataclass
-class NoDefinedProfiles(InfoLevel, pt.NoDefinedProfiles):
-    def code(self):
-        return "A015"
-
-    def message(self) -> str:
-        return "There are no profiles defined in your profiles.yml file"
-
-
-@dataclass
-class ProfileHelpMessage(InfoLevel, pt.ProfileHelpMessage):
-    def code(self):
-        return "A016"
-
-    def message(self) -> str:
-        return """
+        msg += """
 For more information on configuring profiles, please consult the dbt docs:
 
 https://docs.getdbt.com/docs/configure-your-profile
 """
+        return msg
 
 
 @dataclass

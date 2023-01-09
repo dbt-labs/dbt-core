@@ -27,11 +27,6 @@ from dbt.events.types import (
     DbtProjectError,
     DbtProjectErrorException,
     DbtProfileError,
-    DbtProfileErrorException,
-    ProfileListTitle,
-    ListSingleProfile,
-    NoDefinedProfiles,
-    ProfileHelpMessage,
     CatchableExceptionOnRun,
     InternalExceptionOnRun,
     GenericExceptionOnRun,
@@ -108,20 +103,8 @@ class BaseTask(metaclass=ABCMeta):
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
-            fire_event(DbtProfileError())
-            fire_event(DbtProfileErrorException(exc=str(exc)))
-
             all_profiles = read_profiles(flags.PROFILES_DIR).keys()
-
-            if len(all_profiles) > 0:
-                fire_event(ProfileListTitle())
-                for profile in all_profiles:
-                    fire_event(ListSingleProfile(profile=profile))
-            else:
-                fire_event(NoDefinedProfiles())
-
-            fire_event(ProfileHelpMessage())
-
+            fire_event(DbtProfileError(exc=str(exc), profiles=all_profiles))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
         return cls(args, config)
