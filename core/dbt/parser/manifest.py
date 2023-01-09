@@ -7,6 +7,7 @@ import traceback
 from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
 from itertools import chain
 import time
+from dbt.events.base_types import EventLevel
 
 import dbt.exceptions
 import dbt.tracking
@@ -961,19 +962,20 @@ def invalid_target_fail_unless_test(
     target_kind: str,
     target_package: Optional[str] = None,
     disabled: Optional[bool] = None,
+    should_warn_if_disabled: bool = True,
 ):
     if node.resource_type == NodeType.Test:
         if disabled:
-            fire_event(
-                InvalidDisabledTargetInTestNode(
-                    resource_type_title=node.resource_type.title(),
-                    unique_id=node.unique_id,
-                    original_file_path=node.original_file_path,
-                    target_kind=target_kind,
-                    target_name=target_name,
-                    target_package=target_package if target_package else "",
-                )
+            event = InvalidDisabledTargetInTestNode(
+                resource_type_title=node.resource_type.title(),
+                unique_id=node.unique_id,
+                original_file_path=node.original_file_path,
+                target_kind=target_kind,
+                target_name=target_name,
+                target_package=target_package if target_package else "",
             )
+
+            fire_event(event, EventLevel.WARN if should_warn_if_disabled else None)
         else:
             warn_or_error(
                 NodeNotFoundOrDisabled(
@@ -1132,6 +1134,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
                 target_kind="node",
                 target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
+                should_warn_if_disabled=False,
             )
 
             continue
@@ -1175,6 +1178,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 target_kind="node",
                 target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
+                should_warn_if_disabled=False,
             )
             continue
 
@@ -1270,6 +1274,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 target_kind="node",
                 target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
+                should_warn_if_disabled=False,
             )
             continue
 
