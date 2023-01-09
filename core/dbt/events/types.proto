@@ -69,607 +69,901 @@ message GenericMessage {
 
 // A001
 message MainReportVersion {
+    string version = 1;
+    int32 log_version = 2;
+}
+
+message MainReportVersionMsg {
     EventInfo info = 1;
-    string version = 2;
-    int32 log_version = 3;
+    MainReportVersion data = 2;
 }
 
 // A002
 message MainReportArgs {
+    map<string, string> args = 1;
+}
+
+message MainReportArgsMsg {
     EventInfo info = 1;
-    map<string, string> args = 2;
+    MainReportArgs data = 2;
 }
 
 // A003
 message MainTrackingUserState {
+    string user_state = 1;
+}
+
+message MainTrackingUserStateMsg {
     EventInfo info = 1;
-    string user_state = 2;
+    MainTrackingUserState data = 2;
 }
 
 // A004
 message MergedFromState {
+    int32 num_merged = 1;
+    repeated string sample = 2;
+}
+
+message MergedFromStateMsg {
     EventInfo info = 1;
-    int32 num_merged = 2;
-    repeated string sample = 3;
+    MergedFromState data = 2;
 }
 
 // A005
 message MissingProfileTarget {
+    string profile_name = 1;
+    string target_name = 2;
+}
+
+message MissingProfileTargetMsg {
     EventInfo info = 1;
-    string profile_name = 2;
-    string target_name = 3;
+    MissingProfileTarget data = 2;
 }
 
 // Skipped A006, A007
 
 // A008
 message InvalidVarsYAML {
+}
+
+message InvalidVarsYAMLMsg {
     EventInfo info = 1;
+    InvalidVarsYAML data = 2;
 }
 
 // A009
 message DbtProjectError {
+}
+
+message DbtProjectErrorMsg {
     EventInfo info = 1;
+    DbtProjectError data = 2;
 }
 
 // A010
 message DbtProjectErrorException {
+    string exc = 1;
+}
+
+message DbtProjectErrorExceptionMsg {
     EventInfo info = 1;
-    string exc = 2;
+    DbtProjectErrorException data = 2;
 }
 
 // A011
 message DbtProfileError {
+}
+
+message DbtProfileErrorMsg {
     EventInfo info = 1;
+    DbtProfileError data = 2;
 }
 
 // A012
 message DbtProfileErrorException {
+    string exc = 1;
+}
+
+message DbtProfileErrorExceptionMsg {
     EventInfo info = 1;
-    string exc = 2;
+    DbtProfileErrorException data = 2;
 }
 
 // A013
 message ProfileListTitle {
+}
+
+message ProfileListTitleMsg {
     EventInfo info = 1;
+    ProfileListTitle data = 2;
 }
 
 // A014
 message ListSingleProfile {
+    string profile = 1;
+}
+
+message ListSingleProfileMsg {
     EventInfo info = 1;
-    string profile = 2;
+    ListSingleProfile data = 2;
 }
 
 // A015
 message NoDefinedProfiles {
+}
+
+message NoDefinedProfilesMsg {
     EventInfo info = 1;
+    NoDefinedProfiles data = 2;
 }
 
 // A016
 message ProfileHelpMessage {
+}
+
+message ProfileHelpMessageMsg {
     EventInfo info = 1;
+    ProfileHelpMessage data = 2;
 }
 
 // A017
 message StarterProjectPath {
+    string dir = 1;
+}
+
+message StarterProjectPathMsg {
     EventInfo info = 1;
-    string dir = 2;
+    StarterProjectPath data = 2;
 }
 
 // A018
 message ConfigFolderDirectory {
+    string dir = 1;
+}
+
+message ConfigFolderDirectoryMsg {
     EventInfo info = 1;
-    string dir = 2;
+    ConfigFolderDirectory data = 2;
 }
 
 // A019
 message NoSampleProfileFound {
+    string adapter = 1;
+}
+
+message NoSampleProfileFoundMsg {
     EventInfo info = 1;
-    string adapter = 2;
+    NoSampleProfileFound data = 2;
 }
 
 // A020
 message ProfileWrittenWithSample {
+    string name = 1;
+    string path = 2;
+}
+
+message ProfileWrittenWithSampleMsg {
     EventInfo info = 1;
-    string name = 2;
-    string path = 3;
+    ProfileWrittenWithSample data = 2;
 }
 
 // A021
 message ProfileWrittenWithTargetTemplateYAML {
+    string name = 1;
+    string path = 2;
+}
+
+message ProfileWrittenWithTargetTemplateYAMLMsg {
     EventInfo info = 1;
-    string name = 2;
-    string path = 3;
+    ProfileWrittenWithTargetTemplateYAMLMsg data = 2;
 }
 
 // A022
 message ProfileWrittenWithProjectTemplateYAML {
+    string name = 1;
+    string path = 2;
+}
+
+message ProfileWrittenWithProjectTemplateYAMLMsg {
     EventInfo info = 1;
-    string name = 2;
-    string path = 3;
+    ProfileWrittenWithProjectTemplateYAML data = 2;
 }
 
 // A023
 message SettingUpProfile {
+}
+
+message SettingUpProfileMsg {
     EventInfo info = 1;
+    SettingUpProfile data = 2;
 }
 
 // A024
 message InvalidProfileTemplateYAML {
+}
+
+message InvalidProfileTemplateYAMLMsg {
     EventInfo info = 1;
+    InvalidProfileTemplateYAML data = 2;
 }
 
 // A025
 message ProjectNameAlreadyExists {
+    string name = 1;
+}
+
+message ProjectNameAlreadyExistsMsg {
     EventInfo info = 1;
-    string name = 2;
+    ProjectNameAlreadyExists data = 2;
 }
 
 // A026
 message ProjectCreated {
+    string project_name = 1;
+    string docs_url = 2;
+    string slack_url = 3;
+}
+
+message ProjectCreatedMsg {
     EventInfo info = 1;
-    string project_name = 2;
-    string docs_url = 3;
-    string slack_url = 4;
+    ProjectCreated data = 2;
 }
 
 // D - Deprecation
 
 // D001
 message PackageRedirectDeprecation {
+    string old_name = 1;
+    string new_name = 2;
+}
+
+message PackageRedirectDeprecationMsg {
     EventInfo info = 1;
-    string old_name = 2;
-    string new_name = 3;
+    PackageRedirectDeprecation data = 2;
 }
 
 // D002
 message PackageInstallPathDeprecation {
+}
+
+message PackageInstallPathDeprecationMsg {
     EventInfo info = 1;
+    PackageInstallPathDeprecation data = 2;
 }
 
 // D003
 message ConfigSourcePathDeprecation {
+    string deprecated_path = 1;
+    string exp_path = 2;
+}
+
+message ConfigSourcePathDeprecationMsg {
     EventInfo info = 1;
-    string deprecated_path = 2;
-    string exp_path = 3;
+    ConfigSourcePathDeprecation data = 2;
 }
 
 // D004
 message ConfigDataPathDeprecation {
+    string deprecated_path = 1;
+    string exp_path = 2;
+}
+
+message ConfigDataPathDeprecationMsg {
     EventInfo info = 1;
-    string deprecated_path = 2;
-    string exp_path = 3;
+    ConfigDataPathDeprecation data = 2;
 }
 
 //D005
 message AdapterDeprecationWarning {
+    string old_name = 1;
+    string new_name = 2;
+}
+
+message AdapterDeprecationWarningMsg {
     EventInfo info = 1;
-    string old_name = 2;
-    string new_name = 3;
+    AdapterDeprecationWarning data = 2;
 }
 
 //D006
 message MetricAttributesRenamed {
+    string metric_name = 1;
+}
+
+message MetricAttributesRenamedMsg {
     EventInfo info = 1;
-    string metric_name = 2;
+    MetricAttributesRenamed data = 2;
 }
 
 //D007
 message ExposureNameDeprecation {
+    string exposure = 1;
+}
+
+message ExposureNameDeprecationMsg {
     EventInfo info = 1;
-    string exposure = 2;
+    ExposureNameDeprecation data = 2;
 }
 
 // E - DB Adapter
 
 // E001
 message AdapterEventDebug {
+    NodeInfo node_info = 1;
+    string name = 2;
+    string base_msg = 3;
+    repeated string args = 4;
+}
+
+message AdapterEventDebugMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    string base_msg = 4;
-    repeated string args = 5;
+    AdapterEventDebug data = 2;
 }
 
 // E002
 message AdapterEventInfo {
+    NodeInfo node_info = 1;
+    string name = 2;
+    string base_msg = 3;
+    repeated string args = 4;
+}
+
+message AdapterEventInfoMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    string base_msg = 4;
-    repeated string args = 5;
+    AdapterEventInfo data = 2;
 }
 
 // E003
 message AdapterEventWarning {
+    NodeInfo node_info = 1;
+    string name = 2;
+    string base_msg = 3;
+    repeated string args = 4;
+}
+
+message AdapterEventWarningMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    string base_msg = 4;
-    repeated string args = 5;
+    AdapterEventWarning data = 2;
 }
 
 // E004
 message AdapterEventError {
+    NodeInfo node_info = 1;
+    string name = 2;
+    string base_msg = 3;
+    repeated string args = 4;
+    string exc_info = 5;
+}
+
+message AdapterEventErrorMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    string base_msg = 4;
-    repeated string args = 5;
-    string exc_info = 6;
+    AdapterEventError data = 2;
 }
 
 // E005
 message NewConnection {
+    NodeInfo node_info = 1;
+    string conn_type = 2;
+    string conn_name = 3;
+}
+
+message NewConnectionMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_type = 3;
-    string conn_name = 4;
+    NewConnection data = 2;
 }
 
 // E006
 message ConnectionReused {
+    string conn_name = 1;
+}
+
+message ConnectionReusedMsg {
     EventInfo info = 1;
-    string conn_name = 2;
+    ConnectionReused data = 2;
 }
 
 // E007
 message ConnectionLeftOpenInCleanup {
+    string conn_name = 1;
+}
+
+message ConnectionLeftOpenInCleanupMsg {
     EventInfo info = 1;
-    string conn_name = 2;
+    ConnectionLeftOpen data = 2;
 }
 
 // E008
 message ConnectionClosedInCleanup {
+    string conn_name = 1;
+}
+
+message ConnectionClosedInCleanupMsg {
     EventInfo info = 1;
-    string conn_name = 2;
+    ConnectionClosedInCleanup data = 2;
 }
 
 // E009
 message RollbackFailed {
+    NodeInfo node_info = 1;
+    string conn_name = 2;
+    string exc_info = 3;
+}
+
+message RollbackFailedMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_name = 3;
-    string exc_info = 4;
+    RollbackFailed data = 2;
 }
 
 // E010
 message ConnectionClosed {
+    NodeInfo node_info = 1;
+    string conn_name = 2;
+}
+
+message ConnectionClosedMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_name = 3;
+    ConnectionClosed data = 2;
 }
 
 // E011
 message ConnectionLeftOpen {
+    NodeInfo node_info = 1;
+    string conn_name = 2;
+}
+
+message ConnectionLeftOpenMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_name = 3;
+    ConnectionLeftOpen data = 2;
 }
 
 // E012
 message Rollback {
+    NodeInfo node_info = 1;
+    string conn_name = 2;
+}
+
+message RollbackMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_name = 3;
+    Rollback data = 2;
 }
 
 // E013
 message CacheMiss {
+    string conn_name = 1;
+    string database = 2;
+    string schema = 3;
+}
+
+message CacheMissMsg {
     EventInfo info = 1;
-    string conn_name = 2;
-    string database = 3;
-    string schema = 4;
+    CacheMiss data = 2;
 }
 
 // E014
 message ListRelations {
+    string database = 1;
+    string schema = 2;
+    repeated ReferenceKeyMsg relations = 3;
+}
+
+message ListRelationsMsg {
     EventInfo info = 1;
-    string database = 2;
-    string schema = 3;
-    repeated ReferenceKeyMsg relations = 4;
+    ListRelations data = 2;
 }
 
 // E015
 message ConnectionUsed {
+    NodeInfo node_info = 1;
+    string conn_type = 2;
+    string conn_name = 3;
+}
+
+message ConnectionUsedMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_type = 3;
-    string conn_name = 4;
+    ConnectionUsed data = 2;
 }
 
 // E016
 message SQLQuery {
+    NodeInfo node_info = 1;
+    string conn_name = 2;
+    string sql = 3;
+}
+
+message SQLQueryMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_name = 3;
-    string sql = 4;
+    SQLQuery data = 2;
 }
 
 // E017
 message SQLQueryStatus {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string status = 3;
-    float elapsed = 4;
-}
-
-// E018
-message SQLCommit {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string conn_name = 3;
-}
-
-// E019
-message ColTypeChange {
-    EventInfo info = 1;
-    string orig_type = 2;
-    string new_type = 3;
-    ReferenceKeyMsg table = 4;
-}
-
-// E020
-message SchemaCreation {
-    EventInfo info = 1;
-    ReferenceKeyMsg relation = 2;
-}
-
-// E021
-message SchemaDrop {
-    EventInfo info = 1;
-    ReferenceKeyMsg relation = 2;
-}
-
-// E022
-message UncachedRelation {
-    EventInfo info = 1;
-    ReferenceKeyMsg dep_key = 2;
-    ReferenceKeyMsg ref_key = 3;
-}
-
-// E023
-message AddLink {
-    EventInfo info = 1;
-    ReferenceKeyMsg dep_key = 2;
-    ReferenceKeyMsg ref_key = 3;
-}
-
-// E024
-message AddRelation {
-    EventInfo info = 1;
-    ReferenceKeyMsg relation = 2;
-}
-
-// E025
-message DropMissingRelation {
-    EventInfo info = 1;
-    ReferenceKeyMsg relation = 2;
-}
-
-// E026
-message DropCascade {
-    EventInfo info = 1;
-    ReferenceKeyMsg dropped = 2;
-    repeated ReferenceKeyMsg consequences = 3;
-}
-
-// E027
-message DropRelation {
-    EventInfo info = 1;
-    ReferenceKeyMsg dropped = 2;
-}
-
-// E028
-message UpdateReference {
-    EventInfo info = 1;
-    ReferenceKeyMsg old_key = 2;
-    ReferenceKeyMsg new_key = 3;
-    ReferenceKeyMsg cached_key = 4;
-}
-
-// E029
-message TemporaryRelation {
-    EventInfo info = 1;
-    ReferenceKeyMsg key = 2;
-}
-
-// E030
-message RenameSchema {
-    EventInfo info = 1;
-    ReferenceKeyMsg old_key = 2;
-    ReferenceKeyMsg new_key = 3;
-}
-
-// E031
-message DumpBeforeAddGraph {
-    EventInfo info = 1;
-    map<string, ListOfStrings> dump = 2;
-}
-
-// E032
-message DumpAfterAddGraph {
-    EventInfo info = 1;
-    map<string, ListOfStrings> dump = 2;
-}
-
-// E033
-message DumpBeforeRenameSchema {
-    EventInfo info = 1;
-    map<string, ListOfStrings> dump = 2;
-}
-
-// E034
-message DumpAfterRenameSchema {
-    EventInfo info = 1;
-    map<string, ListOfStrings> dump = 2;
-}
-
-// E035
-message AdapterImportError {
-    EventInfo info = 1;
-    string exc = 2;
-}
-
-// E036
-message PluginLoadError {
-    EventInfo info = 1;
-    string exc_info = 2;
-}
-
-// E037
-message NewConnectionOpening {
-    EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string connection_state = 3;
-}
-
-// E038
-message CodeExecution {
-    EventInfo info = 1;
-    string conn_name = 2;
-    string code_content = 3;
-}
-
-// E039
-message CodeExecutionStatus {
-    EventInfo info = 1;
+    NodeInfo node_info = 1;
     string status = 2;
     float elapsed = 3;
 }
 
+message SQLQueryStatusMsg {
+    EventInfo info = 1;
+    SQLQueryStatus data = 2;
+}
+
+// E018
+message SQLCommit {
+    NodeInfo node_info = 1;
+    string conn_name = 2;
+}
+
+message SQLCommitMsg {
+    EventInfo info = 1;
+    SQLCommit data = 2;
+}
+
+// E019
+message ColTypeChange {
+    string orig_type = 1;
+    string new_type = 2;
+    ReferenceKeyMsg table = 3;
+}
+
+message ColTypeChangeMsg {
+    EventInfo info = 1;
+    ColTypeChange data = 2;
+}
+
+// E020
+message SchemaCreation {
+    ReferenceKeyMsg relation = 1;
+}
+
+message SchemaCreationMsg {
+    EventInfo info = 1;
+    SchemaCreation data = 2;
+}
+
+// E021
+message SchemaDrop {
+    ReferenceKeyMsg relation = 1;
+}
+
+message SchemaDropMsg {
+    EventInfo info = 1;
+    SchemaDrop data = 2;
+}
+
+// E022
+message UncachedRelation {
+    ReferenceKeyMsg dep_key = 1;
+    ReferenceKeyMsg ref_key = 2;
+}
+
+message UncachedRelationMsg {
+    EventInfo info = 1;
+    UncachedRelation data = 2;
+}
+
+// E023
+message AddLink {
+    ReferenceKeyMsg dep_key = 1;
+    ReferenceKeyMsg ref_key = 2;
+}
+
+message AddLinkMsg {
+    EventInfo info = 1;
+    AddLink data = 2;
+}
+
+// E024
+message AddRelation {
+    ReferenceKeyMsg relation = 1;
+}
+
+message AddRelationMsg {
+    EventInfo info = 1;
+    AddRelation data = 2;
+}
+
+// E025
+message DropMissingRelation {
+    ReferenceKeyMsg relation = 1;
+}
+
+message DropMissingRelationMsg {
+    EventInfo info = 1;
+    DropMissingRelation data = 2;
+}
+
+// E026
+message DropCascade {
+    ReferenceKeyMsg dropped = 1;
+    repeated ReferenceKeyMsg consequences = 2;
+}
+
+message DropCascadeMsg {
+    EventInfo info = 1;
+    DropCascade data = 2;
+}
+
+// E027
+message DropRelation {
+    ReferenceKeyMsg dropped = 1;
+}
+
+message DropRelationMsg {
+    EventInfo info = 1;
+    DropRelation data = 2;
+}
+
+// E028
+message UpdateReference {
+    ReferenceKeyMsg old_key = 1;
+    ReferenceKeyMsg new_key = 2;
+    ReferenceKeyMsg cached_key = 3;
+}
+
+message UpdateReferenceMsg {
+    EventInfo info = 1;
+    UpdateReference data = 2;
+}
+
+// E029
+message TemporaryRelation {
+    ReferenceKeyMsg key = 1;
+}
+
+message TemporaryRelationMsg {
+    EventInfo info = 1;
+    TemporaryRelation data = 2;
+}
+
+// E030
+message RenameSchema {
+    ReferenceKeyMsg old_key = 1;
+    ReferenceKeyMsg new_key = 2;
+}
+
+message RenameSchemaMsg {
+    EventInfo info = 1;
+    RenameSchema data = 2;
+}
+
+// E031
+message DumpBeforeAddGraph {
+    map<string, ListOfStrings> dump = 1;
+}
+
+message DumpBeforeAddGraphMsg {
+    EventInfo info = 1;
+    DumpBeforeAddGraph data = 2;
+}
+
+// E032
+message DumpAfterAddGraph {
+    map<string, ListOfStrings> dump = 1;
+}
+
+message DumpAfterAddGraphMsg {
+    EventInfo info = 1;
+    DumpAfterAddGraph data = 2;
+}
+
+// E033
+message DumpBeforeRenameSchema {
+    map<string, ListOfStrings> dump = 1;
+}
+
+message DumpBeforeRenameSchemaMsg {
+    EventInfo info = 1;
+    DumpBeforeRenameSchema data = 2;
+}
+
+// E034
+message DumpAfterRenameSchema {
+    map<string, ListOfStrings> dump = 1;
+}
+
+message DumpAfterRenameSchemaMsg {
+    EventInfo info = 1;
+    DumpAfterRenameSchema data = 2;
+}
+
+// E035
+message AdapterImportError {
+    string exc = 1;
+}
+
+message AdapterImportErrorMsg {
+    EventInfo info = 1;
+    AdapterImportError data = 2;
+}
+
+// E036
+message PluginLoadError {
+    string exc_info = 1;
+}
+
+message PluginLoadErrorMsg {
+    EventInfo info = 1;
+    PluginLoadError data = 2;
+}
+
+// E037
+message NewConnectionOpening {
+    NodeInfo node_info = 1;
+    string connection_state = 2;
+}
+
+message NewConnectionOpeningMsg {
+    EventInfo info = 1;
+    NewConnectionOpening data = 2;
+}
+
+// E038
+message CodeExecution {
+    string conn_name = 1;
+    string code_content = 2;
+}
+
+message CodeExecutionMsg {
+    EventInfo info = 1;
+    CodeExecution data = 2;
+}
+
+// E039
+message CodeExecutionStatus {
+    string status = 1;
+    float elapsed = 2;
+}
+
+message CodeExecutionStatusMsg {
+    EventInfo info = 1;
+    CodeExecutionStatus data = 2;
+}
+
 // E040
 message CatalogGenerationError {
+    string exc = 1;
+}
+
+message CatalogGenerationErrorMsg {
     EventInfo info = 1;
-    string exc = 2;
+    CatalogGenerationError data = 2;
 }
 
 // E041
 message WriteCatalogFailure {
+    int32 num_exceptions = 1;
+}
+
+message WriteCatalogFailureMsg {
     EventInfo info = 1;
-    int32 num_exceptions = 2;
+    WriteCatalogFailure data = 2;
 }
 
 // E042
 message CatalogWritten {
+    string path = 1;
+}
+
+message CatalogWrittenMsg {
     EventInfo info = 1;
-    string path = 2;
+    CatalogWritten data = 2;
 }
 
 // E043
 message CannotGenerateDocs {
+}
+
+message CannotGenerateDocsMsg {
     EventInfo info = 1;
+    CannotGenerateDocs data = 2;
 }
 
 // E044
 message BuildingCatalog {
+}
+
+message BuildingCatalogMsg {
     EventInfo info = 1;
+    BuildingCatalog data = 2;
 }
 
 // E045
 message DatabaseErrorRunningHook {
+    string hook_type = 1;
+}
+
+message DatabaseErrorRunningHookMsg {
     EventInfo info = 1;
-    string hook_type = 2;
+    DatabaseErrorRunningHook data = 2;
 }
 
 // E046
 message HooksRunning {
+    int32 num_hooks = 1;
+    string hook_type = 2;
+}
+
+message HooksRunningMsg {
     EventInfo info = 1;
-    int32 num_hooks = 2;
-    string hook_type = 3;
+    HooksRunning data = 2;
 }
 
 // E047
 message HookFinished {
+    string stat_line = 1;
+    string execution = 2;
+    float execution_time = 3;
+}
+
+message HookFinishedMsg {
     EventInfo info = 1;
-    string stat_line = 2;
-    string execution = 3;
-    float execution_time = 4;
+    HookFinished data = 2;
 }
 
 
 // I - Project parsing
 
 // I001
-message ParseCmdStart {
-    EventInfo info = 1;
+message ParseCmdOut {
+    string msg = 1;
 }
 
-// I002
-message ParseCmdCompiling {
+message ParseCmdOutMsg {
     EventInfo info = 1;
+    ParseCmdOut data = 2;
 }
 
-// I003
-message ParseCmdWritingManifest {
-    EventInfo info = 1;
-}
+// Skipping I002, I003, I004, I005, I006, I007, I008, I009, I010
 
-// I004
-message ParseCmdDone {
-    EventInfo info = 1;
-}
-
-// I005
-message ManifestDependenciesLoaded {
-    EventInfo info = 1;
-}
-
-// I006
-message ManifestLoaderCreated {
-    EventInfo info = 1;
-}
-
-// I007
-message ManifestLoaded {
-    EventInfo info = 1;
-}
-
-// I008
-message ManifestChecked {
-    EventInfo info = 1;
-}
-
-// I009
-message ManifestFlatGraphBuilt {
-    EventInfo info = 1;
-}
-
-// I010
-message ParseCmdPerfInfoPath {
-    EventInfo info = 1;
-    string path = 2;
-}
 
 // I011
 message GenericTestFileParse {
+    string path = 1;
+}
+
+message GenericTestFileParseMsg {
     EventInfo info = 1;
-    string path = 2;
+    GenericTestFileParse data = 2;
 }
 
 // I012
 message MacroFileParse {
+    string path = 1;
+}
+
+message MacroFileParseMsg {
     EventInfo info = 1;
-    string path = 2;
+    MacroFileParse data = 2;
 }
 
 // Skipping I013
 
 // I014
 message PartialParsingExceptionProcessingFile {
+    string file = 1;
+}
+
+message PartialParsingExceptionProcessingFileMsg {
     EventInfo info = 1;
-    string file = 2;
+    PartialParsingExceptionProcessingFile data = 2;
 }
 
 // I016
 message PartialParsingException {
+    map<string, string> exc_info = 1;
+}
+
+message PartialParsingExceptionMsg {
     EventInfo info = 1;
-    map<string, string> exc_info = 2;
+    PartialParsingException data = 2;
 }
 
 // I017
 message PartialParsingSkipParsing {
+}
+
+message PartialParsingSkipParsingMsg {
     EventInfo info = 1;
+    PartialParsingSkipParsing data = 2;
 }
 
 
@@ -678,8 +972,12 @@ message PartialParsingSkipParsing {
 
 // I024
 message UnableToPartialParse {
+    string reason = 1;
+}
+
+message UnableToPartialParseMsg {
     EventInfo info = 1;
-    string reason = 2;
+    UnableToPartialParse data = 2;
 }
 
 // Skipped I025, I026, I027
@@ -687,15 +985,23 @@ message UnableToPartialParse {
 
 // I028
 message PartialParsingNotEnabled {
+}
+
+message PartialParsingNotEnabledMsg {
     EventInfo info = 1;
+    PartialParsingNotEnabled data = 2;
 }
 
 // I029
 message ParsedFileLoadFailed {
+    string path = 1;
+    string exc = 2;
+    string exc_info = 3;
+}
+
+message ParsedFileLoadFailedMsg {
     EventInfo info = 1;
-    string path = 2;
-    string exc = 3;
-    string exc_info = 4;
+    ParsedFileLoadFailed data = 2;
 }
 
 // Skipping I030
@@ -703,406 +1009,646 @@ message ParsedFileLoadFailed {
 
 // I031
 message StaticParserCausedJinjaRendering {
+    string path = 1;
+}
+
+message StaticParserCausedJinjaRenderingMsg {
     EventInfo info = 1;
-    string path = 2;
+    StaticParserCausedJinjaRendering data = 2;
 }
 
 // I032
 message UsingExperimentalParser {
+    string path = 1;
+}
+
+message UsingExperimentalParserMsg {
     EventInfo info = 1;
-    string path = 2;
+    UsingExperimentalParser data = 2;
 }
 
 // I033
 message SampleFullJinjaRendering {
+    string path = 1;
+}
+
+message SampleFullJinjaRenderingMsg {
     EventInfo info = 1;
-    string path = 2;
+    SampleFullJinjaRendering data = 2;
 }
 
 // I034
 message StaticParserFallbackJinjaRendering {
+    string path = 1;
+}
+
+message StaticParserFallbackJinjaRenderingMsg {
     EventInfo info = 1;
-    string path = 2;
+    StaticParserFallbackJinjaRendering data = 2;
 }
 
 // I035
 message StaticParsingMacroOverrideDetected {
+    string path = 1;
+}
+
+message StaticParsingMacroOverrideDetectedMsg {
     EventInfo info = 1;
-    string path = 2;
+    StaticParsingMacroOverrideDetected data = 2;
 }
 
 // I036
 message StaticParserSuccess {
+    string path = 1;
+}
+
+message StaticParserSuccessMsg {
     EventInfo info = 1;
-    string path = 2;
+    StaticParserSuccess data = 2;
 }
 
 // I037
 message StaticParserFailure {
+    string path = 1;
+}
+
+message StaticParserFailureMsg {
     EventInfo info = 1;
-    string path = 2;
+    StaticParserFailure data = 2;
 }
 
 // I038
 message ExperimentalParserSuccess {
+    string path = 1;
+}
+
+message ExperimentalParserSuccessMsg {
     EventInfo info = 1;
-    string path = 2;
+    ExperimentalParserSuccess data = 2;
 }
 
 // I039
 message ExperimentalParserFailure {
+    string path = 1;
+}
+
+message ExperimentalParserFailureMsg {
     EventInfo info = 1;
-    string path = 2;
+    ExperimentalParserFailure data = 2;
 }
 
 // I040
 message PartialParsingEnabled {
+    int32 deleted = 1;
+    int32 added = 2;
+    int32 changed = 3;
+}
+
+message PartialParsingEnabledMsg {
     EventInfo info = 1;
-    int32 deleted = 2;
-    int32 added = 3;
-    int32 changed = 4;
+    PartialParsingEnabled data = 2;
 }
 
 // I041
 message PartialParsingFile {
+    string file_id = 1;
+    string operation = 2;
+}
+
+message PartialParsingFileMsg {
     EventInfo info = 1;
-    string file_id = 2;
-    string operation = 3;
+    PartialParsingFile data = 2;
 }
 
 // Skipped I042, I043, I044, I045, I046, I047, I048, I049
 
 // I050
 message InvalidDisabledTargetInTestNode {
+    string resource_type_title = 1;
+    string unique_id = 2;
+    string original_file_path = 3;
+    string target_kind = 4;
+    string target_name = 5;
+    string target_package = 6;
+}
+
+message InvalidDisabledTargetInTestNodeMsg {
     EventInfo info = 1;
-    string resource_type_title = 2;
-    string unique_id = 3;
-    string original_file_path = 4;
-    string target_kind = 5;
-    string target_name = 6;
-    string target_package = 7;
+    InvalidDisabledTargetInTestNode data = 2;
 }
 
 // I051
 message UnusedResourceConfigPath {
+    repeated string unused_config_paths = 1;
+}
+
+message UnusedResourceConfigPathMsg {
     EventInfo info = 1;
-    repeated string unused_config_paths = 2;
+    UnusedResourceConfigPath data = 2;
 }
 
 // I052
 message SeedIncreased {
+    string package_name = 1;
+    string name = 2;
+}
+
+message SeedIncreasedMsg {
     EventInfo info = 1;
-    string package_name = 2;
-    string name = 3;
+    SeedIncreased data = 2;
 }
 
 // I053
 message SeedExceedsLimitSamePath {
+    string package_name = 1;
+    string name = 2;
+}
+
+message SeedExceedsLimitSamePathMsg {
     EventInfo info = 1;
-    string package_name = 2;
-    string name = 3;
+    SeedExceedsLimitSamePath data = 2;
 }
 
 // I054
 message SeedExceedsLimitAndPathChanged {
+    string package_name = 1;
+    string name = 2;
+}
+
+message SeedExceedsLimitAndPathChangedMsg {
     EventInfo info = 1;
-    string package_name = 2;
-    string name = 3;
+    SeedExceedsLimitAndPathChanged data = 2;
 }
 
 // I055
 message SeedExceedsLimitChecksumChanged {
+    string package_name = 1;
+    string name = 2;
+    string checksum_name = 3;
+}
+
+message SeedExceedsLimitChecksumChangedMsg {
     EventInfo info = 1;
-    string package_name = 2;
-    string name = 3;
-    string checksum_name = 4;
+    SeedExceedsLimitChecksumChanged data = 2;
 }
 
 // I056
 message UnusedTables {
+    repeated string unused_tables = 1;
+}
+
+message UnusedTablesMsg {
     EventInfo info = 1;
-    repeated string unused_tables = 2;
+    UnusedTables data = 2;
 }
 
 // I057
 message WrongResourceSchemaFile {
+    string patch_name = 1;
+    string resource_type = 2;
+    string plural_resource_type = 3;
+    string yaml_key = 4;
+    string file_path = 5;
+}
+
+message WrongResourceSchemaFileMsg {
     EventInfo info = 1;
-    string patch_name = 2;
-    string resource_type = 3;
-    string plural_resource_type = 4;
-    string yaml_key = 5;
-    string file_path = 6;
+    WrongResourceSchemaFile data = 2;
 }
 
 // I058
 message NoNodeForYamlKey {
+    string patch_name = 1;
+    string yaml_key = 2;
+    string file_path = 3;
+}
+
+message NoNodeForYamlKeyMsg {
     EventInfo info = 1;
-    string patch_name = 2;
-    string yaml_key = 3;
-    string file_path = 4;
+    NoNodeForYamlKey data = 2;
 }
 
 // I059
-message MacroPatchNotFound {
+message MacroNotFoundForPatch {
+    string patch_name = 1;
+}
+
+message MacroNotFoundForPatchMsg {
     EventInfo info = 1;
-    string patch_name = 2;
+    MacroNotFoundForPatch data = 2;
 }
 
 // I060
 message NodeNotFoundOrDisabled {
+    string original_file_path = 1;
+    string unique_id = 2;
+    string resource_type_title = 3;
+    string target_name = 4;
+    string target_kind = 5;
+    string target_package = 6;
+    string disabled = 7;
+}
+
+message NodeNotFoundOrDisabledMsg {
     EventInfo info = 1;
-    string original_file_path = 2;
-    string unique_id = 3;
-    string resource_type_title = 4;
-    string target_name = 5;
-    string target_kind = 6;
-    string target_package = 7;
-    string disabled = 8;
+    NodeNotFoundOrDisabled data = 2;
 }
 
 // I061
 message JinjaLogWarning {
+    NodeInfo node_info = 1;
+    string msg = 2;
+}
+
+message JinjaLogWarningMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string msg = 3;
+    JinjaLogWarning data = 2;
 }
 
 // M - Deps generation
 
 // M001
 message GitSparseCheckoutSubdirectory {
+    string subdir = 1;
+}
+
+message GitSparseCheckoutSubdirectoryMsg {
     EventInfo info = 1;
-    string subdir = 2;
+    GitSparseCheckoutSubdirectory data = 2;
 }
 
 // M002
 message GitProgressCheckoutRevision {
+    string revision = 1;
+}
+
+message GitProgressCheckoutRevisionMsg {
     EventInfo info = 1;
-    string revision = 2;
+    GitProgressCheckoutRevision data = 2;
 }
 
 // M003
 message GitProgressUpdatingExistingDependency {
+    string dir = 1;
+}
+
+message GitProgressUpdatingExistingDependencyMsg {
     EventInfo info = 1;
-    string dir = 2;
+    GitProgressUpdatingExistingDependency data = 2;
 }
 
 // M004
 message GitProgressPullingNewDependency {
+    string dir = 1;
+}
+
+message GitProgressPullingNewDependencyMsg {
     EventInfo info = 1;
-    string dir = 2;
+    GitProgressPullingNewDependency data = 2;
 }
 
 // M005
 message GitNothingToDo {
+    string sha = 1;
+}
+
+message GitNothingToDoMsg {
     EventInfo info = 1;
-    string sha = 2;
+    GitNothingToDo data = 2;
 }
 
 // M006
 message GitProgressUpdatedCheckoutRange {
+    string start_sha = 1;
+    string end_sha = 2;
+}
+
+message GitProgressUpdatedCheckoutRangeMsg {
     EventInfo info = 1;
-    string start_sha = 2;
-    string end_sha = 3;
+    GitProgressUpdatedCheckoutRange data = 2;
 }
 
 // M007
 message GitProgressCheckedOutAt {
+    string end_sha = 1;
+}
+
+message GitProgressCheckedOutAtMsg {
     EventInfo info = 1;
-    string end_sha = 2;
+    GitProgressCheckedOutAt data = 2;
 }
 
 // M008
 message RegistryProgressGETRequest {
+    string url = 1;
+}
+
+message RegistryProgressGETRequestMsg {
     EventInfo info = 1;
-    string url = 2;
+    RegistryProgressGETRequest data = 2;
 }
 
 // M009
 message RegistryProgressGETResponse {
+    string url = 1;
+    int32 resp_code = 2;
+}
+
+message RegistryProgressGETResponseMsg {
     EventInfo info = 1;
-    string url = 2;
-    int32 resp_code = 3;
+    RegistryProgressGETResponse data = 2;
 }
 
 // M010
 message SelectorReportInvalidSelector {
+    string valid_selectors = 1;
+    string spec_method = 2;
+    string raw_spec = 3;
+}
+
+message SelectorReportInvalidSelectorMsg {
     EventInfo info = 1;
-    string valid_selectors = 2;
-    string spec_method = 3;
-    string raw_spec = 4;
+    SelectorReportInvalidSelector data = 2;
 }
 
 // M011
 message JinjaLogInfo {
+    NodeInfo node_info = 1;
+    string msg = 2;
+}
+
+message  JinjaLogInfoMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string msg = 3;
+     JinjaLogInfo data = 2;
 }
 
 // M012
 message JinjaLogDebug {
+    NodeInfo node_info = 1;
+    string msg = 2;
+}
+
+message JinjaLogDebugMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string msg = 3;
+    JinjaLogDebug data = 2;
 }
 
 // M013
 message DepsNoPackagesFound {
+}
+
+message DepsNoPackagesFoundMsg {
     EventInfo info = 1;
+    DepsNoPackagesFound data = 2;
 }
 
 // M014
 message DepsStartPackageInstall {
+    string package_name = 1;
+}
+
+message DepsStartPackageInstallMsg {
     EventInfo info = 1;
-    string package_name = 2;
+    DepsStartPackageInstall data = 2;
 }
 
 // M015
 message DepsInstallInfo {
+    string version_name = 1;
+}
+
+message DepsInstallInfoMsg {
     EventInfo info = 1;
-    string version_name = 2;
+    DepsInstallInfo data = 2;
 }
 
 // M016
 message DepsUpdateAvailable {
+    string version_latest = 1;
+}
+
+message DepsUpdateAvailableMsg {
     EventInfo info = 1;
-    string version_latest = 2;
+    DepsUpdateAvailable data = 2;
 }
 
 // M017
 message DepsUpToDate {
+}
+
+message DepsUpToDateMsg {
     EventInfo info = 1;
+    DepsUpToDate data = 2;
 }
 
 // M018
 message DepsListSubdirectory {
+    string subdirectory = 1;
+}
+
+message DepsListSubdirectoryMsg {
     EventInfo info = 1;
-    string subdirectory = 2;
+    DepsListSubdirectory data = 2;
 }
 
 // M019
 message DepsNotifyUpdatesAvailable {
+    ListOfStrings packages = 1;
+}
+
+message DepsNotifyUpdatesAvailableMsg {
     EventInfo info = 1;
-    ListOfStrings packages = 2;
+    DepsNotifyUpdatesAvailable data = 2;
 }
 
 // M020
 message RetryExternalCall {
+    int32 attempt = 1;
+    int32 max = 2;
+}
+
+message RetryExternalCallMsg {
     EventInfo info = 1;
-    int32 attempt = 2;
-    int32 max = 3;
+    RetryExternalCall data = 2;
 }
 
 // M021
 message RecordRetryException {
+    string exc = 1;
+}
+
+message RecordRetryExceptionMsg {
     EventInfo info = 1;
-    string exc = 2;
+    RecordRetryException data = 2;
 }
 
 // M022
 message RegistryIndexProgressGETRequest {
+    string url = 1;
+}
+
+message RegistryIndexProgressGETRequestMsg {
     EventInfo info = 1;
-    string url = 2;
+    RegistryIndexProgressGETRequest data = 2;
 }
 
 // M023
 message RegistryIndexProgressGETResponse {
+    string url = 1;
+    int32 resp_code = 2;
+}
+
+message RegistryIndexProgressGETResponseMsg {
     EventInfo info = 1;
-    string url = 2;
-    int32 resp_code = 3;
+    RegistryIndexProgressGETResponse data = 2;
 }
 
 // M024
 message RegistryResponseUnexpectedType {
+    string response = 1;
+}
+
+message RegistryResponseUnexpectedTypeMsg {
     EventInfo info = 1;
-    string response = 2;
+    RegistryResponseUnexpectedType data = 2;
 }
 
 // M025
 message RegistryResponseMissingTopKeys {
+    string response = 1;
+}
+
+message RegistryResponseMissingTopKeysMsg {
     EventInfo info = 1;
-    string response = 2;
+    RegistryResponseMissingTopKeys data = 2;
 }
 
 // M026
 message RegistryResponseMissingNestedKeys {
+    string response = 1;
+}
+
+message RegistryResponseMissingNestedKeysMsg {
     EventInfo info = 1;
-    string response = 2;
+    RegistryResponseMissingNestedKeys data = 2;
 }
 
 // m027
 message RegistryResponseExtraNestedKeys {
+    string response = 1;
+}
+
+message RegistryResponseExtraNestedKeysMsg {
     EventInfo info = 1;
-    string response = 2;
+    RegistryResponseExtraNestedKeys data = 2;
 }
 
 // M028
 message DepsSetDownloadDirectory {
+    string path = 1;
+}
+
+message DepsSetDownloadDirectoryMsg {
     EventInfo info = 1;
-    string path = 2;
+    DepsSetDownloadDirectory data = 2;
 }
 
 // M029
 message DepsUnpinned {
+    string revision = 1;
+    string git = 2;
+}
+
+message DepsUnpinnedMsg {
     EventInfo info = 1;
-    string revision = 2;
-    string git = 3;
+    DepsUnpinned data = 2;
 }
 
 // M030
 message NoNodesForSelectionCriteria {
+    string spec_raw = 1;
+}
+
+message NoNodesForSelectionCriteriaMsg {
     EventInfo info = 1;
-    string spec_raw = 2;
+    NoNodesForSelectionCriteria data = 2;
 }
 
 // Q - Node execution
 
 // Q001
 message RunningOperationCaughtError {
+    string exc = 1;
+}
+
+message RunningOperationCaughtErrorMsg {
     EventInfo info = 1;
-    string exc = 2;
+    RunningOperationCaughtError data = 2;
 }
 
 // Q002
 message CompileComplete {
+}
+
+message CompileCompleteMsg {
     EventInfo info = 1;
+    CompileComplete data = 2;
 }
 
 // Q003
 message FreshnessCheckComplete {
+}
+
+message FreshnessCheckCompleteMsg {
     EventInfo info = 1;
+    FreshnessCheckComplete data = 2;
 }
 
 // Q004
 message SeedHeader {
+    string header = 1;
+}
+
+message SeedHeaderMsg {
     EventInfo info = 1;
-    string header = 2;
+    SeedHeader data = 2;
 }
 
 // Q005
 message SeedHeaderSeparator {
+    int32 len_header = 1;
+}
+
+message SeedHeaderSeparatorMsg {
     EventInfo info = 1;
-    int32 len_header = 2;
+    SeedHeaderSeparator data = 2;
 }
 
 // Q006
 message SQLRunnerException {
+    string exc = 1;
+    string exc_info = 2;
+}
+
+message SQLRunnerExceptionMsg {
     EventInfo info = 1;
-    string exc = 2;
-    string exc_info = 3;
+    SQLRunnerException data = 2;
 }
 
 // Q007
 message LogTestResult {
+    NodeInfo node_info = 1;
+    string name = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 num_models = 5;
+    float execution_time = 6;
+    int32 num_failures = 7;
+}
+
+message LogTestResultMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string name = 3;
-    string status = 4;
-    int32 index = 5;
-    int32 num_models = 6;
-    float execution_time = 7;
-    int32 num_failures = 8;
+    LogTestResult data = 2;
 }
 
 
@@ -1111,63 +1657,83 @@ message LogTestResult {
 
 // Q011
 message LogStartLine {
+    NodeInfo node_info = 1;
+    string description = 2;
+    int32 index = 3;
+    int32 total = 4;
+}
+
+message LogStartLineMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string description = 3;
-    int32 index = 4;
-    int32 total = 5;
+    LogStartLine data = 2;
 }
 
 // Q012
 message LogModelResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    int32 execution_time = 6;
+}
+
+message LogModelResultMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string description = 3;
-    string status = 4;
-    int32 index = 5;
-    int32 total = 6;
-    int32 execution_time = 7;
+    LogModelResult data = 2;
 }
 
 // skipped Q013, Q014
 
 // Q015
 message LogSnapshotResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    map<string, string> cfg = 7;
+}
+
+message LogSnapshotResultMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string description = 3;
-    string status = 4;
-    int32 index = 5;
-    int32 total = 6;
-    float execution_time = 7;
-    map<string, string> cfg = 8;
+    LogSnapshotResult data = 2;
 }
 
 // Q016
 message LogSeedResult {
+    NodeInfo node_info = 1;
+    string status = 2;
+    string result_message = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    string schema = 7;
+    string relation = 8;
+}
+
+message LogSeedResultMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string status = 3;
-    string result_message = 4;
-    int32 index = 5;
-    int32 total = 6;
-    float execution_time = 7;
-    string schema = 8;
-    string relation = 9;
+    LogSeedResult data = 2;
 }
 
 // Skipped Q017
 
 // Q018
 message LogFreshnessResult {
+    string status = 1;
+    NodeInfo node_info = 2;
+    int32 index = 3;
+    int32 total = 4;
+    float execution_time = 5;
+    string source_name = 6;
+    string table_name = 7;
+}
+
+message LogFreshnessResultMsg {
     EventInfo info = 1;
-    string status = 2;
-    NodeInfo node_info = 3;
-    int32 index = 4;
-    int32 total = 5;
-    float execution_time = 6;
-    string source_name = 7;
-    string table_name = 8;
+    LogFreshnessResult data = 2;
 }
 
 
@@ -1176,117 +1742,181 @@ message LogFreshnessResult {
 
 // Q022
 message LogCancelLine {
+    string conn_name = 1;
+}
+
+message LogCancelLineMsg {
     EventInfo info = 1;
-    string conn_name = 2;
+    LogCancelLine data = 2;
 }
 
 // Q023
 message DefaultSelector {
+    string name = 1;
+}
+
+message DefaultSelectorMsg {
     EventInfo info = 1;
-    string name = 2;
+    DefaultSelector data = 2;
 }
 
 // Q024
 message NodeStart {
+    NodeInfo node_info = 1;
+}
+
+message NodeStartMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
+    NodeStart data = 2;
 }
 
 // Q025
 message NodeFinished {
+    NodeInfo node_info = 1;
+    RunResultMsg run_result = 2;
+}
+
+message NodeFinishedMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    RunResultMsg run_result = 4;
+    NodeFinished data = 2;
 }
 
 // Q026
 message QueryCancelationUnsupported {
+    string type = 1;
+}
+
+message QueryCancelationUnsupportedMsg {
     EventInfo info = 1;
-    string type = 2;
+    QueryCancelationUnsupported data = 2;
 }
 
 // Q027
 message ConcurrencyLine {
+    int32 num_threads = 1;
+    string target_name = 2;
+    int32 node_count = 3;
+}
+
+message ConcurrencyLineMsg {
     EventInfo info = 1;
-    int32 num_threads = 2;
-    string target_name = 3;
-    int32 node_count = 4;
+    ConcurrencyLine data = 2;
 }
 
 // Skipped Q028
 
 // Q029
 message WritingInjectedSQLForNode {
+    NodeInfo node_info = 1;
+}
+
+message WritingInjectedSQLForNodeMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
+    WritingInjectedSQLForNode data = 2;
 }
 
 // Q030
 message NodeCompiling {
+    NodeInfo node_info = 1;
+}
+
+message NodeCompilingMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
+    NodeCompiling data = 2;
 }
 
 // Q031
 message NodeExecuting {
+    NodeInfo node_info = 1;
+}
+
+message NodeExecutingMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
+    NodeExecuting data = 2;
 }
 
 // Q032
 message LogHookStartLine {
+    NodeInfo node_info = 1;
+    string statement = 2;
+    int32 index = 3;
+    int32 total = 4;
+}
+
+message LogHookStartLineMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string statement = 3;
-    int32 index = 4;
-    int32 total = 5;
+    LogHookStartLine data = 2;
 }
 
 // Q033
 message LogHookEndLine {
+    NodeInfo node_info = 1;
+    string statement = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+}
+
+message LogHookEndLineMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string statement = 3;
-    string status = 4;
-    int32 index = 5;
-    int32 total = 6;
-    float execution_time = 7;
+    LogHookEndLine data = 2;
 }
 
 // Q034
 message SkippingDetails {
+    NodeInfo node_info = 1;
+    string resource_type = 2;
+    string schema = 3;
+    string node_name = 4;
+    int32 index = 5;
+    int32 total = 6;
+}
+
+message SkippingDetailsMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string resource_type = 3;
-    string schema = 4;
-    string node_name = 5;
-    int32 index = 6;
-    int32 total = 7;
+    SkippingDetails data = 2;
 }
 
 // Q035
 message NothingToDo {
+}
+
+message NothingToDoMsg {
     EventInfo info = 1;
+    NothingToDo data = 2;
 }
 
 // Q036
 message RunningOperationUncaughtError {
+    string exc = 1;
+}
+
+message RunningOperationUncaughtErrorMsg {
     EventInfo info = 1;
-    string exc = 2;
+    RunningOperationUncaughtError data = 2;
 }
 
 // Q037
 message EndRunResult {
+    repeated RunResultMsg results = 1;
+    float elapsed_time = 2;
+    google.protobuf.Timestamp generated_at = 3;
+    bool success = 4;
+}
+
+message EndRunResultMsg {
     EventInfo info = 1;
-    repeated RunResultMsg results = 2;
-    float elapsed_time = 3;
-    google.protobuf.Timestamp generated_at = 4;
-    bool success = 5;
+    EndRunResult data = 2;
 }
 
 // Q038
 message NoNodesSelected {
+}
+
+message NoNodesSelectedMsg {
     EventInfo info = 1;
+    NoNodesSelected data = 2;
 }
 
 // W - Node testing
@@ -1295,330 +1925,538 @@ message NoNodesSelected {
 
 // W002
 message CatchableExceptionOnRun {
+    NodeInfo node_info = 1;
+    string exc = 2;
+    string exc_info = 3;
+}
+
+message CatchableExceptionOnRunMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    string exc = 3;
-    string exc_info = 4;
+    CatchableExceptionOnRun data = 2;
 }
 
 // W003
 message InternalExceptionOnRun {
+    string build_path = 1;
+    string exc = 2;
+}
+
+message InternalExceptionOnRunMsg {
     EventInfo info = 1;
-    string build_path = 2;
-    string exc = 3;
+    InternalExceptionOnRun data = 2;
 }
 
 // W004
 message GenericExceptionOnRun {
+    string build_path = 1;
+    string unique_id = 2;
+    string exc = 3;
+}
+
+message GenericExceptionOnRunMsg {
     EventInfo info = 1;
-    string build_path = 2;
-    string unique_id = 3;
-    string exc = 4;
+    GenericExceptionOnRun data = 2;
 }
 
 // W005
 message NodeConnectionReleaseError {
+    string node_name = 1;
+    string exc = 2;
+    string exc_info = 3;
+}
+
+message NodeConnectionReleaseErrorMsg {
     EventInfo info = 1;
-    string node_name = 2;
-    string exc = 3;
-    string exc_info = 4;
+    NodeConnectionReleaseError data = 2;
 }
 
 // W006
 message FoundStats {
+    string stat_line = 1;
+}
+
+message FoundStatsMsg {
     EventInfo info = 1;
-    string stat_line = 2;
+    FoundStats data = 2;
 }
 
 // Z - Misc
 
 // Z001
 message MainKeyboardInterrupt {
+}
+
+message MainKeyboardInterruptMsg {
     EventInfo info = 1;
+    MainKeyboardInterrupt data = 2;
 }
 
 // Z002
 message MainEncounteredError {
+    string exc = 1;
+}
+
+message MainEncounteredErrorMsg {
     EventInfo info = 1;
-    string exc = 2;
+    MainEncounteredError data = 2;
 }
 
 // Z003
 message MainStackTrace {
+    string stack_trace = 1;
+}
+
+message MainStackTraceMsg {
     EventInfo info = 1;
-    string stack_trace = 2;
+    MainStackTrace data = 2;
 }
 
 // Z004
 message SystemErrorRetrievingModTime {
+    string path = 1;
+}
+
+message SystemErrorRetrievingModTimeMsg {
     EventInfo info = 1;
-    string path = 2;
+    SystemErrorRetrievingModTime data = 2;
 }
 
 // Z005
 message SystemCouldNotWrite {
+    string path = 1;
+    string reason = 2;
+    string exc = 3;
+}
+
+message SystemCouldNotWriteMsg {
     EventInfo info = 1;
-    string path = 2;
-    string reason = 3;
-    string exc = 4;
+    SystemCouldNotWrite data = 2;
 }
 
 // Z006
 message SystemExecutingCmd {
+    repeated string cmd = 1;
+}
+
+message SystemExecutingCmdMsg {
     EventInfo info = 1;
-    repeated string cmd = 2;
+    SystemExecutingCmd data = 2;
 }
 
 // Z007
+message SystemStdOut{
+    bytes bmsg = 1;
+}
+
 message SystemStdOutMsg {
     EventInfo info = 1;
-    bytes bmsg = 2;
+    SystemStdOut data = 2;
 }
 
 // Z008
+message SystemStdErr {
+    bytes bmsg = 1;
+}
+
 message SystemStdErrMsg {
     EventInfo info = 1;
-    bytes bmsg = 2;
+    SystemStdErr data = 2;
 }
 
 // Z009
 message SystemReportReturnCode {
+    int32 returncode = 1;
+}
+
+message SystemReportReturnCodeMsg {
     EventInfo info = 1;
-    int32 returncode = 2;
+    SystemReportReturnCode data = 2;
 }
 
 // Z010
 message TimingInfoCollected {
+    NodeInfo node_info = 1;
+    TimingInfoMsg timing_info = 2;
+}
+
+message TimingInfoCollectedMsg {
     EventInfo info = 1;
-    NodeInfo node_info = 2;
-    TimingInfoMsg timing_info = 3;
+    TimingInfoCollected data = 2;
 }
 
 // Z011
 message LogDebugStackTrace {
+    string exc_info = 1;
+}
+
+message LogDebugStackTraceMsg {
     EventInfo info = 1;
-    string exc_info = 2;
+    LogDebugStackTrace data = 2;
 }
 
 // Z012
 message CheckCleanPath {
+    string path = 1;
+}
+
+message CheckCleanPathMsg {
     EventInfo info = 1;
-    string path = 2;
+    CheckCleanPath data = 2;
 }
 
 // Z013
 message ConfirmCleanPath {
+    string path = 1;
+}
+
+message ConfirmCleanPathMsg {
     EventInfo info = 1;
-    string path = 2;
+    ConfirmCleanPath data = 2;
 }
 
 // Z014
 message ProtectedCleanPath {
+    string path = 1;
+}
+
+message ProtectedCleanPathMsg {
     EventInfo info = 1;
-    string path = 2;
+    ProtectedCleanPath data = 2;
 }
 
 // Z015
 message FinishedCleanPaths {
+}
+
+message FinishedCleanPathsMsg {
     EventInfo info = 1;
+    FinishedCleanPaths data = 2;
 }
 
 // Z016
 message OpenCommand {
+    string open_cmd = 1;
+    string profiles_dir = 2;
+}
+
+message OpenCommandMsg {
     EventInfo info = 1;
-    string open_cmd = 2;
-    string profiles_dir = 3;
+    OpenCommand data = 2;
 }
 
 // Z017
 message EmptyLine {
+}
+
+message EmptyLineMsg {
     EventInfo info = 1;
+    EmptyLine data = 2;
 }
 
 // Z018
 message ServingDocsPort {
+    string address = 1;
+    int32 port = 2;
+}
+
+message ServingDocsPortMsg {
     EventInfo info = 1;
-    string address = 2;
-    int32 port = 3;
+    ServingDocsPort data = 2;
 }
 
 // Z019
 message ServingDocsAccessInfo {
+    string port = 1;
+}
+
+message ServingDocsAccessInfoMsg {
     EventInfo info = 1;
-    string port = 2;
+    ServingDocsAccessInfo data = 2;
 }
 
 // Z020
 message ServingDocsExitInfo {
+}
+
+message ServingDocsExitInfoMsg {
     EventInfo info = 1;
+    ServingDocsExitInfo data = 2;
 }
 
 // Z021
 message RunResultWarning {
+    string resource_type = 1;
+    string node_name = 2;
+    string path = 3;
+}
+
+message RunResultWarningMsg {
     EventInfo info = 1;
-    string resource_type = 2;
-    string node_name = 3;
-    string path = 4;
+    RunResultWarning data = 2;
 }
 
 // Z022
 message RunResultFailure {
+    string resource_type = 1;
+    string node_name = 2;
+    string path = 3;
+}
+
+message RunResultFailureMsg {
     EventInfo info = 1;
-    string resource_type = 2;
-    string node_name = 3;
-    string path = 4;
+    RunResultFailure data = 2;
 }
 
 // Z023
 message StatsLine {
+    map<string, int32> stats = 1;
+}
+
+message StatsLineMsg {
     EventInfo info = 1;
-    map<string, int32> stats = 2;
+    StatsLine data = 2;
 }
 
 // Z024
 message RunResultError {
+    string msg = 1;
+}
+
+message RunResultErrorMsg {
     EventInfo info = 1;
-    string msg = 2;
+    RunResultError data = 2;
 }
 
 // Z025
 message RunResultErrorNoMessage {
+    string status = 1;
+}
+
+message RunResultErrorNoMessageMsg {
     EventInfo info = 1;
-    string status = 2;
+    RunResultErrorNoMessage data = 2;
 }
 
 // Z026
 message SQLCompiledPath {
+    string path = 1;
+}
+
+message SQLCompiledPathMsg {
     EventInfo info = 1;
-    string path = 2;
+    SQLCompiledPath data = 2;
 }
 
 // Z027
 message CheckNodeTestFailure {
+    string relation_name = 1;
+}
+
+message CheckNodeTestFailureMsg {
     EventInfo info = 1;
-    string relation_name = 2;
+    CheckNodeTestFailure data = 2;
 }
 
 // Z028
 message FirstRunResultError {
+    string msg = 1;
+}
+
+message FirstRunResultErrorMsg {
     EventInfo info = 1;
-    string msg = 2;
+    FirstRunResultError data = 2;
 }
 
 // Z029
 message AfterFirstRunResultError {
+    string msg = 1;
+}
+
+message AfterFirstRunResultErrorMsg {
     EventInfo info = 1;
-    string msg = 2;
+    AfterFirstRunResultError data = 2;
 }
 
 // Z030
 message EndOfRunSummary {
+    int32 num_errors = 1;
+    int32 num_warnings = 2;
+    bool keyboard_interrupt = 3;
+}
+
+message EndOfRunSummaryMsg {
     EventInfo info = 1;
-    int32 num_errors = 2;
-    int32 num_warnings = 3;
-    bool keyboard_interrupt = 4;
+    EndOfRunSummary data = 2;
 }
 
 // Skipped Z031, Z032, Z033
 
 // Z034
 message LogSkipBecauseError {
+    string schema = 1;
+    string relation = 2;
+    int32 index = 3;
+    int32 total = 4;
+}
+
+message LogSkipBecauseErrorMsg {
     EventInfo info = 1;
-    string schema = 2;
-    string relation = 3;
-    int32 index = 4;
-    int32 total = 5;
+    LogSkipBecauseError data = 2;
 }
 
 // Z036
 message EnsureGitInstalled {
+}
+
+message EnsureGitInstalledMsg {
     EventInfo info = 1;
+    EnsureGitInstalled data = 2;
 }
 
 // Z037
 message DepsCreatingLocalSymlink {
+}
+
+message DepsCreatingLocalSymlinkMsg {
     EventInfo info = 1;
+    DepsCreatingLocalSymlink data = 2;
 }
 
 // Z038
 message DepsSymlinkNotAvailable {
+}
+
+message DepsSymlinkNotAvailableMsg {
     EventInfo info = 1;
+    DepsSymlinkNotAvailable data = 2;
 }
 
 // Z039
 message DisableTracking {
+}
+
+message DisableTrackingMsg {
     EventInfo info = 1;
+    DisableTracking data = 2;
 }
 
 // Z040
 message SendingEvent {
+    string kwargs = 1;
+}
+
+message SendingEventMsg {
     EventInfo info = 1;
-    string kwargs = 2;
+    SendingEvent data = 2;
 }
 
 // Z041
 message SendEventFailure {
+}
+
+message SendEventFailureMsg {
     EventInfo info = 1;
+    SendEventFailure data = 2;
 }
 
 // Z042
 message FlushEvents {
+}
+
+message FlushEventsMsg {
     EventInfo info = 1;
+    FlushEvents data = 2;
 }
 
 // Z043
 message FlushEventsFailure {
+}
+
+message FlushEventsFailureMsg {
     EventInfo info = 1;
+    FlushEventsFailure data = 2;
 }
 
 // Z044
 message TrackingInitializeFailure {
+    string exc_info = 1;
+}
+
+message TrackingInitializeFailureMsg {
     EventInfo info = 1;
-    string exc_info = 2;
+    TrackingInitializeFailure data = 2;
 }
 
 // Skipped Z045
 
 // Z046
 message RunResultWarningMessage {
+    string msg = 1;
+}
+
+message RunResultWarningMessageMsg {
     EventInfo info = 1;
-    string msg = 2;
+    RunResultWarningMessage data = 2;
 }
 
 // T - Integration tests
 
 // T001
 message IntegrationTestInfo {
+    string msg = 1;
+}
+
+message IntegrationTestInfoMsg {
     EventInfo info = 1;
-    string msg = 2;
+    IntegrationTestInfo data = 2;
 }
 
 // T002
 message IntegrationTestDebug {
+    string msg = 1;
+}
+
+message IntegrationTestDebugMsg {
     EventInfo info = 1;
-    string msg = 2;
+    IntegrationTestDebug data = 2;
 }
 
 // T003
 message IntegrationTestWarn {
+    string msg = 1;
+}
+
+message IntegrationTestWarnMsg {
     EventInfo info = 1;
-    string msg = 2;
+    IntegrationTestWarn data = 2;
 }
 
 // T004
 message IntegrationTestError {
+    string msg = 1;
+}
+
+message IntegrationTestErrorMsg {
     EventInfo info = 1;
-    string msg = 2;
+    IntegrationTestError data = 2;
 }
 
 // T005
 message IntegrationTestException {
+    string msg = 1;
+}
+
+message IntegrationTestExceptionMsg {
     EventInfo info = 1;
-    string msg = 2;
+    IntegrationTestException data = 2;
 }
 
 // T006
 message UnitTestInfo {
+    string msg = 1;
+}
+
+message UnitTestInfoMsg {
     EventInfo info = 1;
-    string msg = 2;
+    UnitTestInfo data = 2;
 }

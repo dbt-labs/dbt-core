@@ -16,7 +16,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
-from dbt.events.functions import fire_event, info
+from dbt.events.functions import fire_event
 from dbt.events.types import (
     LogTestResult,
     LogStartLine,
@@ -68,14 +68,14 @@ class TestRunner(CompileRunner):
         fire_event(
             LogTestResult(
                 name=model.name,
-                info=info(level=LogTestResult.status_to_level(str(result.status))),
                 status=str(result.status),
                 index=self.node_index,
                 num_models=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=model.node_info,
                 num_failures=result.failures,
-            )
+            ),
+            level=LogTestResult.status_to_level(str(result.status)),
         )
 
     def print_start_line(self):

@@ -1,7 +1,8 @@
 # flake8: noqa
 from dbt.events.test_types import UnitTestInfo
 from dbt.events import AdapterLogger
-from dbt.events.functions import event_to_json, LOG_VERSION, event_to_dict
+from dbt.events.functions import msg_to_json, LOG_VERSION, msg_to_dict
+from dbt.events.base_types import msg_from_base_event
 from dbt.events.types import *
 from dbt.events.test_types import *
 
@@ -100,43 +101,6 @@ class TestEventCodes:
                 code not in all_codes
             ), f"{code} is assigned more than once. Check types.py for duplicates."
             all_codes.add(code)
-
-
-def MockNode():
-    return ModelNode(
-        alias="model_one",
-        name="model_one",
-        database="dbt",
-        schema="analytics",
-        resource_type=NodeType.Model,
-        unique_id="model.root.model_one",
-        fqn=["root", "model_one"],
-        package_name="root",
-        original_file_path="model_one.sql",
-        root_path="/usr/src/app",
-        refs=[],
-        sources=[],
-        depends_on=DependsOn(),
-        config=NodeConfig.from_dict(
-            {
-                "enabled": True,
-                "materialized": "view",
-                "persist_docs": {},
-                "post-hook": [],
-                "pre-hook": [],
-                "vars": {},
-                "quoting": {},
-                "column_types": {},
-                "tags": [],
-            }
-        ),
-        tags=[],
-        path="model_one.sql",
-        raw_code="",
-        description="",
-        columns={},
-        checksum=FileHash.from_contents(""),
-    )
 
 
 sample_values = [
@@ -243,16 +207,7 @@ sample_values = [
     HookFinished(stat_line="", execution="", execution_time=0),
 
     # I - Project parsing ======================
-    ParseCmdStart(),
-    ParseCmdCompiling(),
-    ParseCmdWritingManifest(),
-    ParseCmdDone(),
-    ManifestDependenciesLoaded(),
-    ManifestLoaderCreated(),
-    ManifestLoaded(),
-    ManifestChecked(),
-    ManifestFlatGraphBuilt(),
-    ParseCmdPerfInfoPath(path=""),
+    ParseCmdOut(msg="testing"),
     GenericTestFileParse(path=""),
     MacroFileParse(path=""),
     PartialParsingExceptionProcessingFile(file=""),
@@ -289,7 +244,7 @@ sample_values = [
     UnusedTables(unused_tables=[]),
     WrongResourceSchemaFile(patch_name="", resource_type="", file_path="", plural_resource_type=""),
     NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
-    MacroPatchNotFound(patch_name=""),
+    MacroNotFoundForPatch(patch_name=""),
     NodeNotFoundOrDisabled(
         original_file_path="",
         unique_id="",
@@ -429,8 +384,8 @@ sample_values = [
     SystemErrorRetrievingModTime(path=""),
     SystemCouldNotWrite(path="", reason="", exc=""),
     SystemExecutingCmd(cmd=[""]),
-    SystemStdOutMsg(bmsg=b""),
-    SystemStdErrMsg(bmsg=b""),
+    SystemStdOut(bmsg=b""),
+    SystemStdErr(bmsg=b""),
     SystemReportReturnCode(returncode=0),
     TimingInfoCollected(),
     LogDebugStackTrace(),
@@ -499,9 +454,10 @@ class TestEventJSONSerialization:
 
         # if we have everything we need to test, try to serialize everything
         for event in sample_values:
-            event_dict = event_to_dict(event)
+            msg = msg_from_base_event(event)
+            msg_dict = msg_to_dict(msg)
             try:
-                event_json = event_to_json(event)
+                msg_json = msg_to_json(msg)
             except Exception as e:
                 raise Exception(f"{event} is not serializable to json. Originating exception: {e}")
 

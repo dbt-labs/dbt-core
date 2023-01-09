@@ -9,16 +9,16 @@ import threading
 from typing import Any, Callable, List, Optional, TextIO
 from uuid import uuid4
 
-from dbt.events.base_types import BaseEvent, EventLevel
+from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
 
 
 # A Filter is a function which takes a BaseEvent and returns True if the event
 # should be logged, False otherwise.
-Filter = Callable[[BaseEvent], bool]
+Filter = Callable[[EventMsg], bool]
 
 
 # Default filter which logs every event
-def NoFilter(_: BaseEvent) -> bool:
+def NoFilter(_: EventMsg) -> bool:
     return True
 
 
@@ -45,13 +45,6 @@ _log_level_map = {
     EventLevel.WARN: 30,
     EventLevel.ERROR: 40,
 }
-
-
-# We should consider fixing the problem, but log_level() can return a string for
-# DynamicLevel events, even thought it is supposed to return an EventLevel. This
-# function gets a string for the level, no matter what.
-def _get_level_str(e: BaseEvent) -> str:
-    return e.log_level().value if isinstance(e.log_level(), EventLevel) else str(e.log_level())
 
 
 # We need this function for now because the numeric log severity levels in
@@ -113,14 +106,14 @@ class _Logger:
 
             self._python_logger = log
 
-    def create_line(self, e: BaseEvent) -> str:
+    def create_line(self, msg: EventMsg) -> str:
         raise NotImplementedError()
 
-    def write_line(self, e: BaseEvent):
-        line = self.create_line(e)
-        python_level = _log_level_map[e.log_level()]
+    def write_line(self, msg: EventMsg):
+        line = self.create_line(msg)
+        python_level = _log_level_map[EventLevel(msg.info.level)]
         if self._python_logger is not None:
-            send_to_logger(self._python_logger, _get_level_str(e), line)
+            send_to_logger(self._python_logger, msg.info.level, line)
         elif self._stream is not None and _log_level_map[self.level] <= python_level:
             self._stream.write(line + "\n")
 
@@ -138,24 +131,26 @@ class _TextLogger(_Logger):
         self.use_colors = config.use_colors
         self.use_debug_format = config.line_format == LineFormat.DebugText
 
-    def create_line(self, e: BaseEvent) -> str:
-        return self.create_debug_line(e) if self.use_debug_format else self.create_info_line(e)
+    def create_line(self, msg: EventMsg) -> str:
+        return self.create_debug_line(msg) if self.use_debug_format else self.create_info_line(msg)
 
-    def create_info_line(self, e: BaseEvent) -> str:
+    def create_info_line(self, msg: EventMsg) -> str:
         ts: str = datetime.utcnow().strftime("%H:%M:%S")
-        scrubbed_msg: str = self.scrubber(e.message())  # type: ignore
+        scrubbed_msg: str = self.scrubber(msg.info.msg)  # type: ignore
         return f"{self._get_color_tag()}{ts}  {scrubbed_msg}"
 
-    def create_debug_line(self, e: BaseEvent) -> str:
+    def create_debug_line(self, msg: EventMsg) -> str:
         log_line: str = ""
         # Create a separator if this is the beginning of an invocation
         # TODO: This is an ugly hack, get rid of it if we can
-        if type(e).__name__ == "MainReportVersion":
+        if msg.info.name == "MainReportVersion":
             separator = 30 * "="
-            log_line = f"\n\n{separator} {datetime.utcnow()} | {self.event_manager.invocation_id} {separator}\n"
-        ts: str = datetime.utcnow().strftime("%H:%M:%S.%f")
-        scrubbed_msg: str = self.scrubber(e.message())  # type: ignore
-        level = _get_level_str(e)
+            log_line = (
+                f"\n\n{separator} {msg.info.ts} | {self.event_manager.invocation_id} {separator}\n"
+            )
+        ts: str = msg.info.ts.strftime("%H:%M:%S.%f")
+        scrubbed_msg: str = self.scrubber(msg.info.msg)  # type: ignore
+        level = msg.info.level
         log_line += (
             f"{self._get_color_tag()}{ts} [{level:<5}]{self._get_thread_name()} {scrubbed_msg}"
         )
@@ -175,11 +170,11 @@ class _TextLogger(_Logger):
 
 
 class _JsonLogger(_Logger):
-    def create_line(self, e: BaseEvent) -> str:
-        from dbt.events.functions import event_to_dict
+    def create_line(self, msg: EventMsg) -> str:
+        from dbt.events.functions import msg_to_dict
 
-        event_dict = event_to_dict(e)
-        raw_log_line = json.dumps(event_dict, sort_keys=True)
+        msg_dict = msg_to_dict(msg)
+        raw_log_line = json.dumps(msg_dict, sort_keys=True)
         line = self.scrubber(raw_log_line)  # type: ignore
         return line
 
@@ -187,16 +182,17 @@ class _JsonLogger(_Logger):
 class EventManager:
     def __init__(self) -> None:
         self.loggers: List[_Logger] = []
-        self.callbacks: List[Callable[[BaseEvent], None]] = []
+        self.callbacks: List[Callable[[EventMsg], None]] = []
         self.invocation_id: str = str(uuid4())
 
-    def fire_event(self, e: BaseEvent) -> None:
+    def fire_event(self, e: BaseEvent, level: EventLevel = None) -> None:
+        msg = msg_from_base_event(e, level=level)
         for logger in self.loggers:
-            if logger.filter(e):  # type: ignore
-                logger.write_line(e)
+            if logger.filter(msg):  # type: ignore
+                logger.write_line(msg)
 
         for callback in self.callbacks:
-            callback(e)
+            callback(msg)
 
     def add_logger(self, config: LoggerConfig):
         logger = (

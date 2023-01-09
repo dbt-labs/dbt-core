@@ -9,7 +9,7 @@ from dbt.contracts.results import RunStatus
 from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
-from dbt.events.functions import fire_event, info
+from dbt.events.functions import fire_event
 from dbt.events.types import (
     SeedHeader,
     SeedHeaderSeparator,
@@ -17,6 +17,7 @@ from dbt.events.types import (
     LogSeedResult,
     LogStartLine,
 )
+from dbt.events.base_types import EventLevel
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus
 
@@ -46,10 +47,9 @@ class SeedRunner(ModelRunner):
 
     def print_result_line(self, result):
         model = result.node
-        level = "error" if result.status == NodeStatus.Error else "info"
+        level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
         fire_event(
             LogSeedResult(
-                info=info(level=level),
                 status=result.status,
                 result_message=result.message,
                 index=self.node_index,
@@ -58,7 +58,8 @@ class SeedRunner(ModelRunner):
                 schema=self.node.schema,
                 relation=model.alias,
                 node_info=model.node_info,
-            )
+            ),
+            level=level,
         )
 
 

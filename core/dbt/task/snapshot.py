@@ -1,7 +1,8 @@
 from .run import ModelRunner, RunTask
 
 from dbt.exceptions import InternalException
-from dbt.events.functions import fire_event, info
+from dbt.events.functions import fire_event
+from dbt.events.base_types import EventLevel
 from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -15,10 +16,9 @@ class SnapshotRunner(ModelRunner):
     def print_result_line(self, result):
         model = result.node
         cfg = model.config.to_dict(omit_none=True)
-        level = "error" if result.status == NodeStatus.Error else "info"
+        level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
         fire_event(
             LogSnapshotResult(
-                info=info(level=level),
                 status=result.status,
                 description=self.get_node_representation(),
                 cfg=cfg,
@@ -26,7 +26,8 @@ class SnapshotRunner(ModelRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=model.node_info,
-            )
+            ),
+            level=level,
         )
 
 

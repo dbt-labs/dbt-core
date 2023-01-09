@@ -1150,8 +1150,8 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
             project.warn_for_unused_resource_config_paths(self.used, [])
             warn_or_error_patch.assert_called_once()
             event = warn_or_error_patch.call_args[0][0]
-            assert event.info.name == 'UnusedResourceConfigPath'
-            msg = event.info.msg
+            assert type(event).__name__ == 'UnusedResourceConfigPath'
+            msg = event.message()
             expected_msg = "- models.my_test_project.baz"
             assert expected_msg in msg
 

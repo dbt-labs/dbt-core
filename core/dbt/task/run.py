@@ -27,7 +27,7 @@ from dbt.exceptions import (
     RuntimeException,
     ValidationException,
 )
-from dbt.events.functions import fire_event, get_invocation_id, info
+from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DatabaseErrorRunningHook,
     EmptyLine,
@@ -38,6 +38,7 @@ from dbt.events.types import (
     LogHookEndLine,
     LogHookStartLine,
 )
+from dbt.events.base_types import EventLevel
 from dbt.logger import (
     TextOnly,
     HookMetadata,
@@ -186,10 +187,10 @@ class ModelRunner(CompileRunner):
         description = self.describe_node()
         if result.status == NodeStatus.Error:
             status = result.status
-            level = "error"
+            level = EventLevel.ERROR
         else:
             status = result.message
-            level = "info"
+            level = EventLevel.INFO
         fire_event(
             LogModelResult(
                 description=description,
@@ -198,8 +199,8 @@ class ModelRunner(CompileRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
-                info=info(level=level),
-            )
+            ),
+            level=level,
         )
 
     def before_execute(self):
