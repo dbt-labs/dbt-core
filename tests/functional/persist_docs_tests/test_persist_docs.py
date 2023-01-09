@@ -1,17 +1,47 @@
-from test.integration.base import DBTIntegrationTest, use_profile
-import os
-
 import json
+import os
+import pytest
+
+from dbt.tests.util import (
+    run_dbt,
+)
+
+from tests.functional.persist_docs_tests.fixtures import (
+    _DOCS__MY_FUN_DOCS,
+    _MODELS__MISSING_COLUMN,
+    _MODELS__NO_DOCS_MODEL,
+    _MODELS__TABLE,
+    _MODELS__VIEW,
+    _PROPERITES__SCHEMA_MISSING_COL,
+    _PROPERTIES__SCHEMA_YML,
+    _SEEDS__SEED,
+)
 
 
-class BasePersistDocsTest(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "persist_docs_060"
+class BasePersistDocsTest:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project):
+        run_dbt(["seed"])
+        run_dbt()
 
-    @property
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"seed.csv": _SEEDS__SEED}
+
+    @pytest.fixture(scope="class")
     def models(self):
-        return "models"
+        return {
+            "no_docs_model.sql": _MODELS__NO_DOCS_MODEL,
+            "table_model.sql": _MODELS__TABLE,
+            "view_model.sql": _MODELS__VIEW,
+        }
+
+    @pytest.fixture(scope="class")
+    def properties(self):
+        return {
+            "my_fun_docs.md": _DOCS__MY_FUN_DOCS,
+            "schema.yml": _PROPERTIES__SCHEMA_YML,
+        }
 
     def _assert_common_comments(self, *comments):
         for comment in comments:
@@ -40,8 +70,12 @@ class BasePersistDocsTest(DBTIntegrationTest):
             table_comment, table_id_comment, table_name_comment
         )
 
-    def _assert_has_view_comments(self, view_node, has_node_comments=True,
-                                  has_column_comments=True):
+    def _assert_has_view_comments(
+        self,
+        view_node,
+        has_node_comments=True,
+        has_column_comments=True
+    ):
         view_comment = view_node['metadata']['comment']
         if has_node_comments:
             assert view_comment.startswith('View model description')
@@ -61,10 +95,9 @@ class BasePersistDocsTest(DBTIntegrationTest):
 
 
 class TestPersistDocs(BasePersistDocsTest):
-    @property
-    def project_config(self):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
         return {
-            'config-version': 2,
             'models': {
                 'test': {
                     '+persist_docs': {
@@ -75,13 +108,12 @@ class TestPersistDocs(BasePersistDocsTest):
             }
         }
 
-    def run_has_comments_pglike(self):
-        self.run_dbt()
-        self.run_dbt(['docs', 'generate'])
+    def test_has_comments_pglike(self, project):
+        run_dbt(['docs', 'generate'])
         with open('target/catalog.json') as fp:
             catalog_data = json.load(fp)
         assert 'nodes' in catalog_data
-        assert len(catalog_data['nodes']) == 3
+        assert len(catalog_data['nodes']) == 4
         table_node = catalog_data['nodes']['model.test.table_model']
         view_node = self._assert_has_table_comments(table_node)
 
@@ -91,15 +123,11 @@ class TestPersistDocs(BasePersistDocsTest):
         no_docs_node = catalog_data['nodes']['model.test.no_docs_model']
         self._assert_has_view_comments(no_docs_node, False, False)
 
-    @use_profile('postgres')
-    def test_postgres_comments(self):
-        self.run_has_comments_pglike()
 
 class TestPersistDocsColumnMissing(BasePersistDocsTest):
-    @property
-    def project_config(self):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
         return {
-            'config-version': 2,
             'models': {
                 'test': {
                     '+persist_docs': {
@@ -109,14 +137,16 @@ class TestPersistDocsColumnMissing(BasePersistDocsTest):
             }
         }
 
-    @property
+    @pytest.fixture(scope="class")
     def models(self):
-        return 'models-column-missing'
+        return {"missing_column.sql": _MODELS__MISSING_COLUMN}
 
-    @use_profile('postgres')
-    def test_postgres_missing_column(self):
-        self.run_dbt()
-        self.run_dbt(['docs', 'generate'])
+    @pytest.fixture(scope="class")
+    def properties(self):
+        return {"schema.yml": _PROPERITES__SCHEMA_MISSING_COL}
+
+    def test_postgres_missing_column(self, project):
+        run_dbt(['docs', 'generate'])
         with open('target/catalog.json') as fp:
             catalog_data = json.load(fp)
         assert 'nodes' in catalog_data
