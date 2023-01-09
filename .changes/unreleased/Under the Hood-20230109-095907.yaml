@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Reorganize structured logging events to have two top keys
+time: 2023-01-09T09:59:07.842187-05:00
+custom:
+  Author: gshank
+  Issue: "6311"
