@@ -2192,7 +2192,7 @@ class RelationWrongType(CompilationException):
 # TODO: add deprecation to functions
 DEPRECATION_VERSION = "1.5.0"
 SUGGESTED_ACTION = "using `raise {exception}` directly instead"
-REASON = "Not doing it this way"
+REASON = "See https://github.com/dbt-labs/dbt-core/issues/6393 for more details"
 
 
 @deprecated(
