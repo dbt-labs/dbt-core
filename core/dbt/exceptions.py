@@ -2000,7 +2000,7 @@ class DuplicatePatchPath(CompilationError):
         return msg
 
 
-# should this inherit ParsingException instead?
+# should this inherit ParsingError instead?
 class DuplicateResourceName(CompilationError):
     def __init__(self, node_1, node_2):
         self.node_1 = node_1
