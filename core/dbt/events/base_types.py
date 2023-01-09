@@ -4,7 +4,12 @@ import os
 import threading
 from datetime import datetime
 import dbt.events.proto_types as pt
-from typing import Protocol
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import Protocol
+else:
+    from typing_extensions import Protocol
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # These base types define the _required structure_ for the concrete event #
