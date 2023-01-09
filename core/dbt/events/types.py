@@ -1092,7 +1092,7 @@ class PartialParsingFile(DebugLevel, pt.PartialParsingFile):
 
 
 @dataclass
-class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestNode):
+class InvalidDisabledTargetInTestNode(DebugLevel, pt.InvalidDisabledTargetInTestNode):
     def code(self):
         return "I050"
 
