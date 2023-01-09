@@ -122,16 +122,13 @@ class DbtProjectError(ErrorLevel, pt.DbtProjectError):
         return "A009"
 
     def message(self) -> str:
-        return "Encountered an error while reading the project:"
+        msg = "Encountered an error while reading the project:"
+        if self.exc:
+            msg += f"  ERROR: {str(self.exc)}"
+        return msg
 
 
-@dataclass
-class DbtProjectErrorException(ErrorLevel, pt.DbtProjectErrorException):
-    def code(self):
-        return "A010"
-
-    def message(self) -> str:
-        return f"  ERROR: {str(self.exc)}"
+# Skipped A010
 
 
 @dataclass

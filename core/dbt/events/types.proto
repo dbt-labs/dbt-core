@@ -133,6 +133,7 @@ message InvalidVarsYAMLMsg {
 
 // A009
 message DbtProjectError {
+    string exc = 1;
 }
 
 message DbtProjectErrorMsg {
@@ -140,15 +141,7 @@ message DbtProjectErrorMsg {
     DbtProjectError data = 2;
 }
 
-// A010
-message DbtProjectErrorException {
-    string exc = 1;
-}
-
-message DbtProjectErrorExceptionMsg {
-    EventInfo info = 1;
-    DbtProjectErrorException data = 2;
-}
+// Skipped A010
 
 // A011
 message DbtProfileError {

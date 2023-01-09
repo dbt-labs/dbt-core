@@ -25,7 +25,6 @@ from dbt.logger import log_manager
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DbtProjectError,
-    DbtProjectErrorException,
     DbtProfileError,
     CatchableExceptionOnRun,
     InternalExceptionOnRun,
@@ -97,8 +96,7 @@ class BaseTask(metaclass=ABCMeta):
             # for the clean or deps tasks
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
-            fire_event(DbtProjectError())
-            fire_event(DbtProjectErrorException(exc=str(exc)))
+            fire_event(DbtProjectError(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException("Could not run dbt") from exc

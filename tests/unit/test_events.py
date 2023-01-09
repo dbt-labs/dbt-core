@@ -112,7 +112,6 @@ sample_values = [
     MissingProfileTarget(profile_name="", target_name=""),
     InvalidVarsYAML(),
     DbtProjectError(),
-    DbtProjectErrorException(exc=""),
     DbtProfileError(),
     StarterProjectPath(dir=""),
     ConfigFolderDirectory(dir=""),
