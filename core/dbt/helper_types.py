@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
-from importlib import import_module
 from pathlib import Path
 from typing import Tuple, AbstractSet, Union
 from hologram import FieldEncoder, JsonDict
@@ -18,6 +17,7 @@ from dbt.dataclass_schema import (
     StrEnum,
 )
 from dbt.exceptions import ValidationException
+import dbt.events.types as dbt_event_types
 
 
 class Port(int, SerializableType):
@@ -114,11 +114,15 @@ class IncludeExclude(dbtClassMixin):
         if isinstance(self.exclude, list):
             self._validate_items(self.exclude)
 
+    def includes(self, item_name: str):
+        return (
+            item_name in self.include or self.include in self.INCLUDE_ALL
+        ) and item_name not in self.exclude
+
     def _validate_items(self, items: List[str]):
         pass
 
 
-# TODO: find a better spot for this
 class WarnErrorOptions(IncludeExclude):
     # TODO: this method can be removed once the click CLI is in use
     @classmethod
@@ -134,9 +138,8 @@ class WarnErrorOptions(IncludeExclude):
         )
 
     def _validate_items(self, items: List[str]):
-        mod = import_module("dbt.events.types")
         valid_exception_names = set(
-            [name for name, cls in mod.__dict__.items() if isinstance(cls, type)]
+            [name for name, cls in dbt_event_types.__dict__.items() if isinstance(cls, type)]
         )
         for item in items:
             if item not in valid_exception_names:

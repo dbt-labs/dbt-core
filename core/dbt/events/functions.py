@@ -165,15 +165,7 @@ def warn_or_error(event, node=None):
     from dbt.helper_types import WarnErrorOptions
 
     warn_error_options = WarnErrorOptions.from_yaml_string(str(flags.WARN_ERROR_OPTIONS))
-
-    if (
-        flags.WARN_ERROR
-        or (
-            warn_error_options.include in warn_error_options.INCLUDE_ALL
-            and event.info.name not in warn_error_options.exclude
-        )
-        or (event.info.name in warn_error_options.include)
-    ):
+    if flags.WARN_ERROR or warn_error_options.includes(event.info.name):
         # TODO: resolve this circular import when at top
         from dbt.exceptions import EventCompilationError
 
