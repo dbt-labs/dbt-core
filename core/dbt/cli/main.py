@@ -12,6 +12,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.task.clean import CleanTask
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
+from dbt.task.test import TestTask
 
 
 # CLI invocation
@@ -41,10 +42,11 @@ class dbtRunner:
     def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
         try:
             dbt_ctx = cli.make_context(cli.name, args)
-            dbt_ctx.obj = {}
-            dbt_ctx.obj["project"] = self.project
-            dbt_ctx.obj["profile"] = self.profile
-            dbt_ctx.obj["manifest"] = self.manifest
+            dbt_ctx.obj = {
+                "project": self.project,
+                "profile": self.profile,
+                "manifest": self.manifest,
+            }
             return cli.invoke(dbt_ctx)
         except (click.NoSuchOption, click.UsageError) as e:
             raise dbtUsageException(e.message)
@@ -206,7 +208,8 @@ def docs_serve(ctx, **kwargs):
 @p.version_check
 @requires.preflight
 def compile(ctx, **kwargs):
-    """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the target/ directory."""
+    """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
+    target/ directory."""
     click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
     return None, True
 
@@ -449,8 +452,12 @@ def freshness(ctx, **kwargs):
 @requires.preflight
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = TestTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # Support running as a module
