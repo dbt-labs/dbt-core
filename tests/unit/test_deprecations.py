@@ -126,7 +126,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_compiler_error(self):
         func = dbt.exceptions.raise_compiler_error
-        exception = dbt.exceptions.CompilationException
+        exception = dbt.exceptions.CompilationError
         msg = ""
 
         self.is_deprecated(func)

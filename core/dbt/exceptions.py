@@ -1717,7 +1717,7 @@ class VarsArgNotYamlDict(CompilationError):
 
 
 # contracts level
-class UnrecognizedCredentialType(CompilationException):
+class UnrecognizedCredentialType(CompilationError):
     def __init__(self, typename: str, supported_types: List):
         self.typename = typename
         self.supported_types = supported_types
@@ -2264,7 +2264,7 @@ def raise_dataclass_not_dict(obj) -> NoReturn:
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
 )
 def raise_compiler_error(msg, node=None) -> NoReturn:
@@ -2580,7 +2580,7 @@ def raise_parsing_error(msg, node=None) -> NoReturn:
 # here deprecated to give a chance for adapters to rework
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
 )
 def raise_unrecognized_credentials_type(typename, supported_types):
@@ -2589,7 +2589,7 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
 )
 def raise_patch_targets_not_found(patches):
