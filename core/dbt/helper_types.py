@@ -126,11 +126,12 @@ class IncludeExclude(dbtClassMixin):
 class WarnErrorOptions(IncludeExclude):
     # TODO: this method can be removed once the click CLI is in use
     @classmethod
-    def from_yaml_string(cls, warn_error_options_str: str):
+    def from_yaml_string(cls, warn_error_options_str: Optional[str]):
 
         # TODO: resolve circular import
         from dbt.config.utils import parse_cli_yaml_string
 
+        warn_error_options_str = warn_error_options_str or "{}"
         warn_error_options = parse_cli_yaml_string(warn_error_options_str, "warn-error-options")
         return cls(
             include=warn_error_options.get("include", []),

@@ -162,14 +162,13 @@ class MissingProfileTargetMsg(betterproto.Message):
 class InvalidOptionYAML(betterproto.Message):
     """A008"""
 
-    pass
+    option_name: str = betterproto.string_field(1)
 
 
 @dataclass
-class InvalidVarsYAMLMsg(betterproto.Message):
+class InvalidOptionYAMLMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "InvalidVarsYAML" = betterproto.message_field(2)
-    option_name: str = betterproto.string_field(3)
+    data: "InvalidOptionYAML" = betterproto.message_field(2)
 
 
 @dataclass
