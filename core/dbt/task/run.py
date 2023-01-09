@@ -253,7 +253,9 @@ class ModelRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterialization(model=model, adapter_type=self.adapter.type())
+            raise MissingMaterialization(
+                materialization=model.get_materialization(), adapter_type=self.adapter.type()
+            )
 
         if "config" not in context:
             raise InternalException(

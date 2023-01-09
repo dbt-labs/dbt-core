@@ -5,5 +5,4 @@ body: Cleaned up exceptions to directly raise in code.  Removed use of all excep
 time: 2022-12-05T14:19:37.863032-06:00
 custom:
   Author: emmyoop
-  Issue: "6339"
-  PR: "6347"
+  Issue: 6339 6393

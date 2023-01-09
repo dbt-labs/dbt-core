@@ -101,7 +101,7 @@ class TestRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterialization(model=test, adapter_type=self.adapter.type())
+            raise MissingMaterialization(materialization=test.get_materialization(), adapter_type=self.adapter.type())
 
         if "config" not in context:
             raise InternalException(

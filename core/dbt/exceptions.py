@@ -3,8 +3,8 @@ import json
 import re
 from typing import Any, Dict, List, Mapping, NoReturn, Optional, Union
 
-# from dbt.contracts.graph import ManifestNode # or ParsedNode?
 from dbt.dataclass_schema import ValidationError
+from dbt.internal_deprecations import deprecated
 from dbt.events.functions import warn_or_error
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import JinjaLogWarning
@@ -692,6 +692,18 @@ class GitCloningProblem(RuntimeException):
         return msg
 
 
+class BadSpecError(InternalException):
+    def __init__(self, repo, revision, error):
+        self.repo = repo
+        self.revision = revision
+        self.stderr = scrub_secrets(error.stderr.strip(), env_secrets())
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"Error checking out spec='{self.revision}' for repo {self.repo}\n{self.stderr}"
+        return msg
+
+
 class GitCloningError(InternalException):
     def __init__(self, repo: str, revision: str, error: CommandResultError):
         self.repo = repo
@@ -711,16 +723,8 @@ class GitCloningError(InternalException):
         return scrub_secrets(msg, env_secrets())
 
 
-class GitCheckoutError(InternalException):
-    def __init__(self, repo: str, revision: str, error: CommandResultError):
-        self.repo = repo
-        self.revision = revision
-        self.stderr = error.stderr.strip()
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        msg = f"Error checking out spec='{self.revision}' for repo {self.repo}\n{self.stderr}"
-        return scrub_secrets(msg, env_secrets())
+class GitCheckoutError(BadSpecError):
+    pass
 
 
 class InvalidMaterializationArg(CompilationException):
@@ -731,6 +735,21 @@ class InvalidMaterializationArg(CompilationException):
 
     def get_message(self) -> str:
         msg = f"materialization '{self.name}' received unknown argument '{self.argument}'."
+        return msg
+
+
+class OperationException(CompilationException):
+    def __init__(self, operation_name):
+        self.operation_name = operation_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            f"dbt encountered an error when attempting to create a {self.operation_name}. "
+            "If this error persists, please create an issue at: \n\n"
+            "https://github.com/dbt-labs/dbt-core"
+        )
+
         return msg
 
 
@@ -1535,14 +1554,13 @@ class RelationTypeNull(CompilationException):
 
 
 class MaterializationNotAvailable(CompilationException):
-    def __init__(self, model, adapter_type: str):
-        self.model = model
+    def __init__(self, materialization, adapter_type: str):
+        self.materialization = materialization
         self.adapter_type = adapter_type
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        materialization = self.model.get_materialization()
-        msg = f"Materialization '{materialization}' is not available for {self.adapter_type}!"
+        msg = f"Materialization '{self.materialization}' is not available for {self.adapter_type}!"
         return msg
 
 
@@ -1772,6 +1790,17 @@ class VarsArgNotYamlDict(CompilationException):
 
 
 # contracts level
+class UnrecognizedCredentialType(CompilationException):
+    def __init__(self, typename: str, supported_types: List):
+        self.typename = typename
+        self.supported_types = supported_types
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = 'Unrecognized credentials type "{}" - supported types are ({})'.format(
+            self.typename, ", ".join('"{}"'.format(t) for t in self.supported_types)
+        )
+        return msg
 
 
 class DuplicateMacroInPackage(CompilationException):
@@ -1823,6 +1852,29 @@ class DuplicateMaterializationName(CompilationException):
 
 
 # jinja exceptions
+class PatchTargetNotFound(CompilationException):
+    def __init__(self, patches: Dict):
+        self.patches = patches
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        patch_list = "\n\t".join(
+            f"model {p.name} (referenced in path {p.original_file_path})"
+            for p in self.patches.values()
+        )
+        msg = f"dbt could not find models for the following patches:\n\t{patch_list}"
+        return msg
+
+
+class MacroNotFound(CompilationException):
+    def __init__(self, node, target_macro_id: str):
+        self.node = node
+        self.target_macro_id = target_macro_id
+        msg = f"'{self.node.unique_id}' references macro '{self.target_macro_id}' which is not defined!"
+
+        super().__init__(msg=msg)
+
+
 class MissingConfig(CompilationException):
     def __init__(self, unique_id: str, name: str):
         self.unique_id = unique_id
@@ -1834,20 +1886,19 @@ class MissingConfig(CompilationException):
 
 
 class MissingMaterialization(CompilationException):
-    def __init__(self, model, adapter_type):
-        self.model = model
+    def __init__(self, materialization, adapter_type):
+        self.materialization = materialization
         self.adapter_type = adapter_type
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        materialization = self.model.get_materialization()
 
         valid_types = "'default'"
 
         if self.adapter_type != "default":
             valid_types = f"'default' and '{self.adapter_type}'"
 
-        msg = f"No materialization '{materialization}' was found for adapter {self.adapter_type}! (searched types {valid_types})"
+        msg = f"No materialization '{self.materialization}' was found for adapter {self.adapter_type}! (searched types {valid_types})"
         return msg
 
 
@@ -2139,139 +2190,293 @@ class RelationWrongType(CompilationException):
 # They will be removed in 1 (or 2?) versions.  Issue to be created to ensure it happens.
 
 # TODO: add deprecation to functions
+DEPRECATION_VERSION = "1.5.0"
+SUGGESTED_ACTION = "using `raise {exception}` directly instead"
+REASON = "See https://github.com/dbt-labs/dbt-core/issues/6393 for more details"
+
+
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="JinjaLogWarning"),
+    reason=REASON,
+)
 def warn(msg, node=None):
     warn_or_error(JinjaLogWarning(msg=msg, node_info=get_node_info()))
     return ""
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MissingConfig"),
+    reason=REASON,
+)
 def missing_config(model, name) -> NoReturn:
     raise MissingConfig(unique_id=model.unique_id, name=name)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MissingMaterialization"),
+    reason=REASON,
+)
 def missing_materialization(model, adapter_type) -> NoReturn:
-    raise MissingMaterialization(model=model, adapter_type=adapter_type)
+    materialization = model.config.materialized
+    raise MissingMaterialization(materialization=materialization, adapter_type=adapter_type)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MissingRelation"),
+    reason=REASON,
+)
 def missing_relation(relation, model=None) -> NoReturn:
     raise MissingRelation(relation, model)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousAlias"),
+    reason=REASON,
+)
 def raise_ambiguous_alias(node_1, node_2, duped_name=None) -> NoReturn:
     raise AmbiguousAlias(node_1, node_2, duped_name)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousCatalogMatch"),
+    reason=REASON,
+)
 def raise_ambiguous_catalog_match(unique_id, match_1, match_2) -> NoReturn:
     raise AmbiguousCatalogMatch(unique_id, match_1, match_2)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="CacheInconsistency"),
+    reason=REASON,
+)
 def raise_cache_inconsistent(message) -> NoReturn:
     raise CacheInconsistency(message)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DataclassNotDict"),
+    reason=REASON,
+)
 def raise_dataclass_not_dict(obj) -> NoReturn:
     raise DataclassNotDict(obj)
 
 
-# note: this is called all over the code in addition to in jinja
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    reason=REASON,
+)
 def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DatabaseException"),
+    reason=REASON,
+)
 def raise_database_error(msg, node=None) -> NoReturn:
     raise DatabaseException(msg, node)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DependencyNotFound"),
+    reason=REASON,
+)
 def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:
     raise DependencyNotFound(node, node_description, required_pkg)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DependencyException"),
+    reason=REASON,
+)
 def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(scrub_secrets(msg, env_secrets()))
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicatePatchPath"),
+    reason=REASON,
+)
 def raise_duplicate_patch_name(patch_1, existing_patch_path) -> NoReturn:
     raise DuplicatePatchPath(patch_1, existing_patch_path)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateResourceName"),
+    reason=REASON,
+)
 def raise_duplicate_resource_name(node_1, node_2) -> NoReturn:
     raise DuplicateResourceName(node_1, node_2)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="InvalidPropertyYML"),
+    reason=REASON,
+)
 def raise_invalid_property_yml_version(path, issue) -> NoReturn:
     raise InvalidPropertyYML(path, issue)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="NotImplementedException"),
+    reason=REASON,
+)
 def raise_not_implemented(msg) -> NoReturn:
     raise NotImplementedException(msg)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="RelationWrongType"),
+    reason=REASON,
+)
 def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:
     raise RelationWrongType(relation, expected_type, model)
 
 
 # these were implemented in core so deprecating here by calling the new exception directly
+
+
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateAlias"),
+    reason=REASON,
+)
 def raise_duplicate_alias(
     kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
 ) -> NoReturn:
     raise DuplicateAlias(kwargs, aliases, canonical_key)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateSourcePatchName"),
+    reason=REASON,
+)
 def raise_duplicate_source_patch_name(patch_1, patch_2):
     raise DuplicateSourcePatchName(patch_1, patch_2)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroPatchName"),
+    reason=REASON,
+)
 def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
     raise DuplicateMacroPatchName(patch_1, existing_patch_path)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroName"),
+    reason=REASON,
+)
 def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
     raise DuplicateMacroName(node_1, node_2, namespace)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="ApproximateMatch"),
+    reason=REASON,
+)
 def approximate_relation_match(target, relation):
     raise ApproximateMatch(target, relation)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResults"),
+    reason=REASON,
+)
 def get_relation_returned_multiple_results(kwargs, matches):
     raise RelationReturnedMultipleResults(kwargs, matches)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="OperationException"),
+    reason=REASON,
+)
 def system_error(operation_name):
-    # Note: This was converted for core to use SymbolicLinkError because it's the only way it was used. Maintaining flexibility here for now.
-    msg = (
-        f"dbt encountered an error when attempting to {operation_name}. "
-        "If this error persists, please create an issue at: \n\n"
-        "https://github.com/dbt-labs/dbt-core"
-    )
-    raise CompilationException(msg)
+    raise OperationException(operation_name)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="InvalidMaterializationArg"),
+    reason=REASON,
+)
 def invalid_materialization_argument(name, argument):
     raise InvalidMaterializationArg(name, argument)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="BadSpecException"),
+    reason=REASON,
+)
 def bad_package_spec(repo, spec, error_message):
-    msg = f"Error checking out spec='{spec}' for repo {repo}\n{error_message}"
-    raise InternalException(scrub_secrets(msg, env_secrets()))
+    raise BadSpecError(spec, repo, error_message)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="CommandResultError"),
+    reason=REASON,
+)
 def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
-    error.cmd = list(scrub_secrets(str(error.cmd), env_secrets()))
     raise error
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="GitCloningProblem"),
+    reason=REASON,
+)
 def raise_git_cloning_problem(repo) -> NoReturn:
     raise GitCloningProblem(repo)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MacroInvalidDispatchArg"),
+    reason=REASON,
+)
 def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
     raise MacroInvalidDispatchArg(macro_name)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="GraphDependencyNotFound"),
+    reason=REASON,
+)
 def dependency_not_found(node, dependency):
     raise GraphDependencyNotFound(node, dependency)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="TargetNotFound"),
+    reason=REASON,
+)
 def target_not_found(
     node,
     target_name: str,
@@ -2288,6 +2493,11 @@ def target_not_found(
     )
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DocTargetNotFound"),
+    reason=REASON,
+)
 def doc_target_not_found(
     model, target_doc_name: str, target_doc_package: Optional[str]
 ) -> NoReturn:
@@ -2296,26 +2506,56 @@ def doc_target_not_found(
     )
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="InvalidDocArgs"),
+    reason=REASON,
+)
 def doc_invalid_args(model, args) -> NoReturn:
     raise InvalidDocArgs(node=model, args=args)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="RefBadContext"),
+    reason=REASON,
+)
 def ref_bad_context(model, args) -> NoReturn:
     raise RefBadContext(node=model, args=args)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MetricInvalidArgs"),
+    reason=REASON,
+)
 def metric_invalid_args(model, args) -> NoReturn:
     raise MetricInvalidArgs(node=model, args=args)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="RefInvalidArgs"),
+    reason=REASON,
+)
 def ref_invalid_args(model, args) -> NoReturn:
     raise RefInvalidArgs(node=model, args=args)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="InvalidBoolean"),
+    reason=REASON,
+)
 def invalid_bool_error(got_value, macro_name) -> NoReturn:
     raise InvalidBoolean(return_value=got_value, macro_name=macro_name)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="InvalidMacroArgType"),
+    reason=REASON,
+)
 def invalid_type_error(method_name, arg_name, got_value, expected_type) -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros
     has changed.
@@ -2323,45 +2563,70 @@ def invalid_type_error(method_name, arg_name, got_value, expected_type) -> NoRet
     raise InvalidMacroArgType(method_name, arg_name, got_value, expected_type)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="DisallowSecretEnvVar"),
+    reason=REASON,
+)
 def disallow_secret_env_var(env_var_name) -> NoReturn:
     """Raise an error when a secret env var is referenced outside allowed
     rendering contexts"""
     raise DisallowSecretEnvVar(env_var_name)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="ParsingException"),
+    reason=REASON,
+)
 def raise_parsing_error(msg, node=None) -> NoReturn:
     raise ParsingException(msg, node)
 
 
-# These are the exceptions functions that were not called within dbt-core but will remain here but deprecated to give a chance to rework
-# TODO: is this valid?  Should I create a special exception class for this?
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    reason=REASON,
+)
 def raise_unrecognized_credentials_type(typename, supported_types):
-    msg = 'Unrecognized credentials type "{}" - supported types are ({})'.format(
-        typename, ", ".join('"{}"'.format(t) for t in supported_types)
-    )
-    raise CompilationException(msg)
+    raise UnrecognizedCredentialType(typename, supported_types)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    reason=REASON,
+)
 def raise_patch_targets_not_found(patches):
-    patch_list = "\n\t".join(
-        f"model {p.name} (referenced in path {p.original_file_path})" for p in patches.values()
-    )
-    msg = f"dbt could not find models for the following patches:\n\t{patch_list}"
-    raise CompilationException(msg)
+    raise PatchTargetNotFound(patches)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResults"),
+    reason=REASON,
+)
 def multiple_matching_relations(kwargs, matches):
     raise RelationReturnedMultipleResults(kwargs, matches)
 
 
-# while this isn't in our code I wouldn't be surpised it's in adapter code
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MaterializationNotAvailable"),
+    reason=REASON,
+)
 def materialization_not_available(model, adapter_type):
-    raise MaterializationNotAvailable(model, adapter_type)
+    materialization = model.config.materialized
+    raise MaterializationNotAvailable(materialization=materialization, adapter_type=adapter_type)
 
 
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_ACTION.format(exception="MacroNotFound"),
+    reason=REASON,
+)
 def macro_not_found(model, target_macro_id):
-    msg = f"'{model.unique_id}' references macro '{target_macro_id}' which is not defined!"
-    raise CompilationException(msg=msg, node=model)
+    raise MacroNotFound(node=model, target_macro_id=target_macro_id)
 
 
 # adapters use this to format messages.  it should be deprecated but live on for now

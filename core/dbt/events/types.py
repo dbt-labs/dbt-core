@@ -416,6 +416,22 @@ class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+@dataclass
+class FunctionDeprecated(WarnLevel, pt.FunctionDeprecated):
+    def code(self):
+        return "D008"
+
+    def message(self):
+        extra_reason = ""
+        if self.reason:
+            extra_reason = f"\n{self.reason}"
+        msg = (
+            f"`{self.function_name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
+            f"Adapter maintainers can resolve this deprecation by {self.suggested_action}. {extra_reason}"
+        )
+        return warning_tag(msg)
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
