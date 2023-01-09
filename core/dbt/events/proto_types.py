@@ -750,186 +750,37 @@ class SchemaDropMsg(betterproto.Message):
 
 
 @dataclass
-class UncachedRelation(betterproto.Message):
+class CacheAction(betterproto.Message):
     """E022"""
 
-    dep_key: "ReferenceKeyMsg" = betterproto.message_field(1)
+    action: str = betterproto.string_field(1)
     ref_key: "ReferenceKeyMsg" = betterproto.message_field(2)
+    ref_key_2: "ReferenceKeyMsg" = betterproto.message_field(3)
+    ref_key_3: "ReferenceKeyMsg" = betterproto.message_field(4)
+    ref_list: List["ReferenceKeyMsg"] = betterproto.message_field(5)
 
 
 @dataclass
-class UncachedRelationMsg(betterproto.Message):
+class CacheActionMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "UncachedRelation" = betterproto.message_field(2)
+    data: "CacheAction" = betterproto.message_field(2)
 
 
 @dataclass
-class AddLink(betterproto.Message):
-    """E023"""
-
-    dep_key: "ReferenceKeyMsg" = betterproto.message_field(1)
-    ref_key: "ReferenceKeyMsg" = betterproto.message_field(2)
-
-
-@dataclass
-class AddLinkMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "AddLink" = betterproto.message_field(2)
-
-
-@dataclass
-class AddRelation(betterproto.Message):
-    """E024"""
-
-    relation: "ReferenceKeyMsg" = betterproto.message_field(1)
-
-
-@dataclass
-class AddRelationMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "AddRelation" = betterproto.message_field(2)
-
-
-@dataclass
-class DropMissingRelation(betterproto.Message):
-    """E025"""
-
-    relation: "ReferenceKeyMsg" = betterproto.message_field(1)
-
-
-@dataclass
-class DropMissingRelationMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DropMissingRelation" = betterproto.message_field(2)
-
-
-@dataclass
-class DropCascade(betterproto.Message):
-    """E026"""
-
-    dropped: "ReferenceKeyMsg" = betterproto.message_field(1)
-    consequences: List["ReferenceKeyMsg"] = betterproto.message_field(2)
-
-
-@dataclass
-class DropCascadeMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DropCascade" = betterproto.message_field(2)
-
-
-@dataclass
-class DropRelation(betterproto.Message):
-    """E027"""
-
-    dropped: "ReferenceKeyMsg" = betterproto.message_field(1)
-
-
-@dataclass
-class DropRelationMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DropRelation" = betterproto.message_field(2)
-
-
-@dataclass
-class UpdateReference(betterproto.Message):
-    """E028"""
-
-    old_key: "ReferenceKeyMsg" = betterproto.message_field(1)
-    new_key: "ReferenceKeyMsg" = betterproto.message_field(2)
-    cached_key: "ReferenceKeyMsg" = betterproto.message_field(3)
-
-
-@dataclass
-class UpdateReferenceMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "UpdateReference" = betterproto.message_field(2)
-
-
-@dataclass
-class TemporaryRelation(betterproto.Message):
-    """E029"""
-
-    key: "ReferenceKeyMsg" = betterproto.message_field(1)
-
-
-@dataclass
-class TemporaryRelationMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "TemporaryRelation" = betterproto.message_field(2)
-
-
-@dataclass
-class RenameSchema(betterproto.Message):
-    """E030"""
-
-    old_key: "ReferenceKeyMsg" = betterproto.message_field(1)
-    new_key: "ReferenceKeyMsg" = betterproto.message_field(2)
-
-
-@dataclass
-class RenameSchemaMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "RenameSchema" = betterproto.message_field(2)
-
-
-@dataclass
-class DumpBeforeAddGraph(betterproto.Message):
+class CacheDumpGraph(betterproto.Message):
     """E031"""
 
     dump: Dict[str, "ListOfStrings"] = betterproto.map_field(
         1, betterproto.TYPE_STRING, betterproto.TYPE_MESSAGE
     )
+    before_after: str = betterproto.string_field(2)
+    action: str = betterproto.string_field(3)
 
 
 @dataclass
-class DumpBeforeAddGraphMsg(betterproto.Message):
+class CacheDumpGraphMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "DumpBeforeAddGraph" = betterproto.message_field(2)
-
-
-@dataclass
-class DumpAfterAddGraph(betterproto.Message):
-    """E032"""
-
-    dump: Dict[str, "ListOfStrings"] = betterproto.map_field(
-        1, betterproto.TYPE_STRING, betterproto.TYPE_MESSAGE
-    )
-
-
-@dataclass
-class DumpAfterAddGraphMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DumpAfterAddGraph" = betterproto.message_field(2)
-
-
-@dataclass
-class DumpBeforeRenameSchema(betterproto.Message):
-    """E033"""
-
-    dump: Dict[str, "ListOfStrings"] = betterproto.map_field(
-        1, betterproto.TYPE_STRING, betterproto.TYPE_MESSAGE
-    )
-
-
-@dataclass
-class DumpBeforeRenameSchemaMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DumpBeforeRenameSchema" = betterproto.message_field(2)
-
-
-@dataclass
-class DumpAfterRenameSchema(betterproto.Message):
-    """E034"""
-
-    dump: Dict[str, "ListOfStrings"] = betterproto.map_field(
-        1, betterproto.TYPE_STRING, betterproto.TYPE_MESSAGE
-    )
-
-
-@dataclass
-class DumpAfterRenameSchemaMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DumpAfterRenameSchema" = betterproto.message_field(2)
+    data: "CacheDumpGraph" = betterproto.message_field(2)
 
 
 @dataclass

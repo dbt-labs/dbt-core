@@ -593,140 +593,35 @@ message SchemaDropMsg {
 }
 
 // E022
-message UncachedRelation {
-    ReferenceKeyMsg dep_key = 1;
+message CacheAction {
+    string action = 1;
     ReferenceKeyMsg ref_key = 2;
+    ReferenceKeyMsg ref_key_2 = 3;
+    ReferenceKeyMsg ref_key_3 = 4;
+    repeated ReferenceKeyMsg ref_list = 5;
 }
 
-message UncachedRelationMsg {
+message CacheActionMsg {
     EventInfo info = 1;
-    UncachedRelation data = 2;
+    CacheAction data = 2;
 }
 
-// E023
-message AddLink {
-    ReferenceKeyMsg dep_key = 1;
-    ReferenceKeyMsg ref_key = 2;
-}
-
-message AddLinkMsg {
-    EventInfo info = 1;
-    AddLink data = 2;
-}
-
-// E024
-message AddRelation {
-    ReferenceKeyMsg relation = 1;
-}
-
-message AddRelationMsg {
-    EventInfo info = 1;
-    AddRelation data = 2;
-}
-
-// E025
-message DropMissingRelation {
-    ReferenceKeyMsg relation = 1;
-}
-
-message DropMissingRelationMsg {
-    EventInfo info = 1;
-    DropMissingRelation data = 2;
-}
-
-// E026
-message DropCascade {
-    ReferenceKeyMsg dropped = 1;
-    repeated ReferenceKeyMsg consequences = 2;
-}
-
-message DropCascadeMsg {
-    EventInfo info = 1;
-    DropCascade data = 2;
-}
-
-// E027
-message DropRelation {
-    ReferenceKeyMsg dropped = 1;
-}
-
-message DropRelationMsg {
-    EventInfo info = 1;
-    DropRelation data = 2;
-}
-
-// E028
-message UpdateReference {
-    ReferenceKeyMsg old_key = 1;
-    ReferenceKeyMsg new_key = 2;
-    ReferenceKeyMsg cached_key = 3;
-}
-
-message UpdateReferenceMsg {
-    EventInfo info = 1;
-    UpdateReference data = 2;
-}
-
-// E029
-message TemporaryRelation {
-    ReferenceKeyMsg key = 1;
-}
-
-message TemporaryRelationMsg {
-    EventInfo info = 1;
-    TemporaryRelation data = 2;
-}
-
-// E030
-message RenameSchema {
-    ReferenceKeyMsg old_key = 1;
-    ReferenceKeyMsg new_key = 2;
-}
-
-message RenameSchemaMsg {
-    EventInfo info = 1;
-    RenameSchema data = 2;
-}
+// Skipping E023, E024, E025, E026, E027, E028, E029, E0230
 
 // E031
-message DumpBeforeAddGraph {
+message CacheDumpGraph {
     map<string, ListOfStrings> dump = 1;
+    string before_after = 2;
+    string action = 3;
 }
 
-message DumpBeforeAddGraphMsg {
+message CacheDumpGraphMsg {
     EventInfo info = 1;
-    DumpBeforeAddGraph data = 2;
+    CacheDumpGraph data = 2;
 }
 
-// E032
-message DumpAfterAddGraph {
-    map<string, ListOfStrings> dump = 1;
-}
 
-message DumpAfterAddGraphMsg {
-    EventInfo info = 1;
-    DumpAfterAddGraph data = 2;
-}
-
-// E033
-message DumpBeforeRenameSchema {
-    map<string, ListOfStrings> dump = 1;
-}
-
-message DumpBeforeRenameSchemaMsg {
-    EventInfo info = 1;
-    DumpBeforeRenameSchema data = 2;
-}
-
-// E034
-message DumpAfterRenameSchema {
-    map<string, ListOfStrings> dump = 1;
-}
-
-message DumpAfterRenameSchemaMsg {
-    EventInfo info = 1;
-    DumpAfterRenameSchema data = 2;
-}
+// Skipping E032, E033, E034
 
 // E035
 message AdapterImportError {
