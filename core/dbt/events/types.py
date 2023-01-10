@@ -117,79 +117,40 @@ class InvalidVarsYAML(ErrorLevel, pt.InvalidVarsYAML):
 
 
 @dataclass
-class DbtProjectError(ErrorLevel, pt.DbtProjectError):
+class LogDbtProjectError(ErrorLevel, pt.LogDbtProjectError):
     def code(self):
         return "A009"
 
     def message(self) -> str:
-        return "Encountered an error while reading the project:"
+        msg = "Encountered an error while reading the project:"
+        if self.exc:
+            msg += f"  ERROR: {str(self.exc)}"
+        return msg
+
+
+# Skipped A010
 
 
 @dataclass
-class DbtProjectErrorException(ErrorLevel, pt.DbtProjectErrorException):
-    def code(self):
-        return "A010"
-
-    def message(self) -> str:
-        return f"  ERROR: {str(self.exc)}"
-
-
-@dataclass
-class DbtProfileError(ErrorLevel, pt.DbtProfileError):
+class LogDbtProfileError(ErrorLevel, pt.LogDbtProfileError):
     def code(self):
         return "A011"
 
     def message(self) -> str:
-        return "Encountered an error while reading profiles:"
+        msg = "Encountered an error while reading profiles:\n" f"  ERROR: {str(self.exc)}"
+        if self.profiles:
+            msg += "Defined profiles:\n"
+            for profile in self.profiles:
+                msg += f" - {profile}"
+        else:
+            msg += "There are no profiles defined in your profiles.yml file"
 
-
-@dataclass
-class DbtProfileErrorException(ErrorLevel, pt.DbtProfileErrorException):
-    def code(self):
-        return "A012"
-
-    def message(self) -> str:
-        return f"  ERROR: {str(self.exc)}"
-
-
-@dataclass
-class ProfileListTitle(InfoLevel, pt.ProfileListTitle):
-    def code(self):
-        return "A013"
-
-    def message(self) -> str:
-        return "Defined profiles:"
-
-
-@dataclass
-class ListSingleProfile(InfoLevel, pt.ListSingleProfile):
-    def code(self):
-        return "A014"
-
-    def message(self) -> str:
-        return f" - {self.profile}"
-
-
-@dataclass
-class NoDefinedProfiles(InfoLevel, pt.NoDefinedProfiles):
-    def code(self):
-        return "A015"
-
-    def message(self) -> str:
-        return "There are no profiles defined in your profiles.yml file"
-
-
-@dataclass
-class ProfileHelpMessage(InfoLevel, pt.ProfileHelpMessage):
-    def code(self):
-        return "A016"
-
-    def message(self) -> str:
-        return """
+        msg += """
 For more information on configuring profiles, please consult the dbt docs:
 
 https://docs.getdbt.com/docs/configure-your-profile
 """
+        return msg
 
 
 @dataclass
@@ -631,130 +592,54 @@ class SchemaDrop(DebugLevel, pt.SchemaDrop):
         return f'Dropping schema "{self.relation}".'
 
 
-# TODO pretty sure this is only ever called in dead code
-# see: core/dbt/adapters/cache.py _add_link vs add_link
 @dataclass
-class UncachedRelation(DebugLevel, Cache, pt.UncachedRelation):
+class CacheAction(DebugLevel, Cache, pt.CacheAction):
     def code(self):
         return "E022"
 
-    def message(self) -> str:
-        return (
-            f"{self.dep_key} references {str(self.ref_key)} "
-            f"but {self.ref_key.database}.{self.ref_key.schema}"
-            "is not in the cache, skipping assumed external relation"
-        )
+    def message(self):
+        if self.action == "add_link":
+            return f"adding link, {self.ref_key} references {self.ref_key_2}"
+        elif self.action == "add_relation":
+            return f"adding relation: {str(self.ref_key)}"
+        elif self.action == "drop_missing_relation":
+            return f"dropped a nonexistent relationship: {str(self.ref_key)}"
+        elif self.action == "drop_cascade":
+            return f"drop {self.ref_key} is cascading to {self.ref_list}"
+        elif self.action == "drop_relation":
+            return f"Dropping relation: {self.ref_key}"
+        elif self.action == "update_reference":
+            return (
+                f"updated reference from {self.ref_key} -> {self.ref_key_3} to "
+                f"{self.ref_key_2} -> {self.ref_key_3}"
+            )
+        elif self.action == "temporary_relation":
+            return f"old key {self.ref_key} not found in self.relations, assuming temporary"
+        elif self.action == "rename_relation":
+            return f"Renaming relation {self.ref_key} to {self.ref_key_2}"
+        elif self.action == "uncached_relation":
+            return (
+                f"{self.ref_key_2} references {str(self.ref_key)} "
+                f"but {self.ref_key.database}.{self.ref_key.schema}"
+                "is not in the cache, skipping assumed external relation"
+            )
+        else:
+            return f"{self.ref_key}"
+
+
+# Skipping E023, E024, E025, E026, E027, E028, E029, E030
 
 
 @dataclass
-class AddLink(DebugLevel, Cache, pt.AddLink):
-    def code(self):
-        return "E023"
-
-    def message(self) -> str:
-        return f"adding link, {self.dep_key} references {self.ref_key}"
-
-
-@dataclass
-class AddRelation(DebugLevel, Cache, pt.AddRelation):
-    def code(self):
-        return "E024"
-
-    def message(self) -> str:
-        return f"Adding relation: {str(self.relation)}"
-
-
-@dataclass
-class DropMissingRelation(DebugLevel, Cache, pt.DropMissingRelation):
-    def code(self):
-        return "E025"
-
-    def message(self) -> str:
-        return f"dropped a nonexistent relationship: {str(self.relation)}"
-
-
-@dataclass
-class DropCascade(DebugLevel, Cache, pt.DropCascade):
-    def code(self):
-        return "E026"
-
-    def message(self) -> str:
-        return f"drop {self.dropped} is cascading to {self.consequences}"
-
-
-@dataclass
-class DropRelation(DebugLevel, Cache, pt.DropRelation):
-    def code(self):
-        return "E027"
-
-    def message(self) -> str:
-        return f"Dropping relation: {self.dropped}"
-
-
-@dataclass
-class UpdateReference(DebugLevel, Cache, pt.UpdateReference):
-    def code(self):
-        return "E028"
-
-    def message(self) -> str:
-        return (
-            f"updated reference from {self.old_key} -> {self.cached_key} to "
-            f"{self.new_key} -> {self.cached_key}"
-        )
-
-
-@dataclass
-class TemporaryRelation(DebugLevel, Cache, pt.TemporaryRelation):
-    def code(self):
-        return "E029"
-
-    def message(self) -> str:
-        return f"old key {self.key} not found in self.relations, assuming temporary"
-
-
-@dataclass
-class RenameSchema(DebugLevel, Cache, pt.RenameSchema):
-    def code(self):
-        return "E030"
-
-    def message(self) -> str:
-        return f"Renaming relation {self.old_key} to {self.new_key}"
-
-
-@dataclass
-class DumpBeforeAddGraph(DebugLevel, Cache, pt.DumpBeforeAddGraph):
+class CacheDumpGraph(DebugLevel, Cache, pt.CacheDumpGraph):
     def code(self):
         return "E031"
 
     def message(self) -> str:
-        return f"before adding : {self.dump}"
+        return f"{self.before_after} {self.action} : {self.dump}"
 
 
-@dataclass
-class DumpAfterAddGraph(DebugLevel, Cache, pt.DumpAfterAddGraph):
-    def code(self):
-        return "E032"
-
-    def message(self) -> str:
-        return f"after adding: {self.dump}"
-
-
-@dataclass
-class DumpBeforeRenameSchema(DebugLevel, Cache, pt.DumpBeforeRenameSchema):
-    def code(self):
-        return "E033"
-
-    def message(self) -> str:
-        return f"before rename: {self.dump}"
-
-
-@dataclass
-class DumpAfterRenameSchema(DebugLevel, Cache, pt.DumpAfterRenameSchema):
-    def code(self):
-        return "E034"
-
-    def message(self) -> str:
-        return f"after rename: {self.dump}"
+# Skipping E032, E033, E034
 
 
 @dataclass

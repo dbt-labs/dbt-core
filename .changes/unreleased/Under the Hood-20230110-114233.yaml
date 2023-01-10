@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Combine some logging events
+time: 2023-01-10T11:42:33.580756-05:00
+custom:
+  Author: gshank
+  Issue: 1716 1717 1719
