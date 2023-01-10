@@ -2,7 +2,7 @@ import pytest
 from hologram import ValidationError
 from dbt.tests.util import run_dbt, get_manifest
 
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingError
 
 from tests.functional.configs.fixtures import (
     schema_all_disabled_yml,
@@ -47,7 +47,7 @@ class TestSchemaDisabledConfigsFailure:
         }
 
     def test_disabled_config(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "which is disabled"
@@ -209,7 +209,7 @@ class TestMultipleDisabledNodesForUniqueIDFailure:
         }
 
     def test_disabled_config(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
         expected_msg = "Found 3 matching disabled nodes for model 'my_model_2'"

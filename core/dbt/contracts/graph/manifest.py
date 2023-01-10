@@ -40,10 +40,10 @@ from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourc
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
-    CompilationException,
-    DuplicateResourceName,
-    DuplicateMacroInPackage,
-    DuplicateMaterializationName,
+    CompilationError,
+    DuplicateResourceNameError,
+    DuplicateMacroInPackageError,
+    DuplicateMaterializationNameError,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
@@ -102,7 +102,7 @@ class DocLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> Documentation:
         if unique_id not in manifest.docs:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
@@ -135,7 +135,7 @@ class SourceLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SourceDefinition:
         if unique_id not in manifest.sources:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
@@ -173,7 +173,7 @@ class RefableLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
         if unique_id not in manifest.nodes:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return manifest.nodes[unique_id]
@@ -206,7 +206,7 @@ class MetricLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Metric:
         if unique_id not in manifest.metrics:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Metric {unique_id} found in cache but not found in manifest"
             )
         return manifest.metrics[unique_id]
@@ -398,7 +398,7 @@ class MaterializationCandidate(MacroCandidate):
             return NotImplemented
         equal = self.specificity == other.specificity and self.locality == other.locality
         if equal:
-            raise DuplicateMaterializationName(self.macro, other)
+            raise DuplicateMaterializationNameError(self.macro, other)
 
         return equal
 
@@ -480,13 +480,13 @@ def _update_into(dest: MutableMapping[str, T], new_item: T):
     """
     unique_id = new_item.unique_id
     if unique_id not in dest:
-        raise dbt.exceptions.RuntimeException(
+        raise dbt.exceptions.DbtRuntimeError(
             f"got an update_{new_item.resource_type} call with an "
             f"unrecognized {new_item.resource_type}: {new_item.unique_id}"
         )
     existing = dest[unique_id]
     if new_item.original_file_path != existing.original_file_path:
-        raise dbt.exceptions.RuntimeException(
+        raise dbt.exceptions.DbtRuntimeError(
             f"cannot update a {new_item.resource_type} to have a new file path!"
         )
     dest[unique_id] = new_item
@@ -839,7 +839,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.metrics[unique_id]
         else:
             # something terrible has happened
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 "Expected node {} not found in manifest".format(unique_id)
             )
 
@@ -1035,7 +1035,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def add_macro(self, source_file: SourceFile, macro: Macro):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
-            raise DuplicateMacroInPackage(macro=macro, macro_mapping=self.macros)
+            raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
 
         self.macros[macro.unique_id] = macro
         source_file.macros.append(macro.unique_id)
@@ -1213,7 +1213,7 @@ class WritableManifest(ArtifactMixin):
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
     if value.unique_id in src:
-        raise DuplicateResourceName(value, src[value.unique_id])
+        raise DuplicateResourceNameError(value, src[value.unique_id])
 
 
 K_T = TypeVar("K_T")
@@ -1222,7 +1222,7 @@ V_T = TypeVar("V_T")
 
 def _expect_value(key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str) -> V_T:
     if key not in src:
-        raise CompilationException(
+        raise CompilationError(
             'Expected to find "{}" in cached "result.{}" based '
             "on cached file information: {}!".format(key, name, old_file)
         )

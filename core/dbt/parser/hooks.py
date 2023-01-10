@@ -4,7 +4,7 @@ from typing import Iterable, Iterator, Union, List, Tuple
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
 from dbt.contracts.graph.nodes import HookNode
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType, RunHookType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
@@ -46,7 +46,7 @@ class HookSearcher(Iterable[HookBlock]):
         elif self.hook_type == RunHookType.End:
             hooks = self.project.on_run_end
         else:
-            raise InternalException(
+            raise DbtInternalError(
                 'hook_type must be one of "{}" or "{}" (got {})'.format(
                     RunHookType.Start, RunHookType.End, self.hook_type
                 )

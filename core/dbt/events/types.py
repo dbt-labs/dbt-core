@@ -378,7 +378,7 @@ class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
 
 
 @dataclass
-class FunctionDeprecated(WarnLevel, pt.FunctionDeprecated):
+class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
     def code(self):
         return "D008"
 
@@ -387,7 +387,7 @@ class FunctionDeprecated(WarnLevel, pt.FunctionDeprecated):
         if self.reason:
             extra_reason = f"\n{self.reason}"
         msg = (
-            f"`{self.function_name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
+            f"`{self.name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
             f"Adapter maintainers can resolve this deprecation by {self.suggested_action}. {extra_reason}"
         )
         return warning_tag(msg)
@@ -802,7 +802,7 @@ class MacroFileParse(DebugLevel, pt.MacroFileParse):
 
 
 @dataclass
-class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExceptionProcessingFile):
+class PartialParsingErrorProcessingFile(DebugLevel, pt.PartialParsingErrorProcessingFile):
     def code(self):
         return "I014"
 
@@ -814,7 +814,7 @@ class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExcepti
 
 
 @dataclass
-class PartialParsingException(DebugLevel, pt.PartialParsingException):
+class PartialParsingError(DebugLevel, pt.PartialParsingError):
     def code(self):
         return "I016"
 
@@ -1879,7 +1879,7 @@ class CatchableExceptionOnRun(DebugLevel, pt.CatchableExceptionOnRun):  # noqa
 
 
 @dataclass
-class InternalExceptionOnRun(DebugLevel, pt.InternalExceptionOnRun):
+class InternalErrorOnRun(DebugLevel, pt.InternalErrorOnRun):
     def code(self):
         return "W003"
 

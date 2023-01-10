@@ -91,13 +91,13 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         with self.lock:
             if key not in self.thread_connections:
-                raise dbt.exceptions.InvalidConnectionException(key, list(self.thread_connections))
+                raise dbt.exceptions.InvalidConnectionError(key, list(self.thread_connections))
             return self.thread_connections[key]
 
     def set_thread_connection(self, conn: Connection) -> None:
         key = self.get_thread_identifier()
         if key in self.thread_connections:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 "In set_thread_connection, existing connection exists for {}"
             )
         self.thread_connections[key] = conn
@@ -137,7 +137,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A context manager that handles exceptions raised by the
             underlying database.
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`exception_handler` is not implemented for this adapter!"
         )
 
@@ -211,7 +211,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             connect should trigger a retry.
         :type retryable_exceptions: Iterable[Type[Exception]]
         :param int retry_limit: How many times to retry the call to connect. If this limit
-            is exceeded before a successful call, a FailedToConnectException will be raised.
+            is exceeded before a successful call, a FailedToConnectError will be raised.
             Must be non-negative.
         :param retry_timeout: Time to wait between attempts to connect. Can also take a
             Callable that takes the number of attempts so far, beginning at 0, and returns an int
@@ -220,14 +220,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :param int _attempts: Parameter used to keep track of the number of attempts in calling the
             connect function across recursive calls. Passed as an argument to retry_timeout if it
             is a Callable. This parameter should not be set by the initial caller.
-        :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry attempts without
+        :raises dbt.exceptions.FailedToConnectError: Upon exhausting all retry attempts without
             successfully acquiring a handle.
         :return: The given connection with its appropriate state and handle attributes set
             depending on whether we successfully acquired a handle or not.
         """
         timeout = retry_timeout(_attempts) if callable(retry_timeout) else retry_timeout
         if timeout < 0:
-            raise dbt.exceptions.FailedToConnectException(
+            raise dbt.exceptions.FailedToConnectError(
                 "retry_timeout cannot be negative or return a negative time."
             )
 
@@ -235,7 +235,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             # This guard is not perfect others may add to the recursion limit (e.g. built-ins).
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.exceptions.FailedToConnectException("retry_limit cannot be negative")
+            raise dbt.exceptions.FailedToConnectError("retry_limit cannot be negative")
 
         try:
             connection.handle = connect()
@@ -246,7 +246,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             if retry_limit <= 0:
                 connection.handle = None
                 connection.state = ConnectionState.FAIL
-                raise dbt.exceptions.FailedToConnectException(str(e))
+                raise dbt.exceptions.FailedToConnectError(str(e))
 
             logger.debug(
                 f"Got a retryable error when attempting to open a {cls.TYPE} connection.\n"
@@ -268,12 +268,12 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         except Exception as e:
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.exceptions.FailedToConnectException(str(e))
+            raise dbt.exceptions.FailedToConnectError(str(e))
 
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:
         """Cancel all open connections on the adapter. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`cancel_open` is not implemented for this adapter!"
         )
 
@@ -288,7 +288,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        raise dbt.exceptions.NotImplementedException("`open` is not implemented for this adapter!")
+        raise dbt.exceptions.NotImplementedError("`open` is not implemented for this adapter!")
 
     def release(self) -> None:
         with self.lock:
@@ -320,16 +320,12 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def begin(self) -> None:
         """Begin a transaction. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            "`begin` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`begin` is not implemented for this adapter!")
 
     @abc.abstractmethod
     def commit(self) -> None:
         """Commit a transaction. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            "`commit` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`commit` is not implemented for this adapter!")
 
     @classmethod
     def _rollback_handle(cls, connection: Connection) -> None:
@@ -365,7 +361,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
         if connection.transaction_open is False:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Tried to rollback transaction on connection "
                 f'"{connection.name}", but it does not have one open!'
             )
@@ -415,6 +411,4 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        raise dbt.exceptions.NotImplementedException(
-            "`execute` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`execute` is not implemented for this adapter!")

@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
 
 
 from tests.functional.metrics.fixtures import (
@@ -85,14 +85,14 @@ class TestInvalidRefMetrics:
             "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
+    # tests that we get a ParsingError with an invalid model ref, where
     # the model name does not have quotes
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -104,14 +104,14 @@ class TestInvalidMetricMissingModel:
             "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
+    # tests that we get a ParsingError with an invalid model ref, where
     # the model name does not have quotes
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -123,13 +123,13 @@ class TestInvalidMetricMissingExpression:
             "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with a missing expression
+    # tests that we get a ParsingError with a missing expression
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -142,7 +142,7 @@ class TestNamesWithSpaces:
         }
 
     def test_names_with_spaces(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "cannot contain spaces" in str(exc.value)
 
@@ -156,7 +156,7 @@ class TestNamesWithSpecialChar:
         }
 
     def test_names_with_special_char(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "must contain only letters, numbers and underscores" in str(exc.value)
 
@@ -170,7 +170,7 @@ class TestNamesWithLeandingNumber:
         }
 
     def test_names_with_leading_number(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "must begin with a letter" in str(exc.value)
 
@@ -184,7 +184,7 @@ class TestLongName:
         }
 
     def test_long_name(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "cannot contain more than 250 characters" in str(exc.value)
 
@@ -198,7 +198,7 @@ class TestInvalidDerivedMetrics:
         }
 
     def test_invalid_derived_metrics(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -294,14 +294,14 @@ class TestInvalidTimestampTimeGrainsMetrics:
             "people.sql": models_people_sql,
         }
 
-    # Tests that we get a ParsingException with an invalid metric definition.
+    # Tests that we get a ParsingError with an invalid metric definition.
     # This metric definition is missing timestamp but HAS a time_grains property
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -313,12 +313,12 @@ class TestInvalidTimestampWindowMetrics:
             "people.sql": models_people_sql,
         }
 
-    # Tests that we get a ParsingException with an invalid metric definition.
+    # Tests that we get a ParsingError with an invalid metric definition.
     # This metric definition is missing timestamp but HAS a window property
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])

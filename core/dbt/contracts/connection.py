@@ -12,7 +12,7 @@ from typing import (
     List,
     Callable,
 )
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.utils import translate_aliases
 from dbt.events.functions import fire_event
 from dbt.events.types import NewConnectionOpening
@@ -94,7 +94,7 @@ class Connection(ExtensibleDbtClassMixin, Replaceable):
                 # this will actually change 'self._handle'.
                 self._handle.resolve(self)
             except RecursionError as exc:
-                raise InternalException(
+                raise DbtInternalError(
                     "A connection's open() method attempted to read the handle value"
                 ) from exc
         return self._handle

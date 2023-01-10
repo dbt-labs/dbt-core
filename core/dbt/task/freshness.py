@@ -15,7 +15,7 @@ from dbt.contracts.results import (
     SourceFreshnessResult,
     FreshnessStatus,
 )
-from dbt.exceptions import RuntimeException, InternalException
+from dbt.exceptions import DbtRuntimeError, DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     FreshnessCheckComplete,
@@ -33,7 +33,7 @@ RESULT_FILE_NAME = "sources.json"
 
 class FreshnessRunner(BaseRunner):
     def on_skip(self):
-        raise RuntimeException("Freshness: nodes cannot be skipped!")
+        raise DbtRuntimeError("Freshness: nodes cannot be skipped!")
 
     def before_execute(self):
         description = "freshness of {0.source_name}.{0.name}".format(self.node)
@@ -100,7 +100,7 @@ class FreshnessRunner(BaseRunner):
         # therefore loaded_at_field should be a str. If this invariant is
         # broken, raise!
         if compiled_node.loaded_at_field is None:
-            raise InternalException(
+            raise DbtInternalError(
                 "Got to execute for source freshness of a source that has no loaded_at_field!"
             )
 
@@ -132,7 +132,7 @@ class FreshnessRunner(BaseRunner):
     def compile(self, manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
-            raise RuntimeException("fresnhess runner: got a non-Source")
+            raise DbtRuntimeError("fresnhess runner: got a non-Source")
         # we don't do anything interesting when we compile a source node
         return self.node
 
@@ -162,7 +162,7 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return FreshnessSelector(
             graph=self.graph,
             manifest=self.manifest,

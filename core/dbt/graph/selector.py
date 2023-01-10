@@ -9,8 +9,8 @@ from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
 from dbt.node_types import NodeType
 from dbt.exceptions import (
-    InternalException,
-    InvalidSelectorException,
+    DbtInternalError,
+    InvalidSelectorError,
 )
 from dbt.contracts.graph.nodes import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
@@ -78,7 +78,7 @@ class NodeSelector(MethodManager):
         nodes = self.graph.nodes()
         try:
             collected = self.select_included(nodes, spec)
-        except InvalidSelectorException:
+        except InvalidSelectorError:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
             fire_event(
                 SelectorReportInvalidSelector(
@@ -183,7 +183,7 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.metrics:
             node = self.manifest.metrics[unique_id]
         else:
-            raise InternalException(f"Node {unique_id} not found in the manifest!")
+            raise DbtInternalError(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
 
     def filter_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:

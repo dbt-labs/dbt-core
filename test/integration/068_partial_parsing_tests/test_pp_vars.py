@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import ParsingError
 from dbt.constants import SECRET_ENV_PREFIX
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
@@ -58,7 +58,7 @@ class EnvVarTest(BasePPTest):
 
         # copy a file with an env_var call without an env_var
         self.copy_file('test-files/env_var_model.sql', 'models/env_var_model.sql')
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             results = self.run_dbt(["--partial-parse", "run"])
 
         # set the env var
@@ -84,7 +84,7 @@ class EnvVarTest(BasePPTest):
         # set an env_var in a schema file
         self.copy_file('test-files/env_var_schema.yml', 'models/schema.yml')
         self.copy_file('test-files/env_var_model_one.sql', 'models/model_one.sql')
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             results = self.run_dbt(["--partial-parse", "run"])
 
         # actually set the env_var
@@ -139,7 +139,7 @@ class EnvVarTest(BasePPTest):
 
         # Delete database env var
         del os.environ['ENV_VAR_DATABASE']
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             results = self.run_dbt(["--partial-parse", "run"])
         os.environ['ENV_VAR_DATABASE'] = 'test_dbt'
 
@@ -149,7 +149,7 @@ class EnvVarTest(BasePPTest):
         results = self.run_dbt(["--partial-parse", "run"])
         # Add source test using test_color and an env_var for color
         self.copy_file('test-files/env_var_schema2.yml', 'models/schema.yml')
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             results = self.run_dbt(["--partial-parse", "run"])
         os.environ['ENV_VAR_COLOR'] = 'green'
         results = self.run_dbt(["--partial-parse", "run"])

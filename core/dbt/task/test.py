@@ -22,9 +22,9 @@ from dbt.events.types import (
     LogStartLine,
 )
 from dbt.exceptions import (
-    InternalException,
-    InvalidBoolean,
-    MissingMaterialization,
+    DbtInternalError,
+    BooleanError,
+    MissingMaterializationError,
 )
 from dbt.graph import (
     ResourceTypeSelector,
@@ -51,7 +51,7 @@ class TestResultData(dbtClassMixin):
             try:
                 return bool(strtobool(field))  # type: ignore
             except ValueError:
-                raise InvalidBoolean(field, "get_test_sql")
+                raise BooleanError(field, "get_test_sql")
 
         # need this so we catch both true bools and 0/1
         return bool(field)
@@ -101,10 +101,10 @@ class TestRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterialization(materialization=test.get_materialization(), adapter_type=self.adapter.type())
+            raise MissingMaterializationError(materialization=test.get_materialization(), adapter_type=self.adapter.type())
 
         if "config" not in context:
-            raise InternalException(
+            raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
 
@@ -118,14 +118,14 @@ class TestRunner(CompileRunner):
         table = result["table"]
         num_rows = len(table.rows)
         if num_rows != 1:
-            raise InternalException(
+            raise DbtInternalError(
                 f"dbt internally failed to execute {test.unique_id}: "
                 f"Returned {num_rows} rows, but expected "
                 f"1 row"
             )
         num_cols = len(table.columns)
         if num_cols != 3:
-            raise InternalException(
+            raise DbtInternalError(
                 f"dbt internally failed to execute {test.unique_id}: "
                 f"Returned {num_cols} columns, but expected "
                 f"3 columns"
@@ -203,7 +203,7 @@ class TestTask(RunTask):
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,

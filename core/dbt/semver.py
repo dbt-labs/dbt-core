@@ -5,7 +5,7 @@ from typing import List
 
 from packaging import version as packaging_version
 
-from dbt.exceptions import VersionsNotCompatibleException
+from dbt.exceptions import VersionsNotCompatibleError
 import dbt.utils
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
@@ -94,7 +94,7 @@ class VersionSpecifier(VersionSpecification):
         match = _VERSION_REGEX.match(version_string)
 
         if not match:
-            raise dbt.exceptions.SemverException(
+            raise dbt.exceptions.SemverError(
                 f'"{version_string}" is not a valid semantic version.'
             )
 
@@ -222,7 +222,7 @@ class VersionRange:
         if a.compare(b) == 0:
             return a
         else:
-            raise VersionsNotCompatibleException()
+            raise VersionsNotCompatibleError()
 
     def _try_combine_lower_bound_with_exact(self, lower, exact):
         comparison = lower.compare(exact)
@@ -230,7 +230,7 @@ class VersionRange:
         if comparison < 0 or (comparison == 0 and lower.matcher == Matchers.GREATER_THAN_OR_EQUAL):
             return exact
 
-        raise VersionsNotCompatibleException()
+        raise VersionsNotCompatibleError()
 
     def _try_combine_lower_bound(self, a, b):
         if b.is_unbounded:
@@ -258,7 +258,7 @@ class VersionRange:
         if comparison > 0 or (comparison == 0 and upper.matcher == Matchers.LESS_THAN_OR_EQUAL):
             return exact
 
-        raise VersionsNotCompatibleException()
+        raise VersionsNotCompatibleError()
 
     def _try_combine_upper_bound(self, a, b):
         if b.is_unbounded:
@@ -291,7 +291,7 @@ class VersionRange:
             end = self._try_combine_upper_bound(self.end, other.end)
 
         if start.compare(end) > 0:
-            raise VersionsNotCompatibleException()
+            raise VersionsNotCompatibleError()
 
         return VersionRange(start=start, end=end)
 
@@ -379,8 +379,8 @@ def reduce_versions(*args):
 
         for version_specifier in version_specifiers:
             to_return = to_return.reduce(version_specifier.to_range())
-    except VersionsNotCompatibleException:
-        raise VersionsNotCompatibleException(
+    except VersionsNotCompatibleError:
+        raise VersionsNotCompatibleError(
             "Could not find a satisfactory version from options: {}".format([str(a) for a in args])
         )
 
@@ -394,7 +394,7 @@ def versions_compatible(*args):
     try:
         reduce_versions(*args)
         return True
-    except VersionsNotCompatibleException:
+    except VersionsNotCompatibleError:
         return False
 
 

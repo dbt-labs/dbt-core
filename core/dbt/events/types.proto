@@ -336,16 +336,16 @@ message ExposureNameDeprecationMsg {
 }
 
 //D008
-message FunctionDeprecated {
-    string function_name = 1;
+message InternalDeprecation {
+    string name = 1;
     string reason = 2;
     string suggested_action = 3;
     string version = 4;
 }
 
-message FunctionDeprecatedMsg {
+message InternalDeprecationMsg {
     EventInfo info = 1;
-    FunctionDeprecated data = 2;
+    InternalDeprecation data = 2;
 }
 
 // E - DB Adapter
@@ -797,23 +797,23 @@ message MacroFileParseMsg {
 // Skipping I013
 
 // I014
-message PartialParsingExceptionProcessingFile {
+message PartialParsingErrorProcessingFile {
     string file = 1;
 }
 
-message PartialParsingExceptionProcessingFileMsg {
+message PartialParsingErrorProcessingFileMsg {
     EventInfo info = 1;
-    PartialParsingExceptionProcessingFile data = 2;
+    PartialParsingErrorProcessingFile data = 2;
 }
 
 // I016
-message PartialParsingException {
+message PartialParsingError {
     map<string, string> exc_info = 1;
 }
 
-message PartialParsingExceptionMsg {
+message PartialParsingErrorMsg {
     EventInfo info = 1;
-    PartialParsingException data = 2;
+    PartialParsingError data = 2;
 }
 
 // I017
@@ -825,9 +825,7 @@ message PartialParsingSkipParsingMsg {
     PartialParsingSkipParsing data = 2;
 }
 
-
 // Skipped I018, I019, I020, I021, I022, I023
-
 
 // I024
 message UnableToPartialParse {
@@ -1795,14 +1793,14 @@ message CatchableExceptionOnRunMsg {
 }
 
 // W003
-message InternalExceptionOnRun {
+message InternalErrorOnRun {
     string build_path = 1;
     string exc = 2;
 }
 
-message InternalExceptionOnRunMsg {
+message InternalErrorOnRunMsg {
     EventInfo info = 1;
-    InternalExceptionOnRun data = 2;
+    InternalErrorOnRun data = 2;
 }
 
 // W004

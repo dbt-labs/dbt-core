@@ -38,7 +38,7 @@ class Exception(builtins.Exception):
         }
 
 
-class InternalException(Exception):
+class DbtInternalError(Exception):
     def __init__(self, msg: str):
         self.stack: List = []
         self.msg = scrub_secrets(msg, env_secrets())
@@ -79,7 +79,7 @@ class InternalException(Exception):
         return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
 
 
-class RuntimeException(RuntimeError, Exception):
+class DbtRuntimeError(RuntimeError, Exception):
     CODE = 10001
     MESSAGE = "Runtime error"
 
@@ -172,72 +172,7 @@ class RuntimeException(RuntimeError, Exception):
         return result
 
 
-class RPCFailureResult(RuntimeException):
-    CODE = 10002
-    MESSAGE = "RPC execution error"
-
-
-class RPCTimeoutException(RuntimeException):
-    CODE = 10008
-    MESSAGE = "RPC timeout error"
-
-    def __init__(self, timeout: Optional[float]):
-        super().__init__(self.MESSAGE)
-        self.timeout = timeout
-
-    def data(self):
-        result = super().data()
-        result.update(
-            {
-                "timeout": self.timeout,
-                "message": f"RPC timed out after {self.timeout}s",
-            }
-        )
-        return result
-
-
-class RPCKilledException(RuntimeException):
-    CODE = 10009
-    MESSAGE = "RPC process killed"
-
-    def __init__(self, signum: int):
-        self.signum = signum
-        self.msg = f"RPC process killed by signal {self.signum}"
-        super().__init__(self.msg)
-
-    def data(self):
-        return {
-            "signum": self.signum,
-            "message": self.msg,
-        }
-
-
-class RPCCompiling(RuntimeException):
-    CODE = 10010
-    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
-
-    def __init__(self, msg: str = None, node=None):
-        if msg is None:
-            msg = "compile in progress"
-        super().__init__(msg, node)
-
-
-class RPCLoadException(RuntimeException):
-    CODE = 10011
-    MESSAGE = (
-        'RPC server failed to compile project, call the "status" method for' " compile status"
-    )
-
-    def __init__(self, cause: Dict[str, Any]):
-        self.cause = cause
-        self.msg = f'{self.MESSAGE}: {self.cause["message"]}'
-        super().__init__(self.msg)
-
-    def data(self):
-        return {"cause": self.cause, "message": self.msg}
-
-
-class DatabaseException(RuntimeException):
+class DbtDatabaseError(DbtRuntimeError):
     CODE = 10003
     MESSAGE = "Database Error"
 
@@ -247,14 +182,14 @@ class DatabaseException(RuntimeException):
         if hasattr(self.node, "build_path") and self.node.build_path:
             lines.append(f"compiled Code at {self.node.build_path}")
 
-        return lines + RuntimeException.process_stack(self)
+        return lines + DbtRuntimeError.process_stack(self)
 
     @property
     def type(self):
         return "Database"
 
 
-class CompilationException(RuntimeException):
+class CompilationError(DbtRuntimeError):
     CODE = 10004
     MESSAGE = "Compilation Error"
 
@@ -274,16 +209,16 @@ class CompilationException(RuntimeException):
             )
 
 
-class RecursionException(RuntimeException):
+class RecursionError(DbtRuntimeError):
     pass
 
 
-class ValidationException(RuntimeException):
+class DbtValidationError(DbtRuntimeError):
     CODE = 10005
     MESSAGE = "Validation Error"
 
 
-class ParsingException(RuntimeException):
+class ParsingError(DbtRuntimeError):
     CODE = 10015
     MESSAGE = "Parsing Error"
 
@@ -293,7 +228,7 @@ class ParsingException(RuntimeException):
 
 
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
-class JSONValidationException(ValidationException):
+class JSONValidationError(DbtValidationError):
     def __init__(self, typename, errors):
         self.typename = typename
         self.errors = errors
@@ -303,11 +238,11 @@ class JSONValidationException(ValidationException):
 
     def __reduce__(self):
         # see https://stackoverflow.com/a/36342588 for why this is necessary
-        return (JSONValidationException, (self.typename, self.errors))
+        return (JSONValidationError, (self.typename, self.errors))
 
 
-class IncompatibleSchemaException(RuntimeException):
-    def __init__(self, expected: str, found: Optional[str]):
+class IncompatibleSchemaError(DbtRuntimeError):
+    def __init__(self, expected: str, found: Optional[str] = None):
         self.expected = expected
         self.found = found
         self.filename = "input file"
@@ -334,11 +269,11 @@ class IncompatibleSchemaException(RuntimeException):
     MESSAGE = "Incompatible Schema"
 
 
-class JinjaRenderingException(CompilationException):
+class JinjaRenderingError(CompilationError):
     pass
 
 
-class UndefinedMacroException(CompilationException):
+class UndefinedMacroError(CompilationError):
     def __str__(self, prefix: str = "! ") -> str:
         msg = super().__str__(prefix)
         return (
@@ -348,28 +283,16 @@ class UndefinedMacroException(CompilationException):
         )
 
 
-class UnknownAsyncIDException(Exception):
-    CODE = 10012
-    MESSAGE = "RPC server got an unknown async ID"
-
-    def __init__(self, task_id):
-        self.task_id = task_id
-
-    def __str__(self):
-        return f"{self.MESSAGE}: {self.task_id}"
-
-
-class AliasException(ValidationException):
+class AliasError(DbtValidationError):
     pass
 
 
-class DependencyException(Exception):
-    # this can happen due to raise_dependency_error and its callers
+class DependencyError(Exception):
     CODE = 10006
     MESSAGE = "Dependency Error"
 
 
-class DbtConfigError(RuntimeException):
+class DbtConfigError(DbtRuntimeError):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
@@ -387,7 +310,7 @@ class DbtConfigError(RuntimeException):
             return f"{msg}\n\nError encountered in {self.path}"
 
 
-class FailFastException(RuntimeException):
+class FailFastError(DbtRuntimeError):
     CODE = 10013
     MESSAGE = "FailFast Error"
 
@@ -412,7 +335,7 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
-class SemverException(Exception):
+class SemverError(Exception):
     def __init__(self, msg: str = None):
         self.msg = msg
         if msg is not None:
@@ -421,22 +344,22 @@ class SemverException(Exception):
             super().__init__()
 
 
-class VersionsNotCompatibleException(SemverException):
+class VersionsNotCompatibleError(SemverError):
     pass
 
 
-class NotImplementedException(Exception):
+class NotImplementedError(Exception):
     def __init__(self, msg: str):
         self.msg = msg
         self.formatted_msg = f"ERROR: {self.msg}"
         super().__init__(self.formatted_msg)
 
 
-class FailedToConnectException(DatabaseException):
+class FailedToConnectError(DbtDatabaseError):
     pass
 
 
-class CommandError(RuntimeException):
+class CommandError(DbtRuntimeError):
     def __init__(self, cwd: str, cmd: List[str], msg: str = "Error running command"):
         cmd_scrubbed = list(scrub_secrets(cmd_txt, env_secrets()) for cmd_txt in cmd)
         super().__init__(msg)
@@ -483,7 +406,7 @@ class CommandResultError(CommandError):
         return f"{self.msg} running: {self.cmd}"
 
 
-class InvalidConnectionException(RuntimeException):
+class InvalidConnectionError(DbtRuntimeError):
     def __init__(self, thread_id, known: List):
         self.thread_id = thread_id
         self.known = known
@@ -492,17 +415,17 @@ class InvalidConnectionException(RuntimeException):
         )
 
 
-class InvalidSelectorException(RuntimeException):
+class InvalidSelectorError(DbtRuntimeError):
     def __init__(self, name: str):
         self.name = name
         super().__init__(name)
 
 
-class DuplicateYamlKeyException(CompilationException):
+class DuplicateYamlKeyError(CompilationError):
     pass
 
 
-class ConnectionException(Exception):
+class ConnectionError(Exception):
     """
     There was a problem with the connection that returned a bad response,
     timed out, or resulted in a file that is corrupt.
@@ -512,7 +435,7 @@ class ConnectionException(Exception):
 
 
 # event level exception
-class EventCompilationException(CompilationException):
+class EventCompilationError(CompilationError):
     def __init__(self, msg: str, node):
         self.msg = scrub_secrets(msg, env_secrets())
         self.node = node
@@ -520,7 +443,7 @@ class EventCompilationException(CompilationException):
 
 
 # compilation level exceptions
-class GraphDependencyNotFound(CompilationException):
+class GraphDependencyNotFoundError(CompilationError):
     def __init__(self, node, dependency: str):
         self.node = node
         self.dependency = dependency
@@ -534,21 +457,21 @@ class GraphDependencyNotFound(CompilationException):
 # client level exceptions
 
 
-class NoSupportedLanguagesFound(CompilationException):
+class NoSupportedLanguagesFoundError(CompilationError):
     def __init__(self, node):
         self.node = node
         self.msg = f"No supported_languages found in materialization macro {self.node.name}"
         super().__init__(msg=self.msg)
 
 
-class MaterializtionMacroNotUsed(CompilationException):
+class MaterializtionMacroNotUsedError(CompilationError):
     def __init__(self, node):
         self.node = node
         self.msg = "Only materialization macros can be used with this function"
         super().__init__(msg=self.msg)
 
 
-class UndefinedCompilation(CompilationException):
+class UndefinedCompilationError(CompilationError):
     def __init__(self, name: str, node):
         self.name = name
         self.node = node
@@ -556,20 +479,20 @@ class UndefinedCompilation(CompilationException):
         super().__init__(msg=self.msg)
 
 
-class CaughtMacroExceptionWithNode(CompilationException):
+class CaughtMacroErrorWithNodeError(CompilationError):
     def __init__(self, exc, node):
         self.exc = exc
         self.node = node
         super().__init__(msg=str(exc))
 
 
-class CaughtMacroException(CompilationException):
+class CaughtMacroError(CompilationError):
     def __init__(self, exc):
         self.exc = exc
         super().__init__(msg=str(exc))
 
 
-class MacroNameNotString(CompilationException):
+class MacroNameNotStringError(CompilationError):
     def __init__(self, kwarg_value):
         self.kwarg_value = kwarg_value
         super().__init__(msg=self.get_message())
@@ -582,7 +505,7 @@ class MacroNameNotString(CompilationException):
         return msg
 
 
-class MissingControlFlowStartTag(CompilationException):
+class MissingControlFlowStartTagError(CompilationError):
     def __init__(self, tag, expected_tag: str, tag_parser):
         self.tag = tag
         self.expected_tag = expected_tag
@@ -598,7 +521,7 @@ class MissingControlFlowStartTag(CompilationException):
         return msg
 
 
-class UnexpectedControlFlowEndTag(CompilationException):
+class UnexpectedControlFlowEndTagError(CompilationError):
     def __init__(self, tag, expected_tag: str, tag_parser):
         self.tag = tag
         self.expected_tag = expected_tag
@@ -614,7 +537,7 @@ class UnexpectedControlFlowEndTag(CompilationException):
         return msg
 
 
-class UnexpectedMacroEOF(CompilationException):
+class UnexpectedMacroEOFError(CompilationError):
     def __init__(self, expected_name: str, actual_name: str):
         self.expected_name = expected_name
         self.actual_name = actual_name
@@ -625,7 +548,7 @@ class UnexpectedMacroEOF(CompilationException):
         return msg
 
 
-class MacroNamespaceNotString(CompilationException):
+class MacroNamespaceNotStringError(CompilationError):
     def __init__(self, kwarg_type: Any):
         self.kwarg_type = kwarg_type
         super().__init__(msg=self.get_message())
@@ -638,7 +561,7 @@ class MacroNamespaceNotString(CompilationException):
         return msg
 
 
-class NestedTags(CompilationException):
+class NestedTagsError(CompilationError):
     def __init__(self, outer, inner):
         self.outer = outer
         self.inner = inner
@@ -653,7 +576,7 @@ class NestedTags(CompilationException):
         return msg
 
 
-class BlockDefinitionNotAtTop(CompilationException):
+class BlockDefinitionNotAtTopError(CompilationError):
     def __init__(self, tag_parser, tag_start):
         self.tag_parser = tag_parser
         self.tag_start = tag_start
@@ -668,7 +591,7 @@ class BlockDefinitionNotAtTop(CompilationException):
         return msg
 
 
-class MissingCloseTag(CompilationException):
+class MissingCloseTagError(CompilationError):
     def __init__(self, block_type_name: str, linecount: int):
         self.block_type_name = block_type_name
         self.linecount = linecount
@@ -679,7 +602,7 @@ class MissingCloseTag(CompilationException):
         return msg
 
 
-class GitCloningProblem(RuntimeException):
+class UnknownGitCloningProblemError(DbtRuntimeError):
     def __init__(self, repo: str):
         self.repo = scrub_secrets(repo, env_secrets())
         super().__init__(msg=self.get_message())
@@ -692,7 +615,7 @@ class GitCloningProblem(RuntimeException):
         return msg
 
 
-class BadSpecError(InternalException):
+class BadSpecError(DbtInternalError):
     def __init__(self, repo, revision, error):
         self.repo = repo
         self.revision = revision
@@ -704,7 +627,7 @@ class BadSpecError(InternalException):
         return msg
 
 
-class GitCloningError(InternalException):
+class GitCloningError(DbtInternalError):
     def __init__(self, repo: str, revision: str, error: CommandResultError):
         self.repo = repo
         self.revision = revision
@@ -727,7 +650,7 @@ class GitCheckoutError(BadSpecError):
     pass
 
 
-class InvalidMaterializationArg(CompilationException):
+class MaterializationArgError(CompilationError):
     def __init__(self, name: str, argument: str):
         self.name = name
         self.argument = argument
@@ -738,7 +661,7 @@ class InvalidMaterializationArg(CompilationException):
         return msg
 
 
-class OperationException(CompilationException):
+class OperationError(CompilationError):
     def __init__(self, operation_name):
         self.operation_name = operation_name
         super().__init__(msg=self.get_message())
@@ -753,7 +676,7 @@ class OperationException(CompilationException):
         return msg
 
 
-class SymbolicLinkError(CompilationException):
+class SymbolicLinkError(CompilationError):
     def __init__(self):
         super().__init__(msg=self.get_message())
 
@@ -768,23 +691,21 @@ class SymbolicLinkError(CompilationException):
 
 
 # context level exceptions
-
-
-class ZipStrictWrongType(CompilationException):
+class ZipStrictWrongTypeError(CompilationError):
     def __init__(self, exc):
         self.exc = exc
         msg = str(self.exc)
         super().__init__(msg=msg)
 
 
-class SetStrictWrongType(CompilationException):
+class SetStrictWrongTypeError(CompilationError):
     def __init__(self, exc):
         self.exc = exc
         msg = str(self.exc)
         super().__init__(msg=msg)
 
 
-class LoadAgateTableValueError(CompilationException):
+class LoadAgateTableValueError(CompilationError):
     def __init__(self, exc: ValueError, node):
         self.exc = exc
         self.node = node
@@ -792,7 +713,7 @@ class LoadAgateTableValueError(CompilationException):
         super().__init__(msg=msg)
 
 
-class LoadAgateTableNotSeed(CompilationException):
+class LoadAgateTableNotSeedError(CompilationError):
     def __init__(self, resource_type, node):
         self.resource_type = resource_type
         self.node = node
@@ -800,14 +721,14 @@ class LoadAgateTableNotSeed(CompilationException):
         super().__init__(msg=msg)
 
 
-class MacrosSourcesUnWriteable(CompilationException):
+class MacrosSourcesUnWriteableError(CompilationError):
     def __init__(self, node):
         self.node = node
         msg = 'cannot "write" macros or sources'
         super().__init__(msg=msg)
 
 
-class PackageNotInDeps(CompilationException):
+class PackageNotInDepsError(CompilationError):
     def __init__(self, package_name: str, node):
         self.package_name = package_name
         self.node = node
@@ -815,7 +736,7 @@ class PackageNotInDeps(CompilationException):
         super().__init__(msg=msg)
 
 
-class OperationsCannotRefEphemeralNodes(CompilationException):
+class OperationsCannotRefEphemeralNodesError(CompilationError):
     def __init__(self, target_name: str, node):
         self.target_name = target_name
         self.node = node
@@ -823,7 +744,7 @@ class OperationsCannotRefEphemeralNodes(CompilationException):
         super().__init__(msg=msg)
 
 
-class InvalidPersistDocsValueType(CompilationException):
+class PersistDocsValueTypeError(CompilationError):
     def __init__(self, persist_docs: Any):
         self.persist_docs = persist_docs
         msg = (
@@ -833,14 +754,14 @@ class InvalidPersistDocsValueType(CompilationException):
         super().__init__(msg=msg)
 
 
-class InvalidInlineModelConfig(CompilationException):
+class InlineModelConfigError(CompilationError):
     def __init__(self, node):
         self.node = node
         msg = "Invalid inline model config"
         super().__init__(msg=msg)
 
 
-class ConflictingConfigKeys(CompilationException):
+class ConflictingConfigKeysError(CompilationError):
     def __init__(self, oldkey: str, newkey: str, node):
         self.oldkey = oldkey
         self.newkey = newkey
@@ -849,7 +770,7 @@ class ConflictingConfigKeys(CompilationException):
         super().__init__(msg=msg)
 
 
-class InvalidNumberSourceArgs(CompilationException):
+class NumberSourceArgsError(CompilationError):
     def __init__(self, args, node):
         self.args = args
         self.node = node
@@ -857,7 +778,7 @@ class InvalidNumberSourceArgs(CompilationException):
         super().__init__(msg=msg)
 
 
-class RequiredVarNotFound(CompilationException):
+class RequiredVarNotFoundError(CompilationError):
     def __init__(self, var_name: str, merged: Dict, node):
         self.var_name = var_name
         self.merged = merged
@@ -877,14 +798,14 @@ class RequiredVarNotFound(CompilationException):
         return msg
 
 
-class PackageNotFoundForMacro(CompilationException):
+class PackageNotFoundForMacroError(CompilationError):
     def __init__(self, package_name: str):
         self.package_name = package_name
         msg = f"Could not find package '{self.package_name}'"
         super().__init__(msg=msg)
 
 
-class DisallowSecretEnvVar(ParsingException):
+class SecretEnvVarLocationError(ParsingError):
     def __init__(self, env_var_name: str):
         self.env_var_name = env_var_name
         super().__init__(msg=self.get_message())
@@ -897,7 +818,7 @@ class DisallowSecretEnvVar(ParsingException):
         return msg
 
 
-class InvalidMacroArgType(CompilationException):
+class MacroArgTypeError(CompilationError):
     def __init__(self, method_name: str, arg_name: str, got_value: Any, expected_type):
         self.method_name = method_name
         self.arg_name = arg_name
@@ -915,7 +836,7 @@ class InvalidMacroArgType(CompilationException):
         return msg
 
 
-class InvalidBoolean(CompilationException):
+class BooleanError(CompilationError):
     def __init__(self, return_value: Any, macro_name: str):
         self.return_value = return_value
         self.macro_name = macro_name
@@ -929,7 +850,7 @@ class InvalidBoolean(CompilationException):
         return msg
 
 
-class RefInvalidArgs(CompilationException):
+class RefArgsError(CompilationError):
     def __init__(self, node, args):
         self.node = node
         self.args = args
@@ -940,7 +861,7 @@ class RefInvalidArgs(CompilationException):
         return msg
 
 
-class MetricInvalidArgs(CompilationException):
+class MetricArgsError(CompilationError):
     def __init__(self, node, args):
         self.node = node
         self.args = args
@@ -951,7 +872,7 @@ class MetricInvalidArgs(CompilationException):
         return msg
 
 
-class RefBadContext(CompilationException):
+class RefBadContextError(CompilationError):
     def __init__(self, node, args):
         self.node = node
         self.args = args
@@ -980,7 +901,7 @@ To fix this, add the following hint to the top of the model "{model_name}":
         return msg
 
 
-class InvalidDocArgs(CompilationException):
+class DocArgsError(CompilationError):
     def __init__(self, node, args):
         self.node = node
         self.args = args
@@ -991,8 +912,8 @@ class InvalidDocArgs(CompilationException):
         return msg
 
 
-class DocTargetNotFound(CompilationException):
-    def __init__(self, node, target_doc_name: str, target_doc_package: Optional[str]):
+class DocTargetNotFoundError(CompilationError):
+    def __init__(self, node, target_doc_name: str, target_doc_package: Optional[str] = None):
         self.node = node
         self.target_doc_name = target_doc_name
         self.target_doc_package = target_doc_package
@@ -1006,7 +927,7 @@ class DocTargetNotFound(CompilationException):
         return msg
 
 
-class MacroInvalidDispatchArg(CompilationException):
+class MacroDispatchArgError(CompilationError):
     def __init__(self, macro_name: str):
         self.macro_name = macro_name
         super().__init__(msg=self.get_message())
@@ -1025,7 +946,7 @@ class MacroInvalidDispatchArg(CompilationException):
         return msg
 
 
-class DuplicateMacroName(CompilationException):
+class DuplicateMacroNameError(CompilationError):
     def __init__(self, node_1, node_2, namespace: str):
         self.node_1 = node_1
         self.node_2 = node_2
@@ -1051,7 +972,7 @@ class DuplicateMacroName(CompilationException):
 
 
 # parser level exceptions
-class InvalidDictParse(ParsingException):
+class DictParseError(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.exc = exc
         self.node = node
@@ -1059,7 +980,7 @@ class InvalidDictParse(ParsingException):
         super().__init__(msg=msg)
 
 
-class InvalidConfigUpdate(ParsingException):
+class ConfigUpdateError(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.exc = exc
         self.node = node
@@ -1067,7 +988,7 @@ class InvalidConfigUpdate(ParsingException):
         super().__init__(msg=msg)
 
 
-class PythonParsingException(ParsingException):
+class PythonParsingError(ParsingError):
     def __init__(self, exc: SyntaxError, node):
         self.exc = exc
         self.node = node
@@ -1079,7 +1000,7 @@ class PythonParsingException(ParsingException):
         return msg
 
 
-class PythonLiteralEval(ParsingException):
+class PythonLiteralEvalError(ParsingError):
     def __init__(self, exc: Exception, node):
         self.exc = exc
         self.node = node
@@ -1095,14 +1016,14 @@ class PythonLiteralEval(ParsingException):
         return msg
 
 
-class InvalidModelConfig(ParsingException):
+class ModelConfigError(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class YamlParseListFailure(ParsingException):
+class YamlParseListError(ParsingError):
     def __init__(
         self,
         path: str,
@@ -1127,7 +1048,7 @@ class YamlParseListFailure(ParsingException):
         return msg
 
 
-class YamlParseDictFailure(ParsingException):
+class YamlParseDictError(ParsingError):
     def __init__(
         self,
         path: str,
@@ -1152,8 +1073,13 @@ class YamlParseDictFailure(ParsingException):
         return msg
 
 
-class YamlLoadFailure(ParsingException):
-    def __init__(self, project_name: Optional[str], path: str, exc: ValidationException):
+class YamlLoadError(ParsingError):
+    def __init__(
+        self,
+        path: str,
+        exc: DbtValidationError,
+        project_name: Optional[str] = None,
+    ):
         self.project_name = project_name
         self.path = path
         self.exc = exc
@@ -1167,49 +1093,54 @@ class YamlLoadFailure(ParsingException):
         return msg
 
 
-class InvalidTestConfig(ParsingException):
+class TestConfigError(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class InvalidSchemaConfig(ParsingException):
+class SchemaConfigError(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class InvalidSnapshopConfig(ParsingException):
+class SnapshopConfigError(ParsingError):
     def __init__(self, exc: ValidationError, node):
         self.msg = self.validator_error_message(exc)
         self.node = node
         super().__init__(msg=self.msg)
 
 
-class SameKeyNested(CompilationException):
+class SameKeyNestedError(CompilationError):
     def __init__(self):
         msg = "Test cannot have the same key at the top-level and in config"
         super().__init__(msg=msg)
 
 
-class TestArgIncludesModel(CompilationException):
+class TestArgIncludesModelError(CompilationError):
     def __init__(self):
         msg = 'Test arguments include "model", which is a reserved argument'
         super().__init__(msg=msg)
 
 
-class UnexpectedTestNamePattern(CompilationException):
+class UnexpectedTestNamePatternError(CompilationError):
     def __init__(self, test_name: str):
         self.test_name = test_name
         msg = f"Test name string did not match expected pattern: {self.test_name}"
         super().__init__(msg=msg)
 
 
-class CustomMacroPopulatingConfigValues(CompilationException):
+class CustomMacroPopulatingConfigValueError(CompilationError):
     def __init__(
-        self, target_name: str, column_name: Optional[str], name: str, key: str, err_msg: str
+        self,
+        target_name: str,
+        name: str,
+        key: str,
+        err_msg: str,
+        column_name: Optional[str] = None,
     ):
         self.target_name = target_name
         self.column_name = column_name
@@ -1239,21 +1170,21 @@ class CustomMacroPopulatingConfigValues(CompilationException):
         return msg
 
 
-class TagsNotListOfStrings(CompilationException):
+class TagsNotListOfStringsError(CompilationError):
     def __init__(self, tags: Any):
         self.tags = tags
         msg = f"got {self.tags} ({type(self.tags)}) for tags, expected a list of strings"
         super().__init__(msg=msg)
 
 
-class TagNotString(CompilationException):
+class TagNotStringError(CompilationError):
     def __init__(self, tag: Any):
         self.tag = tag
         msg = f"got {self.tag} ({type(self.tag)}) for tag, expected a str"
         super().__init__(msg=msg)
 
 
-class TestNameNotString(ParsingException):
+class TestNameNotStringError(ParsingError):
     def __init__(self, test_name: Any):
         self.test_name = test_name
         super().__init__(msg=self.get_message())
@@ -1264,7 +1195,7 @@ class TestNameNotString(ParsingException):
         return msg
 
 
-class TestArgsNotDict(ParsingException):
+class TestArgsNotDictError(ParsingError):
     def __init__(self, test_args: Any):
         self.test_args = test_args
         super().__init__(msg=self.get_message())
@@ -1275,7 +1206,7 @@ class TestArgsNotDict(ParsingException):
         return msg
 
 
-class TestDefinitionDictLength(ParsingException):
+class TestDefinitionDictLengthError(ParsingError):
     def __init__(self, test):
         self.test = test
         super().__init__(msg=self.get_message())
@@ -1289,7 +1220,7 @@ class TestDefinitionDictLength(ParsingException):
         return msg
 
 
-class TestInvalidType(ParsingException):
+class TestTypeError(ParsingError):
     def __init__(self, test: Any):
         self.test = test
         super().__init__(msg=self.get_message())
@@ -1300,7 +1231,7 @@ class TestInvalidType(ParsingException):
 
 
 # This is triggered across multiple files
-class EnvVarMissing(ParsingException):
+class EnvVarMissingError(ParsingError):
     def __init__(self, var: str):
         self.var = var
         super().__init__(msg=self.get_message())
@@ -1310,7 +1241,7 @@ class EnvVarMissing(ParsingException):
         return msg
 
 
-class TargetNotFound(CompilationException):
+class TargetNotFoundError(CompilationError):
     def __init__(
         self,
         node,
@@ -1349,7 +1280,7 @@ class TargetNotFound(CompilationException):
         return msg
 
 
-class DuplicateSourcePatchName(CompilationException):
+class DuplicateSourcePatchNameError(CompilationError):
     def __init__(self, patch_1, patch_2):
         self.patch_1 = patch_1
         self.patch_2 = patch_2
@@ -1371,7 +1302,7 @@ class DuplicateSourcePatchName(CompilationException):
         return msg
 
 
-class DuplicateMacroPatchName(CompilationException):
+class DuplicateMacroPatchNameError(CompilationError):
     def __init__(self, patch_1, existing_patch_path):
         self.patch_1 = patch_1
         self.existing_patch_path = existing_patch_path
@@ -1392,7 +1323,7 @@ class DuplicateMacroPatchName(CompilationException):
 
 
 # core level exceptions
-class DuplicateAlias(AliasException):
+class DuplicateAliasError(AliasError):
     def __init__(self, kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str):
         self.kwargs = kwargs
         self.aliases = aliases
@@ -1409,9 +1340,7 @@ class DuplicateAlias(AliasException):
 
 
 # Postgres Exceptions
-
-
-class UnexpectedDbReference(NotImplementedException):
+class UnexpectedDbReferenceError(NotImplementedError):
     def __init__(self, adapter, database, expected):
         self.adapter = adapter
         self.database = database
@@ -1423,7 +1352,7 @@ class UnexpectedDbReference(NotImplementedException):
         return msg
 
 
-class CrossDbReferenceProhibited(CompilationException):
+class CrossDbReferenceProhibitedError(CompilationError):
     def __init__(self, adapter, exc_msg: str):
         self.adapter = adapter
         self.exc_msg = exc_msg
@@ -1434,7 +1363,7 @@ class CrossDbReferenceProhibited(CompilationException):
         return msg
 
 
-class IndexConfigNotDict(CompilationException):
+class IndexConfigNotDictError(CompilationError):
     def __init__(self, raw_index: Any):
         self.raw_index = raw_index
         super().__init__(msg=self.get_message())
@@ -1448,7 +1377,7 @@ class IndexConfigNotDict(CompilationException):
         return msg
 
 
-class InvalidIndexConfig(CompilationException):
+class IndexConfigError(CompilationError):
     def __init__(self, exc: TypeError):
         self.exc = exc
         super().__init__(msg=self.get_message())
@@ -1460,7 +1389,7 @@ class InvalidIndexConfig(CompilationException):
 
 
 # adapters exceptions
-class InvalidMacroResult(CompilationException):
+class MacroResultError(CompilationError):
     def __init__(self, freshness_macro_name: str, table):
         self.freshness_macro_name = freshness_macro_name
         self.table = table
@@ -1472,7 +1401,7 @@ class InvalidMacroResult(CompilationException):
         return msg
 
 
-class SnapshotTargetNotSnapshotTable(CompilationException):
+class SnapshotTargetNotSnapshotTableError(CompilationError):
     def __init__(self, missing: List):
         self.missing = missing
         super().__init__(msg=self.get_message())
@@ -1484,7 +1413,7 @@ class SnapshotTargetNotSnapshotTable(CompilationException):
         return msg
 
 
-class SnapshotTargetIncomplete(CompilationException):
+class SnapshotTargetIncompleteError(CompilationError):
     def __init__(self, extra: List, missing: List):
         self.extra = extra
         self.missing = missing
@@ -1500,7 +1429,7 @@ class SnapshotTargetIncomplete(CompilationException):
         return msg
 
 
-class RenameToNoneAttempted(CompilationException):
+class RenameToNoneAttemptedError(CompilationError):
     def __init__(self, src_name: str, dst_name: str, name: str):
         self.src_name = src_name
         self.dst_name = dst_name
@@ -1509,21 +1438,21 @@ class RenameToNoneAttempted(CompilationException):
         super().__init__(msg=self.msg)
 
 
-class NullRelationDropAttempted(CompilationException):
+class NullRelationDropAttemptedError(CompilationError):
     def __init__(self, name: str):
         self.name = name
         self.msg = f"Attempted to drop a null relation for {self.name}"
         super().__init__(msg=self.msg)
 
 
-class NullRelationCacheAttempted(CompilationException):
+class NullRelationCacheAttemptedError(CompilationError):
     def __init__(self, name: str):
         self.name = name
         self.msg = f"Attempted to cache a null relation for {self.name}"
         super().__init__(msg=self.msg)
 
 
-class InvalidQuoteConfigType(CompilationException):
+class QuoteConfigTypeError(CompilationError):
     def __init__(self, quote_config: Any):
         self.quote_config = quote_config
         super().__init__(msg=self.get_message())
@@ -1536,7 +1465,7 @@ class InvalidQuoteConfigType(CompilationException):
         return msg
 
 
-class MultipleDatabasesNotAllowed(CompilationException):
+class MultipleDatabasesNotAllowedError(CompilationError):
     def __init__(self, databases):
         self.databases = databases
         super().__init__(msg=self.get_message())
@@ -1546,14 +1475,14 @@ class MultipleDatabasesNotAllowed(CompilationException):
         return msg
 
 
-class RelationTypeNull(CompilationException):
+class RelationTypeNullError(CompilationError):
     def __init__(self, relation):
         self.relation = relation
         self.msg = f"Tried to drop relation {self.relation}, but its type is null."
         super().__init__(msg=self.msg)
 
 
-class MaterializationNotAvailable(CompilationException):
+class MaterializationNotAvailableError(CompilationError):
     def __init__(self, materialization, adapter_type: str):
         self.materialization = materialization
         self.adapter_type = adapter_type
@@ -1564,7 +1493,7 @@ class MaterializationNotAvailable(CompilationException):
         return msg
 
 
-class RelationReturnedMultipleResults(CompilationException):
+class RelationReturnedMultipleResultsError(CompilationError):
     def __init__(self, kwargs: Mapping[str, Any], matches: List):
         self.kwargs = kwargs
         self.matches = matches
@@ -1579,7 +1508,7 @@ class RelationReturnedMultipleResults(CompilationException):
         return msg
 
 
-class ApproximateMatch(CompilationException):
+class ApproximateMatchError(CompilationError):
     def __init__(self, target, relation):
         self.target = target
         self.relation = relation
@@ -1597,8 +1526,7 @@ class ApproximateMatch(CompilationException):
         return msg
 
 
-# adapters exceptions
-class UnexpectedNull(DatabaseException):
+class UnexpectedNullError(DbtDatabaseError):
     def __init__(self, field_name: str, source):
         self.field_name = field_name
         self.source = source
@@ -1609,7 +1537,7 @@ class UnexpectedNull(DatabaseException):
         super().__init__(msg)
 
 
-class UnexpectedNonTimestamp(DatabaseException):
+class UnexpectedNonTimestampError(DbtDatabaseError):
     def __init__(self, field_name: str, source, dt: Any):
         self.field_name = field_name
         self.source = source
@@ -1622,7 +1550,7 @@ class UnexpectedNonTimestamp(DatabaseException):
 
 
 # deps exceptions
-class MultipleVersionGitDeps(DependencyException):
+class MultipleVersionGitDepsError(DependencyError):
     def __init__(self, git: str, requested):
         self.git = git
         self.requested = requested
@@ -1633,7 +1561,7 @@ class MultipleVersionGitDeps(DependencyException):
         super().__init__(msg)
 
 
-class DuplicateProjectDependency(DependencyException):
+class DuplicateProjectDependencyError(DependencyError):
     def __init__(self, project_name: str):
         self.project_name = project_name
         msg = (
@@ -1643,7 +1571,7 @@ class DuplicateProjectDependency(DependencyException):
         super().__init__(msg)
 
 
-class DuplicateDependencyToRoot(DependencyException):
+class DuplicateDependencyToRootError(DependencyError):
     def __init__(self, project_name: str):
         self.project_name = project_name
         msg = (
@@ -1654,7 +1582,7 @@ class DuplicateDependencyToRoot(DependencyException):
         super().__init__(msg)
 
 
-class MismatchedDependencyTypes(DependencyException):
+class MismatchedDependencyTypeError(DependencyError):
     def __init__(self, new, old):
         self.new = new
         self.old = old
@@ -1665,7 +1593,7 @@ class MismatchedDependencyTypes(DependencyException):
         super().__init__(msg)
 
 
-class PackageVersionNotFound(DependencyException):
+class PackageVersionNotFoundError(DependencyError):
     def __init__(
         self,
         package_name: str,
@@ -1701,7 +1629,7 @@ class PackageVersionNotFound(DependencyException):
         return msg
 
 
-class PackageNotFound(DependencyException):
+class PackageNotFoundError(DependencyError):
     def __init__(self, package_name: str):
         self.package_name = package_name
         msg = f"Package {self.package_name} was not found in the package index"
@@ -1709,37 +1637,35 @@ class PackageNotFound(DependencyException):
 
 
 # config level exceptions
-
-
-class ProfileConfigInvalid(DbtProfileError):
+class ProfileConfigError(DbtProfileError):
     def __init__(self, exc: ValidationError):
         self.exc = exc
         msg = self.validator_error_message(self.exc)
         super().__init__(msg=msg)
 
 
-class ProjectContractInvalid(DbtProjectError):
+class ProjectContractError(DbtProjectError):
     def __init__(self, exc: ValidationError):
         self.exc = exc
         msg = self.validator_error_message(self.exc)
         super().__init__(msg=msg)
 
 
-class ProjectContractBroken(DbtProjectError):
+class ProjectContractBrokenError(DbtProjectError):
     def __init__(self, exc: ValidationError):
         self.exc = exc
         msg = self.validator_error_message(self.exc)
         super().__init__(msg=msg)
 
 
-class ConfigContractBroken(DbtProjectError):
+class ConfigContractBrokenError(DbtProjectError):
     def __init__(self, exc: ValidationError):
         self.exc = exc
         msg = self.validator_error_message(self.exc)
         super().__init__(msg=msg)
 
 
-class NonUniquePackageName(CompilationException):
+class NonUniquePackageNameError(CompilationError):
     def __init__(self, project_name: str):
         self.project_name = project_name
         super().__init__(msg=self.get_message())
@@ -1754,7 +1680,7 @@ class NonUniquePackageName(CompilationException):
         return msg
 
 
-class UninstalledPackagesFound(CompilationException):
+class UninstalledPackagesFoundError(CompilationError):
     def __init__(
         self,
         count_packages_specified: int,
@@ -1777,7 +1703,7 @@ class UninstalledPackagesFound(CompilationException):
         return msg
 
 
-class VarsArgNotYamlDict(CompilationException):
+class VarsArgNotYamlDictError(CompilationError):
     def __init__(self, var_type):
         self.var_type = var_type
         super().__init__(msg=self.get_message())
@@ -1790,7 +1716,7 @@ class VarsArgNotYamlDict(CompilationException):
 
 
 # contracts level
-class UnrecognizedCredentialType(CompilationException):
+class UnrecognizedCredentialTypeError(CompilationError):
     def __init__(self, typename: str, supported_types: List):
         self.typename = typename
         self.supported_types = supported_types
@@ -1803,7 +1729,7 @@ class UnrecognizedCredentialType(CompilationException):
         return msg
 
 
-class DuplicateMacroInPackage(CompilationException):
+class DuplicateMacroInPackageError(CompilationError):
     def __init__(self, macro, macro_mapping: Mapping):
         self.macro = macro
         self.macro_mapping = macro_mapping
@@ -1832,7 +1758,7 @@ class DuplicateMacroInPackage(CompilationException):
         return msg
 
 
-class DuplicateMaterializationName(CompilationException):
+class DuplicateMaterializationNameError(CompilationError):
     def __init__(self, macro, other_macro):
         self.macro = macro
         self.other_macro = other_macro
@@ -1852,7 +1778,7 @@ class DuplicateMaterializationName(CompilationException):
 
 
 # jinja exceptions
-class PatchTargetNotFound(CompilationException):
+class PatchTargetNotFoundError(CompilationError):
     def __init__(self, patches: Dict):
         self.patches = patches
         super().__init__(msg=self.get_message())
@@ -1866,7 +1792,7 @@ class PatchTargetNotFound(CompilationException):
         return msg
 
 
-class MacroNotFound(CompilationException):
+class MacroNotFoundError(CompilationError):
     def __init__(self, node, target_macro_id: str):
         self.node = node
         self.target_macro_id = target_macro_id
@@ -1875,7 +1801,7 @@ class MacroNotFound(CompilationException):
         super().__init__(msg=msg)
 
 
-class MissingConfig(CompilationException):
+class MissingConfigError(CompilationError):
     def __init__(self, unique_id: str, name: str):
         self.unique_id = unique_id
         self.name = name
@@ -1885,7 +1811,7 @@ class MissingConfig(CompilationException):
         super().__init__(msg=msg)
 
 
-class MissingMaterialization(CompilationException):
+class MissingMaterializationError(CompilationError):
     def __init__(self, materialization, adapter_type):
         self.materialization = materialization
         self.adapter_type = adapter_type
@@ -1902,7 +1828,7 @@ class MissingMaterialization(CompilationException):
         return msg
 
 
-class MissingRelation(CompilationException):
+class MissingRelationError(CompilationError):
     def __init__(self, relation, model=None):
         self.relation = relation
         self.model = model
@@ -1910,7 +1836,7 @@ class MissingRelation(CompilationException):
         super().__init__(msg=msg)
 
 
-class AmbiguousAlias(CompilationException):
+class AmbiguousAliasError(CompilationError):
     def __init__(self, node_1, node_2, duped_name=None):
         self.node_1 = node_1
         self.node_2 = node_2
@@ -1931,7 +1857,7 @@ class AmbiguousAlias(CompilationException):
         return msg
 
 
-class AmbiguousCatalogMatch(CompilationException):
+class AmbiguousCatalogMatchError(CompilationError):
     def __init__(self, unique_id: str, match_1, match_2):
         self.unique_id = unique_id
         self.match_1 = match_1
@@ -1955,14 +1881,14 @@ class AmbiguousCatalogMatch(CompilationException):
         return msg
 
 
-class CacheInconsistency(InternalException):
+class CacheInconsistencyError(DbtInternalError):
     def __init__(self, msg: str):
         self.msg = msg
         formatted_msg = f"Cache inconsistency detected: {self.msg}"
         super().__init__(msg=formatted_msg)
 
 
-class NewNameAlreadyInCache(CacheInconsistency):
+class NewNameAlreadyInCacheError(CacheInconsistencyError):
     def __init__(self, old_key: str, new_key: str):
         self.old_key = old_key
         self.new_key = new_key
@@ -1972,21 +1898,21 @@ class NewNameAlreadyInCache(CacheInconsistency):
         super().__init__(msg)
 
 
-class ReferencedLinkNotCached(CacheInconsistency):
+class ReferencedLinkNotCachedError(CacheInconsistencyError):
     def __init__(self, referenced_key: str):
         self.referenced_key = referenced_key
         msg = f"in add_link, referenced link key {self.referenced_key} not in cache!"
         super().__init__(msg)
 
 
-class DependentLinkNotCached(CacheInconsistency):
+class DependentLinkNotCachedError(CacheInconsistencyError):
     def __init__(self, dependent_key: str):
         self.dependent_key = dependent_key
         msg = f"in add_link, dependent link key {self.dependent_key} not in cache!"
         super().__init__(msg)
 
 
-class TruncatedModelNameCausedCollision(CacheInconsistency):
+class TruncatedModelNameCausedCollisionError(CacheInconsistencyError):
     def __init__(self, new_key, relations: Dict):
         self.new_key = new_key
         self.relations = relations
@@ -2013,14 +1939,14 @@ class TruncatedModelNameCausedCollision(CacheInconsistency):
         return msg
 
 
-class NoneRelationFound(CacheInconsistency):
+class NoneRelationFoundError(CacheInconsistencyError):
     def __init__(self):
         msg = "in get_relations, a None relation was found in the cache!"
         super().__init__(msg)
 
 
 # this is part of the context and also raised in dbt.contracts.relation.py
-class DataclassNotDict(CompilationException):
+class DataclassNotDictError(CompilationError):
     def __init__(self, obj: Any):
         self.obj = obj
         super().__init__(msg=self.get_message())
@@ -2034,7 +1960,7 @@ class DataclassNotDict(CompilationException):
         return msg
 
 
-class DependencyNotFound(CompilationException):
+class DependencyNotFoundError(CompilationError):
     def __init__(self, node, node_description, required_pkg):
         self.node = node
         self.node_description = node_description
@@ -2051,7 +1977,7 @@ class DependencyNotFound(CompilationException):
         return msg
 
 
-class DuplicatePatchPath(CompilationException):
+class DuplicatePatchPathError(CompilationError):
     def __init__(self, patch_1, existing_patch_path):
         self.patch_1 = patch_1
         self.existing_patch_path = existing_patch_path
@@ -2073,8 +1999,8 @@ class DuplicatePatchPath(CompilationException):
         return msg
 
 
-# should this inherit ParsingException instead?
-class DuplicateResourceName(CompilationException):
+# should this inherit ParsingError instead?
+class DuplicateResourceNameError(CompilationError):
     def __init__(self, node_1, node_2):
         self.node_1 = node_1
         self.node_2 = node_2
@@ -2126,7 +2052,7 @@ To fix this, change the name of one of these resources:
         return msg
 
 
-class InvalidPropertyYML(CompilationException):
+class PropertyYMLError(CompilationError):
     def __init__(self, path: str, issue: str):
         self.path = path
         self.issue = issue
@@ -2141,14 +2067,14 @@ class InvalidPropertyYML(CompilationException):
         return msg
 
 
-class PropertyYMLMissingVersion(InvalidPropertyYML):
+class PropertyYMLMissingVersionError(PropertyYMLError):
     def __init__(self, path: str):
         self.path = path
         self.issue = f"the yml property file {self.path} is missing a version tag"
         super().__init__(self.path, self.issue)
 
 
-class PropertyYMLVersionNotInt(InvalidPropertyYML):
+class PropertyYMLVersionNotIntError(PropertyYMLError):
     def __init__(self, path: str, version: Any):
         self.path = path
         self.version = version
@@ -2159,7 +2085,7 @@ class PropertyYMLVersionNotInt(InvalidPropertyYML):
         super().__init__(self.path, self.issue)
 
 
-class PropertyYMLInvalidTag(InvalidPropertyYML):
+class PropertyYMLInvalidTagError(PropertyYMLError):
     def __init__(self, path: str, version: int):
         self.path = path
         self.version = version
@@ -2167,7 +2093,7 @@ class PropertyYMLInvalidTag(InvalidPropertyYML):
         super().__init__(self.path, self.issue)
 
 
-class RelationWrongType(CompilationException):
+class RelationWrongTypeError(CompilationError):
     def __init__(self, relation, expected_type, model=None):
         self.relation = relation
         self.expected_type = expected_type
@@ -2183,6 +2109,83 @@ class RelationWrongType(CompilationException):
         )
 
         return msg
+
+
+# not modifying these since rpc should be deprecated soon
+class UnknownAsyncIDException(Exception):
+    CODE = 10012
+    MESSAGE = "RPC server got an unknown async ID"
+
+    def __init__(self, task_id):
+        self.task_id = task_id
+
+    def __str__(self):
+        return f"{self.MESSAGE}: {self.task_id}"
+
+
+class RPCFailureResult(DbtRuntimeError):
+    CODE = 10002
+    MESSAGE = "RPC execution error"
+
+
+class RPCTimeoutException(DbtRuntimeError):
+    CODE = 10008
+    MESSAGE = "RPC timeout error"
+
+    def __init__(self, timeout: Optional[float] = None):
+        super().__init__(self.MESSAGE)
+        self.timeout = timeout
+
+    def data(self):
+        result = super().data()
+        result.update(
+            {
+                "timeout": self.timeout,
+                "message": f"RPC timed out after {self.timeout}s",
+            }
+        )
+        return result
+
+
+class RPCKilledException(DbtRuntimeError):
+    CODE = 10009
+    MESSAGE = "RPC process killed"
+
+    def __init__(self, signum: int):
+        self.signum = signum
+        self.msg = f"RPC process killed by signal {self.signum}"
+        super().__init__(self.msg)
+
+    def data(self):
+        return {
+            "signum": self.signum,
+            "message": self.msg,
+        }
+
+
+class RPCCompiling(DbtRuntimeError):
+    CODE = 10010
+    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
+
+    def __init__(self, msg: str = None, node=None):
+        if msg is None:
+            msg = "compile in progress"
+        super().__init__(msg, node)
+
+
+class RPCLoadException(DbtRuntimeError):
+    CODE = 10011
+    MESSAGE = (
+        'RPC server failed to compile project, call the "status" method for' " compile status"
+    )
+
+    def __init__(self, cause: Dict[str, Any]):
+        self.cause = cause
+        self.msg = f'{self.MESSAGE}: {self.cause["message"]}'
+        super().__init__(self.msg)
+
+    def data(self):
+        return {"cause": self.cause, "message": self.msg}
 
 
 # These are copies of what's in dbt/context/exceptions_jinja.py to not immediately break adapters
@@ -2207,147 +2210,147 @@ def warn(msg, node=None):
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MissingConfig"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MissingConfigError"),
     reason=REASON,
 )
 def missing_config(model, name) -> NoReturn:
-    raise MissingConfig(unique_id=model.unique_id, name=name)
+    raise MissingConfigError(unique_id=model.unique_id, name=name)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MissingMaterialization"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MissingMaterializationError"),
     reason=REASON,
 )
 def missing_materialization(model, adapter_type) -> NoReturn:
     materialization = model.config.materialized
-    raise MissingMaterialization(materialization=materialization, adapter_type=adapter_type)
+    raise MissingMaterializationError(materialization=materialization, adapter_type=adapter_type)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MissingRelation"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MissingRelationError"),
     reason=REASON,
 )
 def missing_relation(relation, model=None) -> NoReturn:
-    raise MissingRelation(relation, model)
+    raise MissingRelationError(relation, model)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousAlias"),
+    suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousAliasError"),
     reason=REASON,
 )
 def raise_ambiguous_alias(node_1, node_2, duped_name=None) -> NoReturn:
-    raise AmbiguousAlias(node_1, node_2, duped_name)
+    raise AmbiguousAliasError(node_1, node_2, duped_name)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousCatalogMatch"),
+    suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousCatalogMatchError"),
     reason=REASON,
 )
 def raise_ambiguous_catalog_match(unique_id, match_1, match_2) -> NoReturn:
-    raise AmbiguousCatalogMatch(unique_id, match_1, match_2)
+    raise AmbiguousCatalogMatchError(unique_id, match_1, match_2)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CacheInconsistency"),
+    suggested_action=SUGGESTED_ACTION.format(exception="CacheInconsistencyError"),
     reason=REASON,
 )
 def raise_cache_inconsistent(message) -> NoReturn:
-    raise CacheInconsistency(message)
+    raise CacheInconsistencyError(message)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DataclassNotDict"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DataclassNotDictError"),
     reason=REASON,
 )
 def raise_dataclass_not_dict(obj) -> NoReturn:
-    raise DataclassNotDict(obj)
+    raise DataclassNotDictError(obj)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
 )
 def raise_compiler_error(msg, node=None) -> NoReturn:
-    raise CompilationException(msg, node)
+    raise CompilationError(msg, node)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DatabaseException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DbtDatabaseError"),
     reason=REASON,
 )
 def raise_database_error(msg, node=None) -> NoReturn:
-    raise DatabaseException(msg, node)
+    raise DbtDatabaseError(msg, node)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DependencyNotFound"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DependencyNotFoundError"),
     reason=REASON,
 )
 def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:
-    raise DependencyNotFound(node, node_description, required_pkg)
+    raise DependencyNotFoundError(node, node_description, required_pkg)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DependencyException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DependencyError"),
     reason=REASON,
 )
 def raise_dependency_error(msg) -> NoReturn:
-    raise DependencyException(scrub_secrets(msg, env_secrets()))
+    raise DependencyError(scrub_secrets(msg, env_secrets()))
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DuplicatePatchPath"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicatePatchPathError"),
     reason=REASON,
 )
 def raise_duplicate_patch_name(patch_1, existing_patch_path) -> NoReturn:
-    raise DuplicatePatchPath(patch_1, existing_patch_path)
+    raise DuplicatePatchPathError(patch_1, existing_patch_path)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateResourceName"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateResourceNameError"),
     reason=REASON,
 )
 def raise_duplicate_resource_name(node_1, node_2) -> NoReturn:
-    raise DuplicateResourceName(node_1, node_2)
+    raise DuplicateResourceNameError(node_1, node_2)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="InvalidPropertyYML"),
+    suggested_action=SUGGESTED_ACTION.format(exception="PropertyYMLError"),
     reason=REASON,
 )
 def raise_invalid_property_yml_version(path, issue) -> NoReturn:
-    raise InvalidPropertyYML(path, issue)
+    raise PropertyYMLError(path, issue)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="NotImplementedException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="NotImplementedError"),
     reason=REASON,
 )
 def raise_not_implemented(msg) -> NoReturn:
-    raise NotImplementedException(msg)
+    raise NotImplementedError(msg)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="RelationWrongType"),
+    suggested_action=SUGGESTED_ACTION.format(exception="RelationWrongTypeError"),
     reason=REASON,
 )
 def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:
-    raise RelationWrongType(relation, expected_type, model)
+    raise RelationWrongTypeError(relation, expected_type, model)
 
 
 # these were implemented in core so deprecating here by calling the new exception directly
@@ -2355,81 +2358,81 @@ def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateAlias"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateAliasError"),
     reason=REASON,
 )
 def raise_duplicate_alias(
     kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
 ) -> NoReturn:
-    raise DuplicateAlias(kwargs, aliases, canonical_key)
+    raise DuplicateAliasError(kwargs, aliases, canonical_key)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateSourcePatchName"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateSourcePatchNameError"),
     reason=REASON,
 )
 def raise_duplicate_source_patch_name(patch_1, patch_2):
-    raise DuplicateSourcePatchName(patch_1, patch_2)
+    raise DuplicateSourcePatchNameError(patch_1, patch_2)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroPatchName"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroPatchNameError"),
     reason=REASON,
 )
 def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
-    raise DuplicateMacroPatchName(patch_1, existing_patch_path)
+    raise DuplicateMacroPatchNameError(patch_1, existing_patch_path)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroName"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroNameError"),
     reason=REASON,
 )
 def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
-    raise DuplicateMacroName(node_1, node_2, namespace)
+    raise DuplicateMacroNameError(node_1, node_2, namespace)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="ApproximateMatch"),
+    suggested_action=SUGGESTED_ACTION.format(exception="ApproximateMatchError"),
     reason=REASON,
 )
 def approximate_relation_match(target, relation):
-    raise ApproximateMatch(target, relation)
+    raise ApproximateMatchError(target, relation)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResults"),
+    suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResultsError"),
     reason=REASON,
 )
 def get_relation_returned_multiple_results(kwargs, matches):
-    raise RelationReturnedMultipleResults(kwargs, matches)
+    raise RelationReturnedMultipleResultsError(kwargs, matches)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="OperationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="OperationError"),
     reason=REASON,
 )
 def system_error(operation_name):
-    raise OperationException(operation_name)
+    raise OperationError(operation_name)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="InvalidMaterializationArg"),
+    suggested_action=SUGGESTED_ACTION.format(exception="InvalidMaterializationArgError"),
     reason=REASON,
 )
 def invalid_materialization_argument(name, argument):
-    raise InvalidMaterializationArg(name, argument)
+    raise MaterializationArgError(name, argument)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="BadSpecException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="BadSpecError"),
     reason=REASON,
 )
 def bad_package_spec(repo, spec, error_message):
@@ -2447,34 +2450,34 @@ def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="GitCloningProblem"),
+    suggested_action=SUGGESTED_ACTION.format(exception="UnknownGitCloningProblemError"),
     reason=REASON,
 )
 def raise_git_cloning_problem(repo) -> NoReturn:
-    raise GitCloningProblem(repo)
+    raise UnknownGitCloningProblemError(repo)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MacroInvalidDispatchArg"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MacroDispatchArgError"),
     reason=REASON,
 )
 def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
-    raise MacroInvalidDispatchArg(macro_name)
+    raise MacroDispatchArgError(macro_name)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="GraphDependencyNotFound"),
+    suggested_action=SUGGESTED_ACTION.format(exception="GraphDependencyNotFoundError"),
     reason=REASON,
 )
 def dependency_not_found(node, dependency):
-    raise GraphDependencyNotFound(node, dependency)
+    raise GraphDependencyNotFoundError(node, dependency)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="TargetNotFound"),
+    suggested_action=SUGGESTED_ACTION.format(exception="TargetNotFoundError"),
     reason=REASON,
 )
 def target_not_found(
@@ -2484,7 +2487,7 @@ def target_not_found(
     target_package: Optional[str] = None,
     disabled: Optional[bool] = None,
 ) -> NoReturn:
-    raise TargetNotFound(
+    raise TargetNotFoundError(
         node=node,
         target_name=target_name,
         target_kind=target_kind,
@@ -2495,141 +2498,151 @@ def target_not_found(
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DocTargetNotFound"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DocTargetNotFoundError"),
     reason=REASON,
 )
 def doc_target_not_found(
-    model, target_doc_name: str, target_doc_package: Optional[str]
+    model, target_doc_name: str, target_doc_package: Optional[str] = None
 ) -> NoReturn:
-    raise DocTargetNotFound(
+    raise DocTargetNotFoundError(
         node=model, target_doc_name=target_doc_name, target_doc_package=target_doc_package
     )
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="InvalidDocArgs"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DocArgsError"),
     reason=REASON,
 )
 def doc_invalid_args(model, args) -> NoReturn:
-    raise InvalidDocArgs(node=model, args=args)
+    raise DocArgsError(node=model, args=args)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="RefBadContext"),
+    suggested_action=SUGGESTED_ACTION.format(exception="RefBadContextError"),
     reason=REASON,
 )
 def ref_bad_context(model, args) -> NoReturn:
-    raise RefBadContext(node=model, args=args)
+    raise RefBadContextError(node=model, args=args)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MetricInvalidArgs"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MetricArgsError"),
     reason=REASON,
 )
 def metric_invalid_args(model, args) -> NoReturn:
-    raise MetricInvalidArgs(node=model, args=args)
+    raise MetricArgsError(node=model, args=args)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="RefInvalidArgs"),
+    suggested_action=SUGGESTED_ACTION.format(exception="RefArgsError"),
     reason=REASON,
 )
 def ref_invalid_args(model, args) -> NoReturn:
-    raise RefInvalidArgs(node=model, args=args)
+    raise RefArgsError(node=model, args=args)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="InvalidBoolean"),
+    suggested_action=SUGGESTED_ACTION.format(exception="BooleanError"),
     reason=REASON,
 )
 def invalid_bool_error(got_value, macro_name) -> NoReturn:
-    raise InvalidBoolean(return_value=got_value, macro_name=macro_name)
+    raise BooleanError(return_value=got_value, macro_name=macro_name)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="InvalidMacroArgType"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MacroArgTypeError"),
     reason=REASON,
 )
 def invalid_type_error(method_name, arg_name, got_value, expected_type) -> NoReturn:
-    """Raise a CompilationException when an adapter method available to macros
+    """Raise a InvalidMacroArgType when an adapter method available to macros
     has changed.
     """
-    raise InvalidMacroArgType(method_name, arg_name, got_value, expected_type)
+    raise MacroArgTypeError(method_name, arg_name, got_value, expected_type)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DisallowSecretEnvVar"),
+    suggested_action=SUGGESTED_ACTION.format(exception="SecretEnvVarLocationError"),
     reason=REASON,
 )
 def disallow_secret_env_var(env_var_name) -> NoReturn:
     """Raise an error when a secret env var is referenced outside allowed
     rendering contexts"""
-    raise DisallowSecretEnvVar(env_var_name)
+    raise SecretEnvVarLocationError(env_var_name)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="ParsingException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="ParsingError"),
     reason=REASON,
 )
 def raise_parsing_error(msg, node=None) -> NoReturn:
-    raise ParsingException(msg, node)
+    raise ParsingError(msg, node)
 
 
+# These are the exceptions functions that were not called within dbt-core but will remain
+# here deprecated to give a chance for adapters to rework
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="UnrecognizedCredentialTypeError"),
     reason=REASON,
 )
 def raise_unrecognized_credentials_type(typename, supported_types):
-    raise UnrecognizedCredentialType(typename, supported_types)
+    raise UnrecognizedCredentialTypeError(typename, supported_types)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="PatchTargetNotFoundError"),
     reason=REASON,
 )
 def raise_patch_targets_not_found(patches):
-    raise PatchTargetNotFound(patches)
+    raise PatchTargetNotFoundError(patches)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResults"),
+    suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResultsError"),
     reason=REASON,
 )
 def multiple_matching_relations(kwargs, matches):
-    raise RelationReturnedMultipleResults(kwargs, matches)
+    raise RelationReturnedMultipleResultsError(kwargs, matches)
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MaterializationNotAvailable"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MaterializationNotAvailableError"),
     reason=REASON,
 )
 def materialization_not_available(model, adapter_type):
     materialization = model.config.materialized
-    raise MaterializationNotAvailable(materialization=materialization, adapter_type=adapter_type)
+    raise MaterializationNotAvailableError(
+        materialization=materialization, adapter_type=adapter_type
+    )
 
 
 @deprecated(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="MacroNotFound"),
+    suggested_action=SUGGESTED_ACTION.format(exception="MacroNotFoundError"),
     reason=REASON,
 )
 def macro_not_found(model, target_macro_id):
-    raise MacroNotFound(node=model, target_macro_id=target_macro_id)
+    raise MacroNotFoundError(node=model, target_macro_id=target_macro_id)
 
 
 # adapters use this to format messages.  it should be deprecated but live on for now
+# TODO: What should the message here be?
+@deprecated(
+    version=DEPRECATION_VERSION,
+    suggested_action="Format this message in the adapter",
+    reason="`validator_error_message` is now a mathod on DbtRuntimeError",
+)
 def validator_error_message(exc):
     """Given a dbt.dataclass_schema.ValidationError (which is basically a
     jsonschema.ValidationError), return the relevant parts as a string

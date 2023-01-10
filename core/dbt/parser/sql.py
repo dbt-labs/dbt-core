@@ -5,7 +5,7 @@ from typing import Iterable
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.nodes import SqlNode, Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.macros import MacroParser
@@ -35,7 +35,7 @@ class SqlBlockParser(SimpleSQLParser[SqlNode]):
     def get_compiled_path(block: FileBlock):
         # we do it this way to make mypy happy
         if not isinstance(block, SqlBlock):
-            raise InternalException(
+            raise DbtInternalError(
                 "While parsing SQL operation, got an actual file block instead of "
                 "an SQL block: {}".format(block)
             )

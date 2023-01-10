@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import re
 from typing import Dict, ClassVar, Any, Optional
 
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 
 
 @dataclass
@@ -85,7 +85,7 @@ class Column:
 
     def string_size(self) -> int:
         if not self.is_string():
-            raise RuntimeException("Called string_size() on non-string field!")
+            raise DbtRuntimeError("Called string_size() on non-string field!")
 
         if self.dtype == "text" or self.char_size is None:
             # char_size should never be None. Handle it reasonably just in case
@@ -124,7 +124,7 @@ class Column:
     def from_description(cls, name: str, raw_data_type: str) -> "Column":
         match = re.match(r"([^(]+)(\([^)]+\))?", raw_data_type)
         if match is None:
-            raise RuntimeException(f'Could not interpret data type "{raw_data_type}"')
+            raise DbtRuntimeError(f'Could not interpret data type "{raw_data_type}"')
         data_type, size_info = match.groups()
         char_size = None
         numeric_precision = None
@@ -137,7 +137,7 @@ class Column:
                 try:
                     char_size = int(parts[0])
                 except ValueError:
-                    raise RuntimeException(
+                    raise DbtRuntimeError(
                         f'Could not interpret data_type "{raw_data_type}": '
                         f'could not convert "{parts[0]}" to an integer'
                     )
@@ -145,14 +145,14 @@ class Column:
                 try:
                     numeric_precision = int(parts[0])
                 except ValueError:
-                    raise RuntimeException(
+                    raise DbtRuntimeError(
                         f'Could not interpret data_type "{raw_data_type}": '
                         f'could not convert "{parts[0]}" to an integer'
                     )
                 try:
                     numeric_scale = int(parts[1])
                 except ValueError:
-                    raise RuntimeException(
+                    raise DbtRuntimeError(
                         f'Could not interpret data_type "{raw_data_type}": '
                         f'could not convert "{parts[1]}" to an integer'
                     )

@@ -12,7 +12,7 @@ from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import ManifestStateCheck
 from dbt.clients import agate_helper
-from dbt.exceptions import ValidationException, DbtConfigError
+from dbt.exceptions import DbtValidationError, DbtConfigError
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError
 
@@ -58,8 +58,8 @@ class TestPostgresAdapter(unittest.TestCase):
     def test_acquire_connection_validations(self, psycopg2):
         try:
             connection = self.adapter.acquire_connection('dummy')
-        except ValidationException as e:
-            self.fail('got ValidationException: {}'.format(str(e)))
+        except DbtValidationError as e:
+            self.fail('got DbtValidationError: {}'.format(str(e)))
         except BaseException as e:
             self.fail('acquiring connection failed with unknown exception: {}'
                       .format(str(e)))

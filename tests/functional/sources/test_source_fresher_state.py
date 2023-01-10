@@ -4,7 +4,7 @@ import shutil
 import pytest
 from datetime import datetime, timedelta
 
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 
 
 from dbt.tests.util import AnyStringWith, AnyFloat
@@ -619,7 +619,7 @@ class TestSourceFresherNoPreviousState(SuccessfulSourceFreshnessTest):
     def test_intentional_failure_no_previous_state(self, project):
         self.run_dbt_with_vars(project, ["run"])
         # TODO add the current and previous but with previous as null
-        with pytest.raises(InternalException) as excinfo:
+        with pytest.raises(DbtInternalError) as excinfo:
             self.run_dbt_with_vars(
                 project,
                 ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
@@ -641,7 +641,7 @@ class TestSourceFresherNoCurrentState(SuccessfulSourceFreshnessTest):
         copy_to_previous_state()
         assert previous_state_results[0].max_loaded_at is not None
 
-        with pytest.raises(InternalException) as excinfo:
+        with pytest.raises(DbtInternalError) as excinfo:
             self.run_dbt_with_vars(
                 project,
                 ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],

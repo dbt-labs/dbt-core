@@ -6,7 +6,7 @@ from .printer import (
 )
 
 from dbt.contracts.results import RunStatus
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
 from dbt.events.functions import fire_event
@@ -73,7 +73,7 @@ class SeedTask(RunTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

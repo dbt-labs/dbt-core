@@ -1,7 +1,7 @@
 import os
 import pytest
 import yaml
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
 
 from dbt.tests.util import (
     run_dbt,
@@ -164,7 +164,7 @@ class TestMalformedSources(BaseSourcesTest):
         }
 
     def test_malformed_schema_will_break_run(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             self.run_dbt_with_vars(project, ["seed"])
 
 

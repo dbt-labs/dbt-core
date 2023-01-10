@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationException, UndefinedMacroException
+from dbt.exceptions import CompilationError
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
@@ -99,8 +99,8 @@ class MetricsTest(BasePPTest):
 
         # Then delete a metric
         self.copy_file('test-files/people_metrics3.yml', 'models/people_metrics.yml')
-        with self.assertRaises(CompilationException):
-            # We use "parse" here and not "run" because we're checking that the CompilationException
+        with self.assertRaises(CompilationError):
+            # We use "parse" here and not "run" because we're checking that the CompilationError
             # occurs at parse time, not compilation
             results = self.run_dbt(["parse"])
 

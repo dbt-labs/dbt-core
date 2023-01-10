@@ -1,6 +1,6 @@
 from .run import ModelRunner, RunTask
 
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.base_types import EventLevel
 from dbt.events.types import LogSnapshotResult
@@ -37,7 +37,7 @@ class SnapshotTask(RunTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

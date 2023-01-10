@@ -133,7 +133,7 @@ sample_values = [
     AdapterDeprecationWarning(old_name="", new_name=""),
     MetricAttributesRenamed(metric_name=""),
     ExposureNameDeprecation(exposure=""),
-    FunctionDeprecated(function_name="", reason="", suggested_action="", version=""),
+    InternalDeprecation(name="", reason="", suggested_action="", version=""),
 
     # E - DB Adapter ======================
     AdapterEventDebug(),
@@ -183,9 +183,9 @@ sample_values = [
     ParseCmdOut(msg="testing"),
     GenericTestFileParse(path=""),
     MacroFileParse(path=""),
-    PartialParsingExceptionProcessingFile(file=""),
+    PartialParsingErrorProcessingFile(file=""),
     PartialParsingFile(file_id=""),
-    PartialParsingException(exc_info={}),
+    PartialParsingError(exc_info={}),
     PartialParsingSkipParsing(),
     UnableToPartialParse(reason="something went wrong"),
     PartialParsingNotEnabled(),
@@ -344,7 +344,7 @@ sample_values = [
     # W - Node testing ======================
 
     CatchableExceptionOnRun(exc=""),
-    InternalExceptionOnRun(build_path="", exc=""),
+    InternalErrorOnRun(build_path="", exc=""),
     GenericExceptionOnRun(build_path="", unique_id="", exc=""),
     NodeConnectionReleaseError(node_name="", exc=""),
     FoundStats(stat_line=""),

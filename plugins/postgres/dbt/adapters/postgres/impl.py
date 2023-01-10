@@ -9,11 +9,11 @@ from dbt.adapters.postgres import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
 from dbt.dataclass_schema import dbtClassMixin, ValidationError
 from dbt.exceptions import (
-    CrossDbReferenceProhibited,
-    IndexConfigNotDict,
-    InvalidIndexConfig,
-    RuntimeException,
-    UnexpectedDbReference,
+    CrossDbReferenceProhibitedError,
+    IndexConfigNotDictError,
+    IndexConfigError,
+    DbtRuntimeError,
+    UnexpectedDbReferenceError,
 )
 import dbt.utils
 
@@ -46,9 +46,9 @@ class PostgresIndexConfig(dbtClassMixin):
             cls.validate(raw_index)
             return cls.from_dict(raw_index)
         except ValidationError as exc:
-            raise InvalidIndexConfig(exc)
+            raise IndexConfigError(exc)
         except TypeError:
-            raise IndexConfigNotDict(raw_index)
+            raise IndexConfigNotDictError(raw_index)
 
 
 @dataclass
@@ -74,7 +74,7 @@ class PostgresAdapter(SQLAdapter):
             database = database.strip('"')
         expected = self.config.credentials.database
         if database.lower() != expected.lower():
-            raise UnexpectedDbReference(self.type(), database, expected)
+            raise UnexpectedDbReferenceError(self.type(), database, expected)
         # return an empty string on success so macros can call this
         return ""
 
@@ -107,8 +107,8 @@ class PostgresAdapter(SQLAdapter):
         schemas = super()._get_catalog_schemas(manifest)
         try:
             return schemas.flatten()
-        except RuntimeException as exc:
-            raise CrossDbReferenceProhibited(self.type(), exc.msg)
+        except DbtRuntimeError as exc:
+            raise CrossDbReferenceProhibitedError(self.type(), exc.msg)
 
     def _link_cached_relations(self, manifest):
         schemas: Set[str] = set()

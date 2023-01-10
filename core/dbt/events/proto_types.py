@@ -429,19 +429,19 @@ class ExposureNameDeprecationMsg(betterproto.Message):
 
 
 @dataclass
-class FunctionDeprecated(betterproto.Message):
+class InternalDeprecation(betterproto.Message):
     """D008"""
 
-    function_name: str = betterproto.string_field(1)
+    name: str = betterproto.string_field(1)
     reason: str = betterproto.string_field(2)
     suggested_action: str = betterproto.string_field(3)
     version: str = betterproto.string_field(4)
 
 
 @dataclass
-class FunctionDeprecatedMsg(betterproto.Message):
+class InternalDeprecationMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "FunctionDeprecated" = betterproto.message_field(2)
+    data: "InternalDeprecation" = betterproto.message_field(2)
 
 
 @dataclass
@@ -999,20 +999,20 @@ class MacroFileParseMsg(betterproto.Message):
 
 
 @dataclass
-class PartialParsingExceptionProcessingFile(betterproto.Message):
+class PartialParsingErrorProcessingFile(betterproto.Message):
     """I014"""
 
     file: str = betterproto.string_field(1)
 
 
 @dataclass
-class PartialParsingExceptionProcessingFileMsg(betterproto.Message):
+class PartialParsingErrorProcessingFileMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "PartialParsingExceptionProcessingFile" = betterproto.message_field(2)
+    data: "PartialParsingErrorProcessingFile" = betterproto.message_field(2)
 
 
 @dataclass
-class PartialParsingException(betterproto.Message):
+class PartialParsingError(betterproto.Message):
     """I016"""
 
     exc_info: Dict[str, str] = betterproto.map_field(
@@ -1021,9 +1021,9 @@ class PartialParsingException(betterproto.Message):
 
 
 @dataclass
-class PartialParsingExceptionMsg(betterproto.Message):
+class PartialParsingErrorMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "PartialParsingException" = betterproto.message_field(2)
+    data: "PartialParsingError" = betterproto.message_field(2)
 
 
 @dataclass
@@ -2239,7 +2239,7 @@ class CatchableExceptionOnRunMsg(betterproto.Message):
 
 
 @dataclass
-class InternalExceptionOnRun(betterproto.Message):
+class InternalErrorOnRun(betterproto.Message):
     """W003"""
 
     build_path: str = betterproto.string_field(1)
@@ -2247,9 +2247,9 @@ class InternalExceptionOnRun(betterproto.Message):
 
 
 @dataclass
-class InternalExceptionOnRunMsg(betterproto.Message):
+class InternalErrorOnRunMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "InternalExceptionOnRun" = betterproto.message_field(2)
+    data: "InternalErrorOnRun" = betterproto.message_field(2)
 
 
 @dataclass

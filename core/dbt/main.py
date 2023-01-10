@@ -46,9 +46,9 @@ from dbt.utils import ExitCodes, args_to_dict
 from dbt.config.profile import read_user_config
 from dbt.exceptions import (
     Exception as dbtException,
-    InternalException,
-    NotImplementedException,
-    FailedToConnectException,
+    DbtInternalError,
+    NotImplementedError,
+    FailedToConnectError,
 )
 
 
@@ -92,7 +92,7 @@ class DBTArgumentParser(argparse.ArgumentParser):
     ):
         mutex_group = self.add_mutually_exclusive_group()
         if not name.startswith("--"):
-            raise InternalException(
+            raise DbtInternalError(
                 'cannot handle optional argument without "--" prefix: ' f'got "{name}"'
             )
         if dest is None:
@@ -207,7 +207,7 @@ def track_run(task):
     try:
         yield
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
-    except (NotImplementedException, FailedToConnectException) as e:
+    except (NotImplementedError, FailedToConnectError) as e:
         fire_event(MainEncounteredError(exc=str(e)))
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
     except Exception:
@@ -220,7 +220,7 @@ def track_run(task):
 def run_from_args(parsed):
     log_cache_events(getattr(parsed, "log_cache_events", False))
 
-    # this will convert DbtConfigErrors into RuntimeExceptions
+    # this will convert DbtConfigErrors into DbtRuntimeError
     # task could be any one of the task objects
     task = parsed.cls.from_args(args=parsed)
 

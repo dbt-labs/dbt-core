@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
 
 
@@ -22,6 +22,6 @@ class TestDuplicateSourceEnabled:
 
     def test_duplicate_source_enabled(self, project):
         message = "dbt found two sources with the name"
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["compile"])
         assert message in str(exc.value)

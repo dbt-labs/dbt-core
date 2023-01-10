@@ -64,7 +64,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         * The Connection state should be "fail" and the handle None.
         * The resulting attempt count should be 1 as we are not explicitly configured to handle a
           ValueError.
-        * retry_connection should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectError with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
@@ -75,7 +75,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise ValueError("Something went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectException, "Something went horribly wrong"
+            dbt.exceptions.FailedToConnectError, "Something went horribly wrong"
         ):
 
             BaseConnectionManager.retry_connection(
@@ -99,7 +99,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         As a result:
         * The Connection state should be "fail" and the handle None.
         * The resulting attempt count should be 2 as we are configured to handle a ValueError.
-        * retry_connection should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectError with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
@@ -110,7 +110,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise ValueError("Something went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectException, "Something went horribly wrong"
+            dbt.exceptions.FailedToConnectError, "Something went horribly wrong"
         ):
 
             BaseConnectionManager.retry_connection(
@@ -173,7 +173,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         * The Connection state should be "fail" and the handle None, as connect
           never returns.
         * The resulting attempt count should be 11 as we are configured to handle a ValueError.
-        * retry_connection should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectError with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
@@ -185,7 +185,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise ValueError("Something went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectException, "Something went horribly wrong"
+            dbt.exceptions.FailedToConnectError, "Something went horribly wrong"
         ):
             BaseConnectionManager.retry_connection(
                 conn,
@@ -208,7 +208,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
         * The Connection state should be "fail" and the handle None, as connect
           never returns.
         * The resulting attempt count should be 11 as we are configured to handle all Exceptions.
-        * retry_connection should raise a FailedToConnectException with the Exception message.
+        * retry_connection should raise a FailedToConnectError with the Exception message.
         """
         conn = self.postgres_connection
         attempts = 0
@@ -220,7 +220,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             raise TypeError("An unhandled thing went horribly wrong")
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectException, "An unhandled thing went horribly wrong"
+            dbt.exceptions.FailedToConnectError, "An unhandled thing went horribly wrong"
         ):
             BaseConnectionManager.retry_connection(
                 conn,
@@ -338,7 +338,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             return True
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectException, "retry_limit cannot be negative"
+            dbt.exceptions.FailedToConnectError, "retry_limit cannot be negative"
         ):
             BaseConnectionManager.retry_connection(
                 conn,
@@ -365,7 +365,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
 
         for retry_timeout in [-10, -2.5, lambda _: -100, lambda _: -10.1]:
             with self.assertRaisesRegex(
-                dbt.exceptions.FailedToConnectException,
+                dbt.exceptions.FailedToConnectError,
                 "retry_timeout cannot be negative or return a negative time",
             ):
                 BaseConnectionManager.retry_connection(
@@ -392,7 +392,7 @@ class BaseConnectionManagerTest(unittest.TestCase):
             return True
 
         with self.assertRaisesRegex(
-            dbt.exceptions.FailedToConnectException,
+            dbt.exceptions.FailedToConnectError,
             "retry_limit cannot be negative",
         ):
             BaseConnectionManager.retry_connection(

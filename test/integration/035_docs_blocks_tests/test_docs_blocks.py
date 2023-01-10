@@ -122,7 +122,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_alternative_docs_path_missing(self):
         self.use_default_project({"docs-paths": [self.dir("not-docs")]})
-        with self.assertRaises(dbt.exceptions.CompilationException):
+        with self.assertRaises(dbt.exceptions.CompilationError):
             self.run_dbt()
 
 
@@ -142,7 +142,7 @@ class TestMissingDocsBlocks(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_missing_doc_ref(self):
         # The run should fail since we could not find the docs reference.
-        with self.assertRaises(dbt.exceptions.CompilationException):
+        with self.assertRaises(dbt.exceptions.CompilationError):
             self.run_dbt()
 
 
@@ -162,7 +162,7 @@ class TestBadDocsBlocks(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_invalid_doc_ref(self):
         # The run should fail since we could not find the docs reference.
-        with self.assertRaises(dbt.exceptions.CompilationException):
+        with self.assertRaises(dbt.exceptions.CompilationError):
             self.run_dbt(expect_pass=False)
 
 class TestDuplicateDocsBlock(DBTIntegrationTest):
@@ -180,5 +180,5 @@ class TestDuplicateDocsBlock(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_duplicate_doc_ref(self):
-        with self.assertRaises(dbt.exceptions.CompilationException):
+        with self.assertRaises(dbt.exceptions.CompilationError):
             self.run_dbt(expect_pass=False)

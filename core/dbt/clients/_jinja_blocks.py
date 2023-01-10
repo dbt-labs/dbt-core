@@ -2,13 +2,13 @@ import re
 from collections import namedtuple
 
 from dbt.exceptions import (
-    BlockDefinitionNotAtTop,
-    InternalException,
-    MissingCloseTag,
-    MissingControlFlowStartTag,
-    NestedTags,
-    UnexpectedControlFlowEndTag,
-    UnexpectedMacroEOF,
+    BlockDefinitionNotAtTopError,
+    DbtInternalError,
+    MissingCloseTagError,
+    MissingControlFlowStartTagError,
+    NestedTagsError,
+    UnexpectedControlFlowEndTagError,
+    UnexpectedMacroEOFError,
 )
 
 
@@ -147,7 +147,7 @@ class TagIterator:
     def _expect_match(self, expected_name, *patterns, **kwargs):
         match = self._first_match(*patterns, **kwargs)
         if match is None:
-            raise UnexpectedMacroEOF(expected_name, self.data[self.pos :])
+            raise UnexpectedMacroEOFError(expected_name, self.data[self.pos :])
         return match
 
     def handle_expr(self, match):
@@ -261,7 +261,7 @@ class TagIterator:
             elif block_type_name is not None:
                 yield self.handle_tag(match)
             else:
-                raise InternalException(
+                raise DbtInternalError(
                     "Invalid regex match in next_block, expected block start, "
                     "expr start, or comment start"
                 )
@@ -317,16 +317,16 @@ class BlockIterator:
                     found = self.stack.pop()
                 else:
                     expected = _CONTROL_FLOW_END_TAGS[tag.block_type_name]
-                    raise UnexpectedControlFlowEndTag(tag, expected, self.tag_parser)
+                    raise UnexpectedControlFlowEndTagError(tag, expected, self.tag_parser)
                 expected = _CONTROL_FLOW_TAGS[found]
                 if expected != tag.block_type_name:
-                    raise MissingControlFlowStartTag(tag, expected, self.tag_parser)
+                    raise MissingControlFlowStartTagError(tag, expected, self.tag_parser)
 
             if tag.block_type_name in allowed_blocks:
                 if self.stack:
-                    raise BlockDefinitionNotAtTop(self.tag_parser, tag.start)
+                    raise BlockDefinitionNotAtTopError(self.tag_parser, tag.start)
                 if self.current is not None:
-                    raise NestedTags(outer=self.current, inner=tag)
+                    raise NestedTagsError(outer=self.current, inner=tag)
                 if collect_raw_data:
                     raw_data = self.data[self.last_position : tag.start]
                     self.last_position = tag.start
@@ -347,7 +347,7 @@ class BlockIterator:
 
         if self.current:
             linecount = self.data[: self.current.end].count("\n") + 1
-            raise MissingCloseTag(self.current.block_type_name, linecount)
+            raise MissingCloseTagError(self.current.block_type_name, linecount)
 
         if collect_raw_data:
             raw_data = self.data[self.last_position :]

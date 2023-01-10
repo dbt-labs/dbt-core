@@ -60,4 +60,4 @@ def load_yaml_text(contents, path=None):
         else:
             error = str(e)
 
-        raise dbt.exceptions.ValidationException(error)
+        raise dbt.exceptions.DbtValidationError(error)

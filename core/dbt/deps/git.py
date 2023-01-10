@@ -9,7 +9,7 @@ from dbt.contracts.project import (
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import ExecutableError, MultipleVersionGitDeps
+from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import EnsureGitInstalled, DepsUnpinned
 
@@ -143,7 +143,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         if len(requested) == 0:
             requested = {"HEAD"}
         elif len(requested) > 1:
-            raise MultipleVersionGitDeps(self.git, requested)
+            raise MultipleVersionGitDepsError(self.git, requested)
 
         return GitPinnedPackage(
             git=self.git,

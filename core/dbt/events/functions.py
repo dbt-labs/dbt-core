@@ -163,9 +163,9 @@ def msg_to_dict(msg: EventMsg) -> dict:
 def warn_or_error(event, node=None):
     if flags.WARN_ERROR:
         # TODO: resolve this circular import when at top
-        from dbt.exceptions import EventCompilationException
+        from dbt.exceptions import EventCompilationError
 
-        raise EventCompilationException(event.message(), node)
+        raise EventCompilationError(event.message(), node)
     else:
         fire_event(event)
 

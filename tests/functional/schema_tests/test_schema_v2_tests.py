@@ -95,7 +95,7 @@ from tests.functional.schema_tests.fixtures import (
     alt_local_utils__macros__type_timestamp_sql,
     all_quotes_schema__schema_yml,
 )
-from dbt.exceptions import ParsingException, CompilationException, DuplicateResourceName
+from dbt.exceptions import ParsingError, CompilationError, DuplicateResourceNameError
 from dbt.contracts.results import TestStatus
 
 
@@ -410,7 +410,7 @@ class TestMalformedSchemaTests:
         self,
         project,
     ):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt()
 
 
@@ -904,7 +904,7 @@ class TestGenericTestsCollide:
         project,
     ):
         """These tests collide, since only the configs differ"""
-        with pytest.raises(DuplicateResourceName) as exc:
+        with pytest.raises(DuplicateResourceNameError) as exc:
             run_dbt()
         assert "dbt found two tests with the name" in str(exc.value)
 
@@ -922,7 +922,7 @@ class TestGenericTestsConfigCustomMacros:
         project,
     ):
         """This test has a reference to a custom macro its configs"""
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
         assert "Invalid generic test configuration" in str(exc)
 
@@ -987,7 +987,7 @@ class TestInvalidSchema:
         self,
         project,
     ):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt()
         assert re.search(r"'models' is not a list", str(exc))
 

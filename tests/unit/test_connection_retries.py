@@ -1,7 +1,7 @@
 import functools
 import pytest
 from requests.exceptions import RequestException
-from dbt.exceptions import ConnectionException
+from dbt.exceptions import ConnectionError
 from dbt.utils import _connection_exception_retry
 
 
@@ -28,7 +28,7 @@ class TestMaxRetries:
     def test_no_retry(self):
         fn_to_retry = functools.partial(no_success_fn)
 
-        with pytest.raises(ConnectionException):
+        with pytest.raises(ConnectionError):
             _connection_exception_retry(fn_to_retry, 3)
 
 

@@ -12,7 +12,7 @@ def to_be_decorated():
 
 
 # simpletest that the return value is not modified
-def test_deprecated():
+def test_deprecated_func():
     assert(hasattr(to_be_decorated, '__wrapped__'))
     assert(to_be_decorated() == 5)
 
@@ -36,7 +36,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_missing_config(self):
         func = dbt.exceptions.missing_config
-        exception = dbt.exceptions.MissingConfig
+        exception = dbt.exceptions.MissingConfigError
         model = argparse.Namespace()
         model.unique_id = ''
         name = ""
@@ -49,7 +49,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_missing_materialization(self):
         func = dbt.exceptions.missing_materialization
-        exception = dbt.exceptions.MissingMaterialization
+        exception = dbt.exceptions.MissingMaterializationError
         model = argparse.Namespace()
         model.config = argparse.Namespace()
         model.config.materialized = ''
@@ -63,7 +63,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_missing_relation(self):
         func = dbt.exceptions.missing_relation
-        exception = dbt.exceptions.MissingRelation
+        exception = dbt.exceptions.MissingRelationError
         relation = ""
 
         self.is_deprecated(func)
@@ -74,7 +74,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_ambiguous_alias(self):
         func = dbt.exceptions.raise_ambiguous_alias
-        exception = dbt.exceptions.AmbiguousAlias
+        exception = dbt.exceptions.AmbiguousAliasError
         node_1 = argparse.Namespace()
         node_1.unique_id = ""
         node_1.original_file_path = ""
@@ -91,7 +91,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_ambiguous_catalog_match(self):
         func = dbt.exceptions.raise_ambiguous_catalog_match
-        exception = dbt.exceptions.AmbiguousCatalogMatch
+        exception = dbt.exceptions.AmbiguousCatalogMatchError
         unique_id = ""
         match_1 = {"metadata": {"schema": ""}}
         match_2 = {"metadata": {"schema": ""}}
@@ -104,7 +104,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_cache_inconsistent(self):
         func = dbt.exceptions.raise_cache_inconsistent
-        exception = dbt.exceptions.CacheInconsistency
+        exception = dbt.exceptions.CacheInconsistencyError
         msg = ""
 
         self.is_deprecated(func)
@@ -115,7 +115,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_dataclass_not_dict(self):
         func = dbt.exceptions.raise_dataclass_not_dict
-        exception = dbt.exceptions.DataclassNotDict
+        exception = dbt.exceptions.DataclassNotDictError
         obj = ""
 
         self.is_deprecated(func)
@@ -126,7 +126,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_compiler_error(self):
         func = dbt.exceptions.raise_compiler_error
-        exception = dbt.exceptions.CompilationException
+        exception = dbt.exceptions.CompilationError
         msg = ""
 
         self.is_deprecated(func)
@@ -137,7 +137,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_database_error(self):
         func = dbt.exceptions.raise_database_error
-        exception = dbt.exceptions.DatabaseException
+        exception = dbt.exceptions.DbtDatabaseError
         msg = ""
 
         self.is_deprecated(func)
@@ -148,7 +148,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_dep_not_found(self):
         func = dbt.exceptions.raise_dep_not_found
-        exception = dbt.exceptions.DependencyNotFound
+        exception = dbt.exceptions.DependencyNotFoundError
         node = ""
         node_description = ""
         required_pkg = ""
@@ -161,7 +161,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_dependency_error(self):
         func = dbt.exceptions.raise_dependency_error
-        exception = dbt.exceptions.DependencyException
+        exception = dbt.exceptions.DependencyError
         msg = ""
 
         self.is_deprecated(func)
@@ -172,7 +172,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_duplicate_patch_name(self):
         func = dbt.exceptions.raise_duplicate_patch_name
-        exception = dbt.exceptions.DuplicatePatchPath
+        exception = dbt.exceptions.DuplicatePatchPathError
         patch_1 = argparse.Namespace()
         patch_1.name = ""
         patch_1.original_file_path = ""
@@ -186,7 +186,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_duplicate_resource_name(self):
         func = dbt.exceptions.raise_duplicate_resource_name
-        exception = dbt.exceptions.DuplicateResourceName
+        exception = dbt.exceptions.DuplicateResourceNameError
         node_1 = argparse.Namespace()
         node_1.name = ""
         node_1.resource_type = NodeType('model')
@@ -207,7 +207,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_invalid_property_yml_version(self):
         func = dbt.exceptions.raise_invalid_property_yml_version
-        exception = dbt.exceptions.InvalidPropertyYML
+        exception = dbt.exceptions.PropertyYMLError
         path = ""
         issue = ""
 
@@ -219,7 +219,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_not_implemented(self):
         func = dbt.exceptions.raise_not_implemented
-        exception = dbt.exceptions.NotImplementedException
+        exception = dbt.exceptions.NotImplementedError
         msg = ""
 
         self.is_deprecated(func)
@@ -230,7 +230,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_relation_wrong_type(self):
         func = dbt.exceptions.relation_wrong_type
-        exception = dbt.exceptions.RelationWrongType
+        exception = dbt.exceptions.RelationWrongTypeError
 
         relation = argparse.Namespace()
         relation.type = ""
@@ -244,7 +244,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_duplicate_alias(self):
         func = dbt.exceptions.raise_duplicate_alias
-        exception = dbt.exceptions.DuplicateAlias
+        exception = dbt.exceptions.DuplicateAliasError
         kwargs = {"": ""}
         aliases = {"": ""}
         canonical_key = ""
@@ -257,7 +257,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_duplicate_source_patch_name(self):
         func = dbt.exceptions.raise_duplicate_source_patch_name
-        exception = dbt.exceptions.DuplicateSourcePatchName
+        exception = dbt.exceptions.DuplicateSourcePatchNameError
         patch_1 = argparse.Namespace()
         patch_1.name = ""
         patch_1.path = ""
@@ -273,7 +273,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_duplicate_macro_patch_name(self):
         func = dbt.exceptions.raise_duplicate_macro_patch_name
-        exception = dbt.exceptions.DuplicateMacroPatchName
+        exception = dbt.exceptions.DuplicateMacroPatchNameError
         patch_1 = argparse.Namespace()
         patch_1.package_name = ""
         patch_1.name = ""
@@ -288,7 +288,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_duplicate_macro_name(self):
         func = dbt.exceptions.raise_duplicate_macro_name
-        exception = dbt.exceptions.DuplicateMacroName
+        exception = dbt.exceptions.DuplicateMacroNameError
         node_1 = argparse.Namespace()
         node_1.name = ""
         node_1.package_name = ""
@@ -308,7 +308,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_approximate_relation_match(self):
         func = dbt.exceptions.approximate_relation_match
-        exception = dbt.exceptions.ApproximateMatch
+        exception = dbt.exceptions.ApproximateMatchError
         target = ""
         relation = ""
 
@@ -320,7 +320,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_get_relation_returned_multiple_results(self):
         func = dbt.exceptions.get_relation_returned_multiple_results
-        exception = dbt.exceptions.RelationReturnedMultipleResults
+        exception = dbt.exceptions.RelationReturnedMultipleResultsError
         kwargs = {}
         matches = []
 
@@ -332,7 +332,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_system_error(self):
         func = dbt.exceptions.system_error
-        exception = dbt.exceptions.OperationException
+        exception = dbt.exceptions.OperationError
         operation_name = ""
 
         self.is_deprecated(func)
@@ -343,7 +343,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_invalid_materialization_argument(self):
         func = dbt.exceptions.invalid_materialization_argument
-        exception = dbt.exceptions.InvalidMaterializationArg
+        exception = dbt.exceptions.MaterializationArgError
         name = ""
         argument = ""
 
@@ -386,7 +386,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_git_cloning_problem(self):
         func = dbt.exceptions.raise_git_cloning_problem
-        exception = dbt.exceptions.GitCloningProblem
+        exception = dbt.exceptions.UnknownGitCloningProblemError
         repo = ""
 
         self.is_deprecated(func)
@@ -397,7 +397,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_macro_invalid_dispatch_arg(self):
         func = dbt.exceptions.macro_invalid_dispatch_arg
-        exception = dbt.exceptions.MacroInvalidDispatchArg
+        exception = dbt.exceptions.MacroDispatchArgError
         macro_name = ""
 
         self.is_deprecated(func)
@@ -408,7 +408,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_dependency_not_found(self):
         func = dbt.exceptions.dependency_not_found
-        exception = dbt.exceptions.GraphDependencyNotFound
+        exception = dbt.exceptions.GraphDependencyNotFoundError
         node = argparse.Namespace()
         node.unique_id = ""
         dependency = ""
@@ -421,7 +421,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_target_not_found(self):
         func = dbt.exceptions.target_not_found
-        exception = dbt.exceptions.TargetNotFound
+        exception = dbt.exceptions.TargetNotFoundError
         node = argparse.Namespace()
         node.unique_id = ""
         node.original_file_path = ""
@@ -437,7 +437,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_doc_target_not_found(self):
         func = dbt.exceptions.doc_target_not_found
-        exception = dbt.exceptions.DocTargetNotFound
+        exception = dbt.exceptions.DocTargetNotFoundError
         model = argparse.Namespace()
         model.unique_id = ""
         target_doc_name = ""
@@ -451,7 +451,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_ref_bad_context(self):
         func = dbt.exceptions.ref_bad_context
-        exception = dbt.exceptions.RefBadContext
+        exception = dbt.exceptions.RefBadContextError
         model = argparse.Namespace()
         model.name = ""
         args = []
@@ -464,7 +464,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_metric_invalid_args(self):
         func = dbt.exceptions.metric_invalid_args
-        exception = dbt.exceptions.MetricInvalidArgs
+        exception = dbt.exceptions.MetricArgsError
         model = argparse.Namespace()
         model.unique_id = ""
         args = []
@@ -477,7 +477,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_ref_invalid_args(self):
         func = dbt.exceptions.ref_invalid_args
-        exception = dbt.exceptions.RefInvalidArgs
+        exception = dbt.exceptions.RefArgsError
         model = argparse.Namespace()
         model.unique_id = ""
         args = []
@@ -490,7 +490,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_invalid_bool_error(self):
         func = dbt.exceptions.invalid_bool_error
-        exception = dbt.exceptions.InvalidBoolean
+        exception = dbt.exceptions.BooleanError
         return_value = ""
         macro_name = ""
 
@@ -502,7 +502,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_invalid_type_error(self):
         func = dbt.exceptions.invalid_type_error
-        exception = dbt.exceptions.InvalidMacroArgType
+        exception = dbt.exceptions.MacroArgTypeError
         method_name = ""
         arg_name = ""
         got_value = ""
@@ -516,7 +516,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_disallow_secret_env_var(self):
         func = dbt.exceptions.disallow_secret_env_var
-        exception = dbt.exceptions.DisallowSecretEnvVar
+        exception = dbt.exceptions.SecretEnvVarLocationError
         env_var_name = ""
 
         self.is_deprecated(func)
@@ -527,7 +527,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_parsing_error(self):
         func = dbt.exceptions.raise_parsing_error
-        exception = dbt.exceptions.ParsingException
+        exception = dbt.exceptions.ParsingError
         msg = ""
 
         self.is_deprecated(func)
@@ -538,7 +538,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_unrecognized_credentials_type(self):
         func = dbt.exceptions.raise_unrecognized_credentials_type
-        exception = dbt.exceptions.UnrecognizedCredentialType
+        exception = dbt.exceptions.UnrecognizedCredentialTypeError
         typename = ""
         supported_types = []
 
@@ -550,7 +550,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_patch_targets_not_found(self):
         func = dbt.exceptions.raise_patch_targets_not_found
-        exception = dbt.exceptions.PatchTargetNotFound
+        exception = dbt.exceptions.PatchTargetNotFoundError
         node = argparse.Namespace()
         node.name = ""
         node.original_file_path = ""
@@ -564,7 +564,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_multiple_matching_relations(self):
         func = dbt.exceptions.multiple_matching_relations
-        exception = dbt.exceptions.RelationReturnedMultipleResults
+        exception = dbt.exceptions.RelationReturnedMultipleResultsError
         kwargs = {}
         matches = []
 
@@ -576,7 +576,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_materialization_not_available(self):
         func = dbt.exceptions.materialization_not_available
-        exception = dbt.exceptions.MaterializationNotAvailable
+        exception = dbt.exceptions.MaterializationNotAvailableError
         model = argparse.Namespace()
         model.config = argparse.Namespace()
         model.config.materialized = ""
@@ -590,7 +590,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_macro_not_found(self):
         func = dbt.exceptions.macro_not_found
-        exception = dbt.exceptions.MacroNotFound
+        exception = dbt.exceptions.MacroNotFoundError
         model = argparse.Namespace()
         model.unique_id = ""
         target_macro_id = ""
