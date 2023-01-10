@@ -1,0 +1,6 @@
+kind: Fixes
+body: fix docs generate --defer by adding defer_to_manifest to before_run
+time: 2022-12-26T01:02:11.630614+01:00
+custom:
+  Author: mivanicova
+  Issue: "6488"

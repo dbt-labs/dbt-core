@@ -179,6 +179,10 @@ class ListTask(GraphRunnableTask):
         else:
             return self.args.select
 
+    def defer_to_manifest(self, adapter, selected_uids):
+        # list don't defer
+        return
+
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
             raise InternalException("manifest and graph must be set to get perform node selection")
