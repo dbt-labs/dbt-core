@@ -347,6 +347,11 @@ message FunctionDeprecatedMsg {
     FunctionDeprecated data = 2;
 }
 
+message FunctionDeprecatedMsg {
+    EventInfo info = 1;
+    FunctionDeprecated data = 2;
+}
+
 // E - DB Adapter
 
 // E001

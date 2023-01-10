@@ -1,0 +1,7 @@
+kind: Fixes
+body: Restore historical behavior of certain disabled test messages, so that they
+  are at the less obtrusive debug level, rather than the warning level.
+time: 2023-01-09T16:12:54.064875-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6501"
