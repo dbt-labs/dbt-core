@@ -429,7 +429,7 @@ class ExposureNameDeprecationMsg(betterproto.Message):
 
 
 @dataclass
-class FunctionDeprecated(betterproto.Message):
+class InternalDeprecation(betterproto.Message):
     """D008"""
 
     function_name: str = betterproto.string_field(1)
@@ -439,26 +439,9 @@ class FunctionDeprecated(betterproto.Message):
 
 
 @dataclass
-class FunctionDeprecatedMsg(betterproto.Message):
+class InternalDeprecationMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "FunctionDeprecated" = betterproto.message_field(2)
-
-
-@dataclass
-class ClassDeprecated(betterproto.Message):
-    """D009"""
-
-    info: "EventInfo" = betterproto.message_field(1)
-    class_name: str = betterproto.string_field(2)
-    reason: str = betterproto.string_field(3)
-    suggested_action: str = betterproto.string_field(4)
-    version: str = betterproto.string_field(5)
-
-
-@dataclass
-class ClassDeprecatedMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ClassDeprecated" = betterproto.message_field(2)
+    data: "InternalDeprecation" = betterproto.message_field(2)
 
 
 @dataclass

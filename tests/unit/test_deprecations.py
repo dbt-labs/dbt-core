@@ -1,12 +1,12 @@
 import argparse
 import pytest
 
-from dbt.internal_deprecations import deprecated_func
+from dbt.internal_deprecations import deprecated
 import dbt.exceptions
 from dbt.node_types import NodeType
 
 
-@deprecated_func(reason="just because", version="1.23.0", suggested_action="Make some updates")
+@deprecated(reason="just because", version="1.23.0", suggested_action="Make some updates")
 def to_be_decorated():
     return 5
 
@@ -603,28 +603,263 @@ class TestDeprecatedExceptionFunctions:
 
 
 class TestDeprecatedExceptionClasses:
+    def runClass(self, cls, *args):
+        return cls(*args)
+
+    def is_deprecated(self, func):
+        assert(hasattr(func, '__wrapped__'))
 
     def test_InternalException(self):
-        assert(issubclass(dbt.exceptions.InternalException, dbt.exceptions.DbtInternalError))
-        assert(issubclass(dbt.exceptions.RuntimeException, dbt.exceptions.DbtRuntimeError))
-        assert(issubclass(dbt.exceptions.DatabaseException, dbt.exceptions.DbtDatabaseError))
-        assert(issubclass(dbt.exceptions.CompilationException, dbt.exceptions.CompilationError))
-        assert(issubclass(dbt.exceptions.RecursionException, dbt.exceptions.RecursionError))
-        assert(issubclass(dbt.exceptions.ValidationException, dbt.exceptions.DbtValidationError))
-        assert(issubclass(dbt.exceptions.IncompatibleSchemaException, dbt.exceptions.IncompatibleSchemaError))
-        assert(issubclass(dbt.exceptions.JinjaRenderingException, dbt.exceptions.JinjaRenderingError))
-        assert(issubclass(dbt.exceptions.UndefinedMacroException, dbt.exceptions.UndefinedMacroError))
-        assert(issubclass(dbt.exceptions.UnknownAsyncIDException, dbt.exceptions.UnknownAsyncIDError))
-        assert(issubclass(dbt.exceptions.AliasException, dbt.exceptions.AliasError))
-        assert(issubclass(dbt.exceptions.DependencyException, dbt.exceptions.DependencyError))
-        assert(issubclass(dbt.exceptions.FailFastException, dbt.exceptions.FailFastError))
-        assert(issubclass(dbt.exceptions.ParsingException, dbt.exceptions.ParsingError))
-        assert(issubclass(dbt.exceptions.JSONValidationException, dbt.exceptions.JSONValidationError))
-        assert(issubclass(dbt.exceptions.SemverException, dbt.exceptions.SemverError))
-        assert(issubclass(dbt.exceptions.VersionsNotCompatibleException, dbt.exceptions.VersionsNotCompatibleError))
-        assert(issubclass(dbt.exceptions.NotImplementedException, dbt.exceptions.NotImplementedError))
-        assert(issubclass(dbt.exceptions.FailedToConnectException, dbt.exceptions.FailedToConnectError))
-        assert(issubclass(dbt.exceptions.InvalidConnectionException, dbt.exceptions.InvalidConnectionError))
-        assert(issubclass(dbt.exceptions.InvalidSelectorException, dbt.exceptions.InvalidSelectorError))
-        assert(issubclass(dbt.exceptions.DuplicateYamlKeyException, dbt.exceptions.DuplicateYamlKeyError))
-        assert(issubclass(dbt.exceptions.ConnectionException, dbt.exceptions.ConnectionError))
+        cls = dbt.exceptions.InternalException
+        exception = dbt.exceptions.DbtInternalError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_RuntimeException(self):
+        cls = dbt.exceptions.RuntimeException
+        exception = dbt.exceptions.DbtRuntimeError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_DatabaseException(self):
+        cls = dbt.exceptions.DatabaseException
+        exception = dbt.exceptions.DbtDatabaseError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_CompilationException(self):
+        cls = dbt.exceptions.CompilationException
+        exception = dbt.exceptions.CompilationError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_RecursionException(self):
+        cls = dbt.exceptions.RecursionException
+        exception = dbt.exceptions.RecursionError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_ValidationException(self):
+        cls = dbt.exceptions.ValidationException
+        exception = dbt.exceptions.DbtValidationError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_IncompatibleSchemaException(self):
+        cls = dbt.exceptions.IncompatibleSchemaException
+        exception = dbt.exceptions.IncompatibleSchemaError
+        expected = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(expected)
+
+    def test_JinjaRenderingException(self):
+        cls = dbt.exceptions.JinjaRenderingException
+        exception = dbt.exceptions.JinjaRenderingError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_UndefinedMacroException(self):
+        cls = dbt.exceptions.UndefinedMacroException
+        exception = dbt.exceptions.UndefinedMacroError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_UnknownAsyncIDException(self):
+        cls = dbt.exceptions.UnknownAsyncIDException
+        exception = dbt.exceptions.UnknownAsyncIDError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_AliasException(self):
+        cls = dbt.exceptions.AliasException
+        exception = dbt.exceptions.AliasError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_DependencyException(self):
+        cls = dbt.exceptions.DependencyException
+        exception = dbt.exceptions.DependencyError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_FailFastException(self):
+        cls = dbt.exceptions.FailFastException
+        exception = dbt.exceptions.FailFastError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_ParsingException(self):
+        cls = dbt.exceptions.ParsingException
+        exception = dbt.exceptions.ParsingError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_JSONValidationException(self):
+        cls = dbt.exceptions.JSONValidationException
+        exception = dbt.exceptions.JSONValidationError
+        typename = ""
+        errors = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(typename, errors)
+
+    def test_SemverException(self):
+        cls = dbt.exceptions.SemverException
+        exception = dbt.exceptions.SemverError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_VersionsNotCompatibleException(self):
+        cls = dbt.exceptions.VersionsNotCompatibleException
+        exception = dbt.exceptions.VersionsNotCompatibleError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_NotImplementedException(self):
+        cls = dbt.exceptions.NotImplementedException
+        exception = dbt.exceptions.NotImplementedError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_FailedToConnectException(self):
+        cls = dbt.exceptions.FailedToConnectException
+        exception = dbt.exceptions.FailedToConnectError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_InvalidConnectionException(self):
+        cls = dbt.exceptions.InvalidConnectionException
+        exception = dbt.exceptions.InvalidConnectionError
+        thread_id = ""
+        known = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(thread_id, known)
+
+    def test_InvalidSelectorException(self):
+        cls = dbt.exceptions.InvalidSelectorException
+        exception = dbt.exceptions.InvalidSelectorError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_DuplicateYamlKeyException(self):
+        cls = dbt.exceptions.DuplicateYamlKeyException
+        exception = dbt.exceptions.DuplicateYamlKeyError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)
+
+    def test_ConnectionException(self):
+        cls = dbt.exceptions.ConnectionException
+        exception = dbt.exceptions.ConnectionError
+        msg = ""
+
+        self.is_deprecated(cls)
+
+        assert(hasattr(cls, '__wrapped__'))
+        with pytest.raises(exception):
+            raise cls(msg)

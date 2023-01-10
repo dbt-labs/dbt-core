@@ -336,30 +336,16 @@ message ExposureNameDeprecationMsg {
 }
 
 //D008
-message FunctionDeprecated {
-    string function_name = 1;
+message InternalDeprecation {
+    string name = 1;
     string reason = 2;
     string suggested_action = 3;
     string version = 4;
 }
 
-message FunctionDeprecatedMsg {
+message InternalDeprecationMsg {
     EventInfo info = 1;
-    FunctionDeprecated data = 2;
-}
-
-//D009
-message ClassDeprecated {
-    EventInfo info = 1;
-    string class_name = 2;
-    string reason = 3;
-    string suggested_action = 4;
-    string version = 5;
-}
-
-message ClassDeprecatedMsg {
-    EventInfo info = 1;
-    ClassDeprecated data = 2;
+    InternalDeprecation data = 2;
 }
 
 // E - DB Adapter

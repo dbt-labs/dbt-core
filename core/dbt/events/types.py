@@ -378,7 +378,7 @@ class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
 
 
 @dataclass
-class FunctionDeprecated(WarnLevel, pt.FunctionDeprecated):
+class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
     def code(self):
         return "D008"
 
@@ -388,22 +388,6 @@ class FunctionDeprecated(WarnLevel, pt.FunctionDeprecated):
             extra_reason = f"\n{self.reason}"
         msg = (
             f"`{self.function_name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
-            f"Adapter maintainers can resolve this deprecation by {self.suggested_action}. {extra_reason}"
-        )
-        return warning_tag(msg)
-
-
-@dataclass
-class ClassDeprecated(WarnLevel, pt.ClassDeprecated):
-    def code(self):
-        return "D009"
-
-    def message(self):
-        extra_reason = ""
-        if self.reason:
-            extra_reason = f"\n{self.reason}"
-        msg = (
-            f"`{self.class_name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
             f"Adapter maintainers can resolve this deprecation by {self.suggested_action}. {extra_reason}"
         )
         return warning_tag(msg)
