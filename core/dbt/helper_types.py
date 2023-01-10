@@ -131,7 +131,9 @@ class WarnErrorOptions(IncludeExclude):
         # TODO: resolve circular import
         from dbt.config.utils import parse_cli_yaml_string
 
-        warn_error_options_str = warn_error_options_str or "{}"
+        warn_error_options_str = (
+            str(warn_error_options_str) if warn_error_options_str is not None else "{}"
+        )
         warn_error_options = parse_cli_yaml_string(warn_error_options_str, "warn-error-options")
         return cls(
             include=warn_error_options.get("include", []),
