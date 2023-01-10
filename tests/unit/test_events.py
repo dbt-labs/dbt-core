@@ -5,6 +5,7 @@ from dbt.events.functions import msg_to_json, LOG_VERSION, msg_to_dict
 from dbt.events.base_types import msg_from_base_event
 from dbt.events.types import *
 from dbt.events.test_types import *
+from dbt.contracts.results import TimingInfo
 
 from dbt.events.base_types import (
     BaseEvent,
@@ -464,3 +465,12 @@ class TestEventJSONSerialization:
 
 
 T = TypeVar("T")
+
+
+def test_date_serialization():
+    ti = TimingInfo("test")
+    ti.begin()
+    ti.end()
+    ti_dict = ti.to_dict()
+    assert ti_dict["started_at"].endswith("Z")
+    assert ti_dict["completed_at"].endswith("Z")
