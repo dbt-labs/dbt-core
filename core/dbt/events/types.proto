@@ -132,26 +132,26 @@ message InvalidVarsYAMLMsg {
 }
 
 // A009
-message DbtProjectError {
+message LogDbtProjectError {
     string exc = 1;
 }
 
-message DbtProjectErrorMsg {
+message LogDbtProjectErrorMsg {
     EventInfo info = 1;
-    DbtProjectError data = 2;
+    LogDbtProjectError data = 2;
 }
 
 // Skipped A010
 
 // A011
-message DbtProfileError {
+message LogDbtProfileError {
     string exc = 1;
     repeated string profiles = 2;
 }
 
-message DbtProfileErrorMsg {
+message LogDbtProfileErrorMsg {
     EventInfo info = 1;
-    DbtProfileError data = 2;
+    LogDbtProfileError data = 2;
 }
 
 // Skipped A012, A013, A014, A015, A016

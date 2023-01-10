@@ -171,20 +171,20 @@ class InvalidVarsYAMLMsg(betterproto.Message):
 
 
 @dataclass
-class DbtProjectError(betterproto.Message):
+class LogDbtProjectError(betterproto.Message):
     """A009"""
 
     exc: str = betterproto.string_field(1)
 
 
 @dataclass
-class DbtProjectErrorMsg(betterproto.Message):
+class LogDbtProjectErrorMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "DbtProjectError" = betterproto.message_field(2)
+    data: "LogDbtProjectError" = betterproto.message_field(2)
 
 
 @dataclass
-class DbtProfileError(betterproto.Message):
+class LogDbtProfileError(betterproto.Message):
     """A011"""
 
     exc: str = betterproto.string_field(1)
@@ -192,9 +192,9 @@ class DbtProfileError(betterproto.Message):
 
 
 @dataclass
-class DbtProfileErrorMsg(betterproto.Message):
+class LogDbtProfileErrorMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "DbtProfileError" = betterproto.message_field(2)
+    data: "LogDbtProfileError" = betterproto.message_field(2)
 
 
 @dataclass

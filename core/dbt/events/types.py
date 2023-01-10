@@ -117,7 +117,7 @@ class InvalidVarsYAML(ErrorLevel, pt.InvalidVarsYAML):
 
 
 @dataclass
-class DbtProjectError(ErrorLevel, pt.DbtProjectError):
+class LogDbtProjectError(ErrorLevel, pt.LogDbtProjectError):
     def code(self):
         return "A009"
 
@@ -132,7 +132,7 @@ class DbtProjectError(ErrorLevel, pt.DbtProjectError):
 
 
 @dataclass
-class DbtProfileError(ErrorLevel, pt.DbtProfileError):
+class LogDbtProfileError(ErrorLevel, pt.LogDbtProfileError):
     def code(self):
         return "A011"
 
