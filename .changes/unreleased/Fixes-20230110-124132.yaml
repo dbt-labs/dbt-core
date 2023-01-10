@@ -1,0 +1,7 @@
+kind: Fixes
+body: Bump mashumuro version to get regression fix and add unit test to verify that
+  fix.
+time: 2023-01-10T12:41:32.339631-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6428"
