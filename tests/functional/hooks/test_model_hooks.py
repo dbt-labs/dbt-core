@@ -170,6 +170,29 @@ class TestPrePostModelHooks(BaseTestPrePost):
         self.check_hooks("end", project, dbt_profile_target["host"])
 
 
+class TestPrePostModelHooksUnderscores(TestPrePostModelHooks):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "models": {
+                "test": {
+                    "pre_hook": [
+                        # inside transaction (runs second)
+                        MODEL_PRE_HOOK,
+                        # outside transaction (runs first)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+                    ],
+                    "post_hook": [
+                        # outside transaction (runs second)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+                        # inside transaction (runs first)
+                        MODEL_POST_HOOK,
+                    ],
+                }
+            }
+        }
+
+
 class TestHookRefs(BaseTestPrePost):
     @pytest.fixture(scope="class")
     def project_config_update(self):
