@@ -270,7 +270,7 @@ show = click.option(
 )
 
 skip_profile_setup = click.option(
-    "--skip-profile-setup", "-s", envvar=None, help="Skip interative profile setup.", is_flag=True
+    "--skip-profile-setup", "-s", envvar=None, help="Skip interactive profile setup.", is_flag=True
 )
 
 # TODO:  The env var and name (reflected in flags) are corrections!
