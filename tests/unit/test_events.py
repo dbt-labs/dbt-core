@@ -134,6 +134,7 @@ sample_values = [
     MetricAttributesRenamed(metric_name=""),
     ExposureNameDeprecation(exposure=""),
     FunctionDeprecated(function_name="", reason="", suggested_action="", version=""),
+    ClassDeprecated(class_name="", reason="", suggested_action="", version=""),
 
     # E - DB Adapter ======================
     AdapterEventDebug(),
@@ -183,7 +184,7 @@ sample_values = [
     ParseCmdOut(msg="testing"),
     GenericTestFileParse(path=""),
     MacroFileParse(path=""),
-    PartialParsingExceptionProcessingFile(file=""),
+    PartialParsingErrorProcessingFile(file=""),
     PartialParsingFile(file_id=""),
     PartialParsingError(exc_info={}),
     PartialParsingSkipParsing(),

@@ -4,7 +4,7 @@ import re
 from typing import Any, Dict, List, Mapping, NoReturn, Optional, Union
 
 from dbt.dataclass_schema import ValidationError
-from dbt.internal_deprecations import deprecated
+from dbt.internal_deprecations import deprecated_class, deprecated_func
 from dbt.events.functions import warn_or_error
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import JinjaLogWarning
@@ -2188,7 +2188,7 @@ SUGGESTED_ACTION = "using `raise {exception}` directly instead"
 REASON = "See https://github.com/dbt-labs/dbt-core/issues/6393 for more details"
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="JinjaLogWarning"),
     reason=REASON,
@@ -2198,7 +2198,7 @@ def warn(msg, node=None):
     return ""
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MissingConfig"),
     reason=REASON,
@@ -2207,7 +2207,7 @@ def missing_config(model, name) -> NoReturn:
     raise MissingConfig(unique_id=model.unique_id, name=name)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MissingMaterialization"),
     reason=REASON,
@@ -2217,7 +2217,7 @@ def missing_materialization(model, adapter_type) -> NoReturn:
     raise MissingMaterialization(materialization=materialization, adapter_type=adapter_type)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MissingRelation"),
     reason=REASON,
@@ -2226,7 +2226,7 @@ def missing_relation(relation, model=None) -> NoReturn:
     raise MissingRelation(relation, model)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousAlias"),
     reason=REASON,
@@ -2235,7 +2235,7 @@ def raise_ambiguous_alias(node_1, node_2, duped_name=None) -> NoReturn:
     raise AmbiguousAlias(node_1, node_2, duped_name)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="AmbiguousCatalogMatch"),
     reason=REASON,
@@ -2244,7 +2244,7 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2) -> NoReturn:
     raise AmbiguousCatalogMatch(unique_id, match_1, match_2)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="CacheInconsistency"),
     reason=REASON,
@@ -2253,7 +2253,7 @@ def raise_cache_inconsistent(message) -> NoReturn:
     raise CacheInconsistency(message)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DataclassNotDict"),
     reason=REASON,
@@ -2262,7 +2262,7 @@ def raise_dataclass_not_dict(obj) -> NoReturn:
     raise DataclassNotDict(obj)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
@@ -2271,7 +2271,7 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationError(msg, node)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DatabaseException"),
     reason=REASON,
@@ -2280,7 +2280,7 @@ def raise_database_error(msg, node=None) -> NoReturn:
     raise DatabaseError(msg, node)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DependencyNotFound"),
     reason=REASON,
@@ -2289,7 +2289,7 @@ def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:
     raise DependencyNotFound(node, node_description, required_pkg)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DependencyException"),
     reason=REASON,
@@ -2298,7 +2298,7 @@ def raise_dependency_error(msg) -> NoReturn:
     raise DependencyError(scrub_secrets(msg, env_secrets()))
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DuplicatePatchPath"),
     reason=REASON,
@@ -2307,7 +2307,7 @@ def raise_duplicate_patch_name(patch_1, existing_patch_path) -> NoReturn:
     raise DuplicatePatchPath(patch_1, existing_patch_path)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DuplicateResourceName"),
     reason=REASON,
@@ -2316,7 +2316,7 @@ def raise_duplicate_resource_name(node_1, node_2) -> NoReturn:
     raise DuplicateResourceName(node_1, node_2)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="InvalidPropertyYML"),
     reason=REASON,
@@ -2325,7 +2325,7 @@ def raise_invalid_property_yml_version(path, issue) -> NoReturn:
     raise InvalidPropertyYML(path, issue)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="NotImplementedException"),
     reason=REASON,
@@ -2334,7 +2334,7 @@ def raise_not_implemented(msg) -> NoReturn:
     raise NotImplementedError(msg)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="RelationWrongType"),
     reason=REASON,
@@ -2346,7 +2346,7 @@ def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:
 # these were implemented in core so deprecating here by calling the new exception directly
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DuplicateAlias"),
     reason=REASON,
@@ -2357,7 +2357,7 @@ def raise_duplicate_alias(
     raise DuplicateAlias(kwargs, aliases, canonical_key)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DuplicateSourcePatchName"),
     reason=REASON,
@@ -2366,7 +2366,7 @@ def raise_duplicate_source_patch_name(patch_1, patch_2):
     raise DuplicateSourcePatchName(patch_1, patch_2)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroPatchName"),
     reason=REASON,
@@ -2375,7 +2375,7 @@ def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
     raise DuplicateMacroPatchName(patch_1, existing_patch_path)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DuplicateMacroName"),
     reason=REASON,
@@ -2384,7 +2384,7 @@ def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
     raise DuplicateMacroName(node_1, node_2, namespace)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="ApproximateMatch"),
     reason=REASON,
@@ -2393,7 +2393,7 @@ def approximate_relation_match(target, relation):
     raise ApproximateMatch(target, relation)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResults"),
     reason=REASON,
@@ -2402,7 +2402,7 @@ def get_relation_returned_multiple_results(kwargs, matches):
     raise RelationReturnedMultipleResults(kwargs, matches)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="OperationException"),
     reason=REASON,
@@ -2411,7 +2411,7 @@ def system_error(operation_name):
     raise OperationError(operation_name)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="InvalidMaterializationArg"),
     reason=REASON,
@@ -2420,7 +2420,7 @@ def invalid_materialization_argument(name, argument):
     raise InvalidMaterializationArg(name, argument)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="BadSpecException"),
     reason=REASON,
@@ -2429,7 +2429,7 @@ def bad_package_spec(repo, spec, error_message):
     raise BadSpecError(spec, repo, error_message)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="CommandResultError"),
     reason=REASON,
@@ -2438,7 +2438,7 @@ def raise_git_cloning_error(error: CommandResultError) -> NoReturn:
     raise error
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="GitCloningProblem"),
     reason=REASON,
@@ -2447,7 +2447,7 @@ def raise_git_cloning_problem(repo) -> NoReturn:
     raise GitCloningProblem(repo)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MacroInvalidDispatchArg"),
     reason=REASON,
@@ -2456,7 +2456,7 @@ def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
     raise MacroInvalidDispatchArg(macro_name)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="GraphDependencyNotFound"),
     reason=REASON,
@@ -2465,7 +2465,7 @@ def dependency_not_found(node, dependency):
     raise GraphDependencyNotFound(node, dependency)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="TargetNotFound"),
     reason=REASON,
@@ -2486,7 +2486,7 @@ def target_not_found(
     )
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DocTargetNotFound"),
     reason=REASON,
@@ -2499,7 +2499,7 @@ def doc_target_not_found(
     )
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="InvalidDocArgs"),
     reason=REASON,
@@ -2508,7 +2508,7 @@ def doc_invalid_args(model, args) -> NoReturn:
     raise InvalidDocArgs(node=model, args=args)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="RefBadContext"),
     reason=REASON,
@@ -2517,7 +2517,7 @@ def ref_bad_context(model, args) -> NoReturn:
     raise RefBadContext(node=model, args=args)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MetricInvalidArgs"),
     reason=REASON,
@@ -2526,7 +2526,7 @@ def metric_invalid_args(model, args) -> NoReturn:
     raise MetricInvalidArgs(node=model, args=args)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="RefInvalidArgs"),
     reason=REASON,
@@ -2535,7 +2535,7 @@ def ref_invalid_args(model, args) -> NoReturn:
     raise RefInvalidArgs(node=model, args=args)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="InvalidBoolean"),
     reason=REASON,
@@ -2544,7 +2544,7 @@ def invalid_bool_error(got_value, macro_name) -> NoReturn:
     raise InvalidBoolean(return_value=got_value, macro_name=macro_name)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="InvalidMacroArgType"),
     reason=REASON,
@@ -2556,7 +2556,7 @@ def invalid_type_error(method_name, arg_name, got_value, expected_type) -> NoRet
     raise InvalidMacroArgType(method_name, arg_name, got_value, expected_type)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="DisallowSecretEnvVar"),
     reason=REASON,
@@ -2567,7 +2567,7 @@ def disallow_secret_env_var(env_var_name) -> NoReturn:
     raise DisallowSecretEnvVar(env_var_name)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="ParsingException"),
     reason=REASON,
@@ -2578,7 +2578,7 @@ def raise_parsing_error(msg, node=None) -> NoReturn:
 
 # These are the exceptions functions that were not called within dbt-core but will remain
 # here deprecated to give a chance for adapters to rework
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
@@ -2587,7 +2587,7 @@ def raise_unrecognized_credentials_type(typename, supported_types):
     raise UnrecognizedCredentialType(typename, supported_types)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
     reason=REASON,
@@ -2596,7 +2596,7 @@ def raise_patch_targets_not_found(patches):
     raise PatchTargetNotFound(patches)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="RelationReturnedMultipleResults"),
     reason=REASON,
@@ -2605,7 +2605,7 @@ def multiple_matching_relations(kwargs, matches):
     raise RelationReturnedMultipleResults(kwargs, matches)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MaterializationNotAvailable"),
     reason=REASON,
@@ -2615,7 +2615,7 @@ def materialization_not_available(model, adapter_type):
     raise MaterializationNotAvailable(materialization=materialization, adapter_type=adapter_type)
 
 
-@deprecated(
+@deprecated_func(
     version=DEPRECATION_VERSION,
     suggested_action=SUGGESTED_ACTION.format(exception="MacroNotFound"),
     reason=REASON,
@@ -2625,6 +2625,12 @@ def macro_not_found(model, target_macro_id):
 
 
 # adapters use this to format messages.  it should be deprecated but live on for now
+# TODO: What should the message here be?
+@deprecated_func(
+    version=DEPRECATION_VERSION,
+    suggested_action="Format this message in the adapter",
+    reason="`validator_error_message` is now a mathod on DbtRuntimeError",
+)
 def validator_error_message(exc):
     """Given a dbt.dataclass_schema.ValidationError (which is basically a
     jsonschema.ValidationError), return the relevant parts as a string
@@ -2635,94 +2641,213 @@ def validator_error_message(exc):
     return "at path {}: {}".format(path, exc.message)
 
 
+SUGGESTED_CLASS_ACTION = "using `raise {exception}` instead"
+CLASS_REASON = "See https://github.com/dbt-labs/dbt-core/issues/6460 for more details"
+
+
 # these subclass new names to not immediately break adapters
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DbtInternalError"),
+    reason=CLASS_REASON,
+)
 class InternalException(DbtInternalError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DbtRuntimeError"),
+    reason=CLASS_REASON,
+)
 class RuntimeException(DbtRuntimeError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DatabaseError"),
+    reason=CLASS_REASON,
+)
 class DatabaseException(DatabaseError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="CompilationError"),
+    reason=CLASS_REASON,
+)
 class CompilationException(CompilationError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="RecursionError"),
+    reason=CLASS_REASON,
+)
 class RecursionException(RecursionError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DbtValidationError"),
+    reason=CLASS_REASON,
+)
 class ValidationException(DbtValidationError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="IncompatibleSchemaError"),
+    reason=CLASS_REASON,
+)
 class IncompatibleSchemaException(IncompatibleSchemaError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="JinjaRenderingError"),
+    reason=CLASS_REASON,
+)
 class JinjaRenderingException(JinjaRenderingError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="UndefinedMacroError"),
+    reason=CLASS_REASON,
+)
 class UndefinedMacroException(UndefinedMacroError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="UnknownAsyncIDError"),
+    reason=CLASS_REASON,
+)
 class UnknownAsyncIDException(UnknownAsyncIDError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="AliasError"),
+    reason=CLASS_REASON,
+)
 class AliasException(AliasError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DependencyError"),
+    reason=CLASS_REASON,
+)
 class DependencyException(DependencyError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="FailFastError"),
+    reason=CLASS_REASON,
+)
 class FailFastException(FailFastError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="ParsingError"),
+    reason=CLASS_REASON,
+)
 class ParsingException(ParsingError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="JSONValidationError"),
+    reason=CLASS_REASON,
+)
 class JSONValidationException(JSONValidationError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="SemverError"),
+    reason=CLASS_REASON,
+)
 class SemverException(SemverError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="VersionsNotCompatibleError"),
+    reason=CLASS_REASON,
+)
 class VersionsNotCompatibleException(VersionsNotCompatibleError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="NotImplementedError"),
+    reason=CLASS_REASON,
+)
 class NotImplementedException(NotImplementedError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="FailedToConnectError"),
+    reason=CLASS_REASON,
+)
 class FailedToConnectException(FailedToConnectError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="InvalidConnectionError"),
+    reason=CLASS_REASON,
+)
 class InvalidConnectionException(InvalidConnectionError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="InvalidSelectorError"),
+    reason=CLASS_REASON,
+)
 class InvalidSelectorException(InvalidSelectorError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DuplicateYamlKeyError"),
+    reason=CLASS_REASON,
+)
 class DuplicateYamlKeyException(DuplicateYamlKeyError):
     pass
 
 
+@deprecated_class(
+    version=DEPRECATION_VERSION,
+    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="ConnectionError"),
+    reason=CLASS_REASON,
+)
 class ConnectionException(ConnectionError):
     pass

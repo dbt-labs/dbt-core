@@ -348,6 +348,20 @@ message FunctionDeprecatedMsg {
     FunctionDeprecated data = 2;
 }
 
+//D009
+message ClassDeprecated {
+    EventInfo info = 1;
+    string class_name = 2;
+    string reason = 3;
+    string suggested_action = 4;
+    string version = 5;
+}
+
+message ClassDeprecatedMsg {
+    EventInfo info = 1;
+    ClassDeprecated data = 2;
+}
+
 // E - DB Adapter
 
 // E001
@@ -797,23 +811,23 @@ message MacroFileParseMsg {
 // Skipping I013
 
 // I014
-message PartialParsingExceptionProcessingFile {
+message PartialParsingErrorProcessingFile {
     string file = 1;
 }
 
-message PartialParsingExceptionProcessingFileMsg {
+message PartialParsingErrorProcessingFileMsg {
     EventInfo info = 1;
-    PartialParsingExceptionProcessingFile data = 2;
+    PartialParsingErrorProcessingFile data = 2;
 }
 
 // I016
-message PartialParsingException {
+message PartialParsingError {
     map<string, string> exc_info = 1;
 }
 
-message PartialParsingExceptionMsg {
+message PartialParsingErrorMsg {
     EventInfo info = 1;
-    PartialParsingException data = 2;
+    PartialParsingError data = 2;
 }
 
 // I017

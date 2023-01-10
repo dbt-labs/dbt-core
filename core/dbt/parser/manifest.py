@@ -21,7 +21,7 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
-    PartialParsingExceptionProcessingFile,
+    PartialParsingErrorProcessingFile,
     PartialParsingError,
     PartialParsingSkipParsing,
     UnableToPartialParse,
@@ -278,7 +278,7 @@ class ManifestLoader:
                             source_file = self.manifest.files[file_id]
                         if source_file:
                             parse_file_type = source_file.parse_file_type
-                            fire_event(PartialParsingExceptionProcessingFile(file=file_id))
+                            fire_event(PartialParsingErrorProcessingFile(file=file_id))
                     exc_info["parse_file_type"] = parse_file_type
                     fire_event(PartialParsingError(exc_info=exc_info))
 

@@ -445,6 +445,23 @@ class FunctionDeprecatedMsg(betterproto.Message):
 
 
 @dataclass
+class ClassDeprecated(betterproto.Message):
+    """D009"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    class_name: str = betterproto.string_field(2)
+    reason: str = betterproto.string_field(3)
+    suggested_action: str = betterproto.string_field(4)
+    version: str = betterproto.string_field(5)
+
+
+@dataclass
+class ClassDeprecatedMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ClassDeprecated" = betterproto.message_field(2)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 
@@ -999,16 +1016,16 @@ class MacroFileParseMsg(betterproto.Message):
 
 
 @dataclass
-class PartialParsingExceptionProcessingFile(betterproto.Message):
+class PartialParsingErrorProcessingFile(betterproto.Message):
     """I014"""
 
     file: str = betterproto.string_field(1)
 
 
 @dataclass
-class PartialParsingExceptionProcessingFileMsg(betterproto.Message):
+class PartialParsingErrorProcessingFileMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "PartialParsingExceptionProcessingFile" = betterproto.message_field(2)
+    data: "PartialParsingErrorProcessingFile" = betterproto.message_field(2)
 
 
 @dataclass
@@ -1021,9 +1038,9 @@ class PartialParsingError(betterproto.Message):
 
 
 @dataclass
-class PartialParsingExceptionMsg(betterproto.Message):
+class PartialParsingErrorMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "PartialParsingException" = betterproto.message_field(2)
+    data: "PartialParsingError" = betterproto.message_field(2)
 
 
 @dataclass
@@ -2247,9 +2264,9 @@ class InternalErrorOnRun(betterproto.Message):
 
 
 @dataclass
-class InternalExceptionOnRunMsg(betterproto.Message):
+class InternalErrorOnRunMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "InternalExceptionOnRun" = betterproto.message_field(2)
+    data: "InternalErrorOnRun" = betterproto.message_field(2)
 
 
 @dataclass

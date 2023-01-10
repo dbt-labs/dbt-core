@@ -1,18 +1,18 @@
 import argparse
 import pytest
 
-from dbt.internal_deprecations import deprecated
+from dbt.internal_deprecations import deprecated_func
 import dbt.exceptions
 from dbt.node_types import NodeType
 
 
-@deprecated(reason="just because", version="1.23.0", suggested_action="Make some updates")
+@deprecated_func(reason="just because", version="1.23.0", suggested_action="Make some updates")
 def to_be_decorated():
     return 5
 
 
 # simpletest that the return value is not modified
-def test_deprecated():
+def test_deprecated_func():
     assert(hasattr(to_be_decorated, '__wrapped__'))
     assert(to_be_decorated() == 5)
 
@@ -137,7 +137,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_database_error(self):
         func = dbt.exceptions.raise_database_error
-        exception = dbt.exceptions.DatabaseException
+        exception = dbt.exceptions.DatabaseError
         msg = ""
 
         self.is_deprecated(func)
@@ -161,7 +161,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_dependency_error(self):
         func = dbt.exceptions.raise_dependency_error
-        exception = dbt.exceptions.DependencyException
+        exception = dbt.exceptions.DependencyError
         msg = ""
 
         self.is_deprecated(func)
@@ -219,7 +219,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_not_implemented(self):
         func = dbt.exceptions.raise_not_implemented
-        exception = dbt.exceptions.NotImplementedException
+        exception = dbt.exceptions.NotImplementedError
         msg = ""
 
         self.is_deprecated(func)
@@ -332,7 +332,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_system_error(self):
         func = dbt.exceptions.system_error
-        exception = dbt.exceptions.OperationException
+        exception = dbt.exceptions.OperationError
         operation_name = ""
 
         self.is_deprecated(func)
@@ -527,7 +527,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_parsing_error(self):
         func = dbt.exceptions.raise_parsing_error
-        exception = dbt.exceptions.ParsingException
+        exception = dbt.exceptions.ParsingError
         msg = ""
 
         self.is_deprecated(func)
@@ -600,3 +600,31 @@ class TestDeprecatedExceptionFunctions:
         assert(hasattr(func, '__wrapped__'))
         with pytest.raises(exception):
             func(model, target_macro_id)
+
+
+class TestDeprecatedExceptionClasses:
+
+    def test_InternalException(self):
+        assert(issubclass(dbt.exceptions.InternalException, dbt.exceptions.DbtInternalError))
+        assert(issubclass(dbt.exceptions.RuntimeException, dbt.exceptions.DbtRuntimeError))
+        assert(issubclass(dbt.exceptions.DatabaseException, dbt.exceptions.DatabaseError))
+        assert(issubclass(dbt.exceptions.CompilationException, dbt.exceptions.CompilationError))
+        assert(issubclass(dbt.exceptions.RecursionException, dbt.exceptions.RecursionError))
+        assert(issubclass(dbt.exceptions.ValidationException, dbt.exceptions.DbtValidationError))
+        assert(issubclass(dbt.exceptions.IncompatibleSchemaException, dbt.exceptions.IncompatibleSchemaError))
+        assert(issubclass(dbt.exceptions.JinjaRenderingException, dbt.exceptions.JinjaRenderingError))
+        assert(issubclass(dbt.exceptions.UndefinedMacroException, dbt.exceptions.UndefinedMacroError))
+        assert(issubclass(dbt.exceptions.UnknownAsyncIDException, dbt.exceptions.UnknownAsyncIDError))
+        assert(issubclass(dbt.exceptions.AliasException, dbt.exceptions.AliasError))
+        assert(issubclass(dbt.exceptions.DependencyException, dbt.exceptions.DependencyError))
+        assert(issubclass(dbt.exceptions.FailFastException, dbt.exceptions.FailFastError))
+        assert(issubclass(dbt.exceptions.ParsingException, dbt.exceptions.ParsingError))
+        assert(issubclass(dbt.exceptions.JSONValidationException, dbt.exceptions.JSONValidationError))
+        assert(issubclass(dbt.exceptions.SemverException, dbt.exceptions.SemverError))
+        assert(issubclass(dbt.exceptions.VersionsNotCompatibleException, dbt.exceptions.VersionsNotCompatibleError))
+        assert(issubclass(dbt.exceptions.NotImplementedException, dbt.exceptions.NotImplementedError))
+        assert(issubclass(dbt.exceptions.FailedToConnectException, dbt.exceptions.FailedToConnectError))
+        assert(issubclass(dbt.exceptions.InvalidConnectionException, dbt.exceptions.InvalidConnectionError))
+        assert(issubclass(dbt.exceptions.InvalidSelectorException, dbt.exceptions.InvalidSelectorError))
+        assert(issubclass(dbt.exceptions.DuplicateYamlKeyException, dbt.exceptions.DuplicateYamlKeyError))
+        assert(issubclass(dbt.exceptions.ConnectionException, dbt.exceptions.ConnectionError))
