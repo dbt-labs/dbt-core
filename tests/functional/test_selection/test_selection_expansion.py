@@ -184,6 +184,18 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
         self.run_tests_and_assert(select, exclude, expected, indirect_selection)
 
+    def test_model_a_exclude_specific_test_buildable(
+        self,
+        project,
+    ):
+        select = "model_a"
+        exclude = "unique_model_a_fun"
+        expected = ["just_a", "cf_a_b", "cf_a_src", "relationships_model_a_fun__fun__ref_model_b_", "relationships_model_a_fun__fun__source_my_src_my_tbl_"]
+        indirect_selection = "buildable"
+
+        self.list_tests_and_assert(select, exclude, expected, indirect_selection)
+        self.run_tests_and_assert(select, exclude, expected, indirect_selection)
+
     def test_only_generic(
         self,
         project,
@@ -374,6 +386,40 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
         self.run_tests_and_assert(select, exclude, expected, indirect_selection)
 
+    def test_model_a_indirect_selection_cautious(
+        self,
+        project,
+    ):
+        select = "model_a"
+        exclude = None
+        expected = [
+            "just_a",
+            "unique_model_a_fun",
+        ]
+        indirect_selection = "cautious"
+
+        self.list_tests_and_assert(select, exclude, expected, indirect_selection)
+        self.run_tests_and_assert(select, exclude, expected, indirect_selection)
+
+    def test_model_a_indirect_selection_buildable(
+        self,
+        project,
+    ):
+        select = "model_a"
+        exclude = None
+        expected = [
+            "cf_a_b",
+            "cf_a_src",
+            "just_a",
+            "relationships_model_a_fun__fun__ref_model_b_",
+            "relationships_model_a_fun__fun__source_my_src_my_tbl_",
+            "unique_model_a_fun",
+        ]
+        indirect_selection = "buildable"
+
+        self.list_tests_and_assert(select, exclude, expected, indirect_selection)
+        self.run_tests_and_assert(select, exclude, expected, indirect_selection)
+
     def test_model_a_indirect_selection_exclude_unique_tests(
         self,
         project,
@@ -402,16 +448,21 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
               definition:
                 method: fqn
                 value: model_a
-            - name: model_a_no_indirect_selection
+            - name: model_a_cautious_indirect_selection
               definition:
                 method: fqn
                 value: model_a
                 indirect_selection: "cautious"
-            - name: model_a_yes_indirect_selection
+            - name: model_a_eager_indirect_selection
               definition:
                 method: fqn
                 value: model_a
                 indirect_selection: "eager"
+            - name: model_a_buildable_indirect_selection
+              definition:
+                method: fqn
+                value: model_a
+                indirect_selection: "buildable"
         """
 
     def test_selector_model_a_unset_indirect_selection(
@@ -440,7 +491,7 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             selector_name="model_a_unset_indirect_selection",
         )
 
-    def test_selector_model_a_no_indirect_selection(
+    def test_selector_model_a_cautious_indirect_selection(
         self,
         project,
     ):
@@ -450,16 +501,16 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             include=None,
             exclude=None,
             expected_tests=expected,
-            selector_name="model_a_no_indirect_selection",
+            selector_name="model_a_cautious_indirect_selection",
         )
         self.run_tests_and_assert(
             include=None,
             exclude=None,
             expected_tests=expected,
-            selector_name="model_a_no_indirect_selection",
+            selector_name="model_a_cautious_indirect_selection",
         )
 
-    def test_selector_model_a_yes_indirect_selection(
+    def test_selector_model_a_eager_indirect_selection(
         self,
         project,
     ):
@@ -476,11 +527,37 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             include=None,
             exclude=None,
             expected_tests=expected,
-            selector_name="model_a_yes_indirect_selection",
+            selector_name="model_a_eager_indirect_selection",
         )
         self.run_tests_and_assert(
             include=None,
             exclude=None,
             expected_tests=expected,
-            selector_name="model_a_yes_indirect_selection",
+            selector_name="model_a_eager_indirect_selection",
+        )
+
+    def test_selector_model_a_buildable_indirect_selection(
+        self,
+        project,
+    ):
+        expected = [
+            "cf_a_b",
+            "cf_a_src",
+            "just_a",
+            "relationships_model_a_fun__fun__ref_model_b_",
+            "relationships_model_a_fun__fun__source_my_src_my_tbl_",
+            "unique_model_a_fun",
+        ]
+
+        self.list_tests_and_assert(
+            include=None,
+            exclude=None,
+            expected_tests=expected,
+            selector_name="model_a_buildable_indirect_selection",
+        )
+        self.run_tests_and_assert(
+            include=None,
+            exclude=None,
+            expected_tests=expected,
+            selector_name="model_a_buildable_indirect_selection",
         )

@@ -44,12 +44,14 @@ def parse_union(
                 components=intersection_components,
                 expect_exists=expect_exists,
                 raw=raw_spec,
+                indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
             )
         )
     return SelectionUnion(
         components=union_components,
         expect_exists=False,
         raw=components,
+        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
     )
 
 
@@ -78,9 +80,12 @@ def parse_difference(
         include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
     excluded = parse_union_from_default(
-        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection.Eager
+        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
-    return SelectionDifference(components=[included, excluded])
+    return SelectionDifference(
+        components=[included, excluded],
+        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+    )
 
 
 RawDefinition = Union[str, Dict[str, Any]]

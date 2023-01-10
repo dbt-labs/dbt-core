@@ -24,6 +24,7 @@ SELECTOR_METHOD_SEPARATOR = "."
 class IndirectSelection(StrEnum):
     Eager = "eager"
     Cautious = "cautious"
+    Buildable = "buildable"
 
 
 def _probably_path(value: str):
@@ -173,12 +174,14 @@ class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMe
     def __init__(
         self,
         components: Iterable[SelectionSpec],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager,
         expect_exists: bool = False,
         raw: Any = None,
     ):
         self.components: List[SelectionSpec] = list(components)
         self.expect_exists = expect_exists
         self.raw = raw
+        self.indirect_selection = indirect_selection
 
     def __iter__(self) -> Iterator[SelectionSpec]:
         for component in self.components:

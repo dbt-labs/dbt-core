@@ -206,6 +206,9 @@ class TestFlags(TestCase):
         self.user_config.indirect_selection = 'cautious'
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Cautious)
+        self.user_config.indirect_selection = 'buildable'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Buildable)
         self.user_config.indirect_selection = None
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Eager)
