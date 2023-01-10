@@ -41,9 +41,9 @@ from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, s
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationError,
-    DuplicateResourceName,
-    DuplicateMacroInPackage,
-    DuplicateMaterializationName,
+    DuplicateResourceNameError,
+    DuplicateMacroInPackageError,
+    DuplicateMaterializationNameError,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
@@ -398,7 +398,7 @@ class MaterializationCandidate(MacroCandidate):
             return NotImplemented
         equal = self.specificity == other.specificity and self.locality == other.locality
         if equal:
-            raise DuplicateMaterializationName(self.macro, other)
+            raise DuplicateMaterializationNameError(self.macro, other)
 
         return equal
 
@@ -1035,7 +1035,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def add_macro(self, source_file: SourceFile, macro: Macro):
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
-            raise DuplicateMacroInPackage(macro=macro, macro_mapping=self.macros)
+            raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
 
         self.macros[macro.unique_id] = macro
         source_file.macros.append(macro.unique_id)
@@ -1213,7 +1213,7 @@ class WritableManifest(ArtifactMixin):
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
     if value.unique_id in src:
-        raise DuplicateResourceName(value, src[value.unique_id])
+        raise DuplicateResourceNameError(value, src[value.unique_id])
 
 
 K_T = TypeVar("K_T")

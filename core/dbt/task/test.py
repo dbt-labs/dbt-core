@@ -23,8 +23,8 @@ from dbt.events.types import (
 )
 from dbt.exceptions import (
     DbtInternalError,
-    InvalidBoolean,
-    MissingMaterialization,
+    BooleanError,
+    MissingMaterializationError,
 )
 from dbt.graph import (
     ResourceTypeSelector,
@@ -51,7 +51,7 @@ class TestResultData(dbtClassMixin):
             try:
                 return bool(strtobool(field))  # type: ignore
             except ValueError:
-                raise InvalidBoolean(field, "get_test_sql")
+                raise BooleanError(field, "get_test_sql")
 
         # need this so we catch both true bools and 0/1
         return bool(field)
@@ -101,7 +101,7 @@ class TestRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterialization(materialization=test.get_materialization(), adapter_type=self.adapter.type())
+            raise MissingMaterializationError(materialization=test.get_materialization(), adapter_type=self.adapter.type())
 
         if "config" not in context:
             raise DbtInternalError(

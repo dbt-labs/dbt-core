@@ -22,8 +22,8 @@ from dbt.contracts.connection import QueryComment
 from dbt.exceptions import (
     DbtProjectError,
     SemverError,
-    ProjectContractBroken,
-    ProjectContractInvalid,
+    ProjectContractBrokenError,
+    ProjectContractError,
     DbtRuntimeError,
 )
 from dbt.graph import SelectionSpec
@@ -325,7 +325,7 @@ class PartialProject(RenderComponents):
             ProjectContract.validate(rendered.project_dict)
             cfg = ProjectContract.from_dict(rendered.project_dict)
         except ValidationError as e:
-            raise ProjectContractInvalid(e) from e
+            raise ProjectContractError(e) from e
         # name/version are required in the Project definition, so we can assume
         # they are present
         name = cfg.name
@@ -642,7 +642,7 @@ class Project:
         try:
             ProjectContract.validate(self.to_project_config())
         except ValidationError as e:
-            raise ProjectContractBroken(e) from e
+            raise ProjectContractBrokenError(e) from e
 
     @classmethod
     def partial_load(cls, project_root: str, *, verify_version: bool = False) -> PartialProject:

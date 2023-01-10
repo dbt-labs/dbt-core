@@ -11,7 +11,11 @@ from dbt.contracts.relation import (
     Policy,
     Path,
 )
-from dbt.exceptions import ApproximateMatch, DbtInternalError, MultipleDatabasesNotAllowed
+from dbt.exceptions import (
+    ApproximateMatchError,
+    DbtInternalError,
+    MultipleDatabasesNotAllowedError,
+)
 from dbt.node_types import NodeType
 from dbt.utils import filter_null_values, deep_merge, classproperty
 
@@ -100,7 +104,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         if approximate_match and not exact_match:
             target = self.create(database=database, schema=schema, identifier=identifier)
-            raise ApproximateMatch(target, self)
+            raise ApproximateMatchError(target, self)
 
         return exact_match
 
@@ -438,7 +442,7 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
         if not allow_multiple_databases:
             seen = {r.database.lower() for r in self if r.database}
             if len(seen) > 1:
-                raise MultipleDatabasesNotAllowed(seen)
+                raise MultipleDatabasesNotAllowedError(seen)
 
         for information_schema_name, schema in self.search():
             path = {"database": information_schema_name.database, "schema": schema}

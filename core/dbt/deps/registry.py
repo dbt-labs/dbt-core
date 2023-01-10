@@ -11,8 +11,8 @@ from dbt.contracts.project import (
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 from dbt.exceptions import (
     DependencyError,
-    PackageNotFound,
-    PackageVersionNotFound,
+    PackageNotFoundError,
+    PackageVersionNotFoundError,
     VersionsNotCompatibleError,
 )
 
@@ -71,7 +71,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
     def _check_in_index(self):
         index = registry.index_cached()
         if self.package not in index:
-            raise PackageNotFound(self.package)
+            raise PackageNotFoundError(self.package)
 
     @classmethod
     def from_contract(cls, contract: RegistryPackage) -> "RegistryUnpinnedPackage":
@@ -118,7 +118,9 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
             target = None
         if not target:
             # raise an exception if no installable target version is found
-            raise PackageVersionNotFound(self.package, range_, installable, should_version_check)
+            raise PackageVersionNotFoundError(
+                self.package, range_, installable, should_version_check
+            )
         latest_compatible = installable[-1]
         return RegistryPinnedPackage(
             package=self.package, version=target, version_latest=latest_compatible

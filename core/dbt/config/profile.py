@@ -15,7 +15,7 @@ from dbt.exceptions import (
     DbtProjectError,
     DbtValidationError,
     DbtRuntimeError,
-    ProfileConfigInvalid,
+    ProfileConfigError,
 )
 from dbt.events.types import MissingProfileTarget
 from dbt.events.functions import fire_event
@@ -158,7 +158,7 @@ class Profile(HasCredentials):
             dct = self.to_profile_info(serialize_credentials=True)
             ProfileConfig.validate(dct)
         except ValidationError as exc:
-            raise ProfileConfigInvalid(exc) from exc
+            raise ProfileConfigError(exc) from exc
 
     @staticmethod
     def _credentials_from_profile(

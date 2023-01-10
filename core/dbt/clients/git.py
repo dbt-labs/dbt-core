@@ -16,7 +16,7 @@ from dbt.exceptions import (
     CommandResultError,
     GitCheckoutError,
     GitCloningError,
-    GitCloningProblem,
+    UnknownGitCloningProblemError,
     DbtRuntimeError,
 )
 from packaging import version
@@ -134,7 +134,7 @@ def clone_and_checkout(
         err = exc.stderr
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:
-            raise GitCloningProblem(repo)
+            raise UnknownGitCloningProblemError(repo)
 
     directory = None
     start_sha = None

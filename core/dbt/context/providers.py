@@ -42,26 +42,26 @@ from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.events.functions import get_metadata_vars
 from dbt.exceptions import (
     CompilationError,
-    ConflictingConfigKeys,
-    DisallowSecretEnvVar,
-    EnvVarMissing,
+    ConflictingConfigKeysError,
+    SecretEnvVarLocationError,
+    EnvVarMissingError,
     DbtInternalError,
-    InvalidInlineModelConfig,
-    InvalidNumberSourceArgs,
-    InvalidPersistDocsValueType,
-    LoadAgateTableNotSeed,
+    InlineModelConfigError,
+    NumberSourceArgsError,
+    PersistDocsValueTypeError,
+    LoadAgateTableNotSeedError,
     LoadAgateTableValueError,
-    MacroInvalidDispatchArg,
-    MacrosSourcesUnWriteable,
-    MetricInvalidArgs,
-    MissingConfig,
-    OperationsCannotRefEphemeralNodes,
-    PackageNotInDeps,
+    MacroDispatchArgError,
+    MacrosSourcesUnWriteableError,
+    MetricArgsError,
+    MissingConfigError,
+    OperationsCannotRefEphemeralNodesError,
+    PackageNotInDepsError,
     ParsingError,
-    RefBadContext,
-    RefInvalidArgs,
+    RefBadContextError,
+    RefArgsError,
     DbtRuntimeError,
-    TargetNotFound,
+    TargetNotFoundError,
     DbtValidationError,
 )
 from dbt.config import IsFQNResource
@@ -147,7 +147,7 @@ class BaseDatabaseWrapper:
             raise CompilationError(msg)
 
         if packages is not None:
-            raise MacroInvalidDispatchArg(macro_name)
+            raise MacroDispatchArgError(macro_name)
 
         namespace = macro_namespace
 
@@ -241,7 +241,7 @@ class BaseRefResolver(BaseResolver):
         elif len(args) == 2:
             package, name = args
         else:
-            raise RefInvalidArgs(node=self.model, args=args)
+            raise RefArgsError(node=self.model, args=args)
         self.validate_args(name, package)
         return self.resolve(name, package)
 
@@ -265,7 +265,7 @@ class BaseSourceResolver(BaseResolver):
 
     def __call__(self, *args: str) -> RelationProxy:
         if len(args) != 2:
-            raise InvalidNumberSourceArgs(args, node=self.model)
+            raise NumberSourceArgsError(args, node=self.model)
         self.validate_args(args[0], args[1])
         return self.resolve(args[0], args[1])
 
@@ -300,7 +300,7 @@ class BaseMetricResolver(BaseResolver):
         elif len(args) == 2:
             package, name = args
         else:
-            raise MetricInvalidArgs(node=self.model, args=args)
+            raise MetricArgsError(node=self.model, args=args)
         self.validate_args(name, package)
         return self.resolve(name, package)
 
@@ -321,7 +321,7 @@ class ParseConfigObject(Config):
             if oldkey in config:
                 newkey = oldkey.replace("_", "-")
                 if newkey in config:
-                    raise ConflictingConfigKeys(oldkey, newkey, node=self.model)
+                    raise ConflictingConfigKeysError(oldkey, newkey, node=self.model)
                 config[newkey] = config.pop(oldkey)
         return config
 
@@ -331,7 +331,7 @@ class ParseConfigObject(Config):
         elif len(args) == 0 and len(kwargs) > 0:
             opts = kwargs
         else:
-            raise InvalidInlineModelConfig(node=self.model)
+            raise InlineModelConfigError(node=self.model)
 
         opts = self._transform_config(opts)
 
@@ -379,7 +379,7 @@ class RuntimeConfigObject(Config):
         else:
             result = self.model.config.get(name, default)
         if result is _MISSING:
-            raise MissingConfig(unique_id=self.model.unique_id, name=name)
+            raise MissingConfigError(unique_id=self.model.unique_id, name=name)
         return result
 
     def require(self, name, validator=None):
@@ -401,14 +401,14 @@ class RuntimeConfigObject(Config):
     def persist_relation_docs(self) -> bool:
         persist_docs = self.get("persist_docs", default={})
         if not isinstance(persist_docs, dict):
-            raise InvalidPersistDocsValueType(persist_docs)
+            raise PersistDocsValueTypeError(persist_docs)
 
         return persist_docs.get("relation", False)
 
     def persist_column_docs(self) -> bool:
         persist_docs = self.get("persist_docs", default={})
         if not isinstance(persist_docs, dict):
-            raise InvalidPersistDocsValueType(persist_docs)
+            raise PersistDocsValueTypeError(persist_docs)
 
         return persist_docs.get("columns", False)
 
@@ -467,7 +467,7 @@ class RuntimeRefResolver(BaseRefResolver):
         )
 
         if target_model is None or isinstance(target_model, Disabled):
-            raise TargetNotFound(
+            raise TargetNotFoundError(
                 node=self.model,
                 target_name=target_name,
                 target_kind="node",
@@ -489,7 +489,7 @@ class RuntimeRefResolver(BaseRefResolver):
     ) -> None:
         if resolved.unique_id not in self.model.depends_on.nodes:
             args = self._repack_args(target_name, target_package)
-            raise RefBadContext(node=self.model, args=args)
+            raise RefBadContextError(node=self.model, args=args)
 
 
 class OperationRefResolver(RuntimeRefResolver):
@@ -505,7 +505,7 @@ class OperationRefResolver(RuntimeRefResolver):
         if target_model.is_ephemeral_model:
             # In operations, we can't ref() ephemeral nodes, because
             # Macros do not support set_cte
-            raise OperationsCannotRefEphemeralNodes(target_model.name, node=self.model)
+            raise OperationsCannotRefEphemeralNodesError(target_model.name, node=self.model)
         else:
             return super().create_relation(target_model, name)
 
@@ -528,7 +528,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
         )
 
         if target_source is None or isinstance(target_source, Disabled):
-            raise TargetNotFound(
+            raise TargetNotFoundError(
                 node=self.model,
                 target_name=f"{source_name}.{table_name}",
                 target_kind="source",
@@ -555,7 +555,7 @@ class RuntimeMetricResolver(BaseMetricResolver):
         )
 
         if target_metric is None or isinstance(target_metric, Disabled):
-            raise TargetNotFound(
+            raise TargetNotFoundError(
                 node=self.model,
                 target_name=target_name,
                 target_kind="metric",
@@ -584,7 +584,7 @@ class ModelConfiguredVar(Var):
         if package_name != self._config.project_name:
             if package_name not in dependencies:
                 # I don't think this is actually reachable
-                raise PackageNotInDeps(package_name, node=self._node)
+                raise PackageNotInDepsError(package_name, node=self._node)
             yield dependencies[package_name]
         yield self._config
 
@@ -767,7 +767,7 @@ class ProviderContext(ManifestContext):
     def write(self, payload: str) -> str:
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
-            raise MacrosSourcesUnWriteable(node=self.model)
+            raise MacrosSourcesUnWriteableError(node=self.model)
         self.model.build_path = self.model.write_node(self.config.target_path, "run", payload)
         return ""
 
@@ -787,7 +787,7 @@ class ProviderContext(ManifestContext):
     @contextmember
     def load_agate_table(self) -> agate.Table:
         if not isinstance(self.model, SeedNode):
-            raise LoadAgateTableNotSeed(self.model.resource_type, node=self.model)
+            raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
         assert self.model.root_path
         path = os.path.join(self.model.root_path, self.model.original_file_path)
         column_types = self.model.config.column_types
@@ -1196,7 +1196,7 @@ class ProviderContext(ManifestContext):
         """
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            raise DisallowSecretEnvVar(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -1229,7 +1229,7 @@ class ProviderContext(ManifestContext):
                         source_file.env_vars.append(var)  # type: ignore[union-attr]
             return return_value
         else:
-            raise EnvVarMissing(var)
+            raise EnvVarMissingError(var)
 
     @contextproperty
     def selected_resources(self) -> List[str]:
@@ -1410,7 +1410,7 @@ def generate_runtime_macro_context(
 class ExposureRefResolver(BaseResolver):
     def __call__(self, *args) -> str:
         if len(args) not in (1, 2):
-            raise RefInvalidArgs(node=self.model, args=args)
+            raise RefArgsError(node=self.model, args=args)
         self.model.refs.append(list(args))
         return ""
 
@@ -1418,7 +1418,7 @@ class ExposureRefResolver(BaseResolver):
 class ExposureSourceResolver(BaseResolver):
     def __call__(self, *args) -> str:
         if len(args) != 2:
-            raise InvalidNumberSourceArgs(args, node=self.model)
+            raise NumberSourceArgsError(args, node=self.model)
         self.model.sources.append(list(args))
         return ""
 
@@ -1426,7 +1426,7 @@ class ExposureSourceResolver(BaseResolver):
 class ExposureMetricResolver(BaseResolver):
     def __call__(self, *args) -> str:
         if len(args) not in (1, 2):
-            raise MetricInvalidArgs(node=self.model, args=args)
+            raise MetricArgsError(node=self.model, args=args)
         self.model.metrics.append(list(args))
         return ""
 
@@ -1468,7 +1468,7 @@ class MetricRefResolver(BaseResolver):
         elif len(args) == 2:
             package, name = args
         else:
-            raise RefInvalidArgs(node=self.model, args=args)
+            raise RefArgsError(node=self.model, args=args)
         self.validate_args(name, package)
         self.model.refs.append(list(args))
         return ""
@@ -1558,7 +1558,7 @@ class TestContext(ProviderContext):
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            raise DisallowSecretEnvVar(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -1584,7 +1584,7 @@ class TestContext(ProviderContext):
                     source_file.add_env_var(var, yaml_key, name)  # type: ignore[union-attr]
             return return_value
         else:
-            raise EnvVarMissing(var)
+            raise EnvVarMissingError(var)
 
 
 def generate_test_context(

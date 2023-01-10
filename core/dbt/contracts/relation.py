@@ -9,7 +9,7 @@ from typing_extensions import Protocol
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import CompilationError, DataclassNotDict
+from dbt.exceptions import CompilationError, DataclassNotDictError
 from dbt.utils import deep_merge
 
 
@@ -43,10 +43,10 @@ class FakeAPIObject(dbtClassMixin, Replaceable, Mapping):
             raise KeyError(key) from None
 
     def __iter__(self):
-        raise DataclassNotDict(self)
+        raise DataclassNotDictError(self)
 
     def __len__(self):
-        raise DataclassNotDict(self)
+        raise DataclassNotDictError(self)
 
     def incorporate(self, **kwargs):
         value = self.to_dict(omit_none=True)

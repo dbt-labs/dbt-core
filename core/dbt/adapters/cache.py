@@ -9,11 +9,11 @@ from dbt.adapters.reference_keys import (
     _ReferenceKey,
 )
 from dbt.exceptions import (
-    DependentLinkNotCached,
-    NewNameAlreadyInCache,
-    NoneRelationFound,
-    ReferencedLinkNotCached,
-    TruncatedModelNameCausedCollision,
+    DependentLinkNotCachedError,
+    NewNameAlreadyInCacheError,
+    NoneRelationFoundError,
+    ReferencedLinkNotCachedError,
+    TruncatedModelNameCausedCollisionError,
 )
 from dbt.events.functions import fire_event, fire_event_if
 from dbt.events.types import CacheAction, CacheDumpGraph
@@ -141,7 +141,7 @@ class _CachedRelation:
         :raises InternalError: If the new key already exists.
         """
         if new_key in self.referenced_by:
-            raise NewNameAlreadyInCache(old_key, new_key)
+            raise NewNameAlreadyInCacheError(old_key, new_key)
 
         if old_key not in self.referenced_by:
             return
@@ -257,11 +257,11 @@ class RelationsCache:
         if referenced is None:
             return
         if referenced is None:
-            raise ReferencedLinkNotCached(referenced_key)
+            raise ReferencedLinkNotCachedError(referenced_key)
 
         dependent = self.relations.get(dependent_key)
         if dependent is None:
-            raise DependentLinkNotCached(dependent_key)
+            raise DependentLinkNotCachedError(dependent_key)
 
         assert dependent is not None  # we just raised!
 
@@ -426,7 +426,7 @@ class RelationsCache:
         if new_key in self.relations:
             # Tell user when collision caused by model names truncated during
             # materialization.
-            raise TruncatedModelNameCausedCollision(new_key, self.relations)
+            raise TruncatedModelNameCausedCollisionError(new_key, self.relations)
 
         if old_key not in self.relations:
             fire_event(
@@ -490,7 +490,7 @@ class RelationsCache:
             ]
 
         if None in results:
-            raise NoneRelationFound()
+            raise NoneRelationFoundError()
         return results
 
     def clear(self):

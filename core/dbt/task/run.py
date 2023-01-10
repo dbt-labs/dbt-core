@@ -23,7 +23,7 @@ from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatu
 from dbt.exceptions import (
     CompilationError,
     DbtInternalError,
-    MissingMaterialization,
+    MissingMaterializationError,
     DbtRuntimeError,
     DbtValidationError,
 )
@@ -253,7 +253,7 @@ class ModelRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterialization(
+            raise MissingMaterializationError(
                 materialization=model.get_materialization(), adapter_type=self.adapter.type()
             )
 

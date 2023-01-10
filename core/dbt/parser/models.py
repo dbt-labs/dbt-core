@@ -30,9 +30,9 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 import ast
 from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import (
-    InvalidModelConfig,
+    ModelConfigError,
     ParsingError,
-    PythonLiteralEval,
+    PythonLiteralEvalError,
     PythonParsingError,
     UndefinedMacroError,
 )
@@ -96,7 +96,7 @@ class PythonParseVisitor(ast.NodeVisitor):
         try:
             return ast.literal_eval(node)
         except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError) as exc:
-            raise PythonLiteralEval(exc, node=self.dbt_node) from exc
+            raise PythonLiteralEvalError(exc, node=self.dbt_node) from exc
 
     def _get_call_literals(self, node):
         # List of literals
@@ -255,7 +255,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
-                raise InvalidModelConfig(exc, node=node) from exc
+                raise ModelConfigError(exc, node=node) from exc
             return
 
         elif not flags.STATIC_PARSER:

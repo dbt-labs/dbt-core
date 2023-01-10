@@ -29,15 +29,15 @@ from dbt.contracts.graph.nodes import GenericTestNode
 
 from dbt.exceptions import (
     CaughtMacroError,
-    CaughtMacroErrorWithNode,
+    CaughtMacroErrorWithNodeError,
     CompilationError,
     DbtInternalError,
-    InvalidMaterializationArg,
+    MaterializationArgError,
     JinjaRenderingError,
     MacroReturn,
-    MaterializtionMacroNotUsed,
-    NoSupportedLanguagesFound,
-    UndefinedCompilation,
+    MaterializtionMacroNotUsedError,
+    NoSupportedLanguagesFoundError,
+    UndefinedCompilationError,
     UndefinedMacroError,
 )
 from dbt import flags
@@ -300,7 +300,7 @@ class MacroGenerator(BaseMacroGenerator):
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            raise CaughtMacroErrorWithNode(exc=e, node=self.macro)
+            raise CaughtMacroErrorWithNodeError(exc=e, node=self.macro)
         except CompilationError as e:
             e.stack.append(self.macro)
             raise e
@@ -380,7 +380,7 @@ class MaterializationExtension(jinja2.ext.Extension):
                 node.defaults.append(languages)
 
             else:
-                raise InvalidMaterializationArg(materialization_name, target.name)
+                raise MaterializationArgError(materialization_name, target.name)
 
         if SUPPORTED_LANG_ARG not in node.args:
             node.args.append(SUPPORTED_LANG_ARG)
@@ -455,7 +455,7 @@ def create_undefined(node=None):
             return self
 
         def __reduce__(self):
-            raise UndefinedCompilation(name=self.name, node=node)
+            raise UndefinedCompilationError(name=self.name, node=node)
 
     return Undefined
 
@@ -655,13 +655,13 @@ def add_rendered_test_kwargs(
 
 def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
     if "materialization" not in node.name:
-        raise MaterializtionMacroNotUsed(node=node)
+        raise MaterializtionMacroNotUsedError(node=node)
 
     no_kwargs = not node.defaults
     no_langs_found = SUPPORTED_LANG_ARG not in node.args
 
     if no_kwargs or no_langs_found:
-        raise NoSupportedLanguagesFound(node=node)
+        raise NoSupportedLanguagesFoundError(node=node)
 
     lang_idx = node.args.index(SUPPORTED_LANG_ARG)
     # indexing defaults from the end
