@@ -14,7 +14,6 @@ from dbt.exceptions import (
     PackageNotFound,
     PackageVersionNotFound,
     VersionsNotCompatibleError,
-    InternalException,
 )
 
 
@@ -54,7 +53,6 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         return "version {}".format(self.version)
 
     def _fetch_metadata(self, project, renderer) -> RegistryPackageMetadata:
-        raise InternalException("text")
         dct = registry.package_version(self.package, self.version)
         return RegistryPackageMetadata.from_dict(dct)
 
