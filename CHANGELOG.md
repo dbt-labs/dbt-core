@@ -12,7 +12,6 @@
 - Added favor-state flag to optionally favor state nodes even if unselected node exists ([#2968](https://github.com/dbt-labs/dbt-core/issues/2968))
 - Update structured logging. Convert to using protobuf messages. Ensure events are enriched with node_info. ([#5610](https://github.com/dbt-labs/dbt-core/issues/5610))
 - Friendlier error messages when packages.yml is malformed ([#5486](https://github.com/dbt-labs/dbt-core/issues/5486))
-- Migrate dbt-utils current_timestamp macros into core + adapters ([#5521](https://github.com/dbt-labs/dbt-core/issues/5521))
 - Allow partitions in external tables to be supplied as a list ([#5929](https://github.com/dbt-labs/dbt-core/issues/5929))
 - extend -f flag shorthand for seed command ([#5990](https://github.com/dbt-labs/dbt-core/issues/5990))
 - This pulls the profile name from args when constructing a RuntimeConfig in lib.py, enabling the dbt-server to override the value that's in the dbt_project.yml ([#6201](https://github.com/dbt-labs/dbt-core/issues/6201))
