@@ -16,7 +16,6 @@ from dbt.dataclass_schema import (
     ValidationError,
     StrEnum,
 )
-from dbt.exceptions import ValidationException
 import dbt.events.types as dbt_event_types
 
 
@@ -99,12 +98,12 @@ class IncludeExclude(dbtClassMixin):
 
     def __post_init__(self):
         if isinstance(self.include, str) and self.include not in self.INCLUDE_ALL:
-            raise ValidationException(
+            raise ValidationError(
                 f"include must be one of {self.INCLUDE_ALL} or a list of strings"
             )
 
         if self.exclude and self.include not in self.INCLUDE_ALL:
-            raise ValidationException(
+            raise ValidationError(
                 f"exclude can only be specified if include is one of {self.INCLUDE_ALL}"
             )
 
@@ -146,7 +145,7 @@ class WarnErrorOptions(IncludeExclude):
         )
         for item in items:
             if item not in valid_exception_names:
-                raise ValidationException(f"{item} is not a valid dbt error name.")
+                raise ValidationError(f"{item} is not a valid dbt error name.")
 
 
 dbtClassMixin.register_field_encoders(

@@ -2,15 +2,15 @@
 import pytest
 
 from dbt.helper_types import IncludeExclude, WarnErrorOptions
-from dbt.exceptions import ValidationException
+from dbt.dataclass_schema import ValidationError
 
 
 class TestIncludeExclude:
     def test_init_invalid(self):
-        with pytest.raises(ValidationException):
+        with pytest.raises(ValidationError):
             IncludeExclude(include="invalid")
 
-        with pytest.raises(ValidationException):
+        with pytest.raises(ValidationError):
             IncludeExclude(include=["ItemA"], exclude=["ItemB"])
 
     @pytest.mark.parametrize(
@@ -31,10 +31,10 @@ class TestIncludeExclude:
 
 class TestWarnErrorOptions:
     def test_init(self):
-        with pytest.raises(ValidationException):
+        with pytest.raises(ValidationError):
             WarnErrorOptions(include=["InvalidError"])
 
-        with pytest.raises(ValidationException):
+        with pytest.raises(ValidationError):
             WarnErrorOptions(include="*", exclude=["InvalidError"])
 
         warn_error_options = WarnErrorOptions(include=["NoNodesForSelectionCriteria"])

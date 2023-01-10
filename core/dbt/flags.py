@@ -232,11 +232,10 @@ def _get_flag_value_from_env(flag):
     if env_value is None or env_value == "":
         return None
 
-    env_value = env_value.lower()
     if flag in _NON_BOOLEAN_FLAGS:
         flag_value = env_value
     else:
-        flag_value = env_set_bool(env_value)
+        flag_value = env_set_bool(env_value.lower())
 
     return flag_value
 

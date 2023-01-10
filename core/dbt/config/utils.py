@@ -8,13 +8,8 @@ from dbt.clients import yaml_helper
 from dbt.config import Profile, Project, read_user_config
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.events.functions import fire_event
-<<<<<<< HEAD
-from dbt.events.types import InvalidVarsYAML
-from dbt.exceptions import DbtValidationError, VarsArgNotYamlDictError
-=======
 from dbt.events.types import InvalidOptionYAML
-from dbt.exceptions import ValidationException, OptionNotYamlDict
->>>>>>> e372d13e8 (first pass: --warn-error-options)
+from dbt.exceptions import DbtValidationError, OptionNotYamlDict
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
@@ -31,6 +26,7 @@ def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, An
             raise OptionNotYamlDict(var_type, cli_option_name)
     except DbtValidationError:
         fire_event(InvalidOptionYAML(option_name=cli_option_name))
+        raise
 
 
 def get_project_config(

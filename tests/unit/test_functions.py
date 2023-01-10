@@ -4,7 +4,7 @@ import pytest
 import dbt.flags as flags
 from dbt.events.functions import warn_or_error
 from dbt.events.types import NoNodesForSelectionCriteria
-from dbt.exceptions import EventCompilationException
+from dbt.exceptions import EventCompilationError
 
 
 @pytest.mark.parametrize(
@@ -24,7 +24,7 @@ def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation
     )
     flags.set_from_args(args, {})
     if expect_compilation_exception:
-        with pytest.raises(EventCompilationException):
+        with pytest.raises(EventCompilationError):
             warn_or_error(NoNodesForSelectionCriteria())
     else:
         warn_or_error(NoNodesForSelectionCriteria())
@@ -43,7 +43,7 @@ def test_warn_or_error_warn_error(warn_error, expect_compilation_exception):
     )
     flags.set_from_args(args, {})
     if expect_compilation_exception:
-        with pytest.raises(EventCompilationException):
+        with pytest.raises(EventCompilationError):
             warn_or_error(NoNodesForSelectionCriteria())
     else:
         warn_or_error(NoNodesForSelectionCriteria())
