@@ -432,7 +432,7 @@ class ExposureNameDeprecationMsg(betterproto.Message):
 class InternalDeprecation(betterproto.Message):
     """D008"""
 
-    function_name: str = betterproto.string_field(1)
+    name: str = betterproto.string_field(1)
     reason: str = betterproto.string_field(2)
     suggested_action: str = betterproto.string_field(3)
     version: str = betterproto.string_field(4)

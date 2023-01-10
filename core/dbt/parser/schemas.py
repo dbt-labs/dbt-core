@@ -103,7 +103,9 @@ def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
         # source_file.contents can sometimes be None
         return load_yaml_text(source_file.contents or "", source_file.path)
     except DbtValidationError as e:
-        raise YamlLoadFailure(source_file.project_name, source_file.path.relative_path, e)
+        raise YamlLoadFailure(
+            project_name=source_file.project_name, path=source_file.path.relative_path, exc=e
+        )
 
 
 class ParserRef:

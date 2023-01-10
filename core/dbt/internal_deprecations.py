@@ -9,11 +9,11 @@ def deprecated(suggested_action: str, version: str, reason: Optional[str]):
     def inner(func):
         @functools.wraps(func)
         def wrapped(*args, **kwargs):
-            function_name = func.__name__
+            name = func.__name__
 
             warn_or_error(
                 InternalDeprecation(
-                    function_name=function_name,
+                    name=name,
                     suggested_action=suggested_action,
                     version=version,
                     reason=reason,

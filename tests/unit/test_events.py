@@ -133,8 +133,7 @@ sample_values = [
     AdapterDeprecationWarning(old_name="", new_name=""),
     MetricAttributesRenamed(metric_name=""),
     ExposureNameDeprecation(exposure=""),
-    FunctionDeprecated(function_name="", reason="", suggested_action="", version=""),
-    ClassDeprecated(class_name="", reason="", suggested_action="", version=""),
+    InternalDeprecation(name="", reason="", suggested_action="", version=""),
 
     # E - DB Adapter ======================
     AdapterEventDebug(),
