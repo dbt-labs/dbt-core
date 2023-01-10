@@ -294,14 +294,14 @@ class TestInvalidTimestampTimeGrainsMetrics:
             "people.sql": models_people_sql,
         }
 
-    # Tests that we get a ParsingException with an invalid metric definition.
+    # Tests that we get a ParsingError with an invalid metric definition.
     # This metric definition is missing timestamp but HAS a time_grains property
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -313,12 +313,12 @@ class TestInvalidTimestampWindowMetrics:
             "people.sql": models_people_sql,
         }
 
-    # Tests that we get a ParsingException with an invalid metric definition.
+    # Tests that we get a ParsingError with an invalid metric definition.
     # This metric definition is missing timestamp but HAS a window property
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])

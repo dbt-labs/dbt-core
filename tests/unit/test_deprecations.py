@@ -137,7 +137,7 @@ class TestDeprecatedExceptionFunctions:
 
     def test_raise_database_error(self):
         func = dbt.exceptions.raise_database_error
-        exception = dbt.exceptions.DatabaseError
+        exception = dbt.exceptions.DbtDatabaseError
         msg = ""
 
         self.is_deprecated(func)
@@ -607,7 +607,7 @@ class TestDeprecatedExceptionClasses:
     def test_InternalException(self):
         assert(issubclass(dbt.exceptions.InternalException, dbt.exceptions.DbtInternalError))
         assert(issubclass(dbt.exceptions.RuntimeException, dbt.exceptions.DbtRuntimeError))
-        assert(issubclass(dbt.exceptions.DatabaseException, dbt.exceptions.DatabaseError))
+        assert(issubclass(dbt.exceptions.DatabaseException, dbt.exceptions.DbtDatabaseError))
         assert(issubclass(dbt.exceptions.CompilationException, dbt.exceptions.CompilationError))
         assert(issubclass(dbt.exceptions.RecursionException, dbt.exceptions.RecursionError))
         assert(issubclass(dbt.exceptions.ValidationException, dbt.exceptions.DbtValidationError))

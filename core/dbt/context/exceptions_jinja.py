@@ -15,7 +15,7 @@ from dbt.exceptions import (
     CacheInconsistency,
     DataclassNotDict,
     CompilationError,
-    DatabaseError,
+    DbtDatabaseError,
     DependencyNotFound,
     DependencyError,
     DuplicatePatchPath,
@@ -66,7 +66,7 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
 
 
 def raise_database_error(msg, node=None) -> NoReturn:
-    raise DatabaseError(msg, node)
+    raise DbtDatabaseError(msg, node)
 
 
 def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:

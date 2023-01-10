@@ -6,7 +6,7 @@ from datetime import datetime
 import warnings
 import yaml
 
-from dbt.exceptions import CompilationError, DatabaseError
+from dbt.exceptions import CompilationError, DbtDatabaseError
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
@@ -497,7 +497,7 @@ def project(
     # throwing CompilationErrorss or DatabaseErrors
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError, CompilationError, DatabaseError):
+    except (KeyError, AttributeError, CompilationError, DbtDatabaseError):
         pass
     os.chdir(orig_cwd)
     cleanup_event_logger()

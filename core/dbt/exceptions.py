@@ -172,7 +172,7 @@ class DbtRuntimeError(RuntimeError, Exception):
         return result
 
 
-class DatabaseError(DbtRuntimeError):
+class DbtDatabaseError(DbtRuntimeError):
     CODE = 10003
     MESSAGE = "Database Error"
 
@@ -366,7 +366,7 @@ class NotImplementedError(Exception):
         super().__init__(self.formatted_msg)
 
 
-class FailedToConnectError(DatabaseError):
+class FailedToConnectError(DbtDatabaseError):
     pass
 
 
@@ -1527,7 +1527,7 @@ class ApproximateMatch(CompilationError):
         return msg
 
 
-class UnexpectedNull(DatabaseError):
+class UnexpectedNull(DbtDatabaseError):
     def __init__(self, field_name: str, source):
         self.field_name = field_name
         self.source = source
@@ -1538,7 +1538,7 @@ class UnexpectedNull(DatabaseError):
         super().__init__(msg)
 
 
-class UnexpectedNonTimestamp(DatabaseError):
+class UnexpectedNonTimestamp(DbtDatabaseError):
     def __init__(self, field_name: str, source, dt: Any):
         self.field_name = field_name
         self.source = source
@@ -2273,11 +2273,11 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DatabaseException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DbtDatabaseError"),
     reason=REASON,
 )
 def raise_database_error(msg, node=None) -> NoReturn:
-    raise DatabaseError(msg, node)
+    raise DbtDatabaseError(msg, node)
 
 
 @deprecated_func(
@@ -2291,7 +2291,7 @@ def raise_dep_not_found(node, node_description, required_pkg) -> NoReturn:
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="DependencyException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="DependencyError"),
     reason=REASON,
 )
 def raise_dependency_error(msg) -> NoReturn:
@@ -2327,7 +2327,7 @@ def raise_invalid_property_yml_version(path, issue) -> NoReturn:
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="NotImplementedException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="NotImplementedError"),
     reason=REASON,
 )
 def raise_not_implemented(msg) -> NoReturn:
@@ -2404,7 +2404,7 @@ def get_relation_returned_multiple_results(kwargs, matches):
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="OperationException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="OperationError"),
     reason=REASON,
 )
 def system_error(operation_name):
@@ -2422,7 +2422,7 @@ def invalid_materialization_argument(name, argument):
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="BadSpecException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="BadSpecError"),
     reason=REASON,
 )
 def bad_package_spec(repo, spec, error_message):
@@ -2569,7 +2569,7 @@ def disallow_secret_env_var(env_var_name) -> NoReturn:
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="ParsingException"),
+    suggested_action=SUGGESTED_ACTION.format(exception="ParsingError"),
     reason=REASON,
 )
 def raise_parsing_error(msg, node=None) -> NoReturn:
@@ -2580,7 +2580,7 @@ def raise_parsing_error(msg, node=None) -> NoReturn:
 # here deprecated to give a chance for adapters to rework
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
+    suggested_action=SUGGESTED_ACTION.format(exception="UnrecognizedCredentialType"),
     reason=REASON,
 )
 def raise_unrecognized_credentials_type(typename, supported_types):
@@ -2589,7 +2589,7 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 @deprecated_func(
     version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_ACTION.format(exception="CompilationError"),
+    suggested_action=SUGGESTED_ACTION.format(exception="PatchTargetNotFound"),
     reason=REASON,
 )
 def raise_patch_targets_not_found(patches):
@@ -2669,7 +2669,7 @@ class RuntimeException(DbtRuntimeError):
     suggested_action=SUGGESTED_CLASS_ACTION.format(exception="DatabaseError"),
     reason=CLASS_REASON,
 )
-class DatabaseException(DatabaseError):
+class DatabaseException(DbtDatabaseError):
     pass
 
 
