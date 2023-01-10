@@ -219,12 +219,12 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 if func == "get":
                     num_args = len(args)
                     if num_args == 0:
-                        raise ParsingException(
+                        raise ParsingError(
                             "dbt.config.get() requires at least one argument",
                             node=node,
                         )
                     if num_args > 2:
-                        raise ParsingException(
+                        raise ParsingError(
                             f"dbt.config.get() takes at most 2 arguments ({num_args} given)",
                             node=node,
                         )
