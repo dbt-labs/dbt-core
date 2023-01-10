@@ -708,17 +708,6 @@ class TestDeprecatedExceptionClasses:
         with pytest.raises(exception):
             raise cls(msg)
 
-    def test_UnknownAsyncIDException(self):
-        cls = dbt.exceptions.UnknownAsyncIDException
-        exception = dbt.exceptions.UnknownAsyncIDError
-        msg = ""
-
-        self.is_deprecated(cls)
-
-        assert(hasattr(cls, '__wrapped__'))
-        with pytest.raises(exception):
-            raise cls(msg)
-
     def test_AliasException(self):
         cls = dbt.exceptions.AliasException
         exception = dbt.exceptions.AliasError

@@ -283,17 +283,6 @@ class UndefinedMacroError(CompilationError):
         )
 
 
-class UnknownAsyncIDError(Exception):
-    CODE = 10012
-    MESSAGE = "RPC server got an unknown async ID"
-
-    def __init__(self, task_id):
-        self.task_id = task_id
-
-    def __str__(self):
-        return f"{self.MESSAGE}: {self.task_id}"
-
-
 class AliasError(DbtValidationError):
     pass
 
@@ -2123,6 +2112,17 @@ class RelationWrongTypeError(CompilationError):
 
 
 # not modifying these since rpc should be deprecated soon
+class UnknownAsyncIDException(Exception):
+    CODE = 10012
+    MESSAGE = "RPC server got an unknown async ID"
+
+    def __init__(self, task_id):
+        self.task_id = task_id
+
+    def __str__(self):
+        return f"{self.MESSAGE}: {self.task_id}"
+
+
 class RPCFailureResult(DbtRuntimeError):
     CODE = 10002
     MESSAGE = "RPC execution error"
@@ -2736,15 +2736,6 @@ class JinjaRenderingException(JinjaRenderingError):
     reason=CLASS_REASON,
 )
 class UndefinedMacroException(UndefinedMacroError):
-    pass
-
-
-@deprecated(
-    version=DEPRECATION_VERSION,
-    suggested_action=SUGGESTED_CLASS_ACTION.format(exception="UnknownAsyncIDError"),
-    reason=CLASS_REASON,
-)
-class UnknownAsyncIDException(UnknownAsyncIDError):
     pass
 
 
