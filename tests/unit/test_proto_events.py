@@ -87,6 +87,7 @@ def test_exception_events():
 
 
 def test_node_info_events():
+    meta_dict = {"string-key1": ["value1", 2], "string-key2": {"nested-dict-key": "value2"}, 1: "value-from-non-string-key", "string-key3": 1, "string-key4": ["string1", 1, "string2", 2]}
     node_info = {
         "node_path": "some_path",
         "node_name": "some_name",
@@ -96,6 +97,7 @@ def test_node_info_events():
         "node_status": "started",
         "node_started_at": "some_time",
         "node_finished_at": "another_time",
+        "meta": meta_dict,
     }
     event = LogStartLine(
         description="some description",
@@ -105,6 +107,7 @@ def test_node_info_events():
     )
     assert event
     assert event.node_info.node_path == "some_path"
+    assert event.node_info.meta == meta_dict
 
 
 def test_extra_dict_on_event(monkeypatch):

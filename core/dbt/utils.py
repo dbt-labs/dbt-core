@@ -683,3 +683,10 @@ def cast_to_int(integer: Optional[int]) -> int:
         return 0
     else:
         return integer
+
+
+def cast_dict_to_dict_of_strings(dct):
+    new_dct = {}
+    for k, v in dct.items():
+        new_dct[str(k)] = str(v)
+    return new_dct

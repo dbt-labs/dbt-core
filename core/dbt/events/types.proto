@@ -35,6 +35,7 @@ message NodeInfo {
     string node_status = 6;
     string node_started_at = 7;
     string node_finished_at = 8;
+    map<string, string> meta = 9;
 }
 
 // RunResult
