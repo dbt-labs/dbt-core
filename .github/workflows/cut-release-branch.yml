@@ -9,6 +9,9 @@
 #
 
 # Note: This should be moved into the actions repos so it can be used in all adapters as well
+# string together all updates into single action
+# Should open PRs in all repos, do all adapters first then put link to all adapter PRs in the core PR talking about dependency
+# add note to eventually commit changes directly and bypass checks - same as release - when we move to this model run test action after merge
 
 name: Cut new release branch
 
@@ -19,14 +22,11 @@ on:
        description: 'The name of the main branch (ex. main)'
        default: main
        required: true
-      new_branch_name:
-       description: 'The full name of the new branch (ex. 1.5.latest)'
-       required: true
       version_to_bump_main:
        description: 'The alpha version main should bump to (ex. 1.6.0a1)'
        required: true
-      version_to_bump_release:
-       description: 'The rc version main should bump to (ex. 1.5.0rc1)'
+      new_branch_name:
+       description: 'The full name of the new branch (ex. 1.5.latest)'
        required: true
 
 defaults:
@@ -52,9 +52,11 @@ jobs:
         with:
           version: ${{ inputs.version_to_bump_main }}
 
-      # - name: Audit New branch
+      # - name: Audit if New branch already exist?
 
   cut_branch:
+    needs: ['prep_work']
+    if: prep_work.needs.output.branch_exists = false
     runs-on: ubuntu-latest
     steps:
       - name: Set branch value
@@ -74,19 +76,16 @@ jobs:
           git push origin ${{ steps.variables.output.BRANCH_NAME }}
           git branch --set-upstream-to=origin/${{ steps.variables.output.BRANCH_NAME }} ${{ steps.variables.output.BRANCH_NAME }}
 
-      - name: Bump version
-        run: |
-          source env/bin/activate
-          pip install -r dev-requirements.txt
-          env/bin/bumpversion --allow-dirty --new-version ${{ inputs.version_to_bump_release }} major
-          git status
+      - name: Bump dependencies
+        if: repo != dbt-core
+        run: some_script because each adapter is different
 
-      - name: Commit version bump to branch
+      - name: Commit dependency change
         uses: EndBug/add-and-commit@v7
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Bumping version to ${{ inputs.version_to_bump_release }}'
+          message: 'Bumping version to ${{ inputs.version_to_bump_main }}'
           branch: '${{ steps.variables.output.BRANCH_NAME }}'
           push: 'origin origin/${{ steps.variables.output.BRANCH_NAME }}'
 
@@ -94,13 +93,15 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
           author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
-          base: ${{ inputs.new_branch_name }}
-          title: 'Cut release branch and bump version to ${{ inputs.version_to_bump_release }}'
+          base: ${{github.ref}}
+          title: 'Clean up changelogs and bump to version ${{ inputs.version_to_bump_main }}'
           branch: '${{ steps.variables.output.BRANCH_NAME }}'
           labels: |
             Skip Changelog
 
   cleanup_main:
+    needs: ['cut_branch']
+    if: success() # runs even if cut_branch was skipped
     runs-on: ubuntu-latest
     steps:
       - remove_changelogs
