@@ -10,6 +10,7 @@ from dbt.config.project import Project
 from dbt.config.profile import Profile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.task.clean import CleanTask
+from dbt.task.compile import CompileTask
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
 from dbt.task.test import TestTask
@@ -210,8 +211,12 @@ def docs_serve(ctx, **kwargs):
 def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
     target/ directory."""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = CompileTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt debug
