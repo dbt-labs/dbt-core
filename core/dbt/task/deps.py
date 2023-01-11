@@ -25,7 +25,6 @@ from dbt.clients import system
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
-
 from dbt.config import Project
 
 
