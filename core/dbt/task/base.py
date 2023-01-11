@@ -452,6 +452,9 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
             else:
+                # 'skipped' nodes should not have a value for 'node_finished_at'
+                # they do have 'node_started_at', which is set in GraphRunnableTask.call_runner
+                self.node.update_event_status(node_status=RunStatus.Skipped)
                 fire_event(
                     SkippingDetails(
                         resource_type=self.node.resource_type,
