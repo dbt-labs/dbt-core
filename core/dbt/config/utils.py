@@ -8,20 +8,24 @@ from dbt.clients import yaml_helper
 from dbt.config import Profile, Project, read_user_config
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.events.functions import fire_event
-from dbt.events.types import InvalidVarsYAML
-from dbt.exceptions import DbtValidationError, VarsArgNotYamlDictError
+from dbt.events.types import InvalidOptionYAML
+from dbt.exceptions import DbtValidationError, OptionNotYamlDict
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
+    return parse_cli_yaml_string(var_string, "vars")
+
+
+def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, Any]:
     try:
         cli_vars = yaml_helper.load_yaml_text(var_string)
         var_type = type(cli_vars)
         if var_type is dict:
             return cli_vars
         else:
-            raise VarsArgNotYamlDictError(var_type)
+            raise OptionNotYamlDict(var_type, cli_option_name)
     except DbtValidationError:
-        fire_event(InvalidVarsYAML())
+        fire_event(InvalidOptionYAML(option_name=cli_option_name))
         raise
 
 

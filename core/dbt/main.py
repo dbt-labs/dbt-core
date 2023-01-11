@@ -1006,15 +1006,29 @@ def parse_args(args, cls=DBTArgumentParser):
         """,
     )
 
-    p.add_argument(
+    warn_error_flag = p.add_mutually_exclusive_group()
+    warn_error_flag.add_argument(
         "--warn-error",
         action="store_true",
         default=None,
         help="""
         If dbt would normally warn, instead raise an exception. Examples
-        include --models that selects nothing, deprecations, configurations
+        include --select that selects nothing, deprecations, configurations
         with no associated models, invalid test configurations, and missing
         sources/refs in tests.
+        """,
+    )
+
+    warn_error_flag.add_argument(
+        "--warn-error-options",
+        default=None,
+        help="""
+        If dbt would normally warn, instead raise an exception based on
+        include/exclude configuration. Examples include --select that selects
+        nothing, deprecations, configurations with no associated models,
+        invalid test configurations, and missing sources/refs in tests.
+        This argument should be a YAML string, with keys 'include' or 'exclude'.
+        eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'
         """,
     )
 

@@ -161,7 +161,11 @@ def msg_to_dict(msg: EventMsg) -> dict:
 
 
 def warn_or_error(event, node=None):
-    if flags.WARN_ERROR:
+    # TODO: resolve this circular import when flags.WARN_ERROR_OPTIONS is WarnErrorOptions type via click CLI.
+    from dbt.helper_types import WarnErrorOptions
+
+    warn_error_options = WarnErrorOptions.from_yaml_string(flags.WARN_ERROR_OPTIONS)
+    if flags.WARN_ERROR or warn_error_options.includes(type(event).__name__):
         # TODO: resolve this circular import when at top
         from dbt.exceptions import EventCompilationError
 

@@ -108,12 +108,12 @@ class MissingProfileTarget(InfoLevel, pt.MissingProfileTarget):
 
 
 @dataclass
-class InvalidVarsYAML(ErrorLevel, pt.InvalidVarsYAML):
+class InvalidOptionYAML(ErrorLevel, pt.InvalidOptionYAML):
     def code(self):
         return "A008"
 
     def message(self) -> str:
-        return "The YAML provided in the --vars argument is not valid."
+        return f"The YAML provided in the --{self.option_name} argument is not valid."
 
 
 @dataclass

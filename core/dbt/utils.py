@@ -657,9 +657,10 @@ def args_to_dict(args):
             "store_failures",
             "use_experimental_parser",
         )
+        default_empty_yaml_dict_keys = ("vars", "warn_error_options")
         if key in default_false_keys and var_args[key] is False:
             continue
-        if key == "vars" and var_args[key] == "{}":
+        if key in default_empty_yaml_dict_keys and var_args[key] == "{}":
             continue
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
