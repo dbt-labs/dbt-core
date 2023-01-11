@@ -4,6 +4,7 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union, Dict, Any, Optional
+from datetime import datetime
 
 from dbt import tracking
 from dbt import flags
@@ -208,6 +209,9 @@ class BaseRunner(metaclass=ABCMeta):
             self.before_execute()
 
         result = self.safe_run(manifest)
+        self.node.update_event_status(
+            node_status=result.status, finished_at=datetime.utcnow().isoformat()
+        )
 
         if not self.node.is_ephemeral_model:
             self.after_execute(result)
