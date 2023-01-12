@@ -47,7 +47,9 @@ class NodeInfo(betterproto.Message):
     node_status: str = betterproto.string_field(6)
     node_started_at: str = betterproto.string_field(7)
     node_finished_at: str = betterproto.string_field(8)
-    meta: str = betterproto.string_field(9)
+    meta: Dict[str, str] = betterproto.map_field(
+        9, betterproto.TYPE_STRING, betterproto.TYPE_STRING
+    )
 
 
 @dataclass

@@ -124,12 +124,13 @@ message MissingProfileTargetMsg {
 // Skipped A006, A007
 
 // A008
-message InvalidVarsYAML {
+message InvalidOptionYAML {
+    string option_name = 1;
 }
 
-message InvalidVarsYAMLMsg {
+message InvalidOptionYAMLMsg {
     EventInfo info = 1;
-    InvalidVarsYAML data = 2;
+    InvalidOptionYAML data = 2;
 }
 
 // A009
