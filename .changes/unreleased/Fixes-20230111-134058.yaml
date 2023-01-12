@@ -1,0 +1,6 @@
+kind: Fixes
+body: Call update_event_status earlier for node results. Rename event 'HookFinished' -> FinishedRunningStats
+time: 2023-01-11T13:40:58.577722+01:00
+custom:
+  Author: jtcohen6
+  Issue: "6571"

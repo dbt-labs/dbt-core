@@ -747,15 +747,15 @@ message HooksRunningMsg {
 }
 
 // E047
-message HookFinished {
+message FinishedRunningStats {
     string stat_line = 1;
     string execution = 2;
     float execution_time = 3;
 }
 
-message HookFinishedMsg {
+message FinishedRunningStatsMsg {
     EventInfo info = 1;
-    HookFinished data = 2;
+    FinishedRunningStats data = 2;
 }
 
 
