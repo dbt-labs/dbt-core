@@ -1,7 +1,0 @@
-kind: Features
-body: Add support for Python 3.11
-time: 2022-12-06T15:07:04.753127+01:00
-custom:
-  Author: joshuataylor MichelleArk jtcohen6
-  Issue: "6147"
-  PR: "6326"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Treat dense text blobs as binary for `git grep`
-time: 2022-12-19T19:34:35.890275-07:00
-custom:
-  Author: dbeatty10
-  Issue: "6294"
