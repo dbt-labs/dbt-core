@@ -1,4 +1,5 @@
 import abc
+from fnmatch import fnmatch
 from itertools import chain
 from pathlib import Path
 from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
@@ -46,10 +47,13 @@ class MethodName(StrEnum):
     Metric = "metric"
     Result = "result"
     SourceStatus = "source_status"
+    Wildcard = "wildcard"
 
 
-def is_selected_node(fqn: List[str], node_selector: str):
-
+def is_selected_node(
+    fqn: List[str],
+    node_selector: str,
+) -> bool:
     # If qualified_name exactly matches model name (fqn's leaf), return True
     if fqn[-1] == node_selector:
         return True
@@ -179,6 +183,32 @@ class QualifiedNameSelectorMethod(SelectorMethod):
             return True
 
         return False
+
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """Yield all nodes in the graph that match the selector.
+
+        :param str selector: The selector or node name
+        """
+        parsed_nodes = list(self.parsed_nodes(included_nodes))
+        for node, real_node in parsed_nodes:
+            if self.node_is_match(selector, real_node.fqn):
+                yield node
+
+
+class WildcardSelectorMethod(SelectorMethod):
+    def node_is_match(self, qualified_name: str, fqn: List[str]) -> bool:
+        """Determine if a qualified name matches a pattern via fnmatch which implements
+        unix shell-style wildcard syntax.
+
+        Examples:
+            project.*.*.model_[1-9]
+            project.*.*.folder_?.model_*
+            *_column_?
+
+        :param str qualified_name: The qualified name to match the nodes with
+        :param List[str] fqn: The node's fully qualified name in the graph.
+        """
+        return fnmatch(".".join(fqn), qualified_name)
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yield all nodes in the graph that match the selector.
@@ -622,6 +652,7 @@ class SourceStatusSelectorMethod(SelectorMethod):
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
+        MethodName.Wildcard: WildcardSelectorMethod,
         MethodName.Tag: TagSelectorMethod,
         MethodName.Group: GroupSelectorMethod,
         MethodName.Source: SourceSelectorMethod,

@@ -30,6 +30,7 @@ from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
     MethodManager,
     QualifiedNameSelectorMethod,
+    WildcardSelectorMethod,
     TagSelectorMethod,
     GroupSelectorMethod,
     SourceSelectorMethod,
@@ -681,6 +682,34 @@ def test_select_fqn(manifest):
         'mynamespace.union_model', 'mynamespace.ephemeral_model', 'mynamespace.seed'}
     assert search_manifest_using_method(
         manifest, method, 'ext') == {'ext_model'}
+
+
+def test_select_wildcard(manifest):
+    methods = MethodManager(manifest, None)
+    method = methods.get_method('wildcard', [])
+    assert isinstance(method, WildcardSelectorMethod)
+    assert method.arguments == []
+
+    # useful example
+    assert search_manifest_using_method(manifest, method, '*.*.*_model') == {
+        'mynamespace.union_model', 'mynamespace.ephemeral_model', 'union_model'}
+    # multiple wildcards
+    assert search_manifest_using_method(
+        manifest, method, '*unions*') == {'union_model', 'mynamespace.union_model'}
+    # negation
+    assert not search_manifest_using_method(manifest, method, '!pkg*')
+    # single wildcard
+    assert search_manifest_using_method(manifest, method, 'pkg.t*') == {
+        'table_model', 'table_model_py', 'table_model_csv'}
+    # wildcard and ? (matches exactly one character)
+    assert search_manifest_using_method(
+        manifest, method, '*ext_m?del') == {'ext_model'}
+    # multiple ?
+    assert search_manifest_using_method(manifest, method, '*.?????_model') == {
+        'union_model', 'table_model', 'mynamespace.union_model'}
+    # multiple ranges
+    assert search_manifest_using_method(manifest, method, '*.[t-u][a-n][b-i][l-o][e-n]_model') == {
+        'union_model', 'table_model', 'mynamespace.union_model'}
 
 
 def test_select_tag(manifest):
