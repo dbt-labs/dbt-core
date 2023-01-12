@@ -142,6 +142,10 @@ jobs:
           brew tap miniscruff/changie https://github.com/miniscruff/changie
           brew install changie
 
+      # Remove the directories (there will be 2) that the versioned changelogs go into
+      # Also remove the .md files
+      # then update the 0.0.0.md to add in the release branch changelog we just cut above
+      # run changie merge
       - name: Cleanup changelog
         run: |
           if [[ ${{ steps.semver.outputs.is-pre-release }} -eq 1 ]]
@@ -152,6 +156,19 @@ jobs:
           fi
           changie merge
           git status
+
+      - name: Commit changelog cleanup to branch
+        uses: EndBug/add-and-commit@v7
+        with:
+          author_name: 'Github Build Bot'
+          author_email: 'buildbot@fishtownanalytics.com'
+          message: 'Bumping version to ${{ inputs.version_to_bump_main }}'
+          branch: '${{ steps.variables.output.BRANCH_NAME }}'
+          push: 'origin origin/${{ steps.variables.output.BRANCH_NAME }}'
+
+      - name: Add testing
+        run: |
+          Update the testing matrix to include the release branch that just got cut
 
       - name: Commit changelog cleanup to branch
         uses: EndBug/add-and-commit@v7
