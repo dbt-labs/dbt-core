@@ -69,7 +69,7 @@ select * from {{ this.schema }}.seed
 """
 
 
-class BaseTableMat:
+class BaseTableMaterialization:
 
     @pytest.fixture(scope="class")
     def seeds(self):
@@ -79,7 +79,7 @@ class BaseTableMat:
     def models(self):
         return {'materialized.sql': model_sql}
 
-    def test_table_mat_sort_dist_no_op(self, project):
+    def test_table_materialization_sort_dist_no_op(self, project):
         # basic table mat test, sort and dist is not supported by postgres so the result table would still be same as input
 
         # check seed
