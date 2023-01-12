@@ -1,6 +1,0 @@
-kind: Features
-body: Update structured logging. Convert to using protobuf messages. Ensure events are enriched with node_info.
-time: 2022-08-17T15:48:57.225267-04:00
-custom:
-  Author: gshank
-  Issue: "5610"
