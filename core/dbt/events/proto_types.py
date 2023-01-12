@@ -164,7 +164,7 @@ class MissingProfileTargetMsg(betterproto.Message):
 class InvalidOptionYAML(betterproto.Message):
     """A008"""
 
-    pass
+    option_name: str = betterproto.string_field(1)
 
 
 @dataclass

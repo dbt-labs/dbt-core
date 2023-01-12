@@ -125,6 +125,7 @@ message MissingProfileTargetMsg {
 
 // A008
 message InvalidOptionYAML {
+    string option_name = 1;
 }
 
 message InvalidOptionYAMLMsg {

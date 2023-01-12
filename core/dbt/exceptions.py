@@ -1703,7 +1703,7 @@ class UninstalledPackagesFoundError(CompilationError):
         return msg
 
 
-class OptionNotYamlDict(CompilationError):
+class OptionNotYamlDictError(CompilationError):
     def __init__(self, var_type, option_name):
         self.var_type = var_type
         self.option_name = option_name
