@@ -177,7 +177,7 @@ sample_values = [
     BuildingCatalog(),
     DatabaseErrorRunningHook(hook_type=""),
     HooksRunning(num_hooks=0, hook_type=""),
-    HookFinished(stat_line="", execution="", execution_time=0),
+    FinishedRunningStats(stat_line="", execution="", execution_time=0),
 
     # I - Project parsing ======================
     ParseCmdOut(msg="testing"),

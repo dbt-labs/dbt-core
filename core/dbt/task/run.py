@@ -32,7 +32,7 @@ from dbt.events.types import (
     DatabaseErrorRunningHook,
     EmptyLine,
     HooksRunning,
-    HookFinished,
+    FinishedRunningStats,
     LogModelResult,
     LogStartLine,
     LogHookEndLine,
@@ -421,7 +421,9 @@ class RunTask(CompileTask):
         with TextOnly():
             fire_event(EmptyLine())
         fire_event(
-            HookFinished(stat_line=stat_line, execution=execution, execution_time=execution_time)
+            FinishedRunningStats(
+                stat_line=stat_line, execution=execution, execution_time=execution_time
+            )
         )
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):

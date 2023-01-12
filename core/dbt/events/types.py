@@ -755,7 +755,7 @@ class HooksRunning(InfoLevel, pt.HooksRunning):
 
 
 @dataclass
-class HookFinished(InfoLevel, pt.HookFinished):
+class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
     def code(self):
         return "E047"
 
