@@ -93,5 +93,5 @@ class BaseTableMaterialization:
         check_relations_equal(project.adapter, ["seed", "materialized"])
 
 
-class TestTableMat(BaseTableMat):
+class TestTableMat(BaseTableMaterialization):
     pass
