@@ -226,10 +226,6 @@ class GraphRunnableTask(ManifestTask):
             status: Dict[str, str] = {}
             try:
                 result = runner.run_with_hooks(self.manifest)
-                status = runner.get_result_status(result)
-                runner.node.update_event_status(
-                    node_status=result.status, finished_at=datetime.utcnow().isoformat()
-                )
             finally:
                 finishctx = TimestampNamed("finished_at")
                 with finishctx, DbtModelState(status):
