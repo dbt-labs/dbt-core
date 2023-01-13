@@ -80,7 +80,7 @@ class BaseTableMaterialization:
         return {'materialized.sql': model_sql}
 
     def test_table_materialization_sort_dist_no_op(self, project):
-        # basic table mat test, sort and dist is not supported by postgres so the result table would still be same as input
+        # basic table materialization test, sort and dist is not supported by postgres so the result table would still be same as input
 
         # check seed
         results = run_dbt(["seed"])
