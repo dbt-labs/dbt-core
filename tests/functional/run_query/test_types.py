@@ -1,4 +1,8 @@
+import pytest
 
+from dbt.tests.util import run_dbt
+
+macros_sql = """
 {% macro test_array_results() %}
 
     {% set sql %}
@@ -14,3 +18,16 @@
     {% endif %}
 
 {% endmacro %}
+"""
+
+
+class TestTypes:
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": macros_sql,
+        }
+
+    def test_nested_types(self, project):
+        result = run_dbt(['run-operation', 'test_array_results'])
+        assert result.success
