@@ -1,6 +1,7 @@
 import pytest
 from dbt.tests.util import run_dbt, get_manifest, read_file
 import json
+import os
 
 
 my_model_sql = """
@@ -54,8 +55,11 @@ def test_basic(project, logs_dir):
                 assert "node_info" in log_data
                 assert "timing_info" in log_data
 
-    # Verify the ConnectionReused event occurs and has the right data
-    assert connection_reused_data
-    for data in connection_reused_data:
-        assert "conn_name" in data and data["conn_name"]
-        assert "orig_conn_name" in data and data["orig_conn_name"]
+    # windows doesn't have the same thread/connection flow so the ConnectionReused
+    # events don't show up
+    if os.name != "nt":
+        # Verify the ConnectionReused event occurs and has the right data
+        assert connection_reused_data
+        for data in connection_reused_data:
+            assert "conn_name" in data and data["conn_name"]
+            assert "orig_conn_name" in data and data["orig_conn_name"]
