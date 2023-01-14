@@ -70,7 +70,7 @@ _MODELS__INCREMENTAL_SYNC_REMOVE_ONLY = """
 
 WITH source_data AS (SELECT * FROM {{ ref('model_a') }} )
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 {% if is_incremental() %}
 
@@ -123,7 +123,7 @@ with source_data as (
 
 )
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 select id
        ,cast(field1 as {{string_type}}) as field1
@@ -184,7 +184,7 @@ _MODELS__INCREMENTAL_SYNC_ALL_COLUMNS = """
 
 WITH source_data AS (SELECT * FROM {{ ref('model_a') }} )
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 {% if is_incremental() %}
 
@@ -215,7 +215,7 @@ _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE = """
     )
 }}
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 WITH source_data AS (SELECT * FROM {{ ref('model_a') }} )
 
@@ -267,7 +267,7 @@ _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_TARGET = """
     config(materialized='table')
 }}
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 with source_data as (
 
@@ -293,7 +293,7 @@ _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS = """
     )
 }}
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 WITH source_data AS (SELECT * FROM {{ ref('model_a') }} )
 
@@ -327,7 +327,7 @@ with source_data as (
 
 )
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 select id
        ,cast(field1 as {{string_type}}) as field1
@@ -344,7 +344,7 @@ _MODELS__INCREMENTAL_APPEND_NEW_COLUMNS_REMOVE_ONE_TARGET = """
     config(materialized='table')
 }}
 
-{% set string_type = 'varchar(10)' %}
+{% set string_type = dbt.type_string() %}
 
 with source_data as (
 
