@@ -486,7 +486,7 @@ def _build_snapshot_subparser(subparsers, base_subparser):
     return sub
 
 
-def _add_defer_arguments(*subparsers):
+def _add_defer_argument(*subparsers):
     for sub in subparsers:
         sub.add_optional_argument_inverse(
             "--defer",
@@ -499,6 +499,10 @@ def _add_defer_arguments(*subparsers):
             """,
             default=flags.DEFER_MODE,
         )
+
+
+def _add_favor_state_argument(*subparsers):
+    for sub in subparsers:
         sub.add_optional_argument_inverse(
             "--favor-state",
             enable_help="""
@@ -576,7 +580,7 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
         Do not run "dbt compile" as part of docs generation
         """,
     )
-    _add_defer_arguments(generate_sub)
+    _add_defer_argument(generate_sub)
     return generate_sub
 
 
@@ -1188,7 +1192,9 @@ def parse_args(args, cls=DBTArgumentParser):
     # list_sub sets up its own arguments.
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
-    _add_defer_arguments(run_sub, test_sub, build_sub, snapshot_sub, compile_sub)
+    _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub, compile_sub)
+    # --favor-state
+    _add_favor_state_argument(run_sub, test_sub, build_sub, snapshot_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub, build_sub)
 
