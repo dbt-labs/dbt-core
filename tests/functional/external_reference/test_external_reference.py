@@ -24,16 +24,16 @@ class TestExternalReference:
         return {"model.sql": external_model_sql}
 
     def test_external_reference(self, project, unique_schema):
-        external_schema = unique_schema + 'z'
+        external_schema = unique_schema + "z"
         project.run_sql(f'create schema "{external_schema}"')
         project.run_sql(f'create table "{external_schema}"."external" (id integer)')
         project.run_sql(f'insert into "{external_schema}"."external" values (1), (2)')
 
-        results = run_dbt(['run'])
+        results = run_dbt(["run"])
         assert len(results) == 1
 
         # running it again should succeed
-        results = run_dbt(['run'])
+        results = run_dbt(["run"])
         assert len(results) == 1
 
 
@@ -45,13 +45,15 @@ class TestExternalDependency:
         return {"model.sql": model_sql}
 
     def test_external_reference(self, project, unique_schema):
-        results = run_dbt(['run'])
+        results = run_dbt(["run"])
         assert len(results) == 1
 
-        external_schema = unique_schema + 'z'
+        external_schema = unique_schema + "z"
         project.run_sql(f'create schema "{external_schema}"')
-        project.run_sql(f'create view "{external_schema}"."external" as (select * from {unique_schema}.model)')
+        project.run_sql(
+            f'create view "{external_schema}"."external" as (select * from {unique_schema}.model)'
+        )
 
         # running it again should succeed
-        results = run_dbt(['run'])
+        results = run_dbt(["run"])
         assert len(results) == 1

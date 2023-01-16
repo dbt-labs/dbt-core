@@ -272,7 +272,7 @@ class TestBuilder(Generic[Testable]):
                         column_name=column_name,
                         name=self.name,
                         key=key,
-                        err_msg=e.msg
+                        err_msg=e.msg,
                     )
 
             if value is not None:

@@ -26,7 +26,7 @@ def test_basic(project, logs_dir):
     assert log_file
     node_start = False
     node_finished = False
-    for log_line in log_file.split('\n'):
+    for log_line in log_file.split("\n"):
         # skip empty lines
         if len(log_line) == 0:
             continue
@@ -35,13 +35,13 @@ def test_basic(project, logs_dir):
             continue
         log_dct = json.loads(log_line)
         log_data = log_dct["data"]
-        log_event = log_dct['info']['name']
+        log_event = log_dct["info"]["name"]
         if log_event == "NodeStart":
             node_start = True
         if log_event == "NodeFinished":
             node_finished = True
         if node_start and not node_finished:
-            if log_event == 'NodeExecuting':
+            if log_event == "NodeExecuting":
                 assert "node_info" in log_data
             if log_event == "JinjaLogDebug":
                 assert "node_info" in log_data

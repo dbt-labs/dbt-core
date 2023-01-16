@@ -29,5 +29,5 @@ class TestTypes:
         }
 
     def test_nested_types(self, project):
-        result = run_dbt(['run-operation', 'test_array_results'])
+        result = run_dbt(["run-operation", "test_array_results"])
         assert result.success
