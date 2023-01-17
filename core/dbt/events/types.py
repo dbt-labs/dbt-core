@@ -449,7 +449,7 @@ class ConnectionReused(DebugLevel, pt.ConnectionReused):
         return "E006"
 
     def message(self) -> str:
-        return f"Re-using an available connection from the pool (formerly {self.conn_name})"
+        return f"Re-using an available connection from the pool (formerly {self.orig_conn_name}, now {self.conn_name})"
 
 
 @dataclass
