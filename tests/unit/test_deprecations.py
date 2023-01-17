@@ -13,13 +13,13 @@ def to_be_decorated():
 
 # simpletest that the return value is not modified
 def test_deprecated_func():
-    assert(hasattr(to_be_decorated, '__wrapped__'))
-    assert(to_be_decorated() == 5)
+    assert hasattr(to_be_decorated, "__wrapped__")
+    assert to_be_decorated() == 5
 
 
 class TestDeprecatedFunctions:
     def is_deprecated(self, func):
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         # TODO: add in log check
 
     def test_warn(self):
@@ -31,19 +31,19 @@ class TestDeprecatedExceptionFunctions:
         return func(*args)
 
     def is_deprecated(self, func):
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         # TODO: add in log check
 
     def test_missing_config(self):
         func = dbt.exceptions.missing_config
         exception = dbt.exceptions.MissingConfigError
         model = argparse.Namespace()
-        model.unique_id = ''
+        model.unique_id = ""
         name = ""
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, name)
 
@@ -52,12 +52,12 @@ class TestDeprecatedExceptionFunctions:
         exception = dbt.exceptions.MissingMaterializationError
         model = argparse.Namespace()
         model.config = argparse.Namespace()
-        model.config.materialized = ''
+        model.config.materialized = ""
         adapter_type = ""
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, adapter_type)
 
@@ -68,7 +68,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(relation)
 
@@ -85,7 +85,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(node_1, node_2, duped_name)
 
@@ -98,7 +98,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(unique_id, match_1, match_2)
 
@@ -109,7 +109,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(msg)
 
@@ -120,7 +120,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(obj)
 
@@ -131,7 +131,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(msg)
 
@@ -142,7 +142,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(msg)
 
@@ -155,7 +155,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(node, node_description, required_pkg)
 
@@ -166,7 +166,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(msg)
 
@@ -180,7 +180,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(patch_1, existing_patch_path)
 
@@ -189,7 +189,7 @@ class TestDeprecatedExceptionFunctions:
         exception = dbt.exceptions.DuplicateResourceNameError
         node_1 = argparse.Namespace()
         node_1.name = ""
-        node_1.resource_type = NodeType('model')
+        node_1.resource_type = NodeType("model")
         node_1.column_name = ""
         node_1.unique_id = ""
         node_1.original_file_path = ""
@@ -201,7 +201,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(node_1, node_2)
 
@@ -213,7 +213,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(path, issue)
 
@@ -224,7 +224,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(msg)
 
@@ -238,7 +238,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(relation, expected_type)
 
@@ -251,7 +251,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(kwargs, aliases, canonical_key)
 
@@ -267,7 +267,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(patch_1, patch_2)
 
@@ -282,7 +282,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(patch_1, existing_patch_path)
 
@@ -302,7 +302,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(node_1, node_2, namespace)
 
@@ -314,7 +314,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(target, relation)
 
@@ -326,7 +326,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(kwargs, matches)
 
@@ -337,7 +337,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(operation_name)
 
@@ -349,7 +349,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(name, argument)
 
@@ -363,7 +363,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(repo, spec, error)
 
@@ -391,7 +391,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(repo)
 
@@ -402,7 +402,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(macro_name)
 
@@ -415,7 +415,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(node, dependency)
 
@@ -431,7 +431,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(node, target_name, target_kind)
 
@@ -445,7 +445,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, target_doc_name, target_doc_package)
 
@@ -458,7 +458,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, args)
 
@@ -471,7 +471,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, args)
 
@@ -484,7 +484,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, args)
 
@@ -496,7 +496,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(return_value, macro_name)
 
@@ -510,7 +510,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(method_name, arg_name, got_value, expected_type)
 
@@ -521,7 +521,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(env_var_name)
 
@@ -532,7 +532,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(msg)
 
@@ -544,7 +544,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(typename, supported_types)
 
@@ -558,7 +558,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(patches)
 
@@ -570,7 +570,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(kwargs, matches)
 
@@ -584,7 +584,7 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, adapter_type)
 
@@ -597,6 +597,6 @@ class TestDeprecatedExceptionFunctions:
 
         self.is_deprecated(func)
 
-        assert(hasattr(func, '__wrapped__'))
+        assert hasattr(func, "__wrapped__")
         with pytest.raises(exception):
             func(model, target_macro_id)

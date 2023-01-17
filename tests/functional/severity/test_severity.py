@@ -60,10 +60,7 @@ select * from {{ ref("sample_model") }} where email is null
 
 @pytest.fixture(scope="class")
 def models():
-    return {
-        "sample_model.sql": models__sample_model_sql,
-        "schema.yml": models__schema_yml
-    }
+    return {"sample_model.sql": models__sample_model_sql, "schema.yml": models__schema_yml}
 
 
 @pytest.fixture(scope="class")
@@ -79,9 +76,9 @@ def tests():
 @pytest.fixture(scope="class")
 def project_config_update():
     return {
-        'config-version': 2,
-        'seed-paths': ['seeds'],
-        'test-paths': ['tests'],
+        "config-version": 2,
+        "seed-paths": ["seeds"],
+        "test-paths": ["tests"],
         "seeds": {
             "quote_columns": False,
         },
@@ -95,25 +92,31 @@ class TestSeverity:
         run_dbt(["run"])
 
     def test_generic_default(self, project):
-        results = run_dbt(['test', '--select', 'test_type:generic'])
+        results = run_dbt(["test", "--select", "test_type:generic"])
         assert len(results) == 2
-        assert all([r.status == 'warn' for r in results])
+        assert all([r.status == "warn" for r in results])
         assert all([r.failures == 2 for r in results])
 
     def test_generic_strict(self, project):
-        results = run_dbt(['test', '--select', 'test_type:generic', "--vars", '{"strict": True}'], expect_pass=False)
+        results = run_dbt(
+            ["test", "--select", "test_type:generic", "--vars", '{"strict": True}'],
+            expect_pass=False,
+        )
         assert len(results) == 2
-        assert all([r.status == 'fail' for r in results])
+        assert all([r.status == "fail" for r in results])
         assert all([r.failures == 2 for r in results])
 
     def test_singular_default(self, project):
-        results = run_dbt(['test', '--select', 'test_type:singular'])
+        results = run_dbt(["test", "--select", "test_type:singular"])
         assert len(results) == 1
-        assert all([r.status == 'warn' for r in results])
+        assert all([r.status == "warn" for r in results])
         assert all([r.failures == 2 for r in results])
 
     def test_singular_strict(self, project):
-        results = run_dbt(['test', '--select', 'test_type:singular', "--vars", '{"strict": True}'], expect_pass=False)
+        results = run_dbt(
+            ["test", "--select", "test_type:singular", "--vars", '{"strict": True}'],
+            expect_pass=False,
+        )
         assert len(results) == 1
-        assert all([r.status == 'fail' for r in results])
+        assert all([r.status == "fail" for r in results])
         assert all([r.failures == 2 for r in results])

@@ -64,10 +64,8 @@ class BaseIncrementalPredicates:
     def project_config_update(self):
         return {
             "models": {
-                "+incremental_predicates": [
-                    "id != 2"
-                ],
-                "+incremental_strategy": "delete+insert"
+                "+incremental_predicates": ["id != 2"],
+                "+incremental_strategy": "delete+insert",
             }
         }
 
@@ -123,16 +121,21 @@ class BaseIncrementalPredicates:
             inc_test_model_count=1,
             seed_rows=seed_rows,
             opt_model_count=opt_model_count,
-            relation=relation
+            relation=relation,
         )
 
     # no unique_key test
     def test__incremental_predicates(self, project):
         """seed should match model after two incremental runs"""
 
-        expected_fields = self.get_expected_fields(relation="expected_delete_insert_incremental_predicates", seed_rows=4)
+        expected_fields = self.get_expected_fields(
+            relation="expected_delete_insert_incremental_predicates", seed_rows=4
+        )
         test_case_fields = self.get_test_fields(
-            project, seed="expected_delete_insert_incremental_predicates", incremental_model="delete_insert_incremental_predicates", update_sql_file=None
+            project,
+            seed="expected_delete_insert_incremental_predicates",
+            incremental_model="delete_insert_incremental_predicates",
+            update_sql_file=None,
         )
         self.check_scenario_correctness(expected_fields, test_case_fields, project)
 
@@ -144,11 +147,4 @@ class TestIncrementalPredicatesDeleteInsert(BaseIncrementalPredicates):
 class TestPredicatesDeleteInsert(BaseIncrementalPredicates):
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {
-            "models": {
-                "+predicates": [
-                    "id != 2"
-                ],
-                "+incremental_strategy": "delete+insert"
-            }
-        }
+        return {"models": {"+predicates": ["id != 2"], "+incremental_strategy": "delete+insert"}}

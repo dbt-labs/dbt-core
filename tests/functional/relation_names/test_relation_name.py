@@ -40,9 +40,13 @@ class TestGeneratedDDLNameRules:
     def setup_class(self):
         self.incremental_filename = "my_name_is_51_characters_incremental_abcdefghijklmn"
         # length is 63
-        self.max_length_filename = "my_name_is_max_length_chars_abcdefghijklmnopqrstuvwxyz123456789"
+        self.max_length_filename = (
+            "my_name_is_max_length_chars_abcdefghijklmnopqrstuvwxyz123456789"
+        )
         # length is 64
-        self.over_max_length_filename = "my_name_is_one_over_max_length_chats_abcdefghijklmnopqrstuvwxyz1"
+        self.over_max_length_filename = (
+            "my_name_is_one_over_max_length_chats_abcdefghijklmnopqrstuvwxyz1"
+        )
 
         self.filename_for_backup_file = "my_name_is_52_characters_abcdefghijklmnopqrstuvwxyz0"
 
@@ -57,14 +61,10 @@ class TestGeneratedDDLNameRules:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            f"{self.incremental_filename}.sql":
-                models__basic_incremental,
-            f"{self.filename_for_backup_file}.sql":
-                models__basic_table,
-            f"{self.max_length_filename}.sql":
-                models__basic_table,
-            f"{self.over_max_length_filename}.sql":
-                models__basic_table,
+            f"{self.incremental_filename}.sql": models__basic_incremental,
+            f"{self.filename_for_backup_file}.sql": models__basic_table,
+            f"{self.max_length_filename}.sql": models__basic_table,
+            f"{self.over_max_length_filename}.sql": models__basic_table,
         }
 
     @pytest.fixture(scope="class")
@@ -110,15 +110,17 @@ class TestGeneratedDDLNameRules:
     # 63 characters is the character limit for a table name in a postgres database
     # (assuming compiled without changes from source)
     def test_name_longer_than_63_does_not_build(self):
-        err_msg = "Relation name 'my_name_is_one_over_max"\
+        err_msg = (
+            "Relation name 'my_name_is_one_over_max"
             "_length_chats_abcdefghijklmnopqrstuvwxyz1' is longer than 63 characters"
+        )
         res = run_dbt(
             [
                 "run",
                 "-s",
                 self.over_max_length_filename,
             ],
-            expect_pass=False
+            expect_pass=False,
         )
         assert res[0].status == RunStatus.Error
         assert err_msg in res[0].message

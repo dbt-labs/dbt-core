@@ -78,10 +78,10 @@ class TestAdapterLogger:
         # ensure AdapterLogger and subclasses makes all base_msg members
         # of type string; when someone writes logger.debug(a) where a is
         # any non-string object
-        event = AdapterEventDebug(name="dbt_tests", base_msg=[1,2,3], args=(3,))
+        event = AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=(3,))
         assert isinstance(event.base_msg, str)
 
-        event = JinjaLogDebug(msg=[1,2,3])
+        event = JinjaLogDebug(msg=[1, 2, 3])
         assert isinstance(event.msg, str)
 
 
@@ -124,7 +124,6 @@ sample_values = [
     InvalidProfileTemplateYAML(),
     ProjectNameAlreadyExists(name=""),
     ProjectCreated(project_name=""),
-
     # D - Deprecations ======================
     PackageRedirectDeprecation(old_name="", new_name=""),
     PackageInstallPathDeprecation(),
@@ -134,7 +133,6 @@ sample_values = [
     MetricAttributesRenamed(metric_name=""),
     ExposureNameDeprecation(exposure=""),
     InternalDeprecation(name="", reason="", suggested_action="", version=""),
-
     # E - DB Adapter ======================
     AdapterEventDebug(),
     AdapterEventInfo(),
@@ -178,7 +176,6 @@ sample_values = [
     DatabaseErrorRunningHook(hook_type=""),
     HooksRunning(num_hooks=0, hook_type=""),
     FinishedRunningStats(stat_line="", execution="", execution_time=0),
-
     # I - Project parsing ======================
     ParseCmdOut(msg="testing"),
     GenericTestFileParse(path=""),
@@ -215,7 +212,9 @@ sample_values = [
     SeedExceedsLimitAndPathChanged(package_name="", name=""),
     SeedExceedsLimitChecksumChanged(package_name="", name="", checksum_name=""),
     UnusedTables(unused_tables=[]),
-    WrongResourceSchemaFile(patch_name="", resource_type="", file_path="", plural_resource_type=""),
+    WrongResourceSchemaFile(
+        patch_name="", resource_type="", file_path="", plural_resource_type=""
+    ),
     NoNodeForYamlKey(patch_name="", yaml_key="", file_path=""),
     MacroNotFoundForPatch(patch_name=""),
     NodeNotFoundOrDisabled(
@@ -228,9 +227,7 @@ sample_values = [
         disabled="",
     ),
     JinjaLogWarning(),
-
     # M - Deps generation ======================
-
     GitSparseCheckoutSubdirectory(subdir=""),
     GitProgressCheckoutRevision(revision=""),
     GitProgressUpdatingExistingDependency(dir=""),
@@ -259,9 +256,7 @@ sample_values = [
     RegistryResponseMissingNestedKeys(response=""),
     RegistryResponseExtraNestedKeys(response=""),
     DepsSetDownloadDirectory(path=""),
-
     # Q - Node execution ======================
-
     RunningOperationCaughtError(exc=""),
     CompileComplete(),
     FreshnessCheckComplete(),
@@ -340,17 +335,13 @@ sample_values = [
     NoNodesSelected(),
     DepsUnpinned(revision="", git=""),
     NoNodesForSelectionCriteria(spec_raw=""),
-
     # W - Node testing ======================
-
     CatchableExceptionOnRun(exc=""),
     InternalErrorOnRun(build_path="", exc=""),
     GenericExceptionOnRun(build_path="", unique_id="", exc=""),
     NodeConnectionReleaseError(node_name="", exc=""),
     FoundStats(stat_line=""),
-
     # Z - misc ======================
-
     MainKeyboardInterrupt(),
     MainEncounteredError(exc=""),
     MainStackTrace(stack_trace=""),
@@ -373,7 +364,7 @@ sample_values = [
     ServingDocsExitInfo(),
     RunResultWarning(resource_type="", node_name="", path=""),
     RunResultFailure(resource_type="", node_name="", path=""),
-    StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0,"total": 0}),
+    StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),
     RunResultError(msg=""),
     RunResultErrorNoMessage(status=""),
     SQLCompiledPath(path=""),
@@ -392,7 +383,6 @@ sample_values = [
     FlushEventsFailure(),
     TrackingInitializeFailure(),
     RunResultWarningMessage(),
-
     # T - tests ======================
     IntegrationTestInfo(),
     IntegrationTestDebug(),
@@ -400,10 +390,7 @@ sample_values = [
     IntegrationTestError(),
     IntegrationTestException(),
     UnitTestInfo(),
-
 ]
-
-
 
 
 class TestEventJSONSerialization:

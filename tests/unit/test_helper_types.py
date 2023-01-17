@@ -1,4 +1,3 @@
-
 import pytest
 
 from dbt.helper_types import IncludeExclude, WarnErrorOptions
@@ -21,7 +20,7 @@ class TestIncludeExclude:
             ("*", ["ItemA"], False),
             (["ItemA"], [], True),
             (["ItemA", "ItemB"], [], True),
-        ]
+        ],
     )
     def test_includes(self, include, exclude, expected_includes):
         include_exclude = IncludeExclude(include=include, exclude=exclude)
