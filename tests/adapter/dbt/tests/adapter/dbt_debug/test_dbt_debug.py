@@ -21,7 +21,7 @@ class BaseDebug:
     def assertGotValue(self, linepat, result):
         found = False
         output = self.capsys.readouterr().out
-        for line in output.split('\n'):
+        for line in output.split("\n"):
             if linepat.match(line):
                 found = True
                 assert result in line
@@ -41,10 +41,7 @@ class BaseDebug:
 class BaseDebugProfileVariable(BaseDebug):
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {
-            "config-version": 2,
-            "profile": '{{ "te" ~ "st" }}'
-        }
+        return {"config-version": 2, "profile": '{{ "te" ~ "st" }}'}
 
 
 class TestDebugPostgres(BaseDebug):
@@ -70,7 +67,6 @@ class TestDebugProfileVariablePostgres(BaseDebugProfileVariable):
 
 
 class TestDebugInvalidProjectPostgres(BaseDebug):
-
     def test_empty_project(self, project):
         with open("dbt_project.yml", "w") as f:  # noqa: F841
             pass
@@ -96,9 +92,7 @@ class TestDebugInvalidProjectPostgres(BaseDebug):
 
     def test_invalid_project_outside_current_dir(self, project):
         # create a dbt_project.yml
-        project_config = {
-            "invalid-key": "not a valid key in this project"
-        }
+        project_config = {"invalid-key": "not a valid key in this project"}
         os.makedirs("custom", exist_ok=True)
         with open("custom/dbt_project.yml", "w") as f:
             yaml.safe_dump(project_config, f, default_flow_style=True)

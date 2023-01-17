@@ -74,5 +74,5 @@ class BaseConfigProject:
             "bad.sql": bad_sql,
             "dupe.sql": dupe_sql,
             "good.sql": good_sql,
-            "schema.yml": schema_yml
+            "schema.yml": schema_yml,
         }

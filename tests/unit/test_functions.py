@@ -13,15 +13,13 @@ from dbt.exceptions import EventCompilationError
         ('{"include": "all"}', True),
         ('{"include": [NoNodesForSelectionCriteria]}', True),
         ('{"include": []}', False),
-        ('{}', False),
+        ("{}", False),
         ('{"include": [MainTrackingUserState]}', False),
         ('{"include": "all", "exclude": [NoNodesForSelectionCriteria]}', False),
     ],
 )
 def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation_exception):
-    args = Namespace(
-        warn_error_options=warn_error_options
-    )
+    args = Namespace(warn_error_options=warn_error_options)
     flags.set_from_args(args, {})
     if expect_compilation_exception:
         with pytest.raises(EventCompilationError):
@@ -38,9 +36,7 @@ def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation
     ],
 )
 def test_warn_or_error_warn_error(warn_error, expect_compilation_exception):
-    args = Namespace(
-        warn_error=warn_error
-    )
+    args = Namespace(warn_error=warn_error)
     flags.set_from_args(args, {})
     if expect_compilation_exception:
         with pytest.raises(EventCompilationError):

@@ -16,7 +16,7 @@ def models():
 
 @pytest.fixture(scope="class")
 def project_config_update():
-    return {'config-version': 2}
+    return {"config-version": 2}
 
 
 class TestColors:

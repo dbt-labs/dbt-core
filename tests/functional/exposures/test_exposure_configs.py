@@ -12,7 +12,7 @@ from tests.functional.exposures.fixtures import (
     enabled_yaml_level_exposure_yml,
     invalid_config_exposure_yml,
     source_schema_yml,
-    metrics_schema_yml
+    metrics_schema_yml,
 )
 
 

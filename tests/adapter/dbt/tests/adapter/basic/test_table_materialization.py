@@ -70,14 +70,13 @@ select * from {{ this.schema }}.seed
 
 
 class BaseTableMaterialization:
-
     @pytest.fixture(scope="class")
     def seeds(self):
         return {"seed.csv": seeds__seed_csv}
 
     @pytest.fixture(scope="class")
     def models(self):
-        return {'materialized.sql': model_sql}
+        return {"materialized.sql": model_sql}
 
     def test_table_materialization_sort_dist_no_op(self, project):
         # basic table materialization test, sort and dist is not supported by postgres so the result table would still be same as input

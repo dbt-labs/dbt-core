@@ -249,7 +249,9 @@ def clean_up_logging():
 # otherwise this will fail. So to test errors in those areas, you need to copy the files
 # into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
-def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging):
+def adapter(
+    unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging
+):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
         profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None

@@ -1003,11 +1003,13 @@ class TestCommentedSchema:
     def test_quoted_schema_file(self, project):
         try:
             # A schema file consisting entirely of quotes should not be a problem
-            run_dbt(['parse'])
+            run_dbt(["parse"])
         except TypeError:
-            assert False, '`dbt parse` failed with a yaml file that is all comments with the same exception as 3568'
+            assert (
+                False
+            ), "`dbt parse` failed with a yaml file that is all comments with the same exception as 3568"
         except Exception:
-            assert False, '`dbt parse` failed with a yaml file that is all comments'
+            assert False, "`dbt parse` failed with a yaml file that is all comments"
 
 
 class TestWrongSpecificationBlock:

@@ -91,9 +91,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute_test(
-        self, test: TestNode, manifest: Manifest
-    ) -> TestResultData:
+    def execute_test(self, test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
@@ -101,7 +99,9 @@ class TestRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterializationError(materialization=test.get_materialization(), adapter_type=self.adapter.type())
+            raise MissingMaterializationError(
+                materialization=test.get_materialization(), adapter_type=self.adapter.type()
+            )
 
         if "config" not in context:
             raise DbtInternalError(
