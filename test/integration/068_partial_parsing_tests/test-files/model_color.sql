@@ -1,1 +1,0 @@
-select 'blue' as fun
