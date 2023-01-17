@@ -28,11 +28,12 @@ if __name__ == "__main__":
     if package_request.status_code == 404:
         if halt_on_missing:
             sys.exit(1)
-        else:
-            # everything is the latest if the package doesn't exist
-            print(f"::set-output name=latest::{True}")
-            print(f"::set-output name=minor_latest::{True}")
-            sys.exit(0)
+        # everything is the latest if the package doesn't exist
+        github_output = os.environ.get("GITHUB_OUTPUT")
+        with open(github_output, "at", encoding="utf-8") as gh_output:
+            gh_output.write("latest=True")
+            gh_output.write("minor_latest=True")
+        sys.exit(0)
 
     # TODO: verify package meta is "correct"
     # https://github.com/dbt-labs/dbt-core/issues/4640
@@ -91,5 +92,7 @@ if __name__ == "__main__":
     latest = is_latest(pre_rel, new_version, current_latest)
     minor_latest = is_latest(pre_rel, new_version, current_minor_latest)
 
-    print(f"::set-output name=latest::{latest}")
-    print(f"::set-output name=minor_latest::{minor_latest}")
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    with open(github_output, "at", encoding="utf-8") as gh_output:
+        gh_output.write(f"latest={latest}")
+        gh_output.write(f"minor_latest={minor_latest}")
