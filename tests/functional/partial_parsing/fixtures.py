@@ -1,4 +1,3 @@
-
 local_dependency__dbt_project_yml = """
 
 name: 'local_dep'
