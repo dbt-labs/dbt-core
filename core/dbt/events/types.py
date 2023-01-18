@@ -1162,15 +1162,6 @@ class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
         return self.msg
 
 
-@dataclass
-class PartialParsingDeletedEntity(DebugLevel, pt.PartialParsingDeletedEntity):
-    def code(self):
-        return "I062"
-
-    def message(self) -> str:
-        return f"Partial parsing: deleted entity {self.unique_id}"
-
-
 # =======================================================
 # M - Deps generation
 # =======================================================
