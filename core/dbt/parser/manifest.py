@@ -1394,10 +1394,6 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_docs_for_node(ctx, node)
 
 
-def write_manifest(manifest: Manifest, target_path: str, write_json=False, write_files=False):
-    if write_json:
-        path = os.path.join(target_path, MANIFEST_FILE_NAME)
-        manifest.write(path)
-    if write_files:
-        path = os.path.join(target_path, "files.json")
-        write_file(path, json.dumps(manifest.files, cls=dbt.utils.JSONEncoder, indent=4))
+def write_manifest(manifest: Manifest, target_path: str):
+    path = os.path.join(target_path, MANIFEST_FILE_NAME)
+    manifest.write(path)

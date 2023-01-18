@@ -2,16 +2,14 @@ import inspect  # This is temporary for RAT-ing
 from copy import copy
 from pprint import pformat as pf  # This is temporary for RAT-ing
 from typing import List, Tuple, Optional
-import os
 
 import click
 from dbt.cli import requires, params as p
-from dbt.config import RuntimeConfig
 from dbt.config.project import Project
 from dbt.config.profile import Profile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.task.clean import CleanTask
-from dbt.parser.manifest import ManifestLoader, write_manifest
+from dbt.parser.manifest import write_manifest
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
 
@@ -155,7 +153,6 @@ def docs(ctx, **kwargs):
 @p.exclude
 @p.profile
 @p.profiles_dir
-@p.project_dir
 @p.select
 @p.selector
 @p.state
@@ -244,7 +241,6 @@ def debug(ctx, **kwargs):
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
     task = DepsTask(ctx.obj["flags"], ctx.obj["project"])
-    _set_manifest_on_task(task, ctx)
     results = task.run()
     success = task.interpret_results(results)
     return results, success
@@ -305,16 +301,11 @@ def list(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.runtime_config
+@requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
-    flags = ctx.obj["flags"]
-    config = RuntimeConfig.from_parts(
-        ctx.obj["project"],
-        ctx.obj["profile"],
-        flags,
-    )
-    manifest = ManifestLoader.get_full_manifest(config, write_perf_info=True)
-    _write_manifest(manifest, flags)
+    _write_manifest(ctx)
     return None, True
 
 
@@ -339,14 +330,11 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.runtime_config
+@requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-    config = RuntimeConfig.from_parts(
-        ctx.obj["project"],
-        ctx.obj["profile"],
-        ctx.obj["flags"],
-    )
-    task = RunTask(ctx.obj["flags"], config)
+    task = RunTask(ctx.obj["flags"], ctx.obj["runtime_config"])
     _set_manifest_on_task(task, ctx)
 
     results = task.run()
@@ -469,28 +457,14 @@ def test(ctx, **kwargs):
     return None, True
 
 
-def _get_config_from_ctx(ctx):
-    return RuntimeConfig.from_parts(
-        ctx.obj["project"],
-        ctx.obj["profile"],
-        ctx.obj["flags"],
-    )
+def _set_manifest_on_task(task, ctx):
+    _write_manifest(ctx)
+    task.set_manifest(ctx.obj["manifest"])
 
 
-def _set_manifest_on_task(task, ctx, write_perf_info=False):
-    config = _get_config_from_ctx(ctx)
-    manifest = ManifestLoader.get_full_manifest(config, write_perf_info=write_perf_info)
-    flags = ctx.obj["flags"]
-    _write_manifest(manifest, flags)
-    task.set_manifest(manifest)
-
-
-def _write_manifest(manifest, flags):
-    write_manifest(
-        manifest,
-        write_files=os.getenv("DBT_WRITE_FILES"),
-        write_json=flags.write_json,
-    )
+def _write_manifest(ctx):
+    if ctx.obj["flags"].write_json:
+        write_manifest(ctx.obj["manifest"], ctx.obj["runtime_config"].target_path)
 
 
 # Support running as a module

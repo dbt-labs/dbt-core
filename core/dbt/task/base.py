@@ -45,7 +45,7 @@ from dbt.events.types import (
 from dbt.events.contextvars import get_node_info
 from .printer import print_run_result_error
 
-from dbt.adapters.factory import get_adapter, register_adapter
+from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 import dbt.exceptions
@@ -173,7 +173,6 @@ class ConfiguredTask(BaseTask):
 
     def __init__(self, args, config):
         super().__init__(args, config)
-        register_adapter(self.config)
         self.graph: Optional[Graph] = None
         self.manifest: Optional[Manifest] = None
 
