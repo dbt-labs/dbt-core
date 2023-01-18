@@ -207,11 +207,15 @@ class RunExecutionResult(
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
     def write(self, path: str):
+        # just need shallow copy as we're not modifying content in dict
+        args = self.args.copy()
+        args.pop("MP_CONTEXT", None)
+        args.pop("mp_context", None)
         writable = RunResultsArtifact.from_execution_results(
             results=self.results,
             elapsed_time=self.elapsed_time,
             generated_at=self.generated_at,
-            args=self.args,
+            args=args,
         )
         writable.write(path)
 

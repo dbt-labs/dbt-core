@@ -14,6 +14,7 @@ from dbt.task.compile import CompileTask
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
 from dbt.task.test import TestTask
+from dbt.task.snapshot import SnapshotTask
 
 
 # CLI invocation
@@ -401,10 +402,16 @@ def seed(ctx, **kwargs):
 @p.threads
 @p.vars
 @requires.preflight
+@requires.profile
+@requires.project
 def snapshot(ctx, **kwargs):
     """Execute snapshots defined in your project"""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = SnapshotTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt source
