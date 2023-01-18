@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: dbt snapshot works in click
+time: 2023-01-17T16:25:05.973769-08:00
+custom:
+  Author: ChenyuLInx
+  Issue: "5554"
