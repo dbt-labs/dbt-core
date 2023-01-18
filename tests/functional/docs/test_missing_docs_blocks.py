@@ -34,7 +34,7 @@ class TestMissingDocsBlocks:
         return {
             "model.sql": missing_docs_blocks_model_sql,
             "schema.yml": missing_docs_blocks_schema_yml,
-            "docs.md": missing_docs_blocks_docs_md
+            "docs.md": missing_docs_blocks_docs_md,
         }
 
     def test_missing_doc_ref(self, project):

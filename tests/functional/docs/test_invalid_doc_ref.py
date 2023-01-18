@@ -38,7 +38,7 @@ class TestInvalidDocRef:
         return {
             "model.sql": invalid_doc_ref_model_sql,
             "docs.md": invalid_doc_ref_docs_md,
-            "schema.yml": invalid_doc_ref_schema_yml
+            "schema.yml": invalid_doc_ref_schema_yml,
         }
 
     def test_invalid_doc_ref(self, project):
