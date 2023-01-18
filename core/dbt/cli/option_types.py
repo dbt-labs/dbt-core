@@ -1,4 +1,4 @@
-from click import ParamType
+from click import ParamType, Choice
 
 from dbt.config.utils import parse_cli_vars
 from dbt.exceptions import ValidationException
@@ -33,3 +33,13 @@ class Truthy(ParamType):
             return None
         else:
             return value
+
+
+class ChoiceTuple(Choice):
+    name = "CHOICE_TUPLE"
+
+    def convert(self, value, param, ctx):
+        for value_item in value:
+            super().convert(value_item, param, ctx)
+
+        return value

@@ -2,7 +2,7 @@ from pathlib import Path, PurePath
 
 import click
 from dbt.cli.options import OptionEatAll
-from dbt.cli.option_types import YAML
+from dbt.cli.option_types import YAML, ChoiceTuple
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 
 
@@ -249,7 +249,7 @@ resource_type = click.option(
     "--resource-type",
     envvar=None,
     help="TODO: No current help text",
-    type=click.Choice(
+    type=ChoiceTuple(
         [
             "metric",
             "source",
@@ -264,8 +264,8 @@ resource_type = click.option(
         ],
         case_sensitive=False,
     ),
-    multiple=True,
-    default=[],
+    cls=OptionEatAll,
+    default=(),
 )
 
 select = click.option(
