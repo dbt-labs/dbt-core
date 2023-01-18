@@ -1409,6 +1409,20 @@ class JinjaLogWarningMsg(betterproto.Message):
 
 
 @dataclass
+class PartialParsingDeletedEntity(betterproto.Message):
+    """I062"""
+
+    node_info: "NodeInfo" = betterproto.message_field(1)
+    msg: str = betterproto.string_field(2)
+
+
+@dataclass
+class PartialParsingDeletedEntityMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "PartialParsingDeletedEntity" = betterproto.message_field(2)
+
+
+@dataclass
 class GitSparseCheckoutSubdirectory(betterproto.Message):
     """M001"""
 
