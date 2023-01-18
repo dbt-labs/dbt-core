@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: dbt list working with click
+time: 2023-01-17T21:37:29.91632-05:00
+custom:
+  Author: michelleark
+  Issue: "5549"
