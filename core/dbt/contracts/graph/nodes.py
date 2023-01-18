@@ -1068,6 +1068,7 @@ class Metric(GraphNode):
             and True
         )
 
+
 @dataclass
 class Entity(GraphNode):
     name: str

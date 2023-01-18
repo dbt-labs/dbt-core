@@ -546,6 +546,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 entity_parser = EntityParser(self, yaml_block)
                 entity_parser.parse()
 
+
 def check_format_version(file_path, yaml_dct) -> None:
     if "version" not in yaml_dct:
         raise PropertyYMLMissingVersionError(file_path)
@@ -1238,7 +1239,9 @@ class EntityParser(YamlReader):
             model=unparsed.model,
             name=unparsed.name,
             description=unparsed.description,
-            dimensions= {dimension.name: dimension for dimension in unparsed.dimensions} if unparsed.dimensions else {},
+            dimensions={dimension.name: dimension for dimension in unparsed.dimensions}
+            if unparsed.dimensions
+            else {},
             meta=unparsed.meta,
             tags=unparsed.tags,
             config=config,

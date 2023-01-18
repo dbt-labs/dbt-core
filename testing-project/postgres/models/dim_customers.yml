@@ -1,5 +1,5 @@
-version: 2 
-models: 
+version: 2
+models:
   - name: dim_customers
     columns:
       - name: customer_id

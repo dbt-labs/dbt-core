@@ -1226,6 +1226,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
         metric.depends_on.nodes.append(target_model_id)
         manifest.update_metric(metric)
 
+
 def _process_refs_for_entity(manifest: Manifest, current_project: str, entity: Entity):
     """Given a manifest and an entity in that manifest, process its refs"""
     for ref in entity.refs:
@@ -1266,6 +1267,7 @@ def _process_refs_for_entity(manifest: Manifest, current_project: str, entity: E
 
         entity.depends_on.nodes.append(target_model_id)
         manifest.update_entity(entity)
+
 
 def _process_metrics_for_node(
     manifest: Manifest,
@@ -1433,6 +1435,7 @@ def _process_sources_for_exposure(manifest: Manifest, current_project: str, expo
         target_source_id = target_source.unique_id
         exposure.depends_on.nodes.append(target_source_id)
         manifest.update_exposure(exposure)
+
 
 ## TODO: Remove this code because metrics can't be based on sources
 def _process_sources_for_metric(manifest: Manifest, current_project: str, metric: Metric):

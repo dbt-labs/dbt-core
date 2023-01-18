@@ -534,9 +534,11 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
         if data.get("model") is not None and data.get("calculation_method") == "derived":
             raise ValidationError("Derived metrics cannot have a 'model' property")
 
+
 @dataclass
 class UnparsedEntity(dbtClassMixin, Replaceable):
     """This class is used for entity information"""
+
     name: str
     model: str
     description: str = ""

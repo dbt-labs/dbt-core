@@ -1031,29 +1031,29 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return None
 
     def resolve_entity(
-            self,
-            target_entity_name: str,
-            target_entity_package: Optional[str],
-            current_project: str,
-            node_package: str,
-        ) -> MaybeEntityNode:
+        self,
+        target_entity_name: str,
+        target_entity_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeEntityNode:
 
-            entity: Optional[Entity] = None
-            disabled: Optional[List[Entity]] = None
+        entity: Optional[Entity] = None
+        disabled: Optional[List[Entity]] = None
 
-            candidates = _search_packages(current_project, node_package, target_entity_package)
-            for pkg in candidates:
-                entity = self.entity_lookup.find(target_entity_name, pkg, self)
+        candidates = _search_packages(current_project, node_package, target_entity_package)
+        for pkg in candidates:
+            entity = self.entity_lookup.find(target_entity_name, pkg, self)
 
-                if entity is not None and entity.config.enabled:
-                    return entity
+            if entity is not None and entity.config.enabled:
+                return entity
 
-                # it's possible that the node is disabled
-                if disabled is None:
-                    disabled = self.disabled_lookup.find(f"{target_entity_name}", pkg)
-            if disabled:
-                return Disabled(disabled[0])
-            return None
+            # it's possible that the node is disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(f"{target_entity_name}", pkg)
+        if disabled:
+            return Disabled(disabled[0])
+        return None
 
     # Called by DocsRuntimeContext.doc
     def resolve_doc(

@@ -120,10 +120,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
-
-    def entity_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, Entity]]:
+    def entity_nodes(self, included_nodes: Set[UniqueId]) -> Iterator[Tuple[UniqueId, Entity]]:
 
         for key, metric in self.manifest.entities.items():
             unique_id = UniqueId(key)
@@ -284,8 +281,10 @@ class MetricSelectorMethod(SelectorMethod):
 
             yield node
 
+
 class EntitySelectorMethod(SelectorMethod):
     """TODO: Add a description of what this selector method is doing"""
+
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         parts = selector.split(".")
         target_package = SELECTOR_GLOB
@@ -308,6 +307,7 @@ class EntitySelectorMethod(SelectorMethod):
                 continue
 
             yield node
+
 
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:

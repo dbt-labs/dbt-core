@@ -1161,6 +1161,7 @@ class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
     def message(self) -> str:
         return self.msg
 
+
 @dataclass
 class PartialParsingDeletedEntity(DebugLevel, pt.PartialParsingDeletedEntity):
     def code(self):

@@ -1504,6 +1504,7 @@ def generate_parse_metrics(
         ),
     }
 
+
 class EntityRefResolver(BaseResolver):
     def __call__(self, *args) -> str:
         package = None
@@ -1523,6 +1524,7 @@ class EntityRefResolver(BaseResolver):
                 f"In the entity associated with {self.model.original_file_path} "
                 "the name argument to ref() must be a string"
             )
+
 
 def generate_parse_entities(
     entity: Entity,

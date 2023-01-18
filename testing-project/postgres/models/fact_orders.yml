@@ -1,5 +1,5 @@
-version: 2 
-models: 
+version: 2
+models:
   - name: fact_orders
     columns:
       - name: order_id
