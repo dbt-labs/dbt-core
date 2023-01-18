@@ -1,6 +1,6 @@
 import json
 
-from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric
+from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric, Entity
 from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
@@ -22,6 +22,7 @@ class ListTask(GraphRunnableTask):
             NodeType.Source,
             NodeType.Exposure,
             NodeType.Metric,
+            NodeType.Entity,
         )
     )
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((NodeType.Analysis,))
@@ -82,6 +83,8 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.exposures[node]
             elif node in self.manifest.metrics:
                 yield self.manifest.metrics[node]
+            elif node in self.manifest.entities:
+                yield self.manifest.entities[node]
             else:
                 raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{node}"'
@@ -105,6 +108,11 @@ class ListTask(GraphRunnableTask):
                 # metrics are searched for by pkg.metric_name
                 metric_selector = ".".join([node.package_name, node.name])
                 yield f"metric:{metric_selector}"
+            elif node.resource_type == NodeType.Entity:
+                assert isinstance(node, Entity)
+                # entities are searched for by pkg.entity_name
+                entity_selector = ".".join([node.package_name, node.name])
+                yield f"entity:{entity_selector}"
             else:
                 # everything else is from `fqn`
                 yield ".".join(node.fqn)

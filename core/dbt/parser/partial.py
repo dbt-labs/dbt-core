@@ -242,7 +242,7 @@ class PartialParsing:
                     self.remove_source_override_target(source)
 
     def delete_disabled(self, unique_id, file_id):
-        # This node/metric/exposure is disabled. Find it and remove it from disabled dictionary.
+        # This node/metric/entity/exposure is disabled. Find it and remove it from disabled dictionary.
         for dis_index, dis_node in enumerate(self.saved_manifest.disabled[unique_id]):
             if dis_node.file_id == file_id:
                 node = dis_node
@@ -441,6 +441,18 @@ class PartialParsing:
                     if metric_element:
                         self.delete_schema_metric(schema_file, metric_element)
                         self.merge_patch(schema_file, "metrics", metric_element)
+            elif unique_id in self.saved_manifest.entities:
+                entity = self.saved_manifest.entities[unique_id]
+                file_id = entity.file_id
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
+                    schema_file = self.saved_files[file_id]
+                    entities = []
+                    if "entities" in schema_file.dict_from_yaml:
+                        entities = schema_file.dict_from_yaml["entities"]
+                    entity_element = self.get_schema_element(entities, entity.name)
+                    if entity_element:
+                        self.delete_schema_entity(schema_file, entity_element)
+                        self.merge_patch(schema_file, "entities", entity_element)
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
@@ -746,6 +758,29 @@ class PartialParsing:
                     self.delete_schema_metric(schema_file, elem)
                     self.merge_patch(schema_file, dict_key, elem)
 
+        # entities
+        dict_key = "entities"
+        entity_diff = self.get_diff_for("entities", saved_yaml_dict, new_yaml_dict)
+        if entity_diff["changed"]:
+            for entity in entity_diff["changed"]:
+                self.delete_schema_entity(schema_file, entity)
+                self.merge_patch(schema_file, dict_key, entity)
+        if entity_diff["deleted"]:
+            for entity in entity_diff["deleted"]:
+                self.delete_schema_entity(schema_file, entity)
+        if entity_diff["added"]:
+            for entity in entity_diff["added"]:
+                self.merge_patch(schema_file, dict_key, entity)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in entity_diff["changed_or_deleted_names"]:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_entity(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
+
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
     def get_diff_for(self, key, saved_yaml_dict, new_yaml_dict):
@@ -918,6 +953,24 @@ class PartialParsing:
                         unique_id
                     )
                     schema_file.metrics.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+
+    # entities are created only from schema files, but also can be referred to by other nodes
+    def delete_schema_entity(self, schema_file, entity_dict):
+        entity_name = entity_dict["name"]
+        entities = schema_file.entities.copy()
+        for unique_id in entities:
+            if unique_id in self.saved_manifest.entities:
+                entity = self.saved_manifest.entities[unique_id]
+                if entity.name == entity_name:
+                    # Need to find everything that referenced this entity and schedule for parsing
+                    if unique_id in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
+                    self.deleted_manifest.entities[unique_id] = self.saved_manifest.entities.pop(
+                        unique_id
+                    )
+                    schema_file.entities.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 

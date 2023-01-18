@@ -22,11 +22,12 @@ from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.context.providers import (
     generate_parse_exposure,
     generate_parse_metrics,
+    generate_parse_entities,
     generate_test_context,
 )
 from dbt.context.macro_resolver import MacroResolver
 from dbt.contracts.files import FileHash, SchemaSourceFile
-from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
+from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig, EntityConfig
 from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ColumnInfo,
@@ -35,6 +36,7 @@ from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     Exposure,
     Metric,
+    Entity,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -47,6 +49,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate,
     UnparsedExposure,
     UnparsedMetric,
+    UnparsedEntity,
     UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
@@ -94,6 +97,7 @@ schema_file_keys = (
     "analyses",
     "exposures",
     "metrics",
+    "entities",
 )
 
 
@@ -114,6 +118,7 @@ class ParserRef:
     def __init__(self):
         self.column_info: Dict[str, ColumnInfo] = {}
 
+    ## TODO: Mimic this for dimension information at the entity level
     def add(
         self,
         column: Union[HasDocs, UnparsedColumn],
@@ -536,6 +541,10 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 metric_parser = MetricParser(self, yaml_block)
                 metric_parser.parse()
 
+            # parse entities
+            if "entities" in dct:
+                entity_parser = EntityParser(self, yaml_block)
+                entity_parser.parse()
 
 def check_format_version(file_path, yaml_dct) -> None:
     if "version" not in yaml_dct:
@@ -1183,3 +1192,106 @@ class MetricParser(YamlReader):
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             self.parse_metric(unparsed)
+
+
+class EntityParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, NodeType.Entity.pluralize())
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_entity(self, unparsed: UnparsedEntity):
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.Entity}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+
+        config = self._generate_entity_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=True,
+        )
+
+        config = config.finalize_and_validate()
+
+        unrendered_config = self._generate_entity_config(
+            target=unparsed,
+            fqn=fqn,
+            package_name=package_name,
+            rendered=False,
+        )
+
+        if not isinstance(config, EntityConfig):
+            raise DbtInternalError(
+                f"Calculated a {type(config)} for an entity, but expected a EntityConfig"
+            )
+
+        parsed = Entity(
+            package_name=package_name,
+            path=path,
+            original_file_path=self.yaml.path.original_file_path,
+            unique_id=unique_id,
+            fqn=fqn,
+            model=unparsed.model,
+            name=unparsed.name,
+            description=unparsed.description,
+            dimensions= {dimension.name: dimension for dimension in unparsed.dimensions} if unparsed.dimensions else {},
+            meta=unparsed.meta,
+            tags=unparsed.tags,
+            config=config,
+            unrendered_config=unrendered_config,
+        )
+
+        ctx = generate_parse_entities(
+            parsed,
+            self.root_project,
+            self.schema_parser.manifest,
+            package_name,
+        )
+
+        if parsed.model is not None:
+            model_ref = "{{ " + parsed.model + " }}"
+            get_rendered(model_ref, ctx, parsed)
+
+        # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
+        if parsed.config.enabled:
+            # self.manifest.add_metric(self.yaml.file, parsed)
+            self.manifest.add_entity(self.yaml.file, parsed)
+        else:
+            self.manifest.add_disabled(self.yaml.file, parsed)
+
+    def _generate_entity_config(
+        self, target: UnparsedEntity, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply metric configs
+        precedence_configs.update(target.config)
+
+        return generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Entity,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+
+    def parse(self):
+        for data in self.get_key_dicts():
+            try:
+                UnparsedEntity.validate(data)
+                unparsed = UnparsedEntity.from_dict(data)
+
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+            self.parse_entity(unparsed)
