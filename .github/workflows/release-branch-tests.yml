@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
 
       - name: "Test Step"
-        id: generate
+        id: test_generate
         run: |
           git status
           git branch --format "%(refname:short)" | grep "^1.*.latest"
