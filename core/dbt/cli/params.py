@@ -82,7 +82,7 @@ enable_legacy_logger = click.option(
 )
 
 exclude = click.option(
-    "--exclude", envvar=None, multiple=True, help="Specify the nodes to exclude."
+    "--exclude", envvar=None, type=tuple, cls=OptionEatAll, help="Specify the nodes to exclude."
 )
 
 fail_fast = click.option(
