@@ -77,6 +77,11 @@
 <p>Type: choice: [‘eager’, ‘cautious’]</p>
 <p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
 </section>
+<section id="build|models">
+<h4>models<a class="headerlink" href="#build|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="build|profile">
 <h4>profile<a class="headerlink" href="#build|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
@@ -183,6 +188,11 @@
 <h4>full_refresh<a class="headerlink" href="#compile|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
+</section>
+<section id="compile|models">
+<h4>models<a class="headerlink" href="#compile|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
 </section>
 <section id="compile|parse_only">
 <h4>parse_only<a class="headerlink" href="#compile|parse_only" title="Permalink to this heading">¶</a></h4>
@@ -349,6 +359,11 @@
 <p>Type: choice: [‘eager’, ‘cautious’]</p>
 <p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
 </section>
+<section id="list|models">
+<h4>models<a class="headerlink" href="#list|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="list|output">
 <h4>output<a class="headerlink" href="#list|output" title="Permalink to this heading">¶</a></h4>
 <p>Type: choice: [‘json’, ‘name’, ‘path’, ‘selector’]</p>
@@ -374,8 +389,79 @@
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
-<section id="list|resource_type">
-<h4>resource_type<a class="headerlink" href="#list|resource_type" title="Permalink to this heading">¶</a></h4>
+<section id="list|resource_types">
+<h4>resource_types<a class="headerlink" href="#list|resource_types" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘metric’, ‘source’, ‘analysis’, ‘model’, ‘test’, ‘exposure’, ‘snapshot’, ‘seed’, ‘default’, ‘all’]</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="list|select">
+<h4>select<a class="headerlink" href="#list|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
+<section id="list|selector">
+<h4>selector<a class="headerlink" href="#list|selector" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>The selector name to use, as defined in selectors.yml</p>
+</section>
+<section id="list|state">
+<h4>state<a class="headerlink" href="#list|state" title="Permalink to this heading">¶</a></h4>
+<p>Type: path</p>
+<p>If set, use the given directory as the source for json files to compare with this project.</p>
+</section>
+<section id="list|target">
+<h4>target<a class="headerlink" href="#list|target" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Which target to load for the given profile</p>
+</section>
+<section id="list|vars">
+<h4>vars<a class="headerlink" href="#list|vars" title="Permalink to this heading">¶</a></h4>
+<p>Type: YAML</p>
+<p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
+</section>
+<h3>Command: list<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
+<section id="list|exclude">
+<h4>exclude<a class="headerlink" href="#list|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to exclude.</p>
+</section>
+<section id="list|indirect_selection">
+<h4>indirect_selection<a class="headerlink" href="#list|indirect_selection" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘eager’, ‘cautious’]</p>
+<p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
+</section>
+<section id="list|models">
+<h4>models<a class="headerlink" href="#list|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
+<section id="list|output">
+<h4>output<a class="headerlink" href="#list|output" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘json’, ‘name’, ‘path’, ‘selector’]</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="list|output_keys">
+<h4>output_keys<a class="headerlink" href="#list|output_keys" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="list|profile">
+<h4>profile<a class="headerlink" href="#list|profile" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Which profile to load. Overrides setting in dbt_project.yml.</p>
+</section>
+<section id="list|profiles_dir">
+<h4>profiles_dir<a class="headerlink" href="#list|profiles_dir" title="Permalink to this heading">¶</a></h4>
+<p>Type: path</p>
+<p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
+</section>
+<section id="list|project_dir">
+<h4>project_dir<a class="headerlink" href="#list|project_dir" title="Permalink to this heading">¶</a></h4>
+<p>Type: path</p>
+<p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
+</section>
+<section id="list|resource_types">
+<h4>resource_types<a class="headerlink" href="#list|resource_types" title="Permalink to this heading">¶</a></h4>
 <p>Type: choice: [‘metric’, ‘source’, ‘analysis’, ‘model’, ‘test’, ‘exposure’, ‘snapshot’, ‘seed’, ‘default’, ‘all’]</p>
 <p>TODO: No current help text</p>
 </section>
@@ -476,6 +562,11 @@
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
 </section>
+<section id="run|models">
+<h4>models<a class="headerlink" href="#run|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="run|profile">
 <h4>profile<a class="headerlink" href="#run|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
@@ -573,6 +664,11 @@
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
 </section>
+<section id="seed|models">
+<h4>models<a class="headerlink" href="#seed|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="seed|profile">
 <h4>profile<a class="headerlink" href="#seed|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
@@ -644,6 +740,11 @@
 <p>Type: string</p>
 <p>Specify the nodes to exclude.</p>
 </section>
+<section id="snapshot|models">
+<h4>models<a class="headerlink" href="#snapshot|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="snapshot|profile">
 <h4>profile<a class="headerlink" href="#snapshot|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
@@ -710,6 +811,11 @@
 <h4>indirect_selection<a class="headerlink" href="#test|indirect_selection" title="Permalink to this heading">¶</a></h4>
 <p>Type: choice: [‘eager’, ‘cautious’]</p>
 <p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
+</section>
+<section id="test|models">
+<h4>models<a class="headerlink" href="#test|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Specify the nodes to include.</p>
 </section>
 <section id="test|profile">
 <h4>profile<a class="headerlink" href="#test|profile" title="Permalink to this heading">¶</a></h4>
