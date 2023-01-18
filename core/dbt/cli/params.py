@@ -133,13 +133,20 @@ macro_debugging = click.option(
     hidden=True,
 )
 
+models = click.option(
+    "-m",
+    "models",
+    envvar=None,
+    help="Specify the nodes to include.",
+    multiple=True,
+)
 
 output = click.option(
     "--output",
     envvar=None,
     help="TODO: No current help text",
     type=click.Choice(["json", "name", "path", "selector"], case_sensitive=False),
-    default="name",
+    default="selector",
 )
 
 output_keys = click.option(
@@ -233,6 +240,7 @@ record_timing_info = click.option(
 )
 
 resource_type = click.option(
+    "--resource-types",
     "--resource-type",
     envvar=None,
     help="TODO: No current help text",
@@ -251,13 +259,13 @@ resource_type = click.option(
         ],
         case_sensitive=False,
     ),
-    default="default",
+    multiple=True,
+    default=["default"],
 )
 
 select = click.option(
-    "-m",
     "-s",
-    "select",
+    "--select",
     envvar=None,
     help="Specify the nodes to include.",
     multiple=True,
