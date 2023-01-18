@@ -1,6 +1,7 @@
 from pathlib import Path, PurePath
 
 import click
+from dbt.cli.options import OptionEatAll
 from dbt.cli.option_types import YAML
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 
@@ -141,7 +142,8 @@ models = click.option(
     "-m",
     envvar=None,
     help="Specify the nodes to include.",
-    multiple=True,
+    cls=OptionEatAll,
+    type=tuple,
 )
 
 output = click.option(
@@ -271,7 +273,8 @@ select = click.option(
     "--select",
     envvar=None,
     help="Specify the nodes to include.",
-    multiple=True,
+    cls=OptionEatAll,
+    type=tuple,
 )
 
 selector = click.option(
