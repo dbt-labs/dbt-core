@@ -80,7 +80,9 @@ enable_legacy_logger = click.option(
     hidden=True,
 )
 
-exclude = click.option("--exclude", envvar=None, help="Specify the nodes to exclude.")
+exclude = click.option(
+    "--exclude", envvar=None, multiple=True, help="Specify the nodes to exclude."
+)
 
 fail_fast = click.option(
     "--fail-fast/--no-fail-fast",
@@ -134,8 +136,9 @@ macro_debugging = click.option(
 )
 
 models = click.option(
+    "--models",
+    "--model",
     "-m",
-    "models",
     envvar=None,
     help="Specify the nodes to include.",
     multiple=True,
@@ -260,7 +263,7 @@ resource_type = click.option(
         case_sensitive=False,
     ),
     multiple=True,
-    default=["default"],
+    default=[],
 )
 
 select = click.option(
