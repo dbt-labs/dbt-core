@@ -449,12 +449,7 @@ class GraphRunnableTask(ConfiguredTask):
             )
 
         if flags.WRITE_JSON:
-            write_manifest(
-                self.manifest,
-                self.config.target_path,
-                write_json=self.args.WRITE_JSON,
-                write_files=True,
-            )
+            write_manifest(self.manifest, self.config.target_path)
             self.write_result(result)
 
         self.task_end_messages(result.results)
