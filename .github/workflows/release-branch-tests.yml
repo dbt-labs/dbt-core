@@ -39,6 +39,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: "Test Step"
+        id: generate
+        run: |
+          git status
+          git branch --format "%(refname:short)" | grep "^1.*.latest"
+          git branch --format "%(refname:short)"
+
       - name: "Get all branches"
         id: generate
         run: |
