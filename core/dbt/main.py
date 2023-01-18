@@ -30,7 +30,6 @@ import dbt.task.freshness as freshness_task
 import dbt.task.generate as generate_task
 import dbt.task.init as init_task
 import dbt.task.list as list_task
-import dbt.task.parse as parse_task
 import dbt.task.run as run_task
 import dbt.task.run_operation as run_operation_task
 import dbt.task.seed as seed_task
@@ -541,7 +540,9 @@ def _build_parse_subparser(subparsers, base_subparser):
         Parses the project and provides information on performance
         """,
     )
-    sub.set_defaults(cls=parse_task.ParseTask, which="parse", rpc_method="parse")
+    # NOTE: changing this cls to None is breaking, but this file should go
+    # away once merging the click work
+    sub.set_defaults(cls=None, which="parse", rpc_method="parse")
     sub.add_argument("--write-manifest", action="store_true")
     sub.add_argument("--compile", action="store_true")
     return sub
