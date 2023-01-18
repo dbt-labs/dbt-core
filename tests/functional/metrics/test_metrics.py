@@ -21,7 +21,7 @@ from tests.functional.metrics.fixtures import (
     derived_metric_old_attr_names_yml,
     metric_without_timestamp_or_timegrains_yml,
     invalid_metric_without_timestamp_with_time_grains_yml,
-    invalid_metric_without_timestamp_with_window_yml
+    invalid_metric_without_timestamp_with_window_yml,
 )
 
 

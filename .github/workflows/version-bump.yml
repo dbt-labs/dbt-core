@@ -65,7 +65,7 @@ jobs:
       - name: Set branch value
         id: variables
         run: |
-          echo "::set-output name=BRANCH_NAME::prep-release/${{ github.event.inputs.version_number }}_$GITHUB_RUN_ID"
+          echo "BRANCH_NAME=prep-release/${{ github.event.inputs.version_number }}_$GITHUB_RUN_ID" >> $GITHUB_OUTPUT
 
       - name: Create PR branch
         run: |

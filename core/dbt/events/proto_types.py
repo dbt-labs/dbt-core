@@ -531,6 +531,7 @@ class ConnectionReused(betterproto.Message):
     """E006"""
 
     conn_name: str = betterproto.string_field(1)
+    orig_conn_name: str = betterproto.string_field(2)
 
 
 @dataclass

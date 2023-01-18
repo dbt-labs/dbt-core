@@ -12,7 +12,12 @@ from dbt.adapters.factory import Adapter
 from dbt.main import handle_and_check
 from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
-from dbt.events.functions import fire_event, capture_stdout_logs, stop_capture_stdout_logs, reset_metadata_vars
+from dbt.events.functions import (
+    fire_event,
+    capture_stdout_logs,
+    stop_capture_stdout_logs,
+    reset_metadata_vars,
+)
 from dbt.events.test_types import IntegrationTestDebug
 
 # =============================================================================

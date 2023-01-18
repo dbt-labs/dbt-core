@@ -13,7 +13,18 @@ from dbt.events.base_types import msg_from_base_event, EventLevel
 from dbt.version import installed
 
 
-info_keys = {"name", "code", "msg", "level", "invocation_id", "pid", "thread", "ts", "extra", "category"}
+info_keys = {
+    "name",
+    "code",
+    "msg",
+    "level",
+    "invocation_id",
+    "pid",
+    "thread",
+    "ts",
+    "extra",
+    "category",
+}
 
 
 def test_events():
@@ -87,7 +98,13 @@ def test_exception_events():
 
 
 def test_node_info_events():
-    meta_dict = {"string-key1": ["value1", 2], "string-key2": {"nested-dict-key": "value2"}, 1: "value-from-non-string-key", "string-key3": 1, "string-key4": ["string1", 1, "string2", 2]}
+    meta_dict = {
+        "string-key1": ["value1", 2],
+        "string-key2": {"nested-dict-key": "value2"},
+        1: "value-from-non-string-key",
+        "string-key3": 1,
+        "string-key4": ["string1", 1, "string2", 2],
+    }
     node_info = {
         "node_path": "some_path",
         "node_name": "some_name",
@@ -136,13 +153,7 @@ def test_extra_dict_on_event(monkeypatch):
 
 
 def test_dynamic_level_events():
-    event = LogTestResult(
-        name="model_name",
-        status="pass",
-        index=1,
-        num_models=3,
-        num_failures=0
-    )
+    event = LogTestResult(name="model_name", status="pass", index=1, num_models=3, num_failures=0)
     msg = msg_from_base_event(event, level=EventLevel.INFO)
     assert msg
     assert msg.info.level == "info"

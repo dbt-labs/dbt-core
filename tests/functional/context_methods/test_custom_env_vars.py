@@ -27,7 +27,9 @@ class TestCustomVarInLogs:
         del os.environ["DBT_ENV_CUSTOM_ENV_SOME_VAR"]
 
     def test_extra_filled(self, project):
-        _, log_output = run_dbt_and_capture(['--log-format=json', 'deps'],)
+        _, log_output = run_dbt_and_capture(
+            ["--log-format=json", "deps"],
+        )
         logs = parse_json_logs(log_output)
         for log in logs:
-            assert log['info'].get('extra') == {"SOME_VAR": "value"}
+            assert log["info"].get("extra") == {"SOME_VAR": "value"}

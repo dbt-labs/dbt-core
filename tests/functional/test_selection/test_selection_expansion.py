@@ -190,7 +190,13 @@ class TestSelectionExpansion:
     ):
         select = "model_a"
         exclude = "unique_model_a_fun"
-        expected = ["just_a", "cf_a_b", "cf_a_src", "relationships_model_a_fun__fun__ref_model_b_", "relationships_model_a_fun__fun__source_my_src_my_tbl_"]
+        expected = [
+            "just_a",
+            "cf_a_b",
+            "cf_a_src",
+            "relationships_model_a_fun__fun__ref_model_b_",
+            "relationships_model_a_fun__fun__source_my_src_my_tbl_",
+        ]
         indirect_selection = "buildable"
 
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
