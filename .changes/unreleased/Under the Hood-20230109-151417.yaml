@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: '[CT-932] Implement `dbt test` in Click'
+time: 2023-01-09T15:14:17.524221-08:00
+custom:
+  Author: aranke
+  Issue: "5556"
