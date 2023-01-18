@@ -26,11 +26,11 @@ class BaseCachingTest:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            'config-version': 2,
-            'quoting': {
-                'identifier': False,
-                'schema': False,
-            }
+            "config-version": 2,
+            "quoting": {
+                "identifier": False,
+                "schema": False,
+            },
         }
 
     def run_and_inspect_cache(self, project, run_args=None):
@@ -58,7 +58,7 @@ class BaseCachingTest:
             assert getattr(relation, key).lower() == getattr(second_relation, key).lower()
 
     def test_cache(self, project):
-        self.run_and_inspect_cache(project, run_args=['run'])
+        self.run_and_inspect_cache(project, run_args=["run"])
 
 
 class BaseCachingLowercaseModel(BaseCachingTest):
@@ -87,7 +87,7 @@ class BaseCachingSelectedSchemaOnly(BaseCachingTest):
 
     def test_cache(self, project):
         # this should only cache the schema containing the selected model
-        run_args = ['--cache-selected-only', 'run', '--select', 'model']
+        run_args = ["--cache-selected-only", "run", "--select", "model"]
         self.run_and_inspect_cache(project, run_args)
 
 
