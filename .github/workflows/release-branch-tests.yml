@@ -34,6 +34,9 @@ jobs:
       # Will look like '["1.0.latest", "1.2.latest"]'
       branches: ${{ toJSON(steps.generate.outputs.branch_matrix) }}
     steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
       - name: "Get all branches"
         run: |
           branches=($(git branch --format "%(refname:short)" | grep "^1.*.latest"))
