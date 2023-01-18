@@ -9,6 +9,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Exposure,
     Metric,
+    Entity,
     GraphMemberNode,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -51,8 +52,8 @@ class GraphQueue:
         node = self.manifest.expect(node_id)
         if node.resource_type != NodeType.Model:
             return False
-        # must be a Model - tell mypy this won't be a Source or Exposure or Metric
-        assert not isinstance(node, (SourceDefinition, Exposure, Metric))
+        # must be a Model - tell mypy this won't be a Source or Exposure or Metric or Entity
+        assert not isinstance(node, (SourceDefinition, Exposure, Metric, Entity))
         if node.is_ephemeral:
             return False
         return True

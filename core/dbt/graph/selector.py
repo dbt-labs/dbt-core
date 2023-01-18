@@ -163,6 +163,9 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.metrics:
             metric = self.manifest.metrics[unique_id]
             return metric.config.enabled
+        elif unique_id in self.manifest.entities:
+            metric = self.manifest.entities[unique_id]
+            return metric.config.enabled
         node = self.manifest.nodes[unique_id]
         return not node.empty and node.config.enabled
 
@@ -182,6 +185,8 @@ class NodeSelector(MethodManager):
             node = self.manifest.exposures[unique_id]
         elif unique_id in self.manifest.metrics:
             node = self.manifest.metrics[unique_id]
+        elif unique_id in self.manifest.entities:
+            node = self.manifest.entities[unique_id]
         else:
             raise DbtInternalError(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)

@@ -533,3 +533,20 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
         if data.get("model") is not None and data.get("calculation_method") == "derived":
             raise ValidationError("Derived metrics cannot have a 'model' property")
+
+@dataclass
+class UnparsedEntity(dbtClassMixin, Replaceable):
+    """This class is used for entity information"""
+    name: str
+    model: str
+    description: str = ""
+    dimensions: Optional[str] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedEntity, cls).validate(data)
+        errors = []
+        ## TODO: Add validation here around include/exclude and others

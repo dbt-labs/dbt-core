@@ -45,6 +45,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("tests")
         elif resource_type == NodeType.Metric:
             model_configs = unrendered.get("metrics")
+        elif resource_type == NodeType.Entity:
+            model_configs = unrendered.get("entities")
         elif resource_type == NodeType.Exposure:
             model_configs = unrendered.get("exposures")
         else:
@@ -70,6 +72,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.tests
         elif resource_type == NodeType.Metric:
             model_configs = self.project.metrics
+        elif resource_type == NodeType.Entity:
+            model_configs = self.project.entities
         elif resource_type == NodeType.Exposure:
             model_configs = self.project.exposures
         else:

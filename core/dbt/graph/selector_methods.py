@@ -12,6 +12,7 @@ from dbt.contracts.graph.nodes import (
     SingularTestNode,
     Exposure,
     Metric,
+    Entity,
     GenericTestNode,
     SourceDefinition,
     ResultNode,
@@ -43,6 +44,7 @@ class MethodName(StrEnum):
     State = "state"
     Exposure = "exposure"
     Metric = "metric"
+    Entity = "entity"
     Result = "result"
     SourceStatus = "source_status"
 
@@ -71,7 +73,7 @@ def is_selected_node(fqn: List[str], node_selector: str):
     return True
 
 
-SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric]
+SelectorTarget = Union[SourceDefinition, ManifestNode, Exposure, Metric, Entity]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -118,6 +120,17 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, metric
 
+
+    def entity_nodes(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, Entity]]:
+
+        for key, metric in self.manifest.entities.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, metric
+
     def all_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
@@ -126,6 +139,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.source_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.entity_nodes(included_nodes),
         )
 
     def configurable_nodes(
@@ -136,11 +150,12 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
-    ) -> Iterator[Tuple[UniqueId, Union[Exposure, ManifestNode, Metric]]]:
+    ) -> Iterator[Tuple[UniqueId, Union[Exposure, ManifestNode, Metric, Entity]]]:
         yield from chain(
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
+            self.entity_nodes(included_nodes),
         )
 
     @abc.abstractmethod
@@ -269,6 +284,30 @@ class MetricSelectorMethod(SelectorMethod):
 
             yield node
 
+class EntitySelectorMethod(SelectorMethod):
+    """TODO: Add a description of what this selector method is doing"""
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid entity selector value "{}". Entities must be of '
+                "the form ${{entity_name}} or "
+                "${{entity_package.entity_name}}"
+            ).format(selector)
+            raise DbtRuntimeError(msg)
+
+        for node, real_node in self.entity_nodes(included_nodes):
+            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+                continue
+            if target_name not in (real_node.name, SELECTOR_GLOB):
+                continue
+
+            yield node
 
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
@@ -530,6 +569,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.exposures[node]
             elif node in manifest.metrics:
                 previous_node = manifest.metrics[node]
+            elif node in manifest.entities:
+                previous_node = manifest.entities[node]
 
             if checker(previous_node, real_node):
                 yield node
@@ -616,6 +657,7 @@ class MethodManager:
         MethodName.State: StateSelectorMethod,
         MethodName.Exposure: ExposureSelectorMethod,
         MethodName.Metric: MetricSelectorMethod,
+        MethodName.Entity: EntitySelectorMethod,
         MethodName.Result: ResultSelectorMethod,
         MethodName.SourceStatus: SourceStatusSelectorMethod,
     }

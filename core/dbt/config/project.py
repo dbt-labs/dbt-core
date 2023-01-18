@@ -381,6 +381,7 @@ class PartialProject(RenderComponents):
         sources: Dict[str, Any]
         tests: Dict[str, Any]
         metrics: Dict[str, Any]
+        entities: Dict[str, Any]
         exposures: Dict[str, Any]
         vars_value: VarProvider
 
@@ -391,6 +392,7 @@ class PartialProject(RenderComponents):
         sources = cfg.sources
         tests = cfg.tests
         metrics = cfg.metrics
+        entities = cfg.entities
         exposures = cfg.exposures
         if cfg.vars is None:
             vars_dict: Dict[str, Any] = {}
@@ -446,6 +448,7 @@ class PartialProject(RenderComponents):
             sources=sources,
             tests=tests,
             metrics=metrics,
+            entities=entities,
             exposures=exposures,
             vars=vars_value,
             config_version=cfg.config_version,
@@ -550,6 +553,7 @@ class Project:
     sources: Dict[str, Any]
     tests: Dict[str, Any]
     metrics: Dict[str, Any]
+    entities: Dict[str, Any]
     exposures: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
@@ -624,6 +628,7 @@ class Project:
                 "sources": self.sources,
                 "tests": self.tests,
                 "metrics": self.metrics,
+                "entities": self.entities,
                 "exposures": self.exposures,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],

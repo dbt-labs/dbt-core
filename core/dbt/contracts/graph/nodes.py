@@ -55,6 +55,7 @@ from .model_config import (
     TestConfig,
     SourceConfig,
     MetricConfig,
+    EntityConfig,
     ExposureConfig,
     EmptySnapshotConfig,
     SnapshotConfig,
@@ -272,7 +273,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     @classmethod
     def _deserialize(cls, dct: Dict[str, int]):
         # The serialized ParsedNodes do not differ from each other
-        # in fields that would allow 'from_dict' to distinguis
+        # in fields that would allow 'from_dict' to distinguish
         # between them.
         resource_type = dct["resource_type"]
         if resource_type == "model":
@@ -392,6 +393,7 @@ class CompiledNode(ParsedNode):
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    entities: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     compiled_path: Optional[str] = None
     compiled: bool = False
@@ -906,6 +908,7 @@ class Exposure(GraphNode):
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    entities: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property
@@ -997,6 +1000,7 @@ class Metric(GraphNode):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    entities: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property
@@ -1064,6 +1068,61 @@ class Metric(GraphNode):
             and True
         )
 
+@dataclass
+class Entity(GraphNode):
+    name: str
+    model: str
+    description: str
+    dimensions: List[str]
+    model_unique_id: Optional[str] = None
+    resource_type: NodeType = NodeType.Entity
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+    config: EntityConfig = field(default_factory=EntityConfig)
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    sources: List[List[str]] = field(default_factory=list)
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
+    created_at: float = field(default_factory=lambda: time.time())
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def search_name(self):
+        return self.name
+
+    def same_model(self, old: "Entity") -> bool:
+        return self.model == old.model
+
+    def same_dimensions(self, old: "Entity") -> bool:
+        return self.dimensions == old.dimensions
+
+    def same_description(self, old: "Entity") -> bool:
+        return self.description == old.description
+
+    def same_config(self, old: "Entity") -> bool:
+        return self.config.same_contents(
+            self.unrendered_config,
+            old.unrendered_config,
+        )
+
+    def same_contents(self, old: Optional["Entity"]) -> bool:
+        # existing when it didn't before is a change!
+        # metadata/tags changes are not "changes"
+        if old is None:
+            return True
+
+        return (
+            self.same_model(old)
+            and self.same_dimensions(old)
+            and self.same_description(old)
+            and self.same_config(old)
+            and True
+        )
+
 
 # ====================================
 # Patches
@@ -1126,6 +1185,7 @@ GraphMemberNode = Union[
     ResultNode,
     Exposure,
     Metric,
+    Entity,
 ]
 
 # All "nodes" (or node-like objects) in this file

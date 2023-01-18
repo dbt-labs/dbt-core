@@ -48,6 +48,7 @@ def print_compile_stats(stats):
         NodeType.Source: "source",
         NodeType.Exposure: "exposure",
         NodeType.Metric: "metric",
+        NodeType.Entity: "entity",
     }
 
     results = {k: 0 for k in names.keys()}
@@ -83,6 +84,8 @@ def _generate_stats(manifest: Manifest):
         stats[exposure.resource_type] += 1
     for metric in manifest.metrics.values():
         stats[metric.resource_type] += 1
+    for entity in manifest.entities.values():
+        stats[entity.resource_type] += 1
     for macro in manifest.macros.values():
         stats[macro.resource_type] += 1
     return stats

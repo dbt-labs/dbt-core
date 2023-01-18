@@ -33,6 +33,7 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
     Metric,
+    Entity,
     SeedNode,
     SourceDefinition,
     Resource,
@@ -1498,6 +1499,42 @@ def generate_parse_metrics(
         "metric": ParseMetricResolver(
             None,
             metric,
+            project,
+            manifest,
+        ),
+    }
+
+class EntityRefResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        package = None
+        if len(args) == 1:
+            name = args[0]
+        elif len(args) == 2:
+            package, name = args
+        else:
+            raise RefArgsError(node=self.model, args=args)
+        self.validate_args(name, package)
+        self.model.refs.append(list(args))
+        return ""
+
+    def validate_args(self, name, package):
+        if not isinstance(name, str):
+            raise ParsingError(
+                f"In the entity associated with {self.model.original_file_path} "
+                "the name argument to ref() must be a string"
+            )
+
+def generate_parse_entities(
+    entity: Entity,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    package_name: str,
+) -> Dict[str, Any]:
+    project = config.load_dependencies()[package_name]
+    return {
+        "ref": EntityRefResolver(
+            None,
+            entity,
             project,
             manifest,
         ),
