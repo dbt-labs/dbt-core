@@ -1,0 +1,15 @@
+version: 2 
+entities:
+
+  - name: customers
+    model: ref('dim_customers')
+    description: "Our customers entity"
+
+    dimensions:
+      - name: first_name_v3_testing
+        description: string
+        column_name: first_name
+        date_type: string
+        default_timestamp: true
+        primary_key: true
+        time_grains: [day, week, month]

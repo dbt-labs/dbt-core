@@ -1,0 +1,6 @@
+customer_id,first_name,last_name,email,gender,is_new_customer,date_added
+1,Geodude,Hills,bhills0@altervista.org,Male,FALSE,2022-01-01
+2,Mew,Coxhead,mcoxhead1@symantec.com,Genderfluid,TRUE,2022-01-06
+3,Mewtwo,Redish,aredish2@last.fm,Genderqueer,FALSE,2022-01-13
+4,Charizard,Basant,lbasant3@dedecms.com,Female,TRUE,2022-02-01
+5,Snorlax,Pokemon,the_email@dedecms.com,Male,TRUE,2022-02-03

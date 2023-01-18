@@ -1,0 +1,21 @@
+version: 2 
+models: 
+  - name: fact_orders
+    columns:
+      - name: order_id
+        description: TBD
+
+      - name: order_country
+        description: TBD
+
+      - name: order_total
+        description: TBD
+
+      - name: had_discount
+        description: TBD
+
+      - name: customer_id
+        description: TBD
+
+      - name: order_date
+        description: TBD

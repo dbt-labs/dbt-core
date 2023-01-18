@@ -1,0 +1,6 @@
+version: 2 
+entities:
+
+  - name: orders
+    model: ref('fact_orders')
+    description: "Our orders entity"

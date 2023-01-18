@@ -1,0 +1,21 @@
+version: 2 
+models: 
+  - name: dim_customers
+    columns:
+      - name: customer_id
+        description: TBD
+
+      - name: first_name
+        description: TBD
+
+      - name: last_name
+        description: TBD
+
+      - name: email
+        description: TBD
+
+      - name: gender
+        description: TBD
+
+      - name: is_new_customer
+        description: TBD
