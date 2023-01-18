@@ -43,8 +43,8 @@ jobs:
         id: test_generate
         run: |
           git status
-          git branch --format "%(refname:short)" | grep "^1.*.latest"
           git branch --format "%(refname:short)"
+          git branch --format "%(refname:short)" | grep "^1.*.latest"
 
       - name: "Get all branches"
         id: generate
