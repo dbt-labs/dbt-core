@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       # Will look like '["1.0.latest", "1.2.latest"]'
-      branches: ${{ toJSON(steps.generate.outputs.branch_matrix) }}
+      branch_matrix: ${{ toJSON(steps.generate.outputs.branch_matrix) }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
@@ -40,18 +40,16 @@ jobs:
           fetch-depth: 0
 
       - name: "Get all branches"
+        id: generate
         run: |
-          branches=($(git branch --format "%(refname:short)" | grep "^1.*.latest"))
-          branches+="main"
+          git status
+          BRANCHES=($(git branch --format "%(refname:short)" | grep "^1.*.latest"))
+          BRANCHES+="main"
+          echo "branch_matrix=$BRANCHES" >> $GITHUB_OUTPUT
 
       - name: "[DEBUG] Check branch list"
         run: |
           echo ${{ steps.generate.outputs.branch_matrix }}
-
-      - name: Generate Matrix
-        id: generate
-        run: |
-          echo "branch_matrix=BRANCHES" >> $GITHUB_OUTPUT
 
   kick-off-ci:
     needs: [generate_matrix]
@@ -65,7 +63,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        branch: ${{ fromJSON(needs.generate_matrix.outputs.branches) }}
+        branch: ${{ fromJSON(needs.generate_matrix.outputs.branch_matrix) }}
 
     steps:
     - name: Call CI workflow for ${{ matrix.branch }} branch
