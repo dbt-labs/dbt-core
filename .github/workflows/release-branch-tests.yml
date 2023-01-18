@@ -28,7 +28,28 @@ on:
 permissions: read-all
 
 jobs:
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      # Will look like '["1.0.latest", "1.2.latest"]'
+      branches: ${{ toJSON(steps.generate.outputs.branch_matrix) }}
+    steps:
+      - name: "Get all branches"
+        run: |
+          branches=($(git branch --format "%(refname:short)" | grep "^1.*.latest"))
+          branches+="main"
+
+      - name: "[DEBUG] Check branch list"
+        run: |
+          echo ${{ steps.generate.outputs.branch_matrix }}
+
+      - name: Generate Matrix
+        id: generate
+        run: |
+          echo "branch_matrix=BRANCHES" >> $GITHUB_OUTPUT
+
   kick-off-ci:
+    needs: [generate_matrix]
     name: Kick-off CI
     runs-on: ubuntu-latest
 
@@ -39,7 +60,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        branch: [1.0.latest, 1.1.latest, 1.2.latest, 1.3.latest, 1.4.latest, main]
+        branch: ${{ fromJSON(needs.generate_matrix.outputs.branches) }}
 
     steps:
     - name: Call CI workflow for ${{ matrix.branch }} branch
