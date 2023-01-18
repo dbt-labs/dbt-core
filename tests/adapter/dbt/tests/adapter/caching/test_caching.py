@@ -34,16 +34,14 @@ class BaseCachingTest:
         }
 
     def run_and_inspect_cache(self, project, run_args=None):
-        if not run_args:
-            run_args = ['run']
         run_dbt(run_args)
 
         # the cache was empty at the start of the run.
         # the model materialization returned an unquoted relation and added to the cache.
         adapter = project.adapter
         assert len(adapter.cache.relations) == 1
-        relation = next(iter(adapter.cache.relations.values()))
-        assert relation.inner.schema == project.test_schema
+        relation = list(adapter.cache.relations).pop()
+        assert relation.schema == project.test_schema
         assert relation.schema == project.test_schema.lower()
 
         # on the second run, dbt will find a relation in the database during cache population.
@@ -53,14 +51,14 @@ class BaseCachingTest:
         run_dbt(run_args)
         adapter = project.adapter
         assert len(adapter.cache.relations) == 1
-        second_relation = next(iter(adapter.cache.relations.values()))
+        second_relation = list(adapter.cache.relations).pop()
 
         # perform a case-insensitive + quote-insensitive comparison
         for key in ["database", "schema", "identifier"]:
-            assert relation.inner[key].lower() == second_relation.inner[key].lower()
+            assert getattr(relation, key).lower() == getattr(second_relation, key).lower()
 
     def test_cache(self, project):
-        self.run_and_inspect_cache(project)
+        self.run_and_inspect_cache(project, run_args=['run'])
 
 
 class BaseCachingLowercaseModel(BaseCachingTest):
