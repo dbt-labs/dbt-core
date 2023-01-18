@@ -118,7 +118,7 @@ class ParserRef:
     def __init__(self):
         self.column_info: Dict[str, ColumnInfo] = {}
 
-    ## TODO: Mimic this for dimension information at the entity level
+    # TODO: Mimic this for dimension information at the entity level
     def add(
         self,
         column: Union[HasDocs, UnparsedColumn],

@@ -550,5 +550,4 @@ class UnparsedEntity(dbtClassMixin, Replaceable):
     @classmethod
     def validate(cls, data):
         super(UnparsedEntity, cls).validate(data)
-        errors = []
-        ## TODO: Add validation here around include/exclude and others
+        # TODO: Add validation here around include/exclude and others

@@ -1437,7 +1437,7 @@ def _process_sources_for_exposure(manifest: Manifest, current_project: str, expo
         manifest.update_exposure(exposure)
 
 
-## TODO: Remove this code because metrics can't be based on sources
+# TODO: Remove this code because metrics can't be based on sources
 def _process_sources_for_metric(manifest: Manifest, current_project: str, metric: Metric):
     target_source: Optional[Union[Disabled, SourceDefinition]] = None
     for source_name, table_name in metric.sources:
