@@ -63,8 +63,8 @@ class GraphRunnableTask(ConfiguredTask):
 
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
-    def __init__(self, args, config):
-        super().__init__(args, config)
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config, manifest)
         self.job_queue: Optional[GraphQueue] = None
         self._flattened_nodes: Optional[List[ResultNode]] = None
 

@@ -168,15 +168,15 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> str:
     return nearest_project_dir
 
 
+# TODO: look into deprecating this class in favor of several small functions that
+# produce the same behavior. currently this class only contains manifest compilation,
+# holding a manifest, and moving direcories.
 class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
-    def __init__(self, args, config):
+    def __init__(self, args, config, manifest: Optional[Manifest]):
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
-        self.manifest: Optional[Manifest] = None
-
-    def set_manifest(self, manifest: Manifest):
         self.manifest = manifest
 
     def compile_manifest(self):

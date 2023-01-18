@@ -4,7 +4,7 @@ from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile
 from dbt.events.functions import setup_event_logger
 from dbt.exceptions import DbtProjectError
-from dbt.parser.manifest import ManifestLoader
+from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import initialize_from_flags, track_run
 
@@ -116,8 +116,9 @@ def runtime_config(func):
 
 
 def manifest(*args0, write_perf_info=False):
-    """A decorator used by click command functions for generating a manifest given a profile, project,
-    and runtime config. This also registers the adaper from the runtime config.
+    """A decorator used by click command functions for generating a manifest
+    given a profile, project, and runtime config. This also registers the adaper
+    from the runtime config and writes the manifest to disc.
     """
 
     def outer_wrapper(func):
@@ -138,6 +139,8 @@ def manifest(*args0, write_perf_info=False):
             )
 
             ctx.obj["manifest"] = manifest
+            if ctx.obj["flags"].write_json:
+                write_manifest(manifest, ctx.obj["runtime_config"].target_path)
 
             return func(*args, **kwargs)
 

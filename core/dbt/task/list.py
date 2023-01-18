@@ -40,8 +40,8 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args, config):
-        super().__init__(args, config)
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config, manifest)
         if self.args.models:
             if self.args.select:
                 raise RuntimeException('"models" and "select" are mutually exclusive arguments')

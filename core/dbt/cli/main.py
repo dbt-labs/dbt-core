@@ -9,7 +9,6 @@ from dbt.config.project import Project
 from dbt.config.profile import Profile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.task.clean import CleanTask
-from dbt.parser.manifest import write_manifest
 from dbt.task.compile import CompileTask
 from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
@@ -214,8 +213,7 @@ def docs_serve(ctx, **kwargs):
 def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
     target/ directory."""
-    task = CompileTask(ctx.obj["flags"], ctx.obj["runtime_config"])
-    _set_manifest_on_task(task, ctx)
+    task = CompileTask(ctx.obj["flags"], ctx.obj["runtime_config"], ctx.obj["manifest"])
 
     results = task.run()
     success = task.interpret_results(results)
@@ -317,7 +315,7 @@ def list(ctx, **kwargs):
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
-    _write_manifest(ctx)
+    # manifest generation and writing happens in @requires.manifeset
     return None, True
 
 
@@ -346,8 +344,7 @@ def parse(ctx, **kwargs):
 @requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-    task = RunTask(ctx.obj["flags"], ctx.obj["runtime_config"])
-    _set_manifest_on_task(task, ctx)
+    task = RunTask(ctx.obj["flags"], ctx.obj["runtime_config"], ctx.obj["manifest"])
 
     results = task.run()
     success = task.interpret_results(results)
@@ -469,22 +466,11 @@ def freshness(ctx, **kwargs):
 @requires.manifest
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
-    task = TestTask(ctx.obj["flags"], ctx.obj["runtime_config"])
-    _set_manifest_on_task(task, ctx)
+    task = TestTask(ctx.obj["flags"], ctx.obj["runtime_config"], ctx.obj["manifest"])
 
     results = task.run()
     success = task.interpret_results(results)
     return results, success
-
-
-def _set_manifest_on_task(task, ctx):
-    _write_manifest(ctx)
-    task.set_manifest(ctx.obj["manifest"])
-
-
-def _write_manifest(ctx):
-    if ctx.obj["flags"].write_json:
-        write_manifest(ctx.obj["manifest"], ctx.obj["runtime_config"].target_path)
 
 
 # Support running as a module
