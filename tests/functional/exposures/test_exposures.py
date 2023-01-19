@@ -6,7 +6,7 @@ from tests.functional.exposures.fixtures import (
     second_model_sql,
     simple_exposure_yml,
     source_schema_yml,
-    metrics_schema_yml
+    metrics_schema_yml,
 )
 
 
@@ -37,8 +37,8 @@ class TestBasicExposures:
         manifest = get_manifest(project.project_root)
         exposure_depends_on = manifest.exposures["exposure.test.simple_exposure"].depends_on.nodes
         expected_exposure_depends_on = [
-            'source.test.test_source.test_table',
-            'model.test.model',
-            'metric.test.metric'
+            "source.test.test_source.test_table",
+            "model.test.model",
+            "metric.test.metric",
         ]
         assert sorted(exposure_depends_on) == sorted(expected_exposure_depends_on)

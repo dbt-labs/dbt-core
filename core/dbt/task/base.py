@@ -4,6 +4,7 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union, Dict, Any, Optional
+from datetime import datetime
 
 from dbt import tracking
 from dbt import flags
@@ -16,24 +17,18 @@ from dbt.contracts.results import (
     RunningStatus,
 )
 from dbt.exceptions import (
-    NotImplementedException,
-    CompilationException,
-    RuntimeException,
-    InternalException,
+    NotImplementedError,
+    CompilationError,
+    DbtRuntimeError,
+    DbtInternalError,
 )
 from dbt.logger import log_manager
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    DbtProjectError,
-    DbtProjectErrorException,
-    DbtProfileError,
-    DbtProfileErrorException,
-    ProfileListTitle,
-    ListSingleProfile,
-    NoDefinedProfiles,
-    ProfileHelpMessage,
+    LogDbtProjectError,
+    LogDbtProfileError,
     CatchableExceptionOnRun,
-    InternalExceptionOnRun,
+    InternalErrorOnRun,
     GenericExceptionOnRun,
     NodeConnectionReleaseError,
     LogDebugStackTrace,
@@ -102,33 +97,20 @@ class BaseTask(metaclass=ABCMeta):
             # for the clean or deps tasks
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
-            fire_event(DbtProjectError())
-            fire_event(DbtProjectErrorException(exc=str(exc)))
+            fire_event(LogDbtProjectError(exc=str(exc)))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
+            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
-            fire_event(DbtProfileError())
-            fire_event(DbtProfileErrorException(exc=str(exc)))
-
-            all_profiles = read_profiles(flags.PROFILES_DIR).keys()
-
-            if len(all_profiles) > 0:
-                fire_event(ProfileListTitle())
-                for profile in all_profiles:
-                    fire_event(ListSingleProfile(profile=profile))
-            else:
-                fire_event(NoDefinedProfiles())
-
-            fire_event(ProfileHelpMessage())
-
+            all_profile_names = list(read_profiles(flags.PROFILES_DIR).keys())
+            fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
+            raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
         return cls(args, config)
 
     @abstractmethod
     def run(self):
-        raise dbt.exceptions.NotImplementedException("Not Implemented")
+        raise dbt.exceptions.NotImplementedError("Not Implemented")
 
     def interpret_results(self, results):
         return True
@@ -142,7 +124,7 @@ def get_nearest_project_dir(args):
         if os.path.exists(project_file):
             return args.project_dir
         else:
-            raise dbt.exceptions.RuntimeException(
+            raise dbt.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
             )
@@ -156,7 +138,7 @@ def get_nearest_project_dir(args):
             return cwd
         cwd = os.path.dirname(cwd)
 
-    raise dbt.exceptions.RuntimeException(
+    raise dbt.exceptions.DbtRuntimeError(
         "fatal: Not a dbt project (or any of the parent directories). "
         "Missing dbt_project.yml file"
     )
@@ -227,6 +209,9 @@ class BaseRunner(metaclass=ABCMeta):
             self.before_execute()
 
         result = self.safe_run(manifest)
+        self.node.update_event_status(
+            node_status=result.status, finished_at=datetime.utcnow().isoformat()
+        )
 
         if not self.node.is_ephemeral_model:
             self.after_execute(result)
@@ -347,7 +332,7 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        fire_event(InternalExceptionOnRun(build_path=self.node.build_path, exc=str(e)))
+        fire_event(InternalErrorOnRun(build_path=self.node.build_path, exc=str(e)))
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
@@ -363,10 +348,10 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def handle_exception(self, e, ctx):
-        catchable_errors = (CompilationException, RuntimeException)
+        catchable_errors = (CompilationError, DbtRuntimeError)
         if isinstance(e, catchable_errors):
             error = self._handle_catchable_exception(e, ctx)
-        elif isinstance(e, InternalException):
+        elif isinstance(e, DbtInternalError):
             error = self._handle_internal_exception(e, ctx)
         else:
             error = self._handle_generic_exception(e, ctx)
@@ -421,16 +406,16 @@ class BaseRunner(metaclass=ABCMeta):
         return None
 
     def before_execute(self):
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def execute(self, compiled_node, manifest):
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def run(self, compiled_node, manifest):
         return self.execute(compiled_node, manifest)
 
     def after_execute(self, result):
-        raise NotImplementedException()
+        raise NotImplementedError()
 
     def _skip_caused_by_ephemeral_failure(self):
         if self.skip_cause is None or self.skip_cause.node is None:
@@ -456,7 +441,7 @@ class BaseRunner(metaclass=ABCMeta):
                 )
                 print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
-                    raise InternalException(
+                    raise DbtInternalError(
                         "Skip cause not set but skip was somehow caused by an ephemeral failure"
                     )
                 # set an error so dbt will exit with an error code
@@ -467,6 +452,9 @@ class BaseRunner(metaclass=ABCMeta):
                     )
                 )
             else:
+                # 'skipped' nodes should not have a value for 'node_finished_at'
+                # they do have 'node_started_at', which is set in GraphRunnableTask.call_runner
+                self.node.update_event_status(node_status=RunStatus.Skipped)
                 fire_event(
                     SkippingDetails(
                         resource_type=self.node.resource_type,

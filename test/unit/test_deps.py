@@ -133,7 +133,7 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(c.git, 'http://example.com')
         self.assertEqual(c.revisions, ['0.0.1', '0.0.2'])
 
-        with self.assertRaises(dbt.exceptions.DependencyException):
+        with self.assertRaises(dbt.exceptions.DependencyError):
             c.resolved()
 
     def test_default_revision(self):
@@ -264,7 +264,7 @@ class TestHubPackage(unittest.TestCase):
             package='dbt-labs-test/b',
             version='0.1.2'
         ))
-        with self.assertRaises(dbt.exceptions.DependencyException) as exc:
+        with self.assertRaises(dbt.exceptions.DependencyError) as exc:
             a.resolved()
 
         msg = 'Package dbt-labs-test/b was not found in the package index'
@@ -276,7 +276,7 @@ class TestHubPackage(unittest.TestCase):
             version='0.1.4'
         ))
 
-        with self.assertRaises(dbt.exceptions.DependencyException) as exc:
+        with self.assertRaises(dbt.exceptions.DependencyError) as exc:
             a.resolved()
         msg = (
             "Could not find a matching compatible version for package "
@@ -298,7 +298,7 @@ class TestHubPackage(unittest.TestCase):
         b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
 
-        with self.assertRaises(dbt.exceptions.DependencyException) as exc:
+        with self.assertRaises(dbt.exceptions.DependencyError) as exc:
             c.resolved()
         msg = (
             "Version error for package dbt-labs-test/a: Could not "

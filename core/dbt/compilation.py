@@ -21,9 +21,9 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
 )
 from dbt.exceptions import (
-    GraphDependencyNotFound,
-    InternalException,
-    RuntimeException,
+    GraphDependencyNotFoundError,
+    DbtInternalError,
+    DbtRuntimeError,
 )
 from dbt.graph import Graph
 from dbt.events.functions import fire_event
@@ -258,7 +258,7 @@ class Compiler:
         inserting CTEs into the SQL.
         """
         if model.compiled_code is None:
-            raise RuntimeException("Cannot inject ctes into an unparsed node", model)
+            raise DbtRuntimeError("Cannot inject ctes into an unparsed node", model)
         if model.extra_ctes_injected:
             return (model, model.extra_ctes)
 
@@ -279,7 +279,7 @@ class Compiler:
         # ephemeral model.
         for cte in model.extra_ctes:
             if cte.id not in manifest.nodes:
-                raise InternalException(
+                raise DbtInternalError(
                     f"During compilation, found a cte reference that "
                     f"could not be resolved: {cte.id}"
                 )
@@ -287,7 +287,7 @@ class Compiler:
             assert not isinstance(cte_model, SeedNode)
 
             if not cte_model.is_ephemeral_model:
-                raise InternalException(f"{cte.id} is not ephemeral")
+                raise DbtInternalError(f"{cte.id} is not ephemeral")
 
             # This model has already been compiled, so it's been
             # through here before
@@ -352,13 +352,6 @@ class Compiler:
         )
 
         if node.language == ModelLanguage.python:
-            # TODO could we also 'minify' this code at all? just aesthetic, not functional
-
-            # quoating seems like something very specific to sql so far
-            # for all python implementations we are seeing there's no quating.
-            # TODO try to find better way to do this, given that
-            original_quoting = self.config.quoting
-            self.config.quoting = {key: False for key in original_quoting.keys()}
             context = self._create_node_context(node, manifest, extra_context)
 
             postfix = jinja.get_rendered(
@@ -368,8 +361,6 @@ class Compiler:
             )
             # we should NOT jinja render the python model's 'raw code'
             node.compiled_code = f"{node.raw_code}\n\n{postfix}"
-            # restore quoting settings in the end since context is lazy evaluated
-            self.config.quoting = original_quoting
 
         else:
             context = self._create_node_context(node, manifest, extra_context)
@@ -400,7 +391,7 @@ class Compiler:
             elif dependency in manifest.metrics:
                 linker.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
             else:
-                raise GraphDependencyNotFound(node, dependency)
+                raise GraphDependencyNotFoundError(node, dependency)
 
     def link_graph(self, linker: Linker, manifest: Manifest, add_test_edges: bool = False):
         for source in manifest.sources.values():

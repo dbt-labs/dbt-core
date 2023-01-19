@@ -898,11 +898,11 @@ def test_select_state_no_change(manifest, previous_state):
 def test_select_state_nothing(manifest, previous_state):
     previous_state.manifest = None
     method = statemethod(manifest, previous_state)
-    with pytest.raises(dbt.exceptions.RuntimeException) as exc:
+    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, 'modified')
     assert 'no comparison manifest' in str(exc.value)
 
-    with pytest.raises(dbt.exceptions.RuntimeException) as exc:
+    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, 'new')
     assert 'no comparison manifest' in str(exc.value)
 
@@ -973,8 +973,8 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         assert not search_manifest_using_method(manifest, method, 'modified')
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
-        assert event.info.name == 'SeedExceedsLimitSamePath'
-        msg = event.info.msg
+        assert type(event).__name__ == 'SeedExceedsLimitSamePath'
+        msg = event.message()
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
@@ -990,8 +990,8 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
             manifest, method, 'modified') == {'seed'}
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
-        assert event.info.name == 'SeedIncreased'
-        msg = event.info.msg
+        assert type(event).__name__ == 'SeedIncreased'
+        msg = event.message()
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')

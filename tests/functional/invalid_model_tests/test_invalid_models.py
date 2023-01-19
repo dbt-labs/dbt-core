@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingError
 
 from dbt.tests.util import (
     run_dbt,
@@ -129,7 +129,7 @@ class TestMalformedEnabledParam(InvalidModelBase):
         }
 
     def test_view_disabled(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["seed"])
 
         assert "enabled" in str(exc.value)
@@ -146,7 +146,7 @@ class TestReferencingDisabledModel(InvalidModelBase):
         }
 
     def test_referencing_disabled_model(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
 
         assert "which is disabled" in str(exc.value)
@@ -160,7 +160,7 @@ class TestMissingModelReference(InvalidModelBase):
         return {"models__dependent_on_view.sql": models__dependent_on_view}
 
     def test_models_not_found(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
 
         assert "which was not found" in str(exc.value)
@@ -176,7 +176,7 @@ class TestInvalidMacroCall(InvalidModelBase):
         return {"models__with_bad_macro.sql": models__with_bad_macro}
 
     def test_with_invalid_macro_call(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["compile"])
 
         assert "macro 'dbt_macro__some_macro' takes no keyword argument 'invalid'" in str(
@@ -207,7 +207,7 @@ class TestInvalidDisabledSource(InvalidModelBase):
         }
 
     def test_postgres_source_disabled(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
 
         assert "which is disabled" in str(exc.value)
@@ -221,7 +221,7 @@ class TestInvalidMissingSource(InvalidModelBase):
         return {"models__referencing_disabled_source.sql": models__referencing_disabled_source}
 
     def test_source_missing(self, project):
-        with pytest.raises(CompilationException) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt()
 
         assert "which was not found" in str(exc.value)

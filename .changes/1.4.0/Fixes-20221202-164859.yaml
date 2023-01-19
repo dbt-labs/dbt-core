@@ -1,6 +1,0 @@
-kind: Fixes
-body: Use full path for writing manifest
-time: 2022-12-02T16:48:59.029519-05:00
-custom:
-  Author: gshank
-  Issue: "6055"

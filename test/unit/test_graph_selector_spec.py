@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 from dbt.graph.selector_spec import (
     SelectionCriteria,
     SelectionIntersection,
@@ -111,10 +111,10 @@ def test_raw_parse_weird():
 
 
 def test_raw_parse_invalid():
-    with pytest.raises(RuntimeException):
+    with pytest.raises(DbtRuntimeError):
         SelectionCriteria.from_single_spec('invalid_method:something')
 
-    with pytest.raises(RuntimeException):
+    with pytest.raises(DbtRuntimeError):
         SelectionCriteria.from_single_spec('@foo+')
 
 

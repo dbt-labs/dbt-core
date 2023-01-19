@@ -6,7 +6,7 @@ from .base import BaseRunner
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
-from dbt.exceptions import InternalException, RuntimeException
+from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.events.functions import fire_event
 from dbt.events.types import CompileComplete
@@ -43,7 +43,7 @@ class CompileTask(GraphRunnableTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
@@ -63,12 +63,12 @@ class CompileTask(GraphRunnableTask):
 
         state = self.previous_state
         if state is None:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 "Received a --defer argument, but no value was provided to --state"
             )
 
         if state.manifest is None:
-            raise RuntimeException(f'Could not find manifest in --state path: "{self.args.state}"')
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{self.args.state}"')
         return state.manifest
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
@@ -76,13 +76,14 @@ class CompileTask(GraphRunnableTask):
         if deferred_manifest is None:
             return
         if self.manifest is None:
-            raise InternalException(
+            raise DbtInternalError(
                 "Expected to defer to manifest, but there is no runtime manifest to defer from!"
             )
         self.manifest.merge_from_artifact(
             adapter=adapter,
             other=deferred_manifest,
             selected=selected_uids,
+            favor_state=bool(self.args.favor_state),
         )
         # TODO: is it wrong to write the manifest here? I think it's right...
         self.write_manifest()

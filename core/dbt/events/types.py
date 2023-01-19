@@ -11,6 +11,7 @@ from dbt.events.base_types import (
     Cache,
     AdapterEventStringFunctor,
     EventStringFunctor,
+    EventLevel,
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 
@@ -107,88 +108,49 @@ class MissingProfileTarget(InfoLevel, pt.MissingProfileTarget):
 
 
 @dataclass
-class InvalidVarsYAML(ErrorLevel, pt.InvalidVarsYAML):
+class InvalidOptionYAML(ErrorLevel, pt.InvalidOptionYAML):
     def code(self):
         return "A008"
 
     def message(self) -> str:
-        return "The YAML provided in the --vars argument is not valid."
+        return f"The YAML provided in the --{self.option_name} argument is not valid."
 
 
 @dataclass
-class DbtProjectError(ErrorLevel, pt.DbtProjectError):
+class LogDbtProjectError(ErrorLevel, pt.LogDbtProjectError):
     def code(self):
         return "A009"
 
     def message(self) -> str:
-        return "Encountered an error while reading the project:"
+        msg = "Encountered an error while reading the project:"
+        if self.exc:
+            msg += f"  ERROR: {str(self.exc)}"
+        return msg
+
+
+# Skipped A010
 
 
 @dataclass
-class DbtProjectErrorException(ErrorLevel, pt.DbtProjectErrorException):
-    def code(self):
-        return "A010"
-
-    def message(self) -> str:
-        return f"  ERROR: {str(self.exc)}"
-
-
-@dataclass
-class DbtProfileError(ErrorLevel, pt.DbtProfileError):
+class LogDbtProfileError(ErrorLevel, pt.LogDbtProfileError):
     def code(self):
         return "A011"
 
     def message(self) -> str:
-        return "Encountered an error while reading profiles:"
+        msg = "Encountered an error while reading profiles:\n" f"  ERROR: {str(self.exc)}"
+        if self.profiles:
+            msg += "Defined profiles:\n"
+            for profile in self.profiles:
+                msg += f" - {profile}"
+        else:
+            msg += "There are no profiles defined in your profiles.yml file"
 
-
-@dataclass
-class DbtProfileErrorException(ErrorLevel, pt.DbtProfileErrorException):
-    def code(self):
-        return "A012"
-
-    def message(self) -> str:
-        return f"  ERROR: {str(self.exc)}"
-
-
-@dataclass
-class ProfileListTitle(InfoLevel, pt.ProfileListTitle):
-    def code(self):
-        return "A013"
-
-    def message(self) -> str:
-        return "Defined profiles:"
-
-
-@dataclass
-class ListSingleProfile(InfoLevel, pt.ListSingleProfile):
-    def code(self):
-        return "A014"
-
-    def message(self) -> str:
-        return f" - {self.profile}"
-
-
-@dataclass
-class NoDefinedProfiles(InfoLevel, pt.NoDefinedProfiles):
-    def code(self):
-        return "A015"
-
-    def message(self) -> str:
-        return "There are no profiles defined in your profiles.yml file"
-
-
-@dataclass
-class ProfileHelpMessage(InfoLevel, pt.ProfileHelpMessage):
-    def code(self):
-        return "A016"
-
-    def message(self) -> str:
-        return """
+        msg += """
 For more information on configuring profiles, please consult the dbt docs:
 
 https://docs.getdbt.com/docs/configure-your-profile
 """
+        return msg
 
 
 @dataclass
@@ -415,6 +377,22 @@ class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+@dataclass
+class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
+    def code(self):
+        return "D008"
+
+    def message(self):
+        extra_reason = ""
+        if self.reason:
+            extra_reason = f"\n{self.reason}"
+        msg = (
+            f"`{self.name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
+            f"Adapter maintainers can resolve this deprecation by {self.suggested_action}. {extra_reason}"
+        )
+        return warning_tag(msg)
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -471,7 +449,7 @@ class ConnectionReused(DebugLevel, pt.ConnectionReused):
         return "E006"
 
     def message(self) -> str:
-        return f"Re-using an available connection from the pool (formerly {self.conn_name})"
+        return f"Re-using an available connection from the pool (formerly {self.orig_conn_name}, now {self.conn_name})"
 
 
 @dataclass
@@ -614,130 +592,54 @@ class SchemaDrop(DebugLevel, pt.SchemaDrop):
         return f'Dropping schema "{self.relation}".'
 
 
-# TODO pretty sure this is only ever called in dead code
-# see: core/dbt/adapters/cache.py _add_link vs add_link
 @dataclass
-class UncachedRelation(DebugLevel, Cache, pt.UncachedRelation):
+class CacheAction(DebugLevel, Cache, pt.CacheAction):
     def code(self):
         return "E022"
 
-    def message(self) -> str:
-        return (
-            f"{self.dep_key} references {str(self.ref_key)} "
-            f"but {self.ref_key.database}.{self.ref_key.schema}"
-            "is not in the cache, skipping assumed external relation"
-        )
+    def message(self):
+        if self.action == "add_link":
+            return f"adding link, {self.ref_key} references {self.ref_key_2}"
+        elif self.action == "add_relation":
+            return f"adding relation: {str(self.ref_key)}"
+        elif self.action == "drop_missing_relation":
+            return f"dropped a nonexistent relationship: {str(self.ref_key)}"
+        elif self.action == "drop_cascade":
+            return f"drop {self.ref_key} is cascading to {self.ref_list}"
+        elif self.action == "drop_relation":
+            return f"Dropping relation: {self.ref_key}"
+        elif self.action == "update_reference":
+            return (
+                f"updated reference from {self.ref_key} -> {self.ref_key_3} to "
+                f"{self.ref_key_2} -> {self.ref_key_3}"
+            )
+        elif self.action == "temporary_relation":
+            return f"old key {self.ref_key} not found in self.relations, assuming temporary"
+        elif self.action == "rename_relation":
+            return f"Renaming relation {self.ref_key} to {self.ref_key_2}"
+        elif self.action == "uncached_relation":
+            return (
+                f"{self.ref_key_2} references {str(self.ref_key)} "
+                f"but {self.ref_key.database}.{self.ref_key.schema}"
+                "is not in the cache, skipping assumed external relation"
+            )
+        else:
+            return f"{self.ref_key}"
+
+
+# Skipping E023, E024, E025, E026, E027, E028, E029, E030
 
 
 @dataclass
-class AddLink(DebugLevel, Cache, pt.AddLink):
-    def code(self):
-        return "E023"
-
-    def message(self) -> str:
-        return f"adding link, {self.dep_key} references {self.ref_key}"
-
-
-@dataclass
-class AddRelation(DebugLevel, Cache, pt.AddRelation):
-    def code(self):
-        return "E024"
-
-    def message(self) -> str:
-        return f"Adding relation: {str(self.relation)}"
-
-
-@dataclass
-class DropMissingRelation(DebugLevel, Cache, pt.DropMissingRelation):
-    def code(self):
-        return "E025"
-
-    def message(self) -> str:
-        return f"dropped a nonexistent relationship: {str(self.relation)}"
-
-
-@dataclass
-class DropCascade(DebugLevel, Cache, pt.DropCascade):
-    def code(self):
-        return "E026"
-
-    def message(self) -> str:
-        return f"drop {self.dropped} is cascading to {self.consequences}"
-
-
-@dataclass
-class DropRelation(DebugLevel, Cache, pt.DropRelation):
-    def code(self):
-        return "E027"
-
-    def message(self) -> str:
-        return f"Dropping relation: {self.dropped}"
-
-
-@dataclass
-class UpdateReference(DebugLevel, Cache, pt.UpdateReference):
-    def code(self):
-        return "E028"
-
-    def message(self) -> str:
-        return (
-            f"updated reference from {self.old_key} -> {self.cached_key} to "
-            f"{self.new_key} -> {self.cached_key}"
-        )
-
-
-@dataclass
-class TemporaryRelation(DebugLevel, Cache, pt.TemporaryRelation):
-    def code(self):
-        return "E029"
-
-    def message(self) -> str:
-        return f"old key {self.key} not found in self.relations, assuming temporary"
-
-
-@dataclass
-class RenameSchema(DebugLevel, Cache, pt.RenameSchema):
-    def code(self):
-        return "E030"
-
-    def message(self) -> str:
-        return f"Renaming relation {self.old_key} to {self.new_key}"
-
-
-@dataclass
-class DumpBeforeAddGraph(DebugLevel, Cache, pt.DumpBeforeAddGraph):
+class CacheDumpGraph(DebugLevel, Cache, pt.CacheDumpGraph):
     def code(self):
         return "E031"
 
     def message(self) -> str:
-        return f"before adding : {self.dump}"
+        return f"{self.before_after} {self.action} : {self.dump}"
 
 
-@dataclass
-class DumpAfterAddGraph(DebugLevel, Cache, pt.DumpAfterAddGraph):
-    def code(self):
-        return "E032"
-
-    def message(self) -> str:
-        return f"after adding: {self.dump}"
-
-
-@dataclass
-class DumpBeforeRenameSchema(DebugLevel, Cache, pt.DumpBeforeRenameSchema):
-    def code(self):
-        return "E033"
-
-    def message(self) -> str:
-        return f"before rename: {self.dump}"
-
-
-@dataclass
-class DumpAfterRenameSchema(DebugLevel, Cache, pt.DumpAfterRenameSchema):
-    def code(self):
-        return "E034"
-
-    def message(self) -> str:
-        return f"after rename: {self.dump}"
+# Skipping E032, E033, E034
 
 
 @dataclass
@@ -755,7 +657,7 @@ class PluginLoadError(DebugLevel, pt.PluginLoadError):  # noqa
         return "E036"
 
     def message(self):
-        pass
+        return f"{self.exc_info}"
 
 
 @dataclass
@@ -853,7 +755,7 @@ class HooksRunning(InfoLevel, pt.HooksRunning):
 
 
 @dataclass
-class HookFinished(InfoLevel, pt.HookFinished):
+class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
     def code(self):
         return "E047"
 
@@ -867,93 +769,15 @@ class HookFinished(InfoLevel, pt.HookFinished):
 
 
 @dataclass
-class ParseCmdStart(InfoLevel, pt.ParseCmdStart):
+class ParseCmdOut(InfoLevel, pt.ParseCmdOut):
     def code(self):
         return "I001"
 
     def message(self) -> str:
-        return "Start parsing."
+        return self.msg
 
 
-@dataclass
-class ParseCmdCompiling(InfoLevel, pt.ParseCmdCompiling):
-    def code(self):
-        return "I002"
-
-    def message(self) -> str:
-        return "Compiling."
-
-
-@dataclass
-class ParseCmdWritingManifest(InfoLevel, pt.ParseCmdWritingManifest):
-    def code(self):
-        return "I003"
-
-    def message(self) -> str:
-        return "Writing manifest."
-
-
-@dataclass
-class ParseCmdDone(InfoLevel, pt.ParseCmdDone):
-    def code(self):
-        return "I004"
-
-    def message(self) -> str:
-        return "Done."
-
-
-@dataclass
-class ManifestDependenciesLoaded(InfoLevel, pt.ManifestDependenciesLoaded):
-    def code(self):
-        return "I005"
-
-    def message(self) -> str:
-        return "Dependencies loaded"
-
-
-@dataclass
-class ManifestLoaderCreated(InfoLevel, pt.ManifestLoaderCreated):
-    def code(self):
-        return "I006"
-
-    def message(self) -> str:
-        return "ManifestLoader created"
-
-
-@dataclass
-class ManifestLoaded(InfoLevel, pt.ManifestLoaded):
-    def code(self):
-        return "I007"
-
-    def message(self) -> str:
-        return "Manifest loaded"
-
-
-@dataclass
-class ManifestChecked(InfoLevel, pt.ManifestChecked):
-    def code(self):
-        return "I008"
-
-    def message(self) -> str:
-        return "Manifest checked"
-
-
-@dataclass
-class ManifestFlatGraphBuilt(InfoLevel, pt.ManifestFlatGraphBuilt):
-    def code(self):
-        return "I009"
-
-    def message(self) -> str:
-        return "Flat graph built"
-
-
-@dataclass
-class ParseCmdPerfInfoPath(InfoLevel, pt.ParseCmdPerfInfoPath):
-    def code(self):
-        return "I010"
-
-    def message(self) -> str:
-        return f"Performance info: {self.path}"
+# Skipping I002, I003, I004, I005, I006, I007, I008, I009, I010
 
 
 @dataclass
@@ -978,7 +802,7 @@ class MacroFileParse(DebugLevel, pt.MacroFileParse):
 
 
 @dataclass
-class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExceptionProcessingFile):
+class PartialParsingErrorProcessingFile(DebugLevel, pt.PartialParsingErrorProcessingFile):
     def code(self):
         return "I014"
 
@@ -990,7 +814,7 @@ class PartialParsingExceptionProcessingFile(DebugLevel, pt.PartialParsingExcepti
 
 
 @dataclass
-class PartialParsingException(DebugLevel, pt.PartialParsingException):
+class PartialParsingError(DebugLevel, pt.PartialParsingError):
     def code(self):
         return "I016"
 
@@ -1153,7 +977,7 @@ class PartialParsingFile(DebugLevel, pt.PartialParsingFile):
 
 
 @dataclass
-class InvalidDisabledTargetInTestNode(WarnLevel, pt.InvalidDisabledTargetInTestNode):
+class InvalidDisabledTargetInTestNode(DebugLevel, pt.InvalidDisabledTargetInTestNode):
     def code(self):
         return "I050"
 
@@ -1290,7 +1114,7 @@ class NoNodeForYamlKey(WarnLevel, pt.NoNodeForYamlKey):
 
 
 @dataclass
-class MacroPatchNotFound(WarnLevel, pt.MacroPatchNotFound):
+class MacroNotFoundForPatch(WarnLevel, pt.MacroNotFoundForPatch):
     def code(self):
         return "I059"
 
@@ -1723,17 +1547,16 @@ class LogTestResult(DynamicLevel, pt.LogTestResult):
     @classmethod
     def status_to_level(cls, status):
         # The statuses come from TestStatus
-        # TODO should this return EventLevel enum instead?
         level_lookup = {
-            "fail": "error",
-            "pass": "info",
-            "warn": "warn",
-            "error": "error",
+            "fail": EventLevel.ERROR,
+            "pass": EventLevel.INFO,
+            "warn": EventLevel.WARN,
+            "error": EventLevel.ERROR,
         }
         if status in level_lookup:
             return level_lookup[status]
         else:
-            return "info"
+            return EventLevel.INFO
 
 
 # Skipped Q008, Q009, Q010
@@ -1855,15 +1678,15 @@ class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
         # The statuses come from FreshnessStatus
         # TODO should this return EventLevel enum instead?
         level_lookup = {
-            "runtime error": "error",
-            "pass": "info",
-            "warn": "warn",
-            "error": "error",
+            "runtime error": EventLevel.ERROR,
+            "pass": EventLevel.INFO,
+            "warn": EventLevel.WARN,
+            "error": EventLevel.ERROR,
         }
         if status in level_lookup:
             return level_lookup[status]
         else:
-            return "info"
+            return EventLevel.INFO
 
 
 # Skipped Q019, Q020, Q021
@@ -2056,7 +1879,7 @@ class CatchableExceptionOnRun(DebugLevel, pt.CatchableExceptionOnRun):  # noqa
 
 
 @dataclass
-class InternalExceptionOnRun(DebugLevel, pt.InternalExceptionOnRun):
+class InternalErrorOnRun(DebugLevel, pt.InternalErrorOnRun):
     def code(self):
         return "W003"
 
@@ -2164,7 +1987,7 @@ class SystemExecutingCmd(DebugLevel, pt.SystemExecutingCmd):
 
 
 @dataclass
-class SystemStdOutMsg(DebugLevel, pt.SystemStdOutMsg):
+class SystemStdOut(DebugLevel, pt.SystemStdOut):
     def code(self):
         return "Z007"
 
@@ -2173,7 +1996,7 @@ class SystemStdOutMsg(DebugLevel, pt.SystemStdOutMsg):
 
 
 @dataclass
-class SystemStdErrMsg(DebugLevel, pt.SystemStdErrMsg):
+class SystemStdErr(DebugLevel, pt.SystemStdErr):
     def code(self):
         return "Z008"
 

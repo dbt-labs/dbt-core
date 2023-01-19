@@ -4,7 +4,7 @@ from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.contracts.results import RunningStatus, collect_timing_info
 from dbt.events.functions import fire_event
 from dbt.events.types import NodeCompiling, NodeExecuting
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 from dbt import flags
 from dbt.task.sql import SqlCompileRunner
 from dataclasses import dataclass
@@ -125,7 +125,7 @@ def get_task_by_type(type):
     elif type == "run_operation":
         return RunOperationTask
 
-    raise RuntimeException("not a valid task")
+    raise DbtRuntimeError("not a valid task")
 
 
 def create_task(type, args, manifest, config):

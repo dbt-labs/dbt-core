@@ -2,7 +2,7 @@ from typing import Set, Iterable, Iterator, Optional, NewType
 from itertools import product
 import networkx as nx  # type: ignore
 
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 
 UniqueId = NewType("UniqueId", str)
 
@@ -27,7 +27,7 @@ class Graph:
     def ancestors(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes having a path to `node` in `graph`"""
         if not self.graph.has_node(node):
-            raise InternalException(f"Node {node} not found in the graph!")
+            raise DbtInternalError(f"Node {node} not found in the graph!")
         return {
             child
             for _, child in nx.bfs_edges(self.graph, node, reverse=True, depth_limit=max_depth)
@@ -36,7 +36,7 @@ class Graph:
     def descendants(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
-            raise InternalException(f"Node {node} not found in the graph!")
+            raise DbtInternalError(f"Node {node} not found in the graph!")
         return {child for _, child in nx.bfs_edges(self.graph, node, depth_limit=max_depth)}
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:

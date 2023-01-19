@@ -184,7 +184,7 @@ class TestMissingDependency(object):
 
     def test_missing_dependency(self, project):
         # dbt should raise a runtime exception
-        with pytest.raises(dbt.exceptions.RuntimeException):
+        with pytest.raises(dbt.exceptions.DbtRuntimeError):
             run_dbt(["compile"])
 
 
@@ -335,12 +335,12 @@ class TestSimpleDependencyDuplicateName(BaseDependencyTest):
         )
 
     def test_local_dependency_same_name(self, prepare_dependencies, project):
-        with pytest.raises(dbt.exceptions.DependencyException):
+        with pytest.raises(dbt.exceptions.DependencyError):
             run_dbt(["deps"], expect_pass=False)
 
     def test_local_dependency_same_name_sneaky(self, prepare_dependencies, project):
         shutil.copytree("duplicate_dependency", "./dbt_packages/duplicate_dependency")
-        with pytest.raises(dbt.exceptions.CompilationException):
+        with pytest.raises(dbt.exceptions.CompilationError):
             run_dbt(["compile"])
 
         # needed to avoid compilation errors from duplicate package names in test autocleanup

@@ -1,9 +1,0 @@
-kind: Breaking Changes
-body: Cleaned up exceptions to directly raise in code.  Removed use of all exception
-  functions in the code base and marked them all as deprecated to be removed next
-  minor release.
-time: 2022-12-05T14:19:37.863032-06:00
-custom:
-  Author: emmyoop
-  Issue: "6339"
-  PR: "6347"

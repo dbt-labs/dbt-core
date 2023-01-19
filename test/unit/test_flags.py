@@ -1,8 +1,8 @@
 import os
-from unittest import mock, TestCase
+from unittest import TestCase
 from argparse import Namespace
+import pytest
 
-from .utils import normalize
 from dbt import flags
 from dbt.contracts.project import UserConfig
 from dbt.graph.selector_spec import IndirectSelection
@@ -63,6 +63,21 @@ class TestFlags(TestCase):
         flags.WARN_ERROR = False
         self.user_config.warn_error = None
 
+        # warn_error_options
+        self.user_config.warn_error_options = '{"include": "all"}'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.WARN_ERROR_OPTIONS, '{"include": "all"}')
+        os.environ['DBT_WARN_ERROR_OPTIONS'] = '{"include": []}'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.WARN_ERROR_OPTIONS, '{"include": []}')
+        setattr(self.args, 'warn_error_options', '{"include": "all"}')
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.WARN_ERROR_OPTIONS, '{"include": "all"}')
+        # cleanup
+        os.environ.pop('DBT_WARN_ERROR_OPTIONS')
+        delattr(self.args, 'warn_error_options')
+        self.user_config.warn_error_options = None
+    
         # write_json
         self.user_config.write_json = True
         flags.set_from_args(self.args, self.user_config)
@@ -206,6 +221,9 @@ class TestFlags(TestCase):
         self.user_config.indirect_selection = 'cautious'
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Cautious)
+        self.user_config.indirect_selection = 'buildable'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Buildable)
         self.user_config.indirect_selection = None
         flags.set_from_args(self.args, self.user_config)
         self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Eager)
@@ -261,3 +279,59 @@ class TestFlags(TestCase):
         # cleanup
         os.environ.pop('DBT_LOG_PATH')
         delattr(self.args, 'log_path')
+
+    def test__flags_are_mutually_exclusive(self):
+        # options from user config
+        self.user_config.warn_error = False
+        self.user_config.warn_error_options = '{"include":"all}'
+        with pytest.raises(ValueError):
+            flags.set_from_args(self.args, self.user_config)
+        #cleanup
+        self.user_config.warn_error = None
+        self.user_config.warn_error_options = None
+        
+        # options from args
+        setattr(self.args, 'warn_error', False)
+        setattr(self.args, 'warn_error_options', '{"include":"all}')
+        with pytest.raises(ValueError):
+            flags.set_from_args(self.args, self.user_config)
+        # cleanup
+        delattr(self.args, 'warn_error')
+        delattr(self.args, 'warn_error_options')
+
+        # options from environment
+        os.environ['DBT_WARN_ERROR'] = 'false'
+        os.environ['DBT_WARN_ERROR_OPTIONS'] = '{"include": []}'
+        with pytest.raises(ValueError):
+            flags.set_from_args(self.args, self.user_config)
+        #cleanup
+        os.environ.pop('DBT_WARN_ERROR')
+        os.environ.pop('DBT_WARN_ERROR_OPTIONS')
+
+        # options from user config + args
+        self.user_config.warn_error = False
+        setattr(self.args, 'warn_error_options', '{"include":"all}')
+        with pytest.raises(ValueError):
+            flags.set_from_args(self.args, self.user_config)
+        # cleanup
+        self.user_config.warn_error = None
+        delattr(self.args, 'warn_error_options')
+        
+        # options from user config + environ
+        self.user_config.warn_error = False
+        os.environ['DBT_WARN_ERROR_OPTIONS'] = '{"include": []}'
+        with pytest.raises(ValueError):
+            flags.set_from_args(self.args, self.user_config)
+        # cleanup
+        self.user_config.warn_error = None
+        os.environ.pop('DBT_WARN_ERROR_OPTIONS')
+
+        # options from args + environ
+        setattr(self.args, 'warn_error', False)
+        os.environ['DBT_WARN_ERROR_OPTIONS'] = '{"include": []}'
+        with pytest.raises(ValueError):
+            flags.set_from_args(self.args, self.user_config)
+        # cleanup
+        delattr(self.args, 'warn_error')
+        os.environ.pop('DBT_WARN_ERROR_OPTIONS')
+

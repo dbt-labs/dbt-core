@@ -7,6 +7,7 @@ import traceback
 from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
 from itertools import chain
 import time
+from dbt.events.base_types import EventLevel
 
 import dbt.exceptions
 import dbt.tracking
@@ -20,8 +21,8 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
-    PartialParsingExceptionProcessingFile,
-    PartialParsingException,
+    PartialParsingErrorProcessingFile,
+    PartialParsingError,
     PartialParsingSkipParsing,
     UnableToPartialParse,
     PartialParsingNotEnabled,
@@ -60,7 +61,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
 )
 from dbt.contracts.util import Writable
-from dbt.exceptions import TargetNotFound, AmbiguousAlias
+from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -277,9 +278,9 @@ class ManifestLoader:
                             source_file = self.manifest.files[file_id]
                         if source_file:
                             parse_file_type = source_file.parse_file_type
-                            fire_event(PartialParsingExceptionProcessingFile(file=file_id))
+                            fire_event(PartialParsingErrorProcessingFile(file=file_id))
                     exc_info["parse_file_type"] = parse_file_type
-                    fire_event(PartialParsingException(exc_info=exc_info))
+                    fire_event(PartialParsingError(exc_info=exc_info))
 
                     # Send event
                     if dbt.tracking.active_user is not None:
@@ -961,19 +962,20 @@ def invalid_target_fail_unless_test(
     target_kind: str,
     target_package: Optional[str] = None,
     disabled: Optional[bool] = None,
+    should_warn_if_disabled: bool = True,
 ):
     if node.resource_type == NodeType.Test:
         if disabled:
-            fire_event(
-                InvalidDisabledTargetInTestNode(
-                    resource_type_title=node.resource_type.title(),
-                    unique_id=node.unique_id,
-                    original_file_path=node.original_file_path,
-                    target_kind=target_kind,
-                    target_name=target_name,
-                    target_package=target_package if target_package else "",
-                )
+            event = InvalidDisabledTargetInTestNode(
+                resource_type_title=node.resource_type.title(),
+                unique_id=node.unique_id,
+                original_file_path=node.original_file_path,
+                target_kind=target_kind,
+                target_name=target_name,
+                target_package=target_package if target_package else "",
             )
+
+            fire_event(event, EventLevel.WARN if should_warn_if_disabled else None)
         else:
             warn_or_error(
                 NodeNotFoundOrDisabled(
@@ -987,7 +989,7 @@ def invalid_target_fail_unless_test(
                 )
             )
     else:
-        raise TargetNotFound(
+        raise TargetNotFoundError(
             node=node,
             target_name=target_name,
             target_kind=target_kind,
@@ -1015,11 +1017,13 @@ def _check_resource_uniqueness(
 
         existing_node = names_resources.get(name)
         if existing_node is not None:
-            raise dbt.exceptions.DuplicateResourceName(existing_node, node)
+            raise dbt.exceptions.DuplicateResourceNameError(existing_node, node)
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
-            raise AmbiguousAlias(node_1=existing_alias, node_2=node, duped_name=full_node_name)
+            raise AmbiguousAliasError(
+                node_1=existing_alias, node_2=node, duped_name=full_node_name
+            )
 
         names_resources[name] = node
         alias_resources[full_node_name] = node
@@ -1111,7 +1115,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
@@ -1132,6 +1136,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
                 target_kind="node",
                 target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
+                should_warn_if_disabled=False,
             )
 
             continue
@@ -1154,7 +1159,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
@@ -1175,6 +1180,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 target_kind="node",
                 target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
+                should_warn_if_disabled=False,
             )
             continue
 
@@ -1204,7 +1210,7 @@ def _process_metrics_for_node(
         elif len(metric) == 2:
             target_metric_package, target_metric_name = metric
         else:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Metric references should always be 1 or 2 arguments - got {len(metric)}"
             )
 
@@ -1249,7 +1255,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
@@ -1270,6 +1276,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 target_kind="node",
                 target_package=target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
+                should_warn_if_disabled=False,
             )
             continue
 

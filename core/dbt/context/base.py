@@ -10,12 +10,12 @@ from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper 
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.graph.nodes import Resource
 from dbt.exceptions import (
-    DisallowSecretEnvVar,
-    EnvVarMissing,
+    SecretEnvVarLocationError,
+    EnvVarMissingError,
     MacroReturn,
-    RequiredVarNotFound,
-    SetStrictWrongType,
-    ZipStrictWrongType,
+    RequiredVarNotFoundError,
+    SetStrictWrongTypeError,
+    ZipStrictWrongTypeError,
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import JinjaLogInfo, JinjaLogDebug
@@ -153,7 +153,7 @@ class Var:
             return "<Configuration>"
 
     def get_missing_var(self, var_name):
-        raise RequiredVarNotFound(var_name, self._merged, self._node)
+        raise RequiredVarNotFoundError(var_name, self._merged, self._node)
 
     def has_var(self, var_name: str):
         return var_name in self._merged
@@ -297,7 +297,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            raise DisallowSecretEnvVar(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -312,7 +312,7 @@ class BaseContext(metaclass=ContextMeta):
 
             return return_value
         else:
-            raise EnvVarMissing(var)
+            raise EnvVarMissingError(var)
 
     if os.environ.get("DBT_MACRO_DEBUGGING"):
 
@@ -493,7 +493,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return set(value)
         except TypeError as e:
-            raise SetStrictWrongType(e)
+            raise SetStrictWrongTypeError(e)
 
     @contextmember("zip")
     @staticmethod
@@ -537,7 +537,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return zip(*args)
         except TypeError as e:
-            raise ZipStrictWrongType(e)
+            raise ZipStrictWrongTypeError(e)
 
     @contextmember
     @staticmethod

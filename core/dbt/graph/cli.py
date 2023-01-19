@@ -7,7 +7,7 @@ from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 from typing import Dict, List, Optional, Tuple, Any, Union
 
 from dbt.contracts.selection import SelectorDefinition, SelectorFile
-from dbt.exceptions import InternalException, ValidationException
+from dbt.exceptions import DbtInternalError, DbtValidationError
 
 from .selector_spec import (
     SelectionUnion,
@@ -44,12 +44,14 @@ def parse_union(
                 components=intersection_components,
                 expect_exists=expect_exists,
                 raw=raw_spec,
+                indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
             )
         )
     return SelectionUnion(
         components=union_components,
         expect_exists=False,
         raw=components,
+        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
     )
 
 
@@ -78,9 +80,12 @@ def parse_difference(
         include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
     excluded = parse_union_from_default(
-        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection.Eager
+        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
-    return SelectionDifference(components=[included, excluded])
+    return SelectionDifference(
+        components=[included, excluded],
+        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+    )
 
 
 RawDefinition = Union[str, Dict[str, Any]]
@@ -89,15 +94,15 @@ RawDefinition = Union[str, Dict[str, Any]]
 def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
     result: List[RawDefinition] = []
     if key not in dct:
-        raise InternalException(f"Expected to find key {key} in dict, only found {list(dct)}")
+        raise DbtInternalError(f"Expected to find key {key} in dict, only found {list(dct)}")
     values = dct[key]
     if not isinstance(values, list):
-        raise ValidationException(f'Invalid value for key "{key}". Expected a list.')
+        raise DbtValidationError(f'Invalid value for key "{key}". Expected a list.')
     for value in values:
         if isinstance(value, dict):
             for value_key in value:
                 if not isinstance(value_key, str):
-                    raise ValidationException(
+                    raise DbtValidationError(
                         f'Expected all keys to "{key}" dict to be strings, '
                         f'but "{value_key}" is a "{type(value_key)}"'
                     )
@@ -105,7 +110,7 @@ def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
         elif isinstance(value, str):
             result.append(value)
         else:
-            raise ValidationException(
+            raise DbtValidationError(
                 f'Invalid value type {type(value)} in key "{key}", expected '
                 f"dict or str (value: {value})."
             )
@@ -135,7 +140,7 @@ def _parse_include_exclude_subdefs(
             # do not allow multiple exclude: defs at the same level
             if diff_arg is not None:
                 yaml_sel_cfg = yaml.dump(definition)
-                raise ValidationException(
+                raise DbtValidationError(
                     f"You cannot provide multiple exclude arguments to the "
                     f"same selector set operator:\n{yaml_sel_cfg}"
                 )
@@ -177,7 +182,7 @@ def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpe
         key = list(definition)[0]
         value = definition[key]
         if not isinstance(key, str):
-            raise ValidationException(
+            raise DbtValidationError(
                 f'Expected definition key to be a "str", got one of type ' f'"{type(key)}" ({key})'
             )
         dct = {
@@ -187,7 +192,7 @@ def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpe
     elif definition.get("method") == "selector":
         sel_def = definition.get("value")
         if sel_def not in result:
-            raise ValidationException(f"Existing selector definition for {sel_def} not found.")
+            raise DbtValidationError(f"Existing selector definition for {sel_def} not found.")
         return result[definition["value"]]["definition"]
     elif "method" in definition and "value" in definition:
         dct = definition
@@ -195,7 +200,7 @@ def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpe
             diff_arg = _parse_exclusions(definition, result=result)
             dct = {k: v for k, v in dct.items() if k != "exclude"}
     else:
-        raise ValidationException(
+        raise DbtValidationError(
             f'Expected either 1 key or else "method" '
             f'and "value" keys, but got {list(definition)}'
         )
@@ -221,7 +226,7 @@ def parse_from_definition(
         and len(definition) > 1
     ):
         keys = ",".join(definition.keys())
-        raise ValidationException(
+        raise DbtValidationError(
             f"Only a single 'union' or 'intersection' key is allowed "
             f"in a root level selector definition; found {keys}."
         )
@@ -234,7 +239,7 @@ def parse_from_definition(
     elif isinstance(definition, dict):
         return parse_dict_definition(definition, result=result)
     else:
-        raise ValidationException(
+        raise DbtValidationError(
             f"Expected to find union, intersection, str or dict, instead "
             f"found {type(definition)}: {definition}"
         )

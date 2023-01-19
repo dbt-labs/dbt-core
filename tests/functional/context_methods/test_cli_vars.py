@@ -5,7 +5,7 @@ from tests.fixtures.dbt_integration_project import dbt_integration_project  # no
 
 from dbt.tests.util import run_dbt, get_artifact, write_config_file
 from dbt.tests.fixtures.project import write_project_files
-from dbt.exceptions import RuntimeException, CompilationException
+from dbt.exceptions import DbtRuntimeError, CompilationError
 
 
 models_complex__schema_yml = """
@@ -114,7 +114,7 @@ class TestCLIVarsProfile:
         profile = dbt_profile_data
         profile["test"]["outputs"]["default"]["host"] = "{{ var('db_host') }}"
         write_config_file(profile, project.profiles_dir, "profiles.yml")
-        with pytest.raises(RuntimeException):
+        with pytest.raises(DbtRuntimeError):
             results = run_dbt(["run"])
         results = run_dbt(["run", "--vars", "db_host: localhost"])
         assert len(results) == 1
@@ -148,7 +148,7 @@ class TestCLIVarsPackages:
         write_config_file(packages, project.project_root, "packages.yml")
 
         # Without vars args deps fails
-        with pytest.raises(RuntimeException):
+        with pytest.raises(DbtRuntimeError):
             run_dbt(["deps"])
 
         # With vars arg deps succeeds
@@ -200,7 +200,7 @@ class TestCLIVarsSelectors:
 
         # Update the selectors.yml file to have a var
         write_config_file(var_selectors_yml, project.project_root, "selectors.yml")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["run"])
 
         # Var in cli_vars works

@@ -8,7 +8,7 @@ from dbt.utils import MultiDict
 
 from dbt.context.base import contextproperty, contextmember, Var
 from dbt.context.target import TargetContext
-from dbt.exceptions import EnvVarMissing, DisallowSecretEnvVar
+from dbt.exceptions import EnvVarMissingError, SecretEnvVarLocationError
 
 
 class ConfiguredContext(TargetContext):
@@ -86,7 +86,7 @@ class SchemaYamlContext(ConfiguredContext):
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            raise DisallowSecretEnvVar(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -104,7 +104,7 @@ class SchemaYamlContext(ConfiguredContext):
 
             return return_value
         else:
-            raise EnvVarMissing(var)
+            raise EnvVarMissingError(var)
 
 
 class MacroResolvingContext(ConfiguredContext):

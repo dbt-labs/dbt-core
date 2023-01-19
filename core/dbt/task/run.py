@@ -21,23 +21,24 @@ from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.nodes import HookNode, ResultNode
 from dbt.contracts.results import NodeStatus, RunResult, RunStatus, RunningStatus, BaseResult
 from dbt.exceptions import (
-    CompilationException,
-    InternalException,
-    MissingMaterialization,
-    RuntimeException,
-    ValidationException,
+    CompilationError,
+    DbtInternalError,
+    MissingMaterializationError,
+    DbtRuntimeError,
+    DbtValidationError,
 )
-from dbt.events.functions import fire_event, get_invocation_id, info
+from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DatabaseErrorRunningHook,
     EmptyLine,
     HooksRunning,
-    HookFinished,
+    FinishedRunningStats,
     LogModelResult,
     LogStartLine,
     LogHookEndLine,
     LogHookStartLine,
 )
+from dbt.events.base_types import EventLevel
 from dbt.logger import (
     TextOnly,
     HookMetadata,
@@ -105,7 +106,7 @@ def get_hook(source, index):
 
 def track_model_run(index, num_nodes, run_model_result):
     if tracking.active_user is None:
-        raise InternalException("cannot track model run with no active user")
+        raise DbtInternalError("cannot track model run with no active user")
     invocation_id = get_invocation_id()
     tracking.track_model_run(
         {
@@ -134,14 +135,14 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
             'Invalid return value from materialization, "relations" '
             "not found, got keys: {}".format(list(inp))
         )
-        raise CompilationException(msg, node=model) from None
+        raise CompilationError(msg, node=model) from None
 
     if not isinstance(relations_value, list):
         msg = (
             'Invalid return value from materialization, "relations" '
             "not a list, got: {}".format(relations_value)
         )
-        raise CompilationException(msg, node=model) from None
+        raise CompilationError(msg, node=model) from None
 
     relations: List[BaseRelation] = []
     for relation in relations_value:
@@ -150,7 +151,7 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
                 "Invalid return value from materialization, "
                 '"relations" contains non-Relation: {}'.format(relation)
             )
-            raise CompilationException(msg, node=model)
+            raise CompilationError(msg, node=model)
 
         assert isinstance(relation, BaseRelation)
         relations.append(relation)
@@ -186,10 +187,10 @@ class ModelRunner(CompileRunner):
         description = self.describe_node()
         if result.status == NodeStatus.Error:
             status = result.status
-            level = "error"
+            level = EventLevel.ERROR
         else:
             status = result.message
-            level = "info"
+            level = EventLevel.INFO
         fire_event(
             LogModelResult(
                 description=description,
@@ -198,8 +199,8 @@ class ModelRunner(CompileRunner):
                 total=self.num_nodes,
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
-                info=info(level=level),
-            )
+            ),
+            level=level,
         )
 
     def before_execute(self):
@@ -212,7 +213,7 @@ class ModelRunner(CompileRunner):
     def _build_run_model_result(self, model, context):
         result = context["load_result"]("main")
         if not result:
-            raise RuntimeException("main is not being called during running model")
+            raise DbtRuntimeError("main is not being called during running model")
         adapter_response = {}
         if isinstance(result.response, dbtClassMixin):
             adapter_response = result.response.to_dict(omit_none=True)
@@ -233,7 +234,7 @@ class ModelRunner(CompileRunner):
                 'The materialization ("{}") did not explicitly return a '
                 "list of relations to add to the cache.".format(str(model.get_materialization()))
             )
-            raise CompilationException(msg, node=model)
+            raise CompilationError(msg, node=model)
 
         if isinstance(result, dict):
             return _validate_materialization_relations_dict(result, model)
@@ -242,7 +243,7 @@ class ModelRunner(CompileRunner):
             "Invalid return value from materialization, expected a dict "
             'with key "relations", got: {}'.format(str(result))
         )
-        raise CompilationException(msg, node=model)
+        raise CompilationError(msg, node=model)
 
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)
@@ -252,10 +253,12 @@ class ModelRunner(CompileRunner):
         )
 
         if materialization_macro is None:
-            raise MissingMaterialization(model=model, adapter_type=self.adapter.type())
+            raise MissingMaterializationError(
+                materialization=model.get_materialization(), adapter_type=self.adapter.type()
+            )
 
         if "config" not in context:
-            raise InternalException(
+            raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
         context_config = context["config"]
@@ -264,7 +267,7 @@ class ModelRunner(CompileRunner):
         model_lang_supported = model.language in materialization_macro.supported_languages
         if mat_has_supported_langs and not model_lang_supported:
             str_langs = [str(lang) for lang in materialization_macro.supported_languages]
-            raise ValidationException(
+            raise DbtValidationError(
                 f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
                 f'got "{model.language}"'
             )
@@ -312,7 +315,7 @@ class RunTask(CompileTask):
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
 
         if self.manifest is None:
-            raise InternalException("self.manifest was None in get_hooks_by_type")
+            raise DbtInternalError("self.manifest was None in get_hooks_by_type")
 
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)
@@ -392,7 +395,7 @@ class RunTask(CompileTask):
     ) -> None:
         try:
             self.run_hooks(adapter, hook_type, extra_context)
-        except RuntimeException as exc:
+        except DbtRuntimeError as exc:
             fire_event(DatabaseErrorRunningHook(hook_type=hook_type.value))
             self.node_results.append(
                 BaseResult(
@@ -418,7 +421,9 @@ class RunTask(CompileTask):
         with TextOnly():
             fire_event(EmptyLine())
         fire_event(
-            HookFinished(stat_line=stat_line, execution=execution, execution_time=execution_time)
+            FinishedRunningStats(
+                stat_line=stat_line, execution=execution, execution_time=execution_time
+            )
         )
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
@@ -454,7 +459,7 @@ class RunTask(CompileTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,

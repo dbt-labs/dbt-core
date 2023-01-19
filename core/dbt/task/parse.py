@@ -11,18 +11,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.parser.manifest import Manifest, ManifestLoader, _check_manifest
 from dbt.logger import DbtProcessState
 from dbt.clients.system import write_file
-from dbt.events.types import (
-    ManifestDependenciesLoaded,
-    ManifestLoaderCreated,
-    ManifestLoaded,
-    ManifestChecked,
-    ManifestFlatGraphBuilt,
-    ParseCmdStart,
-    ParseCmdCompiling,
-    ParseCmdWritingManifest,
-    ParseCmdDone,
-    ParseCmdPerfInfoPath,
-)
+from dbt.events.types import ParseCmdOut
 from dbt.events.functions import fire_event
 from dbt.graph import Graph
 import time
@@ -50,7 +39,7 @@ class ParseTask(ConfiguredTask):
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self.loader._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
-        fire_event(ParseCmdPerfInfoPath(path=path))
+        fire_event(ParseCmdOut(msg=f"Performance info: {path}"))
 
     # This method takes code that normally exists in other files
     # and pulls it in here, to simplify logging and make the
@@ -68,20 +57,20 @@ class ParseTask(ConfiguredTask):
         with PARSING_STATE:
             start_load_all = time.perf_counter()
             projects = root_config.load_dependencies()
-            fire_event(ManifestDependenciesLoaded())
+            fire_event(ParseCmdOut(msg="Dependencies loaded"))
             loader = ManifestLoader(root_config, projects, macro_hook)
-            fire_event(ManifestLoaderCreated())
+            fire_event(ParseCmdOut(msg="ManifestLoader created"))
             manifest = loader.load()
-            fire_event(ManifestLoaded())
+            fire_event(ParseCmdOut(msg="Manifest loaded"))
             _check_manifest(manifest, root_config)
-            fire_event(ManifestChecked())
+            fire_event(ParseCmdOut(msg="Manifest checked"))
             manifest.build_flat_graph()
-            fire_event(ManifestFlatGraphBuilt())
+            fire_event(ParseCmdOut(msg="Flat graph built"))
             loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
 
         self.loader = loader
         self.manifest = manifest
-        fire_event(ManifestLoaded())
+        fire_event(ParseCmdOut(msg="Manifest finished loading"))
 
     def compile_manifest(self):
         adapter = get_adapter(self.config)
@@ -89,14 +78,14 @@ class ParseTask(ConfiguredTask):
         self.graph = compiler.compile(self.manifest)
 
     def run(self):
-        fire_event(ParseCmdStart())
+        fire_event(ParseCmdOut(msg="Start parsing."))
         self.get_full_manifest()
         if self.args.compile:
-            fire_event(ParseCmdCompiling())
+            fire_event(ParseCmdOut(msg="Compiling."))
             self.compile_manifest()
         if self.args.write_manifest:
-            fire_event(ParseCmdWritingManifest())
+            fire_event(ParseCmdOut(msg="Writing manifest."))
             self.write_manifest()
 
         self.write_perf_info()
-        fire_event(ParseCmdDone())
+        fire_event(ParseCmdOut(msg="Done."))

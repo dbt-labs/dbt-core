@@ -30,11 +30,11 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 import ast
 from dbt.dataclass_schema import ValidationError
 from dbt.exceptions import (
-    InvalidModelConfig,
-    ParsingException,
-    PythonLiteralEval,
-    PythonParsingException,
-    UndefinedMacroException,
+    ModelConfigError,
+    ParsingError,
+    PythonLiteralEvalError,
+    PythonParsingError,
+    UndefinedMacroError,
 )
 
 dbt_function_key_words = set(["ref", "source", "config", "get"])
@@ -66,13 +66,13 @@ class PythonValidationVisitor(ast.NodeVisitor):
 
     def check_error(self, node):
         if self.num_model_def != 1:
-            raise ParsingException(
+            raise ParsingError(
                 f"dbt allows exactly one model defined per python file, found {self.num_model_def}",
                 node=node,
             )
 
         if len(self.dbt_errors) != 0:
-            raise ParsingException("\n".join(self.dbt_errors), node=node)
+            raise ParsingError("\n".join(self.dbt_errors), node=node)
 
 
 class PythonParseVisitor(ast.NodeVisitor):
@@ -96,7 +96,7 @@ class PythonParseVisitor(ast.NodeVisitor):
         try:
             return ast.literal_eval(node)
         except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError) as exc:
-            raise PythonLiteralEval(exc, node=self.dbt_node) from exc
+            raise PythonLiteralEvalError(exc, node=self.dbt_node) from exc
 
     def _get_call_literals(self, node):
         # List of literals
@@ -176,9 +176,9 @@ def verify_python_model_code(node):
             node,
         )
         if rendered_python != node.raw_code:
-            raise ParsingException("")
-    except (UndefinedMacroException, ParsingException):
-        raise ParsingException("No jinja in python model code is allowed", node=node)
+            raise ParsingError("")
+    except (UndefinedMacroError, ParsingError):
+        raise ParsingError("No jinja in python model code is allowed", node=node)
 
 
 class ModelParser(SimpleSQLParser[ModelNode]):
@@ -202,7 +202,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         try:
             tree = ast.parse(node.raw_code, filename=node.original_file_path)
         except SyntaxError as exc:
-            raise PythonParsingException(exc, node=node) from exc
+            raise PythonParsingError(exc, node=node) from exc
 
         # Only parse if AST tree has instructions in body
         if tree.body:
@@ -219,12 +219,12 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 if func == "get":
                     num_args = len(args)
                     if num_args == 0:
-                        raise ParsingException(
+                        raise ParsingError(
                             "dbt.config.get() requires at least one argument",
                             node=node,
                         )
                     if num_args > 2:
-                        raise ParsingException(
+                        raise ParsingError(
                             f"dbt.config.get() takes at most 2 arguments ({num_args} given)",
                             node=node,
                         )
@@ -255,7 +255,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
-                raise InvalidModelConfig(exc, node=node) from exc
+                raise ModelConfigError(exc, node=node) from exc
             return
 
         elif not flags.STATIC_PARSER:

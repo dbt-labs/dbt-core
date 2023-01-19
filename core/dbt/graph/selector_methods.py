@@ -19,8 +19,8 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
-    InternalException,
-    RuntimeException,
+    DbtInternalError,
+    DbtRuntimeError,
 )
 from dbt.node_types import NodeType
 
@@ -207,7 +207,7 @@ class SourceSelectorMethod(SelectorMethod):
                 "`${{source_name}}.${{target_name}}`, or "
                 "`${{package_name}}.${{source_name}}.${{target_name}}"
             ).format(selector)
-            raise RuntimeException(msg)
+            raise DbtRuntimeError(msg)
 
         for node, real_node in self.source_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
@@ -234,7 +234,7 @@ class ExposureSelectorMethod(SelectorMethod):
                 "the form ${{exposure_name}} or "
                 "${{exposure_package.exposure_name}}"
             ).format(selector)
-            raise RuntimeException(msg)
+            raise DbtRuntimeError(msg)
 
         for node, real_node in self.exposure_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
@@ -259,7 +259,7 @@ class MetricSelectorMethod(SelectorMethod):
                 "the form ${{metric_name}} or "
                 "${{metric_package.metric_name}}"
             ).format(selector)
-            raise RuntimeException(msg)
+            raise DbtRuntimeError(msg)
 
         for node, real_node in self.metric_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
@@ -367,7 +367,7 @@ class ResourceTypeSelectorMethod(SelectorMethod):
         try:
             resource_type = NodeType(selector)
         except ValueError as exc:
-            raise RuntimeException(f'Invalid resource_type selector "{selector}"') from exc
+            raise DbtRuntimeError(f'Invalid resource_type selector "{selector}"') from exc
         for node, real_node in self.parsed_nodes(included_nodes):
             if real_node.resource_type == resource_type:
                 yield node
@@ -390,7 +390,7 @@ class TestTypeSelectorMethod(SelectorMethod):
         elif selector in ("singular", "data"):
             search_type = SingularTestNode
         else:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'
             )
 
@@ -407,7 +407,7 @@ class StateSelectorMethod(SelectorMethod):
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
         if self.previous_state is None or self.previous_state.manifest is None:
-            raise InternalException("No comparison manifest in _macros_modified")
+            raise DbtInternalError("No comparison manifest in _macros_modified")
         old_macros = self.previous_state.manifest.macros
         new_macros = self.manifest.macros
 
@@ -496,7 +496,7 @@ class StateSelectorMethod(SelectorMethod):
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
-            raise RuntimeException("Got a state selector method, but no comparison manifest")
+            raise DbtRuntimeError("Got a state selector method, but no comparison manifest")
 
         state_checks = {
             # it's new if there is no old version
@@ -514,7 +514,7 @@ class StateSelectorMethod(SelectorMethod):
         if selector in state_checks:
             checker = state_checks[selector]
         else:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Got an invalid selector "{selector}", expected one of ' f'"{list(state_checks)}"'
             )
 
@@ -538,7 +538,7 @@ class StateSelectorMethod(SelectorMethod):
 class ResultSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.results is None:
-            raise InternalException("No comparison run_results")
+            raise DbtInternalError("No comparison run_results")
         matches = set(
             result.unique_id for result in self.previous_state.results if result.status == selector
         )
@@ -551,13 +551,11 @@ class SourceStatusSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
 
         if self.previous_state is None or self.previous_state.sources is None:
-            raise InternalException(
+            raise DbtInternalError(
                 "No previous state comparison freshness results in sources.json"
             )
         elif self.previous_state.sources_current is None:
-            raise InternalException(
-                "No current state comparison freshness results in sources.json"
-            )
+            raise DbtInternalError("No current state comparison freshness results in sources.json")
 
         current_state_sources = {
             result.unique_id: getattr(result, "max_loaded_at", 0)
@@ -633,7 +631,7 @@ class MethodManager:
     def get_method(self, method: MethodName, method_arguments: List[str]) -> SelectorMethod:
 
         if method not in self.SELECTOR_METHODS:
-            raise InternalException(
+            raise DbtInternalError(
                 f'Method name "{method}" is a valid node selection '
                 f"method name, but it is not handled"
             )

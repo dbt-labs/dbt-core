@@ -252,7 +252,7 @@ class InitTask(BaseTask):
         try:
             move_to_nearest_project_dir(self.args)
             in_project = True
-        except dbt.exceptions.RuntimeException:
+        except dbt.exceptions.DbtRuntimeError:
             in_project = False
 
         if in_project:

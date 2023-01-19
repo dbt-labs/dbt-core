@@ -7,7 +7,7 @@ from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.connection import AdapterRequiredConfig, QueryComment
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 
 
 class NodeWrapper:
@@ -48,7 +48,7 @@ class _QueryComment(local):
         if isinstance(comment, str) and "*/" in comment:
             # tell the user "no" so they don't hurt themselves by writing
             # garbage
-            raise RuntimeException(f'query comment contains illegal value "*/": {comment}')
+            raise DbtRuntimeError(f'query comment contains illegal value "*/": {comment}')
         self.query_comment = comment
         self.append = append
 

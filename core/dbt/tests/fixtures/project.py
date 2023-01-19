@@ -6,7 +6,7 @@ from datetime import datetime
 import warnings
 import yaml
 
-from dbt.exceptions import CompilationException, DatabaseException
+from dbt.exceptions import CompilationError, DbtDatabaseError
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
@@ -249,7 +249,9 @@ def clean_up_logging():
 # otherwise this will fail. So to test errors in those areas, you need to copy the files
 # into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
-def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging):
+def adapter(
+    unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging
+):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
         profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None
@@ -494,10 +496,10 @@ def project(
     # a `load_dependencies` method.
     # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
     # the macros have errors (which is what we're actually testing for...) they end up
-    # throwing CompilationExceptions or DatabaseExceptions
+    # throwing CompilationErrorss or DatabaseErrors
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError, CompilationException, DatabaseException):
+    except (KeyError, AttributeError, CompilationError, DbtDatabaseError):
         pass
     os.chdir(orig_cwd)
     cleanup_event_logger()

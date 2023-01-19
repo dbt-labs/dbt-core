@@ -71,7 +71,7 @@ def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
     latest_line = ["latest", latest_s, green("Up to date!")]
 
     if installed > latest:
-        latest_line[2] = green("Ahead of latest version!")
+        latest_line[2] = yellow("Ahead of latest version!")
     elif installed < latest:
         latest_line[2] = yellow("Update available!")
         update_info = (
@@ -145,7 +145,7 @@ def _get_plugin_msg_info(
         compatibility_msg = yellow("Update available!")
         needs_update = True
     elif plugin > latest_plugin:
-        compatibility_msg = green("Ahead of latest version!")
+        compatibility_msg = yellow("Ahead of latest version!")
     else:
         compatibility_msg = green("Up to date!")
 
@@ -235,5 +235,5 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-__version__ = "1.4.0b1"
+__version__ = "1.5.0a1"
 installed = get_installed_version()

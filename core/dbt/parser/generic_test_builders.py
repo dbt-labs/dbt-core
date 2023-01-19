@@ -22,17 +22,17 @@ from dbt.contracts.graph.unparsed import (
     UnparsedExposure,
 )
 from dbt.exceptions import (
-    CustomMacroPopulatingConfigValues,
-    SameKeyNested,
-    TagNotString,
-    TagsNotListOfStrings,
-    TestArgIncludesModel,
-    TestArgsNotDict,
-    TestDefinitionDictLength,
-    TestInvalidType,
-    TestNameNotString,
-    UnexpectedTestNamePattern,
-    UndefinedMacroException,
+    CustomMacroPopulatingConfigValueError,
+    SameKeyNestedError,
+    TagNotStringError,
+    TagsNotListOfStringsError,
+    TestArgIncludesModelError,
+    TestArgsNotDictError,
+    TestDefinitionDictLengthError,
+    TestTypeError,
+    TestNameNotStringError,
+    UnexpectedTestNamePatternError,
+    UndefinedMacroError,
 )
 from dbt.parser.search import FileBlock
 
@@ -234,7 +234,7 @@ class TestBuilder(Generic[Testable]):
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
-            raise TestArgIncludesModel()
+            raise TestArgIncludesModelError()
         self.package_name: str = package_name
         self.target: Testable = target
 
@@ -242,7 +242,7 @@ class TestBuilder(Generic[Testable]):
 
         match = self.TEST_NAME_PATTERN.match(test_name)
         if match is None:
-            raise UnexpectedTestNamePattern(test_name)
+            raise UnexpectedTestNamePatternError(test_name)
 
         groups = match.groupdict()
         self.name: str = groups["test_name"]
@@ -259,20 +259,20 @@ class TestBuilder(Generic[Testable]):
             value = self.args.pop(key, None)
             # 'modifier' config could be either top level arg or in config
             if value and "config" in self.args and key in self.args["config"]:
-                raise SameKeyNested()
+                raise SameKeyNestedError()
             if not value and "config" in self.args:
                 value = self.args["config"].pop(key, None)
             if isinstance(value, str):
 
                 try:
                     value = get_rendered(value, render_ctx, native=True)
-                except UndefinedMacroException as e:
-                    raise CustomMacroPopulatingConfigValues(
+                except UndefinedMacroError as e:
+                    raise CustomMacroPopulatingConfigValueError(
                         target_name=self.target.name,
                         column_name=column_name,
                         name=self.name,
                         key=key,
-                        err_msg=e.msg
+                        err_msg=e.msg,
                     )
 
             if value is not None:
@@ -310,7 +310,7 @@ class TestBuilder(Generic[Testable]):
     @staticmethod
     def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(test, dict):
-            raise TestInvalidType(test)
+            raise TestTypeError(test)
 
         # If the test is a dictionary with top-level keys, the test name is "test_name"
         # and the rest are arguments
@@ -324,13 +324,13 @@ class TestBuilder(Generic[Testable]):
         else:
             test = list(test.items())
             if len(test) != 1:
-                raise TestDefinitionDictLength(test)
+                raise TestDefinitionDictLengthError(test)
             test_name, test_args = test[0]
 
         if not isinstance(test_args, dict):
-            raise TestArgsNotDict(test_args)
+            raise TestArgsNotDictError(test_args)
         if not isinstance(test_name, str):
-            raise TestNameNotString(test_name)
+            raise TestNameNotStringError(test_name)
         test_args = deepcopy(test_args)
         if name is not None:
             test_args["column_name"] = name
@@ -421,10 +421,10 @@ class TestBuilder(Generic[Testable]):
         if isinstance(tags, str):
             tags = [tags]
         if not isinstance(tags, list):
-            raise TagsNotListOfStrings(tags)
+            raise TagsNotListOfStringsError(tags)
         for tag in tags:
             if not isinstance(tag, str):
-                raise TagNotString(tag)
+                raise TagNotStringError(tag)
         return tags[:]
 
     def macro_name(self) -> str:

@@ -2,7 +2,7 @@ import agate
 from typing import Any, Optional, Tuple, Type, List
 
 from dbt.contracts.connection import Connection
-from dbt.exceptions import RelationTypeNull
+from dbt.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.cache import _make_ref_key_msg
 from dbt.adapters.sql import SQLConnectionManager
@@ -131,7 +131,7 @@ class SQLAdapter(BaseAdapter):
 
     def drop_relation(self, relation):
         if relation.type is None:
-            raise RelationTypeNull(relation)
+            raise RelationTypeNullError(relation)
 
         self.cache_dropped(relation)
         self.execute_macro(DROP_RELATION_MACRO_NAME, kwargs={"relation": relation})

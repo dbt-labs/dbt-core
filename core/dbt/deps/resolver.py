@@ -2,10 +2,10 @@ from dataclasses import dataclass, field
 from typing import Dict, List, NoReturn, Union, Type, Iterator, Set
 
 from dbt.exceptions import (
-    DuplicateDependencyToRoot,
-    DuplicateProjectDependency,
-    MismatchedDependencyTypes,
-    InternalException,
+    DuplicateDependencyToRootError,
+    DuplicateProjectDependencyError,
+    MismatchedDependencyTypeError,
+    DbtInternalError,
 )
 
 from dbt.config import Project, RuntimeConfig
@@ -56,7 +56,7 @@ class PackageListing:
         self.packages[key_str] = value
 
     def _mismatched_types(self, old: UnpinnedPackage, new: UnpinnedPackage) -> NoReturn:
-        raise MismatchedDependencyTypes(new, old)
+        raise MismatchedDependencyTypeError(new, old)
 
     def incorporate(self, package: UnpinnedPackage):
         key: str = self._pick_key(package)
@@ -80,7 +80,7 @@ class PackageListing:
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise InternalException("Invalid package type {}".format(type(contract)))
+                raise DbtInternalError("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod
@@ -107,9 +107,9 @@ def _check_for_duplicate_project_names(
     for package in final_deps:
         project_name = package.get_project_name(config, renderer)
         if project_name in seen:
-            raise DuplicateProjectDependency(project_name)
+            raise DuplicateProjectDependencyError(project_name)
         elif project_name == config.project_name:
-            raise DuplicateDependencyToRoot(project_name)
+            raise DuplicateDependencyToRootError(project_name)
         seen.add(project_name)
 
 

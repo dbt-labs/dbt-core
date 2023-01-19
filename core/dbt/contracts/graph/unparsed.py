@@ -11,7 +11,7 @@ from dbt.contracts.util import (
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -222,7 +222,7 @@ class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
 
     def __post_init__(self):
         if self.name == "" or self.data_type == "":
-            raise CompilationException("External partition columns must have names and data types")
+            raise CompilationError("External partition columns must have names and data types")
 
 
 @dataclass
@@ -514,7 +514,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
                 errors.append("must contain only letters, numbers and underscores")
 
             if errors:
-                raise ParsingException(
+                raise ParsingError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
 

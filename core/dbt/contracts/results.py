@@ -7,7 +7,7 @@ from dbt.contracts.util import (
     Replaceable,
     schema_version,
 )
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.types import TimingInfoCollected
 from dbt.events.proto_types import RunResultMsg, TimingInfoMsg
@@ -343,14 +343,14 @@ def process_freshness_result(result: FreshnessNodeResult) -> FreshnessNodeOutput
 
     # we know that this must be a SourceFreshnessResult
     if not isinstance(result, SourceFreshnessResult):
-        raise InternalException(
+        raise DbtInternalError(
             "Got {} instead of a SourceFreshnessResult for a "
             "non-error result in freshness execution!".format(type(result))
         )
     # if we're here, we must have a non-None freshness threshold
     criteria = result.node.freshness
     if criteria is None:
-        raise InternalException(
+        raise DbtInternalError(
             "Somehow evaluated a freshness result for a source that has no freshness criteria!"
         )
     return SourceFreshnessOutput(

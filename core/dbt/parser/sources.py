@@ -26,7 +26,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.events.functions import warn_or_error
 from dbt.events.types import UnusedTables
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 
 from dbt.parser.schemas import SchemaParser, ParserRef
@@ -150,7 +150,7 @@ class SourcePatcher:
         )
 
         if not isinstance(config, SourceConfig):
-            raise InternalException(
+            raise DbtInternalError(
                 f"Calculated a {type(config)} for a source, but expected a SourceConfig"
             )
 
