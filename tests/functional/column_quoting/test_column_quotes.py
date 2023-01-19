@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-_MODELS_COLUMN_QUOTING_DEFAULT = """
+_MODELS__COLUMN_QUOTING_DEFAULT = """
 {% set col_a = '"col_A"' %}
 {% set col_b = '"col_B"' %}
 
@@ -17,7 +17,7 @@ select
 from {{ref('seed')}}
 """
 
-_MODELS_COLUMN_QUOTING_NO_QUOTING = """
+_MODELS__COLUMN_QUOTING_NO_QUOTING = """
 {% set col_a = '"col_a"' %}
 {% set col_b = '"col_b"' %}
 
@@ -42,7 +42,7 @@ _SEEDS_BASIC_SEED = """col_A,col_B
 class BaseColumnQuotingTest:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"model.sql": _MODELS_COLUMN_QUOTING_DEFAULT}
+        return {"model.sql": _MODELS__COLUMN_QUOTING_DEFAULT}
 
     @pytest.fixture(scope="class")
     def seeds(self):
@@ -85,7 +85,7 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
 class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"model.sql": _MODELS_COLUMN_QUOTING_NO_QUOTING}
+        return {"model.sql": _MODELS__COLUMN_QUOTING_NO_QUOTING}
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
