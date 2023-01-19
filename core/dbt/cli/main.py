@@ -305,6 +305,7 @@ def list(ctx, **kwargs):
     return results, success
 
 
+# Alias "list" to "ls"
 ls = copy(cli.commands["list"])
 ls.hidden = True
 cli.add_command(ls, "ls")
@@ -463,7 +464,7 @@ def source(ctx, **kwargs):
 @requires.profile
 @requires.project
 def freshness(ctx, **kwargs):
-    """Snapshots the current freshness of the project's sources"""
+    """check the current freshness of the project's sources"""
     config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
     task = FreshnessTask(ctx.obj["flags"], config)
 
@@ -472,6 +473,7 @@ def freshness(ctx, **kwargs):
     return results, success
 
 
+# Alias "source freshness" to "snapshot-freshness"
 snapshot_freshness = copy(cli.commands["source"].commands["freshness"])  # type: ignore
 snapshot_freshness.hidden = True
 cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # type: ignore
