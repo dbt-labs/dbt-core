@@ -18,6 +18,8 @@ from dbt.task.snapshot import SnapshotTask
 from dbt.task.freshness import FreshnessTask
 from dbt.task.seed import SeedTask
 from dbt.task.list import ListTask
+from dbt.task.freshness import FreshnessTask
+from dbt.task.seed import SeedTask
 
 
 # CLI invocation
