@@ -18,6 +18,7 @@ from dbt.task.snapshot import SnapshotTask
 from dbt.task.seed import SeedTask
 from dbt.task.list import ListTask
 from dbt.task.freshness import FreshnessTask
+from dbt.task.run_operation import RunOperationTask
 
 
 # CLI invocation
@@ -363,6 +364,7 @@ def run(ctx, **kwargs):
 
 # dbt run operation
 @cli.command("run-operation")
+@click.argument("macro")
 @click.pass_context
 @p.args
 @p.profile
@@ -371,10 +373,16 @@ def run(ctx, **kwargs):
 @p.target
 @p.vars
 @requires.preflight
+@requires.profile
+@requires.project
 def run_operation(ctx, **kwargs):
     """Run the named macro with any supplied arguments."""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = RunOperationTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt seed

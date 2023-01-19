@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Dict, Any
 import traceback
 
 import agate
@@ -8,7 +7,6 @@ from .runnable import ManifestTask
 
 import dbt.exceptions
 from dbt.adapters.factory import get_adapter
-from dbt.config.utils import parse_cli_vars
 from dbt.contracts.results import RunOperationResultsArtifact
 from dbt.exceptions import InternalException
 from dbt.events.functions import fire_event
@@ -29,14 +27,6 @@ class RunOperationTask(ManifestTask):
 
         return package_name, macro_name
 
-    def _get_kwargs(self) -> Dict[str, Any]:
-        # N.B. parse_cli_vars is embedded into the param when using click.
-        # replace this with:
-        # return self.args.args
-        # when this task is refactored for click
-        # or remove the function completely as it's basically a noop
-        return parse_cli_vars(self.args.args)
-
     def compile_manifest(self) -> None:
         if self.manifest is None:
             raise InternalException("manifest was None in compile_manifest")
@@ -45,7 +35,7 @@ class RunOperationTask(ManifestTask):
         adapter = get_adapter(self.config)
 
         package_name, macro_name = self._get_macro_parts()
-        macro_kwargs = self._get_kwargs()
+        macro_kwargs = self.args.args
 
         with adapter.connection_named("macro_{}".format(macro_name)):
             adapter.clear_transaction()
