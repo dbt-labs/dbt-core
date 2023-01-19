@@ -98,7 +98,10 @@ class TestSeedRunResultsState(BaseRunResultsState):
         self.clear_state()
         run_dbt(["seed"])
         self.copy_state()
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "result:success", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "result:success", "--state", "./state"],
+            expect_pass=True,
+        )
         assert len(results) == 1
         assert results[0] == "test.seed"
 
@@ -108,7 +111,15 @@ class TestSeedRunResultsState(BaseRunResultsState):
 
         results = run_dbt(["ls", "--select", "result:success+", "--state", "./state"])
         assert len(results) == 7
-        assert set(results) == {"test.seed", "test.table_model", "test.view_model", "test.ephemeral_model", "test.not_null_view_model_id", "test.unique_view_model_id", "exposure:test.my_exposure"}
+        assert set(results) == {
+            "test.seed",
+            "test.table_model",
+            "test.view_model",
+            "test.ephemeral_model",
+            "test.not_null_view_model_id",
+            "test.unique_view_model_id",
+            "exposure:test.my_exposure",
+        }
 
         # add a new faulty row to the seed
         changed_seed_contents = seed_csv + "\n" + "\\\3,carl"
@@ -118,7 +129,10 @@ class TestSeedRunResultsState(BaseRunResultsState):
         run_dbt(["seed"], expect_pass=False)
         self.copy_state()
 
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "result:error", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "result:error", "--state", "./state"],
+            expect_pass=True,
+        )
         assert len(results) == 1
         assert results[0] == "test.seed"
 
@@ -128,7 +142,15 @@ class TestSeedRunResultsState(BaseRunResultsState):
 
         results = run_dbt(["ls", "--select", "result:error+", "--state", "./state"])
         assert len(results) == 7
-        assert set(results) == {"test.seed", "test.table_model", "test.view_model", "test.ephemeral_model", "test.not_null_view_model_id", "test.unique_view_model_id", "exposure:test.my_exposure"}
+        assert set(results) == {
+            "test.seed",
+            "test.table_model",
+            "test.view_model",
+            "test.ephemeral_model",
+            "test.not_null_view_model_id",
+            "test.unique_view_model_id",
+            "exposure:test.my_exposure",
+        }
 
 
 class TestBuildRunResultsState(BaseRunResultsState):
@@ -140,28 +162,50 @@ class TestBuildRunResultsState(BaseRunResultsState):
         self.update_view_model_bad_sql()
         self.rebuild_run_dbt(expect_pass=False)
 
-        results = run_dbt(["build", "--select", "result:error", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "result:error", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 3
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"view_model", "not_null_view_model_id", "unique_view_model_id"}
 
         results = run_dbt(["ls", "--select", "result:error", "--state", "./state"])
         assert len(results) == 3
-        assert set(results) == {"test.view_model", "test.not_null_view_model_id", "test.unique_view_model_id"}
+        assert set(results) == {
+            "test.view_model",
+            "test.not_null_view_model_id",
+            "test.unique_view_model_id",
+        }
 
-        results = run_dbt(["build", "--select", "result:error+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "result:error+", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 4
         nodes = set([elem.node.name for elem in results])
-        assert nodes == {"table_model", "view_model", "not_null_view_model_id", "unique_view_model_id"}
+        assert nodes == {
+            "table_model",
+            "view_model",
+            "not_null_view_model_id",
+            "unique_view_model_id",
+        }
 
         results = run_dbt(["ls", "--select", "result:error+", "--state", "./state"])
         assert len(results) == 6  # includes exposure
-        assert set(results) == {"test.table_model", "test.view_model", "test.ephemeral_model", "test.not_null_view_model_id", "test.unique_view_model_id", "exposure:test.my_exposure"}
+        assert set(results) == {
+            "test.table_model",
+            "test.view_model",
+            "test.ephemeral_model",
+            "test.not_null_view_model_id",
+            "test.unique_view_model_id",
+            "exposure:test.my_exposure",
+        }
 
         self.update_view_model_failing_tests()
         self.rebuild_run_dbt(expect_pass=False)
 
-        results = run_dbt(["build", "--select", "result:fail", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "result:fail", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 1
         assert results[0].node.name == "unique_view_model_id"
 
@@ -169,7 +213,9 @@ class TestBuildRunResultsState(BaseRunResultsState):
         assert len(results) == 1
         assert results[0] == "test.unique_view_model_id"
 
-        results = run_dbt(["build", "--select", "result:fail+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "result:fail+", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 2
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"table_model", "unique_view_model_id"}
@@ -181,7 +227,9 @@ class TestBuildRunResultsState(BaseRunResultsState):
         self.update_unique_test_severity_warn()
         self.rebuild_run_dbt(expect_pass=True)
 
-        results = run_dbt(["build", "--select", "result:warn", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["build", "--select", "result:warn", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 1
         assert results[0].node.name == "unique_view_model_id"
 
@@ -189,7 +237,9 @@ class TestBuildRunResultsState(BaseRunResultsState):
         assert len(results) == 1
         assert results[0] == "test.unique_view_model_id"
 
-        results = run_dbt(["build", "--select", "result:warn+", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["build", "--select", "result:warn+", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 2  # includes table_model to be run
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"table_model", "unique_view_model_id"}
@@ -202,7 +252,9 @@ class TestBuildRunResultsState(BaseRunResultsState):
 class TestRunRunResultsState(BaseRunResultsState):
     def test_run_run_results_state(self, project):
         self.run_and_save_state()
-        results = run_dbt(["run", "--select", "result:success", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["run", "--select", "result:success", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 2
         assert results[0].node.name == "view_model"
         assert results[1].node.name == "table_model"
@@ -211,7 +263,9 @@ class TestRunRunResultsState(BaseRunResultsState):
         self.clear_state()
         run_dbt(["run", "--select", "view_model"], expect_pass=True)
         self.copy_state()
-        results = run_dbt(["run", "--select", "result:success+", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["run", "--select", "result:success+", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 2
         assert results[0].node.name == "view_model"
         assert results[1].node.name == "table_model"
@@ -226,18 +280,24 @@ class TestRunRunResultsState(BaseRunResultsState):
         self.copy_state()
 
         # test single result selector on error
-        results = run_dbt(["run", "--select", "result:error", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["run", "--select", "result:error", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 1
         assert results[0].node.name == "view_model"
 
         # test + operator selection on error
-        results = run_dbt(["run", "--select", "result:error+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["run", "--select", "result:error+", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 2
         assert results[0].node.name == "view_model"
         assert results[1].node.name == "table_model"
 
         # single result selector on skipped. Expect this to pass becase underlying view already defined above
-        results = run_dbt(["run", "--select", "result:skipped", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["run", "--select", "result:skipped", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 1
         assert results[0].node.name == "table_model"
 
@@ -249,7 +309,9 @@ class TestRunRunResultsState(BaseRunResultsState):
         run_dbt(["run"], expect_pass=False)
         self.copy_state()
 
-        results = run_dbt(["run", "--select", "result:skipped+", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["run", "--select", "result:skipped+", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 2
         assert results[0].node.name == "table_model"
         assert results[1].node.name == "table_model_downstream"
@@ -259,13 +321,17 @@ class TestTestRunResultsState(BaseRunResultsState):
     def test_test_run_results_state(self, project):
         self.run_and_save_state()
         # run passed nodes
-        results = run_dbt(["test", "--select", "result:pass", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["test", "--select", "result:pass", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 2
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"unique_view_model_id", "not_null_view_model_id"}
 
         # run passed nodes with + operator
-        results = run_dbt(["test", "--select", "result:pass+", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["test", "--select", "result:pass+", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 2
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"unique_view_model_id", "not_null_view_model_id"}
@@ -274,12 +340,16 @@ class TestTestRunResultsState(BaseRunResultsState):
         self.rebuild_run_dbt(expect_pass=False)
 
         # test with failure selector
-        results = run_dbt(["test", "--select", "result:fail", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["test", "--select", "result:fail", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 1
         assert results[0].node.name == "unique_view_model_id"
 
         # test with failure selector and + operator
-        results = run_dbt(["test", "--select", "result:fail+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["test", "--select", "result:fail+", "--state", "./state"], expect_pass=False
+        )
         assert len(results) == 1
         assert results[0].node.name == "unique_view_model_id"
 
@@ -288,12 +358,16 @@ class TestTestRunResultsState(BaseRunResultsState):
         self.rebuild_run_dbt(expect_pass=True)
 
         # test with warn selector
-        results = run_dbt(["test", "--select", "result:warn", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["test", "--select", "result:warn", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 1
         assert results[0].node.name == "unique_view_model_id"
 
         # test with warn selector and + operator
-        results = run_dbt(["test", "--select", "result:warn+", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["test", "--select", "result:warn+", "--state", "./state"], expect_pass=True
+        )
         assert len(results) == 1
         assert results[0].node.name == "unique_view_model_id"
 
@@ -301,7 +375,9 @@ class TestTestRunResultsState(BaseRunResultsState):
 class TestConcurrentSelectionRunResultsState(BaseRunResultsState):
     def test_concurrent_selection_run_run_results_state(self, project):
         self.run_and_save_state()
-        results = run_dbt(["run", "--select", "state:modified+", "result:error+", "--state", "./state"])
+        results = run_dbt(
+            ["run", "--select", "state:modified+", "result:error+", "--state", "./state"]
+        )
         assert len(results) == 0
 
         self.update_view_model_bad_sql()
@@ -313,7 +389,10 @@ class TestConcurrentSelectionRunResultsState(BaseRunResultsState):
         bad_sql = "select * from forced_error"
         write_file(bad_sql, "models", "table_model_modified_example.sql")
 
-        results = run_dbt(["run", "--select", "state:modified+", "result:error+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["run", "--select", "state:modified+", "result:error+", "--state", "./state"],
+            expect_pass=False,
+        )
         assert len(results) == 3
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"view_model", "table_model_modified_example", "table_model"}
@@ -329,7 +408,18 @@ class TestConcurrentSelectionTestRunResultsState(BaseRunResultsState):
         self.rebuild_run_dbt(expect_pass=False)
 
         # get the failures from
-        results = run_dbt(["test", "--select", "result:fail", "--exclude", "not_null_view_model_id", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            [
+                "test",
+                "--select",
+                "result:fail",
+                "--exclude",
+                "not_null_view_model_id",
+                "--state",
+                "./state",
+            ],
+            expect_pass=False,
+        )
         assert len(results) == 1
         nodes = set([elem.node.name for elem in results])
         assert nodes == {"unique_view_model_id"}
@@ -338,7 +428,9 @@ class TestConcurrentSelectionTestRunResultsState(BaseRunResultsState):
 class TestConcurrentSelectionBuildRunResultsState(BaseRunResultsState):
     def test_concurrent_selectors_build_run_results_state(self, project):
         self.run_and_save_state()
-        results = run_dbt(["build", "--select", "state:modified+", "result:error+", "--state", "./state"])
+        results = run_dbt(
+            ["build", "--select", "state:modified+", "result:error+", "--state", "./state"]
+        )
         assert len(results) == 0
 
         self.update_view_model_bad_sql()
@@ -348,10 +440,19 @@ class TestConcurrentSelectionBuildRunResultsState(BaseRunResultsState):
         bad_sql = "select * from forced_error"
         write_file(bad_sql, "models", "table_model_modified_example.sql")
 
-        results = run_dbt(["build", "--select", "state:modified+", "result:error+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            ["build", "--select", "state:modified+", "result:error+", "--state", "./state"],
+            expect_pass=False,
+        )
         assert len(results) == 5
         nodes = set([elem.node.name for elem in results])
-        assert nodes == {"table_model_modified_example", "view_model", "table_model", "not_null_view_model_id", "unique_view_model_id"}
+        assert nodes == {
+            "table_model_modified_example",
+            "view_model",
+            "table_model",
+            "not_null_view_model_id",
+            "unique_view_model_id",
+        }
 
         self.update_view_model_failing_tests()
 
@@ -370,7 +471,24 @@ class TestConcurrentSelectionBuildRunResultsState(BaseRunResultsState):
         bad_again_sql = "select * from forced_anothererror"
         write_file(bad_again_sql, "models", "table_model_modified_example.sql")
 
-        results = run_dbt(["build", "--select", "state:modified+", "result:error+", "result:fail+", "--state", "./state"], expect_pass=False)
+        results = run_dbt(
+            [
+                "build",
+                "--select",
+                "state:modified+",
+                "result:error+",
+                "result:fail+",
+                "--state",
+                "./state",
+            ],
+            expect_pass=False,
+        )
         assert len(results) == 5
         nodes = set([elem.node.name for elem in results])
-        assert nodes == {"error_model", "downstream_of_error_model", "table_model_modified_example", "table_model", "unique_view_model_id"}
+        assert nodes == {
+            "error_model",
+            "downstream_of_error_model",
+            "table_model_modified_example",
+            "table_model",
+            "unique_view_model_id",
+        }

@@ -69,14 +69,19 @@ class BaseModifiedState:
 class TestChangedSeedContents(BaseModifiedState):
     def test_changed_seed_contents_state(self, project):
         self.run_and_save_state()
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"],
+            expect_pass=True,
+        )
         assert len(results) == 0
 
         # add a new row to the seed
         changed_seed_contents = seed_csv + "\n" + "3,carl"
         write_file(changed_seed_contents, "seeds", "seed.csv")
 
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"])
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
+        )
         assert len(results) == 1
         assert results[0] == "test.seed"
 
@@ -86,7 +91,15 @@ class TestChangedSeedContents(BaseModifiedState):
 
         results = run_dbt(["ls", "--select", "state:modified+", "--state", "./state"])
         assert len(results) == 7
-        assert set(results) == {"test.seed", "test.table_model", "test.view_model", "test.ephemeral_model", "test.not_null_view_model_id", "test.unique_view_model_id", "exposure:test.my_exposure"}
+        assert set(results) == {
+            "test.seed",
+            "test.table_model",
+            "test.view_model",
+            "test.ephemeral_model",
+            "test.not_null_view_model_id",
+            "test.unique_view_model_id",
+            "exposure:test.my_exposure",
+        }
 
         shutil.rmtree("./state")
         self.copy_state()
@@ -105,12 +118,25 @@ class TestChangedSeedContents(BaseModifiedState):
         write_file(seed_contents, "seeds", "seed.csv")
 
         # now if we run again, we should get a warning
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"])
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
+        )
         assert len(results) == 1
         assert results[0] == "test.seed"
 
         with pytest.raises(CompilationError) as exc:
-            run_dbt(["--warn-error", "ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"])
+            run_dbt(
+                [
+                    "--warn-error",
+                    "ls",
+                    "--resource-type",
+                    "seed",
+                    "--select",
+                    "state:modified",
+                    "--state",
+                    "./state",
+                ]
+            )
         assert ">1MB" in str(exc.value)
 
         shutil.rmtree("./state")
@@ -119,20 +145,28 @@ class TestChangedSeedContents(BaseModifiedState):
         # once it"s in path mode, we don"t mark it as modified if it changes
         write_file(seed_contents + "\n1,test", "seeds", "seed.csv")
 
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"],
+            expect_pass=True,
+        )
         assert len(results) == 0
 
 
 class TestChangedSeedConfig(BaseModifiedState):
     def test_changed_seed_config(self, project):
         self.run_and_save_state()
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"],
+            expect_pass=True,
+        )
         assert len(results) == 0
 
         update_config_file({"seeds": {"test": {"quote_columns": False}}}, "dbt_project.yml")
 
         # quoting change -> seed changed
-        results = run_dbt(["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"])
+        results = run_dbt(
+            ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
+        )
         assert len(results) == 1
         assert results[0] == "test.seed"
 
@@ -140,13 +174,18 @@ class TestChangedSeedConfig(BaseModifiedState):
 class TestUnrenderedConfigSame(BaseModifiedState):
     def test_unrendered_config_same(self, project):
         self.run_and_save_state()
-        results = run_dbt(["ls", "--resource-type", "model", "--select", "state:modified", "--state", "./state"], expect_pass=True)
+        results = run_dbt(
+            ["ls", "--resource-type", "model", "--select", "state:modified", "--state", "./state"],
+            expect_pass=True,
+        )
         assert len(results) == 0
 
         # although this is the default value, dbt will recognize it as a change
         # for previously-unconfigured models, because it"s been explicitly set
         update_config_file({"models": {"test": {"materialized": "view"}}}, "dbt_project.yml")
-        results = run_dbt(["ls", "--resource-type", "model", "--select", "state:modified", "--state", "./state"])
+        results = run_dbt(
+            ["ls", "--resource-type", "model", "--select", "state:modified", "--state", "./state"]
+        )
         assert len(results) == 1
         assert results[0] == "test.view_model"
 

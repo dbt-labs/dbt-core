@@ -71,18 +71,10 @@ class BaseDeferState:
 
     @pytest.fixture(scope="class")
     def profiles_config_update(self, dbt_profile_target, unique_schema, other_schema):
-        outputs = {
-            "default": dbt_profile_target,
-            "otherschema": deepcopy(dbt_profile_target)
-        }
+        outputs = {"default": dbt_profile_target, "otherschema": deepcopy(dbt_profile_target)}
         outputs["default"]["schema"] = unique_schema
         outputs["otherschema"]["schema"] = other_schema
-        return {
-            "test": {
-                "outputs": outputs,
-                "target": "default"
-            }
-        }
+        return {"test": {"outputs": outputs, "target": "default"}}
 
     def copy_state(self):
         if not os.path.exists("state"):
@@ -156,15 +148,31 @@ class TestRunDeferState(BaseDeferState):
         run_dbt(["run", "--target", "otherschema"], expect_pass=False)
 
         # defer test, it succeeds
-        results = run_dbt(["test", "-m", "view_model+", "--state", "state", "--defer", "--target", "otherschema"])
+        results = run_dbt(
+            ["test", "-m", "view_model+", "--state", "state", "--defer", "--target", "otherschema"]
+        )
 
         # defer docs generate with state, catalog refers schema from the happy times
-        catalog = run_dbt(["docs", "generate", "-m", "view_model+", "--state", "state", "--defer", "--target", "otherschema"])
+        catalog = run_dbt(
+            [
+                "docs",
+                "generate",
+                "-m",
+                "view_model+",
+                "--state",
+                "state",
+                "--defer",
+                "--target",
+                "otherschema",
+            ]
+        )
         assert other_schema not in catalog.nodes["seed.test.seed"].metadata.schema
         assert unique_schema in catalog.nodes["seed.test.seed"].metadata.schema
 
         # with state it should work though
-        results = run_dbt(["run", "-m", "view_model", "--state", "state", "--defer", "--target", "otherschema"])
+        results = run_dbt(
+            ["run", "-m", "view_model", "--state", "state", "--defer", "--target", "otherschema"]
+        )
         assert other_schema not in results[0].node.compiled_code
         assert unique_schema in results[0].node.compiled_code
 
@@ -219,7 +227,9 @@ class TestRunDeferStateIFFNotExists(BaseDeferState):
 
         # this time with --favor-state: even though the seed now exists in our "other" schema,
         # we should still favor the one available from state
-        results = run_dbt(["run", "--state", "state", "--defer", "--favor-state", "--target", "otherschema"])
+        results = run_dbt(
+            ["run", "--state", "state", "--defer", "--favor-state", "--target", "otherschema"]
+        )
         assert len(results) == 2
         assert other_schema not in results[0].node.compiled_code
 
@@ -246,7 +256,17 @@ class TestDeferStateDeletedUpstream(BaseDeferState):
 
         # this time with --favor-state: prefer the models in the "other" schema, even though they exist in ours
         run_dbt(
-            ["run", "-m", "view_model", "--state", "state", "--defer", "--favor-state", "--target", "otherschema"],
+            [
+                "run",
+                "-m",
+                "view_model",
+                "--state",
+                "state",
+                "--defer",
+                "--favor-state",
+                "--target",
+                "otherschema",
+            ],
             expect_pass=True,
         )
         results = run_dbt(["test", "--state", "state", "--defer", "--favor-state"])
