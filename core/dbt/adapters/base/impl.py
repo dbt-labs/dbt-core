@@ -17,7 +17,6 @@ from typing import (
     Iterator,
     Set,
 )
-
 import agate
 import pytz
 
@@ -54,7 +53,7 @@ from dbt.events.types import (
     CodeExecutionStatus,
     CatalogGenerationError,
 )
-from dbt.utils import filter_null_values, executor, cast_to_str
+from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
 from dbt.adapters.base.meta import AdapterMeta, available
@@ -943,7 +942,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         context_override: Optional[Dict[str, Any]] = None,
         kwargs: Dict[str, Any] = None,
         text_only_columns: Optional[Iterable[str]] = None,
-    ) -> agate.Table:
+    ) -> AttrDict:
         """Look macro_name up in the manifest and execute its results.
 
         :param macro_name: The name of the macro to execute.
@@ -1028,7 +1027,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             manifest=manifest,
         )
 
-        results = self._catalog_filter_table(table, manifest)
+        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
         return results
 
     def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
@@ -1060,7 +1059,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         loaded_at_field: str,
         filter: Optional[str],
         manifest: Optional[Manifest] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[AdapterResponse, Dict[str, Any]]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
             "source": source,
@@ -1069,7 +1068,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         }
 
         # run the macro
-        table = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
+        result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
+        adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
@@ -1083,11 +1083,12 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         snapshotted_at = _utc(table[0][1], source, loaded_at_field)
         age = (snapshotted_at - max_loaded_at).total_seconds()
-        return {
+        freshness = {
             "max_loaded_at": max_loaded_at,
             "snapshotted_at": snapshotted_at,
             "age": age,
         }
+        return adapter_response, freshness
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Any:
         """A hook for running some operation before the model materialization
