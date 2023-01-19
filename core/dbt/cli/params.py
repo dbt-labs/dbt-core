@@ -298,10 +298,10 @@ state = click.option(
     help="If set, use the given directory as the source for json files to compare with this project.",
     type=click.Path(
         dir_okay=True,
-        exists=True,
         file_okay=False,
         readable=True,
         resolve_path=True,
+        path_type=Path,
     ),
 )
 

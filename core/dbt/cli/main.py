@@ -15,6 +15,8 @@ from dbt.task.deps import DepsTask
 from dbt.task.run import RunTask
 from dbt.task.test import TestTask
 from dbt.task.snapshot import SnapshotTask
+from dbt.task.freshness import FreshnessTask
+from dbt.task.seed import SeedTask
 
 
 # CLI invocation
@@ -381,10 +383,16 @@ def run_operation(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
+@requires.profile
+@requires.project
 def seed(ctx, **kwargs):
     """Load data from csv files into your data warehouse."""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = SeedTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt snapshot
@@ -436,10 +444,21 @@ def source(ctx, **kwargs):
 @p.threads
 @p.vars
 @requires.preflight
+@requires.profile
+@requires.project
 def freshness(ctx, **kwargs):
     """Snapshots the current freshness of the project's sources"""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = FreshnessTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+snapshot_freshness = copy(cli.commands["source"].commands["freshness"])  # type: ignore
+snapshot_freshness.hidden = True
+cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # type: ignore
 
 
 # dbt test
@@ -462,6 +481,8 @@ def freshness(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
+@requires.profile
+@requires.project
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
     config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
