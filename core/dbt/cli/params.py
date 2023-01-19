@@ -1,7 +1,7 @@
 from pathlib import Path, PurePath
 
 import click
-from dbt.cli.options import OptionEatAll
+from dbt.cli.options import MultiOption
 from dbt.cli.option_types import YAML, ChoiceTuple
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 
@@ -82,7 +82,7 @@ enable_legacy_logger = click.option(
 )
 
 exclude = click.option(
-    "--exclude", envvar=None, type=tuple, cls=OptionEatAll, help="Specify the nodes to exclude."
+    "--exclude", envvar=None, type=tuple, cls=MultiOption, help="Specify the nodes to exclude."
 )
 
 fail_fast = click.option(
@@ -142,7 +142,7 @@ models = click.option(
     "-m",
     envvar=None,
     help="Specify the nodes to include.",
-    cls=OptionEatAll,
+    cls=MultiOption,
     type=tuple,
 )
 
@@ -264,7 +264,7 @@ resource_type = click.option(
         ],
         case_sensitive=False,
     ),
-    cls=OptionEatAll,
+    cls=MultiOption,
     default=(),
 )
 
@@ -273,7 +273,7 @@ select = click.option(
     "--select",
     envvar=None,
     help="Specify the nodes to include.",
-    cls=OptionEatAll,
+    cls=MultiOption,
     type=tuple,
 )
 

@@ -2,13 +2,13 @@ import click
 
 
 # Implementation from: https://stackoverflow.com/a/48394004
-# Note OptionEatAll options must be specified with type=tuple (https://github.com/pallets/click/issues/2012)
-class OptionEatAll(click.Option):
+# Note MultiOption options must be specified with type=tuple or type=ChoiceTuple (https://github.com/pallets/click/issues/2012)
+class MultiOption(click.Option):
     def __init__(self, *args, **kwargs):
         self.save_other_options = kwargs.pop("save_other_options", True)
         nargs = kwargs.pop("nargs", -1)
         assert nargs == -1, "nargs, if set, must be -1 not {}".format(nargs)
-        super(OptionEatAll, self).__init__(*args, **kwargs)
+        super(MultiOption, self).__init__(*args, **kwargs)
         self._previous_parser_process = None
         self._eat_all_parser = None
 
@@ -33,7 +33,7 @@ class OptionEatAll(click.Option):
             # call the actual process
             self._previous_parser_process(value, state)
 
-        retval = super(OptionEatAll, self).add_to_parser(parser, ctx)
+        retval = super(MultiOption, self).add_to_parser(parser, ctx)
         for name in self.opts:
             our_parser = parser._long_opt.get(name) or parser._short_opt.get(name)
             if our_parser:
