@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add dbt run-operation to click CLI
+time: 2023-01-19T10:53:04.154871+01:00
+custom:
+  Author: jtcohen6
+  Issue: "5552"
