@@ -1,8 +1,10 @@
-{% macro get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) -%}
+{% macro get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
+   -- back compat for old kwarg name
+  {% set incremental_predicates = kwargs.get('predicates', incremental_predicates) %}
   {{ adapter.dispatch('get_merge_sql', 'dbt')(target, source, unique_key, dest_columns, incremental_predicates) }}
 {%- endmacro %}
 
-{% macro default__get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) -%}
+{% macro default__get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
     {%- set predicates = [] if incremental_predicates is none else [] + incremental_predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
     {%- set merge_update_columns = config.get('merge_update_columns') -%}
