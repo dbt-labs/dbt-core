@@ -1,7 +1,8 @@
 from pathlib import Path, PurePath
 
 import click
-from dbt.cli.option_types import YAML
+from dbt.cli.options import MultiOption
+from dbt.cli.option_types import YAML, ChoiceTuple
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 
 
@@ -80,7 +81,9 @@ enable_legacy_logger = click.option(
     hidden=True,
 )
 
-exclude = click.option("--exclude", envvar=None, help="Specify the nodes to exclude.")
+exclude = click.option(
+    "--exclude", envvar=None, type=tuple, cls=MultiOption, help="Specify the nodes to exclude."
+)
 
 fail_fast = click.option(
     "--fail-fast/--no-fail-fast",
@@ -133,13 +136,22 @@ macro_debugging = click.option(
     hidden=True,
 )
 
+models = click.option(
+    "--models",
+    "--model",
+    "-m",
+    envvar=None,
+    help="Specify the nodes to include.",
+    cls=MultiOption,
+    type=tuple,
+)
 
 output = click.option(
     "--output",
     envvar=None,
     help="TODO: No current help text",
     type=click.Choice(["json", "name", "path", "selector"], case_sensitive=False),
-    default="name",
+    default="selector",
 )
 
 output_keys = click.option(
@@ -233,10 +245,11 @@ record_timing_info = click.option(
 )
 
 resource_type = click.option(
+    "--resource-types",
     "--resource-type",
     envvar=None,
     help="TODO: No current help text",
-    type=click.Choice(
+    type=ChoiceTuple(
         [
             "metric",
             "source",
@@ -251,16 +264,17 @@ resource_type = click.option(
         ],
         case_sensitive=False,
     ),
-    default="default",
+    cls=MultiOption,
+    default=(),
 )
 
 select = click.option(
-    "-m",
     "-s",
-    "select",
+    "--select",
     envvar=None,
     help="Specify the nodes to include.",
-    multiple=True,
+    cls=MultiOption,
+    type=tuple,
 )
 
 selector = click.option(

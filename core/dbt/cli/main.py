@@ -17,15 +17,11 @@ from dbt.task.test import TestTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.freshness import FreshnessTask
 from dbt.task.seed import SeedTask
+from dbt.task.list import ListTask
 
 
 # CLI invocation
 def cli_runner():
-    # Alias "list" to "ls"
-    ls = copy(cli.commands["list"])
-    ls.hidden = True
-    cli.add_command(ls, "ls")
-
     # Run the cli
     cli()
 
@@ -157,6 +153,7 @@ def docs(ctx, **kwargs):
 @p.compile_docs
 @p.defer
 @p.exclude
+@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -198,6 +195,7 @@ def docs_serve(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.full_refresh
+@p.models
 @p.parse_only
 @p.profile
 @p.profiles_dir
@@ -280,6 +278,7 @@ def init(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.indirect_selection
+@p.models
 @p.output
 @p.output_keys
 @p.profile
@@ -292,10 +291,21 @@ def init(ctx, **kwargs):
 @p.target
 @p.vars
 @requires.preflight
+@requires.profile
+@requires.project
 def list(ctx, **kwargs):
     """List the resources in your project"""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = ListTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+ls = copy(cli.commands["list"])
+ls.hidden = True
+cli.add_command(ls, "ls")
 
 
 # dbt parse
@@ -325,6 +335,7 @@ def parse(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.full_refresh
+@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -370,6 +381,7 @@ def run_operation(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.full_refresh
+@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -400,6 +412,7 @@ def seed(ctx, **kwargs):
 @click.pass_context
 @p.defer
 @p.exclude
+@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -433,6 +446,7 @@ def source(ctx, **kwargs):
 @source.command("freshness")
 @click.pass_context
 @p.exclude
+@p.models
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
 @p.profile
 @p.profiles_dir
@@ -468,6 +482,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.exclude
 @p.fail_fast
 @p.indirect_selection
+@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
