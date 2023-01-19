@@ -686,8 +686,10 @@ def test_select_fqn(manifest):
 
 def test_select_wildcard(manifest):
     methods = MethodManager(manifest, None)
-    method = methods.get_method('wildcard', [])
-    assert isinstance(method, WildcardSelectorMethod)
+    # TODO: this is just here so the PR reviewers can see the parity between the two methods
+    # we may merge these test cases later or rename this to test_select_advanced_fqn
+    method = methods.get_method('fqn', [])
+    assert isinstance(method, (QualifiedNameSelectorMethod, WildcardSelectorMethod))
     assert method.arguments == []
 
     # useful example

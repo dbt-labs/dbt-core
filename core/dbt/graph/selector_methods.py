@@ -63,14 +63,25 @@ def is_selected_node(
     if len(flat_fqn) < len(node_selector.split(".")):
         return False
 
+    slurp_from_ix: Optional[int] = None
     for i, selector_part in enumerate(node_selector.split(".")):
-        # if we hit a GLOB, then this node is selected
-        if selector_part == SELECTOR_GLOB:
-            return True
+        if any(wildcard in selector_part for wildcard in ("*", "?", "[", "]")):
+            slurp_from_ix = i
+            break
         elif flat_fqn[i] == selector_part:
             continue
         else:
             return False
+
+    if slurp_from_ix is not None:
+        # If we have a wildcard, we need to make sure that the selector matches the
+        # rest of the fqn, this is 100% backwards compatible with the old behavior of
+        # encountering a wildcard but more expressive in naturally allowing you to
+        # match the rest of the fqn with more advanced patterns
+        return fnmatch(
+            ".".join(flat_fqn[slurp_from_ix:]),
+            ".".join(node_selector.split(".")[slurp_from_ix:]),
+        )
 
     # if we get all the way down here, then the node is a match
     return True
@@ -225,7 +236,7 @@ class TagSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included that have the specified tag"""
         for node, real_node in self.all_nodes(included_nodes):
-            if selector in real_node.tags:
+            if any(fnmatch(tag, selector) for tag in real_node.tags):
                 yield node
 
 
@@ -243,7 +254,7 @@ class SourceSelectorMethod(SelectorMethod):
         parts = selector.split(".")
         target_package = SELECTOR_GLOB
         if len(parts) == 1:
-            target_source, target_table = parts[0], None
+            target_source, target_table = parts[0], SELECTOR_GLOB
         elif len(parts) == 2:
             target_source, target_table = parts
         elif len(parts) == 3:
@@ -258,13 +269,12 @@ class SourceSelectorMethod(SelectorMethod):
             raise DbtRuntimeError(msg)
 
         for node, real_node in self.source_nodes(included_nodes):
-            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+            if not fnmatch(real_node.package_name, target_package):
                 continue
-            if target_source not in (real_node.source_name, SELECTOR_GLOB):
+            if not fnmatch(real_node.source_name, target_source):
                 continue
-            if target_table not in (None, real_node.name, SELECTOR_GLOB):
+            if not fnmatch(real_node.name, target_table):
                 continue
-
             yield node
 
 
@@ -285,9 +295,9 @@ class ExposureSelectorMethod(SelectorMethod):
             raise DbtRuntimeError(msg)
 
         for node, real_node in self.exposure_nodes(included_nodes):
-            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+            if not fnmatch(real_node.package_name, target_package):
                 continue
-            if target_name not in (real_node.name, SELECTOR_GLOB):
+            if not fnmatch(real_node.name, target_name):
                 continue
 
             yield node
@@ -310,9 +320,9 @@ class MetricSelectorMethod(SelectorMethod):
             raise DbtRuntimeError(msg)
 
         for node, real_node in self.metric_nodes(included_nodes):
-            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+            if not fnmatch(real_node.package_name, target_package):
                 continue
-            if target_name not in (real_node.name, SELECTOR_GLOB):
+            if not fnmatch(real_node.name, target_name):
                 continue
 
             yield node
@@ -336,7 +346,7 @@ class FileSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given file name."""
         for node, real_node in self.all_nodes(included_nodes):
-            if Path(real_node.original_file_path).name == selector:
+            if fnmatch(Path(real_node.original_file_path).name, selector):
                 yield node
 
 
@@ -344,7 +354,7 @@ class PackageSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that have the specified package"""
         for node, real_node in self.all_nodes(included_nodes):
-            if real_node.package_name == selector:
+            if fnmatch(real_node.package_name, selector):
                 yield node
 
 
@@ -425,7 +435,7 @@ class TestNameSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         for node, real_node in self.parsed_nodes(included_nodes):
             if real_node.resource_type == NodeType.Test and hasattr(real_node, "test_metadata"):
-                if real_node.test_metadata.name == selector:  # type: ignore[union-attr]
+                if fnmatch(real_node.test_metadata.name, selector):  # type: ignore[union-attr]
                     yield node
 
 
