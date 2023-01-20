@@ -19,6 +19,7 @@ from dbt.task.seed import SeedTask
 from dbt.task.list import ListTask
 from dbt.task.freshness import FreshnessTask
 from dbt.task.run_operation import RunOperationTask
+from dbt.task.build import BuildTask
 
 
 # CLI invocation
@@ -104,6 +105,7 @@ def cli(ctx, **kwargs):
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.resource_type
 @p.select
 @p.selector
 @p.show
@@ -115,10 +117,16 @@ def cli(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
+@requires.profile
+@requires.project
 def build(ctx, **kwargs):
     """Run all Seeds, Models, Snapshots, and tests in DAG order"""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = BuildTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt clean
