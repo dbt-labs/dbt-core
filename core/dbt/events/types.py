@@ -2348,7 +2348,7 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
 
 
 @dataclass
-class DebugEnvironmentDetails(InfoLevel, pt.DebugEnvironmentDetails):
+class DebugCmdOut(InfoLevel, pt.DebugCmdOut):
     def code(self):
         return "Z047"
 
@@ -2357,7 +2357,7 @@ class DebugEnvironmentDetails(InfoLevel, pt.DebugEnvironmentDetails):
 
 
 @dataclass
-class DebugDependenciesDetails(InfoLevel, pt.DebugDependenciesDetails):
+class DebugCmdResult(InfoLevel, pt.DebugCmdResult):
     def code(self):
         return "Z048"
 
@@ -2366,108 +2366,9 @@ class DebugDependenciesDetails(InfoLevel, pt.DebugDependenciesDetails):
 
 
 @dataclass
-class DebugDependenciesSuccess(InfoLevel, pt.DebugDependenciesSuccess):
+class ListCmdOut(InfoLevel, pt.ListCmdOut):
     def code(self):
         return "Z049"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugDependenciesFailure(ErrorLevel, pt.DebugDependenciesFailure):
-    def code(self):
-        return "Z050"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugConfigurationDetails(InfoLevel, pt.DebugConfigurationDetails):
-    def code(self):
-        return "Z051"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugConfigurationSuccess(InfoLevel, pt.DebugConfigurationSuccess):
-    def code(self):
-        return "Z052"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugConfigurationFailure(ErrorLevel, pt.DebugConfigurationFailure):
-    def code(self):
-        return "Z053"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugConnectionDetails(InfoLevel, pt.DebugConnectionDetails):
-    def code(self):
-        return "Z054"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugConnectionSuccess(InfoLevel, pt.DebugConnectionSuccess):
-    def code(self):
-        return "Z055"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugConnectionFailure(ErrorLevel, pt.DebugConnectionFailure):
-    def code(self):
-        return "Z056"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugRunSuccess(InfoLevel, pt.DebugRunSuccess):
-    def code(self):
-        return "Z057"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugRunFailure(ErrorLevel, pt.DebugRunFailure):
-    def code(self):
-        return "Z058"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class DebugMiscMessages(WarnLevel, pt.DebugMiscMessages):
-    def code(self):
-        return "Z059"
-
-    def message(self) -> str:
-        return self.msg
-
-
-@dataclass
-class ListRunDetails(InfoLevel, pt.ListRunDetails):
-    def code(self):
-        return "Z060"
 
     def message(self) -> str:
         return self.msg

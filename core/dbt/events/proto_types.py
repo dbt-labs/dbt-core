@@ -2848,185 +2848,42 @@ class RunResultWarningMessageMsg(betterproto.Message):
 
 
 @dataclass
-class DebugEnvironmentDetails(betterproto.Message):
+class DebugCmdOut(betterproto.Message):
     """Z047"""
 
     msg: str = betterproto.string_field(1)
 
 
 @dataclass
-class DebugEnvironmentDetailsMsg(betterproto.Message):
+class DebugCmdOutMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugEnvironmentDetails" = betterproto.message_field(2)
+    data: "DebugCmdOut" = betterproto.message_field(2)
 
 
 @dataclass
-class DebugDependenciesDetails(betterproto.Message):
+class DebugCmdResult(betterproto.Message):
     """Z048"""
 
     msg: str = betterproto.string_field(1)
 
 
 @dataclass
-class DebugDependenciesDetailsMsg(betterproto.Message):
+class DebugCmdResultMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugDependenciesDetails" = betterproto.message_field(2)
+    data: "DebugCmdResult" = betterproto.message_field(2)
 
 
 @dataclass
-class DebugDependenciesSuccess(betterproto.Message):
+class ListCmdOut(betterproto.Message):
     """Z049"""
 
     msg: str = betterproto.string_field(1)
 
 
 @dataclass
-class DebugDependenciesSuccessMsg(betterproto.Message):
+class ListCmdOutMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugDependenciesSuccess" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugDependenciesFailure(betterproto.Message):
-    """Z050"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugDependenciesFailureMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugDependenciesFailure" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugConfigurationDetails(betterproto.Message):
-    """Z051"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugConfigurationDetailsMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugConfigurationDetails" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugConfigurationSuccess(betterproto.Message):
-    """Z052"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugConfigurationSuccessMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugConfigurationSuccess" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugConfigurationFailure(betterproto.Message):
-    """QO53"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugConfigurationFailureMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugConfigurationFailure" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugConnectionDetails(betterproto.Message):
-    """Z054"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugConnectionDetailsMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugConnectionDetails" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugConnectionSuccess(betterproto.Message):
-    """Z055"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugConnectionSuccessMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugConnectionSuccess" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugConnectionFailure(betterproto.Message):
-    """Z056"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugConnectionFailureMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugConnectionFailure" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugRunSuccess(betterproto.Message):
-    """Z057"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugRunSuccessMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugRunSuccess" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugRunFailure(betterproto.Message):
-    """Z058"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugRunFailureMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugRunFailure" = betterproto.message_field(2)
-
-
-@dataclass
-class DebugMiscMessages(betterproto.Message):
-    """Z059"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class DebugMiscMessagesMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "DebugMiscMessages" = betterproto.message_field(2)
-
-
-@dataclass
-class ListRunDetails(betterproto.Message):
-    """Z060"""
-
-    msg: str = betterproto.string_field(1)
-
-
-@dataclass
-class ListRunDetailsMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ListRunDetails" = betterproto.message_field(2)
+    data: "ListCmdOut" = betterproto.message_field(2)
 
 
 @dataclass

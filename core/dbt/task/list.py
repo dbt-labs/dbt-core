@@ -13,7 +13,7 @@ from dbt.events.functions import (
 )
 from dbt.events.types import (
     NoNodesSelected,
-    ListRunDetails,
+    ListCmdOut,
 )
 from dbt.exceptions import DbtRuntimeError, DbtInternalError
 
@@ -144,7 +144,7 @@ class ListTask(GraphRunnableTask):
         for result in results:
             self.node_results.append(result)
             if dbt.flags.LOG_FORMAT == "json":
-                fire_event(ListRunDetails(msg=result))
+                fire_event(ListCmdOut(msg=result))
             else:
                 # Cleaner to leave as print than to mutate the logger not to print timestamps.
                 print(result)
