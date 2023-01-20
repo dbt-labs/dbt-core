@@ -6,6 +6,7 @@ How to invoke dbt commands in python runtime
 Right now the best way to invoke a command from python runtime is to use the `dbtRunner` we exposed
 
 .. code-block:: python
+
     from dbt.cli.main import dbtRunner
     cli_args = ['run', '--project-dir', 'jaffle_shop']
 

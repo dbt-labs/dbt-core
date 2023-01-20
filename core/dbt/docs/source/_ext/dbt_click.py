@@ -44,7 +44,9 @@ def format_params(cmd) -> t.List[nodes.section]:
         type_str = get_type_str(param.type)
 
         param_section.append(nodes.paragraph(text=f"Type: {type_str}"))
-        param_section.append(nodes.paragraph(text=param.help))
+        help_txt = getattr(param, "help", None)
+        if help_txt is not None:
+            param_section.append(nodes.paragraph(text=help_txt))
         lines.append(param_section)
     return lines
 
