@@ -59,6 +59,7 @@ class GraphTest(unittest.TestCase):
 
         # Create file filesystem searcher
         self.filesystem_search = patch('dbt.parser.read_files.filesystem_search')
+
         def mock_filesystem_search(project, relative_dirs, extension, ignore_spec):
             if 'sql' not in extension:
                 return []
@@ -72,6 +73,7 @@ class GraphTest(unittest.TestCase):
         self.hook_patcher = patch.object(
             dbt.parser.hooks.HookParser, '__new__'
         )
+
         def create_hook_patcher(cls, project, manifest, root_project):
             result = MagicMock(project=project, manifest=manifest, root_project=root_project)
             result.__iter__.side_effect = lambda: iter([])
@@ -82,7 +84,6 @@ class GraphTest(unittest.TestCase):
         # Create the Manifest.state_check patcher
         @patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
         def _mock_state_check(self):
-            config = self.root_project
             all_projects = self.all_projects
             return ManifestStateCheck(
                 project_env_vars_hash=FileHash.from_contents(''),
@@ -98,6 +99,7 @@ class GraphTest(unittest.TestCase):
         # Create the source file patcher
         self.load_source_file_patcher = patch('dbt.parser.read_files.load_source_file')
         self.mock_source_file = self.load_source_file_patcher.start()
+
         def mock_load_source_file(path, parse_file_type, project_name, saved_files):
             for sf in self.mock_models:
                 if sf.path == path:
@@ -116,7 +118,6 @@ class GraphTest(unittest.TestCase):
                 modification_time=0.0,
             )
             return path
-
 
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:
@@ -224,8 +225,6 @@ class GraphTest(unittest.TestCase):
 
         config = self.get_config(cfg)
         manifest = self.load_manifest(config)
-        compiler = self.get_compiler(config)
-        linker = compiler.compile(manifest)
 
         expected_materialization = {
             "model_one": "table",

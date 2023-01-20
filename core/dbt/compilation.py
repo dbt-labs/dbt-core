@@ -1,10 +1,11 @@
-import os
-from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Optional
-
+import argparse
 import networkx as nx  # type: ignore
+import os
 import pickle
 import sqlparse
+
+from collections import defaultdict
+from typing import List, Dict, Any, Tuple, Optional
 
 from dbt import flags
 from dbt.adapters.factory import get_adapter
@@ -476,7 +477,10 @@ class Compiler:
             self.write_graph_file(linker, manifest)
 
         # Do not print these for ListTask's
-        if not self.config.args.cls == list_task.ListTask:
+        if (
+            self.config.args.__class__ == argparse.Namespace
+            and not self.config.args.cls == list_task.ListTask
+        ):
             print_compile_stats(stats)
 
         return Graph(linker.graph)
