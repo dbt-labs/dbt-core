@@ -168,9 +168,7 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
     # get the project.yml contents
     if not path_exists(project_yaml_filepath):
-        raise DbtProjectError(
-            MISSING_DBT_PROJECT_ERROR.format(path=project_yaml_filepath)
-        )
+        raise DbtProjectError(MISSING_DBT_PROJECT_ERROR.format(path=project_yaml_filepath))
 
     project_dict = _load_yaml(project_yaml_filepath)
 
