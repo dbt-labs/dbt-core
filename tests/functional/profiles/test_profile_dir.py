@@ -89,7 +89,7 @@ def environ(env):
 
 
 class TestProfiles:
-    def dbt_debug(self, project, project_dir_cli_arg=None, profiles_dir_cli_arg=None):
+    def dbt_debug(self, project_dir_cli_arg=None, profiles_dir_cli_arg=None):
         # begin with no command-line args or user config (from profiles.yml)
         flags.set_from_args({}, {})
         command = ["debug"]
