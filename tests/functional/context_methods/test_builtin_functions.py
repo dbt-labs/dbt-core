@@ -112,7 +112,17 @@ class TestContextBuiltins:
         expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
         assert expected in str(result)
 
-        expected = ("'send_anonymous_usage_stats': False", "'quiet': False", "'no_print': False", "'cache_selected_only': False", "'macro': 'validate_invocation'", "'args': '{my_variable: test_variable}'", "'which': 'run-operation'", "'rpc_method': 'run-operation'", "'indirect_selection': 'eager'")
+        expected = (
+            "'send_anonymous_usage_stats': False",
+            "'quiet': False",
+            "'no_print': False",
+            "'cache_selected_only': False",
+            "'macro': 'validate_invocation'",
+            "'args': '{my_variable: test_variable}'",
+            "'which': 'run-operation'",
+            "'rpc_method': 'run-operation'",
+            "'indirect_selection': 'eager'",
+        )
         for element in expected:
             assert element in str(result)
 

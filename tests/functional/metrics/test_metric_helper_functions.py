@@ -3,10 +3,7 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.contracts.graph.metrics import ResolvedMetricReference
 
-from tests.functional.metrics.fixtures import (
-    models_people_sql,
-    basic_metrics_yml
-)
+from tests.functional.metrics.fixtures import models_people_sql, basic_metrics_yml
 
 
 class TestMetricHelperFunctions:

@@ -8,6 +8,7 @@ from dbt.contracts.files import (
     parse_file_type_to_parser,
 )
 from dbt.events.functions import fire_event
+from dbt.events.base_types import EventLevel
 from dbt.events.types import (
     PartialParsingEnabled,
     PartialParsingFile,
@@ -155,7 +156,11 @@ class PartialParsing:
             self.macro_child_map = self.saved_manifest.build_macro_child_map()
         deleted = len(deleted) + len(deleted_schema_files)
         changed = len(changed) + len(changed_schema_files)
-        fire_event(PartialParsingEnabled(deleted=deleted, added=len(added), changed=changed))
+        event = PartialParsingEnabled(deleted=deleted, added=len(added), changed=changed)
+        if os.environ.get("DBT_PP_TEST"):
+            fire_event(event, level=EventLevel.INFO)
+        else:
+            fire_event(event)
         self.file_diff = file_diff
 
     # generate the list of files that need parsing

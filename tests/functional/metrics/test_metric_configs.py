@@ -11,7 +11,7 @@ from tests.functional.metrics.fixtures import (
     disabled_metric_level_schema_yml,
     enabled_metric_level_schema_yml,
     models_people_metrics_sql,
-    invalid_config_metric_yml
+    invalid_config_metric_yml,
 )
 
 

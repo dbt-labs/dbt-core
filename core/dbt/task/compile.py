@@ -83,6 +83,7 @@ class CompileTask(GraphRunnableTask):
             adapter=adapter,
             other=deferred_manifest,
             selected=selected_uids,
+            favor_state=bool(self.args.favor_state),
         )
         # TODO: is it wrong to write the manifest here? I think it's right...
         self.write_manifest()

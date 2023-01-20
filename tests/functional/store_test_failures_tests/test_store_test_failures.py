@@ -38,10 +38,8 @@ class StoreTestFailuresBase:
             "people.csv": seeds__people,
             "expected_accepted_values.csv": seeds__expected_accepted_values,
             "expected_failing_test.csv": seeds__expected_failing_test,
-            "expected_not_null_problematic_model_id.csv":
-                seeds__expected_not_null_problematic_model_id,
-            "expected_unique_problematic_model_id.csv":
-                seeds__expected_unique_problematic_model_id,
+            "expected_not_null_problematic_model_id.csv": seeds__expected_not_null_problematic_model_id,
+            "expected_unique_problematic_model_id.csv": seeds__expected_unique_problematic_model_id,
         }
 
     @pytest.fixture(scope="class")
@@ -59,8 +57,7 @@ class StoreTestFailuresBase:
     def models(self):
         return {
             "fine_model.sql": models__fine_model,
-            "fine_model_but_with_a_no_good_very_long_name.sql":
-                models__file_model_but_with_a_no_good_very_long_name,
+            "fine_model_but_with_a_no_good_very_long_name.sql": models__file_model_but_with_a_no_good_very_long_name,
             "problematic_model.sql": models__problematic_model,
         }
 
@@ -71,9 +68,7 @@ class StoreTestFailuresBase:
                 "quote_columns": False,
                 "test": self.column_type_overrides(),
             },
-            "tests": {
-                "+schema": TEST_AUDIT_SCHEMA_SUFFIX
-            }
+            "tests": {"+schema": TEST_AUDIT_SCHEMA_SUFFIX},
         }
 
     def column_type_overrides(self):
@@ -87,8 +82,8 @@ class StoreTestFailuresBase:
             project.adapter,
             [
                 f"{self.test_audit_schema}.unique_problematic_model_id",
-                "expected_unique_problematic_model_id"
-            ]
+                "expected_unique_problematic_model_id",
+            ],
         )
 
     def run_tests_store_failures_and_assert(self, project):
@@ -98,39 +93,59 @@ class StoreTestFailuresBase:
 
         # compare test results
         actual = [(r.status, r.failures) for r in results]
-        expected = [('pass', 0), ('pass', 0), ('pass', 0), ('pass', 0),
-                    ('fail', 2), ('fail', 2), ('fail', 2), ('fail', 10)]
+        expected = [
+            ("pass", 0),
+            ("pass", 0),
+            ("pass", 0),
+            ("pass", 0),
+            ("fail", 2),
+            ("fail", 2),
+            ("fail", 2),
+            ("fail", 10),
+        ]
         assert sorted(actual) == sorted(expected)
 
         # compare test results stored in database
-        check_relations_equal(project.adapter, [
-            f"{self.test_audit_schema}.failing_test",
-            "expected_failing_test"
-        ])
-        check_relations_equal(project.adapter, [
-            f"{self.test_audit_schema}.not_null_problematic_model_id",
-            "expected_not_null_problematic_model_id"
-        ])
-        check_relations_equal(project.adapter, [
-            f"{self.test_audit_schema}.unique_problematic_model_id",
-            "expected_unique_problematic_model_id"
-        ])
-        check_relations_equal(project.adapter, [
-            f"{self.test_audit_schema}.accepted_values_problemat"
-            "ic_mo_c533ab4ca65c1a9dbf14f79ded49b628",
-            "expected_accepted_values"
-        ])
+        check_relations_equal(
+            project.adapter, [f"{self.test_audit_schema}.failing_test", "expected_failing_test"]
+        )
+        check_relations_equal(
+            project.adapter,
+            [
+                f"{self.test_audit_schema}.not_null_problematic_model_id",
+                "expected_not_null_problematic_model_id",
+            ],
+        )
+        check_relations_equal(
+            project.adapter,
+            [
+                f"{self.test_audit_schema}.unique_problematic_model_id",
+                "expected_unique_problematic_model_id",
+            ],
+        )
+        check_relations_equal(
+            project.adapter,
+            [
+                f"{self.test_audit_schema}.accepted_values_problemat"
+                "ic_mo_c533ab4ca65c1a9dbf14f79ded49b628",
+                "expected_accepted_values",
+            ],
+        )
 
 
 class TestStoreTestFailures(StoreTestFailuresBase):
     @pytest.fixture(scope="function")
     def clean_up(self, project):
         yield
-        with project.adapter.connection_named('__test'):
-            relation = project.adapter.Relation.create(database=project.database, schema=self.test_audit_schema)
+        with project.adapter.connection_named("__test"):
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=self.test_audit_schema
+            )
             project.adapter.drop_schema(relation)
 
-            relation = project.adapter.Relation.create(database=project.database, schema=project.test_schema)
+            relation = project.adapter.Relation.create(
+                database=project.database, schema=project.test_schema
+            )
             project.adapter.drop_schema(relation)
 
     def column_type_overrides(self):

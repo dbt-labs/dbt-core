@@ -1,4 +1,3 @@
-
 from hologram import ValidationError
 import pytest
 import os
@@ -94,7 +93,11 @@ class TestInvalidSeedsMaterializationProj(object):
 class TestInvalidSeedsMaterializationSchema(object):
     def test_seeds_materialization_schema_config(self, project):
         seeds_dir = os.path.join(project.project_root, "seeds")
-        write_file("version: 2\nseeds:\n  - name: myseed\n    config:\n      materialized: table", seeds_dir, "schema.yml")
+        write_file(
+            "version: 2\nseeds:\n  - name: myseed\n    config:\n      materialized: table",
+            seeds_dir,
+            "schema.yml",
+        )
         write_file("id1, id2\n1, 2", seeds_dir, "myseed.csv")
 
         with pytest.raises(ValidationError):
@@ -116,7 +119,11 @@ class TestInvalidSnapshotsMaterializationProj(object):
 class TestInvalidSnapshotsMaterializationSchema(object):
     def test_snapshots_materialization_schema_config(self, project):
         snapshots_dir = os.path.join(project.project_root, "snapshots")
-        write_file("version: 2\nsnapshots:\n  - name: mysnapshot\n    config:\n      materialized: table", snapshots_dir, "schema.yml")
+        write_file(
+            "version: 2\nsnapshots:\n  - name: mysnapshot\n    config:\n      materialized: table",
+            snapshots_dir,
+            "schema.yml",
+        )
         write_file(simple_snapshot, snapshots_dir, "mysnapshot.sql")
 
         with pytest.raises(ValidationError):

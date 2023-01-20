@@ -142,44 +142,44 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         )
 
     def set_connection_name(self, name: Optional[str] = None) -> Connection:
-        conn_name: str
-        if name is None:
-            # if a name isn't specified, we'll re-use a single handle
-            # named 'master'
-            conn_name = "master"
-        else:
-            if not isinstance(name, str):
-                raise dbt.exceptions.CompilerException(
-                    f"For connection name, got {name} - not a string!"
-                )
-            assert isinstance(name, str)
-            conn_name = name
+        """Called by 'acquire_connection' in BaseAdapter, which is called by
+        'connection_named', called by 'connection_for(node)'.
+        Creates a connection for this thread if one doesn't already
+        exist, and will rename an existing connection."""
 
+        conn_name: str = "master" if name is None else name
+
+        # Get a connection for this thread
         conn = self.get_if_exists()
+
+        if conn and conn.name == conn_name and conn.state == "open":
+            # Found a connection and nothing to do, so just return it
+            return conn
+
         if conn is None:
+            # Create a new connection
             conn = Connection(
                 type=Identifier(self.TYPE),
-                name=None,
+                name=conn_name,
                 state=ConnectionState.INIT,
                 transaction_open=False,
                 handle=None,
                 credentials=self.profile.credentials,
             )
-            self.set_thread_connection(conn)
-
-        if conn.name == conn_name and conn.state == "open":
-            return conn
-
-        fire_event(
-            NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info())
-        )
-
-        if conn.state == "open":
-            fire_event(ConnectionReused(conn_name=conn_name))
-        else:
             conn.handle = LazyHandle(self.open)
+            # Add the connection to thread_connections for this thread
+            self.set_thread_connection(conn)
+            fire_event(
+                NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info())
+            )
+        else:  # existing connection either wasn't open or didn't have the right name
+            if conn.state != "open":
+                conn.handle = LazyHandle(self.open)
+            if conn.name != conn_name:
+                orig_conn_name: str = conn.name or ""
+                conn.name = conn_name
+                fire_event(ConnectionReused(orig_conn_name=orig_conn_name, conn_name=conn_name))
 
-        conn.name = conn_name
         return conn
 
     @classmethod

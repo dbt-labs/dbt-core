@@ -2,9 +2,10 @@ import pytest
 from dbt.tests.util import run_dbt, read_file
 import json
 
-model1 = 'select 1 as fun'
+model1 = "select 1 as fun"
 model2 = '{{ config(meta={"owners": ["team1", "team2"]})}} select 1 as fun'
 model3 = '{{ config(meta={"key": 1})}} select 1 as fun'
+
 
 @pytest.fixture(scope="class")  # noqa
 def models():
@@ -20,7 +21,7 @@ def test_meta(project, logs_dir):
     log_file = read_file(logs_dir, "dbt.log")
     assert log_file
 
-    for log_line in log_file.split('\n'):
+    for log_line in log_file.split("\n"):
         # skip empty lines
         if len(log_line) == 0:
             continue
@@ -34,10 +35,10 @@ def test_meta(project, logs_dir):
 
         print(f"--- log_dct: {log_dct}")
         node_info = log_dct["data"]["node_info"]
-        node_path = node_info['node_path']
+        node_path = node_info["node_path"]
         if node_path == "model1.sql":
-            assert node_info['meta'] == {}
+            assert node_info["meta"] == {}
         elif node_path == "model2.sql":
-            assert node_info['meta'] == {"owners": "['team1', 'team2']"}
+            assert node_info["meta"] == {"owners": "['team1', 'team2']"}
         elif node_path == "model3.sql":
-            assert node_info['meta'] == {"key": "1"}
+            assert node_info["meta"] == {"key": "1"}

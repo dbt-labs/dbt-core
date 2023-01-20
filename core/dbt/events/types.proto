@@ -419,6 +419,7 @@ message NewConnectionMsg {
 // E006
 message ConnectionReused {
     string conn_name = 1;
+    string orig_conn_name = 2;
 }
 
 message ConnectionReusedMsg {

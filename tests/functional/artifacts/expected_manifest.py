@@ -1061,9 +1061,7 @@ def expected_references_manifest(project):
                 "unique_id": "seed.test.seed",
                 "checksum": checksum_file(seed_path),
                 "unrendered_config": get_unrendered_seed_config(),
-                "relation_name": '"{0}"."{1}".seed'.format(
-                    project.database, my_schema_name
-                ),
+                "relation_name": '"{0}"."{1}".seed'.format(project.database, my_schema_name),
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
@@ -1244,9 +1242,7 @@ def expected_references_manifest(project):
                 "unique_id": "doc.test.table_info",
             },
             "doc.test.view_summary": {
-                "block_contents": (
-                    "A view of the summary of the ephemeral copy of the seed data"
-                ),
+                "block_contents": ("A view of the summary of the ephemeral copy of the seed data"),
                 "resource_type": "doc",
                 "name": "view_summary",
                 "original_file_path": docs_path,

@@ -36,10 +36,7 @@ select * from {{ ref('model_e') }}
 class TestSimpleCycle:
     @pytest.fixture(scope="class")
     def models(self):
-        return {
-            "model_a.sql": model_a_sql,
-            "model_b.sql": model_b_sql
-        }
+        return {"model_a.sql": model_a_sql, "model_b.sql": model_b_sql}
 
     def test_simple_cycle(self, project):
         with pytest.raises(RuntimeError) as exc:
