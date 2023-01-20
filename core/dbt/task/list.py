@@ -1,7 +1,8 @@
 import json
 
+import dbt.flags
+
 from dbt.contracts.graph.nodes import Exposure, SourceDefinition, Metric
-from dbt.flags import get_flag_dict
 from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
@@ -142,10 +143,10 @@ class ListTask(GraphRunnableTask):
         """Log, or output a plain, newline-delimited, and ready-to-pipe list of nodes found."""
         for result in results:
             self.node_results.append(result)
-            if get_flag_dict()["log_format"] == "json":
+            if dbt.flags.LOG_FORMAT == "json":
                 fire_event(ListRunDetails(msg=result))
             else:
-                # Cleaner to leave as print than to mutate the logger.
+                # Cleaner to leave as print than to mutate the logger not to print timestamps.
                 print(result)
         return self.node_results
 
