@@ -261,6 +261,8 @@ def deps(ctx, **kwargs):
 # dbt init
 @cli.command("init")
 @click.pass_context
+# for backwards compatibility, accept 'project_name' as an optional positional argument
+@click.argument("project_name", required=False)
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -269,7 +271,7 @@ def deps(ctx, **kwargs):
 @p.vars
 @requires.preflight
 def init(ctx, **kwargs):
-    """Initialize a new DBT project."""
+    """Initialize a new dbt project."""
     click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
     return None, True
 
@@ -364,8 +366,8 @@ def run(ctx, **kwargs):
 
 # dbt run operation
 @cli.command("run-operation")
-@click.argument("macro")
 @click.pass_context
+@click.argument("macro")
 @p.args
 @p.profile
 @p.profiles_dir
