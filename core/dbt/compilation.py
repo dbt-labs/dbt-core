@@ -475,11 +475,8 @@ class Compiler:
         if write:
             self.write_graph_file(linker, manifest)
 
-        # Only in the case the object is specifically a ListTask do we avoid printing these stats.
-        try:
-            if not isinstance(self.config.args.get("cls", None), list_task.ListTask):
-                print_compile_stats(stats)
-        except AttributeError:
+        # Do not print these for ListTask's
+        if not self.config.args.cls == list_task.ListTask:
             print_compile_stats(stats)
 
         return Graph(linker.graph)
