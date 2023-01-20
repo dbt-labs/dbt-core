@@ -6,14 +6,16 @@ _MODELS__COLUMN_QUOTING_DEFAULT = """
 {% set col_a = '"col_A"' %}
 {% set col_b = '"col_B"' %}
 
-{{config(
+{{
+  config(
     materialized = 'incremental',
     unique_key = col_a,
-    incremental_strategy = var('strategy')
-    )}}
+  )
+}}
 
 select
-{{ col_a }}, {{ col_b }}
+  {{ col_a }},
+  {{ col_b }}
 from {{ref('seed')}}
 """
 
@@ -21,14 +23,16 @@ _MODELS__COLUMN_QUOTING_NO_QUOTING = """
 {% set col_a = '"col_a"' %}
 {% set col_b = '"col_b"' %}
 
-{{config(
+{{
+  config(
     materialized = 'incremental',
     unique_key = col_a,
-    incremental_strategy = var('strategy')
-    )}}
+  )
+}}
 
 select
-{{ col_a }}, {{ col_b }}
+  {{ col_a }},
+  {{ col_b }}
 from {{ref('seed')}}
 """
 
@@ -49,21 +53,19 @@ class BaseColumnQuotingTest:
         return {"seed.csv": _SEEDS_BASIC_SEED}
 
     @pytest.fixture(scope="function")
-    def run_column_quotes(self, project, request):
+    def run_column_quotes(self, project):
         def fixt():
-            strategy_vars = '{{"strategy": "{}"}}'.format(request.param)
-            results = run_dbt(["seed", "--vars", strategy_vars])
+            results = run_dbt(["seed"])
             assert len(results) == 1
-            results = run_dbt(["run", "--vars", strategy_vars])
+            results = run_dbt(["run"])
             assert len(results) == 1
-            results = run_dbt(["run", "--vars", strategy_vars])
+            results = run_dbt(["run"])
             assert len(results) == 1
 
         return fixt
 
 
 class TestColumnQuotingDefault(BaseColumnQuotingTest):
-    @pytest.mark.parametrize("run_column_quotes", ["delete+insert"], indirect=True)
     def test_column_quotes(self, run_column_quotes):
         run_column_quotes()
 
@@ -77,7 +79,6 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
             },
         }
 
-    @pytest.mark.parametrize("run_column_quotes", ["delete+insert"], indirect=True)
     def test_column_quotes(self, run_column_quotes):
         run_column_quotes()
 
@@ -95,6 +96,5 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
             },
         }
 
-    @pytest.mark.parametrize("run_column_quotes", ["delete+insert"], indirect=True)
     def test_column_quotes(self, run_column_quotes):
         run_column_quotes()
