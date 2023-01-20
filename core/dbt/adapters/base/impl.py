@@ -268,6 +268,22 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
 
+    @available.parse(lambda *a, **k: [])
+    def get_column_schema_from_query(
+        self, sql: str, auto_begin: bool = False, fetch: bool = False
+    ) -> Tuple[AdapterResponse, agate.Table]:
+        """Execute the given SQL. This is a thin wrapper around
+        ConnectionManager.execute.
+
+        :param str sql: The sql to execute.
+        :param bool auto_begin: If set, and dbt is not currently inside a
+            transaction, automatically begin one.
+        :param bool fetch: If set, fetch results.
+        :return: A tuple of the query status and results (empty if fetch=False).
+        :rtype: List[(column_name: str, data_type: str]
+        """
+        return self.connections.get_column_schema_from_query(sql=sql)
+
     @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(self, table: str) -> Tuple[agate.Table]:
         """Obtain partitions metadata for a BigQuery partitioned table.

@@ -128,6 +128,31 @@ class SQLConnectionManager(BaseConnectionManager):
 
         return dbt.clients.agate_helper.table_from_data_flat(data, column_names)
 
+    @classmethod
+    def data_type_code_to_name(cls, int) -> str:
+        """Get the string representation of the data type from the type_code."""
+        # https://peps.python.org/pep-0249/#type-objects
+        raise dbt.exceptions.NotImplementedError(
+            "`data_type_code_to_name` is not implemented for this adapter!"
+        )
+
+    @classmethod
+    def get_column_schema_from_cursor(cls, cursor: Any) -> List[Tuple[str, str]]:
+        # (column_name, data_type)
+        columns: List[Tuple[str, str]] = []
+
+        if cursor.description is not None:
+            # https://peps.python.org/pep-0249/#description
+            columns = [
+                # TODO: ignoring size, precision, scale for now
+                # (though it is part of DB-API standard, and our Column class does have these attributes)
+                # IMO user-defined contracts shouldn't have to match an exact size/precision/scale
+                (col[0], cls.data_type_code_to_name(col[1]))
+                for col in cursor.description
+            ]
+
+        return columns
+
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> Tuple[AdapterResponse, agate.Table]:
@@ -139,6 +164,20 @@ class SQLConnectionManager(BaseConnectionManager):
         else:
             table = dbt.clients.agate_helper.empty_table()
         return response, table
+
+    # TODO: do we need to care about auto_begin here?
+    def get_column_schema_from_query(self, sql: str) -> List[Tuple[str, str]]:
+        sql = self._add_query_comment(sql)
+        _, cursor = self.add_query(sql)
+        return self.get_column_schema_from_cursor(cursor)
+
+    # For dbt-bigquery
+    # def get_column_schema_from_query(cls, sql: str) -> List[Tuple[str, str]]:
+    #    sql = self._add_query_comment(sql)
+    #    # auto_begin is ignored on bigquery, and only included for consistency
+    #    query_job, iterator = self.raw_execute(sql)
+    #    columns = [(field.name, field.field_type) for field in resp.iterator]
+    #    return columns
 
     def add_begin_query(self):
         return self.add_query("BEGIN", auto_begin=False)
