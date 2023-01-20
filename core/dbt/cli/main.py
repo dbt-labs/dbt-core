@@ -20,6 +20,7 @@ from dbt.task.list import ListTask
 from dbt.task.freshness import FreshnessTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.build import BuildTask
+from dbt.task.generate import GenerateTask
 
 
 # CLI invocation
@@ -175,10 +176,16 @@ def docs(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
+@requires.profile
+@requires.project
 def docs_generate(ctx, **kwargs):
     """Generate the documentation website for your project"""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    config = RuntimeConfig.from_parts(ctx.obj["project"], ctx.obj["profile"], ctx.obj["flags"])
+    task = GenerateTask(ctx.obj["flags"], config)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt docs serve
