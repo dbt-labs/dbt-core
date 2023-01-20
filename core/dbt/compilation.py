@@ -477,9 +477,9 @@ class Compiler:
             self.write_graph_file(linker, manifest)
 
         # Do not print these for ListTask's
-        if (
+        if not (
             self.config.args.__class__ == argparse.Namespace
-            and not self.config.args.cls == list_task.ListTask
+            and self.config.args.cls == list_task.ListTask
         ):
             print_compile_stats(stats)
 
