@@ -798,7 +798,7 @@ class TestProject(BaseConfigTest):
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, renderer)
 
-        self.assertIn('no dbt_project.yml', str(exc.exception))
+        self.assertIn('No dbt_project.yml', str(exc.exception))
 
     def test_invalid_version(self):
         self.default_project_data['require-dbt-version'] = 'hello!'
