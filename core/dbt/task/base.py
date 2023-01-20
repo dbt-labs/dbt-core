@@ -97,7 +97,7 @@ class BaseTask(metaclass=ABCMeta):
             log_manager.format_text()
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, *pargs, **kwargs):
         try:
             # This is usually RuntimeConfig
             config = cls.ConfigType.from_args(args)
@@ -124,7 +124,7 @@ class BaseTask(metaclass=ABCMeta):
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
-        return cls(args, config)
+        return cls(args, config, *pargs, **kwargs)
 
     @abstractmethod
     def run(self):
@@ -174,7 +174,7 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> str:
 class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
-    def __init__(self, args, config, manifest: Optional[Manifest]):
+    def __init__(self, args, config, manifest: Optional[Manifest] = None):
         super().__init__(args, config)
         self.graph: Optional[Graph] = None
         self.manifest = manifest
@@ -195,9 +195,9 @@ class ConfiguredTask(BaseTask):
             dbt.tracking.track_runnable_timing({"graph_compilation_elapsed": compile_time})
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, *pargs, **kwargs):
         move_to_nearest_project_dir(args.project_dir)
-        return super().from_args(args)
+        return super().from_args(args, *pargs, **kwargs)
 
 
 class ExecutionContext:

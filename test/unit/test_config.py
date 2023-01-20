@@ -12,15 +12,15 @@ import yaml
 
 import dbt.config
 import dbt.exceptions
+import dbt.tracking
 from dbt import flags
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.postgres import PostgresCredentials
-from dbt.context.base import generate_base_context
 from dbt.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.node_types import NodeType
 from dbt.semver import VersionSpecifier
-from dbt.task.run_operation import RunOperationTask
+from dbt.task.base import ConfiguredTask
 
 from .utils import normalize
 
@@ -909,7 +909,12 @@ class TestProjectFile(BaseFileTest):
             dbt.config.Project.from_project_root(self.project_dir, renderer)
 
 
-class TestRunOperationTask(BaseFileTest):
+class InheritsFromConfiguredTask(ConfiguredTask):
+    def run(self):
+        pass
+
+
+class TestConfiguredTask(BaseFileTest):
     def setUp(self):
         super().setUp()
         self.write_project(self.default_project_data)
@@ -921,17 +926,17 @@ class TestRunOperationTask(BaseFileTest):
         # so it's necessary to change it back at the end.
         os.chdir(INITIAL_ROOT)
 
-    def test_run_operation_task(self):
+    def test_configured_task_dir_change(self):
         self.assertEqual(os.getcwd(), INITIAL_ROOT)
         self.assertNotEqual(INITIAL_ROOT, self.project_dir)
-        new_task = RunOperationTask.from_args(self.args)
+        new_task = InheritsFromConfiguredTask.from_args(self.args)
         self.assertEqual(os.path.realpath(os.getcwd()),
                          os.path.realpath(self.project_dir))
 
-    def test_run_operation_task_with_bad_path(self):
+    def test_configured_task_dir_change_with_bad_path(self):
         self.args.project_dir = 'bad_path'
         with self.assertRaises(dbt.exceptions.RuntimeException):
-            new_task = RunOperationTask.from_args(self.args)
+            new_task = InheritsFromConfiguredTask.from_args(self.args)
 
 
 class TestVariableProjectFile(BaseFileTest):
