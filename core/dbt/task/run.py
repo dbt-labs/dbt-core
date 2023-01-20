@@ -30,7 +30,7 @@ from dbt.exceptions import (
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DatabaseErrorRunningHook,
-    EmptyLine,
+    Formatting,
     HooksRunning,
     FinishedRunningStats,
     LogModelResult,
@@ -335,7 +335,7 @@ class RunTask(CompileTask):
         num_hooks = len(ordered_hooks)
 
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
         fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
 
         startctx = TimestampNamed("node_started_at")
@@ -388,7 +388,7 @@ class RunTask(CompileTask):
         self._total_executed += len(ordered_hooks)
 
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
 
     def safe_run_hooks(
         self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
@@ -419,7 +419,7 @@ class RunTask(CompileTask):
             execution = utils.humanize_execution_time(execution_time=execution_time)
 
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
         fire_event(
             FinishedRunningStats(
                 stat_line=stat_line, execution=execution, execution_time=execution_time

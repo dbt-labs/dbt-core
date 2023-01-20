@@ -12,8 +12,7 @@ from dbt.logger import TextOnly
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     SeedHeader,
-    SeedHeaderSeparator,
-    EmptyLine,
+    Formatting,
     LogSeedResult,
     LogStartLine,
 )
@@ -99,13 +98,13 @@ class SeedTask(RunTask):
 
         header = "Random sample of table: {}.{}".format(schema, alias)
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
         fire_event(SeedHeader(header=header))
-        fire_event(SeedHeaderSeparator(len_header=len(header)))
+        fire_event(Formatting("-" * len(header)))
 
         rand_table.print_table(max_rows=10, max_columns=None)
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
 
     def show_tables(self, results):
         for result in results:

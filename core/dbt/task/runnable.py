@@ -28,7 +28,7 @@ from dbt.logger import (
 )
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
-    EmptyLine,
+    Formatting,
     LogCancelLine,
     DefaultSelector,
     NodeStart,
@@ -377,7 +377,7 @@ class GraphRunnableTask(ManifestTask):
                 )
             )
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
 
         pool = ThreadPool(num_threads)
         try:
@@ -458,7 +458,7 @@ class GraphRunnableTask(ManifestTask):
 
         if len(self._flattened_nodes) == 0:
             with TextOnly():
-                fire_event(EmptyLine())
+                fire_event(Formatting(""))
             warn_or_error(NothingToDo())
             result = self.get_result(
                 results=[],
@@ -467,7 +467,7 @@ class GraphRunnableTask(ManifestTask):
             )
         else:
             with TextOnly():
-                fire_event(EmptyLine())
+                fire_event(Formatting(""))
             selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
             result = self.execute_with_hooks(selected_uids)
 

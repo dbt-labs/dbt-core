@@ -261,7 +261,6 @@ sample_values = [
     CompileComplete(),
     FreshnessCheckComplete(),
     SeedHeader(header=""),
-    SeedHeaderSeparator(len_header=0),
     SQLRunnerException(exc=""),
     LogTestResult(
         name="",
@@ -358,7 +357,7 @@ sample_values = [
     ProtectedCleanPath(path=""),
     FinishedCleanPaths(),
     OpenCommand(open_cmd="", profiles_dir=""),
-    EmptyLine(),
+    Formatting(msg=""),
     ServingDocsPort(address="", port=0),
     ServingDocsAccessInfo(port=""),
     ServingDocsExitInfo(),
@@ -383,6 +382,7 @@ sample_values = [
     FlushEventsFailure(),
     TrackingInitializeFailure(),
     RunResultWarningMessage(),
+    Note(msg="This is a note."),
     # T - tests ======================
     IntegrationTestInfo(),
     IntegrationTestDebug(),

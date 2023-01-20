@@ -1473,15 +1473,7 @@ message SeedHeaderMsg {
     SeedHeader data = 2;
 }
 
-// Q005
-message SeedHeaderSeparator {
-    int32 len_header = 1;
-}
-
-message SeedHeaderSeparatorMsg {
-    EventInfo info = 1;
-    SeedHeaderSeparator data = 2;
-}
+// Skipped Q005
 
 // Q006
 message SQLRunnerException {
@@ -2004,12 +1996,13 @@ message OpenCommandMsg {
 }
 
 // Z017
-message EmptyLine {
+message Formatting {
+    string msg = 1;
 }
 
-message EmptyLineMsg {
+message FormattingMsg {
     EventInfo info = 1;
-    EmptyLine data = 2;
+    Formatting data = 2;
 }
 
 // Z018
@@ -2256,6 +2249,16 @@ message RunResultWarningMessage {
 message RunResultWarningMessageMsg {
     EventInfo info = 1;
     RunResultWarningMessage data = 2;
+}
+
+// Z047
+message Note {
+    string msg = 1;
+}
+
+message NoteMsg {
+    EventInfo info = 1;
+    Note data = 2;
 }
 
 // T - Integration tests
