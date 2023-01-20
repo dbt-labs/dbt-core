@@ -23,7 +23,8 @@ class TestCLI:
     def test_unhidden_params_have_help_texts(self):
         def run_test(command):
             for param in command.params:
-                if not param.hidden:
+                # arguments can't have help text
+                if not isinstance(param, click.Argument) and not param.hidden:
                     assert param.help is not None
             if type(command) is click.Group:
                 for command in command.commands.values():
