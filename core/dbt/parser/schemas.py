@@ -1231,6 +1231,7 @@ class EntityParser(YamlReader):
             )
 
         parsed = Entity(
+            resource_type=NodeType.Entity,
             package_name=package_name,
             path=path,
             original_file_path=self.yaml.path.original_file_path,
@@ -1239,9 +1240,7 @@ class EntityParser(YamlReader):
             model=unparsed.model,
             name=unparsed.name,
             description=unparsed.description,
-            dimensions={dimension.name: dimension for dimension in unparsed.dimensions}
-            if unparsed.dimensions
-            else {},
+            dimensions=unparsed.dimensions,
             meta=unparsed.meta,
             tags=unparsed.tags,
             config=config,

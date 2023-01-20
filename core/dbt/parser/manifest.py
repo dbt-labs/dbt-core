@@ -1324,23 +1324,27 @@ def _process_entities_for_node(
     node: Union[ManifestNode, Entity, Exposure],
 ):
     """Given a manifest and a node in that manifest, process its entities"""
+
+    if isinstance(node, SeedNode):
+        return
+
     for entity in node.entities:
         target_entity: Optional[Union[Disabled, Entity]] = None
-        target_entity_name: str
-        target_entity_package: Optional[str] = None
+        target_entity: str
+        target_entity: Optional[str] = None
 
         if len(entity) == 1:
             target_entity_name = entity[0]
         elif len(entity) == 2:
-            target_entity_package, target_entity_name = entity
+            target_entity_pacakge, target_entity_name = entity
         else:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Entity references should always be 1 or 2 arguments - got {len(entity)}"
             )
 
         target_entity = manifest.resolve_entity(
             target_entity_name,
-            target_entity_package,
+            target_entity_pacakge,
             current_project,
             node.package_name,
         )
@@ -1353,7 +1357,7 @@ def _process_entities_for_node(
                 node=node,
                 target_name=target_entity_name,
                 target_kind="source",
-                target_package=target_entity_package,
+                target_package=target_entity_pacakge,
                 disabled=(isinstance(target_entity, Disabled)),
             )
             continue

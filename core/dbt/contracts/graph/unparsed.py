@@ -542,7 +542,7 @@ class UnparsedEntity(dbtClassMixin, Replaceable):
     name: str
     model: str
     description: str = ""
-    dimensions: Optional[str] = None
+    dimensions: Optional[List[str]] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)

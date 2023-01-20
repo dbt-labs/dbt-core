@@ -1075,8 +1075,8 @@ class Entity(GraphNode):
     model: str
     description: str
     dimensions: List[str]
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Entity]})
     model_unique_id: Optional[str] = None
-    resource_type: NodeType = NodeType.Entity
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: EntityConfig = field(default_factory=EntityConfig)
@@ -1084,7 +1084,7 @@ class Entity(GraphNode):
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
-    metrics: List[List[str]] = field(default_factory=list)
+    entities: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property
