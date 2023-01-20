@@ -7,7 +7,7 @@ macro_test_alter_column_type = """
 {% endmacro %}
 """
 
-macros_sql = """
+macro_test_is_type_sql = """
 {% macro simple_type_check_column(column, check) %}
     {% if check == 'string' %}
         {{ return(column.is_string()) }}
@@ -43,6 +43,7 @@ macros_sql = """
     {% endif %}
     {% do return((failures | length) == 0) %}
 {% endmacro %}
+
 {% test is_type(model, column_map) %}
     {% if not execute %}
         {{ return(None) }}

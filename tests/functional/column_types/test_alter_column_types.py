@@ -2,7 +2,6 @@ import pytest
 from dbt.tests.util import run_dbt
 from tests.functional.column_types.fixtures import (
     macro_test_alter_column_type,
-    model_sql,
     schema_yml,
 )
 
@@ -17,7 +16,6 @@ class TestAlterColumnTypes:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "model.sql": model_sql,
             "schema.yml": schema_yml,
         }
 
