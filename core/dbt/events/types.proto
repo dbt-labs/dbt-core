@@ -2260,86 +2260,142 @@ message RunResultWarningMessageMsg {
 
 // Z047
 message DebugEnvironmentDetails {
+    string msg = 1;
+}
+
+message DebugEnvironmentDetailsMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugEnvironmentDetails data = 2;
 }
 
 // Z048
 message DebugDependenciesDetails {
+    string msg = 1;
+}
+
+message DebugDependenciesDetailsMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugDependenciesDetails data = 2;
 }
 
 // Z049
 message DebugDependenciesSuccess {
+    string msg = 1;
+}
+
+message DebugDependenciesSuccessMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugDependenciesSuccess data = 2;
 }
 
 // Z050
 message DebugDependenciesFailure {
+    string msg = 1;
+}
+
+message DebugDependenciesFailureMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugDependenciesFailure data = 2;
 }
 
 // Z051
 message DebugConfigurationDetails {
+    string msg = 1;
+}
+
+message DebugConfigurationDetailsMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugConfigurationDetails data = 2;
 }
 
 // Z052
 message DebugConfigurationSuccess {
+    string msg = 1;
+}
+
+message DebugConfigurationSuccessMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugConfigurationSuccess data = 2;
 }
 
 // QO53
 message DebugConfigurationFailure {
+    string msg = 1;
+}
+
+message DebugConfigurationFailureMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugConfigurationFailure data = 2;
 }
 
 // Z054
 message DebugConnectionDetails {
+    string msg = 1;
+}
+
+message DebugConnectionDetailsMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugConnectionDetails data = 2;
 }
 
 // Z055
 message DebugConnectionSuccess {
+    string msg = 1;
+}
+
+message DebugConnectionSuccessMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugConnectionSuccess data = 2;
 }
 
 // Z056
 message DebugConnectionFailure {
+    string msg = 1;
+}
+
+message DebugConnectionFailureMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugConnectionFailure data = 2;
 }
 
 // Z057
 message DebugRunSuccess {
+    string msg = 1;
+}
+
+message DebugRunSuccessMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugRunSuccess data = 2;
 }
 
 // Z058
 message DebugRunFailure {
+    string msg = 1;
+}
+
+message DebugRunFailureMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugRunFailure data = 2;
 }
 
 // Z059
 message DebugMiscMessages {
+    string msg = 1;
+}
+
+message DebugMiscMessagesMsg {
     EventInfo info = 1;
-    string msg = 2;
+    DebugMiscMessages data = 2;
 }
 
 // Z060
 message ListRunDetails {
+    string msg = 1;
+}
+
+message ListRunDetailsMsg {
     EventInfo info = 1;
-    string msg = 2;
+    ListRunDetails data = 2;
 }
 
 

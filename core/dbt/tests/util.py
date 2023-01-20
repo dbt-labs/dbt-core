@@ -6,10 +6,7 @@ import json
 import warnings
 from datetime import datetime
 from typing import Dict, List
-from contextlib import (
-    contextmanager,
-    redirect_stdout,
-)
+from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
 from dbt.main import handle_and_check
@@ -94,27 +91,22 @@ def run_dbt(args: List[str] = None, expect_pass=True):
 # If you want the logs that are normally written to a file, you must
 # start with the "--debug" flag. The structured schema log CI test
 # will turn the logs into json, so you have to be prepared for that.
-def run_dbt_and_capture(args: List[str] = None, expect_pass=True, capture_stderr=False):
+def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
-        if capture_stderr:
-            with redirect_stdout(stringbuf):
-                res = run_dbt(args, expect_pass=expect_pass)
-        else:
-            res = run_dbt(args, expect_pass=expect_pass)
-
-        output = stringbuf.getvalue()
+        res = run_dbt(args, expect_pass=expect_pass)
+        stdout = stringbuf.getvalue()
 
     finally:
         stop_capture_stdout_logs()
 
     # Json logs will have lots of escape characters which will
     # make checks for strings in the logs fail, so remove those.
-    if '{"code":' in output:
-        output = output.replace("\\", "")
+    if '{"code":' in stdout:
+        stdout = stdout.replace("\\", "")
 
-    return res, output
+    return res, stdout
 
 
 # Used in test cases to get the manifest from the partial parsing file
