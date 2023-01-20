@@ -134,13 +134,16 @@ def manifest(*args0, write_perf_info=False):
 
             runtime_config = ctx.obj["runtime_config"]
             register_adapter(runtime_config)
-            manifest = ManifestLoader.get_full_manifest(
-                runtime_config, write_perf_info=write_perf_info
-            )
 
-            ctx.obj["manifest"] = manifest
-            if ctx.obj["flags"].write_json:
-                write_manifest(manifest, ctx.obj["runtime_config"].target_path)
+            # a manifest has already been set on the context, so don't overwrite it
+            if ctx.obj.get("manifeset") is None:
+                manifest = ManifestLoader.get_full_manifest(
+                    runtime_config, write_perf_info=write_perf_info
+                )
+
+                ctx.obj["manifest"] = manifest
+                if ctx.obj["flags"].write_json:
+                    write_manifest(manifest, ctx.obj["runtime_config"].target_path)
 
             return func(*args, **kwargs)
 
