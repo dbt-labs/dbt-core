@@ -40,19 +40,20 @@ jobs:
   prep_work:
     runs-on: ubuntu-latest
     steps:
-      - name: Audit Version and Parse Into Parts
+      - name: Audit New Version and Parse Into Parts
         id: semver_release
         uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ inputs.version_to_bump_release }}
 
-      - name: Audit Version and Parse Into Parts
+      - name: Audit Existing Version and Parse Into Parts
         id: semver_main
         uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ inputs.version_to_bump_main }}
 
       # - name: Audit if New branch already exist?
+      # - name: Audit if old branch exist?
 
   cut_branch:
     needs: ['prep_work']
@@ -62,7 +63,7 @@ jobs:
       - name: Set branch value
         id: variables
         run: |
-          echo "::set-output name=BRANCH_NAME::release_workflow/${{ version_to_bump_release }}_version_bump"
+          echo "NEW_BRANCH_NAME=release_workflow/${{ version_to_bump_release }}_version_bump" >> GITHUB_OUTPUT
 
       - name: Cut Release Branch
         run: |
@@ -72,9 +73,9 @@ jobs:
 
       - name: Create PR branch
         run: |
-          git checkout -b ${{ steps.variables.output.BRANCH_NAME }}
-          git push origin ${{ steps.variables.output.BRANCH_NAME }}
-          git branch --set-upstream-to=origin/${{ steps.variables.output.BRANCH_NAME }} ${{ steps.variables.output.BRANCH_NAME }}
+          git checkout -b ${{ steps.variables.output.NEW_BRANCH_NAME }}
+          git push origin ${{ steps.variables.output.NEW_BRANCH_NAME }}
+          git branch --set-upstream-to=origin/${{ steps.variables.output.NEW_BRANCH_NAME }} ${{ steps.variables.output.NEW_BRANCH_NAME }}
 
       - name: Bump dependencies
         if: repo != dbt-core
@@ -86,8 +87,8 @@ jobs:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
           message: 'Bumping version to ${{ inputs.version_to_bump_main }}'
-          branch: '${{ steps.variables.output.BRANCH_NAME }}'
-          push: 'origin origin/${{ steps.variables.output.BRANCH_NAME }}'
+          branch: '${{ steps.variables.output.NEW_BRANCH_NAME }}'
+          push: 'origin origin/${{ steps.variables.output.NEW_BRANCH_NAME }}'
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
@@ -95,7 +96,7 @@ jobs:
           author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
           base: ${{github.ref}}
           title: 'Clean up changelogs and bump to version ${{ inputs.version_to_bump_main }}'
-          branch: '${{ steps.variables.output.BRANCH_NAME }}'
+          branch: '${{ steps.variables.output.NEW_BRANCH_NAME }}'
           labels: |
             Skip Changelog
 
@@ -112,13 +113,13 @@ jobs:
       - name: Set branch value
         id: variables
         run: |
-          echo "::set-output name=BRANCH_NAME::release_workflow/${{ version_to_bump_main }}_version_bump"
+          echo "MAIN_BRANCH_NAME=${{ main_branch_name }}" >> GITHUB_OUTPUT
 
       - name: Create PR branch
         run: |
-          git checkout -b ${{ steps.variables.output.BRANCH_NAME }}
-          git push origin ${{ steps.variables.output.BRANCH_NAME }}
-          git branch --set-upstream-to=origin/${{ steps.variables.output.BRANCH_NAME }} ${{ steps.variables.output.BRANCH_NAME }}
+          git checkout -b ${{ steps.variables.output.MAIN_BRANCH_NAME }}
+          git push origin ${{ steps.variables.output.MAIN_BRANCH_NAME }}
+          git branch --set-upstream-to=origin/${{ steps.variables.output.MAIN_BRANCH_NAME }} ${{ steps.variables.output.MAIN_BRANCH_NAME }}
 
       - name: Bump version
         run: |
@@ -133,8 +134,8 @@ jobs:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
           message: 'Bumping version to ${{ inputs.version_to_bump_main }}'
-          branch: '${{ steps.variables.output.BRANCH_NAME }}'
-          push: 'origin origin/${{ steps.variables.output.BRANCH_NAME }}'
+          branch: '${{ steps.variables.output.MAIN_BRANCH_NAME }}'
+          push: 'origin origin/${{ steps.variables.output.MAIN_BRANCH_NAME }}'
 
       - name: Install Homebrew packages
         run: |
