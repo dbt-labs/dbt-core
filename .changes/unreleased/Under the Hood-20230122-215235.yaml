@@ -3,4 +3,4 @@ body: Small optimization on manifest parsing benefitting large DAGs
 time: 2023-01-22T21:52:35.549814+01:00
 custom:
   Author: boxysean
-  Issue: "6322"
+  Issue: "6073"
