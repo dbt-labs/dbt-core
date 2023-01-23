@@ -1,0 +1,6 @@
+kind: Fixes
+body: add merge_exclude_columns adapter tests
+time: 2023-01-23T13:28:14.808748-06:00
+custom:
+  Author: dave-connors-3
+  Issue: "6699"
