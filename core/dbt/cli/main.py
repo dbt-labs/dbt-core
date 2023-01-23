@@ -21,6 +21,7 @@ from dbt.task.freshness import FreshnessTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.build import BuildTask
 from dbt.task.generate import GenerateTask
+from dbt.task.init import InitTask
 
 
 # CLI invocation
@@ -307,8 +308,11 @@ def deps(ctx, **kwargs):
 @requires.preflight
 def init(ctx, **kwargs):
     """Initialize a new dbt project."""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    task = InitTask(ctx.obj["flags"], None)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt list
