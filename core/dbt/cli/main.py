@@ -362,7 +362,7 @@ cli.add_command(ls, "ls")
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
-    # manifest generation and writing happens in @requires.manifeset
+    # manifest generation and writing happens in @requires.manifest
     return None, True
 
 

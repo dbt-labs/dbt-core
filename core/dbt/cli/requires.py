@@ -136,7 +136,7 @@ def manifest(*args0, write_perf_info=False):
             register_adapter(runtime_config)
 
             # a manifest has already been set on the context, so don't overwrite it
-            if ctx.obj.get("manifeset") is None:
+            if ctx.obj.get("manifest") is None:
                 manifest = ManifestLoader.get_full_manifest(
                     runtime_config, write_perf_info=write_perf_info
                 )
