@@ -4,3 +4,5 @@ entities:
   - name: orders
     model: ref('fact_orders')
     description: "Our orders entity"
+    dimensions:
+      - dimension_1
