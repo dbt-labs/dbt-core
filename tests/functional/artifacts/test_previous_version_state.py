@@ -98,10 +98,10 @@ class TestPreviousVersionState:
 
     def test_backwards_compatible_versions(self, project):
         # manifest schema version 4 and greater should always be forward compatible
-        for schema_version in range(4, self.CURRENT_EXPECTED_MANIFEST_VERSION):
+        for schema_version in range(8, self.CURRENT_EXPECTED_MANIFEST_VERSION):
             self.compare_previous_state(project, schema_version, True)
 
     def test_nonbackwards_compatible_versions(self, project):
         # schema versions 1, 2, 3 are all not forward compatible
-        for schema_version in range(1, 4):
+        for schema_version in range(1, 7):
             self.compare_previous_state(project, schema_version, False)
