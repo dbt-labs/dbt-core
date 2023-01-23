@@ -355,6 +355,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "parent_map",
         "child_map",
         "metrics",
+        "entities",
         "docs",
         "metadata",
         "docs",
@@ -381,7 +382,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
                 and metadata["send_anonymous_usage_stats"] is False
             )
             assert "adapter_type" in metadata and metadata["adapter_type"] == project.adapter_type
-        elif key in ["nodes", "sources", "exposures", "metrics", "disabled", "docs"]:
+        elif key in ["nodes", "sources", "exposures", "metrics", "entities", "disabled", "docs"]:
             for unique_id, node in expected_manifest[key].items():
                 assert unique_id in manifest[key]
                 assert manifest[key][unique_id] == node, f"{unique_id} did not match"
