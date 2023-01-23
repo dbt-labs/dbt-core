@@ -2343,12 +2343,39 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
         return self.msg
 
 
+@dataclass
+class DebugCmdOut(InfoLevel, pt.DebugCmdOut):
+    def code(self):
+        return "Z047"
+
+    def message(self) -> str:
+        return self.msg
+
+
+@dataclass
+class DebugCmdResult(InfoLevel, pt.DebugCmdResult):
+    def code(self):
+        return "Z048"
+
+    def message(self) -> str:
+        return self.msg
+
+
+@dataclass
+class ListCmdOut(InfoLevel, pt.ListCmdOut):
+    def code(self):
+        return "Z049"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # The Note event provides a way to log messages which aren't likely to be useful as more structured events.
 # For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
 @dataclass
 class Note(InfoLevel, pt.Note):
     def code(self):
-        return "Z047"
+        return "Z050"
 
     def message(self) -> str:
         return self.msg

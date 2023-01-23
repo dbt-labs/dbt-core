@@ -2252,6 +2252,36 @@ message RunResultWarningMessageMsg {
 }
 
 // Z047
+message DebugCmdOut {
+    string msg = 1;
+}
+
+message DebugCmdOutMsg {
+    EventInfo info = 1;
+    DebugCmdOut data = 2;
+}
+
+// Z048
+message DebugCmdResult {
+    string msg = 1;
+}
+
+message DebugCmdResultMsg {
+    EventInfo info = 1;
+    DebugCmdResult data = 2;
+}
+
+// Z049
+message ListCmdOut {
+    string msg = 1;
+}
+
+message ListCmdOutMsg {
+    EventInfo info = 1;
+    ListCmdOut data = 2;
+}
+
+// Z050
 message Note {
     string msg = 1;
 }

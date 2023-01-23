@@ -161,7 +161,7 @@ class GraphQueue:
         queue and add them.
         """
         for node, in_degree in self.graph.in_degree():
-            if not self._already_known(node) and in_degree == 0:
+            if in_degree == 0 and not self._already_known(node):
                 self.inner.put((self._scores[node], node))
                 self.queued.add(node)
 
