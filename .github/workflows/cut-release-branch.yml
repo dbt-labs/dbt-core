@@ -1,11 +1,29 @@
 # **what?**
+# Cuts the `*.latest` branch, bumps dependencies on it, cleans up all files in `.changes/unreleased`
+# on main and bumps main to the next alpha..
 #
-
 
 # **why?**
-#
+# Clean up the main branch after a release branch is cut and automate cutting the release branch.
+# Generally reduces the workload of engineers and reducing error.
 
 # **when?**
+# This will run when called manually in a workflow.
+
+# Example Usage including required permissions:  TODO: update once finalized
+
+# permissions:
+#   contents: read
+#   pull-requests: write
+#
+# name: Cut Release Branch
+# jobs:
+#   changelog:
+#     uses: dbt-labs/actions/.github/workflows/cut-release-branch.yml@main
+#    with:
+#      release_branch_name: 1.2.latest
+#      sha: 0e60fc1  (or nothing!)
+#    secrets: inherit # this is only acceptable because we own the action we're calling
 #
 
 # Note: This should be moved into the actions repos so it can be used in all adapters as well
@@ -72,7 +90,7 @@ jobs:
       - name: Bump dependencies
         if: repo != dbt-core
         run: |
-          echo ruinning some script now
+          echo "running some script yet to be written now"
           # TODO: some_script because each adapter is different
 
       - name: Commit dependency change
@@ -80,7 +98,7 @@ jobs:
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Cutting .latests branch ${{ steps.variables.output.NEW_BRANCH_NAME }}'
+          message: 'Cutting .latest branch ${{ steps.variables.output.NEW_BRANCH_NAME }}'
           branch: '${{ steps.variables.output.NEW_BRANCH_NAME }}'
           push: 'origin origin/${{ steps.variables.output.NEW_BRANCH_NAME }}'
 
