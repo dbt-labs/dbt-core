@@ -120,9 +120,14 @@ def cli(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def build(ctx, **kwargs):
     """Run all Seeds, Models, Snapshots, and tests in DAG order"""
-    task = BuildTask(ctx.obj["flags"], ctx.obj["runtime_config"])
+    task = BuildTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -177,6 +182,7 @@ def docs(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def docs_generate(ctx, **kwargs):
     """Generate the documentation website for your project"""
     task = GenerateTask(ctx.obj["flags"], ctx.obj["runtime_config"])
@@ -230,7 +236,11 @@ def docs_serve(ctx, **kwargs):
 def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
     target/ directory."""
-    task = CompileTask(ctx.obj["flags"], ctx.obj["runtime_config"], ctx.obj["manifest"])
+    task = CompileTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -312,9 +322,14 @@ def init(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def list(ctx, **kwargs):
     """List the resources in your project"""
-    task = ListTask(ctx.obj["flags"], ctx.obj["runtime_config"])
+    task = ListTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -377,7 +392,11 @@ def parse(ctx, **kwargs):
 @requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-    task = RunTask(ctx.obj["flags"], ctx.obj["runtime_config"], ctx.obj["manifest"])
+    task = RunTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -398,9 +417,14 @@ def run(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def run_operation(ctx, **kwargs):
     """Run the named macro with any supplied arguments."""
-    task = RunOperationTask(ctx.obj["flags"], ctx.obj["runtime_config"])
+    task = RunOperationTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -429,9 +453,14 @@ def run_operation(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def seed(ctx, **kwargs):
     """Load data from csv files into your data warehouse."""
-    task = SeedTask(ctx.obj["flags"], ctx.obj["runtime_config"])
+    task = SeedTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -457,9 +486,14 @@ def seed(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def snapshot(ctx, **kwargs):
     """Execute snapshots defined in your project"""
-    task = SnapshotTask(ctx.obj["flags"], ctx.obj["runtime_config"])
+    task = SnapshotTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -492,9 +526,14 @@ def source(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
+@requires.manifest
 def freshness(ctx, **kwargs):
     """check the current freshness of the project's sources"""
-    task = FreshnessTask(ctx.obj["flags"], ctx.obj["runtime_config"])
+    task = FreshnessTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
@@ -534,7 +573,11 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @requires.manifest
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
-    task = TestTask(ctx.obj["flags"], ctx.obj["runtime_config"], ctx.obj["manifest"])
+    task = TestTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
 
     results = task.run()
     success = task.interpret_results(results)
