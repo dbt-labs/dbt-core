@@ -1198,7 +1198,7 @@ def expected_references_manifest(project):
             },
         },
         "metrics": {},
-        "entities":{},
+        "entities": {},
         "selectors": {},
         "docs": {
             "doc.dbt.__overview__": ANY,

@@ -3,6 +3,6 @@ metrics:
   - name: revenue
     label: Revenue
     model: ref('fact_orders')
-    
+
     calculation_method: sum
     expression: order_total
