@@ -15,7 +15,7 @@ class BaseColumnTypes:
         assert len(results) == 1
 
 
-class TestPosgresColumnTypes(BaseColumnTypes):
+class TestPostgresColumnTypes(BaseColumnTypes):
     @pytest.fixture(scope="class")
     def models(self):
         return {"model.sql": model_sql, "schema.yml": schema_yml}
