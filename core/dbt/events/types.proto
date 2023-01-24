@@ -863,98 +863,7 @@ message ParsedFileLoadFailedMsg {
     ParsedFileLoadFailed data = 2;
 }
 
-// Skipping I030
-
-
-// I031
-message StaticParserCausedJinjaRendering {
-    string path = 1;
-}
-
-message StaticParserCausedJinjaRenderingMsg {
-    EventInfo info = 1;
-    StaticParserCausedJinjaRendering data = 2;
-}
-
-// I032
-message UsingExperimentalParser {
-    string path = 1;
-}
-
-message UsingExperimentalParserMsg {
-    EventInfo info = 1;
-    UsingExperimentalParser data = 2;
-}
-
-// I033
-message SampleFullJinjaRendering {
-    string path = 1;
-}
-
-message SampleFullJinjaRenderingMsg {
-    EventInfo info = 1;
-    SampleFullJinjaRendering data = 2;
-}
-
-// I034
-message StaticParserFallbackJinjaRendering {
-    string path = 1;
-}
-
-message StaticParserFallbackJinjaRenderingMsg {
-    EventInfo info = 1;
-    StaticParserFallbackJinjaRendering data = 2;
-}
-
-// I035
-message StaticParsingMacroOverrideDetected {
-    string path = 1;
-}
-
-message StaticParsingMacroOverrideDetectedMsg {
-    EventInfo info = 1;
-    StaticParsingMacroOverrideDetected data = 2;
-}
-
-// I036
-message StaticParserSuccess {
-    string path = 1;
-}
-
-message StaticParserSuccessMsg {
-    EventInfo info = 1;
-    StaticParserSuccess data = 2;
-}
-
-// I037
-message StaticParserFailure {
-    string path = 1;
-}
-
-message StaticParserFailureMsg {
-    EventInfo info = 1;
-    StaticParserFailure data = 2;
-}
-
-// I038
-message ExperimentalParserSuccess {
-    string path = 1;
-}
-
-message ExperimentalParserSuccessMsg {
-    EventInfo info = 1;
-    ExperimentalParserSuccess data = 2;
-}
-
-// I039
-message ExperimentalParserFailure {
-    string path = 1;
-}
-
-message ExperimentalParserFailureMsg {
-    EventInfo info = 1;
-    ExperimentalParserFailure data = 2;
-}
+// Skipping I030 - I039
 
 // I040
 message PartialParsingEnabled {
@@ -1124,6 +1033,28 @@ message JinjaLogWarningMsg {
     JinjaLogWarning data = 2;
 }
 
+// I062
+message JinjaLogInfo {
+    NodeInfo node_info = 1;
+    string msg = 2;
+}
+
+message  JinjaLogInfoMsg {
+    EventInfo info = 1;
+     JinjaLogInfo data = 2;
+}
+
+// I063
+message JinjaLogDebug {
+    NodeInfo node_info = 1;
+    string msg = 2;
+}
+
+message JinjaLogDebugMsg {
+    EventInfo info = 1;
+    JinjaLogDebug data = 2;
+}
+
 // M - Deps generation
 
 // M001
@@ -1230,27 +1161,7 @@ message SelectorReportInvalidSelectorMsg {
     SelectorReportInvalidSelector data = 2;
 }
 
-// M011
-message JinjaLogInfo {
-    NodeInfo node_info = 1;
-    string msg = 2;
-}
-
-message  JinjaLogInfoMsg {
-    EventInfo info = 1;
-     JinjaLogInfo data = 2;
-}
-
-// M012
-message JinjaLogDebug {
-    NodeInfo node_info = 1;
-    string msg = 2;
-}
-
-message JinjaLogDebugMsg {
-    EventInfo info = 1;
-    JinjaLogDebug data = 2;
-}
+// Skipped M011 and M012
 
 // M013
 message DepsNoPackagesFound {
