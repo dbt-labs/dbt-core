@@ -8,11 +8,11 @@ from unittest.mock import Mock, call
 from dbt.tests.util import run_dbt
 
 
-class TestInit:
+class TestInitProjectWithExistingProfilesYml:
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_init_task_in_project_with_existing_profiles_yml(self, mock_prompt, mock_confirm, mock_get_adapter, project, adapter):
+    def test_init_task_in_project_with_existing_profiles_yml(self, mock_prompt, mock_confirm, mock_get_adapter, project):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
@@ -27,7 +27,7 @@ class TestInit:
             'test_schema',
             4,
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
 
         run_dbt(['init'])
 
@@ -60,10 +60,12 @@ test:
   target: dev
 """
 
+
+class TestInitProjectWithoutExistingProfilesYml:
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.prompt')
     @mock.patch.object(Path, 'exists', autospec=True)
-    def test_init_task_in_project_without_existing_profiles_yml(self, exists, mock_prompt, mock_get_adapter, project, adapter):
+    def test_init_task_in_project_without_existing_profiles_yml(self, exists, mock_prompt, mock_get_adapter, project):
 
         def exists_side_effect(path):
             # Override responses on specific files, default to 'real world' if not overriden
@@ -84,7 +86,7 @@ test:
             'test_schema',
             4,
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
 
         run_dbt(['init'])
 
@@ -114,6 +116,8 @@ test:
   target: dev
 """
 
+
+class TestInitProjectWithoutExistingProfilesYmlOrTemplate:
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
@@ -134,7 +138,7 @@ test:
         manager.prompt.side_effect = [
             1,
         ]
-        mock_get_adapter.return_value = ['postgres']
+        mock_get_adapter.return_value = [project.adapter.type()]
         run_dbt(['init'])
         manager.assert_has_calls([
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
@@ -167,11 +171,13 @@ test:
   target: dev
 """
 
+
+class TestInitProjectWithProfileTemplateWithoutExistingProfilesYml:
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
     @mock.patch.object(Path, 'exists', autospec=True)
-    def test_init_task_in_project_with_profile_template_without_existing_profiles_yml(self, exists, mock_prompt, mock_confirm, mock_get_adapter, project, adapter):
+    def test_init_task_in_project_with_profile_template_without_existing_profiles_yml(self, exists, mock_prompt, mock_confirm, mock_get_adapter, project):
 
         def exists_side_effect(path):
             # Override responses on specific files, default to 'real world' if not overriden
@@ -211,7 +217,7 @@ prompts:
             'test_username',
             'test_password'
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
         run_dbt(['init'])
         manager.assert_has_calls([
             call.prompt('target (The target name)', default=None, hide_input=False, type=click.STRING),
@@ -240,7 +246,7 @@ class TestInitInvalidProfileTemplate:
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_init_task_in_project_with_invalid_profile_template(self, mock_prompt, mock_confirm, mock_get_adapter, project, adapter):
+    def test_init_task_in_project_with_invalid_profile_template(self, mock_prompt, mock_confirm, mock_get_adapter, project):
         """Test that when an invalid profile_template.yml is provided in the project,
         init command falls back to the target's profile_template.yml"""
         with open(os.path.join(project.project_root, "profile_template.yml"), 'w') as f:
@@ -260,7 +266,7 @@ class TestInitInvalidProfileTemplate:
             'test_schema',
             4,
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
 
         run_dbt(['init'])
 
@@ -294,11 +300,18 @@ test:
 """
 
 
-class TestInitOutsideOfProject:
+class TestInitOutsideOfProjectBase:
     @pytest.fixture(scope="class")
     def project_name(self, unique_schema):
         return f'my_project_{unique_schema}'
 
+    @pytest.fixture(scope="class", autouse=True)
+    def setup(self, project):
+        # Start by removing the dbt_project.yml so that we're not in an existing project
+        os.remove(os.path.join(project.project_root, 'dbt_project.yml'))
+
+
+class TestInitOutsideOfProject(TestInitOutsideOfProjectBase):
     @pytest.fixture(scope="class")
     def dbt_profile_data(self, unique_schema):
         return {
@@ -333,15 +346,10 @@ class TestInitOutsideOfProject:
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_init_task_outside_of_project(self, mock_prompt, mock_confirm, mock_get_adapter, project, adapter, project_name, unique_schema):
+    def test_init_task_outside_of_project(self, mock_prompt, mock_confirm, mock_get_adapter, project, project_name, unique_schema):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
-
-        # Start by removing the dbt_project.yml so that we're not in an existing project
-        # import pdb; pdb.set_trace()
-        os.remove(os.path.join(project.project_root, 'dbt_project.yml'))
-
         manager.prompt.side_effect = [
             project_name,
             1,
@@ -353,7 +361,7 @@ class TestInitOutsideOfProject:
             'test_schema',
             4,
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
         run_dbt(['init'])
 
         manager.assert_has_calls([
@@ -448,27 +456,21 @@ models:
 """
 
 
-class TestInitInvalidProjectNameCLI:
-    @pytest.fixture(scope="class")
-    def project_name(self, unique_schema):
-        return f'my_project_{unique_schema}'
-
+class TestInitInvalidProjectNameCLI(TestInitOutsideOfProjectBase):
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_init_invalid_project_name_cli(self, mock_prompt, mock_confirm, mock_get_adapter, project_name, project, adapter):
+    def test_init_invalid_project_name_cli(self, mock_prompt, mock_confirm, mock_get_adapter, project_name, project):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
-
-        os.remove(os.path.join(project.project_root, 'dbt_project.yml'))
 
         invalid_name = 'name-with-hyphen'
         valid_name = project_name
         manager.prompt.side_effect = [
             valid_name
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
 
         run_dbt(['init', invalid_name, '-s'])
         manager.assert_has_calls([
@@ -476,27 +478,21 @@ class TestInitInvalidProjectNameCLI:
         ])
 
 
-class TestInitInvalidProjectNamePrompt:
-    @pytest.fixture(scope="class")
-    def project_name(self, unique_schema):
-        return f'my_project_{unique_schema}'
-
+class TestInitInvalidProjectNamePrompt(TestInitOutsideOfProjectBase):
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_init_invalid_project_name_prompt(self, mock_prompt, mock_confirm, mock_get_adapter, project_name, project, adapter):
+    def test_init_invalid_project_name_prompt(self, mock_prompt, mock_confirm, mock_get_adapter, project_name, project):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
-
-        os.remove(os.path.join(project.project_root, 'dbt_project.yml'))
 
         invalid_name = 'name-with-hyphen'
         valid_name = project_name
         manager.prompt.side_effect = [
             invalid_name, valid_name
         ]
-        mock_get_adapter.return_value = [adapter.type()]
+        mock_get_adapter.return_value = [project.adapter.type()]
 
         run_dbt(['init', '-s'])
         manager.assert_has_calls([
@@ -505,23 +501,14 @@ class TestInitInvalidProjectNamePrompt:
         ])
 
 
-class TestInitProvidedProjectNameAndSkipProfileSetup:
-    @pytest.fixture(scope="class")
-    def project_name(self, unique_schema):
-        return f'my_project_{unique_schema}'
-
+class TestInitProvidedProjectNameAndSkipProfileSetup(TestInitOutsideOfProjectBase):
     @mock.patch('dbt.task.init._get_adapter_plugin_names')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_init_provided_project_name_and_skip_profile_setup(self, mock_prompt, mock_confirm, mock_get, project, project_name, adapter):
+    def test_init_provided_project_name_and_skip_profile_setup(self, mock_prompt, mock_confirm, mock_get, project, project_name):
         manager = mock.Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
-
-        # Start by removing the dbt_project.yml so that we're not in an existing project
-        # import pdb; pdb.set_trace()
-        os.remove(os.path.join(project.project_root, 'dbt_project.yml'))
-
         manager.prompt.side_effect = [
             1,
             'localhost',
@@ -532,9 +519,9 @@ class TestInitProvidedProjectNameAndSkipProfileSetup:
             'test_schema',
             4,
         ]
-        mock_get.return_value = [adapter.type()]
+        mock_get.return_value = [project.adapter.type()]
 
-        # provide project name through the ini command
+        # provide project name through the init command
         run_dbt(['init', project_name, '-s'])
         manager.assert_not_called()
 
