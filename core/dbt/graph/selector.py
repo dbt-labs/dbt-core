@@ -164,8 +164,8 @@ class NodeSelector(MethodManager):
             metric = self.manifest.metrics[unique_id]
             return metric.config.enabled
         elif unique_id in self.manifest.entities:
-            metric = self.manifest.entities[unique_id]
-            return metric.config.enabled
+            entity = self.manifest.entities[unique_id]
+            return entity.config.enabled
         node = self.manifest.nodes[unique_id]
         return not node.empty and node.config.enabled
 

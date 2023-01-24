@@ -240,7 +240,7 @@ class EntityLookup(dbtClassMixin):
 
     def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> Entity:
         if unique_id not in manifest.entities:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Entity {unique_id} found in cache but not found in manifest"
             )
         return manifest.entities[unique_id]
