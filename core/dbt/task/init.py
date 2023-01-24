@@ -175,7 +175,6 @@ class InitTask(BaseTask):
         profile_template_path = adapter_path / "profile_template.yml"
 
         if profile_template_path.exists():
-            # import pdb; pdb.set_trace()
             with open(profile_template_path) as f:
                 profile_template = yaml.safe_load(f)
             self.create_profile_from_profile_template(profile_template, profile_name)

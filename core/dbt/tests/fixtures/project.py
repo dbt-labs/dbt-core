@@ -191,7 +191,6 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
         elif isinstance(project_config_update, str):
             updates = yaml.safe_load(project_config_update)
             project_config.update(updates)
-
     write_file(yaml.safe_dump(project_config), project_root, "dbt_project.yml")
     return project_config
 
