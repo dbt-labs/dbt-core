@@ -401,6 +401,8 @@ class Compiler:
                 linker.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
             elif dependency in manifest.metrics:
                 linker.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
+            elif dependency in manifest.entities:
+                linker.dependency(node.unique_id, (manifest.entities[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
@@ -413,6 +415,8 @@ class Compiler:
             self.link_node(linker, exposure, manifest)
         for metric in manifest.metrics.values():
             self.link_node(linker, metric, manifest)
+        for entity in manifest.entities.values():
+            self.link_node(linker, entity, manifest)
 
         cycle = linker.find_cycles()
 

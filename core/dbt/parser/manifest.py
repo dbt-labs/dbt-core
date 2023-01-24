@@ -1239,7 +1239,7 @@ def _process_refs_for_entity(manifest: Manifest, current_project: str, entity: E
         elif len(ref) == 2:
             target_model_package, target_model_name = ref
         else:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
@@ -1330,13 +1330,13 @@ def _process_entities_for_node(
 
     for entity in node.entities:
         target_entity: Optional[Union[Disabled, Entity]] = None
-        target_entity: str
-        target_entity: Optional[str] = None
+        target_entity_name: str
+        target_entity_package: Optional[str] = None
 
         if len(entity) == 1:
             target_entity_name = entity[0]
         elif len(entity) == 2:
-            target_entity_pacakge, target_entity_name = entity
+            target_entity_package, target_entity_name = entity
         else:
             raise dbt.exceptions.DbtInternalError(
                 f"Entity references should always be 1 or 2 arguments - got {len(entity)}"
@@ -1344,7 +1344,7 @@ def _process_entities_for_node(
 
         target_entity = manifest.resolve_entity(
             target_entity_name,
-            target_entity_pacakge,
+            target_entity_package,
             current_project,
             node.package_name,
         )
@@ -1357,7 +1357,7 @@ def _process_entities_for_node(
                 node=node,
                 target_name=target_entity_name,
                 target_kind="source",
-                target_package=target_entity_pacakge,
+                target_package=target_entity_package,
                 disabled=(isinstance(target_entity, Disabled)),
             )
             continue
