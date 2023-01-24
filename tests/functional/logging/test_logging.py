@@ -44,6 +44,7 @@ def test_basic(project, logs_dir):
             node_start = True
         if log_event == "NodeFinished":
             node_finished = True
+            assert log_data["run_result"]["adapter_response"]
         if node_start and not node_finished:
             if log_event == "NodeExecuting":
                 assert "node_info" in log_data

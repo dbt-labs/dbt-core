@@ -13,7 +13,7 @@ from dbt.events.types import TimingInfoCollected
 from dbt.events.proto_types import RunResultMsg, TimingInfoMsg
 from dbt.events.contextvars import get_node_info
 from dbt.logger import TimingProcessor
-from dbt.utils import lowercase, cast_to_str, cast_to_int
+from dbt.utils import lowercase, cast_to_str, cast_to_int, cast_dict_to_dict_of_strings
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 import agate
@@ -130,7 +130,6 @@ class BaseResult(dbtClassMixin):
         return data
 
     def to_msg(self):
-        # TODO: add more fields
         msg = RunResultMsg()
         msg.status = str(self.status)
         msg.message = cast_to_str(self.message)
@@ -138,7 +137,7 @@ class BaseResult(dbtClassMixin):
         msg.execution_time = self.execution_time
         msg.num_failures = cast_to_int(self.failures)
         msg.timing_info = [ti.to_msg() for ti in self.timing]
-        # adapter_response
+        msg.adapter_response = cast_dict_to_dict_of_strings(self.adapter_response)
         return msg
 
 
