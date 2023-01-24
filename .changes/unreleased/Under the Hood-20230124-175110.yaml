@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: dbt init works with click
+time: 2023-01-24T17:51:10.74065-05:00
+custom:
+  Author: michelleark
+  Issue: "5548"
