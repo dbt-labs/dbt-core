@@ -7,7 +7,8 @@ from dbt.contracts.graph.unparsed import (
     FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
     UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
-    ExposureType, UnparsedMetric, MetricFilter, MetricTime, MetricTimePeriod
+    ExposureType, UnparsedMetric, UnparsedEntity, MetricFilter, MetricTime, 
+    MetricTimePeriod
 )
 from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
@@ -777,6 +778,52 @@ class TestUnparsedMetric(ContractTestCase):
     def test_bad_filter_missing_things(self):
         tst = self.get_ok_dict()
         del tst['filters'][0]['operator']
+        self.assert_fails_validation(tst)
+
+    def test_bad_tags(self):
+        tst = self.get_ok_dict()
+        tst['tags'] = [123]
+        self.assert_fails_validation(tst)
+
+
+
+
+class TestUnparsedEntity(ContractTestCase):
+    ContractType = UnparsedEntity
+
+    def get_ok_dict(self):
+        return {
+            'name': 'my_entity',
+            'model': "ref('my_model')",
+            'description': 'my model',
+            'dimensions': ['plan', 'country'],
+            'config': {},
+            'tags': [],
+            'meta': {},
+        }
+
+    def test_ok(self):
+        metric = self.ContractType(
+            name='my_entity',
+            model="ref('my_model')",
+            description="my model",
+            dimensions=['plan', 'country'],
+            config={},
+            tags=[],
+            meta={},
+        )
+        dct = self.get_ok_dict()
+        self.assert_symmetric(metric, dct)
+        pickle.loads(pickle.dumps(metric))
+
+    def test_bad_entity_no_name(self):
+        tst = self.get_ok_dict()
+        del tst['name']
+        self.assert_fails_validation(tst)
+
+    def test_bad_entity_no_model(self):
+        tst = self.get_ok_dict()
+        del tst['model']
         self.assert_fails_validation(tst)
 
     def test_bad_tags(self):

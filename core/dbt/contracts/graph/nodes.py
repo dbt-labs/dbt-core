@@ -1085,6 +1085,7 @@ class Entity(GraphNode):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     entities: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
 
     @property

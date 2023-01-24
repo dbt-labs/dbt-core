@@ -22,7 +22,8 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SourceDefinition,
     Exposure,
-    Metric
+    Metric,
+    Entity
 )
 
 from dbt.contracts.graph.unparsed import (
@@ -42,7 +43,7 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
-    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
+    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'entities', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
@@ -123,11 +124,34 @@ class ManifestTest(unittest.TestCase):
                 refs=[['multi']],
                 sources=[],
                 metrics=[],
+                entities=[],
                 fqn=['root', 'my_metric'],
                 unique_id='metric.root.my_metric',
                 package_name='root',
                 path='my_metric.yml',
                 original_file_path='my_metric.yml'
+            )
+        }
+
+        self.entities = {
+            'entity.root.my_entity': Entity(
+                name='my_entity',
+                model='ref("multi")',
+                description="my entity",
+                dimensions=['plan', 'country'],
+                resource_type=NodeType.Entity,
+                meta={'is_okr': True},
+                tags=['okrs'],
+                depends_on=DependsOn(nodes=['model.root.multi']),
+                refs=[['multi']],
+                sources=[],
+                metrics=[],
+                entities=[],
+                fqn=['root', 'my_entity'],
+                unique_id='entity.root.my_entity',
+                package_name='root',
+                path='my_entity.yml',
+                original_file_path='my_entity.yml'
             )
         }
 
@@ -144,6 +168,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
@@ -166,6 +191,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
@@ -188,6 +214,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[['events']],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
@@ -210,6 +237,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[['events']],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(nodes=['model.root.dep']),
                 config=self.model_config,
                 tags=[],
@@ -232,6 +260,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[['events']],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
@@ -254,6 +283,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[['events']],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(nodes=['model.root.nested', 'model.root.sibling']),
                 config=self.model_config,
                 tags=[],
@@ -288,6 +318,8 @@ class ManifestTest(unittest.TestCase):
             exposure.validate(exposure.to_dict(omit_none=True))
         for metric in self.metrics.values():
             metric.validate(metric.to_dict(omit_none=True))
+        for entity in self.entities.values():
+            entity.validate(entity.to_dict(omit_none=True))
         for node in self.nested_nodes.values():
             node.validate(node.to_dict(omit_none=True))
         for source in self.sources.values():
@@ -303,7 +335,7 @@ class ManifestTest(unittest.TestCase):
     def test__no_nodes(self):
         manifest = Manifest(
             nodes={}, sources={}, macros={}, docs={}, disabled={}, files={},
-            exposures={}, metrics={}, selectors={},
+            exposures={}, metrics={}, selectors={}, entities={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
 
@@ -316,6 +348,7 @@ class ManifestTest(unittest.TestCase):
                 'macros': {},
                 'exposures': {},
                 'metrics': {},
+                'entities': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
@@ -336,7 +369,7 @@ class ManifestTest(unittest.TestCase):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes, sources={}, macros={}, docs={}, disabled={}, files={},
-            exposures={}, metrics={}, selectors={},
+            exposures={}, metrics={}, entities={}, selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
@@ -402,20 +435,23 @@ class ManifestTest(unittest.TestCase):
     def test__build_flat_graph(self):
         exposures = copy.copy(self.exposures)
         metrics = copy.copy(self.metrics)
+        entities = copy.copy(self.entities)
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
                             disabled={}, files={}, exposures=exposures,
-                            metrics=metrics, selectors={})
+                            metrics=metrics, entities=entities, selectors={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_exposures = flat_graph['exposures']
         flat_metrics = flat_graph['metrics']
+        flat_entities = flat_graph['entities']
         flat_nodes = flat_graph['nodes']
         flat_sources = flat_graph['sources']
-        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources', 'metrics']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources', 'metrics', 'entities']))
         self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_metrics), set(self.metrics))
+        self.assertEqual(set(flat_entities), set(self.entities))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         self.assertEqual(set(flat_sources), set(self.sources))
         for node in flat_nodes.values():
@@ -466,6 +502,7 @@ class ManifestTest(unittest.TestCase):
                 'macros': {},
                 'exposures': {},
                 'metrics': {},
+                'entities': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
@@ -509,10 +546,13 @@ class ManifestTest(unittest.TestCase):
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
                             disabled={}, files={}, exposures=self.exposures,
-                            metrics=self.metrics, selectors={})
+                            metrics=self.metrics, entities=self.entities, selectors={})
         expect = {
             'metrics': frozenset([
                 ('root', 'my_metric')
+            ]),
+            'entities': frozenset([
+                ('root', 'my_entity')
             ]),
             'exposures': frozenset([
                 ('root', 'my_exposure')
@@ -548,6 +588,7 @@ class ManifestTest(unittest.TestCase):
                 refs=[],
                 sources=[],
                 metrics=[],
+                entities=[],
                 depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
@@ -735,6 +776,7 @@ class MixedManifestTest(unittest.TestCase):
                 'sources': {},
                 'exposures': {},
                 'metrics': {},
+                'entities': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
@@ -824,7 +866,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['exposures', 'metrics', 'nodes', 'sources']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'metrics', 'entities', 'nodes', 'sources']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
         for node in flat_nodes.values():
@@ -870,6 +912,7 @@ class TestManifestSearch(unittest.TestCase):
             files={},
             exposures={},
             metrics={},
+            entities={},
             selectors={},
         )
 
@@ -892,6 +935,7 @@ def make_manifest(nodes=[], sources=[], macros=[], docs=[]):
         files={},
         exposures={},
         metrics={},
+        entities={},
         selectors={},
     )
 

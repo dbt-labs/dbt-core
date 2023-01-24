@@ -10,6 +10,8 @@ from dbt.contracts.graph.model_config import (
     SnapshotConfig,
     SourceConfig,
     ExposureConfig,
+    MetricConfig,
+    EntityConfig,
     EmptySnapshotConfig,
     Hook,
 )
@@ -24,6 +26,7 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
     Metric,
+    Entity,
     SeedNode,
     Docs,
     MacroDependsOn,
@@ -139,6 +142,7 @@ def base_parsed_model_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': []},
         'database': 'test_db',
         'description': '',
@@ -185,6 +189,7 @@ def basic_parsed_model_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         database='test_db',
@@ -235,6 +240,7 @@ def complex_parsed_model_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': ['model.test.bar']},
         'database': 'test_db',
         'deferred': True,
@@ -292,6 +298,7 @@ def complex_parsed_model_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(nodes=['model.test.bar']),
         deferred=True,
         description='My parsed node',
@@ -714,6 +721,7 @@ def patched_model_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='The foo model',
         database='test_db',
@@ -773,6 +781,7 @@ def base_parsed_hook_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': []},
         'database': 'test_db',
         'deferred': False,
@@ -819,6 +828,7 @@ def base_parsed_hook_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         deferred=False,
@@ -849,6 +859,7 @@ def complex_parsed_hook_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': ['model.test.bar']},
         'deferred': False,
         'database': 'test_db',
@@ -906,6 +917,7 @@ def complex_parsed_hook_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(nodes=['model.test.bar']),
         description='My parsed node',
         deferred=False,
@@ -1000,6 +1012,7 @@ def basic_parsed_schema_test_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': []},
         'deferred': False,
         'database': 'test_db',
@@ -1046,6 +1059,7 @@ def basic_parsed_schema_test_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         database='test_db',
@@ -1075,6 +1089,7 @@ def complex_parsed_schema_test_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': ['model.test.bar']},
         'database': 'test_db',
         'deferred': False,
@@ -1138,6 +1153,7 @@ def complex_parsed_schema_test_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(nodes=['model.test.bar']),
         description='My parsed node',
         database='test_db',
@@ -1432,6 +1448,7 @@ def basic_timestamp_snapshot_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': []},
         'deferred': False,
         'database': 'test_db',
@@ -1489,6 +1506,7 @@ def basic_timestamp_snapshot_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         database='test_db',
@@ -1537,6 +1555,7 @@ def basic_intermediate_timestamp_snapshot_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         database='test_db',
@@ -1572,6 +1591,7 @@ def basic_check_snapshot_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'depends_on': {'macros': [], 'nodes': []},
         'database': 'test_db',
         'deferred': False,
@@ -1629,6 +1649,7 @@ def basic_check_snapshot_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         database='test_db',
@@ -1677,6 +1698,7 @@ def basic_intermediate_check_snapshot_object():
         refs=[],
         sources=[],
         metrics=[],
+        entities=[],
         depends_on=DependsOn(),
         description='',
         database='test_db',
@@ -2115,6 +2137,7 @@ def basic_parsed_exposure_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'fqn': ['test', 'exposures', 'my_exposure'],
         'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
@@ -2177,6 +2200,7 @@ def complex_parsed_exposure_dict():
         'refs': [],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'fqn': ['test', 'exposures', 'my_exposure'],
         'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
@@ -2251,49 +2275,88 @@ def test_compare_changed_exposure(func, basic_parsed_exposure_object):
 
 
 # METRICS
-@pytest.fixture
-def minimal_parsed_metric_dict():
-    return {
-        'name': 'my_metric',
-        'type': 'count',
-        'timestamp': 'created_at',
-        'time_grains': ['day'],
-        'fqn': ['test', 'metrics', 'my_metric'],
-        'unique_id': 'metric.test.my_metric',
-        'package_name': 'test',
-        'meta': {},
-        'tags': [],
-        'path': 'models/something.yml',
-        'original_file_path': 'models/something.yml',
-        'description': '',
-        'created_at': 1.0,
-    }
-
 
 @pytest.fixture
 def basic_parsed_metric_dict():
     return {
         'name': 'new_customers',
         'label': 'New Customers',
-        'model': 'ref("dim_customers")',
+        'model': "ref('dim_customers')",
         'calculation_method': 'count',
         'expression': 'user_id',
         'timestamp': 'signup_date',
         'time_grains': ['day', 'week', 'month'],
         'dimensions': ['plan', 'country'],
-        'filters': [
-            {
-                "field": "is_paying",
-                "value": "true",
-                "operator": "=",
-            }
-        ],
+        'filters': [],
         'resource_type': 'metric',
         'refs': [['dim_customers']],
         'sources': [],
         'metrics': [],
+        'entities': [],
         'fqn': ['test', 'metrics', 'my_metric'],
         'unique_id': 'metric.test.my_metric',
+        'package_name': 'test',
+        'path': 'models/something.yml',
+        'original_file_path': 'models/something.yml',
+        'description': '',
+        'meta': {},
+        'tags': [],
+        'created_at': 1,
+        'depends_on': {
+            'nodes': [],
+            'macros': [],
+        },
+        'config': {
+            'enabled': True,
+        },
+        'unrendered_config': {},
+    }
+
+
+@pytest.fixture
+def basic_parsed_metric_object():
+    return Metric(
+        name='new_customers',
+        resource_type=NodeType.Metric,
+        model="ref('dim_customers')",
+        label='New Customers',
+        calculation_method='count',
+        expression="user_id",
+        timestamp='signup_date',
+        time_grains=['day','week','month'],
+        dimensions=['plan','country'],
+        filters=[],
+        refs=[['dim_customers']],
+        fqn=['test', 'metrics', 'my_metric'],
+        unique_id='metric.test.my_metric',
+        package_name='test',
+        path='models/something.yml',
+        original_file_path='models/something.yml',
+        description='',
+        meta={},
+        tags=[],
+        config=MetricConfig(),
+        unrendered_config={},
+    )
+
+def test_simple_parsed_metric(basic_parsed_metric_dict, basic_parsed_metric_object):
+    assert_symmetric(basic_parsed_metric_object, basic_parsed_metric_dict, Metric)
+
+# ENTITIES
+
+@pytest.fixture
+def basic_parsed_entity_dict():
+    return {
+        'name': 'my_entity',
+        'model': "ref('my_model')",
+        'dimensions': [],
+        'resource_type': 'entity',
+        'refs': [['my_model']],
+        'sources': [],
+        'metrics': [],
+        'entities': [],
+        'fqn': ['test', 'entities', 'my_entity'],
+        'unique_id': 'entity.test.my_entity',
         'package_name': 'test',
         'path': 'models/something.yml',
         'original_file_path': 'models/something.yml',
@@ -2305,21 +2368,31 @@ def basic_parsed_metric_dict():
             'nodes': [],
             'macros': [],
         },
+        'config': {
+            'enabled': True,
+        },
+        'unrendered_config': {},
     }
 
-
 @pytest.fixture
-def basic_parsed_metric_object():
-    return Metric(
-        name='my_metric',
-        resource_type=NodeType.Metric,
-        calculation_method='count',
-        fqn=['test', 'metrics', 'my_metric'],
-        unique_id='metric.test.my_metric',
+def basic_parsed_entity_object():
+    return Entity(
+        name='my_entity',
+        model="ref('my_model')",
+        dimensions=[],
+        resource_type=NodeType.Entity,
+        fqn=['test', 'entities', 'my_entity'],
+        refs=[['my_model']],
+        unique_id='entity.test.my_entity',
         package_name='test',
         path='models/something.yml',
         original_file_path='models/something.yml',
         description='',
         meta={},
-        tags=[]
+        tags=[],
+        config=EntityConfig(),
+        unrendered_config={},
     )
+
+def test_simple_parsed_entity(basic_parsed_entity_dict, basic_parsed_entity_object):
+    assert_symmetric(basic_parsed_entity_object, basic_parsed_entity_dict, Entity)
