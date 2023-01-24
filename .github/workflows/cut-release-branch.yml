@@ -21,8 +21,10 @@
 #   changelog:
 #     uses: dbt-labs/actions/.github/workflows/cut-release-branch.yml@main
 #    with:
-#      release_branch_name: 1.2.latest
-#      sha: 0e60fc1  (or nothing!)
+#      version_to_bump_main: 1.3.0a1
+#      new_branch_name: 1.2.latest
+#      dependency_bump_script_path: scripts/
+#      repository: dbt-snowflake
 #    secrets: inherit # this is only acceptable because we own the action we're calling
 #
 
@@ -36,16 +38,18 @@ name: Cut new release branch
 on:
   workflow_dispatch:
     inputs:
-      main_branch_name:
-       description: 'The name of the main branch (ex. main)'
-       default: main
-       required: true
       version_to_bump_main:
-       description: 'The alpha version main should bump to (ex. 1.6.0a1)'
-       required: true
+        description: 'The alpha version main should bump to (ex. 1.6.0a1)'
+        required: true
       new_branch_name:
-       description: 'The full name of the new branch (ex. 1.5.latest)'
-       required: true
+        description: 'The full name of the new branch (ex. 1.5.latest)'
+        required: true
+      dependency_bump_script_path:
+        description: "Path to the script to bump dependencies on the release branch"
+        required: false  # not used in dbt-core
+      repository:
+        description: "Repository to create new branch and cleanup main"
+        required: true
 
 defaults:
   run:
@@ -57,35 +61,46 @@ permissions:
 jobs:
   prep_work:
     runs-on: ubuntu-latest
+    outputs:
+      base_version: ${{ steps.semver.outputs.base-version }}
     steps:
-      - name: Audit New Version and Parse Into Parts
-        id: semver_release
-        uses: dbt-labs/actions/parse-semver@v1
-        with:
-          version: ${{ inputs.version_to_bump_release }}
+      - name: "[DEBUG] Print Inputs"
+        run: |
+          echo "Version to bump main:    ${{ inputs.version_to_bump_main }}"
+          echo "Name of branch to cut:   ${{ inputs.new_branch_name }}"
 
-      - name: Audit Existing Version and Parse Into Parts
-        id: semver_main
+      - name: Audit New Version and Parse Into Parts
+        id: semver
         uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ inputs.version_to_bump_main }}
 
-      # - name: Audit if New branch already exist?
-      # - name: Audit if old branch exist?
+      - name: "Checkout ${{ inputs.repository }} repository"
+        uses: actions/checkout@v4.3.0
+        with:
+          repository: ${{ inputs.repository }}
+
+      - name: "Audit if New Branch Already Exists"
+        id: check_new_branch
+        run: |
+          if git show-ref --quiet refs/heads/${{ inputs.new_branch_name }}; then
+            echo "Branch ${{ inputs.new_branch_name }} already exists.  Exiting."
+            exit 1
+          fi
 
   cut_branch:
     needs: ['prep_work']
-    if: prep_work.needs.output.branch_exists = false
     runs-on: ubuntu-latest
     steps:
-      - name: Set branch value
-        id: variables
-        run: |
-          echo "NEW_BRANCH_NAME=${{ inputs.version_to_bump_release }}" >> GITHUB_OUTPUT
+
+      - name: "Checkout ${{ inputs.repository }} repository"
+        uses: actions/checkout@v4.3.0
+        with:
+          repository: ${{ inputs.repository }}
 
       - name: Create new release branch
         run: |
-          git checkout -b ${{ steps.variables.output.NEW_BRANCH_NAME }}
+          git checkout -b ${{ inputs.new_branch_name }}
 
       - name: Bump dependencies
         if: repo != dbt-core
@@ -98,20 +113,24 @@ jobs:
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Cutting .latest branch ${{ steps.variables.output.NEW_BRANCH_NAME }}'
-          branch: '${{ steps.variables.output.NEW_BRANCH_NAME }}'
-          push: 'origin origin/${{ steps.variables.output.NEW_BRANCH_NAME }}'
+          message: 'Cutting .latest branch ${{ inputs.new_branch_name }}'
+          branch: '${{ inputs.new_branch_name }}'
+          push: 'origin origin/${{ inputs.new_branch_name }}'
 
   cleanup_main:
-    needs: ['cut_branch']
-    if: success() # todo: does it run even if cut_branch was skipped - should it?
+    needs: [prep_work, 'cut_branch']
     runs-on: ubuntu-latest
     steps:
 
       - name: Set branch value
         id: variables
         run: |
-          echo "BRANCH_NAME=cutting_latest_branch/${{ inputs.main_branch_name }}_cleanup" >> GITHUB_OUTPUT
+          echo "BRANCH_NAME=cutting_release_branch/main_cleanup" >> GITHUB_OUTPUT
+
+      - name: "Checkout ${{ inputs.repository }} repository"
+        uses: actions/checkout@v4.3.0
+        with:
+          repository: ${{ inputs.repository }}
 
       - name: Create PR branch
         run: |
@@ -141,12 +160,7 @@ jobs:
           brew tap miniscruff/changie https://github.com/miniscruff/changie
           brew install changie
 
-      # Remove the directories (there will be 2) that the versioned changelogs go into
-      # Also remove the .md files
-      # then update the 0.0.0.md to add in the release branch changelog we just cut above
-      # run changie merge
       - name: Check if any unreleased changelog files exists
-        # if there are no changelog entries, exit!
         shell: bash
         id: unreleased_changelog_check
         run: |
@@ -160,12 +174,11 @@ jobs:
           fi
 
       - name: "Check if any prerelease changelog files exists"
-        # if there are no changelog entries, exit!
         shell: bash
         id: prerelease_changelog_check
         run: |
           git fetch origin ${{ inputs.sha }}
-          if echo grep '.changes/${{ steps.semver.outputs.base-version }}/.*.yaml'; then
+          if echo grep '.changes/${{ needs.prep_work.outputs.base_version }}/.*.yaml'; then
             echo "prerelease_exists=true" >> GITHUB_OUTPUT
             echo "Changelogs exist for this PR, delete them now"
           else
@@ -174,27 +187,26 @@ jobs:
           fi
 
       - name: "Delete unreleased Changelogs"
-        if: ${{ steps.unreleased_changelog_check.outputs.unreleased_exists }}
+        if: ${{ steps.unreleased_changelog_check.outputs.unreleased_exists }} = true
         run: |
           rm .changes/unreleased/*.yaml
 
       - name: Delete unreleased Changelogs
-        if: ${{ steps.prerelease_changelog_check.outputs.prerelease_exists }}
+        if: ${{ steps.prerelease_changelog_check.outputs.prerelease_exists }} = true
         run: |
-          rm .changes/${{ steps.semver.outputs.base-version }}/*.yaml
-          rm .changes/${{ steps.semver.outputs.base-version }}.*.md  #TODO: figure this regex
+          rm .changes/${{ needs.prep_work.outputs.base_version }}/*.yaml
+          rm .changes/${{ needs.prep_work.outputs.base_version }}.*.md  #TODO: figure this regex
 
       - name: "Cleanup CHANGELOG.md"
         run: |
           changie merge
-          git status
 
       - name: Commit changelog cleanup to branch
         uses: EndBug/add-and-commit@v7
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
-          message: 'Clean up changelog on ${{ inputs.main_branch_name }}'
+          message: 'Clean up changelog on main'
           branch: '${{ steps.variables.output.BRANCH_NAME }}'
           push: 'origin origin/${{ steps.variables.output.BRANCH_NAME }}'
 
