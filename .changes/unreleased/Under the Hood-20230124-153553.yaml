@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Revised and simplified various structured logging events
+time: 2023-01-24T15:35:53.065356-05:00
+custom:
+  Author: peterallenwebb
+  Issue: 6664 6665 6666
