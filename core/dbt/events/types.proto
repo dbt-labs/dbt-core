@@ -839,7 +839,21 @@ message UnableToPartialParseMsg {
     UnableToPartialParse data = 2;
 }
 
-// Skipped I025, I026, I027
+// I025
+message StateCheckVarsHash {
+    string checksum = 1;
+    string vars = 2;
+    string profile = 3;
+    string target = 4;
+    string version = 5;
+}
+
+message StateCheckVarsHashMsg {
+    EventInfo info = 1;
+    StateCheckVarsHash data = 2;
+}
+
+// Skipped I026, I027
 
 
 // I028

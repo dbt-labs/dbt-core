@@ -8,6 +8,7 @@ from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tu
 from itertools import chain
 import time
 from dbt.events.base_types import EventLevel
+import pprint
 
 import dbt.exceptions
 import dbt.tracking
@@ -29,6 +30,8 @@ from dbt.events.types import (
     ParsedFileLoadFailed,
     InvalidDisabledTargetInTestNode,
     NodeNotFoundOrDisabled,
+    StateCheckVarsHash,
+    Note,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
@@ -569,6 +572,12 @@ class ManifestLoader:
                     reason="config vars, config profile, or config target have changed"
                 )
             )
+            fire_event(
+                Note(
+                    msg=f"previous checksum: {self.manifest.state_check.vars_hash.checksum}, current checksum: {manifest.state_check.vars_hash.checksum}"
+                ),
+                level=EventLevel.DEBUG,
+            )
             valid = False
             reparse_reason = ReparseReason.vars_changed
         if self.manifest.state_check.profile_hash != manifest.state_check.profile_hash:
@@ -702,14 +711,26 @@ class ManifestLoader:
         # arg vars, but since any changes to that file will cause state_check
         # to not pass, it doesn't matter.  If we move to more granular checking
         # of env_vars, that would need to change.
+        # We are using the parsed cli_vars instead of config.args.vars, in order
+        # to sort them and avoid reparsing because of ordering issues.
+        stringified_cli_vars = pprint.pformat(config.cli_vars)
         vars_hash = FileHash.from_contents(
             "\x00".join(
                 [
-                    getattr(config.args, "vars", "{}") or "{}",
+                    stringified_cli_vars,
                     getattr(config.args, "profile", "") or "",
                     getattr(config.args, "target", "") or "",
                     __version__,
                 ]
+            )
+        )
+        fire_event(
+            StateCheckVarsHash(
+                checksum=vars_hash.checksum,
+                vars=stringified_cli_vars,
+                profile=config.args.profile,
+                target=config.args.target,
+                version=__version__,
             )
         )
 
