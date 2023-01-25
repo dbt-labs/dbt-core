@@ -1,8 +1,8 @@
-import http
 import os
 import shutil
 import socketserver
 import webbrowser
+from http.server import SimpleHTTPRequestHandler
 
 import click
 
@@ -20,9 +20,7 @@ class ServeTask(ConfiguredTask):
         if self.args.browser:
             webbrowser.open_new_tab(f"http://localhost:{port}")
 
-        handler = http.server.SimpleHTTPRequestHandler
-
-        with socketserver.TCPServer(("", port), handler) as httpd:
+        with socketserver.TCPServer(("", port), SimpleHTTPRequestHandler) as httpd:
             click.echo(f"Serving docs at {port}")
             click.echo(f"To access from your browser, navigate to: http://localhost:{port}")
             click.echo("\n\n")
