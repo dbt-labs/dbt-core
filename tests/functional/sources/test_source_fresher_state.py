@@ -112,7 +112,7 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
                     "warn_after": {"count": 10, "period": "hour"},
                     "error_after": {"count": 18, "period": "hour"},
                 },
-                "adapter_response": {},
+                "adapter_response": {"_message": "SELECT 1", "code": "SELECT", "rows_affected": 1},
                 "thread_id": AnyStringWith("Thread-"),
                 "execution_time": AnyFloat(),
                 "timing": [

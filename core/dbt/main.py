@@ -229,15 +229,15 @@ def run_from_args(parsed):
     if task.config is not None:
         log_path = getattr(task.config, "log_path", None)
     log_manager.set_path(log_path)
-    # if 'list' task: set stdout to WARN instead of INFO
-    level_override = parsed.cls.pre_init_hook(parsed)
-    setup_event_logger(log_path or "logs", level_override)
+    setup_event_logger(log_path or "logs")
 
-    fire_event(MainReportVersion(version=str(dbt.version.installed), log_version=LOG_VERSION))
-    fire_event(MainReportArgs(args=args_to_dict(parsed)))
+    # For the ListTask, filter out system report logs to allow piping ls output to jq, etc
+    if not list_task.ListTask == parsed.cls:
+        fire_event(MainReportVersion(version=str(dbt.version.installed), log_version=LOG_VERSION))
+        fire_event(MainReportArgs(args=args_to_dict(parsed)))
 
-    if dbt.tracking.active_user is not None:  # mypy appeasement, always true
-        fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
+        if dbt.tracking.active_user is not None:  # mypy appeasement, always true
+            fire_event(MainTrackingUserState(user_state=dbt.tracking.active_user.state()))
 
     results = None
 

@@ -1,10 +1,11 @@
-import os
-from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Optional
-
+import argparse
 import networkx as nx  # type: ignore
+import os
 import pickle
 import sqlparse
+
+from collections import defaultdict
+from typing import List, Dict, Any, Tuple, Optional
 
 from dbt import flags
 from dbt.adapters.factory import get_adapter
@@ -32,6 +33,7 @@ from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.events.format import pluralize
 import dbt.tracking
+import dbt.task.list as list_task
 
 graph_file_name = "graph.gpickle"
 
@@ -473,7 +475,13 @@ class Compiler:
 
         if write:
             self.write_graph_file(linker, manifest)
-        print_compile_stats(stats)
+
+        # Do not print these for ListTask's
+        if not (
+            self.config.args.__class__ == argparse.Namespace
+            and self.config.args.cls == list_task.ListTask
+        ):
+            print_compile_stats(stats)
 
         return Graph(linker.graph)
 

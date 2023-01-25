@@ -105,10 +105,10 @@ class FreshnessRunner(BaseRunner):
             )
 
         relation = self.adapter.Relation.create_from_source(compiled_node)
-        # given a Source, calculate its fresnhess.
+        # given a Source, calculate its freshness.
         with self.adapter.connection_for(compiled_node):
             self.adapter.clear_transaction()
-            freshness = self.adapter.calculate_freshness(
+            adapter_response, freshness = self.adapter.calculate_freshness(
                 relation,
                 compiled_node.loaded_at_field,
                 compiled_node.freshness.filter,
@@ -124,7 +124,7 @@ class FreshnessRunner(BaseRunner):
             timing=[],
             execution_time=0,
             message=None,
-            adapter_response={},
+            adapter_response=adapter_response.to_dict(omit_none=True),
             failures=None,
             **freshness,
         )

@@ -1499,15 +1499,6 @@ class SeedHeader(InfoLevel, pt.SeedHeader):
 
 
 @dataclass
-class SeedHeaderSeparator(InfoLevel, pt.SeedHeaderSeparator):
-    def code(self):
-        return "Q005"
-
-    def message(self) -> str:
-        return "-" * self.len_header
-
-
-@dataclass
 class SQLRunnerException(DebugLevel, pt.SQLRunnerException):  # noqa
     def code(self):
         return "Q006"
@@ -2084,13 +2075,18 @@ class OpenCommand(InfoLevel, pt.OpenCommand):
         return msg
 
 
+# We use events to create console output, but also think of them as a sequence of important and
+# meaningful occurrences to be used for debugging and monitoring. The Formatting event helps eases
+# the tension between these two goals by allowing empty lines, heading separators, and other
+# formatting to be written to the console, while they can be ignored for other purposes. For
+# general information that isn't simple formatting, the Note event should be used instead.
 @dataclass
-class EmptyLine(InfoLevel, pt.EmptyLine):
+class Formatting(InfoLevel, pt.Formatting):
     def code(self):
         return "Z017"
 
     def message(self) -> str:
-        return ""
+        return self.msg
 
 
 @dataclass
@@ -2344,4 +2340,42 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
 
     def message(self) -> str:
         # This is the message on the result object, cannot be formatted in event
+        return self.msg
+
+
+@dataclass
+class DebugCmdOut(InfoLevel, pt.DebugCmdOut):
+    def code(self):
+        return "Z047"
+
+    def message(self) -> str:
+        return self.msg
+
+
+@dataclass
+class DebugCmdResult(InfoLevel, pt.DebugCmdResult):
+    def code(self):
+        return "Z048"
+
+    def message(self) -> str:
+        return self.msg
+
+
+@dataclass
+class ListCmdOut(InfoLevel, pt.ListCmdOut):
+    def code(self):
+        return "Z049"
+
+    def message(self) -> str:
+        return self.msg
+
+
+# The Note event provides a way to log messages which aren't likely to be useful as more structured events.
+# For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
+@dataclass
+class Note(InfoLevel, pt.Note):
+    def code(self):
+        return "Z050"
+
+    def message(self) -> str:
         return self.msg

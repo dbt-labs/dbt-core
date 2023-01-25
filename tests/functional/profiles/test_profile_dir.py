@@ -1,13 +1,17 @@
-import io
 import os
 import pytest
 import yaml
-from contextlib import contextmanager, redirect_stdout
+
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List
 
 import dbt.flags as flags
-from dbt.tests.util import run_dbt, write_file, rm_file
+
+from dbt.tests.util import (
+    run_dbt_and_capture,
+    write_file,
+    rm_file,
+)
 
 
 @pytest.fixture(scope="class")
@@ -84,16 +88,6 @@ def environ(env):
                 os.environ[key] = value
 
 
-# Use this if you need to capture the standard out in a test
-def run_dbt_and_capture_stdout(args: List[str] = None, expect_pass=True):
-    stringbuf = io.StringIO()
-    with redirect_stdout(stringbuf):
-        res = run_dbt(args, expect_pass=expect_pass)
-    stdout = stringbuf.getvalue()
-
-    return res, stdout
-
-
 class TestProfiles:
     def dbt_debug(self, project_dir_cli_arg=None, profiles_dir_cli_arg=None):
         # begin with no command-line args or user config (from profiles.yml)
@@ -106,8 +100,8 @@ class TestProfiles:
         if profiles_dir_cli_arg:
             command.extend(["--profiles-dir", str(profiles_dir_cli_arg)])
 
-        # get the output of `dbt debug` regarless of the exit code
-        return run_dbt_and_capture_stdout(command, expect_pass=None)
+        # get the output of `dbt debug` regardless of the exit code
+        return run_dbt_and_capture(command, expect_pass=None)
 
     @pytest.mark.parametrize(
         "project_dir_cli_arg, working_directory",

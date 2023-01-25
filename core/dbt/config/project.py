@@ -75,6 +75,11 @@ Validator Error:
 {error}
 """
 
+MISSING_DBT_PROJECT_ERROR = """\
+No dbt_project.yml found at expected path {path}
+Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+"""
+
 
 @runtime_checkable
 class IsFQNResource(Protocol):
@@ -163,9 +168,7 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
     # get the project.yml contents
     if not path_exists(project_yaml_filepath):
-        raise DbtProjectError(
-            "no dbt_project.yml found at expected path {}".format(project_yaml_filepath)
-        )
+        raise DbtProjectError(MISSING_DBT_PROJECT_ERROR.format(path=project_yaml_filepath))
 
     project_dict = _load_yaml(project_yaml_filepath)
 
