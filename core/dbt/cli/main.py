@@ -11,6 +11,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.task.clean import CleanTask
 from dbt.task.compile import CompileTask
 from dbt.task.deps import DepsTask
+from dbt.task.debug import DebugTask
 from dbt.task.run import RunTask
 from dbt.task.test import TestTask
 from dbt.task.snapshot import SnapshotTask
@@ -258,10 +259,19 @@ def compile(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
 def debug(ctx, **kwargs):
     """Show some helpful information about dbt for debugging. Not to be confused with the --debug option which increases verbosity."""
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {ctx.obj['flags']}")
-    return None, True
+    task = DebugTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt deps

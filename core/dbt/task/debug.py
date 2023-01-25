@@ -12,7 +12,6 @@ import dbt.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
-from dbt.config.utils import parse_cli_vars
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
@@ -71,11 +70,7 @@ class DebugTask(BaseTask):
             else:
                 self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
-        # N.B. parse_cli_vars is embedded into the param when using click.
-        # replace this with:
-        # cli_vars: Dict[str, Any] = getattr(args, "vars", {})
-        # when this task is refactored for click
-        self.cli_vars = parse_cli_vars(getattr(self.args, "vars", "{}"))
+        self.cli_vars: Dict[str, Any] = getattr(args, "vars", "{}")
 
         # set by _load_*
         self.profile: Optional[Profile] = None
@@ -258,7 +253,7 @@ class DebugTask(BaseTask):
                     profile_name,
                     self.args.profile,
                     self.args.target,
-                    self.args.threads,
+                    getattr(self.args, "threads", None),
                 )
             except dbt.exceptions.DbtConfigError as exc:
                 profile_errors.append(str(exc))
