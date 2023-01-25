@@ -843,6 +843,15 @@ class UnableToPartialParse(InfoLevel, pt.UnableToPartialParse):
         return f"Unable to do partial parsing because {self.reason}"
 
 
+@dataclass
+class StateCheckVarsHash(DebugLevel, pt.StateCheckVarsHash):
+    def code(self):
+        return "I025"
+
+    def message(self) -> str:
+        return f"checksum: {self.checksum}, vars: {self.vars}, profile: {self.profile}, target: {self.target}, version: {self.version}"
+
+
 # Skipped I025, I026, I026, I027
 
 

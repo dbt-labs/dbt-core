@@ -188,6 +188,7 @@ sample_values = [
     PartialParsingError(exc_info={}),
     PartialParsingSkipParsing(),
     UnableToPartialParse(reason="something went wrong"),
+    StateCheckVarsHash(vars="testing", target="testing", profile="testing"),
     PartialParsingNotEnabled(),
     ParsedFileLoadFailed(path="", exc="", exc_info=""),
     StaticParserCausedJinjaRendering(path=""),
