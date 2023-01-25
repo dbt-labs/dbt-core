@@ -98,7 +98,7 @@ on:
       test_run:
         description: "Test run (Publish release as draft)"
         type: boolean
-        default: false
+        default: true
         required: false
       nightly_release:
         description: "Nightly release to dev environment"

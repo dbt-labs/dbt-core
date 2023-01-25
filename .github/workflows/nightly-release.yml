@@ -1,9 +1,9 @@
 # **what?**
-# Nightly releases to GitHub and PyPI. This workflow produce the following outcome:
+# Nightly releases to GitHub and PyPI. This workflow produces the following outcome:
 # - generate and validate data for night release (commit SHA, version number, release branch);
 # - pass data to release workflow;
-# - night build will be pushed to test PyPI;
 # - night release will be pushed to GitHub as a draft release;
+# - night build will be pushed to test PyPI;
 #
 # **why?**
 # Ensure an automated and tested release process for nightly builds
@@ -11,12 +11,15 @@
 # **when?**
 # This workflow runs on schedule or can be run manually on demand.
 
-name: Nightly Release to GitHub and PyPi
+name: Nightly Test Release to GitHub and PyPi
 
 on:
   workflow_dispatch: # for manual triggering
   schedule:
     - cron: 0 9 * * *
+
+permissions:
+  contents: write # this is the permission that allows creating a new release
 
 defaults:
   run:
