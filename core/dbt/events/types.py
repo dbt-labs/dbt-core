@@ -849,7 +849,7 @@ class StateCheckVarsHash(DebugLevel, pt.StateCheckVarsHash):
         return "I025"
 
     def message(self) -> str:
-        return "checksum: {self.checksum}, vars: {self.vars}, profile: {self.profile}, target: {self.target}, version: {self.version}"
+        return f"checksum: {self.checksum}, vars: {self.vars}, profile: {self.profile}, target: {self.target}, version: {self.version}"
 
 
 # Skipped I025, I026, I026, I027
