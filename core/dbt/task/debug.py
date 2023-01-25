@@ -70,7 +70,7 @@ class DebugTask(BaseTask):
             else:
                 self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
-        self.cli_vars: Dict[str, Any] = getattr(args, "vars", "{}")
+        self.cli_vars: Dict[str, Any] = args.vars
 
         # set by _load_*
         self.profile: Optional[Profile] = None
@@ -253,6 +253,8 @@ class DebugTask(BaseTask):
                     profile_name,
                     self.args.profile,
                     self.args.target,
+                    # TODO: Generalize safe access to flags.THREADS:
+                    # https://github.com/dbt-labs/dbt-core/issues/6259
                     getattr(self.args, "threads", None),
                 )
             except dbt.exceptions.DbtConfigError as exc:
