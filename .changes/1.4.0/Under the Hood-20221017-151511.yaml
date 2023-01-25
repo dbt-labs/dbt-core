@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Fixed extra whitespace in strings introduced by black.
-time: 2022-10-17T15:15:11.499246-05:00
-custom:
-  Author: luke-bassett
-  Issue: "1350"

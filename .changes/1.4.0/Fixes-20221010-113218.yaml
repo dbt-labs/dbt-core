@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add validation of enabled config for metrics, exposures and sources
-time: 2022-10-10T11:32:18.752322-05:00
-custom:
-  Author: emmyoop
-  Issue: "6030"

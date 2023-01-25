@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix behavior of --favor-state with --defer
-time: 2023-01-19T11:11:01.354227+01:00
-custom:
-  Author: jtcohen6
-  Issue: "6617"
