@@ -2,10 +2,11 @@ import pytest
 from click.testing import CliRunner
 
 from dbt.cli.main import cli
-from tests.cli.fixtures import BaseConfigProject
+from tests.functional.minimal_cli.fixtures import BaseConfigProject
 
 
-class TestCli(BaseConfigProject):
+class TestMinimalCli(BaseConfigProject):
+    """Test the minimal/happy-path for the CLI using the Click CliRunner"""
     @pytest.fixture(scope="class")
     def runner(self):
         return CliRunner()
