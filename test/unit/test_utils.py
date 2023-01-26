@@ -145,14 +145,14 @@ class TestBytesFormatting(unittest.TestCase):
         self.assertEqual(dbt.utils.format_bytes(-1), '-1.0 Bytes')
         self.assertEqual(dbt.utils.format_bytes(0), '0.0 Bytes')
         self.assertEqual(dbt.utils.format_bytes(20), '20.0 Bytes')
-        self.assertEqual(dbt.utils.format_bytes(1030), '1.0 KB')
-        self.assertEqual(dbt.utils.format_bytes(1024**2*1.5), '1.5 MB')
-        self.assertEqual(dbt.utils.format_bytes(1024**3*52.6), '52.6 GB')
-        self.assertEqual(dbt.utils.format_bytes(1024**4*128), '128.0 TB')
-        self.assertEqual(dbt.utils.format_bytes(1024**5), '1.0 PB')
-        self.assertEqual(dbt.utils.format_bytes(1024**5*31.4), '31.4 PB')
-        self.assertEqual(dbt.utils.format_bytes(1024**6), '1024.0 PB')
-        self.assertEqual(dbt.utils.format_bytes(1024**6*42), '43008.0 PB')
+        self.assertEqual(dbt.utils.format_bytes(1030), '1.0 KiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**2*1.5), '1.5 MiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**3*52.6), '52.6 GiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**4*128), '128.0 TiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**5), '1.0 PiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**5*31.4), '31.4 PiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**6), '1024.0 PiB')
+        self.assertEqual(dbt.utils.format_bytes(1024**6*42), '43008.0 PiB')
 
 
 class TestRowsNumberFormatting(unittest.TestCase):
