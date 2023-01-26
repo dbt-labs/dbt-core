@@ -574,7 +574,7 @@ class ManifestLoader:
             )
             fire_event(
                 Note(
-                    msg=f"previous checksum: {self.manifest.state_check.vars_hash.checksum}, current checksum: {manifest.state_check.vars_hash.checksum}"
+                    msg=f"previous checksum: {manifest.state_check.vars_hash.checksum}, current checksum: {self.manifest.state_check.vars_hash.checksum}"
                 ),
                 level=EventLevel.DEBUG,
             )
