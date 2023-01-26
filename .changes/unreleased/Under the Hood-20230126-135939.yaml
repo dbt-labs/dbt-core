@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: ' Optimized GraphQueue to remove graph analysis bottleneck in large dags.'
+time: 2023-01-26T13:59:39.518345-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6759"
