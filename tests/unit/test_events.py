@@ -1,29 +1,18 @@
 # flake8: noqa
-from dbt.events.test_types import UnitTestInfo
-from dbt.events import AdapterLogger
-from dbt.events.functions import event_to_json, LOG_VERSION, event_to_dict
-from dbt.events.types import *
-from dbt.events.test_types import *
+import re
+from typing import TypeVar
 
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.nodes import ModelNode, NodeConfig, DependsOn
+from dbt.events import AdapterLogger
 from dbt.events.base_types import (
     BaseEvent,
-    DebugLevel,
-    WarnLevel,
-    InfoLevel,
-    ErrorLevel,
     TestLevel,
 )
-from dbt.events.proto_types import ListOfStrings, NodeInfo, RunResultMsg, ReferenceKeyMsg
-from importlib import reload
-import dbt.events.functions as event_funcs
-import dbt.flags as flags
-import inspect
-import json
-from dbt.contracts.graph.nodes import ModelNode, NodeConfig, DependsOn
-from dbt.contracts.files import FileHash
-from mashumaro.types import SerializableType
-from typing import Generic, TypeVar, Dict
-import re
+from dbt.events.functions import event_to_json, event_to_dict
+from dbt.events.test_types import *
+from dbt.events.types import *
+
 
 # takes in a class and finds any subclasses for it
 def get_all_subclasses(cls):
@@ -459,9 +448,6 @@ sample_values = [
     FinishedCleanPaths(),
     OpenCommand(open_cmd="", profiles_dir=""),
     EmptyLine(),
-    ServingDocsPort(address="", port=0),
-    ServingDocsAccessInfo(port=""),
-    ServingDocsExitInfo(),
     RunResultWarning(resource_type="", node_name="", path=""),
     RunResultFailure(resource_type="", node_name="", path=""),
     StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0,"total": 0}),
