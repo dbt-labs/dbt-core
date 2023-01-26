@@ -1,5 +1,0 @@
-name: jaffle_shop
-profile: jaffle_shop
-version: '0.1.0'
-config-version: 2
-clean-targets: [target, dbt_packages, logs]

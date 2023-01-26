@@ -2464,33 +2464,6 @@ class EmptyLine(InfoLevel, pt.EmptyLine):
 
 
 @dataclass
-class ServingDocsPort(InfoLevel, pt.ServingDocsPort):
-    def code(self):
-        return "Z018"
-
-    def message(self) -> str:
-        return f"Serving docs at {self.address}:{self.port}"
-
-
-@dataclass
-class ServingDocsAccessInfo(InfoLevel, pt.ServingDocsAccessInfo):
-    def code(self):
-        return "Z019"
-
-    def message(self) -> str:
-        return f"To access from your browser, navigate to:  http://localhost:{self.port}"
-
-
-@dataclass
-class ServingDocsExitInfo(InfoLevel, pt.ServingDocsExitInfo):
-    def code(self):
-        return "Z020"
-
-    def message(self) -> str:
-        return "Press Ctrl+C to exit."
-
-
-@dataclass
 class RunResultWarning(WarnLevel, pt.RunResultWarning):
     def code(self):
         return "Z021"
