@@ -16,6 +16,10 @@ class TestDbtRunner:
         with pytest.raises(dbtUsageException):
             dbt.invoke(["deps", "--invalid-option"])
 
+    def test_command_mutually_exclusive_option(self, dbt: dbtRunner) -> None:
+        with pytest.raises(dbtUsageException):
+            dbt.invoke(["--warn-error", "--warn-error-options", '{"include": "all"}', "deps"])
+
     def test_invalid_command(self, dbt: dbtRunner) -> None:
         with pytest.raises(dbtUsageException):
             dbt.invoke(["invalid-command"])

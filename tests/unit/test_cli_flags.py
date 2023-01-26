@@ -7,6 +7,7 @@ from typing import List
 from dbt.cli.main import cli
 from dbt.contracts.project import UserConfig
 from dbt.cli.flags import Flags
+from dbt.helper_types import WarnErrorOptions
 
 
 class TestFlags:
@@ -17,6 +18,10 @@ class TestFlags:
     @pytest.fixture(scope="class")
     def run_context(self) -> click.Context:
         return self.make_dbt_context("run", ["run"])
+
+    @pytest.fixture
+    def user_config(self) -> UserConfig:
+        return UserConfig()
 
     def test_which(self, run_context):
         flags = Flags(run_context)
@@ -53,9 +58,7 @@ class TestFlags:
         flags = Flags(run_context)
         assert flags.ANONYMOUS_USAGE_STATS == expected_anonymous_usage_stats
 
-    def test_empty_user_config_uses_default(self, run_context):
-        user_config = UserConfig()
-
+    def test_empty_user_config_uses_default(self, run_context, user_config):
         flags = Flags(run_context, user_config)
         assert flags.USE_COLORS == run_context.params["use_colors"]
 
@@ -63,8 +66,8 @@ class TestFlags:
         flags = Flags(run_context, None)
         assert flags.USE_COLORS == run_context.params["use_colors"]
 
-    def test_prefer_user_config_to_default(self, run_context):
-        user_config = UserConfig(use_colors=False)
+    def test_prefer_user_config_to_default(self, run_context, user_config):
+        user_config.use_colors = False
         # ensure default value is not the same as user config
         assert run_context.params["use_colors"] is not user_config.use_colors
 
@@ -78,10 +81,81 @@ class TestFlags:
         flags = Flags(context, user_config)
         assert flags.USE_COLORS
 
-    def test_prefer_env_to_user_config(self, monkeypatch):
-        user_config = UserConfig(use_colors=False)
+    def test_prefer_env_to_user_config(self, monkeypatch, user_config):
+        user_config.use_colors = False
         monkeypatch.setenv("DBT_USE_COLORS", "True")
         context = self.make_dbt_context("run", ["run"])
 
         flags = Flags(context, user_config)
         assert flags.USE_COLORS
+
+    def test_mutually_exclusive_options_passed_separately(self):
+        """Assert options that are mutually exclusive can be passed separately without error"""
+        warn_error_context = self.make_dbt_context("run", ["--warn-error", "run"])
+
+        flags = Flags(warn_error_context)
+        assert flags.WARN_ERROR
+
+        warn_error_options_context = self.make_dbt_context(
+            "run", ["--warn-error-options", '{"include": "all"}', "run"]
+        )
+        flags = Flags(warn_error_options_context)
+        assert flags.WARN_ERROR_OPTIONS == WarnErrorOptions(include="all")
+
+    def test_mutually_exclusive_options_from_cli(self):
+        context = self.make_dbt_context(
+            "run", ["--warn-error", "--warn-error-options", '{"include": "all"}', "run"]
+        )
+
+        with pytest.raises(click.UsageError):
+            Flags(context)
+
+    @pytest.mark.parametrize("warn_error", [True, False])
+    def test_mutually_exclusive_options_from_user_config(self, warn_error, user_config):
+        user_config.warn_error = warn_error
+        context = self.make_dbt_context(
+            "run", ["--warn-error-options", '{"include": "all"}', "run"]
+        )
+
+        with pytest.raises(click.UsageError):
+            Flags(context, user_config)
+
+    @pytest.mark.parametrize("warn_error", ["True", "False"])
+    def test_mutually_exclusive_options_from_envvar(self, warn_error, monkeypatch):
+        monkeypatch.setenv("DBT_WARN_ERROR", warn_error)
+        monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include":"all"}')
+        context = self.make_dbt_context("run", ["run"])
+
+        with pytest.raises(click.UsageError):
+            Flags(context)
+
+    @pytest.mark.parametrize("warn_error", [True, False])
+    def test_mutually_exclusive_options_from_cli_and_user_config(self, warn_error, user_config):
+        user_config.warn_error = warn_error
+        context = self.make_dbt_context(
+            "run", ["--warn-error-options", '{"include": "all"}', "run"]
+        )
+
+        with pytest.raises(click.UsageError):
+            Flags(context, user_config)
+
+    @pytest.mark.parametrize("warn_error", ["True", "False"])
+    def test_mutually_exclusive_options_from_cli_and_envvar(self, warn_error, monkeypatch):
+        monkeypatch.setenv("DBT_WARN_ERROR", warn_error)
+        context = self.make_dbt_context(
+            "run", ["--warn-error-options", '{"include": "all"}', "run"]
+        )
+
+        with pytest.raises(click.UsageError):
+            Flags(context)
+
+    @pytest.mark.parametrize("warn_error", ["True", "False"])
+    def test_mutually_exclusive_options_from_user_config_and_envvar(
+        self, user_config, warn_error, monkeypatch
+    ):
+        user_config.warn_error = warn_error
+        monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
+        context = self.make_dbt_context("run", ["run"])
+
+        with pytest.raises(click.UsageError):
+            Flags(context, user_config)
