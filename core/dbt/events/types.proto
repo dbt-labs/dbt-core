@@ -2271,6 +2271,16 @@ message RunResultWarningMessageMsg {
     RunResultWarningMessage data = 2;
 }
 
+// Z050
+message Note {
+    string msg = 1;
+}
+
+message NoteMsg {
+    EventInfo info = 1;
+    Note data = 2;
+}
+
 // T - Integration tests
 
 // T001

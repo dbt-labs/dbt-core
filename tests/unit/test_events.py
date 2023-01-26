@@ -393,6 +393,7 @@ sample_values = [
     FlushEventsFailure(),
     TrackingInitializeFailure(),
     RunResultWarningMessage(),
+    Note(),
 
     # T - tests ======================
     IntegrationTestInfo(),

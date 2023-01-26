@@ -2864,6 +2864,19 @@ class RunResultWarningMessageMsg(betterproto.Message):
 
 
 @dataclass
+class Note(betterproto.Message):
+    """Z050"""
+
+    msg: str = betterproto.string_field(1)
+
+
+@dataclass
+class NoteMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "Note" = betterproto.message_field(2)
+
+
+@dataclass
 class IntegrationTestInfo(betterproto.Message):
     """T001"""
 

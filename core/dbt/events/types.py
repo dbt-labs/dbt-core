@@ -2354,3 +2354,14 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
     def message(self) -> str:
         # This is the message on the result object, cannot be formatted in event
         return self.msg
+
+
+# The Note event provides a way to log messages which aren't likely to be useful as more structured events.
+# For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
+@dataclass
+class Note(InfoLevel, pt.Note):
+    def code(self):
+        return "Z050"
+
+    def message(self) -> str:
+        return self.msg
