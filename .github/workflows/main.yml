@@ -59,9 +59,7 @@ jobs:
           mypy --version
           python -m pip install -r requirements.txt
           python -m pip install -r dev-requirements.txt
-          # Running version disabled temporarily because version isn't implemented on this branch
-          # Please un-comment it when GH #6757 / CT-1926 is complete
-          #dbt --version
+          dbt --version
 
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure

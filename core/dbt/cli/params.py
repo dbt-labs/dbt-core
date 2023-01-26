@@ -4,6 +4,7 @@ import click
 from dbt.cli.options import MultiOption
 from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
+from dbt.version import get_version_information
 
 
 # TODO:  The name (reflected in flags) is a correction!
@@ -373,10 +374,20 @@ vars = click.option(
     default="{}",
 )
 
+
+def version_callback(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(get_version_information())
+    ctx.exit()
+
+
 version = click.option(
     "--version",
+    callback=version_callback,
     envvar=None,
     help="Show version information",
+    is_eager=True,
     is_flag=True,
 )
 

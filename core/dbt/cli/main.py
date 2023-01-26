@@ -91,10 +91,6 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    # Version info
-    if ctx.params["version"]:
-        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        return
 
 
 # dbt build

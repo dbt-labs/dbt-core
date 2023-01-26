@@ -1,5 +1,7 @@
 import pytest
 
+import click.exceptions
+
 from dbt.cli.main import dbtRunner, dbtUsageException
 
 
@@ -21,4 +23,8 @@ class TestDbtRunner:
             dbt.invoke(["invalid-command"])
 
     def test_invoke_version(self, dbt: dbtRunner) -> None:
-        dbt.invoke(["--version"])
+        try:
+            dbt.invoke(["--version"])
+        # click exits early for version, this is intended
+        except click.exceptions.Exit:
+            return
