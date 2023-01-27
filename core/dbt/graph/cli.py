@@ -1,6 +1,6 @@
 # special support for CLI argument parsing.
 # TODO: Remove as part of https://github.com/dbt-labs/dbt-core/issues/6701
-from dbt import flags
+from dbt.flags import get_flag
 from copy import deepcopy
 import itertools
 from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
@@ -45,14 +45,14 @@ def parse_union(
                 components=intersection_components,
                 expect_exists=expect_exists,
                 raw=raw_spec,
-                indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+                indirect_selection=IndirectSelection(get_flag("INDIRECT_SELECTION")),
             )
         )
     return SelectionUnion(
         components=union_components,
         expect_exists=False,
         raw=components,
-        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+        indirect_selection=IndirectSelection(get_flag("INDIRECT_SELECTION")),
     )
 
 
@@ -84,11 +84,11 @@ def parse_difference(
         include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(indirect_selection)
     )
     excluded = parse_union_from_default(
-        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
+        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection(get_flag("INDIRECT_SELECTION"))
     )
     return SelectionDifference(
         components=[included, excluded],
-        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+        indirect_selection=IndirectSelection(get_flag("INDIRECT_SELECTION")),
     )
 
 

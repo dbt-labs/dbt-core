@@ -44,7 +44,7 @@ from dbt.events.types import (
     SeedExceedsLimitChecksumChanged,
 )
 from dbt.events.contextvars import set_contextvars
-from dbt import flags
+from dbt.flags import get_flag
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.utils import cast_dict_to_dict_of_strings
 
@@ -557,7 +557,7 @@ class TestShouldStoreFailures:
     def should_store_failures(self):
         if self.config.store_failures:
             return self.config.store_failures
-        return flags.STORE_FAILURES
+        return get_flag("STORE_FAILURES")
 
     @property
     def is_relational(self):

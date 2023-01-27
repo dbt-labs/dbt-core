@@ -1,4 +1,5 @@
 from dbt.adapters.factory import adapter_management, register_adapter
+from dbt.flags import set_flags
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile
@@ -21,6 +22,7 @@ def preflight(func):
         # Flags
         flags = Flags(ctx)
         ctx.obj["flags"] = flags
+        set_flags(flags)
 
         # Tracking
         initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
