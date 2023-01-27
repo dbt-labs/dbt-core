@@ -15,7 +15,7 @@ from typing import (
     Type,
 )
 
-from dbt import flags
+from dbt.flags import get_flag
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.config.project import load_raw_project
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
@@ -201,7 +201,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         project = Project.from_project_root(
             project_root,
             renderer,
-            verify_version=bool(flags.VERSION_CHECK),
+            verify_version=bool(get_flag("VERSION_CHECK")),
         )
 
         runtime_config = self.from_parts(

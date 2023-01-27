@@ -14,7 +14,7 @@ import pprint
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
-import dbt.flags as flags
+from dbt.flags import get_flag
 
 from dbt.adapters.factory import (
     get_adapter,
@@ -649,7 +649,7 @@ class ManifestLoader:
         return False
 
     def read_manifest_for_partial_parse(self) -> Optional[Manifest]:
-        if not flags.PARTIAL_PARSE:
+        if not get_flag("PARTIAL_PARSE"):
             fire_event(PartialParsingNotEnabled())
             return None
         path = os.path.join(
@@ -692,8 +692,8 @@ class ManifestLoader:
 
     def build_perf_info(self):
         mli = ManifestLoaderInfo(
-            is_partial_parse_enabled=flags.PARTIAL_PARSE,
-            is_static_analysis_enabled=flags.STATIC_PARSER,
+            is_partial_parse_enabled=get_flag("PARTIAL_PARSE"),
+            is_static_analysis_enabled=get_flag("STATIC_PARSER"),
         )
         for project in self.all_projects.values():
             project_info = ProjectLoaderInfo(
@@ -760,7 +760,7 @@ class ManifestLoader:
         profile_env_vars_hash = FileHash.from_contents(env_var_str)
 
         # Create a FileHash of the profile file
-        profile_path = os.path.join(flags.PROFILES_DIR, "profiles.yml")
+        profile_path = os.path.join(get_flag("PROFILES_DIR"), "profiles.yml")
         with open(profile_path) as fp:
             profile_hash = FileHash.from_contents(fp.read())
 
