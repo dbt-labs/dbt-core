@@ -227,4 +227,4 @@ jobs:
       status: "failure"
 
     secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_TEST_CHANNEL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
