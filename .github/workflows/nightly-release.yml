@@ -11,7 +11,7 @@
 # **when?**
 # This workflow runs on schedule or can be run manually on demand.
 
-name: Nightly Test Release to GitHub and PyPi
+name: Nightly Test Release to GitHub and PyPI
 
 on:
   workflow_dispatch: # for manual triggering
