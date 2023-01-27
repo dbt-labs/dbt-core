@@ -51,7 +51,6 @@ select 1
 
 
 class BaseConfigProject:
-
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -59,11 +58,7 @@ class BaseConfigProject:
             "profile": "jaffle_shop",
             "version": "0.1.0",
             "config-version": 2,
-            "clean-targets": [
-                "target",
-                "dbt_packages",
-                "logs"
-            ]
+            "clean-targets": ["target", "dbt_packages", "logs"],
         }
 
     @pytest.fixture(scope="class")
@@ -78,23 +73,16 @@ class BaseConfigProject:
                         "host": "localhost",
                         "user": "root",
                         "port": 5432,
-                        "password": "password"
+                        "password": "password",
                     }
                 },
-                "target": "dev"
+                "target": "dev",
             }
         }
 
     @pytest.fixture(scope="class")
     def packages(self):
-        return {
-            "packages": [
-                {
-                    "package": "dbt-labs/dbt_utils",
-                    "version": "1.0.0"
-                }
-            ]
-        }
+        return {"packages": [{"package": "dbt-labs/dbt_utils", "version": "1.0.0"}]}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -105,9 +93,7 @@ class BaseConfigProject:
 
     @pytest.fixture(scope="class")
     def snapshots(self):
-        return {
-            "sample_snapshot.sql": snapshots__sample_snapshot
-        }
+        return {"sample_snapshot.sql": snapshots__sample_snapshot}
 
     @pytest.fixture(scope="class")
     def seeds(self):

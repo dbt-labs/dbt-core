@@ -26,23 +26,28 @@ class TestFlags:
         flags = Flags(run_context)
         assert flags.MP_CONTEXT == get_context("spawn")
 
-    @pytest.mark.parametrize('param', cli.params)
+    @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
         flags = Flags(run_context)
         assert hasattr(flags, param.name.upper())
         assert getattr(flags, param.name.upper()) == run_context.params[param.name.lower()]
 
-    @pytest.mark.parametrize('do_not_track,expected_anonymous_usage_stats', [
-        ("1", False),
-        ("t", False),
-        ("true", False),
-        ("y", False),
-        ("yes", False),
-        ("false", True),
-        ("anything", True),
-        ("2", True),
-    ])
-    def test_anonymous_usage_state(self, monkeypatch, run_context, do_not_track, expected_anonymous_usage_stats):
+    @pytest.mark.parametrize(
+        "do_not_track,expected_anonymous_usage_stats",
+        [
+            ("1", False),
+            ("t", False),
+            ("true", False),
+            ("y", False),
+            ("yes", False),
+            ("false", True),
+            ("anything", True),
+            ("2", True),
+        ],
+    )
+    def test_anonymous_usage_state(
+        self, monkeypatch, run_context, do_not_track, expected_anonymous_usage_stats
+    ):
         monkeypatch.setenv("DO_NOT_TRACK", do_not_track)
 
         flags = Flags(run_context)
@@ -52,16 +57,16 @@ class TestFlags:
         user_config = UserConfig()
 
         flags = Flags(run_context, user_config)
-        assert flags.USE_COLORS == run_context.params['use_colors']
+        assert flags.USE_COLORS == run_context.params["use_colors"]
 
     def test_none_user_config_uses_default(self, run_context):
         flags = Flags(run_context, None)
-        assert flags.USE_COLORS == run_context.params['use_colors']
+        assert flags.USE_COLORS == run_context.params["use_colors"]
 
     def test_prefer_user_config_to_default(self, run_context):
         user_config = UserConfig(use_colors=False)
         # ensure default value is not the same as user config
-        assert run_context.params['use_colors'] is not user_config.use_colors
+        assert run_context.params["use_colors"] is not user_config.use_colors
 
         flags = Flags(run_context, user_config)
         assert flags.USE_COLORS == user_config.use_colors

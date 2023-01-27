@@ -125,13 +125,6 @@ class DynamicLevel(BaseEvent):
     pass
 
 
-# DynamicLevel requires that the level be supplied on the
-# event construction call using the "info" function from functions.py
-@dataclass  # type: ignore[misc]
-class DynamicLevel(BaseEvent):
-    pass
-
-
 @dataclass
 class TestLevel(BaseEvent):
     __test__ = False
