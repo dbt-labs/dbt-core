@@ -1,7 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, NoReturn, Union, Type, Iterator, Set
 
-from dbt.exceptions import raise_dependency_error, InternalException
+from dbt.exceptions import (
+    DuplicateDependencyToRootError,
+    DuplicateProjectDependencyError,
+    MismatchedDependencyTypeError,
+    DbtInternalError,
+)
 
 from dbt.config import Project, RuntimeConfig
 from dbt.config.renderer import DbtProjectYamlRenderer
@@ -51,10 +56,7 @@ class PackageListing:
         self.packages[key_str] = value
 
     def _mismatched_types(self, old: UnpinnedPackage, new: UnpinnedPackage) -> NoReturn:
-        raise_dependency_error(
-            f"Cannot incorporate {new} ({new.__class__.__name__}) in {old} "
-            f"({old.__class__.__name__}): mismatched types"
-        )
+        raise MismatchedDependencyTypeError(new, old)
 
     def incorporate(self, package: UnpinnedPackage):
         key: str = self._pick_key(package)
@@ -78,7 +80,7 @@ class PackageListing:
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise InternalException("Invalid package type {}".format(type(contract)))
+                raise DbtInternalError("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod
@@ -105,17 +107,9 @@ def _check_for_duplicate_project_names(
     for package in final_deps:
         project_name = package.get_project_name(config, renderer)
         if project_name in seen:
-            raise_dependency_error(
-                f'Found duplicate project "{project_name}". This occurs when '
-                "a dependency has the same project name as some other "
-                "dependency."
-            )
+            raise DuplicateProjectDependencyError(project_name)
         elif project_name == config.project_name:
-            raise_dependency_error(
-                "Found a dependency with the same name as the root project "
-                f'"{project_name}". Package names must be unique in a project.'
-                " Please rename one of these packages."
-            )
+            raise DuplicateDependencyToRootError(project_name)
         seen.add(project_name)
 
 

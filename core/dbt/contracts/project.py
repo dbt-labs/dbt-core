@@ -249,6 +249,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     printer_width: Optional[int] = None
     write_json: Optional[bool] = None
     warn_error: Optional[bool] = None
+    warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     log_format: Optional[str] = None
     debug: Optional[bool] = None
     version_check: Optional[bool] = None

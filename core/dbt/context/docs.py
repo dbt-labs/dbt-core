@@ -1,8 +1,8 @@
 from typing import Any, Dict, Union
 
 from dbt.exceptions import (
-    doc_invalid_args,
-    doc_target_not_found,
+    DocTargetNotFoundError,
+    DocArgsError,
 )
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
@@ -52,7 +52,7 @@ class DocsRuntimeContext(SchemaYamlContext):
         elif len(args) == 2:
             doc_package_name, doc_name = args
         else:
-            doc_invalid_args(self.node, args)
+            raise DocArgsError(self.node, args)
 
         # Documentation
         target_doc = self.manifest.resolve_doc(
@@ -68,7 +68,9 @@ class DocsRuntimeContext(SchemaYamlContext):
                 # TODO CT-211
                 source_file.add_node(self.node.unique_id)  # type: ignore[union-attr]
         else:
-            doc_target_not_found(self.node, doc_name, doc_package_name)
+            raise DocTargetNotFoundError(
+                node=self.node, target_doc_name=doc_name, target_doc_package=doc_package_name
+            )
 
         return target_doc.block_contents
 

@@ -7,7 +7,7 @@ import json
 import dbt.utils
 from typing import Iterable, List, Dict, Union, Optional, Any
 
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 
 
 BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
@@ -168,7 +168,7 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
             return
         elif not isinstance(value, type(existing_type)):
             # actual type mismatch!
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f"Tables contain columns with the same names ({key}), "
                 f"but different types ({value} vs {existing_type})"
             )

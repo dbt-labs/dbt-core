@@ -1,6 +1,6 @@
 import pytest
 import json
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 from dbt.version import __version__ as dbt_version
 from dbt.tests.util import run_dbt_and_capture
 from dbt.tests.adapter.query_comment.fixtures import MACROS__MACRO_SQL, MODELS__X_SQL
@@ -77,7 +77,7 @@ class BaseMacroInvalidQueryComments(BaseDefaultQueryComments):
         return {"query-comment": "{{ invalid_query_header() }}"}
 
     def run_assert_comments(self):
-        with pytest.raises(RuntimeException):
+        with pytest.raises(DbtRuntimeError):
             self.run_get_json(expect_pass=False)
 
 

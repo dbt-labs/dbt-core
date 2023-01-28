@@ -1,6 +1,6 @@
 import pytest
 from dbt.tests.util import run_dbt
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 
 model_sql = """
 select 1 as id
@@ -30,6 +30,6 @@ class TestDocsGenerateOverride:
         results = run_dbt(["run"])
         assert len(results) == 1
         # this should pick up our failure macro and raise a compilation exception
-        with pytest.raises(CompilationException) as excinfo:
+        with pytest.raises(CompilationError) as excinfo:
             run_dbt(["--warn-error", "docs", "generate"])
         assert "rejected: no catalogs for you" in str(excinfo.value)

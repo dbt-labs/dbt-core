@@ -5,9 +5,9 @@ from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 from dbt.clients.system import write_json, read_json
 from dbt import deprecations
 from dbt.exceptions import (
-    InternalException,
-    RuntimeException,
-    IncompatibleSchemaException,
+    DbtInternalError,
+    DbtRuntimeError,
+    IncompatibleSchemaError,
 )
 from dbt.version import __version__
 from dbt.events.functions import get_invocation_id, get_metadata_vars
@@ -123,7 +123,7 @@ class Readable:
         try:
             data = read_json(path)
         except (EnvironmentError, ValueError) as exc:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 
@@ -237,18 +237,43 @@ def rename_sql_attr(node_content: dict) -> dict:
     return node_content
 
 
+def upgrade_node_content(node_content):
+    rename_sql_attr(node_content)
+    if node_content["resource_type"] != "seed" and "root_path" in node_content:
+        del node_content["root_path"]
+
+
+def upgrade_seed_content(node_content):
+    # Remove compilation related attributes
+    for attr_name in (
+        "language",
+        "refs",
+        "sources",
+        "metrics",
+        "depends_on",
+        "compiled_path",
+        "compiled",
+        "compiled_code",
+        "extra_ctes_injected",
+        "extra_ctes",
+        "relation_name",
+    ):
+        if attr_name in node_content:
+            del node_content[attr_name]
+
+
 def upgrade_manifest_json(manifest: dict) -> dict:
     for node_content in manifest.get("nodes", {}).values():
-        node_content = rename_sql_attr(node_content)
-        if node_content["resource_type"] != "seed" and "root_path" in node_content:
-            del node_content["root_path"]
+        upgrade_node_content(node_content)
+        if node_content["resource_type"] == "seed":
+            upgrade_seed_content(node_content)
     for disabled in manifest.get("disabled", {}).values():
         # There can be multiple disabled nodes for the same unique_id
         # so make sure all the nodes get the attr renamed
         for node_content in disabled:
-            rename_sql_attr(node_content)
-            if node_content["resource_type"] != "seed" and "root_path" in node_content:
-                del node_content["root_path"]
+            upgrade_node_content(node_content)
+            if node_content["resource_type"] == "seed":
+                upgrade_seed_content(node_content)
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
@@ -258,7 +283,7 @@ def upgrade_manifest_json(manifest: dict) -> dict:
         if "root_path" in exposure_content:
             del exposure_content["root_path"]
     for source_content in manifest.get("sources", {}).values():
-        if "root_path" in exposure_content:
+        if "root_path" in source_content:
             del source_content["root_path"]
     for macro_content in manifest.get("macros", {}).values():
         if "root_path" in macro_content:
@@ -266,6 +291,7 @@ def upgrade_manifest_json(manifest: dict) -> dict:
     for doc_content in manifest.get("docs", {}).values():
         if "root_path" in doc_content:
             del doc_content["root_path"]
+        doc_content["resource_type"] = "doc"
     return manifest
 
 
@@ -294,7 +320,7 @@ class VersionedSchema(dbtClassMixin):
         try:
             data = read_json(path)
         except (EnvironmentError, ValueError) as exc:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 
@@ -306,7 +332,7 @@ class VersionedSchema(dbtClassMixin):
                 previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
                 if not cls.is_compatible_version(previous_schema_version):
-                    raise IncompatibleSchemaException(
+                    raise IncompatibleSchemaError(
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )
@@ -331,7 +357,7 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
     def validate(cls, data):
         super().validate(data)
         if cls.dbt_schema_version is None:
-            raise InternalException("Cannot call from_dict with no schema version!")
+            raise DbtInternalError("Cannot call from_dict with no schema version!")
 
 
 class Identifier(ValidatedStringMixin):

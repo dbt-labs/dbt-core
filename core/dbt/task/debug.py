@@ -5,7 +5,11 @@ import sys
 from typing import Optional, Dict, Any, List
 
 from dbt.events.functions import fire_event
-from dbt.events.types import OpenCommand
+from dbt.events.types import (
+    OpenCommand,
+    DebugCmdOut,
+    DebugCmdResult,
+)
 from dbt import flags
 import dbt.clients.system
 import dbt.exceptions
@@ -99,25 +103,25 @@ class DebugTask(BaseTask):
             return not self.any_failure
 
         version = get_installed_version().to_version_string(skip_matcher=True)
-        print("dbt version: {}".format(version))
-        print("python version: {}".format(sys.version.split()[0]))
-        print("python path: {}".format(sys.executable))
-        print("os info: {}".format(platform.platform()))
-        print("Using profiles.yml file at {}".format(self.profile_path))
-        print("Using dbt_project.yml file at {}".format(self.project_path))
-        print("")
+        fire_event(DebugCmdOut(msg="dbt version: {}".format(version)))
+        fire_event(DebugCmdOut(msg="python version: {}".format(sys.version.split()[0])))
+        fire_event(DebugCmdOut(msg="python path: {}".format(sys.executable)))
+        fire_event(DebugCmdOut(msg="os info: {}".format(platform.platform())))
+        fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
+        fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
         self.test_configuration()
         self.test_dependencies()
         self.test_connection()
 
         if self.any_failure:
-            print(red(f"{(pluralize(len(self.messages), 'check'))} failed:"))
+            fire_event(
+                DebugCmdResult(msg=red(f"{(pluralize(len(self.messages), 'check'))} failed:"))
+            )
         else:
-            print(green("All checks passed!"))
+            fire_event(DebugCmdResult(msg=green("All checks passed!")))
 
         for message in self.messages:
-            print(message)
-            print("")
+            fire_event(DebugCmdResult(msg=f"{message}\n"))
 
         return not self.any_failure
 
@@ -273,21 +277,33 @@ class DebugTask(BaseTask):
         return green("OK found")
 
     def test_dependencies(self):
-        print("Required dependencies:")
-        print(" - git [{}]".format(self.test_git()))
-        print("")
+        fire_event(DebugCmdOut(msg="Required dependencies:"))
+
+        logline_msg = self.test_git()
+        fire_event(DebugCmdResult(msg=f" - git [{logline_msg}]\n"))
 
     def test_configuration(self):
+        fire_event(DebugCmdOut(msg="Configuration:"))
+
         profile_status = self._load_profile()
+        fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status}]"))
+
         project_status = self._load_project()
-        print("Configuration:")
-        print("  profiles.yml file [{}]".format(profile_status))
-        print("  dbt_project.yml file [{}]".format(project_status))
+        fire_event(DebugCmdOut(msg=f"  dbt_project.yml file [{project_status}]"))
+
         # skip profile stuff if we can't find a profile name
         if self.profile_name is not None:
-            print("  profile: {} [{}]".format(self.profile_name, self._profile_found()))
-            print("  target: {} [{}]".format(self.target_name, self._target_found()))
-        print("")
+            fire_event(
+                DebugCmdOut(
+                    msg="  profile: {} [{}]\n".format(self.profile_name, self._profile_found())
+                )
+            )
+            fire_event(
+                DebugCmdOut(
+                    msg="  target: {} [{}]\n".format(self.target_name, self._target_found())
+                )
+            )
+
         self._log_project_fail()
         self._log_profile_fail()
 
@@ -348,11 +364,12 @@ class DebugTask(BaseTask):
     def test_connection(self):
         if not self.profile:
             return
-        print("Connection:")
+        fire_event(DebugCmdOut(msg="Connection:"))
         for k, v in self.profile.credentials.connection_info():
-            print("  {}: {}".format(k, v))
-        print("  Connection test: [{}]".format(self._connection_result()))
-        print("")
+            fire_event(DebugCmdOut(msg=f"  {k}: {v}"))
+
+        res = self._connection_result()
+        fire_event(DebugCmdOut(msg=f"  Connection test: [{res}]\n"))
 
     @classmethod
     def validate_connection(cls, target_dict):

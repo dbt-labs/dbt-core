@@ -2,7 +2,7 @@ import pytest
 import os
 import shutil
 from dbt.tests.util import run_dbt
-from dbt.exceptions import IncompatibleSchemaException
+from dbt.exceptions import IncompatibleSchemaError
 from dbt.contracts.graph.manifest import WritableManifest
 
 # This is a *very* simple project, with just one model in it.
@@ -84,7 +84,7 @@ class TestPreviousVersionState:
             results = run_dbt(cli_args, expect_pass=expect_pass)
             assert len(results) == 0
         else:
-            with pytest.raises(IncompatibleSchemaException):
+            with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
 
     def test_compare_state_current(self, project):

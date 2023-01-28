@@ -8,7 +8,7 @@ from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
 from dbt.contracts.connection import HasCredentials
-from dbt.exceptions import DbtProjectError, CompilationException, RecursionException
+from dbt.exceptions import DbtProjectError, CompilationError, RecursionError
 from dbt.utils import deep_map_render
 
 
@@ -40,14 +40,14 @@ class BaseRenderer:
         try:
             with catch_jinja():
                 return get_rendered(value, self.context, native=True)
-        except CompilationException as exc:
+        except CompilationError as exc:
             msg = f"Could not render {value}: {exc.msg}"
-            raise CompilationException(msg) from exc
+            raise CompilationError(msg) from exc
 
     def render_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             return deep_map_render(self.render_entry, data)
-        except RecursionException:
+        except RecursionError:
             raise DbtProjectError(
                 f"Cycle detected: {self.name} input has a reference to itself", project=data
             )
@@ -159,7 +159,8 @@ class DbtProjectYamlRenderer(BaseRenderer):
         if first in {"seeds", "models", "snapshots", "tests"}:
             keypath_parts = {(k.lstrip("+ ") if isinstance(k, str) else k) for k in keypath}
             # model-level hooks
-            if "pre-hook" in keypath_parts or "post-hook" in keypath_parts:
+            late_rendered_hooks = {"pre-hook", "post-hook", "pre_hook", "post_hook"}
+            if keypath_parts.intersection(late_rendered_hooks):
                 return False
 
         return True

@@ -15,7 +15,7 @@ import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.exceptions import ConnectionException
+from dbt.exceptions import ConnectionError, DuplicateAliasError
 from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
@@ -92,13 +92,13 @@ DOCS_PREFIX = "dbt_docs__"
 
 def get_dbt_macro_name(name):
     if name is None:
-        raise dbt.exceptions.InternalException("Got None for a macro name!")
+        raise dbt.exceptions.DbtInternalError("Got None for a macro name!")
     return f"{MACRO_PREFIX}{name}"
 
 
 def get_dbt_docs_name(name):
     if name is None:
-        raise dbt.exceptions.InternalException("Got None for a doc name!")
+        raise dbt.exceptions.DbtInternalError("Got None for a doc name!")
     return f"{DOCS_PREFIX}{name}"
 
 
@@ -228,7 +228,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
         return _deep_map_render(func, value, ())
     except RuntimeError as exc:
         if "maximum recursion depth exceeded" in str(exc):
-            raise dbt.exceptions.RecursionException("Cycle detected in deep_map_render")
+            raise dbt.exceptions.RecursionError("Cycle detected in deep_map_render")
         raise
 
 
@@ -365,7 +365,7 @@ class Translator:
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                dbt.exceptions.raise_duplicate_alias(kwargs, self.aliases, canonical_key)
+                raise DuplicateAliasError(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 
@@ -385,7 +385,7 @@ class Translator:
             return self.translate_mapping(value)
         except RuntimeError as exc:
             if "maximum recursion depth exceeded" in str(exc):
-                raise dbt.exceptions.RecursionException(
+                raise dbt.exceptions.RecursionError(
                     "Cycle detected in a value passed to translate!"
                 )
             raise
@@ -403,7 +403,7 @@ def translate_aliases(
 
     :returns: A dict containing all the values in kwargs referenced by their
         canonical key.
-    :raises: `AliasException`, if a canonical key is defined more than once.
+    :raises: `AliasError`, if a canonical key is defined more than once.
     """
     translator = Translator(aliases, recurse)
     return translator.translate(kwargs)
@@ -624,7 +624,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise ConnectionException("External connection exception occurred: " + str(exc))
+            raise ConnectionError("External connection exception occurred: " + str(exc))
 
 
 # This is used to serialize the args in the run_results and in the logs.
@@ -657,9 +657,10 @@ def args_to_dict(args):
             "store_failures",
             "use_experimental_parser",
         )
+        default_empty_yaml_dict_keys = ("vars", "warn_error_options")
         if key in default_false_keys and var_args[key] is False:
             continue
-        if key == "vars" and var_args[key] == "{}":
+        if key in default_empty_yaml_dict_keys and var_args[key] == "{}":
             continue
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
@@ -683,3 +684,10 @@ def cast_to_int(integer: Optional[int]) -> int:
         return 0
     else:
         return integer
+
+
+def cast_dict_to_dict_of_strings(dct):
+    new_dct = {}
+    for k, v in dct.items():
+        new_dct[str(k)] = str(v)
+    return new_dct

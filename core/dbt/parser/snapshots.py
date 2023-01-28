@@ -4,7 +4,7 @@ from typing import List
 from dbt.dataclass_schema import ValidationError
 
 from dbt.contracts.graph.nodes import IntermediateSnapshotNode, SnapshotNode
-from dbt.exceptions import ParsingException, validator_error_message
+from dbt.exceptions import SnapshopConfigError
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
 from dbt.parser.search import BlockContents, BlockSearcher, FileBlock
@@ -38,6 +38,8 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
         # the target schema must be set if we got here, so overwrite the node's
         # schema
         node.schema = node.config.target_schema
+        # We need to set relation_name again, since database/schema might have changed
+        self._update_node_relation_name(node)
 
         return node
 
@@ -66,7 +68,7 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
         except ValidationError as exc:
-            raise ParsingException(validator_error_message(exc), node)
+            raise SnapshopConfigError(exc, node)
 
     def parse_file(self, file_block: FileBlock) -> None:
         blocks = BlockSearcher(

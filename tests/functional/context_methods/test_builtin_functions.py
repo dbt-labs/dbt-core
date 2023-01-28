@@ -3,7 +3,7 @@ import json
 import os
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 
 macros__validate_set_sql = """
 {% macro validate_set() %}
@@ -112,8 +112,19 @@ class TestContextBuiltins:
         expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
         assert expected in str(result)
 
-        expected = "'send_anonymous_usage_stats': False, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
-        assert expected in str(result)
+        expected = (
+            "'send_anonymous_usage_stats': False",
+            "'quiet': False",
+            "'no_print': False",
+            "'cache_selected_only': False",
+            "'macro': 'validate_invocation'",
+            "'args': '{my_variable: test_variable}'",
+            "'which': 'run-operation'",
+            "'rpc_method': 'run-operation'",
+            "'indirect_selection': 'eager'",
+        )
+        for element in expected:
+            assert element in str(result)
 
     def test_builtin_dbt_metadata_envs_function(self, project, monkeypatch):
         envs = {
@@ -141,9 +152,9 @@ class TestContextBuiltinExceptions:
     # Assert compilation errors are raised with _strict equivalents
     def test_builtin_function_exception(self, project):
         write_file(models__set_exception_sql, project.project_root, "models", "raise.sql")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["compile"])
 
         write_file(models__zip_exception_sql, project.project_root, "models", "raise.sql")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["compile"])

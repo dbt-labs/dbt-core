@@ -1,0 +1,6 @@
+kind: Features
+body: Have dbt debug spit out structured json logs with flags enabled.
+time: 2023-01-07T00:31:57.516063-08:00
+custom:
+  Author: versusfacit
+  Issue: "5353"

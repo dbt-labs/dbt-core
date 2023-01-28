@@ -2,7 +2,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 from tests.functional.fail_fast.fixtures import models, project_files  # noqa: F401
-from dbt.exceptions import FailFastException
+from dbt.exceptions import FailFastError
 
 
 def check_audit_table(project, count=1):
@@ -43,7 +43,7 @@ class TestFastFailingDuringRun:
         self,
         project,
     ):
-        with pytest.raises(FailFastException):
+        with pytest.raises(FailFastError):
             run_dbt(["run", "--threads", "1", "--fail-fast"])
             check_audit_table(project)
 
@@ -62,6 +62,6 @@ class TestFailFastFromConfig(TestFastFailingDuringRun):
         self,
         project,
     ):
-        with pytest.raises(FailFastException):
+        with pytest.raises(FailFastError):
             run_dbt(["run", "--threads", "1"])
             check_audit_table(project)

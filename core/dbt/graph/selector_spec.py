@@ -7,7 +7,7 @@ from dbt.dataclass_schema import StrEnum, dbtClassMixin
 from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.exceptions import RuntimeException, InvalidSelectorException
+from dbt.exceptions import DbtRuntimeError, InvalidSelectorError
 
 
 RAW_SELECTOR_PATTERN = re.compile(
@@ -24,6 +24,7 @@ SELECTOR_METHOD_SEPARATOR = "."
 class IndirectSelection(StrEnum):
     Eager = "eager"
     Cautious = "cautious"
+    Buildable = "buildable"
 
 
 def _probably_path(value: str):
@@ -46,7 +47,7 @@ def _match_to_int(match: Dict[str, str], key: str) -> Optional[int]:
     try:
         return int(raw)
     except ValueError as exc:
-        raise RuntimeException(f"Invalid node spec - could not handle parent depth {raw}") from exc
+        raise DbtRuntimeError(f"Invalid node spec - could not handle parent depth {raw}") from exc
 
 
 SelectionSpec = Union[
@@ -72,7 +73,7 @@ class SelectionCriteria:
 
     def __post_init__(self):
         if self.children and self.childrens_parents:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Invalid node spec {self.raw} - "@" prefix and "+" suffix ' "are incompatible"
             )
 
@@ -95,9 +96,7 @@ class SelectionCriteria:
         try:
             method_name = MethodName(method_parts[0])
         except ValueError as exc:
-            raise InvalidSelectorException(
-                f"'{method_parts[0]}' is not a valid method name"
-            ) from exc
+            raise InvalidSelectorError(f"'{method_parts[0]}' is not a valid method name") from exc
 
         method_arguments: List[str] = method_parts[1:]
 
@@ -111,7 +110,7 @@ class SelectionCriteria:
         indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> "SelectionCriteria":
         if "value" not in dct:
-            raise RuntimeException(f'Invalid node spec "{raw}" - no search value!')
+            raise DbtRuntimeError(f'Invalid node spec "{raw}" - no search value!')
         method_name, method_arguments = cls.parse_method(dct)
 
         parents_depth = _match_to_int(dct, "parents_depth")
@@ -162,7 +161,7 @@ class SelectionCriteria:
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
-            raise RuntimeException(f'Invalid selector spec "{raw}"')
+            raise DbtRuntimeError(f'Invalid selector spec "{raw}"')
 
         return cls.selection_criteria_from_dict(
             raw, result.groupdict(), indirect_selection=indirect_selection
@@ -173,12 +172,14 @@ class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMe
     def __init__(
         self,
         components: Iterable[SelectionSpec],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager,
         expect_exists: bool = False,
         raw: Any = None,
     ):
         self.components: List[SelectionSpec] = list(components)
         self.expect_exists = expect_exists
         self.raw = raw
+        self.indirect_selection = indirect_selection
 
     def __iter__(self) -> Iterator[SelectionSpec]:
         for component in self.components:

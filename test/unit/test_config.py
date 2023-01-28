@@ -798,7 +798,7 @@ class TestProject(BaseConfigTest):
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, renderer)
 
-        self.assertIn('no dbt_project.yml', str(exc.exception))
+        self.assertIn('No dbt_project.yml', str(exc.exception))
 
     def test_invalid_version(self):
         self.default_project_data['require-dbt-version'] = 'hello!'
@@ -928,7 +928,7 @@ class TestRunOperationTask(BaseFileTest):
 
     def test_run_operation_task_with_bad_path(self):
         self.args.project_dir = 'bad_path'
-        with self.assertRaises(dbt.exceptions.RuntimeException):
+        with self.assertRaises(dbt.exceptions.DbtRuntimeError):
             new_task = RunOperationTask.from_args(self.args)
 
 
@@ -1150,8 +1150,8 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
             project.warn_for_unused_resource_config_paths(self.used, [])
             warn_or_error_patch.assert_called_once()
             event = warn_or_error_patch.call_args[0][0]
-            assert event.info.name == 'UnusedResourceConfigPath'
-            msg = event.info.msg
+            assert type(event).__name__ == 'UnusedResourceConfigPath'
+            msg = event.message()
             expected_msg = "- models.my_test_project.baz"
             assert expected_msg in msg
 

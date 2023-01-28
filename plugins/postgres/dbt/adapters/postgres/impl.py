@@ -5,10 +5,16 @@ from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
-from dbt.adapters.postgres import PostgresColumn
+from dbt.adapters.postgres.column import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
 from dbt.dataclass_schema import dbtClassMixin, ValidationError
-import dbt.exceptions
+from dbt.exceptions import (
+    CrossDbReferenceProhibitedError,
+    IndexConfigNotDictError,
+    IndexConfigError,
+    DbtRuntimeError,
+    UnexpectedDbReferenceError,
+)
 import dbt.utils
 
 
@@ -40,14 +46,9 @@ class PostgresIndexConfig(dbtClassMixin):
             cls.validate(raw_index)
             return cls.from_dict(raw_index)
         except ValidationError as exc:
-            msg = dbt.exceptions.validator_error_message(exc)
-            dbt.exceptions.raise_compiler_error(f"Could not parse index config: {msg}")
+            raise IndexConfigError(exc)
         except TypeError:
-            dbt.exceptions.raise_compiler_error(
-                f"Invalid index config:\n"
-                f"  Got: {raw_index}\n"
-                f'  Expected a dictionary with at minimum a "columns" key'
-            )
+            raise IndexConfigNotDictError(raw_index)
 
 
 @dataclass
@@ -73,11 +74,7 @@ class PostgresAdapter(SQLAdapter):
             database = database.strip('"')
         expected = self.config.credentials.database
         if database.lower() != expected.lower():
-            raise dbt.exceptions.NotImplementedException(
-                "Cross-db references not allowed in {} ({} vs {})".format(
-                    self.type(), database, expected
-                )
-            )
+            raise UnexpectedDbReferenceError(self.type(), database, expected)
         # return an empty string on success so macros can call this
         return ""
 
@@ -110,12 +107,8 @@ class PostgresAdapter(SQLAdapter):
         schemas = super()._get_catalog_schemas(manifest)
         try:
             return schemas.flatten()
-        except dbt.exceptions.RuntimeException as exc:
-            dbt.exceptions.raise_compiler_error(
-                "Cross-db references not allowed in adapter {}: Got {}".format(
-                    self.type(), exc.msg
-                )
-            )
+        except DbtRuntimeError as exc:
+            raise CrossDbReferenceProhibitedError(self.type(), exc.msg)
 
     def _link_cached_relations(self, manifest):
         schemas: Set[str] = set()

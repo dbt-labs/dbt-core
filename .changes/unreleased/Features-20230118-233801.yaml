@@ -1,0 +1,6 @@
+kind: Features
+body: add adapter_response to dbt test and freshness result
+time: 2023-01-18T23:38:01.857342+08:00
+custom:
+  Author: aezomz
+  Issue: "2964"

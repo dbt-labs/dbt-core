@@ -2,7 +2,6 @@ import os
 import time
 from dataclasses import dataclass, field
 from mashumaro.types import SerializableType
-from pathlib import Path
 from typing import (
     Optional,
     Union,
@@ -12,7 +11,6 @@ from typing import (
     Sequence,
     Tuple,
     Iterator,
-    TypeVar,
 )
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
@@ -20,11 +18,8 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
-    UnparsedNode,
-    UnparsedDocumentation,
     Quoting,
     Docs,
-    UnparsedBaseNode,
     FreshnessThreshold,
     ExternalTable,
     HasYamlMetadata,
@@ -51,6 +46,7 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_contextvars
 from dbt import flags
 from dbt.node_types import ModelLanguage, NodeType
+from dbt.utils import cast_dict_to_dict_of_strings
 
 
 from .model_config import (
@@ -64,9 +60,87 @@ from .model_config import (
     SnapshotConfig,
 )
 
+# =====================================================================
+# This contains the classes for all of the nodes and node-like objects
+# in the manifest. In the "nodes" dictionary of the manifest we find
+# all of the objects in the ManifestNode union below. In addition the
+# manifest contains "macros", "sources", "metrics", "exposures", "docs",
+# and "disabled" dictionaries.
+#
+# The SeedNode is a ManifestNode, but can't be compiled because it has
+# no SQL.
+#
+# All objects defined in this file should have BaseNode as a parent
+# class.
+#
+# The two objects which do not show up in the DAG are Macro and
+# Documentation.
+# =====================================================================
+
+
+# ==================================================
+# Various parent classes and node attribute classes
+# ==================================================
+
+
+@dataclass
+class BaseNode(dbtClassMixin, Replaceable):
+    """All nodes or node-like objects in this file should have this as a base class"""
+
+    name: str
+    resource_type: NodeType
+    package_name: str
+    path: str
+    original_file_path: str
+    unique_id: str
+
+    @property
+    def search_name(self):
+        return self.name
+
+    @property
+    def file_id(self):
+        return f"{self.package_name}://{self.original_file_path}"
+
+    @property
+    def is_refable(self):
+        return self.resource_type in NodeType.refable()
+
+    @property
+    def should_store_failures(self):
+        return False
+
+    # will this node map to an object in the database?
+    @property
+    def is_relational(self):
+        return self.resource_type in NodeType.refable()
+
+    @property
+    def is_ephemeral(self):
+        return self.config.materialized == "ephemeral"
+
+    @property
+    def is_ephemeral_model(self):
+        return self.is_refable and self.is_ephemeral
+
+    def get_materialization(self):
+        return self.config.materialized
+
+
+@dataclass
+class GraphNode(BaseNode):
+    """Nodes in the DAG. Macro and Documentation don't have fqn."""
+
+    fqn: List[str]
+
+    def same_fqn(self, other) -> bool:
+        return self.fqn == other.fqn
+
 
 @dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+    """Used in all ManifestNodes and SourceDefinition"""
+
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -76,81 +150,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
     _extra: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class HasFqn(dbtClassMixin, Replaceable):
-    fqn: List[str]
-
-    def same_fqn(self, other: "HasFqn") -> bool:
-        return self.fqn == other.fqn
-
-
-@dataclass
-class HasUniqueID(dbtClassMixin, Replaceable):
-    unique_id: str
-
-
-@dataclass
-class MacroDependsOn(dbtClassMixin, Replaceable):
-    macros: List[str] = field(default_factory=list)
-
-    # 'in' on lists is O(n) so this is O(n^2) for # of macros
-    def add_macro(self, value: str):
-        if value not in self.macros:
-            self.macros.append(value)
-
-
-@dataclass
-class InjectedCTE(dbtClassMixin, Replaceable):
-    id: str
-    sql: str
-
-
-@dataclass
-class CompiledNode:
-    compiled: bool = False
-    compiled_code: Optional[str] = None
-    extra_ctes_injected: bool = False
-    extra_ctes: List[InjectedCTE] = field(default_factory=list)
-    relation_name: Optional[str] = None
-    _pre_injected_sql: Optional[str] = None
-
-    def set_cte(self, cte_id: str, sql: str):
-        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
-        do if extra_ctes were an OrderedDict
-        """
-        for cte in self.extra_ctes:
-            if cte.id == cte_id:
-                cte.sql = sql
-                break
-        else:
-            self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
-
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
-        if "_pre_injected_sql" in dct:
-            del dct["_pre_injected_sql"]
-        # Remove compiled attributes
-        if "compiled" in dct and dct["compiled"] is False:
-            del dct["compiled"]
-            del dct["extra_ctes_injected"]
-            del dct["extra_ctes"]
-            # "omit_none" means these might not be in the dictionary
-            if "compiled_code" in dct:
-                del dct["compiled_code"]
-            if "relation_name" in dct:
-                del dct["relation_name"]
-        return dct
-
-
-@dataclass
-class DependsOn(MacroDependsOn):
-    nodes: List[str] = field(default_factory=list)
-
-    def add_node(self, value: str):
-        if value not in self.nodes:
-            self.nodes.append(value)
-
-
+# Metrics, exposures,
 @dataclass
 class HasRelationMetadata(dbtClassMixin, Replaceable):
     database: Optional[str]
@@ -167,57 +167,29 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
         return data
 
 
-class ParsedNodeMixins(dbtClassMixin):
-    resource_type: NodeType
-    depends_on: DependsOn
-    config: NodeConfig
+@dataclass
+class MacroDependsOn(dbtClassMixin, Replaceable):
+    """Used only in the Macro class"""
 
-    @property
-    def is_refable(self):
-        return self.resource_type in NodeType.refable()
+    macros: List[str] = field(default_factory=list)
 
-    @property
-    def should_store_failures(self):
-        return self.resource_type == NodeType.Test and (
-            self.config.store_failures
-            if self.config.store_failures is not None
-            else flags.STORE_FAILURES
-        )
-
-    # will this node map to an object in the database?
-    @property
-    def is_relational(self):
-        return self.resource_type in NodeType.refable() or self.should_store_failures
-
-    @property
-    def is_ephemeral(self):
-        return self.config.materialized == "ephemeral"
-
-    @property
-    def is_ephemeral_model(self):
-        return self.is_refable and self.is_ephemeral
-
-    @property
-    def depends_on_nodes(self):
-        return self.depends_on.nodes
-
-    def patch(self, patch: "ParsedNodePatch"):
-        """Given a ParsedNodePatch, add the new information to the node."""
-        # explicitly pick out the parts to update so we don't inadvertently
-        # step on the model name or anything
-        # Note: config should already be updated
-        self.patch_path: Optional[str] = patch.file_id
-        # update created_at so process_docs will run in partial parsing
-        self.created_at = time.time()
-        self.description = patch.description
-        self.columns = patch.columns
-
-    def get_materialization(self):
-        return self.config.materialized
+    # 'in' on lists is O(n) so this is O(n^2) for # of macros
+    def add_macro(self, value: str):
+        if value not in self.macros:
+            self.macros.append(value)
 
 
 @dataclass
-class ParsedNodeMandatory(UnparsedNode, HasUniqueID, HasFqn, HasRelationMetadata, Replaceable):
+class DependsOn(MacroDependsOn):
+    nodes: List[str] = field(default_factory=list)
+
+    def add_node(self, value: str):
+        if value not in self.nodes:
+            self.nodes.append(value)
+
+
+@dataclass
+class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
@@ -227,12 +199,16 @@ class ParsedNodeMandatory(UnparsedNode, HasUniqueID, HasFqn, HasRelationMetadata
         return self.alias
 
 
+# This needs to be in all ManifestNodes and also in SourceDefinition,
+# because of "source freshness"
 @dataclass
 class NodeInfoMixin:
     _event_status: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def node_info(self):
+        meta = getattr(self, "meta", {})
+        meta_stringified = cast_dict_to_dict_of_strings(meta)
         node_info = {
             "node_path": getattr(self, "path", None),
             "node_name": getattr(self, "name", None),
@@ -242,6 +218,7 @@ class NodeInfoMixin:
             "node_status": str(self._event_status.get("node_status")),
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
+            "meta": meta_stringified,
         }
         node_info_msg = NodeInfo(**node_info)
         return node_info_msg
@@ -256,23 +233,20 @@ class NodeInfoMixin:
 
 
 @dataclass
-class ParsedNodeDefaults(NodeInfoMixin, CompiledNode, ParsedNodeMandatory):
+class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     tags: List[str] = field(default_factory=list)
-    refs: List[List[str]] = field(default_factory=list)
-    sources: List[List[str]] = field(default_factory=list)
-    metrics: List[List[str]] = field(default_factory=list)
-    depends_on: DependsOn = field(default_factory=DependsOn)
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
-    compiled_path: Optional[str] = None
     build_path: Optional[str] = None
     deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
+    relation_name: Optional[str] = None
+    raw_code: str = ""
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
@@ -286,12 +260,6 @@ class ParsedNodeDefaults(NodeInfoMixin, CompiledNode, ParsedNodeMandatory):
         write_file(full_path, payload)
         return full_path
 
-
-T = TypeVar("T", bound="ParsedNode")
-
-
-@dataclass
-class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
     def _serialize(self):
         return self.to_dict()
 
@@ -343,10 +311,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return bool(self.config.persist_docs.get("relation"))
         return False
 
-    def same_body(self: T, other: T) -> bool:
-        return self.raw_code == other.raw_code
-
-    def same_persisted_description(self: T, other: T) -> bool:
+    def same_persisted_description(self, other) -> bool:
         # the check on configs will handle the case where we have different
         # persist settings, so we only have to care about the cases where they
         # are the same..
@@ -363,7 +328,10 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
         return True
 
-    def same_database_representation(self, other: T) -> bool:
+    def same_body(self, other) -> bool:
+        return self.raw_code == other.raw_code
+
+    def same_database_representation(self, other) -> bool:
         # compare the config representation, not the node's config value. This
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
@@ -376,13 +344,24 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
                 return False
         return True
 
-    def same_config(self, old: T) -> bool:
+    def same_config(self, old) -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
 
-    def same_contents(self: T, old: Optional[T]) -> bool:
+    def patch(self, patch: "ParsedNodePatch"):
+        """Given a ParsedNodePatch, add the new information to the node."""
+        # explicitly pick out the parts to update so we don't inadvertently
+        # step on the model name or anything
+        # Note: config should already be updated
+        self.patch_path: Optional[str] = patch.file_id
+        # update created_at so process_docs will run in partial parsing
+        self.created_at = time.time()
+        self.description = patch.description
+        self.columns = patch.columns
+
+    def same_contents(self, old) -> bool:
         if old is None:
             return False
 
@@ -397,83 +376,211 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
 
 @dataclass
-class AnalysisNode(ParsedNode):
+class InjectedCTE(dbtClassMixin, Replaceable):
+    """Used in CompiledNodes as part of ephemeral model processing"""
+
+    id: str
+    sql: str
+
+
+@dataclass
+class CompiledNode(ParsedNode):
+    """Contains attributes necessary for SQL files and nodes with refs, sources, etc,
+    so all ManifestNodes except SeedNode."""
+
+    language: str = "sql"
+    refs: List[List[str]] = field(default_factory=list)
+    sources: List[List[str]] = field(default_factory=list)
+    metrics: List[List[str]] = field(default_factory=list)
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    compiled_path: Optional[str] = None
+    compiled: bool = False
+    compiled_code: Optional[str] = None
+    extra_ctes_injected: bool = False
+    extra_ctes: List[InjectedCTE] = field(default_factory=list)
+    _pre_injected_sql: Optional[str] = None
+
+    @property
+    def empty(self):
+        return not self.raw_code.strip()
+
+    def set_cte(self, cte_id: str, sql: str):
+        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
+        do if extra_ctes were an OrderedDict
+        """
+        for cte in self.extra_ctes:
+            if cte.id == cte_id:
+                cte.sql = sql
+                break
+        else:
+            self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
+
+    def __post_serialize__(self, dct):
+        dct = super().__post_serialize__(dct)
+        if "_pre_injected_sql" in dct:
+            del dct["_pre_injected_sql"]
+        # Remove compiled attributes
+        if "compiled" in dct and dct["compiled"] is False:
+            del dct["compiled"]
+            del dct["extra_ctes_injected"]
+            del dct["extra_ctes"]
+            # "omit_none" means these might not be in the dictionary
+            if "compiled_code" in dct:
+                del dct["compiled_code"]
+        return dct
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def depends_on_macros(self):
+        return self.depends_on.macros
+
+
+# ====================================
+# CompiledNode subclasses
+# ====================================
+
+
+@dataclass
+class AnalysisNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
-class HookNode(ParsedNode):
+class HookNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
-class ModelNode(ParsedNode):
+class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
-class RPCNode(ParsedNode):
+class RPCNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
-class SqlNode(ParsedNode):
+class SqlNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
-def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
-    # for seeds, we check the hashes. If the hashes are different types,
-    # no match. If the hashes are both the same 'path', log a warning and
-    # assume they are the same
-    # if the current checksum is a path, we want to log a warning.
-    result = first.checksum == second.checksum
-
-    if first.checksum.name == "path":
-        msg: str
-        if second.checksum.name != "path":
-            warn_or_error(
-                SeedIncreased(package_name=first.package_name, name=first.name), node=first
-            )
-        elif result:
-            warn_or_error(
-                SeedExceedsLimitSamePath(package_name=first.package_name, name=first.name),
-                node=first,
-            )
-        elif not result:
-            warn_or_error(
-                SeedExceedsLimitAndPathChanged(package_name=first.package_name, name=first.name),
-                node=first,
-            )
-        else:
-            warn_or_error(
-                SeedExceedsLimitChecksumChanged(
-                    package_name=first.package_name,
-                    name=first.name,
-                    checksum_name=second.checksum.name,
-                ),
-                node=first,
-            )
-
-    return result
+# ====================================
+# Seed node
+# ====================================
 
 
 @dataclass
-class SeedNode(ParsedNode):
+class SeedNode(ParsedNode):  # No SQLDefaults!
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
     # seeds need the root_path because the contents are not loaded initially
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
 
+    def same_seeds(self, other: "SeedNode") -> bool:
+        # for seeds, we check the hashes. If the hashes are different types,
+        # no match. If the hashes are both the same 'path', log a warning and
+        # assume they are the same
+        # if the current checksum is a path, we want to log a warning.
+        result = self.checksum == other.checksum
+
+        if self.checksum.name == "path":
+            msg: str
+            if other.checksum.name != "path":
+                warn_or_error(
+                    SeedIncreased(package_name=self.package_name, name=self.name), node=self
+                )
+            elif result:
+                warn_or_error(
+                    SeedExceedsLimitSamePath(package_name=self.package_name, name=self.name),
+                    node=self,
+                )
+            elif not result:
+                warn_or_error(
+                    SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
+                    node=self,
+                )
+            else:
+                warn_or_error(
+                    SeedExceedsLimitChecksumChanged(
+                        package_name=self.package_name,
+                        name=self.name,
+                        checksum_name=other.checksum.name,
+                    ),
+                    node=self,
+                )
+
+        return result
+
     @property
     def empty(self):
         """Seeds are never empty"""
         return False
 
-    def same_body(self: T, other: T) -> bool:
-        return same_seeds(self, other)
+    def same_body(self, other) -> bool:
+        return self.same_seeds(other)
+
+    @property
+    def depends_on_nodes(self):
+        return []
+
+    @property
+    def depends_on_macros(self):
+        return []
+
+    @property
+    def extra_ctes(self):
+        return []
+
+    @property
+    def extra_ctes_injected(self):
+        return False
+
+    @property
+    def language(self):
+        return "sql"
+
+
+# ====================================
+# Singular Test node
+# ====================================
+
+
+class TestShouldStoreFailures:
+    @property
+    def should_store_failures(self):
+        if self.config.store_failures:
+            return self.config.store_failures
+        return flags.STORE_FAILURES
+
+    @property
+    def is_relational(self):
+        if self.should_store_failures:
+            return True
+        return False
+
+
+@dataclass
+class SingularTestNode(TestShouldStoreFailures, CompiledNode):
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
+    # Was not able to make mypy happy and keep the code working. We need to
+    # refactor the various configs.
+    config: TestConfig = field(default_factory=TestConfig)  # type: ignore
+
+    @property
+    def test_node_type(self):
+        return "singular"
+
+
+# ====================================
+# Generic Test node
+# ====================================
 
 
 @dataclass
@@ -486,25 +593,15 @@ class TestMetadata(dbtClassMixin, Replaceable):
     namespace: Optional[str] = None
 
 
+# This has to be separated out because it has no default and so
+# has to be included as a superclass, not an attribute
 @dataclass
 class HasTestMetadata(dbtClassMixin):
     test_metadata: TestMetadata
 
 
 @dataclass
-class SingularTestNode(ParsedNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
-    # Was not able to make mypy happy and keep the code working. We need to
-    # refactor the various configs.
-    config: TestConfig = field(default_factory=TestConfig)  # type: ignore
-
-    @property
-    def test_node_type(self):
-        return "singular"
-
-
-@dataclass
-class GenericTestNode(ParsedNode, HasTestMetadata):
+class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
@@ -523,54 +620,39 @@ class GenericTestNode(ParsedNode, HasTestMetadata):
         return "generic"
 
 
+# ====================================
+# Snapshot node
+# ====================================
+
+
 @dataclass
-class IntermediateSnapshotNode(ParsedNode):
+class IntermediateSnapshotNode(CompiledNode):
     # at an intermediate stage in parsing, where we've built something better
     # than an unparsed node for rendering in parse mode, it's pretty possible
     # that we won't have critical snapshot-related information that is only
     # defined in config blocks. To fix that, we have an intermediate type that
     # uses a regular node config, which the snapshot parser will then convert
-    # into a full ParsedSnapshotNode after rendering.
+    # into a full ParsedSnapshotNode after rendering. Note: it currently does
+    # not work to set snapshot config in schema files because of the validation.
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
 
 @dataclass
-class SnapshotNode(ParsedNode):
+class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
 
 
-@dataclass
-class ParsedPatch(HasYamlMetadata, Replaceable):
-    name: str
-    description: str
-    meta: Dict[str, Any]
-    docs: Docs
-    config: Dict[str, Any]
-
-
-# The parsed node update is only the 'patch', not the test. The test became a
-# regular parsed node. Note that description and columns must be present, but
-# may be empty.
-@dataclass
-class ParsedNodePatch(ParsedPatch):
-    columns: Dict[str, ColumnInfo]
+# ====================================
+# Macro
+# ====================================
 
 
 @dataclass
-class ParsedMacroPatch(ParsedPatch):
-    arguments: List[MacroArgument] = field(default_factory=list)
-
-
-@dataclass
-class Macro(UnparsedBaseNode, HasUniqueID):
-    name: str
+class Macro(BaseNode):
     macro_sql: str
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
-    # TODO: can macros even have tags?
-    tags: List[str] = field(default_factory=list)
-    # TODO: is this ever populated?
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -580,7 +662,7 @@ class Macro(UnparsedBaseNode, HasUniqueID):
     created_at: float = field(default_factory=lambda: time.time())
     supported_languages: Optional[List[ModelLanguage]] = None
 
-    def patch(self, patch: ParsedMacroPatch):
+    def patch(self, patch: "ParsedMacroPatch"):
         self.patch_path: Optional[str] = patch.file_id
         self.description = patch.description
         self.created_at = time.time()
@@ -595,11 +677,20 @@ class Macro(UnparsedBaseNode, HasUniqueID):
         # same name/package is its content
         return self.macro_sql == other.macro_sql
 
+    @property
+    def depends_on_macros(self):
+        return self.depends_on.macros
+
+
+# ====================================
+# Documentation node
+# ====================================
+
 
 @dataclass
-class Documentation(UnparsedDocumentation, HasUniqueID):
-    name: str
+class Documentation(BaseNode):
     block_contents: str
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Documentation]})
 
     @property
     def search_name(self):
@@ -613,6 +704,11 @@ class Documentation(UnparsedDocumentation, HasUniqueID):
         return self.block_contents == other.block_contents
 
 
+# ====================================
+# Source node
+# ====================================
+
+
 def normalize_test(testdef: TestDef) -> Dict[str, Any]:
     if isinstance(testdef, str):
         return {testdef: {}}
@@ -621,21 +717,18 @@ def normalize_test(testdef: TestDef) -> Dict[str, Any]:
 
 
 @dataclass
-class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
+class UnpatchedSourceDefinition(BaseNode):
     source: UnparsedSourceDefinition
     table: UnparsedSourceTableDefinition
+    fqn: List[str]
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
-    patch_path: Optional[Path] = None
+    patch_path: Optional[str] = None
 
     def get_full_source_name(self):
         return f"{self.source.name}_{self.table.name}"
 
     def get_source_representation(self):
         return f'source("{self.source.name}", "{self.table.name}")'
-
-    @property
-    def name(self) -> str:
-        return self.get_full_source_name()
 
     @property
     def quote_columns(self) -> Optional[bool]:
@@ -668,13 +761,7 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
 
 
 @dataclass
-class ParsedSourceMandatory(
-    UnparsedBaseNode,
-    HasUniqueID,
-    HasRelationMetadata,
-    HasFqn,
-):
-    name: str
+class ParsedSourceMandatory(GraphNode, HasRelationMetadata):
     source_name: str
     source_description: str
     loader: str
@@ -694,7 +781,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
     source_meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: SourceConfig = field(default_factory=SourceConfig)
-    patch_path: Optional[Path] = None
+    patch_path: Optional[str] = None
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
@@ -797,12 +884,16 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         return f"{self.source_name}.{self.name}"
 
 
+# ====================================
+# Exposure node
+# ====================================
+
+
 @dataclass
-class Exposure(UnparsedBaseNode, HasUniqueID, HasFqn):
-    name: str
+class Exposure(GraphNode):
     type: ExposureType
     owner: ExposureOwner
-    resource_type: NodeType = NodeType.Exposure
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Exposure]})
     description: str = ""
     label: Optional[str] = None
     maturity: Optional[MaturityType] = None
@@ -872,6 +963,11 @@ class Exposure(UnparsedBaseNode, HasUniqueID, HasFqn):
         )
 
 
+# ====================================
+# Metric node
+# ====================================
+
+
 @dataclass
 class MetricReference(dbtClassMixin, Replaceable):
     sql: Optional[Union[str, int]]
@@ -879,20 +975,20 @@ class MetricReference(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Metric(UnparsedBaseNode, HasUniqueID, HasFqn):
+class Metric(GraphNode):
     name: str
     description: str
     label: str
     calculation_method: str
-    timestamp: str
     expression: str
     filters: List[MetricFilter]
     time_grains: List[str]
     dimensions: List[str]
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
+    timestamp: Optional[str] = None
     window: Optional[MetricTime] = None
     model: Optional[str] = None
     model_unique_id: Optional[str] = None
-    resource_type: NodeType = NodeType.Metric
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
@@ -969,7 +1065,41 @@ class Metric(UnparsedBaseNode, HasUniqueID, HasFqn):
         )
 
 
-ManifestNode = Union[
+# ====================================
+# Patches
+# ====================================
+
+
+@dataclass
+class ParsedPatch(HasYamlMetadata, Replaceable):
+    name: str
+    description: str
+    meta: Dict[str, Any]
+    docs: Docs
+    config: Dict[str, Any]
+
+
+# The parsed node update is only the 'patch', not the test. The test became a
+# regular parsed node. Note that description and columns must be present, but
+# may be empty.
+@dataclass
+class ParsedNodePatch(ParsedPatch):
+    columns: Dict[str, ColumnInfo]
+
+
+@dataclass
+class ParsedMacroPatch(ParsedPatch):
+    arguments: List[MacroArgument] = field(default_factory=list)
+
+
+# ====================================
+# Node unions/categories
+# ====================================
+
+
+# ManifestNode without SeedNode, which doesn't have the
+# SQL related attributes
+ManifestSQLNode = Union[
     AnalysisNode,
     SingularTestNode,
     HookNode,
@@ -977,8 +1107,13 @@ ManifestNode = Union[
     RPCNode,
     SqlNode,
     GenericTestNode,
-    SeedNode,
     SnapshotNode,
+]
+
+# All SQL nodes plus SeedNode (csv files)
+ManifestNode = Union[
+    ManifestSQLNode,
+    SeedNode,
 ]
 
 ResultNode = Union[
@@ -986,20 +1121,18 @@ ResultNode = Union[
     SourceDefinition,
 ]
 
+# All nodes that can be in the DAG
 GraphMemberNode = Union[
     ResultNode,
     Exposure,
     Metric,
 ]
 
-
+# All "nodes" (or node-like objects) in this file
 Resource = Union[
+    GraphMemberNode,
     Documentation,
     Macro,
-    ParsedNode,
-    Exposure,
-    Metric,
-    SourceDefinition,
 ]
 
 TestNode = Union[

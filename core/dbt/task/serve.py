@@ -6,7 +6,12 @@ from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
 from dbt.events.functions import fire_event
-from dbt.events.types import ServingDocsPort, ServingDocsAccessInfo, ServingDocsExitInfo, EmptyLine
+from dbt.events.types import (
+    ServingDocsPort,
+    ServingDocsAccessInfo,
+    ServingDocsExitInfo,
+    Formatting,
+)
 
 from dbt.task.base import ConfiguredTask
 
@@ -22,8 +27,8 @@ class ServeTask(ConfiguredTask):
 
         fire_event(ServingDocsPort(address=address, port=port))
         fire_event(ServingDocsAccessInfo(port=port))
-        fire_event(EmptyLine())
-        fire_event(EmptyLine())
+        fire_event(Formatting(""))
+        fire_event(Formatting(""))
         fire_event(ServingDocsExitInfo())
 
         # mypy doesn't think SimpleHTTPRequestHandler is ok here, but it is

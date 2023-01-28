@@ -11,7 +11,7 @@ from dbt.contracts.util import (
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -222,7 +222,7 @@ class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
 
     def __post_init__(self):
         if self.name == "" or self.data_type == "":
-            raise CompilationException("External partition columns must have names and data types")
+            raise CompilationError("External partition columns must have names and data types")
 
 
 @dataclass
@@ -484,9 +484,9 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     name: str
     label: str
     calculation_method: str
-    timestamp: str
     expression: str
     description: str = ""
+    timestamp: Optional[str] = None
     time_grains: List[str] = field(default_factory=list)
     dimensions: List[str] = field(default_factory=list)
     window: Optional[MetricTime] = None
@@ -514,9 +514,19 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
                 errors.append("must contain only letters, numbers and underscores")
 
             if errors:
-                raise ParsingException(
+                raise ParsingError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
+
+        if data.get("timestamp") is None and data.get("time_grains") is not None:
+            raise ValidationError(
+                f"The metric '{data['name']} has time_grains defined but is missing a timestamp dimension."
+            )
+
+        if data.get("timestamp") is None and data.get("window") is not None:
+            raise ValidationError(
+                f"The metric '{data['name']} has a window defined but is missing a timestamp dimension."
+            )
 
         if data.get("model") is None and data.get("calculation_method") != "derived":
             raise ValidationError("Non-derived metrics require a 'model' property")

@@ -9,8 +9,8 @@ from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
 from dbt.node_types import NodeType
 from dbt.exceptions import (
-    InternalException,
-    InvalidSelectorException,
+    DbtInternalError,
+    InvalidSelectorError,
 )
 from dbt.contracts.graph.nodes import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
@@ -78,7 +78,7 @@ class NodeSelector(MethodManager):
         nodes = self.graph.nodes()
         try:
             collected = self.select_included(nodes, spec)
-        except InvalidSelectorException:
+        except InvalidSelectorError:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
             fire_event(
                 SelectorReportInvalidSelector(
@@ -134,7 +134,9 @@ class NodeSelector(MethodManager):
             initial_direct = spec.combined(direct_sets)
             indirect_nodes = spec.combined(indirect_sets)
 
-            direct_nodes = self.incorporate_indirect_nodes(initial_direct, indirect_nodes)
+            direct_nodes = self.incorporate_indirect_nodes(
+                initial_direct, indirect_nodes, spec.indirect_selection
+            )
 
             if spec.expect_exists and len(direct_nodes) == 0:
                 warn_or_error(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
@@ -181,7 +183,7 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.metrics:
             node = self.manifest.metrics[unique_id]
         else:
-            raise InternalException(f"Node {unique_id} not found in the manifest!")
+            raise DbtInternalError(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
 
     def filter_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
@@ -197,7 +199,7 @@ class NodeSelector(MethodManager):
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         # Test selection by default expands to include an implicitly/indirectly selected tests.
         # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
-        # Expansion has two modes, EAGER and CAUTIOUS.
+        # Expansion has three modes, EAGER, CAUTIOUS and BUILDABLE.
         #
         # EAGER mode: If ANY parent is selected, select the test.
         #
@@ -205,11 +207,22 @@ class NodeSelector(MethodManager):
         #  - If ALL parents are selected, select the test.
         #  - If ANY parent is missing, return it separately. We'll keep it around
         #    for later and see if its other parents show up.
+        #
+        # BUILDABLE mode:
+        #  - If ALL parents are selected, or the parents of the test are themselves parents of the selected, select the test.
+        #  - If ANY parent is missing, return it separately. We'll keep it around
+        #    for later and see if its other parents show up.
+        #
         # Users can opt out of inclusive EAGER mode by passing --indirect-selection cautious
         # CLI argument or by specifying `indirect_selection: true` in a yaml selector
 
         direct_nodes = set(selected)
         indirect_nodes = set()
+        selected_and_parents = set()
+        if indirect_selection == IndirectSelection.Buildable:
+            selected_and_parents = selected.union(self.graph.select_parents(selected)).union(
+                self.manifest.sources
+            )
 
         for unique_id in self.graph.select_successors(selected):
             if unique_id in self.manifest.nodes:
@@ -217,17 +230,23 @@ class NodeSelector(MethodManager):
                 if can_select_indirectly(node):
                     # should we add it in directly?
                     if indirect_selection == IndirectSelection.Eager or set(
-                        node.depends_on.nodes
+                        node.depends_on_nodes
                     ) <= set(selected):
                         direct_nodes.add(unique_id)
-                    # if not:
+                    elif indirect_selection == IndirectSelection.Buildable and set(
+                        node.depends_on_nodes
+                    ) <= set(selected_and_parents):
+                        direct_nodes.add(unique_id)
                     else:
                         indirect_nodes.add(unique_id)
 
         return direct_nodes, indirect_nodes
 
     def incorporate_indirect_nodes(
-        self, direct_nodes: Set[UniqueId], indirect_nodes: Set[UniqueId] = set()
+        self,
+        direct_nodes: Set[UniqueId],
+        indirect_nodes: Set[UniqueId] = set(),
+        indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> Set[UniqueId]:
         # Check tests previously selected indirectly to see if ALL their
         # parents are now present.
@@ -238,11 +257,19 @@ class NodeSelector(MethodManager):
 
         selected = set(direct_nodes)
 
-        for unique_id in indirect_nodes:
-            if unique_id in self.manifest.nodes:
-                node = self.manifest.nodes[unique_id]
-                if set(node.depends_on.nodes) <= set(selected):
-                    selected.add(unique_id)
+        if indirect_selection == IndirectSelection.Cautious:
+            for unique_id in indirect_nodes:
+                if unique_id in self.manifest.nodes:
+                    node = self.manifest.nodes[unique_id]
+                    if set(node.depends_on_nodes) <= set(selected):
+                        selected.add(unique_id)
+        elif indirect_selection == IndirectSelection.Buildable:
+            selected_and_parents = selected.union(self.graph.select_parents(selected))
+            for unique_id in indirect_nodes:
+                if unique_id in self.manifest.nodes:
+                    node = self.manifest.nodes[unique_id]
+                    if set(node.depends_on_nodes) <= set(selected_and_parents):
+                        selected.add(unique_id)
 
         return selected
 

@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from .base import BaseContext, contextmember
 
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.exceptions import raise_parsing_error
+from dbt.exceptions import EnvVarMissingError
 
 
 SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"
@@ -50,8 +50,7 @@ class SecretContext(BaseContext):
                 self.env_vars[var] = return_value if var in os.environ else DEFAULT_ENV_PLACEHOLDER
             return return_value
         else:
-            msg = f"Env var required but not provided: '{var}'"
-            raise_parsing_error(msg)
+            raise EnvVarMissingError(var)
 
 
 def generate_secret_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:

@@ -5,7 +5,7 @@ from .test import TestRunner as test_runner
 
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.results import NodeStatus
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
@@ -44,7 +44,7 @@ class BuildTask(RunTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get node selection")
+            raise DbtInternalError("manifest and graph must be set to get node selection")
 
         resource_types = self.resource_types
 
@@ -66,7 +66,7 @@ class BuildTask(RunTask):
 
     def compile_manifest(self):
         if self.manifest is None:
-            raise InternalException("compile_manifest called before manifest was loaded")
+            raise DbtInternalError("compile_manifest called before manifest was loaded")
         adapter = get_adapter(self.config)
         compiler = adapter.get_compiler()
         self.graph = compiler.compile(self.manifest, add_test_edges=True)

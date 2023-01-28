@@ -64,7 +64,7 @@ models__model_a_sql = """
     tags = ['a_or_b']
 ) }}
 
-select 1 as fun
+select * FROM {{ref('model_b')}}
 """
 
 

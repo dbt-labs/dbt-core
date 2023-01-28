@@ -1,8 +1,8 @@
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
+from typing import Optional, TypeVar, Any, Type, Dict, Iterator, Tuple, Set
 
-from dbt.contracts.graph.nodes import SourceDefinition, ParsedNode
+from dbt.contracts.graph.nodes import SourceDefinition, ManifestNode, ResultNode, ParsedNode
 from dbt.contracts.relation import (
     RelationType,
     ComponentName,
@@ -11,7 +11,11 @@ from dbt.contracts.relation import (
     Policy,
     Path,
 )
-from dbt.exceptions import InternalException
+from dbt.exceptions import (
+    ApproximateMatchError,
+    DbtInternalError,
+    MultipleDatabasesNotAllowedError,
+)
 from dbt.node_types import NodeType
 from dbt.utils import filter_null_values, deep_merge, classproperty
 
@@ -83,7 +87,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         if not search:
             # nothing was passed in
-            raise dbt.exceptions.RuntimeException(
+            raise dbt.exceptions.DbtRuntimeError(
                 "Tried to match relation, but no search path was passed!"
             )
 
@@ -100,7 +104,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         if approximate_match and not exact_match:
             target = self.create(database=database, schema=schema, identifier=identifier)
-            dbt.exceptions.approximate_relation_match(target, self)
+            raise ApproximateMatchError(target, self)
 
         return exact_match
 
@@ -210,7 +214,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_ephemeral_from_node(
         cls: Type[Self],
         config: HasQuoting,
-        node: ParsedNode,
+        node: ManifestNode,
     ) -> Self:
         # Note that ephemeral models are based on the name.
         identifier = cls.add_ephemeral_prefix(node.name)
@@ -223,7 +227,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from_node(
         cls: Type[Self],
         config: HasQuoting,
-        node: ParsedNode,
+        node: ManifestNode,
         quote_policy: Optional[Dict[str, bool]] = None,
         **kwargs: Any,
     ) -> Self:
@@ -244,18 +248,21 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from(
         cls: Type[Self],
         config: HasQuoting,
-        node: Union[ParsedNode, SourceDefinition],
+        node: ResultNode,
         **kwargs: Any,
     ) -> Self:
         if node.resource_type == NodeType.Source:
             if not isinstance(node, SourceDefinition):
-                raise InternalException(
+                raise DbtInternalError(
                     "type mismatch, expected SourceDefinition but got {}".format(type(node))
                 )
             return cls.create_from_source(node, **kwargs)
         else:
+            # Can't use ManifestNode here because of parameterized generics
             if not isinstance(node, (ParsedNode)):
-                raise InternalException(f"type mismatch, expected ParsedNode but got {type(node)}")
+                raise DbtInternalError(
+                    f"type mismatch, expected ManifestNode but got {type(node)}"
+                )
             return cls.create_from_node(config, node, **kwargs)
 
     @classmethod
@@ -351,7 +358,7 @@ class InformationSchema(BaseRelation):
 
     def __post_init__(self):
         if not isinstance(self.information_schema_view, (type(None), str)):
-            raise dbt.exceptions.CompilationException(
+            raise dbt.exceptions.CompilationError(
                 "Got an invalid name: {}".format(self.information_schema_view)
             )
 
@@ -435,7 +442,7 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
         if not allow_multiple_databases:
             seen = {r.database.lower() for r in self if r.database}
             if len(seen) > 1:
-                dbt.exceptions.raise_compiler_error(str(seen))
+                raise MultipleDatabasesNotAllowedError(seen)
 
         for information_schema_name, schema in self.search():
             path = {"database": information_schema_name.database, "schema": schema}

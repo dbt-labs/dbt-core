@@ -1,0 +1,6 @@
+kind: Features
+body: Improve error message for packages missing `dbt_project.yml`
+time: 2023-01-20T11:29:21.509967-07:00
+custom:
+  Author: dbeatty10
+  Issue: "6663"

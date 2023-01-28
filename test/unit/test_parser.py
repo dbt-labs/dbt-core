@@ -1,44 +1,39 @@
-import ipdb
+import os
 import unittest
+from copy import deepcopy
 from unittest import mock
 
-import os
 import yaml
 
-from copy import deepcopy
 import dbt.flags
 import dbt.parser
 from dbt import tracking
 from dbt.context.context_config import ContextConfig
-from dbt.exceptions import CompilationException, ParsingException
-from dbt.parser import (
-    ModelParser, MacroParser, SingularTestParser, GenericTestParser,
-    SchemaParser, SnapshotParser, AnalysisParser
-)
-from dbt.parser.schemas import (
-    TestablePatchParser, SourceParser, AnalysisPatchParser, MacroPatchParser
-)
-from dbt.parser.search import FileBlock
-from dbt.parser.generic_test_builders import YamlBlock
-from dbt.parser.sources import SourcePatcher
-
-from dbt.node_types import NodeType, ModelLanguage
 from dbt.contracts.files import SourceFile, FileHash, FilePath, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import (
     NodeConfig, TestConfig, SnapshotConfig
 )
 from dbt.contracts.graph.nodes import (
-    ModelNode, Macro, DependsOn, ColumnInfo,
-    SingularTestNode, GenericTestNode, SnapshotNode, 
+    ModelNode, Macro, DependsOn, SingularTestNode, SnapshotNode,
     AnalysisNode, UnpatchedSourceDefinition
 )
-from dbt.contracts.graph.unparsed import Docs
+from dbt.exceptions import CompilationError, ParsingError
+from dbt.node_types import NodeType
+from dbt.parser import (
+    ModelParser, MacroParser, SingularTestParser, GenericTestParser,
+    SchemaParser, SnapshotParser, AnalysisParser
+)
+from dbt.parser.generic_test_builders import YamlBlock
 from dbt.parser.models import (
     _get_config_call_dict, _shift_sources, _get_exp_sample_result, _get_stable_sample_result, _get_sample_result
 )
-import itertools
-from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode, MockSource, MockDocumentation
+from dbt.parser.schemas import (
+    TestablePatchParser, SourceParser, AnalysisPatchParser, MacroPatchParser
+)
+from dbt.parser.search import FileBlock
+from dbt.parser.sources import SourcePatcher
+from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode
 
 
 def get_abs_os_path(unix_path):
@@ -161,7 +156,7 @@ class BaseParserTest(unittest.TestCase):
         return FileBlock(file=source_file)
 
     def assert_has_manifest_lengths(self, manifest, macros=3, nodes=0,
-                                  sources=0, docs=0, disabled=0):
+                                    sources=0, docs=0, disabled=0):
         self.assertEqual(len(manifest.macros), macros)
         self.assertEqual(len(manifest.nodes), nodes)
         self.assertEqual(len(manifest.sources), sources)
@@ -173,9 +168,13 @@ def assertEqualNodes(node_one, node_two):
     node_one_dict = node_one.to_dict()
     if 'created_at' in node_one_dict:
         del node_one_dict['created_at']
+    if "relation_name" in node_one_dict:
+        del node_one_dict["relation_name"]
     node_two_dict = node_two.to_dict()
     if 'created_at' in node_two_dict:
         del node_two_dict['created_at']
+    if "relation_name" in node_two_dict:
+        del node_two_dict["relation_name"]
     # we don't reall care the order of packages, doing this because it is hard to
     # make config.packages a set instead of a list
     if 'config' in node_one_dict and 'packages' in node_one_dict['config']:
@@ -190,7 +189,6 @@ def assertEqualNodes(node_one, node_two):
             node_two_dict['config_call_dict']['packages'] = set(node_two_dict['config_call_dict']['packages'])
 
     assert node_one_dict == node_two_dict
-
 
 
 SINGLE_TABLE_SOURCE = '''
@@ -217,7 +215,6 @@ sources:
                     values: ['red', 'blue', 'green']
 '''
 
-
 SINGLE_TABLE_MODEL_TESTS = '''
 version: 2
 models:
@@ -234,7 +231,6 @@ models:
             - foreign_package.test_case:
                 arg: 100
 '''
-
 
 SINGLE_TABLE_SOURCE_PATCH = '''
 version: 2
@@ -398,7 +394,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             patch_path=None,
         )
         nodes = {my_model_node.unique_id: my_model_node}
-        macros={m.unique_id: m for m in generate_name_macros('root')}
+        macros = {m.unique_id: m for m in generate_name_macros('root')}
         self.manifest = Manifest(nodes=nodes, macros=macros)
         self.manifest.ref_lookup
         self.parser = SchemaParser(
@@ -491,6 +487,138 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(self.parser.manifest.files[file_id].node_patches, ['model.root.my_model'])
 
 
+sql_model = """
+{{ config(materialized="table") }}
+select 1 as id
+"""
+
+sql_model_parse_error = "{{ SYNTAX ERROR }}"
+
+python_model = """
+import textblob
+import text as a
+from torch import b
+import textblob.text
+import sklearn
+
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        packages=['sklearn==0.1.0']
+    )
+    df0 = dbt.ref("a_model").to_pandas()
+    df1 = dbt.ref("my_sql_model").task.limit(2)
+    df2 = dbt.ref("my_sql_model_1")
+    df3 = dbt.ref("my_sql_model_2")
+    df4 = dbt.source("test", 'table1').limit(max=[max(dbt.ref('something'))])
+    df5 = [dbt.ref('test1')]
+    
+    a_dict = {'test2': dbt.ref('test2')}
+    df5 = {'test2': dbt.ref('test3')}
+    df6 = [dbt.ref("test4")]
+    
+    df = df0.limit(2)
+    return df
+"""
+
+python_model_config = """
+def model(dbt, session):
+    dbt.config.get("param_1")
+    dbt.config.get("param_2")
+    return dbt.ref("some_model")
+"""
+
+python_model_config_with_defaults = """
+def model(dbt, session):
+    dbt.config.get("param_None", None)
+    dbt.config.get("param_Str", "default")
+    dbt.config.get("param_List", [1, 2])
+    return dbt.ref("some_model")
+"""
+
+python_model_single_argument = """
+def model(dbt):
+     dbt.config(materialized="table")
+     return dbt.ref("some_model")
+"""
+
+python_model_no_argument = """
+import pandas as pd
+
+def model():
+    return pd.dataframe([1, 2])
+"""
+
+python_model_incorrect_argument_name = """
+def model(tbd, session):
+    tbd.config(materialized="table")
+    return tbd.ref("some_model")
+"""
+
+python_model_multiple_models = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    return dbt.ref("some_model")
+
+def model(dbt, session):
+    dbt.config(materialized='table')
+    return dbt.ref("some_model")
+"""
+
+python_model_incorrect_function_name = """
+def model1(dbt, session):
+    dbt.config(materialized='table')
+    return dbt.ref("some_model")
+"""
+
+python_model_empty_file = """    """
+
+python_model_multiple_returns = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    return dbt.ref("some_model"), dbt.ref("some_other_model")
+"""
+
+python_model_no_return = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+"""
+
+python_model_single_return = """
+import pandas as pd
+
+def model(dbt, session):
+    dbt.config(materialized='table')
+    return pd.dataframe([1, 2])
+"""
+
+python_model_incorrect_ref = """
+def model(dbt, session):
+    model_names = ["orders", "customers"]
+    models = []
+
+    for model_name in model_names:
+        models.extend(dbt.ref(model_name))
+
+    return models[0]
+"""
+
+python_model_default_materialization = """
+import pandas as pd
+
+def model(dbt, session):
+    return pd.dataframe([1, 2])
+"""
+
+python_model_custom_materialization = """
+import pandas as pd
+
+def model(dbt, session):
+    dbt.config(materialized="view")
+    return pd.dataframe([1, 2])
+"""
+
+
 class ModelParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
@@ -504,8 +632,7 @@ class ModelParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'models')
 
     def test_basic(self):
-        raw_code = '{{ config(materialized="table") }}select 1 as id'
-        block = self.file_block_for(raw_code, 'nested/model_1.sql')
+        block = self.file_block_for(sql_model, 'nested/model_1.sql')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
@@ -523,7 +650,7 @@ class ModelParserTest(BaseParserTest):
             config=NodeConfig(materialized='table'),
             path=normalize('nested/model_1.sql'),
             language='sql',
-            raw_code=raw_code,
+            raw_code=sql_model,
             checksum=block.file.checksum,
             unrendered_config={'materialized': 'table'},
             config_call_dict={
@@ -534,34 +661,14 @@ class ModelParserTest(BaseParserTest):
         file_id = 'snowplow://' + normalize('models/nested/model_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.model_1'])
-    
-    def test_parse_python_file(self):
-        py_code = """
-def model(dbt, session):
-    dbt.config(
-        materialized='table',
-        packages = ['sklearn==0.1.0']
-    )
-    import textblob
-    import text as a
-    from torch import b
-    import textblob.text
-    import sklearn
-    df0 = pandas(dbt.ref("a_model"))
-    df1 = dbt.ref("my_sql_model").task.limit(2)
-    df2 = dbt.ref("my_sql_model_1")
-    df3 = dbt.ref("my_sql_model_2")
-    df4 = dbt.source("test", 'table1').limit(max = [max(dbt.ref('something'))])
-    df5 = [dbt.ref('test1')]
-    
-    a_dict = {'test2' : dbt.ref('test2')}
-    df5 = anotherfunction({'test2' : dbt.ref('test3')})
-    df6 = [somethingelse.ref(dbt.ref("test4"))]
 
-    df = df.limit(2)
-    return df   
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_sql_model_parse_error(self):
+        block = self.file_block_for(sql_model_parse_error, 'nested/model_1.sql')
+        with self.assertRaises(CompilationError):
+            self.parser.parse_file(block)
+
+    def test_python_model_parse(self):
+        block = self.file_block_for(python_model, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
@@ -582,181 +689,116 @@ def model(dbt, session):
             # config.packages = ['textblob']
             path=normalize('nested/py_model.py'),
             language='python',
-            raw_code=py_code,
+            raw_code=python_model,
             checksum=block.file.checksum,
-            unrendered_config={'materialized': 'table', 'packages':python_packages},
-            config_call_dict={'materialized': 'table', 'packages':python_packages},
-            refs=[['a_model'], ['my_sql_model'], ['my_sql_model_1'], ['my_sql_model_2'], ['something'], ['test1'], ['test2'], ['test3'], ['test4']],
-            sources = [['test', 'table1']],
+            unrendered_config={'materialized': 'table', 'packages': python_packages},
+            config_call_dict={'materialized': 'table', 'packages': python_packages},
+            refs=[['a_model'], ['my_sql_model'], ['my_sql_model_1'], ['my_sql_model_2'], ['something'], ['test1'],
+                  ['test2'], ['test3'], ['test4']],
+            sources=[['test', 'table1']],
         )
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' + normalize('models/nested/py_model.py')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['model.snowplow.py_model'])
 
-    def test_python_model_config_get(self):
-        py_code = """
-def model(dbt, session):
-    dbt.config.get("param_1")
-    dbt.config.get("param_2")
-    return df
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_python_model_config(self):
+        block = self.file_block_for(python_model_config, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        
+
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.config.to_dict()["config_keys_used"], ["param_1", "param_2"])
 
-    def test_python_model_config_default(self):
-            py_code = """
-def model(dbt, session):
-    dbt.config.get("param_None", None)
-    dbt.config.get("param_Str", "default")
-    dbt.config.get("param_List", [1, 2])
-    return df
-            """
-            block = self.file_block_for(py_code, 'nested/py_model.py')
-            self.parser.manifest.files[block.file.file_id] = block.file
-
-            self.parser.parse_file(block)
-            node = list(self.parser.manifest.nodes.values())[0]
-            default_values = node.config.to_dict()["config_keys_defaults"]
-            self.assertIsNone(default_values[0])
-            self.assertEqual(default_values[1], "default")
-            self.assertEqual(default_values[2], [1, 2])
-
-
-    def test_wrong_python_model_def_miss_session(self):
-        py_code = """
-def model(dbt):
-    dbt.config(
-        materialized='table',
-    )
-    return df
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_python_model_config_with_defaults(self):
+        block = self.file_block_for(python_model_config_with_defaults, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        default_values = node.config.to_dict()["config_keys_defaults"]
+        self.assertIsNone(default_values[0])
+        self.assertEqual(default_values[1], "default")
+        self.assertEqual(default_values[2], [1, 2])
+
+    def test_python_model_single_argument(self):
+        block = self.file_block_for(python_model_single_argument, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
-    def test_wrong_python_model_def_miss_session(self):
-        py_code = """
-def model():
-    return df
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_python_model_no_argument(self):
+        block = self.file_block_for(python_model_no_argument, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
-    def test_wrong_python_model_def_wrong_arg(self):
-        """ First argument for python model should be dbt
-        """
-        py_code = """
-def model(dat, session):
-    dbt.config(
-        materialized='table',
-    )
-    return df
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_python_model_incorrect_argument_name(self):
+        block = self.file_block_for(python_model_incorrect_argument_name, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
-            self.parser.parse_file(block)
-    
-    def test_wrong_python_model_def_multipe_model(self):
-        py_code = """
-def model(dbt, session):
-    dbt.config(
-        materialized='table',
-    )
-    return df
-
-def model(dbt, session):
-    dbt.config(
-        materialized='table',
-    )
-    return df
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
-        self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
-            self.parser.parse_file(block)
-    
-    def test_wrong_python_model_def_no_model(self):
-        py_code = """
-def model1(dbt, session):
-    dbt.config(
-        materialized='table',
-    )
-    return df
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
-        self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
-            self.parser.parse_file(block)
-    
-    def test_wrong_python_model_def_mutiple_return(self):
-        py_code = """
-def model(dbt, session):
-    dbt.config(
-        materialized='table',
-    )
-    return df1, df2
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
-        self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
-            self.parser.parse_file(block)
-    
-    def test_wrong_python_model_def_no_return(self):
-        py_code = """
-def model(dbt, session):
-    dbt.config(
-        materialized='table',
-    )
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
-        self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ParsingError):
             self.parser.parse_file(block)
 
-    def test_correct_python_model_def_return_function(self):
-        py_code = """
-def model(dbt, session):
-    dbt.config(
-        materialized='table',
-    )
-    return pandas.dataframe([1,2])
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_python_model_multiple_models(self):
+        block = self.file_block_for(python_model_multiple_models, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError):
+            self.parser.parse_file(block)
+
+    def test_python_model_incorrect_function_name(self):
+        block = self.file_block_for(python_model_incorrect_function_name, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError):
+            self.parser.parse_file(block)
+
+    def test_python_model_empty_file(self):
+        block = self.file_block_for(python_model_empty_file, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.assertIsNone(self.parser.parse_file(block))
+
+    def test_python_model_multiple_returns(self):
+        block = self.file_block_for(python_model_multiple_returns, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError):
+            self.parser.parse_file(block)
+
+    def test_python_model_no_return(self):
+        block = self.file_block_for(python_model_no_return, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError):
+            self.parser.parse_file(block)
+
+    def test_python_model_single_return(self):
+        block = self.file_block_for(python_model_single_return, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.assertIsNone(self.parser.parse_file(block))
+
+    def test_python_model_incorrect_ref(self):
+        block = self.file_block_for(python_model_incorrect_ref, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError):
+            self.parser.parse_file(block)
+
+    def test_python_model_default_materialization(self):
+        block = self.file_block_for(python_model_default_materialization, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.get_materialization(), "table")
 
-    def test_parse_error(self):
-        block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
-        with self.assertRaises(CompilationException):
-            self.parser.parse_file(block)
-
-    def test_parse_ref_with_non_string(self):
-        py_code = """
-def model(dbt, session):
-
-    model_names = ["orders", "customers"]
-    models = []
-
-    for model_name in model_names:
-        models.extend(dbt.ref(model_name))
-
-    return models[0]
-        """
-        block = self.file_block_for(py_code, 'nested/py_model.py')
+    def test_python_model_custom_materialization(self):
+        block = self.file_block_for(python_model_custom_materialization, 'nested/py_model.py')
         self.parser.manifest.files[block.file.file_id] = block.file
-        with self.assertRaises(ParsingException):
-            self.parser.parse_file(block)    
-    
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.get_materialization(), "view")
 
+    def test_python_model_custom_materialization(self):
+        block = self.file_block_for(python_model_custom_materialization, 'nested/py_model.py')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.get_materialization(), "view")
 
 class StaticModelParserTest(BaseParserTest):
     def setUp(self):
@@ -805,9 +847,10 @@ class StaticModelParserTest(BaseParserTest):
             unrendered_config={'materialized': 'table'},
         )
 
-        assert(self.parser._has_banned_macro(node))
+        assert (self.parser._has_banned_macro(node))
 
-# TODO 
+
+# TODO
 class StaticModelParserUnitTest(BaseParserTest):
     # _get_config_call_dict
     # _shift_sources
@@ -982,8 +1025,9 @@ class SnapshotParserTest(BaseParserTest):
         return super().file_block_for(data, filename, 'snapshots')
 
     def test_parse_error(self):
-        block = self.file_block_for('{% snapshot foo %}select 1 as id{%snapshot bar %}{% endsnapshot %}', 'nested/snap_1.sql')
-        with self.assertRaises(CompilationException):
+        block = self.file_block_for('{% snapshot foo %}select 1 as id{%snapshot bar %}{% endsnapshot %}',
+                                    'nested/snap_1.sql')
+        with self.assertRaises(CompilationError):
             self.parser.parse_file(block)
 
     def test_single_block(self):
@@ -1032,10 +1076,10 @@ class SnapshotParserTest(BaseParserTest):
                 'updated_at': 'last_update',
             },
             config_call_dict={
-                'strategy': 'timestamp', 
-                'target_database': 'dbt', 
-                'target_schema': 'analytics', 
-                'unique_key': 'id', 
+                'strategy': 'timestamp',
+                'target_database': 'dbt',
+                'target_schema': 'analytics',
+                'unique_key': 'id',
                 'updated_at': 'last_update',
             },
         )
@@ -1100,10 +1144,10 @@ class SnapshotParserTest(BaseParserTest):
                 'updated_at': 'last_update',
             },
             config_call_dict={
-                'strategy': 'timestamp', 
-                'target_database': 'dbt', 
-                'target_schema': 'analytics', 
-                'unique_key': 'id', 
+                'strategy': 'timestamp',
+                'target_database': 'dbt',
+                'target_schema': 'analytics',
+                'unique_key': 'id',
                 'updated_at': 'last_update',
             },
         )
@@ -1137,10 +1181,10 @@ class SnapshotParserTest(BaseParserTest):
                 'updated_at': 'last_update',
             },
             config_call_dict={
-                'strategy': 'timestamp', 
-                'target_database': 'dbt', 
-                'target_schema': 'analytics', 
-                'unique_key': 'id', 
+                'strategy': 'timestamp',
+                'target_database': 'dbt',
+                'target_schema': 'analytics',
+                'unique_key': 'id',
                 'updated_at': 'last_update',
             },
         )
@@ -1265,7 +1309,7 @@ class SingularTestParserTest(BaseParserTest):
 
 
 class GenericTestParserTest(BaseParserTest):
-# generic tests in the test-paths directory currently leverage the macro parser 
+    # generic tests in the test-paths directory currently leverage the macro parser
     def setUp(self):
         super().setUp()
         self.parser = GenericTestParser(
@@ -1333,8 +1377,9 @@ class AnalysisParserTest(BaseParserTest):
             raw_code=raw_code,
             checksum=block.file.checksum,
             unrendered_config={},
+            relation_name=None,
         )
         assertEqualNodes(node, expected)
-        file_id = 'snowplow://' +  normalize('analyses/nested/analysis_1.sql')
+        file_id = 'snowplow://' + normalize('analyses/nested/analysis_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['analysis.snowplow.analysis_1'])

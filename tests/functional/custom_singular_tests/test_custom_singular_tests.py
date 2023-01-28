@@ -103,3 +103,8 @@ class TestFailingTests(CustomSingularTestsBase):
             assert result.status == "fail"
             assert not result.skipped
             assert result.failures > 0
+            assert result.adapter_response == {
+                "_message": "SELECT 1",
+                "code": "SELECT",
+                "rows_affected": 1,
+            }

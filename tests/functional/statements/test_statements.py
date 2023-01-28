@@ -1,11 +1,7 @@
 import pathlib
 import pytest
 
-from dbt.tests.util import (
-    run_dbt,
-    check_relations_equal,
-    write_file
-)
+from dbt.tests.util import run_dbt, check_relations_equal, write_file
 from tests.functional.statements.fixtures import (
     models__statement_actual,
     seeds__statement_actual,
@@ -19,7 +15,9 @@ class TestStatements:
         # put seeds in 'seed' not 'seeds' directory
         (pathlib.Path(project.project_root) / "seed").mkdir(parents=True, exist_ok=True)
         write_file(seeds__statement_actual, project.project_root, "seed", "seed.csv")
-        write_file(seeds__statement_expected, project.project_root, "seed", "statement_expected.csv")
+        write_file(
+            seeds__statement_expected, project.project_root, "seed", "statement_expected.csv"
+        )
 
     @pytest.fixture(scope="class")
     def models(self):

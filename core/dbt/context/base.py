@@ -10,11 +10,12 @@ from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper 
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.graph.nodes import Resource
 from dbt.exceptions import (
-    CompilationException,
+    SecretEnvVarLocationError,
+    EnvVarMissingError,
     MacroReturn,
-    raise_compiler_error,
-    raise_parsing_error,
-    disallow_secret_env_var,
+    RequiredVarNotFoundError,
+    SetStrictWrongTypeError,
+    ZipStrictWrongTypeError,
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import JinjaLogInfo, JinjaLogDebug
@@ -128,7 +129,6 @@ class ContextMeta(type):
 
 
 class Var:
-    UndefinedVarError = "Required var '{}' not found in config:\nVars supplied to {} = {}"
     _VAR_NOTSET = object()
 
     def __init__(
@@ -153,10 +153,7 @@ class Var:
             return "<Configuration>"
 
     def get_missing_var(self, var_name):
-        dct = {k: self._merged[k] for k in self._merged}
-        pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
-        msg = self.UndefinedVarError.format(var_name, self.node_name, pretty_vars)
-        raise_compiler_error(msg, self._node)
+        raise RequiredVarNotFoundError(var_name, self._merged, self._node)
 
     def has_var(self, var_name: str):
         return var_name in self._merged
@@ -300,7 +297,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            disallow_secret_env_var(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -315,8 +312,7 @@ class BaseContext(metaclass=ContextMeta):
 
             return return_value
         else:
-            msg = f"Env var required but not provided: '{var}'"
-            raise_parsing_error(msg)
+            raise EnvVarMissingError(var)
 
     if os.environ.get("DBT_MACRO_DEBUGGING"):
 
@@ -497,7 +493,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return set(value)
         except TypeError as e:
-            raise CompilationException(e)
+            raise SetStrictWrongTypeError(e)
 
     @contextmember("zip")
     @staticmethod
@@ -541,7 +537,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return zip(*args)
         except TypeError as e:
-            raise CompilationException(e)
+            raise ZipStrictWrongTypeError(e)
 
     @contextmember
     @staticmethod
@@ -638,9 +634,8 @@ class BaseContext(metaclass=ContextMeta):
             {% endif %}
 
         This supports all flags defined in flags submodule (core/dbt/flags.py)
-        TODO: Replace with object that provides read-only access to flag values
         """
-        return flags
+        return flags.get_flag_obj()
 
     @contextmember
     @staticmethod

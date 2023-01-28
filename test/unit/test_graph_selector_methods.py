@@ -118,8 +118,6 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
 
     fqn = [pkg] + fqn_extras + [name]
     return SeedNode(
-        language='sql',
-        raw_code='',
         database='dbt',
         schema='dbt_schema',
         alias=alias,
@@ -182,7 +180,6 @@ def make_macro(pkg, name, macro_sql, path=None, depends_on_macros=None):
         path=path,
         original_file_path=path,
         resource_type=NodeType.Macro,
-        tags=[],
         depends_on=MacroDependsOn(macros=depends_on_macros),
     )
 
@@ -338,6 +335,7 @@ def make_exposure(pkg, name, path=None, fqn_extras=None, owner=None):
     fqn = [pkg, 'exposures'] + fqn_extras + [name]
     return Exposure(
         name=name,
+        resource_type=NodeType.Exposure,
         type=ExposureType.Notebook,
         fqn=fqn,
         unique_id=f'exposure.{pkg}.{name}',
@@ -354,6 +352,7 @@ def make_metric(pkg, name, path=None):
 
     return Metric(
         name=name,
+        resource_type=NodeType.Metric,
         path='schema.yml',
         package_name=pkg,
         original_file_path=path,
@@ -899,11 +898,11 @@ def test_select_state_no_change(manifest, previous_state):
 def test_select_state_nothing(manifest, previous_state):
     previous_state.manifest = None
     method = statemethod(manifest, previous_state)
-    with pytest.raises(dbt.exceptions.RuntimeException) as exc:
+    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, 'modified')
     assert 'no comparison manifest' in str(exc.value)
 
-    with pytest.raises(dbt.exceptions.RuntimeException) as exc:
+    with pytest.raises(dbt.exceptions.DbtRuntimeError) as exc:
         search_manifest_using_method(manifest, method, 'new')
     assert 'no comparison manifest' in str(exc.value)
 
@@ -974,8 +973,8 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         assert not search_manifest_using_method(manifest, method, 'modified')
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
-        assert event.info.name == 'SeedExceedsLimitSamePath'
-        msg = event.info.msg
+        assert type(event).__name__ == 'SeedExceedsLimitSamePath'
+        msg = event.message()
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
@@ -991,8 +990,8 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
             manifest, method, 'modified') == {'seed'}
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
-        assert event.info.name == 'SeedIncreased'
-        msg = event.info.msg
+        assert type(event).__name__ == 'SeedIncreased'
+        msg = event.message()
         assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.nodes.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')

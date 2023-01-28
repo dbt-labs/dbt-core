@@ -46,6 +46,7 @@ def cli_runner():
 @p.version
 @p.version_check
 @p.warn_error
+@p.warn_error_options
 @p.write_json
 def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.

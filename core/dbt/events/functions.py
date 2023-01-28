@@ -1,10 +1,9 @@
 import betterproto
 from dbt.constants import METADATA_ENV_PREFIX
-from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut
+from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.events.proto_types import EventInfo
-from dbt.events.types import EmptyLine
+from dbt.events.types import Formatting
 import dbt.flags as flags
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
@@ -17,10 +16,6 @@ import uuid
 
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
-
-# The default event manager will not log anything, but some tests run code that
-# generates events, without configuring the event manager.
-EVENT_MANAGER: EventManager = EventManager()
 
 
 def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = None):
@@ -42,7 +37,7 @@ def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = Non
         EVENT_MANAGER.add_logger(_get_logfile_config(os.path.join(log_path, "dbt.log")))
 
 
-def _get_stdout_config(level: Optional[EventLevel]) -> LoggerConfig:
+def _get_stdout_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     fmt = LineFormat.PlainText
     if flags.LOG_FORMAT == "json":
         fmt = LineFormat.Json
@@ -63,14 +58,14 @@ def _get_stdout_config(level: Optional[EventLevel]) -> LoggerConfig:
 
 
 def _stdout_filter(
-    log_cache_events: bool, debug_mode: bool, quiet_mode: bool, evt: BaseEvent
+    log_cache_events: bool, debug_mode: bool, quiet_mode: bool, msg: EventMsg
 ) -> bool:
     return (
-        not isinstance(evt, NoStdOut)
-        and (not isinstance(evt, Cache) or log_cache_events)
-        and (evt.log_level() != EventLevel.DEBUG or debug_mode)
-        and (evt.log_level() == EventLevel.ERROR or not quiet_mode)
-        and not (flags.LOG_FORMAT == "json" and type(evt) == EmptyLine)
+        not isinstance(msg.data, NoStdOut)
+        and (not isinstance(msg.data, Cache) or log_cache_events)
+        and (EventLevel(msg.info.level) != EventLevel.DEBUG or debug_mode)
+        and (EventLevel(msg.info.level) == EventLevel.ERROR or not quiet_mode)
+        and not (flags.LOG_FORMAT == "json" and type(msg.data) == Formatting)
     )
 
 
@@ -86,18 +81,18 @@ def _get_logfile_config(log_path: str) -> LoggerConfig:
     )
 
 
-def _logfile_filter(log_cache_events: bool, evt: BaseEvent) -> bool:
+def _logfile_filter(log_cache_events: bool, msg: EventMsg) -> bool:
     return (
-        not isinstance(evt, NoFile)
-        and not (isinstance(evt, Cache) and not log_cache_events)
-        and not (flags.LOG_FORMAT == "json" and type(evt) == EmptyLine)
+        not isinstance(msg.data, NoFile)
+        and not (isinstance(msg.data, Cache) and not log_cache_events)
+        and not (flags.LOG_FORMAT == "json" and type(msg.data) == Formatting)
     )
 
 
-def _get_logbook_log_config(level: Optional[EventLevel]) -> LoggerConfig:
+def _get_logbook_log_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     config = _get_stdout_config(level)
     config.name = "logbook_log"
-    config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e, Cache)
+    config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e.data, Cache)
     config.logger = GLOBAL_LOGGER
     return config
 
@@ -112,6 +107,15 @@ def cleanup_event_logger():
     # during test runs, and closes the stream after the test is over.
     EVENT_MANAGER.loggers.clear()
     EVENT_MANAGER.callbacks.clear()
+
+
+# Since dbt-rpc does not do its own log setup, and since some events can
+# currently fire before logs can be configured by setup_event_logger(), we
+# create a default configuration with default settings and no file output.
+EVENT_MANAGER: EventManager = EventManager()
+EVENT_MANAGER.add_logger(
+    _get_logbook_log_config() if flags.ENABLE_LEGACY_LOGGER else _get_stdout_config()
+)
 
 
 # This global, and the following two functions for capturing stdout logs are
@@ -133,47 +137,58 @@ def stop_capture_stdout_logs():
 
 # returns a dictionary representation of the event fields.
 # the message may contain secrets which must be scrubbed at the usage site.
-def event_to_json(event: BaseEvent) -> str:
-    event_dict = event_to_dict(event)
-    raw_log_line = json.dumps(event_dict, sort_keys=True)
+def msg_to_json(msg: EventMsg) -> str:
+    msg_dict = msg_to_dict(msg)
+    raw_log_line = json.dumps(msg_dict, sort_keys=True)
     return raw_log_line
 
 
-def event_to_dict(event: BaseEvent) -> dict:
-    event_dict = dict()
+def msg_to_dict(msg: EventMsg) -> dict:
+    msg_dict = dict()
     try:
-        event_dict = event.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
+        msg_dict = msg.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
     except AttributeError as exc:
-        event_type = type(event).__name__
+        event_type = type(msg).__name__
         raise Exception(f"type {event_type} is not serializable. {str(exc)}")
     # We don't want an empty NodeInfo in output
-    if "node_info" in event_dict and event_dict["node_info"]["node_name"] == "":
-        del event_dict["node_info"]
-    return event_dict
+    if (
+        "data" in msg_dict
+        and "node_info" in msg_dict["data"]
+        and msg_dict["data"]["node_info"]["node_name"] == ""
+    ):
+        del msg_dict["data"]["node_info"]
+    return msg_dict
 
 
 def warn_or_error(event, node=None):
-    if flags.WARN_ERROR:
-        from dbt.exceptions import raise_compiler_error
+    # TODO: resolve this circular import when flags.WARN_ERROR_OPTIONS is WarnErrorOptions type via click CLI.
+    from dbt.helper_types import WarnErrorOptions
 
-        raise_compiler_error(scrub_secrets(event.info.msg, env_secrets()), node)
+    warn_error_options = WarnErrorOptions.from_yaml_string(flags.WARN_ERROR_OPTIONS)
+    if flags.WARN_ERROR or warn_error_options.includes(type(event).__name__):
+        # TODO: resolve this circular import when at top
+        from dbt.exceptions import EventCompilationError
+
+        raise EventCompilationError(event.message(), node)
     else:
         fire_event(event)
 
 
 # an alternative to fire_event which only creates and logs the event value
 # if the condition is met. Does nothing otherwise.
-def fire_event_if(conditional: bool, lazy_e: Callable[[], BaseEvent]) -> None:
+def fire_event_if(
+    conditional: bool, lazy_e: Callable[[], BaseEvent], level: EventLevel = None
+) -> None:
     if conditional:
-        fire_event(lazy_e())
+        fire_event(lazy_e(), level=level)
 
 
 # top-level method for accessing the new eventing system
 # this is where all the side effects happen branched by event type
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
-def fire_event(e: BaseEvent) -> None:
-    EVENT_MANAGER.fire_event(e)
+def fire_event(e: BaseEvent, level: EventLevel = None) -> None:
+    EVENT_MANAGER.fire_event(e, level=level)
 
 
 def get_metadata_vars() -> Dict[str, str]:
@@ -200,11 +215,3 @@ def set_invocation_id() -> None:
     # This is primarily for setting the invocation_id for separate
     # commands in the dbt servers. It shouldn't be necessary for the CLI.
     EVENT_MANAGER.invocation_id = str(uuid.uuid4())
-
-
-# Currently used to set the level in EventInfo, so logging events can
-# provide more than one "level". Might be used in the future to set
-# more fields in EventInfo, once some of that information is no longer global
-def info(level="info"):
-    info = EventInfo(level=level)
-    return info

@@ -6,17 +6,17 @@ from .printer import (
 )
 
 from dbt.contracts.results import RunStatus
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import TextOnly
-from dbt.events.functions import fire_event, info
+from dbt.events.functions import fire_event
 from dbt.events.types import (
     SeedHeader,
-    SeedHeaderSeparator,
-    EmptyLine,
+    Formatting,
     LogSeedResult,
     LogStartLine,
 )
+from dbt.events.base_types import EventLevel
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus
 
@@ -46,10 +46,9 @@ class SeedRunner(ModelRunner):
 
     def print_result_line(self, result):
         model = result.node
-        level = "error" if result.status == NodeStatus.Error else "info"
+        level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
         fire_event(
             LogSeedResult(
-                info=info(level=level),
                 status=result.status,
                 result_message=result.message,
                 index=self.node_index,
@@ -58,7 +57,8 @@ class SeedRunner(ModelRunner):
                 schema=self.node.schema,
                 relation=model.alias,
                 node_info=model.node_info,
-            )
+            ),
+            level=level,
         )
 
 
@@ -72,7 +72,7 @@ class SeedTask(RunTask):
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
-            raise InternalException("manifest and graph must be set to get perform node selection")
+            raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
@@ -98,13 +98,13 @@ class SeedTask(RunTask):
 
         header = "Random sample of table: {}.{}".format(schema, alias)
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
         fire_event(SeedHeader(header=header))
-        fire_event(SeedHeaderSeparator(len_header=len(header)))
+        fire_event(Formatting("-" * len(header)))
 
         rand_table.print_table(max_rows=10, max_columns=None)
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
 
     def show_tables(self, results):
         for result in results:

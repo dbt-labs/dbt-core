@@ -12,7 +12,7 @@ from dbt.contracts.files import (
 )
 
 from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
 from typing import Optional
 
@@ -75,21 +75,21 @@ def validate_yaml(file_path, dct):
                     f"The schema file at {file_path} is "
                     f"invalid because the value of '{key}' is not a list"
                 )
-                raise ParsingException(msg)
+                raise ParsingError(msg)
             for element in dct[key]:
                 if not isinstance(element, dict):
                     msg = (
                         f"The schema file at {file_path} is "
                         f"invalid because a list element for '{key}' is not a dictionary"
                     )
-                    raise ParsingException(msg)
+                    raise ParsingError(msg)
                 if "name" not in element:
                     msg = (
                         f"The schema file at {file_path} is "
                         f"invalid because a list element for '{key}' does not have a "
                         "name attribute."
                     )
-                    raise ParsingException(msg)
+                    raise ParsingError(msg)
 
 
 # Special processing for big seed files

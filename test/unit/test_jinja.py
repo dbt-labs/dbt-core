@@ -6,7 +6,7 @@ import yaml
 from dbt.clients.jinja import get_rendered
 from dbt.clients.jinja import get_template
 from dbt.clients.jinja import extract_toplevel_blocks
-from dbt.exceptions import CompilationException, JinjaRenderingException
+from dbt.exceptions import CompilationError, JinjaRenderingError
 
 
 @contextmanager
@@ -55,12 +55,12 @@ jinja_tests = [
     (
         '''foo: "{{ 'bar' | as_bool }}"''',
         returns('bar'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ 'bar' | as_number }}"''',
         returns('bar'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ 'bar' | as_native }}"''',
@@ -116,7 +116,7 @@ jinja_tests = [
     (
         '''foo: "{{ 1 | as_bool }}"''',
         returns('1'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ 1 | as_number }}"''',
@@ -136,7 +136,7 @@ jinja_tests = [
     (
         '''foo: "{{ '1' | as_bool }}"''',
         returns('1'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ '1' | as_number }}"''',
@@ -171,7 +171,7 @@ jinja_tests = [
     (
         '''foo: "{{ True | as_number }}"''',
         returns('True'),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ True | as_native }}"''',
@@ -197,7 +197,7 @@ jinja_tests = [
     (
         '''foo: "{{ true | as_number }}"''',
         returns("True"),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ true | as_native }}"''',
@@ -254,7 +254,7 @@ jinja_tests = [
     (
         '''foo: "{{ True | as_number }}"''',
         returns("True"),
-        raises(JinjaRenderingException),
+        raises(JinjaRenderingError),
     ),
     (
         '''foo: "{{ True | as_native }}"''',
@@ -552,24 +552,24 @@ class TestBlockLexer(unittest.TestCase):
     def test_nested_not_ok(self):
         # we don't allow nesting same blocks
         body = '{% myblock a %} {% myblock b %} {% endmyblock %} {% endmyblock %}'
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             extract_toplevel_blocks(body, allowed_blocks={'myblock'})
 
     def test_incomplete_block_failure(self):
         fullbody = '{% myblock foo %} {% endmyblock %}'
         for length in range(len('{% myblock foo %}'), len(fullbody)-1):
             body = fullbody[:length]
-            with self.assertRaises(CompilationException):
+            with self.assertRaises(CompilationError):
                 extract_toplevel_blocks(body, allowed_blocks={'myblock'})
 
     def test_wrong_end_failure(self):
         body = '{% myblock foo %} {% endotherblock %}'
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             extract_toplevel_blocks(body, allowed_blocks={'myblock', 'otherblock'})
 
     def test_comment_no_end_failure(self):
         body = '{# '
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             extract_toplevel_blocks(body)
 
     def test_comment_only(self):
@@ -698,7 +698,7 @@ class TestBlockLexer(unittest.TestCase):
     def test_if(self):
         # if you conditionally define your macros/models, don't
         body = '{% if true %}{% macro my_macro() %} adsf {% endmacro %}{% endif %}'
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             extract_toplevel_blocks(body)
 
     def test_if_innocuous(self):
@@ -710,7 +710,7 @@ class TestBlockLexer(unittest.TestCase):
     def test_for(self):
         # no for-loops over macros.
         body = '{% for x in range(10) %}{% macro my_macro() %} adsf {% endmacro %}{% endfor %}'
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(CompilationError):
             extract_toplevel_blocks(body)
 
     def test_for_innocuous(self):
@@ -722,19 +722,19 @@ class TestBlockLexer(unittest.TestCase):
 
     def test_endif(self):
         body = '{% snapshot foo %}select * from thing{% endsnapshot%}{% endif %}'
-        with self.assertRaises(CompilationException) as err:
+        with self.assertRaises(CompilationError) as err:
             extract_toplevel_blocks(body)
         self.assertIn('Got an unexpected control flow end tag, got endif but never saw a preceeding if (@ 1:53)', str(err.exception))
 
     def test_if_endfor(self):
         body = '{% if x %}...{% endfor %}{% endif %}'
-        with self.assertRaises(CompilationException) as err:
+        with self.assertRaises(CompilationError) as err:
             extract_toplevel_blocks(body)
         self.assertIn('Got an unexpected control flow end tag, got endfor but expected endif next (@ 1:13)', str(err.exception))
 
     def test_if_endfor_newlines(self):
         body = '{% if x %}\n    ...\n    {% endfor %}\n{% endif %}'
-        with self.assertRaises(CompilationException) as err:
+        with self.assertRaises(CompilationError) as err:
             extract_toplevel_blocks(body)
         self.assertIn('Got an unexpected control flow end tag, got endfor but expected endif next (@ 3:4)', str(err.exception))
 

@@ -97,7 +97,7 @@ class TestAdapterMacroNoDestination:
         return {"my_macros.sql": macros__no_default_macros}
 
     def test_invalid_macro(self, project):
-        with pytest.raises(dbt.exceptions.CompilationException) as exc:
+        with pytest.raises(dbt.exceptions.CompilationError) as exc:
             run_dbt()
 
         assert "In dispatch: No macro named 'dispatch_to_nowhere' found" in str(exc.value)
@@ -213,7 +213,7 @@ class TestAdapterMacroDeprecated:
         return {"macro.sql": macros__deprecated_adapter_macro}
 
     def test_invalid_macro(self, project):
-        with pytest.raises(dbt.exceptions.CompilationException) as exc:
+        with pytest.raises(dbt.exceptions.CompilationError) as exc:
             run_dbt()
 
         assert 'The "adapter_macro" macro has been deprecated' in str(exc.value)

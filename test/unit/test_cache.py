@@ -121,7 +121,7 @@ class TestRename(TestCache):
         self.cache.add(bar)
         self.assert_relations_exist('DBT', 'schema', 'foo', 'bar')
 
-        with self.assertRaises(dbt.exceptions.InternalException):
+        with self.assertRaises(dbt.exceptions.DbtInternalError):
             self.cache.rename(foo, bar)
 
         self.assert_relations_exist('DBT', 'schema', 'foo', 'bar')

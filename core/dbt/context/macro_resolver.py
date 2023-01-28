@@ -1,6 +1,6 @@
 from typing import Dict, MutableMapping, Optional
 from dbt.contracts.graph.nodes import Macro
-from dbt.exceptions import raise_duplicate_macro_name, raise_compiler_error
+from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.clients.jinja import MacroGenerator
 
@@ -86,7 +86,7 @@ class MacroResolver:
             package_namespaces[macro.package_name] = namespace
 
         if macro.name in namespace:
-            raise_duplicate_macro_name(macro, macro, macro.package_name)
+            raise DuplicateMacroNameError(macro, macro, macro.package_name)
         package_namespaces[macro.package_name][macro.name] = macro
 
     def add_macro(self, macro: Macro):
@@ -187,7 +187,7 @@ class TestMacroNamespace:
         elif package_name in self.macro_resolver.packages:
             macro = self.macro_resolver.packages[package_name].get(name)
         else:
-            raise_compiler_error(f"Could not find package '{package_name}'")
+            raise PackageNotFoundForMacroError(package_name)
         if not macro:
             return None
         macro_func = MacroGenerator(macro, self.ctx, self.node, self.thread_ctx)

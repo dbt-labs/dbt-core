@@ -3,6 +3,13 @@ from enum import Enum
 import os
 import threading
 from datetime import datetime
+import dbt.events.proto_types as pt
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import Protocol
+else:
+    from typing_extensions import Protocol
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # These base types define the _required structure_ for the concrete event #
@@ -58,31 +65,57 @@ class EventLevel(str, Enum):
 class BaseEvent:
     """BaseEvent for proto message generated python events"""
 
-    def __post_init__(self):
-        super().__post_init__()
-        if not self.info.level:
-            self.info.level = self.level_tag()
-        assert self.info.level in ["info", "warn", "error", "debug", "test"]
-        if not hasattr(self.info, "msg") or not self.info.msg:
-            self.info.msg = self.message()
-        self.info.invocation_id = get_invocation_id()
-        self.info.extra = get_global_metadata_vars()
-        self.info.ts = datetime.utcnow()
-        self.info.pid = get_pid()
-        self.info.thread = get_thread_name()
-        self.info.code = self.code()
-        self.info.name = type(self).__name__
-
-    # This is here because although we know that info should always
-    # exist, mypy doesn't.
-    def log_level(self) -> EventLevel:
-        return self.info.level  # type: ignore
+    #   def __post_init__(self):
+    #       super().__post_init__()
+    #       if not self.info.level:
+    #           self.info.level = self.level_tag()
+    #       assert self.info.level in ["info", "warn", "error", "debug", "test"]
+    #       if not hasattr(self.info, "msg") or not self.info.msg:
+    #           self.info.msg = self.message()
+    #       self.info.invocation_id = get_invocation_id()
+    #       self.info.extra = get_global_metadata_vars()
+    #       self.info.ts = datetime.utcnow()
+    #       self.info.pid = get_pid()
+    #       self.info.thread = get_thread_name()
+    #       self.info.code = self.code()
+    #       self.info.name = type(self).__name__
 
     def level_tag(self) -> EventLevel:
         return EventLevel.DEBUG
 
     def message(self) -> str:
         raise Exception("message() not implemented for event")
+
+    def code(self) -> str:
+        raise Exception("code() not implemented for event")
+
+
+class EventMsg(Protocol):
+    info: pt.EventInfo
+    data: BaseEvent
+
+
+def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
+
+    msg_class_name = f"{type(event).__name__}Msg"
+    msg_cls = getattr(pt, msg_class_name)
+
+    # level in EventInfo must be a string, not an EventLevel
+    msg_level: str = level.value if level else event.level_tag().value
+    assert msg_level is not None
+    event_info = pt.EventInfo(
+        level=msg_level,
+        msg=event.message(),
+        invocation_id=get_invocation_id(),
+        extra=get_global_metadata_vars(),
+        ts=datetime.utcnow(),
+        pid=get_pid(),
+        thread=get_thread_name(),
+        code=event.code(),
+        name=type(event).__name__,
+    )
+    new_event = msg_cls(data=event, info=event_info)
+    return new_event
 
 
 # DynamicLevel requires that the level be supplied on the

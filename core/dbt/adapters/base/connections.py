@@ -91,13 +91,13 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         with self.lock:
             if key not in self.thread_connections:
-                raise dbt.exceptions.InvalidConnectionException(key, list(self.thread_connections))
+                raise dbt.exceptions.InvalidConnectionError(key, list(self.thread_connections))
             return self.thread_connections[key]
 
     def set_thread_connection(self, conn: Connection) -> None:
         key = self.get_thread_identifier()
         if key in self.thread_connections:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 "In set_thread_connection, existing connection exists for {}"
             )
         self.thread_connections[key] = conn
@@ -137,49 +137,49 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A context manager that handles exceptions raised by the
             underlying database.
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`exception_handler` is not implemented for this adapter!"
         )
 
     def set_connection_name(self, name: Optional[str] = None) -> Connection:
-        conn_name: str
-        if name is None:
-            # if a name isn't specified, we'll re-use a single handle
-            # named 'master'
-            conn_name = "master"
-        else:
-            if not isinstance(name, str):
-                raise dbt.exceptions.CompilerException(
-                    f"For connection name, got {name} - not a string!"
-                )
-            assert isinstance(name, str)
-            conn_name = name
+        """Called by 'acquire_connection' in BaseAdapter, which is called by
+        'connection_named', called by 'connection_for(node)'.
+        Creates a connection for this thread if one doesn't already
+        exist, and will rename an existing connection."""
 
+        conn_name: str = "master" if name is None else name
+
+        # Get a connection for this thread
         conn = self.get_if_exists()
+
+        if conn and conn.name == conn_name and conn.state == "open":
+            # Found a connection and nothing to do, so just return it
+            return conn
+
         if conn is None:
+            # Create a new connection
             conn = Connection(
                 type=Identifier(self.TYPE),
-                name=None,
+                name=conn_name,
                 state=ConnectionState.INIT,
                 transaction_open=False,
                 handle=None,
                 credentials=self.profile.credentials,
             )
-            self.set_thread_connection(conn)
-
-        if conn.name == conn_name and conn.state == "open":
-            return conn
-
-        fire_event(
-            NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info())
-        )
-
-        if conn.state == "open":
-            fire_event(ConnectionReused(conn_name=conn_name))
-        else:
             conn.handle = LazyHandle(self.open)
+            # Add the connection to thread_connections for this thread
+            self.set_thread_connection(conn)
+            fire_event(
+                NewConnection(conn_name=conn_name, conn_type=self.TYPE, node_info=get_node_info())
+            )
+        else:  # existing connection either wasn't open or didn't have the right name
+            if conn.state != "open":
+                conn.handle = LazyHandle(self.open)
+            if conn.name != conn_name:
+                orig_conn_name: str = conn.name or ""
+                conn.name = conn_name
+                fire_event(ConnectionReused(orig_conn_name=orig_conn_name, conn_name=conn_name))
 
-        conn.name = conn_name
         return conn
 
     @classmethod
@@ -211,7 +211,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             connect should trigger a retry.
         :type retryable_exceptions: Iterable[Type[Exception]]
         :param int retry_limit: How many times to retry the call to connect. If this limit
-            is exceeded before a successful call, a FailedToConnectException will be raised.
+            is exceeded before a successful call, a FailedToConnectError will be raised.
             Must be non-negative.
         :param retry_timeout: Time to wait between attempts to connect. Can also take a
             Callable that takes the number of attempts so far, beginning at 0, and returns an int
@@ -220,14 +220,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :param int _attempts: Parameter used to keep track of the number of attempts in calling the
             connect function across recursive calls. Passed as an argument to retry_timeout if it
             is a Callable. This parameter should not be set by the initial caller.
-        :raises dbt.exceptions.FailedToConnectException: Upon exhausting all retry attempts without
+        :raises dbt.exceptions.FailedToConnectError: Upon exhausting all retry attempts without
             successfully acquiring a handle.
         :return: The given connection with its appropriate state and handle attributes set
             depending on whether we successfully acquired a handle or not.
         """
         timeout = retry_timeout(_attempts) if callable(retry_timeout) else retry_timeout
         if timeout < 0:
-            raise dbt.exceptions.FailedToConnectException(
+            raise dbt.exceptions.FailedToConnectError(
                 "retry_timeout cannot be negative or return a negative time."
             )
 
@@ -235,7 +235,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             # This guard is not perfect others may add to the recursion limit (e.g. built-ins).
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.exceptions.FailedToConnectException("retry_limit cannot be negative")
+            raise dbt.exceptions.FailedToConnectError("retry_limit cannot be negative")
 
         try:
             connection.handle = connect()
@@ -246,7 +246,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             if retry_limit <= 0:
                 connection.handle = None
                 connection.state = ConnectionState.FAIL
-                raise dbt.exceptions.FailedToConnectException(str(e))
+                raise dbt.exceptions.FailedToConnectError(str(e))
 
             logger.debug(
                 f"Got a retryable error when attempting to open a {cls.TYPE} connection.\n"
@@ -268,12 +268,12 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         except Exception as e:
             connection.handle = None
             connection.state = ConnectionState.FAIL
-            raise dbt.exceptions.FailedToConnectException(str(e))
+            raise dbt.exceptions.FailedToConnectError(str(e))
 
     @abc.abstractmethod
     def cancel_open(self) -> Optional[List[str]]:
         """Cancel all open connections on the adapter. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`cancel_open` is not implemented for this adapter!"
         )
 
@@ -288,7 +288,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        raise dbt.exceptions.NotImplementedException("`open` is not implemented for this adapter!")
+        raise dbt.exceptions.NotImplementedError("`open` is not implemented for this adapter!")
 
     def release(self) -> None:
         with self.lock:
@@ -320,16 +320,12 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def begin(self) -> None:
         """Begin a transaction. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            "`begin` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`begin` is not implemented for this adapter!")
 
     @abc.abstractmethod
     def commit(self) -> None:
         """Commit a transaction. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            "`commit` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`commit` is not implemented for this adapter!")
 
     @classmethod
     def _rollback_handle(cls, connection: Connection) -> None:
@@ -365,7 +361,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
         if connection.transaction_open is False:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 f"Tried to rollback transaction on connection "
                 f'"{connection.name}", but it does not have one open!'
             )
@@ -415,6 +411,4 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        raise dbt.exceptions.NotImplementedException(
-            "`execute` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`execute` is not implemented for this adapter!")

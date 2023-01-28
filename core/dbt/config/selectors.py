@@ -12,7 +12,7 @@ from dbt.clients.system import (
     resolve_path_from_base,
 )
 from dbt.contracts.selection import SelectorFile
-from dbt.exceptions import DbtSelectorsError, RuntimeException
+from dbt.exceptions import DbtSelectorsError, DbtRuntimeError
 from dbt.graph import parse_from_selectors_definition, SelectionSpec
 from dbt.graph.selector_spec import SelectionCriteria
 
@@ -46,7 +46,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
                 f"yaml-selectors",
                 result_type="invalid_selector",
             ) from exc
-        except RuntimeException as exc:
+        except DbtRuntimeError as exc:
             raise DbtSelectorsError(
                 f"Could not read selector file data: {exc}",
                 result_type="invalid_selector",
@@ -62,7 +62,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     ) -> "SelectorConfig":
         try:
             rendered = renderer.render_data(data)
-        except (ValidationError, RuntimeException) as exc:
+        except (ValidationError, DbtRuntimeError) as exc:
             raise DbtSelectorsError(
                 f"Could not render selector data: {exc}",
                 result_type="invalid_selector",
@@ -77,7 +77,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     ) -> "SelectorConfig":
         try:
             data = load_yaml_text(load_file_contents(str(path)))
-        except (ValidationError, RuntimeException) as exc:
+        except (ValidationError, DbtRuntimeError) as exc:
             raise DbtSelectorsError(
                 f"Could not read selector file: {exc}",
                 result_type="invalid_selector",

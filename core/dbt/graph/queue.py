@@ -40,7 +40,7 @@ class GraphQueue:
         # store the 'score' of each node as a number. Lower is higher priority.
         self._scores = self._get_scores(self.graph)
         # populate the initial queue
-        self._find_new_additions()
+        self._find_new_additions(list(self.graph.nodes()))
         # awaits after task end
         self.some_task_done = threading.Condition(self.lock)
 
@@ -156,12 +156,12 @@ class GraphQueue:
         """
         return node in self.in_progress or node in self.queued
 
-    def _find_new_additions(self) -> None:
+    def _find_new_additions(self, candidates) -> None:
         """Find any nodes in the graph that need to be added to the internal
         queue and add them.
         """
-        for node, in_degree in self.graph.in_degree():
-            if not self._already_known(node) and in_degree == 0:
+        for node in candidates:
+            if self.graph.in_degree(node) == 0 and not self._already_known(node):
                 self.inner.put((self._scores[node], node))
                 self.queued.add(node)
 
@@ -174,8 +174,9 @@ class GraphQueue:
         """
         with self.lock:
             self.in_progress.remove(node_id)
+            successors = list(self.graph.successors(node_id))
             self.graph.remove_node(node_id)
-            self._find_new_additions()
+            self._find_new_additions(successors)
             self.inner.task_done()
             self.some_task_done.notify_all()
 

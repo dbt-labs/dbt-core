@@ -1,7 +1,15 @@
 import re
 from collections import namedtuple
 
-import dbt.exceptions
+from dbt.exceptions import (
+    BlockDefinitionNotAtTopError,
+    DbtInternalError,
+    MissingCloseTagError,
+    MissingControlFlowStartTagError,
+    NestedTagsError,
+    UnexpectedControlFlowEndTagError,
+    UnexpectedMacroEOFError,
+)
 
 
 def regex(pat):
@@ -139,10 +147,7 @@ class TagIterator:
     def _expect_match(self, expected_name, *patterns, **kwargs):
         match = self._first_match(*patterns, **kwargs)
         if match is None:
-            msg = 'unexpected EOF, expected {}, got "{}"'.format(
-                expected_name, self.data[self.pos :]
-            )
-            dbt.exceptions.raise_compiler_error(msg)
+            raise UnexpectedMacroEOFError(expected_name, self.data[self.pos :])
         return match
 
     def handle_expr(self, match):
@@ -256,20 +261,13 @@ class TagIterator:
             elif block_type_name is not None:
                 yield self.handle_tag(match)
             else:
-                raise dbt.exceptions.InternalException(
+                raise DbtInternalError(
                     "Invalid regex match in next_block, expected block start, "
                     "expr start, or comment start"
                 )
 
     def __iter__(self):
         return self.find_tags()
-
-
-duplicate_tags = (
-    "Got nested tags: {outer.block_type_name} (started at {outer.start}) did "
-    "not have a matching {{% end{outer.block_type_name} %}} before a "
-    "subsequent {inner.block_type_name} was found (started at {inner.start})"
-)
 
 
 _CONTROL_FLOW_TAGS = {
@@ -319,33 +317,16 @@ class BlockIterator:
                     found = self.stack.pop()
                 else:
                     expected = _CONTROL_FLOW_END_TAGS[tag.block_type_name]
-                    dbt.exceptions.raise_compiler_error(
-                        (
-                            "Got an unexpected control flow end tag, got {} but "
-                            "never saw a preceeding {} (@ {})"
-                        ).format(tag.block_type_name, expected, self.tag_parser.linepos(tag.start))
-                    )
+                    raise UnexpectedControlFlowEndTagError(tag, expected, self.tag_parser)
                 expected = _CONTROL_FLOW_TAGS[found]
                 if expected != tag.block_type_name:
-                    dbt.exceptions.raise_compiler_error(
-                        (
-                            "Got an unexpected control flow end tag, got {} but "
-                            "expected {} next (@ {})"
-                        ).format(tag.block_type_name, expected, self.tag_parser.linepos(tag.start))
-                    )
+                    raise MissingControlFlowStartTagError(tag, expected, self.tag_parser)
 
             if tag.block_type_name in allowed_blocks:
                 if self.stack:
-                    dbt.exceptions.raise_compiler_error(
-                        (
-                            "Got a block definition inside control flow at {}. "
-                            "All dbt block definitions must be at the top level"
-                        ).format(self.tag_parser.linepos(tag.start))
-                    )
+                    raise BlockDefinitionNotAtTopError(self.tag_parser, tag.start)
                 if self.current is not None:
-                    dbt.exceptions.raise_compiler_error(
-                        duplicate_tags.format(outer=self.current, inner=tag)
-                    )
+                    raise NestedTagsError(outer=self.current, inner=tag)
                 if collect_raw_data:
                     raw_data = self.data[self.last_position : tag.start]
                     self.last_position = tag.start
@@ -366,11 +347,7 @@ class BlockIterator:
 
         if self.current:
             linecount = self.data[: self.current.end].count("\n") + 1
-            dbt.exceptions.raise_compiler_error(
-                ("Reached EOF without finding a close tag for {} (searched from line {})").format(
-                    self.current.block_type_name, linecount
-                )
-            )
+            raise MissingCloseTagError(self.current.block_type_name, linecount)
 
         if collect_raw_data:
             raw_data = self.data[self.last_position :]

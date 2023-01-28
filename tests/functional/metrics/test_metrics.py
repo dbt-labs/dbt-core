@@ -1,7 +1,8 @@
 import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
+
 
 from tests.functional.metrics.fixtures import (
     mock_purchase_data_csv,
@@ -18,6 +19,9 @@ from tests.functional.metrics.fixtures import (
     invalid_derived_metric_contains_model_yml,
     derived_metric_yml,
     derived_metric_old_attr_names_yml,
+    metric_without_timestamp_or_timegrains_yml,
+    invalid_metric_without_timestamp_with_time_grains_yml,
+    invalid_metric_without_timestamp_with_window_yml,
 )
 
 
@@ -46,6 +50,33 @@ class TestSimpleMetrics:
         assert metric_ids == expected_metric_ids
 
 
+class TestSimpleMetricsNoTimestamp:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": metric_without_timestamp_or_timegrains_yml,
+            "people.sql": models_people_sql,
+        }
+
+    def test_simple_metric_no_timestamp(
+        self,
+        project,
+    ):
+        # initial run
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        metric_ids = list(manifest.metrics.keys())
+        expected_metric_ids = [
+            "metric.test.number_of_people",
+        ]
+        assert metric_ids == expected_metric_ids
+
+        # make sure the 'expression' metric depends on the two upstream metrics
+        metric_test = manifest.metrics["metric.test.number_of_people"]
+        assert metric_test.timestamp is None
+
+
 class TestInvalidRefMetrics:
     @pytest.fixture(scope="class")
     def models(self):
@@ -54,14 +85,14 @@ class TestInvalidRefMetrics:
             "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
+    # tests that we get a ParsingError with an invalid model ref, where
     # the model name does not have quotes
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -73,14 +104,14 @@ class TestInvalidMetricMissingModel:
             "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
+    # tests that we get a ParsingError with an invalid model ref, where
     # the model name does not have quotes
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -92,13 +123,13 @@ class TestInvalidMetricMissingExpression:
             "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with a missing expression
+    # tests that we get a ParsingError with a missing expression
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -111,7 +142,7 @@ class TestNamesWithSpaces:
         }
 
     def test_names_with_spaces(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "cannot contain spaces" in str(exc.value)
 
@@ -125,7 +156,7 @@ class TestNamesWithSpecialChar:
         }
 
     def test_names_with_special_char(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "must contain only letters, numbers and underscores" in str(exc.value)
 
@@ -139,7 +170,7 @@ class TestNamesWithLeandingNumber:
         }
 
     def test_names_with_leading_number(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "must begin with a letter" in str(exc.value)
 
@@ -153,7 +184,7 @@ class TestLongName:
         }
 
     def test_long_name(self, project):
-        with pytest.raises(ParsingException) as exc:
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
         assert "cannot contain more than 250 characters" in str(exc.value)
 
@@ -167,7 +198,7 @@ class TestInvalidDerivedMetrics:
         }
 
     def test_invalid_derived_metrics(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
@@ -253,3 +284,41 @@ class TestDerivedMetricOldAttrNames(TestDerivedMetric):
             "derived_metric.yml": derived_metric_old_attr_names_yml,
             "downstream_model.sql": downstream_model_sql,
         }
+
+
+class TestInvalidTimestampTimeGrainsMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metric_without_timestamp_with_time_grains_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that we get a ParsingError with an invalid metric definition.
+    # This metric definition is missing timestamp but HAS a time_grains property
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])
+
+
+class TestInvalidTimestampWindowMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metric_without_timestamp_with_window_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that we get a ParsingError with an invalid metric definition.
+    # This metric definition is missing timestamp but HAS a window property
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])

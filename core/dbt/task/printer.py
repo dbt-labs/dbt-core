@@ -5,7 +5,7 @@ from dbt.logger import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    EmptyLine,
+    Formatting,
     RunResultWarning,
     RunResultWarningMessage,
     RunResultFailure,
@@ -72,14 +72,14 @@ def print_run_status_line(results) -> None:
         stats["total"] += 1
 
     with TextOnly():
-        fire_event(EmptyLine())
+        fire_event(Formatting(""))
     fire_event(StatsLine(stats=stats))
 
 
 def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
     if newline:
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
 
     if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
         if is_warning:
@@ -109,12 +109,12 @@ def print_run_result_error(result, newline: bool = True, is_warning: bool = Fals
 
         if result.node.build_path is not None:
             with TextOnly():
-                fire_event(EmptyLine())
+                fire_event(Formatting(""))
             fire_event(SQLCompiledPath(path=result.node.compiled_path))
 
         if result.node.should_store_failures:
             with TextOnly():
-                fire_event(EmptyLine())
+                fire_event(Formatting(""))
             fire_event(CheckNodeTestFailure(relation_name=result.node.relation_name))
 
     elif result.message is not None:
@@ -143,7 +143,7 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
 
     with DbtStatusMessage(), InvocationProcessor():
         with TextOnly():
-            fire_event(EmptyLine())
+            fire_event(Formatting(""))
         fire_event(
             EndOfRunSummary(
                 num_errors=len(errors),
