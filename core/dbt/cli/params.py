@@ -92,6 +92,12 @@ fail_fast = click.option(
     help="Stop execution on first failure.",
 )
 
+favor_state = click.option(
+    "--favor-state/--no-favor-state",
+    envvar="DBT_FAVOR_STATE",
+    help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
+)
+
 full_refresh = click.option(
     "--full-refresh",
     "-f",

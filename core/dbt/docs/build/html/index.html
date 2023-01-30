@@ -79,6 +79,11 @@
 <p>Type: boolean</p>
 <p>Stop execution on first failure.</p>
 </section>
+<section id="build|favor_state">
+<h4>favor_state<a class="headerlink" href="#build|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="build|full_refresh">
 <h4>full_refresh<a class="headerlink" href="#build|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
@@ -195,6 +200,11 @@
 <h4>exclude<a class="headerlink" href="#compile|exclude" title="Permalink to this heading">¶</a></h4>
 <p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
+</section>
+<section id="compile|favor_state">
+<h4>favor_state<a class="headerlink" href="#compile|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
 </section>
 <section id="compile|full_refresh">
 <h4>full_refresh<a class="headerlink" href="#compile|full_refresh" title="Permalink to this heading">¶</a></h4>
@@ -563,6 +573,11 @@
 <p>Type: boolean</p>
 <p>If set, defer to the state variable for resolving unselected nodes.</p>
 </section>
+<section id="run|favor_state">
+<h4>favor_state<a class="headerlink" href="#run|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="run|exclude">
 <h4>exclude<a class="headerlink" href="#run|exclude" title="Permalink to this heading">¶</a></h4>
 <p>Type: unknown</p>
@@ -760,6 +775,11 @@
 <p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
+<section id="snapshot|favor_state">
+<h4>favor_state<a class="headerlink" href="#snapshot|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="snapshot|models">
 <h4>models<a class="headerlink" href="#snapshot|models" title="Permalink to this heading">¶</a></h4>
 <p>Type: unknown</p>
@@ -826,6 +846,11 @@
 <h4>fail_fast<a class="headerlink" href="#test|fail_fast" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Stop execution on first failure.</p>
+</section>
+<section id="test|favor_state">
+<h4>favor_state<a class="headerlink" href="#test|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
 </section>
 <section id="test|indirect_selection">
 <h4>indirect_selection<a class="headerlink" href="#test|indirect_selection" title="Permalink to this heading">¶</a></h4>
