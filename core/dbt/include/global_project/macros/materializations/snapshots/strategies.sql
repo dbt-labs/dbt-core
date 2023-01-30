@@ -105,7 +105,9 @@
     {% elif check_cols_config is iterable and (check_cols_config | length) > 0 %}
         {#-- query for proper casing/quoting, to support comparison below --#}
         {%- set select_check_cols_from_target -%}
-          select {{ check_cols_config | join(', ') }} from ({{ node['compiled_code'] }}) subq
+          select {{ check_cols_config | join(', ') }} from (
+              {{ node['compiled_code'] }}
+          ) subq
         {%- endset -%}
         {% set query_columns = get_columns_in_query(select_check_cols_from_target) %}
 
