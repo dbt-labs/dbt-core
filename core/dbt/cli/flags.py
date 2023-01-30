@@ -7,7 +7,7 @@ from multiprocessing import get_context
 from pprint import pformat as pf
 from typing import Set, List
 
-from click import Context, get_current_context, UsageError
+from click import Context, get_current_context, BadOptionUsage
 from click.core import ParameterSource
 
 from dbt.config.profile import read_user_config
@@ -107,6 +107,8 @@ class Flags:
         for flag in group:
             flag_set_by_user = flag.lower() not in params_assigned_from_default
             if flag_set_by_user and set_flag:
-                raise UsageError(f"{flag.lower()}: not allowed with argument {set_flag.lower()}")
+                raise BadOptionUsage(
+                    flag.lower(), f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
+                )
             elif flag_set_by_user:
                 set_flag = flag
