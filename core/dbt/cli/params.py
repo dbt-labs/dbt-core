@@ -75,13 +75,6 @@ defer = click.option(
     help="If set, defer to the state variable for resolving unselected nodes.",
 )
 
-favor_state = click.option(
-    "--favor-state/--no-favor-state",
-    envvar="DBT_FAVOR_STATE",
-    help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
-)
-
-
 enable_legacy_logger = click.option(
     "--enable-legacy-logger/--no-enable-legacy-logger",
     envvar="DBT_ENABLE_LEGACY_LOGGER",
@@ -97,6 +90,12 @@ fail_fast = click.option(
     "-x/ ",
     envvar="DBT_FAIL_FAST",
     help="Stop execution on first failure.",
+)
+
+favor_state = click.option(
+    "--favor-state/--no-favor-state",
+    envvar="DBT_FAVOR_STATE",
+    help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
 )
 
 full_refresh = click.option(

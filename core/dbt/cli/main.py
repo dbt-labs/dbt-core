@@ -101,9 +101,9 @@ def cli(ctx, **kwargs):
 @cli.command("build")
 @click.pass_context
 @p.defer
-@p.favor_state
 @p.exclude
 @p.fail_fast
+@p.favor_state
 @p.full_refresh
 @p.indirect_selection
 @p.profile
@@ -170,8 +170,8 @@ def docs(ctx, **kwargs):
 @click.pass_context
 @p.compile_docs
 @p.defer
-@p.favor_state
 @p.exclude
+@p.favor_state
 @p.models
 @p.profile
 @p.profiles_dir
@@ -234,8 +234,8 @@ def docs_serve(ctx, **kwargs):
 @cli.command("compile")
 @click.pass_context
 @p.defer
-@p.favor_state
 @p.exclude
+@p.favor_state
 @p.full_refresh
 @p.models
 @p.parse_only
@@ -506,8 +506,8 @@ def seed(ctx, **kwargs):
 @cli.command("snapshot")
 @click.pass_context
 @p.defer
-@p.favor_state
 @p.exclude
+@p.favor_state
 @p.models
 @p.profile
 @p.profiles_dir
@@ -586,9 +586,9 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @cli.command("test")
 @click.pass_context
 @p.defer
-@p.favor_state
 @p.exclude
 @p.fail_fast
+@p.favor_state
 @p.indirect_selection
 @p.models
 @p.profile
