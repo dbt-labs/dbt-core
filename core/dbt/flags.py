@@ -9,6 +9,8 @@ if os_name != "nt":
 from pathlib import Path
 from typing import Optional
 
+from dbt.helper_types import WarnErrorOptions
+
 # PROFILES_DIR must be set before the other flags
 # It also gets set in main.py and in set_from_args because the rpc server
 # doesn't go through exactly the same main arg processing.
@@ -46,7 +48,7 @@ USE_COLORS = None
 USE_EXPERIMENTAL_PARSER = None
 VERSION_CHECK = None
 WARN_ERROR = None
-WARN_ERROR_OPTIONS = None
+WARN_ERROR_OPTIONS = WarnErrorOptions(include=[])
 WHICH = None
 WRITE_JSON = None
 
@@ -170,7 +172,13 @@ def set_from_args(args, user_config):
     USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
     VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
     WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
-    WARN_ERROR_OPTIONS = get_flag_value("WARN_ERROR_OPTIONS", args, user_config)
+
+    warn_error_options_str = get_flag_value("WARN_ERROR_OPTIONS", args, user_config)
+    from dbt.cli.option_types import WarnErrorOptionsType
+
+    # Converting to WarnErrorOptions for consistency with dbt/cli/flags.py
+    WARN_ERROR_OPTIONS = WarnErrorOptionsType().convert(warn_error_options_str, None, None)
+
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
 
     _check_mutually_exclusive(["WARN_ERROR", "WARN_ERROR_OPTIONS"], args, user_config)

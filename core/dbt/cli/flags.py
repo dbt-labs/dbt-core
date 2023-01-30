@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
-from typing import Set
+from typing import Set, List
 
-from click import Context, get_current_context
+from click import Context, get_current_context, BadOptionUsage
 from click.core import ParameterSource
 
 from dbt.config.profile import read_user_config
@@ -59,12 +59,15 @@ class Flags:
 
         # Overwrite default assignments with user config if available
         if user_config:
+            param_assigned_from_default_copy = params_assigned_from_default.copy()
             for param_assigned_from_default in params_assigned_from_default:
                 user_config_param_value = getattr(user_config, param_assigned_from_default, None)
                 if user_config_param_value is not None:
                     object.__setattr__(
                         self, param_assigned_from_default.upper(), user_config_param_value
                     )
+                    param_assigned_from_default_copy.remove(param_assigned_from_default)
+            params_assigned_from_default = param_assigned_from_default_copy
 
         # Hard coded flags
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
@@ -78,6 +81,10 @@ class Flags:
             if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes")
             else True,
         )
+        # Check mutual exclusivity once all flags are set
+        self._assert_mutually_exclusive(
+            params_assigned_from_default, ["WARN_ERROR", "WARN_ERROR_OPTIONS"]
+        )
 
         # Support lower cased access for legacy code
         params = set(
@@ -88,3 +95,20 @@ class Flags:
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))
+
+    def _assert_mutually_exclusive(
+        self, params_assigned_from_default: Set[str], group: List[str]
+    ) -> None:
+        """
+        Ensure no elements from group are simultaneously provided by a user, as inferred from params_assigned_from_default.
+        Raises click.UsageError if any two elements from group are simultaneously provided by a user.
+        """
+        set_flag = None
+        for flag in group:
+            flag_set_by_user = flag.lower() not in params_assigned_from_default
+            if flag_set_by_user and set_flag:
+                raise BadOptionUsage(
+                    flag.lower(), f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
+                )
+            elif flag_set_by_user:
+                set_flag = flag

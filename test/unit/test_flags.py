@@ -6,6 +6,7 @@ import pytest
 from dbt import flags
 from dbt.contracts.project import UserConfig
 from dbt.graph.selector_spec import IndirectSelection
+from dbt.helper_types import WarnErrorOptions
 
 class TestFlags(TestCase):
 
@@ -66,13 +67,13 @@ class TestFlags(TestCase):
         # warn_error_options
         self.user_config.warn_error_options = '{"include": "all"}'
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.WARN_ERROR_OPTIONS, '{"include": "all"}')
+        self.assertEqual(flags.WARN_ERROR_OPTIONS, WarnErrorOptions(include="all"))
         os.environ['DBT_WARN_ERROR_OPTIONS'] = '{"include": []}'
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.WARN_ERROR_OPTIONS, '{"include": []}')
+        self.assertEqual(flags.WARN_ERROR_OPTIONS, WarnErrorOptions(include=[]))
         setattr(self.args, 'warn_error_options', '{"include": "all"}')
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.WARN_ERROR_OPTIONS, '{"include": "all"}')
+        self.assertEqual(flags.WARN_ERROR_OPTIONS, WarnErrorOptions(include="all"))
         # cleanup
         os.environ.pop('DBT_WARN_ERROR_OPTIONS')
         delattr(self.args, 'warn_error_options')
@@ -283,7 +284,7 @@ class TestFlags(TestCase):
     def test__flags_are_mutually_exclusive(self):
         # options from user config
         self.user_config.warn_error = False
-        self.user_config.warn_error_options = '{"include":"all}'
+        self.user_config.warn_error_options = '{"include":"all"}'
         with pytest.raises(ValueError):
             flags.set_from_args(self.args, self.user_config)
         #cleanup
@@ -292,7 +293,7 @@ class TestFlags(TestCase):
         
         # options from args
         setattr(self.args, 'warn_error', False)
-        setattr(self.args, 'warn_error_options', '{"include":"all}')
+        setattr(self.args, 'warn_error_options', '{"include":"all"}')
         with pytest.raises(ValueError):
             flags.set_from_args(self.args, self.user_config)
         # cleanup
@@ -310,7 +311,7 @@ class TestFlags(TestCase):
 
         # options from user config + args
         self.user_config.warn_error = False
-        setattr(self.args, 'warn_error_options', '{"include":"all}')
+        setattr(self.args, 'warn_error_options', '{"include":"all"}')
         with pytest.raises(ValueError):
             flags.set_from_args(self.args, self.user_config)
         # cleanup
