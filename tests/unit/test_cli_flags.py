@@ -107,7 +107,7 @@ class TestFlags:
             "run", ["--warn-error", "--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.UsageError):
+        with pytest.raises(click.BadOptionUsage):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -117,7 +117,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.UsageError):
+        with pytest.raises(click.BadOptionUsage):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -126,7 +126,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include":"all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.UsageError):
+        with pytest.raises(click.BadOptionUsage):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -136,7 +136,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.UsageError):
+        with pytest.raises(click.BadOptionUsage):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -146,7 +146,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.UsageError):
+        with pytest.raises(click.BadOptionUsage):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -157,5 +157,5 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.UsageError):
+        with pytest.raises(click.BadOptionUsage):
             Flags(context, user_config)
