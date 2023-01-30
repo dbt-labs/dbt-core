@@ -75,7 +75,7 @@ defer = click.option(
     help="If set, defer to the state variable for resolving unselected nodes.",
 )
 
-favor_defer_state = click.option(
+favor_state = click.option(
     "--favor-state/--no-favor-state",
     envvar="DBT_FAVOR_STATE",
     help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
