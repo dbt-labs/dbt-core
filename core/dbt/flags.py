@@ -1,9 +1,9 @@
 # Do not import the os package because we expose this package in jinja
-from os import name as os_name, path as os_path, getcwd as os_getcwd, getenv as os_getenv
+from os import getenv as os_getenv
 from argparse import Namespace
 from multiprocessing import get_context
 from typing import Optional
-from pathlib import Path
+
 
 def env_set_truthy(key: str) -> Optional[str]:
     """Return the value if it was set to a "truthy" string value or None
@@ -13,6 +13,7 @@ def env_set_truthy(key: str) -> Optional[str]:
     if not value or value.lower() in ("0", "false", "f"):
         return None
     return value
+
 
 # for setting up logger for legacy logger
 ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
@@ -28,51 +29,39 @@ MP_CONTEXT = get_context()
 
 # this roughly follows the patten of EVENT_MANAGER in dbt/events/functions.py
 # During de-globlization, we'll need to handle both similarly
-GLOBAL_FLAGS = Namespace()
+GLOBAL_FLAGS = Namespace()  # type: ignore
+FLAGS_SET = False
+
 
 def set_flags(flags):
     global GLOBAL_FLAGS
+    global FLAGS_SET
+    FLAGS_SET = True
     GLOBAL_FLAGS = flags
 
-def get_flag(key:str, default=None):
-    return getattr(GLOBAL_FLAGS, key, flag_defaults.get(key.upper(), default))
 
-def set_from_args(args, user_config):
-    pass
-# PROFILES_DIR must be set before the other flags
-# It also gets set in main.py and in set_from_args because the rpc server
-# doesn't go through exactly the same main arg processing.
-GLOBAL_PROFILES_DIR = os_path.join(os_path.expanduser("~"), ".dbt")
-LOCAL_PROFILES_DIR = os_getcwd()
-# Use the current working directory if there is a profiles.yml file present there
-if os_path.exists(Path(LOCAL_PROFILES_DIR) / Path("profiles.yml")):
-    DEFAULT_PROFILES_DIR = LOCAL_PROFILES_DIR
-else:
-    DEFAULT_PROFILES_DIR = GLOBAL_PROFILES_DIR
+def get_flags():
+    global FLAGS_SET
+    # this allow use the defualt via get_flags()
+    if not FLAGS_SET:
+        set_from_args(Namespace(), None)
+    return GLOBAL_FLAGS
 
-flag_defaults = {
-    "USE_EXPERIMENTAL_PARSER": False,
-    "STATIC_PARSER": True,
-    "WARN_ERROR": False,
-    "WARN_ERROR_OPTIONS": "{}",
-    "WRITE_JSON": True,
-    "PARTIAL_PARSE": True,
-    "USE_COLORS": True,
-    "PROFILES_DIR": DEFAULT_PROFILES_DIR,
-    "DEBUG": False,
-    "LOG_FORMAT": None,
-    "VERSION_CHECK": True,
-    "FAIL_FAST": False,
-    "SEND_ANONYMOUS_USAGE_STATS": True,
-    "PRINTER_WIDTH": 80,
-    "INDIRECT_SELECTION": "eager",
-    "LOG_CACHE_EVENTS": False,
-    "QUIET": False,
-    "NO_PRINT": False,
-    "CACHE_SELECTED_ONLY": False,
-    "TARGET_PATH": None,
-    "LOG_PATH": None,
-}
+
+def set_from_args(args: Namespace, user_config):
+    global GLOBAL_FLAGS
+    from dbt.cli.main import cli
+    from dbt.cli.flags import Flags
+
+    # make a dummy context to get the flags
+    ctx = cli.make_context("run", ["run"])
+    flags = Flags(ctx, user_config)
+    for arg_name, args_param_value in vars(args).items():
+        object.__setattr__(flags, arg_name.upper(), args_param_value)
+        object.__setattr__(flags, arg_name.lower(), args_param_value)
+    GLOBAL_FLAGS = flags  # type: ignore
+    global FLAGS_SET
+    FLAGS_SET = True
 
 
 def get_flag_dict():
@@ -100,10 +89,7 @@ def get_flag_dict():
         "target_path",
         "log_path",
     }
-    return {
-        key: getattr(GLOBAL_FLAGS, key.upper(), getattr(flag_defaults, key.upper(), None))
-        for key in flag_attr 
-    }
+    return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 
 
 # This is used by core/dbt/context/base.py to return a flag object

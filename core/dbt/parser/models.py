@@ -4,7 +4,7 @@ from dbt.contracts.graph.nodes import ModelNode
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
 from dbt.events.functions import fire_event
-from dbt.flags import get_flag
+from dbt.flags import get_flags
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
@@ -236,7 +236,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
     def render_update(self, node: ModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
-
+        flags = get_flags()
         if node.language == ModelLanguage.python:
             try:
                 verify_python_model_code(node)
@@ -249,7 +249,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 raise ModelConfigError(exc, node=node) from exc
             return
 
-        elif not get_flag("STATIC_PARSER"):
+        elif not flags.STATIC_PARSER:
             # jinja rendering
             super().render_update(node, config)
             fire_event(
@@ -268,7 +268,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # at the same time. If that happens, the experimental parser, stable
         # parser, and jinja rendering will run on the same model file and
         # send back codes for experimental v stable, and stable v jinja.
-        if not get_flag("USE_EXPERIMENTAL_PARSER"):
+        if not flags.USE_EXPERIMENTAL_PARSER:
             # `True` roughly 1/5000 times this function is called
             # sample = random.randint(1, 5001) == 5000
             stable_sample = random.randint(1, 5001) == 5000
@@ -288,7 +288,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         result: List[str] = []
 
         # sample the experimental parser only during a normal run
-        if exp_sample and not get_flag("USE_EXPERIMENTAL_PARSER"):
+        if exp_sample and not flags.USE_EXPERIMENTAL_PARSER:
             fire_event(
                 Note(f"1610: conducting experimental parser sample on {node.path}"),
                 EventLevel.DEBUG,
@@ -307,7 +307,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 exp_sample_config = deepcopy(config)
                 model_parser_copy.populate(exp_sample_node, exp_sample_config, experimental_sample)
         # use the experimental parser exclusively if the flag is on
-        if get_flag("USE_EXPERIMENTAL_PARSER"):
+        if flags.USE_EXPERIMENTAL_PARSER:
             statically_parsed = self.run_experimental_parser(node)
         # run the stable static parser unless it is explicitly turned off
         else:

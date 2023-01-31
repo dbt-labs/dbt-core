@@ -4,7 +4,7 @@ import os
 
 from dbt.dataclass_schema import ValidationError
 
-from dbt.flags import get_flag
+from dbt.flags import get_flags
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
@@ -30,8 +30,6 @@ dbt encountered an error while trying to read your profiles.yml file.
 
 {error_string}
 """
-
-
 
 
 def read_profile(profiles_dir: str) -> Dict[str, Any]:
@@ -199,8 +197,8 @@ defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
 """.format(
-    profiles_file=flags.DEFAULT_PROFILES_DIR
-)
+                profiles_file=get_flags().DEFAULT_PROFILES_DIR
+            )
             raise DbtProjectError(NO_SUPPLIED_PROFILE_ERROR)
         return profile_name
 
@@ -423,7 +421,8 @@ defined in your profiles.yml file. You can find profiles.yml here:
             target could not be found.
         :returns Profile: The new Profile object.
         """
-        raw_profiles = read_profile(get_flag("PROFILES_DIR"))
+        flags = get_flags()
+        raw_profiles = read_profile(flags.PROFILES_DIR)
         profile_name = cls.pick_profile_name(profile_name_override, project_profile_name)
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,

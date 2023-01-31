@@ -4,7 +4,8 @@ from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
-import dbt.flags as flags
+from dbt.flags import get_flags
+import dbt.flags as flags_module
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
 import json
@@ -22,7 +23,7 @@ def setup_event_logger(log_path: str, log_format: str, use_colors: bool, debug: 
     cleanup_event_logger()
     make_log_dir_if_missing(log_path)
 
-    if flags.ENABLE_LEGACY_LOGGER:
+    if get_flags().ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(_get_logbook_log_config(debug))
     else:
         EVENT_MANAGER.add_logger(_get_stdout_config(log_format, debug, use_colors))
@@ -48,7 +49,6 @@ def _get_stdout_config(log_format: str, debug: bool, use_colors: bool) -> Logger
     elif debug:
         fmt = LineFormat.DebugText
     level = EventLevel.DEBUG if debug else EventLevel.INFO
-
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -56,7 +56,11 @@ def _get_stdout_config(log_format: str, debug: bool, use_colors: bool) -> Logger
         line_format=fmt,
         scrubber=env_scrubber,
         filter=partial(
-            _stdout_filter, bool(flags.LOG_CACHE_EVENTS), debug, bool(flags.QUIET), log_format
+            _stdout_filter,
+            bool(flags_module.LOG_CACHE_EVENTS),
+            debug,
+            bool(flags_module.QUIET),
+            log_format,
         ),
         output_stream=sys.stdout,
     )
@@ -81,7 +85,7 @@ def _get_logfile_config(log_path: str, use_colors: bool, log_format: str) -> Log
         use_colors=use_colors,
         level=EventLevel.DEBUG,  # File log is *always* debug level
         scrubber=env_scrubber,
-        filter=partial(_logfile_filter, bool(flags.LOG_CACHE_EVENTS), log_format),
+        filter=partial(_logfile_filter, bool(get_flags().LOG_CACHE_EVENTS), log_format),
         output_file_name=log_path,
     )
 
@@ -96,6 +100,7 @@ def _logfile_filter(log_cache_events: bool, log_format: str, msg: EventMsg) -> b
 
 def _get_logbook_log_config(debug: bool) -> LoggerConfig:
     # use the default one since this code should be removed when we remove logbook
+    flags = get_flags()
     config = _get_stdout_config("", debug, bool(flags.USE_COLORS))
     config.name = "logbook_log"
     config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e.data, Cache)
@@ -120,9 +125,9 @@ def cleanup_event_logger():
 # create a default configuration with default settings and no file output.
 EVENT_MANAGER: EventManager = EventManager()
 EVENT_MANAGER.add_logger(
-    _get_logbook_log_config(flags.DEBUG)  # type: ignore
-    if flags.ENABLE_LEGACY_LOGGER
-    else _get_stdout_config(flags.LOG_FORMAT, flags.DEBUG, flags.USE_COLORS)  # type: ignore
+    _get_logbook_log_config(flags_module.DEBUG)  # type: ignore
+    if flags_module.ENABLE_LEGACY_LOGGER
+    else _get_stdout_config(flags_module.LOG_FORMAT, flags_module.DEBUG, flags_module.USE_COLORS)  # type: ignore
 )
 
 # This global, and the following two functions for capturing stdout logs are
@@ -168,7 +173,9 @@ def msg_to_dict(msg: EventMsg) -> dict:
 
 
 def warn_or_error(event, node=None):
+    flags = get_flags()
     if flags.WARN_ERROR or flags.WARN_ERROR_OPTIONS.includes(type(event).__name__):
+
         # TODO: resolve this circular import when at top
         from dbt.exceptions import EventCompilationError
 
