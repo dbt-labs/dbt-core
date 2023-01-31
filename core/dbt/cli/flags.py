@@ -12,6 +12,7 @@ from click.core import ParameterSource
 
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
+from dbt.cli.option_types import WarnErrorOptionsType
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -80,6 +81,12 @@ class Flags:
             for param_assigned_from_default in params_assigned_from_default:
                 user_config_param_value = getattr(user_config, param_assigned_from_default, None)
                 if user_config_param_value is not None:
+                    # TODO Conversion should happen here to make sure types are consistent with the flag
+                    # extract into a function
+                    if param_assigned_from_default in ["warn_error_options"]:
+                        user_config_param_value = WarnErrorOptionsType().convert(
+                            user_config_param_value, None, None
+                        )
                     object.__setattr__(
                         self, param_assigned_from_default.upper(), user_config_param_value
                     )

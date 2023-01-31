@@ -79,6 +79,15 @@ def run_dbt(args: List[str] = None, expect_pass=True):
         args = ["run"]
 
     print("\n\nInvoking dbt with {}".format(args))
+    from dbt.flags import get_flags
+
+    flags = get_flags()
+    project_dir = getattr(flags, "PROJECT_DIR", None)
+    profiles_dir = getattr(flags, "PROFILES_DIR", None)
+    if project_dir and "--project-dir" not in args:
+        args.extend(["--project-dir", project_dir])
+    if profiles_dir and "--profiles-dir" not in args:
+        args.extend(["--profiles-dir", profiles_dir])
     dbt = dbtRunner()
     res, success = dbt.invoke(args)
 
