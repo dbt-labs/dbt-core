@@ -4,7 +4,7 @@ import click
 from dbt.cli.options import MultiOption
 from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
-
+from dbt.version import get_version_information
 
 # TODO:  The name (reflected in flags) is a correction!
 # The original name was `SEND_ANONYMOUS_USAGE_STATS` and used an env var called "DBT_SEND_ANONYMOUS_USAGE_STATS"
@@ -377,6 +377,25 @@ vars = click.option(
     default="{}",
 )
 
+
+# TODO: when legacy flags are deprecated use
+# click.version_option instead of a callback
+def _version_callback(ctx, _param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(get_version_information())
+    ctx.exit()
+
+
+version = click.option(
+    "--version",
+    callback=_version_callback,
+    envvar=None,
+    expose_value=False,
+    help="Show version information",
+    is_eager=True,
+    is_flag=True,
+)
 
 version_check = click.option(
     "--version-check/--no-version-check",
