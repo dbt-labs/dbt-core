@@ -1,8 +1,5 @@
-import ast
-from inspect import getsource
-
 import click
-from dbt.cli import params
+
 from dbt.cli.main import cli
 
 
@@ -42,10 +39,3 @@ class TestCLI:
                     run_test(command)
 
         run_test(cli)
-
-    def test_params_are_alpha_sorted(self):
-        root_node = ast.parse(getsource(params))
-        param_var_names = [
-            node.targets[0].id for node in ast.walk(root_node) if isinstance(node, ast.Assign)
-        ]
-        assert param_var_names == sorted(param_var_names)

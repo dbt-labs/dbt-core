@@ -1,5 +1,4 @@
 from copy import copy
-from pprint import pformat as pf  # This is temporary for RAT-ing
 from typing import List, Tuple, Optional
 
 import click
@@ -22,6 +21,7 @@ from dbt.task.run_operation import RunOperationTask
 from dbt.task.build import BuildTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
+from dbt.version import __version__, get_version_information
 
 
 # CLI invocation
@@ -31,6 +31,10 @@ def cli_runner():
 
 
 class dbtUsageException(Exception):
+    pass
+
+
+class dbtInternalException(Exception):
     pass
 
 
@@ -52,6 +56,11 @@ class dbtRunner:
                 "manifest": self.manifest,
             }
             return cli.invoke(dbt_ctx)
+        except click.exceptions.Exit as e:
+            # 0 exit code, expected for --version early exit
+            if str(e) == "0":
+                return [], True
+            raise dbtInternalException(f"unhandled exit code {str(e)}")
         except (click.NoSuchOption, click.UsageError) as e:
             raise dbtUsageException(e.message)
 
@@ -64,6 +73,7 @@ class dbtRunner:
     epilog="Specify one of these sub-commands and you can find more help from there.",
 )
 @click.pass_context
+@click.version_option(version=__version__, message=get_version_information())
 @p.anonymous_usage_stats
 @p.cache_selected_only
 @p.debug
@@ -82,7 +92,6 @@ class dbtRunner:
 @p.static_parser
 @p.use_colors
 @p.use_experimental_parser
-@p.version
 @p.version_check
 @p.warn_error
 @p.warn_error_options
@@ -91,10 +100,6 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    # Version info
-    if ctx.params["version"]:
-        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        return
 
 
 # dbt build
@@ -172,7 +177,6 @@ def docs(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.favor_state
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -237,7 +241,6 @@ def docs_serve(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.full_refresh
-@p.models
 @p.parse_only
 @p.profile
 @p.profiles_dir
@@ -347,7 +350,7 @@ def init(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
-@p.select
+@p.raw_select
 @p.selector
 @p.state
 @p.target
@@ -408,7 +411,6 @@ def parse(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.full_refresh
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -471,7 +473,6 @@ def run_operation(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.full_refresh
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -508,7 +509,6 @@ def seed(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.favor_state
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -547,7 +547,6 @@ def source(ctx, **kwargs):
 @source.command("freshness")
 @click.pass_context
 @p.exclude
-@p.models
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
 @p.profile
 @p.profiles_dir
@@ -590,7 +589,6 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.fail_fast
 @p.favor_state
 @p.indirect_selection
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir

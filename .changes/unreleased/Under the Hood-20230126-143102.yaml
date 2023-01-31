@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Implement --version for click cli
+time: 2023-01-26T14:31:02.740282-06:00
+custom:
+  Author: stu-k
+  Issue: "6757"

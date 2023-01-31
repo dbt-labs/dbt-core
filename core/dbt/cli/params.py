@@ -142,16 +142,6 @@ macro_debugging = click.option(
     hidden=True,
 )
 
-models = click.option(
-    "--models",
-    "--model",
-    "-m",
-    envvar=None,
-    help="Specify the nodes to include.",
-    cls=MultiOption,
-    type=tuple,
-)
-
 output = click.option(
     "--output",
     envvar=None,
@@ -274,14 +264,22 @@ resource_type = click.option(
     default=(),
 )
 
-select = click.option(
-    "-s",
-    "--select",
-    envvar=None,
-    help="Specify the nodes to include.",
-    cls=MultiOption,
-    type=tuple,
-)
+model_decls = ("-m", "--models", "--model")
+select_decls = ("-s", "--select")
+select_attrs = {
+    "envvar": None,
+    "help": "Specify the nodes to include.",
+    "cls": MultiOption,
+    "type": tuple,
+}
+
+# `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
+# Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
+# However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
+# See https://github.com/dbt-labs/dbt-core/pull/6774#issuecomment-1408476095 for more info.
+models = click.option(*model_decls, **select_attrs)
+raw_select = click.option(*select_decls, **select_attrs)
+select = click.option(*select_decls, *model_decls, **select_attrs)
 
 selector = click.option(
     "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
@@ -379,12 +377,6 @@ vars = click.option(
     default="{}",
 )
 
-version = click.option(
-    "--version",
-    envvar=None,
-    help="Show version information",
-    is_flag=True,
-)
 
 version_check = click.option(
     "--version-check/--no-version-check",
