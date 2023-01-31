@@ -1,4 +1,3 @@
-from dbt.adapters.base import Column
 from dataclasses import dataclass
 from dbt.adapters.base.relation import BaseRelation
 from dbt.exceptions import DbtRuntimeError
@@ -21,14 +20,3 @@ class PostgresRelation(BaseRelation):
 
     def relation_max_name_length(self):
         return 63
-
-
-class PostgresColumn(Column):
-    @property
-    def data_type(self):
-        # on postgres, do not convert 'text' or 'varchar' to 'varchar()'
-        if self.dtype.lower() == "text" or (
-            self.dtype.lower() == "character varying" and self.char_size is None
-        ):
-            return self.dtype
-        return super().data_type
