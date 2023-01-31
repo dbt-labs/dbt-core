@@ -1,7 +1,5 @@
 import pytest
 
-import click.exceptions
-
 from dbt.cli.main import dbtRunner, dbtUsageException
 
 
