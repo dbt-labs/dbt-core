@@ -49,7 +49,7 @@ from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
 from dbt.events.types import MergedFromState
 from dbt.node_types import NodeType
-from dbt.flags import get_flag, MP_CONTEXT
+from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
 import dbt.utils
 
@@ -303,7 +303,7 @@ class ManifestMetadata(BaseArtifactMetadata):
             self.user_id = tracking.active_user.id
 
         if self.send_anonymous_usage_stats is None:
-            self.send_anonymous_usage_stats = get_flag("SEND_ANONYMOUS_USAGE_STATS")
+            self.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
 
     @classmethod
     def default(cls):

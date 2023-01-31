@@ -17,10 +17,27 @@ if os.name != "nt":
     # https://bugs.python.org/issue41567
     import multiprocessing.popen_spawn_posix  # type: ignore  # noqa: F401
 
+# TODO anything that has a default in params should be removed here?
+# Or maybe only the ones that's in the root click group
+flag_defaults = {
+    "SEND_ANONYMOUS_USAGE_STATS": True,
+    "INDIRECT_SELECTION": "eager",
+    "NO_PRINT": False,
+    "TARGET_PATH": None,
+    # cli args without user_config or env var option
+    "FULL_REFRESH": False,
+    "STRICT_MODE": False,
+    "STORE_FAILURES": False,
+}
+
 
 @dataclass(frozen=True)
 class Flags:
     def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
+
+        # set the default flags
+        for key, value in flag_defaults.items():
+            object.__setattr__(self, key, value)
 
         if ctx is None:
             ctx = get_current_context()

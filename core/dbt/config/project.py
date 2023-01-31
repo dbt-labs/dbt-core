@@ -15,7 +15,7 @@ from typing_extensions import Protocol, runtime_checkable
 import hashlib
 import os
 
-from dbt.flags import get_flag
+from dbt.flags import get_flags
 from dbt import deprecations
 from dbt.clients.system import path_exists, resolve_path_from_base, load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
@@ -374,8 +374,9 @@ class PartialProject(RenderComponents):
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
         asset_paths: List[str] = value_or(cfg.asset_paths, [])
-        target_path: str = flag_or(str(get_flag("TARGET_PATH")), cfg.target_path, "target")
-        log_path: str = flag_or(str(get_flag("LOG_PATH")), cfg.log_path, "logs")
+        flags = get_flags()
+        target_path: str = flag_or(flags.TARGET_PATH, cfg.target_path, "target")
+        log_path: str = flag_or(str(flags.LOG_PATH), cfg.log_path, "logs")
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
         packages_install_path: str = value_or(cfg.packages_install_path, "dbt_packages")
         # in the default case we'll populate this once we know the adapter type

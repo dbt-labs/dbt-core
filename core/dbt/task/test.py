@@ -31,7 +31,7 @@ from dbt.graph import (
     ResourceTypeSelector,
 )
 from dbt.node_types import NodeType
-from dbt import flags
+from dbt.flags import get_flags
 
 
 @dataclass
@@ -157,7 +157,7 @@ class TestRunner(CompileRunner):
             message = f"Got {num_errors}, configured to fail if {test.config.error_if}"
             failures = result.failures
         elif result.should_warn:
-            if flags.WARN_ERROR:
+            if get_flags().WARN_ERROR:
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
             else:

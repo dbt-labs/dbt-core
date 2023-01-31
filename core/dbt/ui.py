@@ -1,8 +1,9 @@
-import dbt.flags as flags
 import textwrap
 from typing import Dict
 
 import colorama
+
+from dbt.flags import get_flags
 
 COLORS: Dict[str, str] = {
     "red": colorama.Fore.RED,
@@ -19,13 +20,14 @@ COLOR_RESET_ALL = COLORS["reset_all"]
 
 
 def color(text: str, color_code: str) -> str:
-    if flags.USE_COLORS:
+    if get_flags().USE_COLORS:
         return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text
 
 
 def printer_width() -> int:
+    flags = get_flags()
     if flags.PRINTER_WIDTH:
         return flags.PRINTER_WIDTH
     return 80

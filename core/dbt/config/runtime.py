@@ -15,7 +15,7 @@ from typing import (
     Type,
 )
 
-from dbt.flags import get_flag
+from dbt.flags import get_flags
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.config.project import load_raw_project
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
@@ -197,11 +197,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         # load the new project and its packages. Don't pass cli variables.
         renderer = DbtProjectYamlRenderer(profile)
-
+        flags = get_flags()
         project = Project.from_project_root(
             project_root,
             renderer,
-            verify_version=bool(get_flag("VERSION_CHECK")),
+            verify_version=bool(flags.VERSION_CHECK),
         )
 
         runtime_config = self.from_parts(
@@ -247,6 +247,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             cli_vars,
             args,
         )
+        flags = get_flags()
         project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
         return project, profile
 
