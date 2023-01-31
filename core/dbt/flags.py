@@ -57,6 +57,10 @@ def set_from_args(args: Namespace, user_config):
     ctx = cli.make_context("run", ["run"])
     flags = Flags(ctx, user_config)
     for arg_name, args_param_value in vars(args).items():
+        if arg_name in ["warn_error_options"]:
+            from dbt.cli.option_types import WarnErrorOptionsType
+
+            args_param_value = WarnErrorOptionsType().convert(args_param_value, None, None)
         object.__setattr__(flags, arg_name.upper(), args_param_value)
         object.__setattr__(flags, arg_name.lower(), args_param_value)
     GLOBAL_FLAGS = flags  # type: ignore
