@@ -1,5 +1,4 @@
 from copy import copy
-from pprint import pformat as pf  # This is temporary for RAT-ing
 from typing import List, Tuple, Optional
 
 import click
