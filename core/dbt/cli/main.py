@@ -35,6 +35,10 @@ class dbtUsageException(Exception):
     pass
 
 
+class dbtInternalException(Exception):
+    pass
+
+
 # Programmatic invocation
 class dbtRunner:
     def __init__(
@@ -57,7 +61,7 @@ class dbtRunner:
             # 0 exit code, expected for --version early exit
             if str(e) == "0":
                 return [], True
-            raise e
+            raise dbtInternalException(f"unhandled exit code {str(e)}")
         except (click.NoSuchOption, click.UsageError) as e:
             raise dbtUsageException(e.message)
 
