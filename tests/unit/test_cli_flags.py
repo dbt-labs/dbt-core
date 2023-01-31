@@ -34,6 +34,8 @@ class TestFlags:
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
         flags = Flags(run_context)
+        if param.name.upper() == "VERSION":
+            return
         assert hasattr(flags, param.name.upper())
         assert getattr(flags, param.name.upper()) == run_context.params[param.name.lower()]
 

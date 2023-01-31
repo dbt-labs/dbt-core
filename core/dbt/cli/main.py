@@ -22,6 +22,7 @@ from dbt.task.run_operation import RunOperationTask
 from dbt.task.build import BuildTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
+from dbt.version import __version__, get_version_information
 
 
 # CLI invocation
@@ -52,6 +53,11 @@ class dbtRunner:
                 "manifest": self.manifest,
             }
             return cli.invoke(dbt_ctx)
+        except click.exceptions.Exit as e:
+            # 0 exit code, expected for --version early exit
+            if str(e) == "0":
+                return [], True
+            raise e
         except (click.NoSuchOption, click.UsageError) as e:
             raise dbtUsageException(e.message)
 
@@ -64,6 +70,7 @@ class dbtRunner:
     epilog="Specify one of these sub-commands and you can find more help from there.",
 )
 @click.pass_context
+@click.version_option(version=__version__, message=get_version_information())
 @p.anonymous_usage_stats
 @p.cache_selected_only
 @p.debug
@@ -82,7 +89,6 @@ class dbtRunner:
 @p.static_parser
 @p.use_colors
 @p.use_experimental_parser
-@p.version
 @p.version_check
 @p.warn_error
 @p.warn_error_options
@@ -91,10 +97,6 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    # Version info
-    if ctx.params["version"]:
-        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        return
 
 
 # dbt build

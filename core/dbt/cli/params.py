@@ -377,12 +377,6 @@ vars = click.option(
     default="{}",
 )
 
-version = click.option(
-    "--version",
-    envvar=None,
-    help="Show version information",
-    is_flag=True,
-)
 
 version_check = click.option(
     "--version-check/--no-version-check",
