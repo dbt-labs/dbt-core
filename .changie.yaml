@@ -88,7 +88,7 @@ custom:
 footerFormat: |
   {{- $contributorDict := dict }}
   {{- /* any names added to this list should be all lowercase for later matching purposes */}}
-  {{- $core_team := list "michelleark" "peterallenwebb" "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "aranke" "dependabot[bot]" "snyk-bot" "colin-rogers-dbt" "nssalian" }}
+  {{- $core_team := list "michelleark" "peterallenwebb" "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "aranke" "dependabot[bot]" "snyk-bot" "colin-rogers-dbt" }}
   {{- range $change := .Changes }}
     {{- $authorList := splitList " " $change.Custom.Author }}
     {{- /* loop through all authors for a single changelog */}}
@@ -97,22 +97,28 @@ footerFormat: |
       {{- /* we only want to include non-core team contributors */}}
       {{- if not (has $authorLower $core_team)}}
         {{- $changeList := splitList " " $change.Custom.Author }}
-          {{- /* Docs kind link back to dbt-docs instead of dbt-core issues */}}
+          {{- $IssueList := list }}
           {{- $changeLink := $change.Kind }}
           {{- if or (eq $change.Kind "Dependencies") (eq $change.Kind "Security") }}
-            {{- $changeLink = "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $change.Custom.PR }}
-          {{- else if eq $change.Kind "Docs"}}
-            {{- $changeLink = "[dbt-docs/#nbr](https://github.com/dbt-labs/dbt-docs/issues/nbr)" | replace "nbr" $change.Custom.Issue }}
+            {{- $changes := splitList " " $change.Custom.PR }}
+            {{- range $issueNbr := $changes }}
+              {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/pull/nbr)" | replace "nbr" $issueNbr }}
+              {{- $IssueList = append $IssueList $changeLink  }}
+            {{- end -}}
           {{- else }}
-            {{- $changeLink = "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $change.Custom.Issue }}
+            {{- $changes := splitList " " $change.Custom.Issue }}
+            {{- range $issueNbr := $changes }}
+              {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
+              {{- $IssueList = append $IssueList $changeLink  }}
+            {{- end -}}
           {{- end }}
           {{- /* check if this contributor has other changes associated with them already */}}
           {{- if hasKey $contributorDict $author }}
             {{- $contributionList := get $contributorDict $author }}
-            {{- $contributionList = append $contributionList $changeLink  }}
+            {{- $contributionList = concat $contributionList $IssueList  }}
             {{- $contributorDict := set $contributorDict $author $contributionList }}
           {{- else }}
-            {{- $contributionList := list $changeLink }}
+            {{- $contributionList := $IssueList }}
             {{- $contributorDict := set $contributorDict $author $contributionList }}
           {{- end }}
         {{- end}}
