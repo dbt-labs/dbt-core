@@ -5,7 +5,7 @@ from dbt.tests.util import (
     run_dbt,
 )
 
-from tests.functional.store_test_failures_tests.fixtures import (
+from dbt.tests.adapter.store_test_failures_tests.fixtures import (
     seeds__people,
     seeds__expected_accepted_values,
     seeds__expected_failing_test,
