@@ -197,11 +197,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         # load the new project and its packages. Don't pass cli variables.
         renderer = DbtProjectYamlRenderer(profile)
-        flags = get_flags()
         project = Project.from_project_root(
             project_root,
             renderer,
-            verify_version=bool(flags.VERSION_CHECK),
+            verify_version=bool(getattr(self.args, "VERSION_CHECK", True)),
         )
 
         runtime_config = self.from_parts(

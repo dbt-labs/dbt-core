@@ -46,11 +46,27 @@ class Flags:
         def assign_params(ctx, params_assigned_from_default):
             """Recursively adds all click params to flag object"""
             for param_name, param_value in ctx.params.items():
+                # TODO: this is to avoid duplicate params being defined in two places (version_check in run and cli)
+                # However this is a bit of a hack and we should find a better way to do this
+                if hasattr(self, param_name.upper()):
+                    if param_name not in [
+                        "full_refresh",
+                        "target_path",
+                        "version_check",
+                        "fail_fast",
+                        "indirect_selection",
+                        "store_failures",
+                    ]:
+                        raise Exception(
+                            f"Duplicate flag names found in click command: {param_name}"
+                        )
+                    else:
+                        if param_name not in params_assigned_from_default:
+                            # If the param was set by the user, don't overwrite it
+                            continue
                 # N.B. You have to use the base MRO method (object.__setattr__) to set attributes
                 # when using frozen dataclasses.
                 # https://docs.python.org/3/library/dataclasses.html#frozen-instances
-                if hasattr(self, param_name):
-                    raise Exception(f"Duplicate flag names found in click command: {param_name}")
                 object.__setattr__(self, param_name.upper(), param_value)
                 if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT:
                     params_assigned_from_default.add(param_name)
