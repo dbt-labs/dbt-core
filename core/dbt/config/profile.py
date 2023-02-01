@@ -4,7 +4,7 @@ import os
 
 from dbt.dataclass_schema import ValidationError
 
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
@@ -30,22 +30,6 @@ dbt encountered an error while trying to read your profiles.yml file.
 
 {error_string}
 """
-
-
-NO_SUPPLIED_PROFILE_ERROR = """\
-dbt cannot run because no profile was specified for this dbt project.
-To specify a profile for this project, add a line like the this to
-your dbt_project.yml file:
-
-profile: [profile name]
-
-Here, [profile name] should be replaced with a profile name
-defined in your profiles.yml file. You can find profiles.yml here:
-
-{profiles_file}/profiles.yml
-""".format(
-    profiles_file=flags.DEFAULT_PROFILES_DIR
-)
 
 
 def read_profile(profiles_dir: str) -> Dict[str, Any]:
@@ -201,6 +185,20 @@ class Profile(HasCredentials):
         if args_profile_name is not None:
             profile_name = args_profile_name
         if profile_name is None:
+            NO_SUPPLIED_PROFILE_ERROR = """\
+dbt cannot run because no profile was specified for this dbt project.
+To specify a profile for this project, add a line like the this to
+your dbt_project.yml file:
+
+profile: [profile name]
+
+Here, [profile name] should be replaced with a profile name
+defined in your profiles.yml file. You can find profiles.yml here:
+
+{profiles_file}/profiles.yml
+""".format(
+                profiles_file=get_flags().DEFAULT_PROFILES_DIR
+            )
             raise DbtProjectError(NO_SUPPLIED_PROFILE_ERROR)
         return profile_name
 
@@ -423,7 +421,7 @@ class Profile(HasCredentials):
             target could not be found.
         :returns Profile: The new Profile object.
         """
-
+        flags = get_flags()
         raw_profiles = read_profile(flags.PROFILES_DIR)
         profile_name = cls.pick_profile_name(profile_name_override, project_profile_name)
         return cls.from_raw_profiles(

@@ -40,7 +40,7 @@ from dbt.exceptions import (
     UndefinedCompilationError,
     UndefinedMacroError,
 )
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage
 
 
@@ -99,8 +99,9 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         If the value is 'write', also write the files to disk.
         WARNING: This can write a ton of data if you aren't careful.
         """
-        if filename == "<template>" and flags.MACRO_DEBUGGING:
-            write = flags.MACRO_DEBUGGING == "write"
+        macro_debugging = get_flags().MACRO_DEBUGGING
+        if filename == "<template>" and macro_debugging:
+            write = macro_debugging == "write"
             filename = _linecache_inject(source, write)
 
         return super()._compile(source, filename)  # type: ignore

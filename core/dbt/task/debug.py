@@ -10,7 +10,6 @@ from dbt.events.types import (
     DebugCmdOut,
     DebugCmdResult,
 )
-from dbt import flags
 import dbt.clients.system
 import dbt.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
@@ -62,7 +61,7 @@ FILE_NOT_FOUND = "file not found"
 class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
-        self.profiles_dir = flags.PROFILES_DIR
+        self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
             self.project_dir = get_nearest_project_dir(self.args.project_dir)
@@ -138,7 +137,7 @@ class DebugTask(BaseTask):
             self.project = Project.from_project_root(
                 self.project_dir,
                 renderer,
-                verify_version=flags.VERSION_CHECK,
+                verify_version=self.args.VERSION_CHECK,
             )
         except dbt.exceptions.DbtConfigError as exc:
             self.project_fail_details = str(exc)
@@ -176,7 +175,7 @@ class DebugTask(BaseTask):
             try:
                 partial = PartialProject.from_project_root(
                     os.path.dirname(self.project_path),
-                    verify_version=bool(flags.VERSION_CHECK),
+                    verify_version=bool(self.args.VERSION_CHECK),
                 )
                 renderer = DbtProjectYamlRenderer(None, self.cli_vars)
                 project_profile = partial.render_profile_name(renderer)

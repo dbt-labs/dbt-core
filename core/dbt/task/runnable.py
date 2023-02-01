@@ -52,7 +52,7 @@ from dbt.parser.manifest import write_manifest
 import dbt.tracking
 
 import dbt.exceptions
-from dbt import flags
+from dbt.flags import get_flags
 import dbt.utils
 
 RESULT_FILE_NAME = "run_results.json"
@@ -205,7 +205,7 @@ class GraphRunnableTask(ConfiguredTask):
             # it gets deleted when we're done with it
             runner.node.clear_event_status()
 
-        fail_fast = flags.FAIL_FAST
+        fail_fast = get_flags().FAIL_FAST
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastError(
@@ -267,7 +267,7 @@ class GraphRunnableTask(ConfiguredTask):
             self._submit(pool, args, callback)
 
         # block on completion
-        if flags.FAIL_FAST:
+        if get_flags().FAIL_FAST:
             # checkout for an errors after task completion in case of
             # fast failure
             while self.job_queue.wait_until_something_was_done():
@@ -372,7 +372,7 @@ class GraphRunnableTask(ConfiguredTask):
 
     def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
         start_populate_cache = time.perf_counter()
-        if flags.CACHE_SELECTED_ONLY is True:
+        if get_flags().CACHE_SELECTED_ONLY is True:
             adapter.set_relations_cache(self.manifest, required_schemas=required_schemas)
         else:
             adapter.set_relations_cache(self.manifest)
@@ -449,7 +449,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
             )
 
-        if flags.WRITE_JSON:
+        if get_flags().WRITE_JSON:
             write_manifest(self.manifest, self.config.target_path)
             self.write_result(result)
 
