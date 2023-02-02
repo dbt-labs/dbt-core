@@ -31,21 +31,14 @@ MP_CONTEXT = get_context()
 # this roughly follows the patten of EVENT_MANAGER in dbt/events/functions.py
 # During de-globlization, we'll need to handle both similarly
 GLOBAL_FLAGS = Namespace()  # type: ignore
-FLAGS_SET = False
 
 
 def set_flags(flags):
     global GLOBAL_FLAGS
-    global FLAGS_SET
-    FLAGS_SET = True
     GLOBAL_FLAGS = flags
 
 
 def get_flags():
-    global FLAGS_SET
-    # this allow use the defualt via get_flags()
-    if not FLAGS_SET:
-        set_from_args(Namespace(), None)
     return GLOBAL_FLAGS
 
 
@@ -54,7 +47,7 @@ def set_from_args(args: Namespace, user_config):
     from dbt.cli.main import cli
     from dbt.cli.flags import Flags, convert_config
 
-    # make a dummy context to get the flags
+    # make a dummy context to get the flags, totally arbitrary
     ctx = cli.make_context("run", ["run"])
     flags = Flags(ctx, user_config)
     for arg_name, args_param_value in vars(args).items():
@@ -62,8 +55,6 @@ def set_from_args(args: Namespace, user_config):
         object.__setattr__(flags, arg_name.upper(), args_param_value)
         object.__setattr__(flags, arg_name.lower(), args_param_value)
     GLOBAL_FLAGS = flags  # type: ignore
-    global FLAGS_SET
-    FLAGS_SET = True
 
 
 def get_flag_dict():
