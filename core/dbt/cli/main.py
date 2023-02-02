@@ -490,7 +490,6 @@ def seed(ctx, **kwargs):
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
     )
-
     results = task.run()
     success = task.interpret_results(results)
     return results, success

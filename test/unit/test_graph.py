@@ -1,4 +1,6 @@
 import os
+
+from argparse import Namespace
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -133,8 +135,8 @@ class GraphTest(unittest.TestCase):
         cfg.update(extra_cfg)
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        dbt.flags.set_from_args({}, config)
-        dbt.flags.PARTIAL_PARSE = False
+        dbt.flags.set_from_args(Namespace(), config)
+        object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
         return config
 
     def get_compiler(self, project):

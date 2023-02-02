@@ -27,6 +27,7 @@ class WarnErrorOptionsType(YAML):
     name = "WarnErrorOptionsType"
 
     def convert(self, value, param, ctx):
+        # this function is being used by param in click
         include_exclude = super().convert(value, param, ctx)
 
         return WarnErrorOptions(

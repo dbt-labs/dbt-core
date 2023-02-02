@@ -12,7 +12,7 @@ from click.core import ParameterSource
 
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
-from dbt.cli.option_types import WarnErrorOptionsType
+from dbt.helper_types import WarnErrorOptions
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -20,7 +20,7 @@ if os.name != "nt":
 
 # TODO anything that has a default in params should be removed here?
 # Or maybe only the ones that's in the root click group
-flag_defaults = {
+FLAGS_DEFAULTS = {
     "SEND_ANONYMOUS_USAGE_STATS": True,
     "INDIRECT_SELECTION": "eager",
     "NO_PRINT": False,
@@ -31,13 +31,33 @@ flag_defaults = {
     "STORE_FAILURES": False,
 }
 
+DUPLICATE_PARAMS = [
+    "full_refresh",
+    "target_path",
+    "version_check",
+    "fail_fast",
+    "indirect_selection",
+    "store_failures",
+]
+
+
+def convert_config(config_name, config_value):
+    # This function should take care of converting the values from config and original
+    # set_from_args to the correct type
+    ret = config_value
+    if config_name.lower() == "warn_error_options":
+        ret = WarnErrorOptions(
+            include=config_value.get("include", []), exclude=config_value.get("exclude", [])
+        )
+    return ret
+
 
 @dataclass(frozen=True)
 class Flags:
     def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
 
         # set the default flags
-        for key, value in flag_defaults.items():
+        for key, value in FLAGS_DEFAULTS.items():
             object.__setattr__(self, key, value)
 
         if ctx is None:
@@ -48,28 +68,24 @@ class Flags:
             for param_name, param_value in ctx.params.items():
                 # TODO: this is to avoid duplicate params being defined in two places (version_check in run and cli)
                 # However this is a bit of a hack and we should find a better way to do this
+
+                # N.B. You have to use the base MRO method (object.__setattr__) to set attributes
+                # when using frozen dataclasses.
+                # https://docs.python.org/3/library/dataclasses.html#frozen-instances
                 if hasattr(self, param_name.upper()):
-                    if param_name not in [
-                        "full_refresh",
-                        "target_path",
-                        "version_check",
-                        "fail_fast",
-                        "indirect_selection",
-                        "store_failures",
-                    ]:
+                    if param_name not in DUPLICATE_PARAMS:
                         raise Exception(
                             f"Duplicate flag names found in click command: {param_name}"
                         )
                     else:
-                        if param_name not in params_assigned_from_default:
-                            # If the param was set by the user, don't overwrite it
-                            continue
-                # N.B. You have to use the base MRO method (object.__setattr__) to set attributes
-                # when using frozen dataclasses.
-                # https://docs.python.org/3/library/dataclasses.html#frozen-instances
-                object.__setattr__(self, param_name.upper(), param_value)
-                if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT:
-                    params_assigned_from_default.add(param_name)
+                        # same TODO as above, this is a hack to accomadate for duplicate params
+                        if ctx.get_parameter_source(param_name) != ParameterSource.DEFAULT:
+                            object.__setattr__(self, param_name.upper(), param_value)
+                else:
+                    object.__setattr__(self, param_name.upper(), param_value)
+                    if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT:
+                        params_assigned_from_default.add(param_name)
+
             if ctx.parent:
                 assign_params(ctx.parent, params_assigned_from_default)
 
@@ -97,14 +113,10 @@ class Flags:
             for param_assigned_from_default in params_assigned_from_default:
                 user_config_param_value = getattr(user_config, param_assigned_from_default, None)
                 if user_config_param_value is not None:
-                    # TODO Conversion should happen here to make sure types are consistent with the flag
-                    # extract into a function
-                    if param_assigned_from_default in ["warn_error_options"]:
-                        user_config_param_value = WarnErrorOptionsType().convert(
-                            user_config_param_value, None, None
-                        )
                     object.__setattr__(
-                        self, param_assigned_from_default.upper(), user_config_param_value
+                        self,
+                        param_assigned_from_default.upper(),
+                        convert_config(param_assigned_from_default, user_config_param_value),
                     )
                     param_assigned_from_default_copy.remove(param_assigned_from_default)
             params_assigned_from_default = param_assigned_from_default_copy
