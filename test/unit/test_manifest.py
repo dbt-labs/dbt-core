@@ -2,6 +2,7 @@ import os
 import unittest
 from unittest import mock
 
+from argparse import Namespace
 import copy
 from collections import namedtuple
 from itertools import product
@@ -34,6 +35,7 @@ from dbt.contracts.graph.unparsed import (
 )
 
 from dbt.events.functions import reset_metadata_vars
+from dbt.flags import set_from_args
 
 from dbt.node_types import NodeType
 import freezegun
@@ -425,7 +427,7 @@ class ManifestTest(unittest.TestCase):
     def test_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         dbt.events.functions.EVENT_MANAGER.invocation_id = '01234567-0123-0123-0123-0123456789ab'
-        dbt.flags.SEND_ANONYMOUS_USAGE_STATS = False
+        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         now = datetime.utcnow()
         self.assertEqual(
             ManifestMetadata(
@@ -448,7 +450,7 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         dbt.events.functions.EVENT_MANAGER.invocation_id = '01234567-0123-0123-0123-0123456789ab'
-        dbt.flags.SEND_ANONYMOUS_USAGE_STATS = False
+        set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id='098f6bcd4621d373cade4e832627b4f6',
             adapter_type='postgres',
