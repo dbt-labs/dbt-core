@@ -1,5 +1,0 @@
-version: 2
-
-models:
-  - name: model
-    description: "{{ doc('my_model_doc') }}"
