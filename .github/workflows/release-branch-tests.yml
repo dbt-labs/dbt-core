@@ -39,7 +39,7 @@ jobs:
         uses: dbt-labs/actions/fetch-repo-branches@v1.1.1
         id: get-latest-branches
         with:
-          repo_name: ${{ inputs.package_name }}
+          repo_name: ${{ github.event.repository.name }}
           organization: "dbt-labs"
           pat: ${{ secrets.GITHUB_TOKEN }}
           fetch_protected_branches_only: true
@@ -47,11 +47,11 @@ jobs:
           perform_match_method: "match"
           retries: 3
 
-      - name: "[ANNOTATION] ${{ inputs.package_name }} - branches to test"
+      - name: "[ANNOTATION] ${{ github.event.repository.name }} - branches to test"
         run: |
-          title="${{ inputs.package_name }} - branches to test"
-          message="The workflow will run tests for the following branches of the ${{ inputs.package_name }} repo: ${{ steps.get-latest-branches.outputs.repo-branches }}"
-          echo "::notice title=${{ env.NOTIFICATION_PREFIX }}: $title::$message"
+          title="${{ github.event.repository.name }} - branches to test"
+          message="The workflow will run tests for the following branches of the ${{ github.event.repository.name }} repo: ${{ steps.get-latest-branches.outputs.repo-branches }}"
+          echo "::notice $title::$message"
 
   kick-off-ci:
     needs: [fetch-latest-branches]
