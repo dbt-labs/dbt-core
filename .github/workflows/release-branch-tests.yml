@@ -28,38 +28,33 @@ on:
 permissions: read-all
 
 jobs:
-  generate_matrix:
+  fetch-latest-branches:
     runs-on: ubuntu-latest
+
     outputs:
-      # Will look like '["1.0.latest", "1.2.latest"]'
-      branch_matrix: ${{ toJSON(steps.generate.outputs.branch_matrix) }}
+      latest-branches: ${{ steps.get-latest-branches.outputs.repo-branches }}
+
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
+      - name: "Fetch dbt-core Latest Branches"
+        uses: dbt-labs/actions/fetch-repo-branches@v1.1.1
+        id: get-latest-branches
         with:
-          fetch-depth: 0
+          repo_name: ${{ inputs.package_name }}
+          organization: "dbt-labs"
+          pat: ${{ secrets.GITHUB_TOKEN }}
+          fetch_protected_branches_only: true
+          regex: "^1.[0-9]+.latest$"
+          perform_match_method: "match"
+          retries: 3
 
-      - name: "Test Step"
-        id: test_generate
+      - name: "[ANNOTATION] ${{ inputs.package_name }} - branches to test"
         run: |
-          git status
-          git branch --format "%(refname:short)"
-          git branch --format "%(refname:short)" | grep "^1.*.latest"
-
-      - name: "Get all branches"
-        id: generate
-        run: |
-          git status
-          BRANCHES=($(git branch --format "%(refname:short)" | grep "^1.*.latest"))
-          BRANCHES+="main"
-          echo "branch_matrix=$BRANCHES" >> $GITHUB_OUTPUT
-
-      - name: "[DEBUG] Check branch list"
-        run: |
-          echo ${{ steps.generate.outputs.branch_matrix }}
+          title="${{ inputs.package_name }} - branches to test"
+          message="The workflow will run tests for the following branches of the ${{ inputs.package_name }} repo: ${{ steps.get-latest-branches.outputs.repo-branches }}"
+          echo "::notice title=${{ env.NOTIFICATION_PREFIX }}: $title::$message"
 
   kick-off-ci:
-    needs: [generate_matrix]
+    needs: [fetch-latest-branches]
     name: Kick-off CI
     runs-on: ubuntu-latest
 
@@ -70,7 +65,9 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        branch: ${{ fromJSON(needs.generate_matrix.outputs.branch_matrix) }}
+        branch: ${{ fromJSON(needs.fetch-latest-branches.outputs.latest-branches) }}
+        include:
+          - branch: 'main'
 
     steps:
     - name: Call CI workflow for ${{ matrix.branch }} branch
