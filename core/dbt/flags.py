@@ -5,6 +5,7 @@ from multiprocessing import get_context
 from typing import Optional
 
 
+# for setting up logger for legacy logger
 def env_set_truthy(key: str) -> Optional[str]:
     """Return the value if it was set to a "truthy" string value or None
     otherwise.
@@ -30,42 +31,30 @@ MP_CONTEXT = get_context()
 # this roughly follows the patten of EVENT_MANAGER in dbt/events/functions.py
 # During de-globlization, we'll need to handle both similarly
 GLOBAL_FLAGS = Namespace()  # type: ignore
-FLAGS_SET = False
 
 
 def set_flags(flags):
     global GLOBAL_FLAGS
-    global FLAGS_SET
-    FLAGS_SET = True
     GLOBAL_FLAGS = flags
 
 
 def get_flags():
-    global FLAGS_SET
-    # this allow use the defualt via get_flags()
-    if not FLAGS_SET:
-        set_from_args(Namespace(), None)
     return GLOBAL_FLAGS
 
 
 def set_from_args(args: Namespace, user_config):
     global GLOBAL_FLAGS
     from dbt.cli.main import cli
-    from dbt.cli.flags import Flags
+    from dbt.cli.flags import Flags, convert_config
 
-    # make a dummy context to get the flags
+    # make a dummy context to get the flags, totally arbitrary
     ctx = cli.make_context("run", ["run"])
     flags = Flags(ctx, user_config)
     for arg_name, args_param_value in vars(args).items():
-        if arg_name in ["warn_error_options"]:
-            from dbt.cli.option_types import WarnErrorOptionsType
-
-            args_param_value = WarnErrorOptionsType().convert(args_param_value, None, None)
+        args_param_value = convert_config(arg_name, args_param_value)
         object.__setattr__(flags, arg_name.upper(), args_param_value)
         object.__setattr__(flags, arg_name.lower(), args_param_value)
     GLOBAL_FLAGS = flags  # type: ignore
-    global FLAGS_SET
-    FLAGS_SET = True
 
 
 def get_flag_dict():
