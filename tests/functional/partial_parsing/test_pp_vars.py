@@ -330,6 +330,7 @@ class TestProfileEnvVars:
         # Change env_vars, the user doesn't exist, this should fail
         os.environ["ENV_VAR_USER"] = "fake_user"
 
+        # N.B. run_dbt_and_capture won't work here because FailedToConnectError ends the test entirely
         with pytest.raises(FailedToConnectError):
             run_dbt(["run"], expect_pass=False)
 
