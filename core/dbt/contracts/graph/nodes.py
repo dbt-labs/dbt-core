@@ -535,18 +535,17 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     def __getattr__(self, name) -> None:
         # Unlike __getattribute__, the __getattr__ magic method is only called when attempting to get an attribute that's missing
         if name in ("refs", "sources", "metrics"):
-            hooks = "\n".join(
-                [f"- {hook.sql}" for hook in self.config.pre_hook + self.config.post_hook]
-            )
+            hooks = [f'- pre_hook: "{hook.sql}"' for hook in self.config.pre_hook] + [
+                f'- post_hook: "{hook.sql}"' for hook in self.config.post_hook
+            ]
+            hook_list = "\n".join(hooks)
             # TODO make this message nicer
             message = f"""
 Seeds cannot depend on other nodes. Please ensure that you do not have any seeds
 with pre- or post-hooks that call 'ref', 'source', or 'metric', either directly
 or indirectly via other macros.
 
-Error raised by {self.unique_id}.
-Hooks:
-{hooks}
+Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list}
 """
             # ParsingError or ValidationError?
             # or our newly proposed DependencyError? (https://github.com/dbt-labs/dbt-core/issues/6826#issuecomment-1412345337)
