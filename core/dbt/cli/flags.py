@@ -29,7 +29,11 @@ FLAGS_DEFAULTS = {
     "STORE_FAILURES": False,
 }
 
-DUPLICATE_PARAMS = [
+
+# For backwards compatability, some params are defined across multiple levels,
+# Top-level value should take precedence.
+# e.g. dbt --target-path test2 run --target-path test2
+EXPECTED_DUPLICATE_PARAMS = [
     "full_refresh",
     "target_path",
     "version_check",
@@ -71,12 +75,13 @@ class Flags:
                 # when using frozen dataclasses.
                 # https://docs.python.org/3/library/dataclasses.html#frozen-instances
                 if hasattr(self, param_name.upper()):
-                    if param_name not in DUPLICATE_PARAMS:
+                    if param_name not in EXPECTED_DUPLICATE_PARAMS:
                         raise Exception(
                             f"Duplicate flag names found in click command: {param_name}"
                         )
                     else:
-                        # same TODO as above, this is a hack to accomadate for duplicate params
+                        # Expected duplicate param from multi-level click command (ex: dbt --full_refresh run --full_refresh)
+                        # Overwrite user-configured param with value from parent context
                         if ctx.get_parameter_source(param_name) != ParameterSource.DEFAULT:
                             object.__setattr__(self, param_name.upper(), param_value)
                 else:
