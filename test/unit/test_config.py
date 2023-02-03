@@ -650,6 +650,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.hashed_name(), '754cd47eac1d6f50a5f7cd399ec43da4')
 
     def test_all_overrides(self):
+        # log-path is not tested because it is set exclusively from flags, not cfg
         self.default_project_data.update({
             'model-paths': ['other-models'],
             'macro-paths': ['other-macros'],
@@ -660,7 +661,6 @@ class TestProject(BaseConfigTest):
             'asset-paths': ['other-assets'],
             'target-path': 'other-target',
             'clean-targets': ['another-target'],
-            'log-path': 'other-logs',
             'packages-install-path': 'other-dbt_packages',
             'quoting': {'identifier': False},
             'models': {
@@ -730,7 +730,6 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.asset_paths, ['other-assets'])
         self.assertEqual(project.target_path, 'other-target')
         self.assertEqual(project.clean_targets, ['another-target'])
-        self.assertEqual(project.log_path, 'other-logs')
         self.assertEqual(project.packages_install_path, 'other-dbt_packages')
         self.assertEqual(project.quoting, {'identifier': False})
         self.assertEqual(project.models, {

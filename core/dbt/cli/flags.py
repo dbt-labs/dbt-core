@@ -13,6 +13,7 @@ from click.core import ParameterSource
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
 from dbt.helper_types import WarnErrorOptions
+from dbt.config.project import PartialProject
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -127,6 +128,18 @@ class Flags:
         # Hard coded flags
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
         object.__setattr__(self, "MP_CONTEXT", get_context("spawn"))
+
+        # Default LOG_PATH from PROJECT_DIR, if available.
+        if getattr(self, "LOG_PATH", None) is None:
+            log_path = "logs"
+            project_dir = getattr(self, "PROJECT_DIR", None)
+            if project_dir:
+                partial = PartialProject.from_project_root(
+                    project_dir, verify_version=getattr(self, "VERSION_CHECK", True)
+                )
+                log_path = str(partial.project_dict.get("log-path"))
+
+            object.__setattr__(self, "LOG_PATH", log_path)
 
         # Support console DO NOT TRACK initiave
         object.__setattr__(

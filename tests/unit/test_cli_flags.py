@@ -34,10 +34,15 @@ class TestFlags:
     @pytest.mark.parametrize("param", cli.params)
     def test_cli_group_flags_from_params(self, run_context, param):
         flags = Flags(run_context)
-        if param.name.upper() == "VERSION":
+        if param.name.upper() in ("VERSION", "LOG_PATH"):
             return
         assert hasattr(flags, param.name.upper())
         assert getattr(flags, param.name.upper()) == run_context.params[param.name.lower()]
+
+    def test_log_path_default(self, run_context):
+        flags = Flags(run_context)
+        assert hasattr(flags, "LOG_PATH")
+        assert getattr(flags, "LOG_PATH") == "logs"
 
     @pytest.mark.parametrize(
         "do_not_track,expected_anonymous_usage_stats",
