@@ -4,6 +4,8 @@ import pytest
 from dbt.internal_deprecations import deprecated
 import dbt.exceptions
 from dbt.node_types import NodeType
+from dbt.flags import set_from_args
+from argparse import Namespace
 
 
 @deprecated(reason="just because", version="1.23.0", suggested_action="Make some updates")
@@ -13,6 +15,7 @@ def to_be_decorated():
 
 # simpletest that the return value is not modified
 def test_deprecated_func():
+    set_from_args(Namespace(WARN_ERROR=False), None)
     assert hasattr(to_be_decorated, "__wrapped__")
     assert to_be_decorated() == 5
 
@@ -27,6 +30,10 @@ class TestDeprecatedFunctions:
 
 
 class TestDeprecatedExceptionFunctions:
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self):
+        set_from_args(Namespace(WARN_ERROR=False), None)
+
     def runFunc(self, func, *args):
         return func(*args)
 

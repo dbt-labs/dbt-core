@@ -21,9 +21,7 @@ if os.name != "nt":
 # TODO anything that has a default in params should be removed here?
 # Or maybe only the ones that's in the root click group
 FLAGS_DEFAULTS = {
-    "SEND_ANONYMOUS_USAGE_STATS": True,
     "INDIRECT_SELECTION": "eager",
-    "NO_PRINT": False,
     "TARGET_PATH": None,
     # cli args without user_config or env var option
     "FULL_REFRESH": False,
