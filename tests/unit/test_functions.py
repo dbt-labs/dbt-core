@@ -10,12 +10,12 @@ from dbt.exceptions import EventCompilationError
 @pytest.mark.parametrize(
     "warn_error_options,expect_compilation_exception",
     [
-        ('{"include": "all"}', True),
-        ('{"include": [NoNodesForSelectionCriteria]}', True),
-        ('{"include": []}', False),
-        ("{}", False),
-        ('{"include": [MainTrackingUserState]}', False),
-        ('{"include": "all", "exclude": [NoNodesForSelectionCriteria]}', False),
+        ({"include": "all"}, True),
+        ({"include": ["NoNodesForSelectionCriteria"]}, True),
+        ({"include": []}, False),
+        ({}, False),
+        ({"include": ["MainTrackingUserState"]}, False),
+        ({"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}, False),
     ],
 )
 def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation_exception):
