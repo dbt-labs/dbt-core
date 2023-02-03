@@ -181,6 +181,11 @@ class Profile(HasCredentials):
         args_profile_name: Optional[str],
         project_profile_name: Optional[str] = None,
     ) -> str:
+        def default_profiles_dir():
+            from pathlib import Path
+
+            return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
+
         profile_name = project_profile_name
         if args_profile_name is not None:
             profile_name = args_profile_name
@@ -197,7 +202,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
 """.format(
-                profiles_file=get_flags().DEFAULT_PROFILES_DIR
+                profiles_file=default_profiles_dir()
             )
             raise DbtProjectError(NO_SUPPLIED_PROFILE_ERROR)
         return profile_name
