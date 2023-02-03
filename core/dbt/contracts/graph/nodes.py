@@ -37,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
 from dbt.events.functions import warn_or_error
+from dbt.exceptions import ParsingError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -482,6 +483,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # seeds need the root_path because the contents are not loaded initially
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
+    depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -523,6 +525,44 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
         """Seeds are never empty"""
         return False
 
+    # https://github.com/dbt-labs/dbt-core/issues/6806
+    # Seeds are tree nodes in the DAG. They cannot depend on other nodes.
+    # However, it's possible to define pre- and post-hooks on seeds, and for those
+    # hooks to include {{ ref(...) }}. This worked in previous versions, but it
+    # was never officially documented or supported behavior. Let's raise an explicit error,
+    # which will surface during parsing if the user has written code such that we attempt
+    # to capture & record a ref/source/metric call on the SeedNode.
+    def __getattr__(self, name) -> None:
+        # Unlike __getattribute__, the __getattr__ magic method is only called when attempting to get an attribute that's missing
+        if name in ("refs", "sources", "metrics"):
+            hooks = "\n".join(
+                [f"- {hook.sql}" for hook in self.config.pre_hook + self.config.post_hook]
+            )
+            # TODO make this message nicer
+            message = f"""
+Seeds cannot depend on other nodes. Please ensure that you do not have any seeds
+with pre- or post-hooks that call 'ref', 'source', or 'metric', either directly
+or indirectly via other macros.
+
+Error raised by {self.unique_id}.
+Hooks:
+{hooks}
+"""
+            # ParsingError or ValidationError?
+            # or our newly proposed DependencyError? (https://github.com/dbt-labs/dbt-core/issues/6826#issuecomment-1412345337)
+            raise ParsingError(message)
+        else:
+            # https://docs.python.org/3/library/functions.html#hasattr
+            # This needs to raise an AttributeError, in order for hasattr() to still work
+            # (see logic in dbt.exceptions.DbtRuntimeError)
+            # We could construct our own AttributeError, but I'd rather just use Python's built-in if possible...
+            return getattr(super(), name)
+            # https://docs.python.org/3/library/exceptions.html#AttributeError
+            # otherwise, in Python <3.10:
+            # raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+            # in Python 3.10+ only:
+            # raise AttributeError(name=name, obj=self)
+
     def same_body(self, other) -> bool:
         return self.same_seeds(other)
 
@@ -532,7 +572,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
 
     @property
     def depends_on_macros(self):
-        return []
+        return self.depends_on.macros
 
     @property
     def extra_ctes(self):
