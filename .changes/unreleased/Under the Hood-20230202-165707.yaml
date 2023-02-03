@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Fix CLI vars test to check for object instead of string
+time: 2023-02-02T16:57:07.541956-08:00
+custom:
+  Author: aranke
+  Issue: ' '
