@@ -1,6 +1,5 @@
 import csv
 import pytest
-import shutil
 
 from codecs import BOM_UTF8
 from pathlib import Path
