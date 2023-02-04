@@ -163,7 +163,7 @@ def mkdir(directory_path):
     try:
         os.makedirs(directory_path)
     except FileExistsError:
-        print(f"{directory_path} already exists.")
+        raise FileExistsError(f"{directory_path} already exists.")
 
 
 # To remove a directory
@@ -171,7 +171,7 @@ def rm_dir(directory_path):
     try:
         shutil.rmtree(directory_path)
     except FileNotFoundError:
-        print(f"{directory_path} does not exist.")
+        raise FileNotFoundError(f"{directory_path} does not exist.")
 
 
 # Get an artifact (usually from the target directory) such as
