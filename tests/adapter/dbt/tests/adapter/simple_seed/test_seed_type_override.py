@@ -14,7 +14,7 @@ from dbt.tests.adapter.simple_seed.seeds import (
 )
 
 
-class SimpleSeedColumnOverride:
+class BaseSimpleSeedColumnOverride:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -71,5 +71,5 @@ class SimpleSeedColumnOverride:
         assert len(test_results) == 10
 
 
-class TestSimpleSeedColumnOverride(SimpleSeedColumnOverride):
+class TestSimpleSeedColumnOverride(BaseSimpleSeedColumnOverride):
     pass
