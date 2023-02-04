@@ -6,6 +6,7 @@ from codecs import BOM_UTF8
 from pathlib import Path
 
 from dbt.tests.util import (
+    copy_file,
     mkdir,
     rm_dir,
     run_dbt,
@@ -29,7 +30,6 @@ from dbt.tests.adapter.simple_seed.seeds import (
     seeds__wont_parse_csv,
     seed__unicode_csv,
     seed__with_dots_csv,
-    seed__bom_csv,
 )
 
 
@@ -237,9 +237,11 @@ class TestSimpleSeedWithBOM(SeedConfigBase):
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
         project.run_sql(seeds__expected_sql)
-        shutil.copyfile(
-            project.test_dir / Path("seed_bom.csv"),
-            project.project_root / Path("seeds") / Path("seed_bom.csv"),
+        copy_file(
+            project.test_dir,
+            "seed_bom.csv",
+            project.project_root / Path("seeds") / "seed_bom.csv",
+            "",
         )
 
     def test_simple_seed(self, project):
@@ -248,7 +250,7 @@ class TestSimpleSeedWithBOM(SeedConfigBase):
         # encoding param must be specified in open, so long as Python reads files with a
         # default file encoding for character sets beyond extended ASCII.
         with open(
-                project.project_root / Path("seeds") / Path("seed_bom.csv"), encoding="utf-8"
+            project.project_root / Path("seeds") / Path("seed_bom.csv"), encoding="utf-8"
         ) as fp:
             assert fp.read(1) == BOM_UTF8.decode("utf-8")
         check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
