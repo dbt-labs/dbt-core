@@ -1,6 +1,8 @@
 import csv
 import pytest
+import shutil
 
+from codecs import BOM_UTF8
 from pathlib import Path
 
 from dbt.tests.util import (
@@ -235,14 +237,20 @@ class TestSimpleSeedWithBOM(SeedConfigBase):
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
         project.run_sql(seeds__expected_sql)
-
-    @pytest.fixture(scope="class")
-    def seeds(self):
-        return {"seed_bom.csv": seed__bom_csv}
+        shutil.copyfile(
+            project.test_dir / Path("seed_bom.csv"),
+            project.project_root / Path("seeds") / Path("seed_bom.csv"),
+        )
 
     def test_simple_seed(self, project):
         seed_result = run_dbt(["seed"])
         assert len(seed_result) == 1
+        # encoding param must be specified in open, so long as Python reads files with a
+        # default file encoding for character sets beyond extended ASCII.
+        with open(
+                project.project_root / Path("seeds") / Path("seed_bom.csv"), encoding="utf-8"
+        ) as fp:
+            assert fp.read(1) == BOM_UTF8.decode("utf-8")
         check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
 
 
