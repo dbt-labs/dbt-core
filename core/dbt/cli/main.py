@@ -23,12 +23,6 @@ from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 
 
-# CLI invocation
-def cli_runner():
-    # Run the cli
-    cli()
-
-
 class dbtUsageException(Exception):
     pass
 
@@ -620,4 +614,4 @@ def test(ctx, **kwargs):
 
 # Support running as a module
 if __name__ == "__main__":
-    cli_runner()
+    cli()
