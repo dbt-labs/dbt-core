@@ -14,6 +14,7 @@ from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
 from dbt.helper_types import WarnErrorOptions
 from dbt.config.project import PartialProject
+from dbt.exceptions import DbtProjectError
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -133,11 +134,19 @@ class Flags:
         if getattr(self, "LOG_PATH", None) is None:
             log_path = "logs"
             project_dir = getattr(self, "PROJECT_DIR", None)
+            # If available, set LOG_PATH from log-path in dbt_project.yml
+            # Known limitations:
+            #  1. Using PartialProject here, so no jinja rendering of log-path.
+            #  2. Programmatic invocations of the cli via dbtRunner may pass a Project object directly,
+            #     which is not being used here to extract log-path.
             if project_dir:
-                partial = PartialProject.from_project_root(
-                    project_dir, verify_version=getattr(self, "VERSION_CHECK", True)
-                )
-                log_path = str(partial.project_dict.get("log-path"))
+                try:
+                    partial = PartialProject.from_project_root(
+                        project_dir, verify_version=getattr(self, "VERSION_CHECK", True)
+                    )
+                    log_path = str(partial.project_dict.get("log-path"))
+                except DbtProjectError:
+                    pass
 
             object.__setattr__(self, "LOG_PATH", log_path)
 

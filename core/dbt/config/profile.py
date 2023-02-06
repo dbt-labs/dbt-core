@@ -181,6 +181,10 @@ class Profile(HasCredentials):
         args_profile_name: Optional[str],
         project_profile_name: Optional[str] = None,
     ) -> str:
+        # TODO: Duplicating this method as direct copy of the implementation in dbt.cli.resolvers
+        # dbt.cli.resolvers implementation can't be used because it causes a circular dependency.
+        # This should be removed and use a safe default access on the Flags module when
+        # https://github.com/dbt-labs/dbt-core/issues/6259 is closed.
         def default_profiles_dir():
             from pathlib import Path
 

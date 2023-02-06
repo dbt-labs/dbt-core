@@ -5,7 +5,7 @@ from dbt.cli.main import dbtRunner, dbtUsageException
 
 class TestDbtRunner:
     @pytest.fixture
-    def dbt(self, project) -> dbtRunner:
+    def dbt(self) -> dbtRunner:
         return dbtRunner()
 
     def test_group_invalid_option(self, dbt: dbtRunner) -> None:
