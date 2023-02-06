@@ -92,5 +92,4 @@ seeds:
     tests:
     - column_type:
         type: text
-
 """
