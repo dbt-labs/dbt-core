@@ -13,11 +13,15 @@ models__merge_exclude_columns_sql = """
 
 {% if not is_incremental() %}
 
+-- data for first invocation of model
+
 select 1 as id, 'hello' as msg, 'blue' as color
 union all
 select 2 as id, 'goodbye' as msg, 'red' as color
 
 {% else %}
+
+-- data for subsequent incremental update
 
 select 1 as id, 'hey' as msg, 'blue' as color
 union all
@@ -41,7 +45,6 @@ ResultHolder = namedtuple(
         "model_count",
         "seed_rows",
         "inc_test_model_count",
-        "opt_model_count",
         "relation",
     ],
 )
@@ -61,9 +64,7 @@ class BaseMergeExcludeColumns:
         model_result_set = run_dbt(["run", "--select", incremental_model])
         return len(model_result_set)
 
-    def get_test_fields(
-        self, project, seed, incremental_model, update_sql_file, opt_model_count=None
-    ):
+    def get_test_fields(self, project, seed, incremental_model, update_sql_file):
 
         seed_count = len(run_dbt(["seed", "--select", seed, "--full-refresh"]))
 
@@ -78,9 +79,7 @@ class BaseMergeExcludeColumns:
         # propagate seed state to incremental model according to unique keys
         inc_test_model_count = self.update_incremental_model(incremental_model=incremental_model)
 
-        return ResultHolder(
-            seed_count, model_count, seed_rows, inc_test_model_count, opt_model_count, relation
-        )
+        return ResultHolder(seed_count, model_count, seed_rows, inc_test_model_count, relation)
 
     def check_scenario_correctness(self, expected_fields, test_case_fields, project):
         """Invoke assertions to verify correct build functionality"""
@@ -92,31 +91,22 @@ class BaseMergeExcludeColumns:
         assert expected_fields.seed_rows == test_case_fields.seed_rows
         # 4. incremental test model(s) should be updated
         assert expected_fields.inc_test_model_count == test_case_fields.inc_test_model_count
-        # 5. extra incremental model(s) should be built; optional since
-        #   comparison may be between an incremental model and seed
-        if expected_fields.opt_model_count and test_case_fields.opt_model_count:
-            assert expected_fields.opt_model_count == test_case_fields.opt_model_count
-        # 6. result table should match intended result set (itself a relation)
+        # 5. result table should match intended result set (itself a relation)
         check_relations_equal(
             project.adapter, [expected_fields.relation, test_case_fields.relation]
-        )
-
-    def get_expected_fields(self, relation, seed_rows, opt_model_count=None):
-        return ResultHolder(
-            seed_count=1,
-            model_count=1,
-            inc_test_model_count=1,
-            seed_rows=seed_rows,
-            opt_model_count=opt_model_count,
-            relation=relation,
         )
 
     def test__merge_exclude_columns(self, project):
         """seed should match model after two incremental runs"""
 
-        expected_fields = self.get_expected_fields(
-            relation="expected_merge_exclude_columns", seed_rows=3
+        expected_fields = ResultHolder(
+            seed_count=1,
+            model_count=1,
+            inc_test_model_count=1,
+            seed_rows=3,
+            relation="expected_merge_exclude_columns",
         )
+
         test_case_fields = self.get_test_fields(
             project,
             seed="expected_merge_exclude_columns",
