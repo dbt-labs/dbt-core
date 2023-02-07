@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Moving simple_seed to adapter zone to help adapter test conversions
+time: 2023-02-03T14:35:51.481856-08:00
+custom:
+  Author: nssalian
+  Issue: CT-1959
