@@ -22,7 +22,8 @@ CI_FLAGS =\
 	DBT_TEST_USER_1=$(if $(DBT_TEST_USER_1),$(DBT_TEST_USER_1),dbt_test_user_1)\
 	DBT_TEST_USER_2=$(if $(DBT_TEST_USER_2),$(DBT_TEST_USER_2),dbt_test_user_2)\
 	DBT_TEST_USER_3=$(if $(DBT_TEST_USER_3),$(DBT_TEST_USER_3),dbt_test_user_3)\
-	RUSTFLAGS=$(if $(RUSTFLAGS),$(RUSTFLAGS),"-D warnings")\
+	POSTGRES_TEST_PORT=$(POSTGRES_TEST_PORT)\
+	RUSTFLAGS="$(if $(RUSTFLAGS),$(RUSTFLAGS),-D warnings)"\
 	LOG_DIR=$(if $(LOG_DIR),$(LOG_DIR),./logs)\
 	DBT_LOG_FORMAT=$(if $(DBT_LOG_FORMAT),$(DBT_LOG_FORMAT),json)
 
@@ -88,11 +89,13 @@ interop: clean
 	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto && \
 	LOG_DIR=$(LOG_DIR) cargo run --manifest-path test/interop/log_parsing/Cargo.toml
 
+
+POSTGRES_TEST_PORT:="5432"
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
 	@\
-	docker-compose up -d database && \
-	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
+	POSTGRES_TEST_PORT=$(POSTGRES_TEST_PORT) docker-compose up -d database && \
+	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres PGPORT=$(POSTGRES_TEST_PORT) bash test/setup_db.sh
 
 # This rule creates a file named .env that is used by docker-compose for passing
 # the USER_ID and GROUP_ID arguments to the Docker image.

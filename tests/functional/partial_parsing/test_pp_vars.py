@@ -313,7 +313,7 @@ class TestProfileEnvVars:
             "type": "postgres",
             "threads": 4,
             "host": "localhost",
-            "port": 5432,
+            "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
             "user": "{{ env_var('ENV_VAR_USER') }}",
             "pass": "{{ env_var('ENV_VAR_PASS') }}",
             "dbname": "dbt",

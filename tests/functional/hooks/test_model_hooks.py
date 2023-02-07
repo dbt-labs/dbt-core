@@ -1,5 +1,4 @@
 import pytest
-
 from pathlib import Path
 
 from dbt.exceptions import CompilationError
@@ -122,7 +121,7 @@ class BaseTestPrePost(object):
             assert ctx["target.dbname"] == "dbt"
             assert ctx["target.host"] == host
             assert ctx["target.name"] == "default"
-            assert ctx["target.port"] == 5432
+            assert ctx["target.port"] == project.dbt_profile_target["port"]
             assert ctx["target.schema"] == project.test_schema
             assert ctx["target.threads"] == 4
             assert ctx["target.type"] == "postgres"
@@ -165,7 +164,6 @@ class TestPrePostModelHooks(BaseTestPrePost):
 
     def test_pre_and_post_run_hooks(self, project, dbt_profile_target):
         run_dbt()
-
         self.check_hooks("start", project, dbt_profile_target["host"])
         self.check_hooks("end", project, dbt_profile_target["host"])
 

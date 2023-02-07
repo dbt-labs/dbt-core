@@ -1,3 +1,4 @@
+import os
 import pytest
 from dbt.tests.util import run_dbt, read_file, check_relations_equal
 
@@ -30,9 +31,9 @@ def dbt_profile_data(unique_schema):
                     "type": "postgres",
                     "threads": 4,
                     "host": "localhost",
-                    "port": 5432,
-                    "user": "root",
-                    "pass": "password",
+                    "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
+                    "user": os.getenv("POSTGRES_TEST_USER", "root"),
+                    "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
                     "dbname": "dbtMixedCase",
                     "schema": unique_schema,
                 },

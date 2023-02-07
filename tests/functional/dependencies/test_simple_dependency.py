@@ -294,10 +294,10 @@ class TestSimpleDependencyBadProfile(object):
             "type": "postgres",
             "threads": 4,
             "host": "{{ env_var('PROFILE_TEST_HOST') }}",
-            "port": 5432,
-            "user": "root",
-            "pass": "password",
-            "dbname": "dbt",
+            "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
+            "user": os.getenv("POSTGRES_TEST_USER", "root"),
+            "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
+            "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
         }
 
     def test_deps_bad_profile(self, project):

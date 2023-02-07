@@ -108,7 +108,7 @@ class TestPrePostRunHooks(object):
         assert ctx["target.dbname"] == "dbt"
         assert ctx["target.host"] == host
         assert ctx["target.name"] == "default"
-        assert ctx["target.port"] == 5432
+        assert ctx["target.port"] == project.dbt_profile_target["port"]
         assert ctx["target.schema"] == project.test_schema
         assert ctx["target.threads"] == 4
         assert ctx["target.type"] == "postgres"

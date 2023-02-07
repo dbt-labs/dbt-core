@@ -434,7 +434,14 @@ class TestInitOutsideOfProject(TestInitOutsideOfProjectBase):
     @mock.patch("click.confirm")
     @mock.patch("click.prompt")
     def test_init_task_outside_of_project(
-        self, mock_prompt, mock_confirm, mock_get_adapter, project, project_name, unique_schema
+        self,
+        mock_prompt,
+        mock_confirm,
+        mock_get_adapter,
+        project,
+        project_name,
+        unique_schema,
+        dbt_profile_data,
     ):
         manager = Mock()
         manager.attach_mock(mock_prompt, "prompt")
@@ -505,7 +512,7 @@ test:
       dbname: dbt
       host: localhost
       pass: password
-      port: 5432
+      port: {dbt_profile_data['test']['outputs']['default2']['port']}
       schema: {unique_schema}
       threads: 4
       type: postgres
@@ -514,7 +521,7 @@ test:
       dbname: dbt
       host: localhost
       pass: password
-      port: 5432
+      port: {dbt_profile_data['test']['outputs']['noaccess']['port']}
       schema: {unique_schema}
       threads: 4
       type: postgres

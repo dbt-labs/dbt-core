@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: "password"
       POSTGRES_DB: "dbt"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_TEST_PORT:-5432}:5432"
 
   test:
     build:

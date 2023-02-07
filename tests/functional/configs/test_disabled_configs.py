@@ -7,7 +7,7 @@ from tests.functional.configs.fixtures import BaseConfigProject
 
 class TestDisabledConfigs(BaseConfigProject):
     @pytest.fixture(scope="class")
-    def dbt_profile_data(self, unique_schema):
+    def dbt_profile_data(self, unique_schema, dbt_profile_target):
         return {
             "config": {"send_anonymous_usage_stats": False},
             "test": {
@@ -17,7 +17,9 @@ class TestDisabledConfigs(BaseConfigProject):
                         # make sure you can do this and get an int out
                         "threads": "{{ (1 + 3) | as_number }}",
                         "host": "localhost",
-                        "port": "{{ (5400 + 32) | as_number }}",
+                        "port": "{{ ("
+                        + str(dbt_profile_target["port"] - 32)
+                        + " + 32) | as_number }}",
                         "user": "root",
                         "pass": "password",
                         "dbname": "dbt",
@@ -28,7 +30,9 @@ class TestDisabledConfigs(BaseConfigProject):
                         # make sure you can do this and get an int out
                         "threads": "{{ (1 + 3) | as_number }}",
                         "host": "localhost",
-                        "port": "{{ (5400 + 32) | as_number }}",
+                        "port": "{{ ("
+                        + str(dbt_profile_target["port"] - 32)
+                        + " + 32) | as_number }}",
                         "user": "root",
                         "pass": "password",
                         "dbname": "dbt",

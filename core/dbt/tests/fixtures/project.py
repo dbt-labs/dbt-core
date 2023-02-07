@@ -378,6 +378,7 @@ class TestProjInfo:
         test_schema,
         database,
         test_config,
+        dbt_profile_target,
     ):
         self.project_root = project_root
         self.profiles_dir = profiles_dir
@@ -388,6 +389,7 @@ class TestProjInfo:
         self.test_schema = test_schema
         self.database = database
         self.test_config = test_config
+        self.dbt_profile_target = dbt_profile_target
         self.created_schemas = []
 
     @property
@@ -464,6 +466,7 @@ def project(
     test_data_dir,
     logs_dir,
     test_config,
+    dbt_profile_target,
 ):
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
@@ -473,6 +476,7 @@ def project(
     os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
     # the signatures in the test signature to a minimum.
+
     project = TestProjInfo(
         project_root=project_root,
         profiles_dir=profiles_root,
@@ -482,6 +486,7 @@ def project(
         test_data_dir=test_data_dir,
         test_schema=unique_schema,
         database=adapter.config.credentials.database,
+        dbt_profile_target=dbt_profile_target,
         test_config=test_config,
     )
     project.drop_test_schema()

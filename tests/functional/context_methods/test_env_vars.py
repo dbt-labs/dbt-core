@@ -75,9 +75,9 @@ class TestEnvVars:
                         "type": "postgres",
                         "threads": 1,
                         "host": "localhost",
-                        "port": 5432,
-                        "user": "root",
-                        "pass": "password",
+                        "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
+                        "user": os.getenv("POSTGRES_TEST_USER", "root"),
+                        "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
                         "dbname": "dbt",
                         "schema": unique_schema,
                     },
@@ -85,7 +85,7 @@ class TestEnvVars:
                         "type": "postgres",
                         "threads": 1,
                         "host": "localhost",
-                        "port": 5432,
+                        "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
                         # root/password
                         "user": "{{ env_var('DBT_TEST_USER') }}",
                         "pass": "{{ env_var('DBT_TEST_PASS') }}",
@@ -151,7 +151,7 @@ class TestEnvVars:
         assert ctx["target.dbname"] == "dbt"
         assert ctx["target.host"] == "localhost"
         assert ctx["target.name"] == "dev"
-        assert ctx["target.port"] == 5432
+        assert ctx["target.port"] == project.dbt_profile_target["port"]
         assert ctx["target.schema"] == project.test_schema
         assert ctx["target.threads"] == 1
         assert ctx["target.type"] == "postgres"
@@ -175,7 +175,7 @@ class TestEnvVars:
         assert ctx["target.dbname"] == "dbt"
         assert ctx["target.host"] == "localhost"
         assert ctx["target.name"] == "prod"
-        assert ctx["target.port"] == 5432
+        assert ctx["target.port"] == project.dbt_profile_target["port"]
         assert ctx["target.schema"] == project.test_schema
         assert ctx["target.threads"] == 1
         assert ctx["target.type"] == "postgres"
