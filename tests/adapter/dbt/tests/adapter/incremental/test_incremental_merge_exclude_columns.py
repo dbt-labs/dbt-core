@@ -68,11 +68,11 @@ class BaseMergeExcludeColumns:
         seed_count = len(run_dbt(["seed", "--select", seed, "--full-refresh"]))
 
         model_count = len(run_dbt(["run", "--select", incremental_model, "--full-refresh"]))
-        # pass on kwarg
+
         relation = incremental_model
         # update seed in anticipation of incremental model update
         row_count_query = "select * from {}.{}".format(project.test_schema, seed)
-        # project.run_sql_file(Path("seeds") / Path(update_sql_file + ".sql"))
+
         seed_rows = len(project.run_sql(row_count_query, fetch="all"))
 
         # propagate seed state to incremental model according to unique keys
@@ -111,7 +111,6 @@ class BaseMergeExcludeColumns:
             relation=relation,
         )
 
-    # no unique_key test
     def test__merge_exclude_columns(self, project):
         """seed should match model after two incremental runs"""
 
