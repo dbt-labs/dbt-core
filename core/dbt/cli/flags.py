@@ -144,7 +144,7 @@ class Flags:
                     partial = PartialProject.from_project_root(
                         project_dir, verify_version=getattr(self, "VERSION_CHECK", True)
                     )
-                    log_path = str(partial.project_dict.get("log-path"))
+                    log_path = str(partial.project_dict.get("log-path", log_path))
                 except DbtProjectError:
                     pass
 
