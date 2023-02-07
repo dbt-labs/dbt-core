@@ -23,7 +23,7 @@ from dbt.contracts.graph.nodes import (
     ColumnInfo,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.unparsed import ExposureType, ExposureOwner, MetricFilter,MetricTime
+from dbt.contracts.graph.unparsed import ExposureType, Owner, MetricFilter,MetricTime
 from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
@@ -330,7 +330,7 @@ def make_exposure(pkg, name, path=None, fqn_extras=None, owner=None):
         fqn_extras = []
 
     if owner is None:
-        owner = ExposureOwner(email='test@example.com')
+        owner = Owner(email='test@example.com')
 
     fqn = [pkg, 'exposures'] + fqn_extras + [name]
     return Exposure(

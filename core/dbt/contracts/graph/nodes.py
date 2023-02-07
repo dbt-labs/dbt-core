@@ -28,7 +28,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
     TestDef,
-    ExposureOwner,
+    Owner,
     ExposureType,
     MaturityType,
     MetricFilter,
@@ -892,7 +892,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 @dataclass
 class Exposure(GraphNode):
     type: ExposureType
-    owner: ExposureOwner
+    owner: Owner
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Exposure]})
     description: str = ""
     label: Optional[str] = None
