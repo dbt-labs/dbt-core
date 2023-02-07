@@ -230,8 +230,9 @@ class TestSeedParsing(SeedConfigBase):
         run_dbt(["seed"], expect_pass=False)
 
 
-# BOM = byte order mark; see https://www.ibm.com/docs/en/netezza?topic=formats-byte-order-mark
 class TestSimpleSeedWithBOM(SeedConfigBase):
+    # Reference: BOM = byte order mark; see https://www.ibm.com/docs/en/netezza?topic=formats-byte-order-mark
+    # Tests for hidden unicode character in csv
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
