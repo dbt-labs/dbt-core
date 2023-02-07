@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import unittest
 import pytest
+from argparse import Namespace
 
 from unittest import mock
 import yaml
@@ -22,11 +23,12 @@ from dbt.node_types import NodeType
 from dbt.semver import VersionSpecifier
 from dbt.task.base import ConfiguredTask
 
+from dbt.flags import set_from_args
+
 from .utils import normalize
 
 INITIAL_ROOT = os.getcwd()
-# Skip due to interface for config updated
-pytestmark = pytest.mark.skip
+
 
 @contextmanager
 def temp_cd(path):
@@ -166,8 +168,8 @@ class BaseConfigTest(unittest.TestCase):
             },
             'empty_profile_data': {}
         }
-        self.args = Args(profiles_dir=self.profiles_dir, cli_vars={},
-                         version_check=True, project_dir=self.project_dir)
+        self.args = Namespace(profiles_dir=self.profiles_dir, cli_vars={}, version_check=True, project_dir=self.project_dir, target=None, threads=None, profile=None)
+        set_from_args(self.args, None)
         self.env_override = {
             'env_value_type': 'postgres',
             'env_value_host': 'env-postgres-host',
@@ -436,6 +438,7 @@ class TestProfileFile(BaseFileTest):
     def test_profile_override(self):
         self.args.profile = 'other'
         self.args.threads = 3
+        set_from_args(self.args, None)
         profile = self.from_args()
         from_raw = self.from_raw_profile_info(
                 self.default_profile_data['other'],
@@ -646,6 +649,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.hashed_name(), '754cd47eac1d6f50a5f7cd399ec43da4')
 
     def test_all_overrides(self):
+        # log-path is not tested because it is set exclusively from flags, not cfg
         self.default_project_data.update({
             'model-paths': ['other-models'],
             'macro-paths': ['other-macros'],
@@ -656,7 +660,6 @@ class TestProject(BaseConfigTest):
             'asset-paths': ['other-assets'],
             'target-path': 'other-target',
             'clean-targets': ['another-target'],
-            'log-path': 'other-logs',
             'packages-install-path': 'other-dbt_packages',
             'quoting': {'identifier': False},
             'models': {
@@ -726,7 +729,6 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.asset_paths, ['other-assets'])
         self.assertEqual(project.target_path, 'other-target')
         self.assertEqual(project.clean_targets, ['another-target'])
-        self.assertEqual(project.log_path, 'other-logs')
         self.assertEqual(project.packages_install_path, 'other-dbt_packages')
         self.assertEqual(project.quoting, {'identifier': False})
         self.assertEqual(project.models, {
@@ -1041,6 +1043,7 @@ class TestRuntimeConfig(BaseConfigTest):
     def test_unsupported_version_no_check(self):
         self.default_project_data['require-dbt-version'] = '>99999.0.0'
         self.args.version_check = False
+        set_from_args(self.args, None)
         conf = self.from_parts()
         self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {'>99999.0.0'})
 
@@ -1063,6 +1066,7 @@ class TestRuntimeConfig(BaseConfigTest):
     def test_unsupported_version_range_no_check(self):
         self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
         self.args.version_check = False
+        set_from_args(self.args, None)
         conf = self.from_parts()
         self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {'>0.0.0', '<=0.0.1'})
 
@@ -1238,6 +1242,7 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
         self.args.target = 'cli-and-env-vars'
         self.args.vars = {"cli_value_host": "cli-postgres-host", "cli_version": "0.1.2"}
         self.args.project_dir = self.project_dir
+        set_from_args(self.args, None)
         with mock.patch.dict(os.environ, self.env_override):
             config = dbt.config.RuntimeConfig.from_args(self.args)
 
