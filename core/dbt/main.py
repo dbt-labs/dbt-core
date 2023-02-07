@@ -11,8 +11,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import dbt.version
-from dbt.events.functions import fire_event, setup_event_logger, LOG_VERSION
+from dbt.events.functions import fire_event, setup_event_logger, setup_fallback_logger, LOG_VERSION
 from dbt.events.types import (
+    EventLevel,
     MainEncounteredError,
     MainKeyboardInterrupt,
     MainReportVersion,
@@ -178,6 +179,13 @@ def handle_and_check(args):
         # Set flags from args, user config, and env vars
         user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
         flags.set_from_args(parsed, user_config)
+
+        # If the user has asked to supress non-error logging on the cli, we want to respect that as soon as possible,
+        # so that any non-error logging done before full log config is loaded and ready is filtered accordingly.
+        setup_fallback_logger(
+            bool(flags.ENABLE_LEGACY_LOGGER), EventLevel.ERROR if flags.QUIET else EventLevel.INFO
+        )
+
         dbt.tracking.initialize_from_flags()
         # Set log_format from flags
         parsed.cls.set_log_format()

@@ -18,6 +18,14 @@ LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
 
+# The "fallback" logger is used as a stop-gap so that console logging works before the logging
+# configuration is fully loaded.
+def setup_fallback_logger(use_legacy: bool, level: EventLevel) -> None:
+    cleanup_event_logger()
+    config = _get_logbook_log_config(level) if use_legacy else _get_stdout_config(level)
+    EVENT_MANAGER.add_logger(config)
+
+
 def setup_event_logger(log_path: str, level_override: Optional[EventLevel] = None):
     cleanup_event_logger()
     make_log_dir_if_missing(log_path)
@@ -113,9 +121,7 @@ def cleanup_event_logger():
 # currently fire before logs can be configured by setup_event_logger(), we
 # create a default configuration with default settings and no file output.
 EVENT_MANAGER: EventManager = EventManager()
-EVENT_MANAGER.add_logger(
-    _get_logbook_log_config() if flags.ENABLE_LEGACY_LOGGER else _get_stdout_config()
-)
+setup_fallback_logger(bool(flags.ENABLE_LEGACY_LOGGER), EventLevel.INFO)
 
 
 # This global, and the following two functions for capturing stdout logs are
