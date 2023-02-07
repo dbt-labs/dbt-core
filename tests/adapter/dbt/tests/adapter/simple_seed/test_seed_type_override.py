@@ -2,16 +2,19 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-from tests.functional.simple_seed.fixtures import (
+from dbt.tests.adapter.simple_seed.fixtures import (
     macros__schema_test,
     properties__schema_yml,
-    seeds__disabled_in_config,
-    seeds__enabled_in_config,
-    seeds__tricky,
+)
+
+from dbt.tests.adapter.simple_seed.seeds import (
+    seeds__enabled_in_config_csv,
+    seeds__disabled_in_config_csv,
+    seeds__tricky_csv,
 )
 
 
-class SimpleSeedColumnOverride(object):
+class BaseSimpleSeedColumnOverride:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -21,9 +24,9 @@ class SimpleSeedColumnOverride(object):
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
-            "seed_enabled.csv": seeds__enabled_in_config,
-            "seed_disabled.csv": seeds__disabled_in_config,
-            "seed_tricky.csv": seeds__tricky,
+            "seed_enabled.csv": seeds__enabled_in_config_csv,
+            "seed_disabled.csv": seeds__disabled_in_config_csv,
+            "seed_tricky.csv": seeds__tricky_csv,
         }
 
     @pytest.fixture(scope="class")
@@ -46,13 +49,15 @@ class SimpleSeedColumnOverride(object):
             },
         }
 
-    def seed_enabled_types(self):
+    @staticmethod
+    def seed_enabled_types():
         return {
             "seed_id": "text",
             "birthday": "date",
         }
 
-    def seed_tricky_types(self):
+    @staticmethod
+    def seed_tricky_types():
         return {
             "seed_id_str": "text",
             "looks_like_a_bool": "text",
@@ -60,11 +65,11 @@ class SimpleSeedColumnOverride(object):
         }
 
     def test_simple_seed_with_column_override(self, project):
-        results = run_dbt(["seed", "--show"])
-        len(results) == 2
-        results = run_dbt(["test"])
-        len(results) == 10
+        seed_results = run_dbt(["seed", "--show"])
+        assert len(seed_results) == 2
+        test_results = run_dbt(["test"])
+        assert len(test_results) == 10
 
 
-class TestSimpleSeedColumnOverride(SimpleSeedColumnOverride):
+class TestSimpleSeedColumnOverride(BaseSimpleSeedColumnOverride):
     pass
