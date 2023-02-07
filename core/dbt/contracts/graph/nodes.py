@@ -525,42 +525,38 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
         """Seeds are never empty"""
         return False
 
-    # https://github.com/dbt-labs/dbt-core/issues/6806
-    # Seeds are tree nodes in the DAG. They cannot depend on other nodes.
-    # However, it's possible to define pre- and post-hooks on seeds, and for those
-    # hooks to include {{ ref(...) }}. This worked in previous versions, but it
-    # was never officially documented or supported behavior. Let's raise an explicit error,
-    # which will surface during parsing if the user has written code such that we attempt
-    # to capture & record a ref/source/metric call on the SeedNode.
-    def __getattr__(self, name) -> None:
-        # Unlike __getattribute__, the __getattr__ magic method is only called when attempting to get an attribute that's missing
-        if name in ("refs", "sources", "metrics"):
-            hooks = [f'- pre_hook: "{hook.sql}"' for hook in self.config.pre_hook] + [
-                f'- post_hook: "{hook.sql}"' for hook in self.config.post_hook
-            ]
-            hook_list = "\n".join(hooks)
-            # TODO make this message nicer
-            message = f"""
-Seeds cannot depend on other nodes. Please ensure that you do not have any seeds
-with pre- or post-hooks that call 'ref', 'source', or 'metric', either directly
-or indirectly via other macros.
+    def disallow_implicit_dependencies(self):
+        """Disallow seeds to take implicit upstream dependencies via pre/post hooks"""
+        # Seeds are root nodes in the DAG. They cannot depend on other nodes.
+        # However, it's possible to define pre- and post-hooks on seeds, and for those
+        # hooks to include {{ ref(...) }}. This worked in previous versions, but it
+        # was never officially documented or supported behavior. Let's raise an explicit error,
+        # which will surface during parsing if the user has written code such that we attempt
+        # to capture & record a ref/source/metric call on the SeedNode.
+        # For more details: https://github.com/dbt-labs/dbt-core/issues/6806
+        hooks = [f'- pre_hook: "{hook.sql}"' for hook in self.config.pre_hook] + [
+            f'- post_hook: "{hook.sql}"' for hook in self.config.post_hook
+        ]
+        hook_list = "\n".join(hooks)
+        message = f"""
+Seeds cannot depend on other nodes. dbt detected a seed with a pre- or post-hook
+that calls 'ref', 'source', or 'metric', either directly or indirectly via other macros.
 
 Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list}
-"""
-            # ParsingError or ValidationError?
-            # or our newly proposed DependencyError? (https://github.com/dbt-labs/dbt-core/issues/6826#issuecomment-1412345337)
-            raise ParsingError(message)
-        else:
-            # https://docs.python.org/3/library/functions.html#hasattr
-            # This needs to raise an AttributeError, in order for hasattr() to still work
-            # (see logic in dbt.exceptions.DbtRuntimeError)
-            # We could construct our own AttributeError, but I'd rather just use Python's built-in if possible...
-            return getattr(super(), name)
-            # https://docs.python.org/3/library/exceptions.html#AttributeError
-            # otherwise, in Python <3.10:
-            # raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-            # in Python 3.10+ only:
-            # raise AttributeError(name=name, obj=self)
+        """
+        raise ParsingError(message)
+
+    @property
+    def refs(self):
+        self.disallow_implicit_dependencies()
+
+    @property
+    def sources(self):
+        self.disallow_implicit_dependencies()
+
+    @property
+    def metrics(self):
+        self.disallow_implicit_dependencies()
 
     def same_body(self, other) -> bool:
         return self.same_seeds(other)

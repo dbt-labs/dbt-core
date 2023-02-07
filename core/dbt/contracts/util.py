@@ -260,9 +260,6 @@ def upgrade_seed_content(node_content):
         if attr_name in node_content:
             del node_content[attr_name]
         # In v1.4, we switched SeedNode.depends_on from DependsOn to MacroDependsOn
-        # I'm not actually sure if this logic is necessary?
-        # TK: actual automated testing for these methods
-        # https://github.com/dbt-labs/dbt-core/issues/6753
         if "depends_on" in node_content and "nodes" in node_content["depends_on"].keys():
             del node_content["depends_on"]["nodes"]
 
