@@ -352,7 +352,7 @@ threads = click.option(
     "--threads",
     envvar=None,
     help="Specify number of threads to use while executing models. Overrides settings in profiles.yml.",
-    default=1,
+    default=None,
     type=click.INT,
 )
 
