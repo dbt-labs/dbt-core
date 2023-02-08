@@ -49,6 +49,8 @@ def preflight(func):
     return update_wrapper(wrapper, func)
 
 
+# TODO: UnsetProfile is necessary for deps and clean to load a project.
+# This decorator and its usage can be removed once https://github.com/dbt-labs/dbt-core/issues/6257 is closed.
 def unset_profile(func):
     def wrapper(*args, **kwargs):
         ctx = args[0]
