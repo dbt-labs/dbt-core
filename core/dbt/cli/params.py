@@ -6,13 +6,10 @@ from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
-# TODO:  The name (reflected in flags) is a correction!
-# The original name was `SEND_ANONYMOUS_USAGE_STATS` and used an env var called "DBT_SEND_ANONYMOUS_USAGE_STATS"
-# Both of which break existing naming conventions (doesn't match param flag).
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
-anonymous_usage_stats = click.option(
-    "--anonymous-usage-stats/--no-anonymous-usage-stats",
-    envvar="DBT_ANONYMOUS_USAGE_STATS",
+# TODO:  Rename this to meet naming conventions (the word "send" is redundant)
+send_anonymous_usage_stats = click.option(
+    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
+    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
     help="Send anonymous usage stats to dbt Labs.",
     default=True,
 )

@@ -73,7 +73,6 @@ def get_flag_dict():
         "version_check",
         "fail_fast",
         "send_anonymous_usage_stats",
-        "anonymous_usage_stats",
         "printer_width",
         "indirect_selection",
         "log_cache_events",

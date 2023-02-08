@@ -25,7 +25,7 @@ def preflight(func):
         set_flags(flags)
 
         # Tracking
-        initialize_from_flags(flags.ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
+        initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
 
         # Logging

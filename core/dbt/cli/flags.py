@@ -151,13 +151,9 @@ class Flags:
             object.__setattr__(self, "LOG_PATH", log_path)
 
         # Support console DO NOT TRACK initiave
-        object.__setattr__(
-            self,
-            "ANONYMOUS_USAGE_STATS",
-            False
-            if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes")
-            else True,
-        )
+        if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes"):
+            object.__setattr__(self, "SEND_ANONYMOUS_USAGE_STATS", False)
+
         # Check mutual exclusivity once all flags are set
         self._assert_mutually_exclusive(
             params_assigned_from_default, ["WARN_ERROR", "WARN_ERROR_OPTIONS"]

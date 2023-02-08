@@ -117,6 +117,7 @@ class TestContextBuiltins:
         assert result
         # The result should include a dictionary of all flags with default values that aren't None
         expected = (
+            "'send_anonymous_usage_stats': False",
             "'quiet': False",
             "'print': True",
             "'cache_selected_only': False",
