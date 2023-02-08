@@ -45,25 +45,54 @@ class TestFlags:
         assert getattr(flags, "LOG_PATH") == "logs"
 
     @pytest.mark.parametrize(
-        "do_not_track,expected_anonymous_usage_stats",
+        "set_stats_param,do_not_track,expected_anonymous_usage_stats",
         [
-            ("1", False),
-            ("t", False),
-            ("true", False),
-            ("y", False),
-            ("yes", False),
-            ("false", True),
-            ("anything", True),
-            ("2", True),
+            # set_stats_param = default, DNT = True, expected = False
+            ("default", "1", False),
+            ("default", "t", False),
+            ("default", "true", False),
+            ("default", "y", False),
+            ("default", "yes", False),
+            # set_stats_param = default, DNT = false, expected = True
+            ("default", "false", True),
+            ("default", "anything", True),
+            # set_stats_param = True, DNT = True, expected = False
+            (True, "1", False),
+            (True, "t", False),
+            (True, "true", False),
+            (True, "y", False),
+            (True, "yes", False),
+            # set_stats_param = True, DNT = false, expected = True
+            (True, "false", True),
+            (True, "anything", True),
+            (True, "2", True),
+            # set_stats_param = False, DNT = True, expected = False
+            (False, "1", False),
+            (False, "t", False),
+            (False, "true", False),
+            (False, "y", False),
+            (False, "yes", False),
+            # set_stats_param = False, DNT = False, expected = False
+            (False, "false", False),
+            (False, "anything", False),
+            (False, "2", False),
         ],
     )
     def test_anonymous_usage_state(
-        self, monkeypatch, run_context, do_not_track, expected_anonymous_usage_stats
+        self,
+        monkeypatch,
+        run_context,
+        set_stats_param,
+        do_not_track,
+        expected_anonymous_usage_stats,
     ):
+        # patch the env
         monkeypatch.setenv("DO_NOT_TRACK", do_not_track)
-
+        # set the param
+        if set_stats_param != "default":
+            run_context.params["send_anonymous_usage_stats"] = set_stats_param
         flags = Flags(run_context)
-        assert flags.SEND_ANONYMOUS_USAGE_STATS == expected_anonymous_usage_stats
+        assert flags.SEND_ANONYMOUS_USAGE_STATS is expected_anonymous_usage_stats
 
     def test_empty_user_config_uses_default(self, run_context, user_config):
         flags = Flags(run_context, user_config)
