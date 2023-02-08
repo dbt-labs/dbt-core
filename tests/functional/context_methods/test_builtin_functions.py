@@ -115,8 +115,9 @@ class TestContextBuiltins:
         assert use_colors == "use_colors: True"
         invocation_dict = find_result_in_parsed_logs(parsed_logs, "invocation_result")
         assert result
-        # The result should include a dictionary of all flags with default values that aren't None
+        # The result should include a dictionary of all flags with values that aren't None
         expected = (
+            "'send_anonymous_usage_stats': False",
             "'quiet': False",
             "'print': True",
             "'cache_selected_only': False",
