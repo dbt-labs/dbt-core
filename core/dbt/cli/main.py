@@ -270,7 +270,7 @@ def compile(ctx, **kwargs):
 @click.pass_context
 @p.config_dir
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.target
 @p.vars

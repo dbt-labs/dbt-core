@@ -218,6 +218,15 @@ profiles_dir = click.option(
     type=click.Path(exists=True),
 )
 
+# `dbt debug` uses this because it implements custom behaviour for non-existent profiles.yml directories
+profiles_dir_exists_false = click.option(
+    "--profiles-dir",
+    envvar="DBT_PROFILES_DIR",
+    help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
+    default=default_profiles_dir,
+    type=click.Path(exists=False),
+)
+
 project_dir = click.option(
     "--project-dir",
     envvar=None,
