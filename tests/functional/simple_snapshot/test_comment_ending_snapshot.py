@@ -1,6 +1,5 @@
 import pytest
 from dbt.tests.util import run_dbt
-from dbt.exceptions import ParsingError
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
