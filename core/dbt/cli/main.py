@@ -145,7 +145,7 @@ def build(ctx, **kwargs):
 @p.target
 @p.vars
 @requires.preflight
-@requires.profile(unset=True)
+@requires.unset_profile
 @requires.project
 def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
@@ -297,7 +297,7 @@ def debug(ctx, **kwargs):
 @p.target
 @p.vars
 @requires.preflight
-@requires.profile(unset=True)
+@requires.unset_profile
 @requires.project
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""

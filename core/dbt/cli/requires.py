@@ -49,34 +49,38 @@ def preflight(func):
     return update_wrapper(wrapper, func)
 
 
-def profile(*args0, unset=False):
-    def outer_wrapper(func):
-        def wrapper(*args, **kwargs):
-            ctx = args[0]
-            assert isinstance(ctx, Context)
+def unset_profile(func):
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
 
-            if ctx.obj.get("profile") is None:
-                flags = ctx.obj["flags"]
-                # TODO: Generalize safe access to flags.THREADS:
-                # https://github.com/dbt-labs/dbt-core/issues/6259
-                threads = getattr(flags, "THREADS", None)
-                if unset:
-                    profile = UnsetProfile()
-                else:
-                    profile = load_profile(
-                        flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads
-                    )
-                ctx.obj["profile"] = profile
+        if ctx.obj.get("profile") is None:
+            profile = UnsetProfile()
+            ctx.obj["profile"] = profile
 
-            return func(*args, **kwargs)
+        return func(*args, **kwargs)
 
-        return update_wrapper(wrapper, func)
+    return update_wrapper(wrapper, func)
 
-    # if there are no args, the decorator was used without params @decorator
-    # otherwise, the decorator was called with params @decorator(arg)
-    if len(args0) == 0:
-        return outer_wrapper
-    return outer_wrapper(args0[0])
+
+def profile(func):
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
+
+        if ctx.obj.get("profile") is None:
+            flags = ctx.obj["flags"]
+            # TODO: Generalize safe access to flags.THREADS:
+            # https://github.com/dbt-labs/dbt-core/issues/6259
+            threads = getattr(flags, "THREADS", None)
+            profile = load_profile(
+                flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads
+            )
+            ctx.obj["profile"] = profile
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
 
 
 def project(func):
