@@ -260,8 +260,7 @@ def upgrade_seed_content(node_content):
         if attr_name in node_content:
             del node_content[attr_name]
         # In v1.4, we switched SeedNode.depends_on from DependsOn to MacroDependsOn
-        if "depends_on" in node_content and "nodes" in node_content["depends_on"].keys():
-            del node_content["depends_on"]["nodes"]
+        node_content.get("depends_on", {}).pop("nodes", None)
 
 
 def upgrade_manifest_json(manifest: dict) -> dict:

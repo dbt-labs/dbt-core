@@ -525,7 +525,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
         """Seeds are never empty"""
         return False
 
-    def disallow_implicit_dependencies(self):
+    def _disallow_implicit_dependencies(self):
         """Disallow seeds to take implicit upstream dependencies via pre/post hooks"""
         # Seeds are root nodes in the DAG. They cannot depend on other nodes.
         # However, it's possible to define pre- and post-hooks on seeds, and for those
@@ -548,15 +548,15 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
 
     @property
     def refs(self):
-        self.disallow_implicit_dependencies()
+        self._disallow_implicit_dependencies()
 
     @property
     def sources(self):
-        self.disallow_implicit_dependencies()
+        self._disallow_implicit_dependencies()
 
     @property
     def metrics(self):
-        self.disallow_implicit_dependencies()
+        self._disallow_implicit_dependencies()
 
     def same_body(self, other) -> bool:
         return self.same_seeds(other)
@@ -566,7 +566,7 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         return []
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
     @property
