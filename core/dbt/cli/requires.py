@@ -133,10 +133,10 @@ def runtime_config(func):
     return update_wrapper(wrapper, func)
 
 
-def manifest(*args0, write_perf_info=False):
+def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
     given a profile, project, and runtime config. This also registers the adaper
-    from the runtime config and writes the manifest to disc.
+    from the runtime config and conditionally writes the manifest to disc.
     """
 
     def outer_wrapper(func):
@@ -160,7 +160,7 @@ def manifest(*args0, write_perf_info=False):
                 )
 
                 ctx.obj["manifest"] = manifest
-                if ctx.obj["flags"].write_json:
+                if write and ctx.obj["flags"].write_json:
                     write_manifest(manifest, ctx.obj["runtime_config"].target_path)
 
             return func(*args, **kwargs)

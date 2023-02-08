@@ -185,7 +185,7 @@ def docs(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
+@requires.manifest(write=False)
 def docs_generate(ctx, **kwargs):
     """Generate the documentation website for your project"""
     task = GenerateTask(
