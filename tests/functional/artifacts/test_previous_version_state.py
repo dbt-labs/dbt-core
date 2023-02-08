@@ -188,7 +188,11 @@ class TestPreviousVersionState:
         ]
         if expect_pass:
             results = run_dbt(cli_args, expect_pass=expect_pass)
-            assert len(results) == 4
+            # We have different numbers of nodes in older versions
+            if compare_manifest_version < 7:
+                assert len(results) == 4
+            else:
+                assert len(results) == 1
         else:
             with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
