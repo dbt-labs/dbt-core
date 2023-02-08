@@ -68,7 +68,7 @@ jobs:
       - name: "Generate Nightly Release Version Number"
         id: nightly-release-version
         run: |
-          number="${{ steps.semver.outputs.version }}.dev${{ steps.current-date.outputs.date }}+nightly"
+          number="${{ steps.semver.outputs.version }}.dev${{ steps.current-date.outputs.date }}"
           echo "number=$number" >> $GITHUB_OUTPUT
 
       - name: "Audit Nightly Release Version And Parse Into Parts"
