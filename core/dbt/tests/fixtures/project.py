@@ -356,7 +356,7 @@ def project_files(project_root, models, macros, snapshots, properties, seeds, te
 
 # We have a separate logs dir for every test
 @pytest.fixture(scope="class")
-def logs_dir(prefix, project_root):
+def logs_dir(project_root, prefix):
     return os.path.join(project_root, "logs", prefix)
 
 
