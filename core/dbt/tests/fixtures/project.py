@@ -356,8 +356,8 @@ def project_files(project_root, models, macros, snapshots, properties, seeds, te
 
 # We have a separate logs dir for every test
 @pytest.fixture(scope="class")
-def logs_dir(request, prefix):
-    return os.path.join(request.config.rootdir, "logs", prefix)
+def logs_dir(prefix, project_root):
+    return os.path.join(project_root, "logs", prefix)
 
 
 # This fixture is for customizing tests that need overrides in adapter
