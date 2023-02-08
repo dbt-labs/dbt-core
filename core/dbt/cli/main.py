@@ -276,14 +276,11 @@ def compile(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
-@requires.profile
-@requires.project
-@requires.runtime_config
 def debug(ctx, **kwargs):
     """Show some helpful information about dbt for debugging. Not to be confused with the --debug option which increases verbosity."""
     task = DebugTask(
         ctx.obj["flags"],
-        ctx.obj["runtime_config"],
+        None,
     )
 
     results = task.run()
