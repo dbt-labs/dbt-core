@@ -25,7 +25,7 @@ snapshots__sample_snapshot = """
 
 {{
     config(
-      target_database='postgres',
+      target_database='dbt',
       target_schema='snapshots',
       unique_key='sample_num',
       strategy='timestamp',
@@ -68,12 +68,12 @@ class BaseConfigProject:
                 "outputs": {
                     "dev": {
                         "type": "postgres",
-                        "database": "postgres",
+                        "dbname": "dbt",
                         "schema": "jaffle_shop",
                         "host": "localhost",
                         "user": "root",
                         "port": 5432,
-                        "password": "password",
+                        "pass": "password",
                     }
                 },
                 "target": "dev",
