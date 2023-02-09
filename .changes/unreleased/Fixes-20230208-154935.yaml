@@ -1,0 +1,6 @@
+kind: Fixes
+body: Always flush stdout after logging
+time: 2023-02-08T15:49:35.175874-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6901"
