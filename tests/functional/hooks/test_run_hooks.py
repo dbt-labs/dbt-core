@@ -8,6 +8,8 @@ from tests.functional.hooks.fixtures import (
     macros__before_and_after,
     models__hooks,
     seeds__example_seed_csv,
+    macros_missing_column,
+    models__missing_column,
 )
 
 from dbt.tests.util import (
@@ -141,3 +143,25 @@ class TestPrePostRunHooks(object):
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")
         self.assert_used_schemas(project)
+
+
+class TestAfterRunHooks(object):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"temp_macro.sql": macros_missing_column}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"test_column.sql": models__missing_column}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            # The create and drop table statements here validate that these hooks run
+            # in the same order that they are defined. Drop before create is an error.
+            # Also check that the table does not exist below.
+            "on-run-start": "- {{ export_table_check() }}"
+        }
+
+    def test_missing_column_pre_hook(self, project):
+        run_dbt(["run"], expect_pass=False)

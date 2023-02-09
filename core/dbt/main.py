@@ -1024,6 +1024,19 @@ def parse_args(args, cls=DBTArgumentParser):
         """,
     )
 
+    warn_error_flag.add_argument(
+        "--warn-error-options",
+        default=None,
+        help="""
+        If dbt would normally warn, instead raise an exception based on
+        include/exclude configuration. Examples include --select that selects
+        nothing, deprecations, configurations with no associated models,
+        invalid test configurations, and missing sources/refs in tests.
+        This argument should be a YAML string, with keys 'include' or 'exclude'.
+        eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'
+        """,
+    )
+
     p.add_argument(
         "--no-version-check",
         dest="version_check",

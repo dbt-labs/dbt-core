@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure results from hooks contain nodes when processing them
+time: 2023-02-08T11:05:51.952494-06:00
+custom:
+  Author: emmyoop
+  Issue: "6796"

@@ -1556,6 +1556,13 @@ message LogSeedResultMsg {
 
 // Skipped Q017
 
+message LogSeedResultMsg {
+    EventInfo info = 1;
+    LogSeedResult data = 2;
+}
+
+// Skipped Q017
+
 // Q018
 message LogFreshnessResult {
     string status = 1;
@@ -1719,6 +1726,15 @@ message NothingToDo {
 }
 
 message NothingToDoMsg {
+    NodeInfo node_info = 1;
+    string resource_type = 2;
+    string schema = 3;
+    string node_name = 4;
+    int32 index = 5;
+    int32 total = 6;
+}
+
+message SkippingDetailsMsg {
     EventInfo info = 1;
     NothingToDo data = 2;
 }

@@ -74,6 +74,8 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
 
     profile_name = getattr(args, "profile", None)
 
+    profile_name = getattr(args, "profile", None)
+
     runtime_args = RuntimeArgs(
         project_dir=project_dir,
         profiles_dir=profiles_dir,

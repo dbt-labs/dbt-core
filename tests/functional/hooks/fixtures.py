@@ -1,3 +1,31 @@
+macros_missing_column = """
+{% macro export_table_check() %}
+
+    {% set table = 'test_column' %}
+
+    {% set query %}
+        SELECT column_name
+        FROM {{ref(table)}}
+        LIMIT 1
+    {% endset %}
+
+    {%- if flags.WHICH in ('run', 'build') -%}
+        {% set results = run_query(query) %}
+        {% if execute %}
+            {%- if results.rows -%}
+                {{ exceptions.raise_compiler_error("ON_RUN_START_CHECK_NOT_PASSED: Data already exported. DBT Run aborted.") }}
+            {% else -%}
+                {{ log("No data found in " ~ table ~ " for current day and runtime region. Proceeding...", true) }}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endif -%}
+{% endmacro %}
+"""
+
+models__missing_column = """
+select 1 as col
+"""
+
 macros__before_and_after = """
 {% macro custom_run_hook(state, target, run_started_at, invocation_id) %}
 

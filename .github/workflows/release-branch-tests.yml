@@ -28,7 +28,33 @@ on:
 permissions: read-all
 
 jobs:
+  fetch-latest-branches:
+    runs-on: ubuntu-latest
+
+    outputs:
+      latest-branches: ${{ steps.get-latest-branches.outputs.repo-branches }}
+
+    steps:
+      - name: "Fetch dbt-core Latest Branches"
+        uses: dbt-labs/actions/fetch-repo-branches@v1.1.1
+        id: get-latest-branches
+        with:
+          repo_name: ${{ github.event.repository.name }}
+          organization: "dbt-labs"
+          pat: ${{ secrets.GITHUB_TOKEN }}
+          fetch_protected_branches_only: true
+          regex: "^1.[0-9]+.latest$"
+          perform_match_method: "match"
+          retries: 3
+
+      - name: "[ANNOTATION] ${{ github.event.repository.name }} - branches to test"
+        run: |
+          title="${{ github.event.repository.name }} - branches to test"
+          message="The workflow will run tests for the following branches of the ${{ github.event.repository.name }} repo: ${{ steps.get-latest-branches.outputs.repo-branches }}"
+          echo "::notice $title::$message"
+
   kick-off-ci:
+    needs: [fetch-latest-branches]
     name: Kick-off CI
     runs-on: ubuntu-latest
 
@@ -39,7 +65,9 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        branch: [1.0.latest, 1.1.latest, 1.2.latest, 1.3.latest, 1.4.latest, main]
+        branch: ${{ fromJSON(needs.fetch-latest-branches.outputs.latest-branches) }}
+        include:
+          - branch: 'main'
 
     steps:
     - name: Call CI workflow for ${{ matrix.branch }} branch
