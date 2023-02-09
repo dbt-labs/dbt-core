@@ -187,7 +187,11 @@
     }
   },
   "additionalProperties": false,
+<<<<<<< HEAD
   "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Optional[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric]]]], parent_map: Optional[Dict[str, List[str]]], child_map: Optional[Dict[str, List[str]]])",
+=======
+  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Optional[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition]]]], parent_map: Optional[Dict[str, List[str]]], child_map: Optional[Dict[str, List[str]]])",
+>>>>>>> 4911cccb8 (partial parsing for groups)
   "definitions": {
     "ManifestMetadata": {
       "type": "object",
@@ -204,7 +208,11 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
+<<<<<<< HEAD
           "default": "2023-02-15T15:58:34.862418Z"
+=======
+          "default": "2023-02-13T17:41:47.731826Z"
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "invocation_id": {
           "oneOf": [
@@ -215,7 +223,11 @@
               "type": "null"
             }
           ],
+<<<<<<< HEAD
           "default": "577bb71e-6097-4b45-a229-fc47954b6fd9"
+=======
+          "default": "2084ee8a-3962-4f49-99a1-4c06387a6e57"
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "env": {
           "type": "object",
@@ -421,7 +433,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.863889
+=======
+          "default": 1676310107.733252
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -1006,7 +1022,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.864901
+=======
+          "default": 1676310107.734257
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -1370,7 +1390,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8654652
+=======
+          "default": 1676310107.734807
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -1632,7 +1656,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8660212
+=======
+          "default": 1676310107.73539
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -1884,7 +1912,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8665721
+=======
+          "default": 1676310107.735925
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -2136,7 +2168,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.867108
+=======
+          "default": 1676310107.7364511
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -2383,7 +2419,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8677619
+=======
+          "default": 1676310107.7370791
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -2658,7 +2698,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8687968
+=======
+          "default": 1676310107.738108
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -3127,7 +3171,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8697689
+=======
+          "default": 1676310107.7390342
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "config_call_dict": {
           "type": "object",
@@ -3524,7 +3572,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.871045
+=======
+          "default": 1676310107.740042
+>>>>>>> 4911cccb8 (partial parsing for groups)
         }
       },
       "additionalProperties": false,
@@ -3639,7 +3691,11 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
+<<<<<<< HEAD
           "default": "2023-02-15T15:58:34.860278Z"
+=======
+          "default": "2023-02-13T17:41:47.729692Z"
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "invocation_id": {
           "oneOf": [
@@ -3650,7 +3706,11 @@
               "type": "null"
             }
           ],
+<<<<<<< HEAD
           "default": "577bb71e-6097-4b45-a229-fc47954b6fd9"
+=======
+          "default": "2084ee8a-3962-4f49-99a1-4c06387a6e57"
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "env": {
           "type": "object",
@@ -4003,7 +4063,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.871335
+=======
+          "default": 1676310107.7403321
+>>>>>>> 4911cccb8 (partial parsing for groups)
         },
         "supported_languages": {
           "oneOf": [
@@ -4246,7 +4310,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.872013
+=======
+          "default": 1676310107.741005
+>>>>>>> 4911cccb8 (partial parsing for groups)
         }
       },
       "additionalProperties": false,
@@ -4468,7 +4536,11 @@
         },
         "created_at": {
           "type": "number",
+<<<<<<< HEAD
           "default": 1676476714.8726609
+=======
+          "default": 1676310107.741645
+>>>>>>> 4911cccb8 (partial parsing for groups)
         }
       },
       "additionalProperties": false,
