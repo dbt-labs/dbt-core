@@ -1074,6 +1074,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.metrics.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, Group):
+                source_file.groups.append(node.unique_id)
         else:
             source_file.nodes.append(node.unique_id)
 
