@@ -9,8 +9,7 @@
 # .rst files there could result in a differently build final index.html file.
 
 # **when?**
-# Whenever a change has been pushed to a branch, and only if there is a diff
-# between the PR branch and main's core/dbt/cli and or core/dbt/docs dirs.
+# Whenever triggered through the github actions UI.
 
 # TODO: add bot comment to PR informing contributor that the docs have been committed
 # TODO: figure out why github action triggered pushes cause github to fail to report
@@ -19,7 +18,7 @@
 name: Generate CLI API docs
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
