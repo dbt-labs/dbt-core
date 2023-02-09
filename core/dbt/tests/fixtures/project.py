@@ -381,6 +381,7 @@ class TestProjInfo:
         test_data_dir,
         test_schema,
         database,
+        logs_dir,
         test_config,
     ):
         self.project_root = project_root
@@ -391,6 +392,7 @@ class TestProjInfo:
         self.test_data_dir = test_data_dir
         self.test_schema = test_schema
         self.database = database
+        self.logs_dir = logs_dir
         self.test_config = test_config
         self.created_schemas = []
 
@@ -486,6 +488,7 @@ def project(
         test_data_dir=test_data_dir,
         test_schema=unique_schema,
         database=adapter.config.credentials.database,
+        logs_dir=logs_dir,
         test_config=test_config,
     )
     project.drop_test_schema()
