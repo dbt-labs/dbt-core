@@ -86,13 +86,11 @@ class TestFlags:
         do_not_track,
         expected_anonymous_usage_stats,
     ):
-        # patch the env
         monkeypatch.setenv("DO_NOT_TRACK", do_not_track)
-        # set the param
         if set_stats_param != "default":
             run_context.params["send_anonymous_usage_stats"] = set_stats_param
         flags = Flags(run_context)
-        assert flags.SEND_ANONYMOUS_USAGE_STATS is expected_anonymous_usage_stats
+        assert flags.SEND_ANONYMOUS_USAGE_STATS == expected_anonymous_usage_stats
 
     def test_empty_user_config_uses_default(self, run_context, user_config):
         flags = Flags(run_context, user_config)
