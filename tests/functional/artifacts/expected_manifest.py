@@ -784,6 +784,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             },
         },
         "metrics": {},
+        "groups": {},
         "selectors": {},
         "parent_map": {
             "model.test.model": ["seed.test.seed"],
@@ -1186,6 +1187,7 @@ def expected_references_manifest(project):
             },
         },
         "metrics": {},
+        "groups": {},
         "selectors": {},
         "docs": {
             "doc.dbt.__overview__": ANY,

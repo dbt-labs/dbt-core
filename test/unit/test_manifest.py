@@ -23,7 +23,8 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SourceDefinition,
     Exposure,
-    Metric
+    Metric,
+    Group,
 )
 
 from dbt.contracts.graph.unparsed import (
@@ -130,6 +131,18 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 path='my_metric.yml',
                 original_file_path='my_metric.yml'
+            )
+        }
+
+        self.groups = {
+            'group.root.my_group': Group(
+                name='my_group',
+                owner=Owner(email='some@email.com'),
+                resource_type=NodeType.Group,
+                unique_id='group.root.my_group',
+                package_name='root',
+                path='my_metric.yml',
+                original_file_path='my_metric.yml',
             )
         }
 
@@ -318,6 +331,7 @@ class ManifestTest(unittest.TestCase):
                 'macros': {},
                 'exposures': {},
                 'metrics': {},
+                'groups': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
@@ -404,11 +418,12 @@ class ManifestTest(unittest.TestCase):
     def test__build_flat_graph(self):
         exposures = copy.copy(self.exposures)
         metrics = copy.copy(self.metrics)
+        groups = copy.copy(self.groups)
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
                             disabled={}, files={}, exposures=exposures,
-                            metrics=metrics, selectors={})
+                            metrics=metrics, groups=groups, selectors={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_exposures = flat_graph['exposures']
@@ -468,6 +483,7 @@ class ManifestTest(unittest.TestCase):
                 'macros': {},
                 'exposures': {},
                 'metrics': {},
+                'groups': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
@@ -737,6 +753,7 @@ class MixedManifestTest(unittest.TestCase):
                 'sources': {},
                 'exposures': {},
                 'metrics': {},
+                'groups': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},

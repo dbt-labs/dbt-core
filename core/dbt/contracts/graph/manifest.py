@@ -29,6 +29,7 @@ from dbt.contracts.graph.nodes import (
     GenericTestNode,
     Exposure,
     Metric,
+    Group,
     UnpatchedSourceDefinition,
     ManifestNode,
     GraphMemberNode,
@@ -599,6 +600,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     docs: MutableMapping[str, Documentation] = field(default_factory=dict)
     exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
+    groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
     files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
@@ -775,6 +777,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
             metrics={k: _deepcopy(v) for k, v in self.metrics.items()},
+            groups={k: _deepcopy(v) for k, v in self.groups.items()},
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
             metadata=self.metadata,
             disabled={k: _deepcopy(v) for k, v in self.disabled.items()},
@@ -816,6 +819,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             docs=self.docs,
             exposures=self.exposures,
             metrics=self.metrics,
+            groups=self.groups,
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,
@@ -1083,6 +1087,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.metrics[metric.unique_id] = metric
         source_file.metrics.append(metric.unique_id)
 
+    def add_group(self, source_file: SchemaSourceFile, group: Group):
+        _check_duplicates(group, self.groups)
+        self.groups[group.unique_id] = group
+        source_file.metrics.append(group.unique_id)
+
     def add_disabled_nofile(self, node: GraphMemberNode):
         # There can be multiple disabled nodes for the same unique_id
         if node.unique_id in self.disabled:
@@ -1125,6 +1134,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.docs,
             self.exposures,
             self.metrics,
+            self.groups,
             self.selectors,
             self.files,
             self.metadata,
@@ -1177,6 +1187,9 @@ class WritableManifest(ArtifactMixin):
     )
     metrics: Mapping[UniqueID, Metric] = field(
         metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
+    )
+    groups: Mapping[UniqueID, Group] = field(
+        metadata=dict(description=("The groups defined in the dbt project"))
     )
     selectors: Mapping[UniqueID, Any] = field(
         metadata=dict(description=("The selectors defined in selectors.yml"))

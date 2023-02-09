@@ -15,6 +15,7 @@ node_type_pluralizations = {
     NodeType.Macro: "macros",
     NodeType.Exposure: "exposures",
     NodeType.Metric: "metrics",
+    NodeType.Group: "groups",
 }
 
 
