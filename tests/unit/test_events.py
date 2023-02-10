@@ -14,6 +14,8 @@ from dbt.events.base_types import (
     msg_from_base_event,
 )
 from dbt.events.functions import msg_to_dict, msg_to_json
+from dbt.flags import set_from_args
+from argparse import Namespace
 
 
 # takes in a class and finds any subclasses for it
@@ -170,8 +172,7 @@ sample_values = [
     types.HooksRunning(num_hooks=0, hook_type=""),
     types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
     # I - Project parsing ======================
-    types.ParseCmdOut(msg="testing"),
-    types.ParseCmdPerfInfoPath(path=""),
+    types.ParsePerfInfoPath(path=""),
     types.GenericTestFileParse(path=""),
     types.MacroFileParse(path=""),
     types.PartialParsingErrorProcessingFile(file=""),
@@ -385,6 +386,7 @@ class TestEventJSONSerialization:
     # event types that take `Any` are not possible to test in this way since some will serialize
     # just fine and others won't.
     def test_all_serializable(self):
+        set_from_args(Namespace(WARN_ERROR=False), None)
         all_non_abstract_events = set(
             get_all_subclasses(BaseEvent),
         )

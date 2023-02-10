@@ -58,6 +58,16 @@ class dbtRunner:
             raise dbtUsageException(e.message)
 
 
+def handle(args):
+    res, _ = handle_and_check(args)
+    return res
+
+
+def handle_and_check(args):
+    dbt = dbtRunner()
+    return dbt.invoke(args)
+
+
 # dbt
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"]},
