@@ -768,20 +768,11 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 # =======================================================
 
 
-@dataclass
-class ParseCmdOut(InfoLevel, pt.ParseCmdOut):
-    def code(self):
-        return "I001"
-
-    def message(self) -> str:
-        return self.msg
-
-
-# Skipping I002, I003, I004, I005, I006, I007, I008, I009
+# Skipping I001, I002, I003, I004, I005, I006, I007, I008, I009
 
 
 @dataclass
-class ParseCmdPerfInfoPath(InfoLevel, pt.ParseCmdPerfInfoPath):
+class ParsePerfInfoPath(InfoLevel, pt.ParsePerfInfoPath):
     def code(self):
         return "I010"
 

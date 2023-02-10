@@ -26,7 +26,7 @@ from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingError,
-    ParseCmdPerfInfoPath,
+    ParsePerfInfoPath,
     PartialParsingSkipParsing,
     UnableToPartialParse,
     PartialParsingNotEnabled,
@@ -989,7 +989,7 @@ class ManifestLoader:
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
-        fire_event(ParseCmdPerfInfoPath(path=path))
+        fire_event(ParsePerfInfoPath(path=path))
 
 
 def invalid_target_fail_unless_test(
