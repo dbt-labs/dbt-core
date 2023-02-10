@@ -1,17 +1,15 @@
 from pathlib import Path, PurePath
 
 import click
-from dbt.cli.option_types import YAML, WarnErrorOptionsType
+from dbt.cli.options import MultiOption
+from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
+from dbt.version import get_version_information
 
-
-# TODO:  The name (reflected in flags) is a correction!
-# The original name was `SEND_ANONYMOUS_USAGE_STATS` and used an env var called "DBT_SEND_ANONYMOUS_USAGE_STATS"
-# Both of which break existing naming conventions (doesn't match param flag).
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
-anonymous_usage_stats = click.option(
-    "--anonymous-usage-stats/--no-anonymous-usage-stats",
-    envvar="DBT_ANONYMOUS_USAGE_STATS",
+# TODO:  Rename this to meet naming conventions (the word "send" is redundant)
+send_anonymous_usage_stats = click.option(
+    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
+    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
     help="Send anonymous usage stats to dbt Labs.",
     default=True,
 )
@@ -80,13 +78,21 @@ enable_legacy_logger = click.option(
     hidden=True,
 )
 
-exclude = click.option("--exclude", envvar=None, help="Specify the nodes to exclude.")
+exclude = click.option(
+    "--exclude", envvar=None, type=tuple, cls=MultiOption, help="Specify the nodes to exclude."
+)
 
 fail_fast = click.option(
     "--fail-fast/--no-fail-fast",
     "-x/ ",
     envvar="DBT_FAIL_FAST",
     help="Stop execution on first failure.",
+)
+
+favor_state = click.option(
+    "--favor-state/--no-favor-state",
+    envvar="DBT_FAVOR_STATE",
+    help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
 )
 
 full_refresh = click.option(
@@ -101,7 +107,7 @@ indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",
     help="Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.",
-    type=click.Choice(["eager", "cautious"], case_sensitive=False),
+    type=click.Choice(["eager", "cautious", "buildable"], case_sensitive=False),
     default="eager",
 )
 
@@ -123,7 +129,8 @@ log_path = click.option(
     "--log-path",
     envvar="DBT_LOG_PATH",
     help="Configure the 'log-path'. Only applies this setting for the current run. Overrides the 'DBT_LOG_PATH' if it is set.",
-    type=click.Path(),
+    default=None,
+    type=click.Path(resolve_path=True, path_type=Path),
 )
 
 macro_debugging = click.option(
@@ -132,21 +139,12 @@ macro_debugging = click.option(
     hidden=True,
 )
 
-models = click.option(
-    "-m",
-    "-s",
-    "models",
-    envvar=None,
-    help="Specify the nodes to include.",
-    multiple=True,
-)
-
 output = click.option(
     "--output",
     envvar=None,
     help="TODO: No current help text",
     type=click.Choice(["json", "name", "path", "selector"], case_sensitive=False),
-    default="name",
+    default="selector",
 )
 
 output_keys = click.option(
@@ -213,15 +211,24 @@ profiles_dir = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",
     help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
-    default=default_profiles_dir(),
+    default=default_profiles_dir,
     type=click.Path(exists=True),
+)
+
+# `dbt debug` uses this because it implements custom behaviour for non-existent profiles.yml directories
+profiles_dir_exists_false = click.option(
+    "--profiles-dir",
+    envvar="DBT_PROFILES_DIR",
+    help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
+    default=default_profiles_dir,
+    type=click.Path(exists=False),
 )
 
 project_dir = click.option(
     "--project-dir",
     envvar=None,
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
-    default=default_project_dir(),
+    default=default_project_dir,
     type=click.Path(exists=True),
 )
 
@@ -240,10 +247,11 @@ record_timing_info = click.option(
 )
 
 resource_type = click.option(
+    "--resource-types",
     "--resource-type",
     envvar=None,
     help="TODO: No current help text",
-    type=click.Choice(
+    type=ChoiceTuple(
         [
             "metric",
             "source",
@@ -258,8 +266,26 @@ resource_type = click.option(
         ],
         case_sensitive=False,
     ),
-    default="default",
+    cls=MultiOption,
+    default=(),
 )
+
+model_decls = ("-m", "--models", "--model")
+select_decls = ("-s", "--select")
+select_attrs = {
+    "envvar": None,
+    "help": "Specify the nodes to include.",
+    "cls": MultiOption,
+    "type": tuple,
+}
+
+# `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
+# Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
+# However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
+# See https://github.com/dbt-labs/dbt-core/pull/6774#issuecomment-1408476095 for more info.
+models = click.option(*model_decls, **select_attrs)
+raw_select = click.option(*select_decls, **select_attrs)
+select = click.option(*select_decls, *model_decls, **select_attrs)
 
 selector = click.option(
     "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
@@ -267,6 +293,19 @@ selector = click.option(
 
 show = click.option(
     "--show", envvar=None, help="Show a sample of the loaded data in the terminal", is_flag=True
+)
+
+# TODO:  The env var is a correction!
+# The original env var was `DBT_TEST_SINGLE_THREADED`.
+# This broke the existing naming convention.
+# This will need to be communicated as a change to the community!
+#
+# N.B. This flag is only used for testing, hence it's hidden from help text.
+single_threaded = click.option(
+    "--single-threaded/--no-single-threaded",
+    envvar="DBT_SINGLE_THREADED",
+    default=False,
+    hidden=True,
 )
 
 skip_profile_setup = click.option(
@@ -283,10 +322,10 @@ state = click.option(
     help="If set, use the given directory as the source for json files to compare with this project.",
     type=click.Path(
         dir_okay=True,
-        exists=True,
         file_okay=False,
         readable=True,
         resolve_path=True,
+        path_type=Path,
     ),
 )
 
@@ -319,7 +358,7 @@ threads = click.option(
     "--threads",
     envvar=None,
     help="Specify number of threads to use while executing models. Overrides settings in profiles.yml.",
-    default=1,
+    default=None,
     type=click.INT,
 )
 
@@ -341,12 +380,26 @@ vars = click.option(
     envvar=None,
     help="Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. '{my_variable: my_value}'",
     type=YAML(),
+    default="{}",
 )
+
+
+# TODO: when legacy flags are deprecated use
+# click.version_option instead of a callback
+def _version_callback(ctx, _param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(get_version_information())
+    ctx.exit()
+
 
 version = click.option(
     "--version",
+    callback=_version_callback,
     envvar=None,
+    expose_value=False,
     help="Show version information",
+    is_eager=True,
     is_flag=True,
 )
 
@@ -362,13 +415,13 @@ warn_error = click.option(
     envvar="DBT_WARN_ERROR",
     help="If dbt would normally warn, instead raise an exception. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations, and missing sources/refs in tests.",
     default=None,
-    flag_value=True,
+    is_flag=True,
 )
 
 warn_error_options = click.option(
     "--warn-error-options",
     envvar="DBT_WARN_ERROR_OPTIONS",
-    default=None,
+    default="{}",
     help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
     and missing sources/refs in tests. This argument should be a YAML string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'""",
     type=WarnErrorOptionsType(),

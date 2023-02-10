@@ -677,7 +677,7 @@ class TestPackageSpec(unittest.TestCase):
                 {'package': 'dbt-labs-test/b', 'version': '0.2.1'},
             ],
         })
-        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
+        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'), {})
         self.assertEqual(len(resolved), 2)
         self.assertEqual(resolved[0].name, 'dbt-labs-test/a')
         self.assertEqual(resolved[0].version, '0.1.3')
@@ -691,7 +691,7 @@ class TestPackageSpec(unittest.TestCase):
                 {'package': 'dbt-labs-test/b', 'version': '0.2.1'},
             ],
         })
-        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
+        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'), {})
         self.assertEqual(resolved[0].name, 'dbt-labs-test/a')
         self.assertEqual(resolved[0].version, '0.1.4a1')
 

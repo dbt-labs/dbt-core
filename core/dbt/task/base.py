@@ -40,10 +40,11 @@ from dbt.events.types import (
 from dbt.events.contextvars import get_node_info
 from .printer import print_run_result_error
 
-from dbt.adapters.factory import register_adapter
+from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile
 import dbt.exceptions
+from dbt.graph import Graph
 
 
 class NoneConfig:
@@ -70,10 +71,10 @@ def read_profiles(profiles_dir=None):
 class BaseTask(metaclass=ABCMeta):
     ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
-    def __init__(self, args, config):
+    def __init__(self, args, config, project=None):
         self.args = args
-        self.args.single_threaded = False
         self.config = config
+        self.project = config if isinstance(config, Project) else project
 
     @classmethod
     def pre_init_hook(cls, args):
@@ -91,10 +92,9 @@ class BaseTask(metaclass=ABCMeta):
             log_manager.format_text()
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, *pargs, **kwargs):
         try:
-            # This is usually RuntimeConfig but will be UnsetProfileConfig
-            # for the clean or deps tasks
+            # This is usually RuntimeConfig
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
             fire_event(LogDbtProjectError(exc=str(exc)))
@@ -106,7 +106,7 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
-        return cls(args, config)
+        return cls(args, config, *pargs, **kwargs)
 
     @abstractmethod
     def run(self):
@@ -116,13 +116,13 @@ class BaseTask(metaclass=ABCMeta):
         return True
 
 
-def get_nearest_project_dir(args):
+def get_nearest_project_dir(project_dir: Optional[str]) -> str:
     # If the user provides an explicit project directory, use that
     # but don't look at parent directories.
-    if args.project_dir:
-        project_file = os.path.join(args.project_dir, "dbt_project.yml")
+    if project_dir:
+        project_file = os.path.join(project_dir, "dbt_project.yml")
         if os.path.exists(project_file):
-            return args.project_dir
+            return project_dir
         else:
             raise dbt.exceptions.DbtRuntimeError(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
@@ -144,23 +144,42 @@ def get_nearest_project_dir(args):
     )
 
 
-def move_to_nearest_project_dir(args):
-    nearest_project_dir = get_nearest_project_dir(args)
+def move_to_nearest_project_dir(project_dir: Optional[str]) -> str:
+    nearest_project_dir = get_nearest_project_dir(project_dir)
     os.chdir(nearest_project_dir)
     return nearest_project_dir
 
 
+# TODO: look into deprecating this class in favor of several small functions that
+# produce the same behavior. currently this class only contains manifest compilation,
+# holding a manifest, and moving direcories.
 class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
-    def __init__(self, args, config):
+    def __init__(self, args, config, manifest: Optional[Manifest] = None):
         super().__init__(args, config)
-        register_adapter(self.config)
+        self.graph: Optional[Graph] = None
+        self.manifest = manifest
+
+    def compile_manifest(self):
+        if self.manifest is None:
+            raise DbtInternalError("compile_manifest called before manifest was loaded")
+
+        start_compile_manifest = time.perf_counter()
+
+        # we cannot get adapter in init since it will break rpc #5579
+        adapter = get_adapter(self.config)
+        compiler = adapter.get_compiler()
+        self.graph = compiler.compile(self.manifest)
+
+        compile_time = time.perf_counter() - start_compile_manifest
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_runnable_timing({"graph_compilation_elapsed": compile_time})
 
     @classmethod
-    def from_args(cls, args):
-        move_to_nearest_project_dir(args)
-        return super().from_args(args)
+    def from_args(cls, args, *pargs, **kwargs):
+        move_to_nearest_project_dir(args.project_dir)
+        return super().from_args(args, *pargs, **kwargs)
 
 
 class ExecutionContext:

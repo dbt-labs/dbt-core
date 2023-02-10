@@ -10,6 +10,7 @@ from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.events.functions import fire_event
 from dbt.events.types import CompileComplete
+from dbt.parser.manifest import write_manifest
 from dbt.node_types import NodeType
 
 
@@ -86,4 +87,4 @@ class CompileTask(GraphRunnableTask):
             favor_state=bool(self.args.favor_state),
         )
         # TODO: is it wrong to write the manifest here? I think it's right...
-        self.write_manifest()
+        write_manifest(self.manifest, self.config.target_path)

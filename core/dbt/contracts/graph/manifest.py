@@ -49,7 +49,7 @@ from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
 from dbt.events.types import MergedFromState
 from dbt.node_types import NodeType
-from dbt import flags
+from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
 import dbt.utils
 
@@ -303,7 +303,7 @@ class ManifestMetadata(BaseArtifactMetadata):
             self.user_id = tracking.active_user.id
 
         if self.send_anonymous_usage_stats is None:
-            self.send_anonymous_usage_stats = flags.SEND_ANONYMOUS_USAGE_STATS
+            self.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
 
     @classmethod
     def default(cls):
@@ -631,7 +631,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
     _lock: Lock = field(
-        default_factory=flags.MP_CONTEXT.Lock,
+        default_factory=MP_CONTEXT.Lock,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
@@ -643,7 +643,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     @classmethod
     def __post_deserialize__(cls, obj):
-        obj._lock = flags.MP_CONTEXT.Lock()
+        obj._lock = MP_CONTEXT.Lock()
         return obj
 
     def sync_update_node(self, new_node: ManifestNode) -> ManifestNode:

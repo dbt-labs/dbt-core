@@ -107,7 +107,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
         if cli_vars is None:
             cli_vars = {}
         if profile:
-            self.ctx_obj = TargetContext(profile, cli_vars)
+            self.ctx_obj = TargetContext(profile.to_target_dict(), cli_vars)
         else:
             self.ctx_obj = BaseContext(cli_vars)  # type:ignore
         context = self.ctx_obj.to_dict()

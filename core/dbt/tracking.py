@@ -1,33 +1,30 @@
-from typing import Optional
+import os
+import platform
 import traceback
-
-from dbt.clients.yaml_helper import (  # noqa:F401
-    yaml,
-    safe_load,
-    Loader,
-    Dumper,
-)
-from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import (
-    DisableTracking,
-    SendingEvent,
-    SendEventFailure,
-    FlushEvents,
-    FlushEventsFailure,
-    TrackingInitializeFailure,
-)
-from dbt import version as dbt_version
-from dbt import flags
-from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
-from snowplow_tracker import SelfDescribingJson
+import uuid
+from contextlib import contextmanager
 from datetime import datetime
+from typing import Optional
 
 import logbook
 import pytz
-import platform
-import uuid
 import requests
-import os
+from snowplow_tracker import Emitter, SelfDescribingJson, Subject, Tracker
+from snowplow_tracker import logger as sp_logger
+
+from dbt import version as dbt_version
+from dbt.clients.yaml_helper import safe_load, yaml  # noqa:F401
+from dbt.events.functions import fire_event, get_invocation_id
+from dbt.events.types import (
+    DisableTracking,
+    FlushEvents,
+    FlushEventsFailure,
+    MainEncounteredError,
+    SendEventFailure,
+    SendingEvent,
+    TrackingInitializeFailure,
+)
+from dbt.exceptions import FailedToConnectError, NotImplementedError
 
 sp_logger.setLevel(100)
 
@@ -178,61 +175,6 @@ class User:
 active_user: Optional[User] = None
 
 
-def get_run_type(args):
-    return "regular"
-
-
-def get_invocation_context(user, config, args):
-    # this adapter might not have implemented the type or unique_field properties
-    try:
-        adapter_type = config.credentials.type
-    except Exception:
-        adapter_type = None
-    try:
-        adapter_unique_id = config.credentials.hashed_unique_field()
-    except Exception:
-        adapter_unique_id = None
-
-    return {
-        "project_id": None if config is None else config.hashed_name(),
-        "user_id": user.id,
-        "invocation_id": get_invocation_id(),
-        "command": args.which,
-        "options": None,
-        "version": str(dbt_version.installed),
-        "run_type": get_run_type(args),
-        "adapter_type": adapter_type,
-        "adapter_unique_id": adapter_unique_id,
-    }
-
-
-def get_invocation_start_context(user, config, args):
-    data = get_invocation_context(user, config, args)
-
-    start_data = {"progress": "start", "result_type": None, "result": None}
-
-    data.update(start_data)
-    return SelfDescribingJson(INVOCATION_SPEC, data)
-
-
-def get_invocation_end_context(user, config, args, result_type):
-    data = get_invocation_context(user, config, args)
-
-    start_data = {"progress": "end", "result_type": result_type, "result": None}
-
-    data.update(start_data)
-    return SelfDescribingJson(INVOCATION_SPEC, data)
-
-
-def get_invocation_invalid_context(user, config, args, result_type):
-    data = get_invocation_context(user, config, args)
-
-    start_data = {"progress": "invalid", "result_type": result_type, "result": None}
-
-    data.update(start_data)
-    return SelfDescribingJson(INVOCATION_SPEC, data)
-
-
 def get_platform_context():
     data = {
         "platform": platform.platform(),
@@ -268,9 +210,11 @@ def track(user, *args, **kwargs):
             fire_event(SendEventFailure())
 
 
-def track_invocation_start(config=None, args=None):
+def track_invocation_start(invocation_context):
+    data = {"progress": "start", "result_type": None, "result": None}
+    data.update(invocation_context)
     context = [
-        get_invocation_start_context(active_user, config, args),
+        SelfDescribingJson(INVOCATION_SPEC, data),
         get_platform_context(),
         get_dbt_env_context(),
     ]
@@ -326,10 +270,29 @@ def track_rpc_request(options):
     )
 
 
-def track_package_install(config, args, options):
+def get_base_invocation_context():
+    assert (
+        active_user is not None
+    ), "initialize active user before calling get_base_invocation_context"
+    return {
+        "project_id": None,
+        "user_id": active_user.id,
+        "invocation_id": active_user.invocation_id,
+        "command": None,
+        "options": None,
+        "version": str(dbt_version.installed),
+        "run_type": "regular",
+        "adapter_type": None,
+        "adapter_unique_id": None,
+    }
+
+
+def track_package_install(command_name: str, project_hashed_name: Optional[str], options):
     assert active_user is not None, "Cannot track package installs when active user is None"
 
-    invocation_data = get_invocation_context(active_user, config, args)
+    invocation_data = get_base_invocation_context()
+
+    invocation_data.update({"project_id": project_hashed_name, "command": command_name})
 
     context = [
         SelfDescribingJson(INVOCATION_SPEC, invocation_data),
@@ -362,10 +325,11 @@ def track_deprecation_warn(options):
     )
 
 
-def track_invocation_end(config=None, args=None, result_type=None):
-    user = active_user
+def track_invocation_end(invocation_context, result_type=None):
+    data = {"progress": "end", "result_type": result_type, "result": None}
+    data.update(invocation_context)
     context = [
-        get_invocation_end_context(user, config, args, result_type),
+        SelfDescribingJson(INVOCATION_SPEC, data),
         get_platform_context(),
         get_dbt_env_context(),
     ]
@@ -375,14 +339,17 @@ def track_invocation_end(config=None, args=None, result_type=None):
     track(active_user, category="dbt", action="invocation", label="end", context=context)
 
 
-def track_invalid_invocation(config=None, args=None, result_type=None):
+def track_invalid_invocation(args=None, result_type=None):
     assert active_user is not None, "Cannot track invalid invocations when active user is None"
-
-    user = active_user
-    invocation_context = get_invocation_invalid_context(user, config, args, result_type)
-
-    context = [invocation_context, get_platform_context(), get_dbt_env_context()]
-
+    invocation_context = get_base_invocation_context()
+    invocation_context.update({"command": args.which})
+    data = {"progress": "invalid", "result_type": result_type, "result": None}
+    data.update(invocation_context)
+    context = [
+        SelfDescribingJson(INVOCATION_SPEC, data),
+        get_platform_context(),
+        get_dbt_env_context(),
+    ]
     track(active_user, category="dbt", action="invocation", label="invalid", context=context)
 
 
@@ -447,16 +414,6 @@ def do_not_track():
     active_user = User(None)
 
 
-def initialize_tracking(cookie_dir):
-    global active_user
-    active_user = User(cookie_dir)
-    try:
-        active_user.initialize()
-    except Exception:
-        fire_event(TrackingInitializeFailure(exc_info=traceback.format_exc()))
-        active_user = User(None)
-
-
 class InvocationProcessor(logbook.Processor):
     def __init__(self):
         super().__init__()
@@ -471,9 +428,34 @@ class InvocationProcessor(logbook.Processor):
             )
 
 
-def initialize_from_flags():
+def initialize_from_flags(send_anonymous_usage_stats, profiles_dir):
     # Setting these used to be in UserConfig, but had to be moved here
-    if flags.SEND_ANONYMOUS_USAGE_STATS:
-        initialize_tracking(flags.PROFILES_DIR)
+    global active_user
+    if send_anonymous_usage_stats:
+        active_user = User(profiles_dir)
+        try:
+            active_user.initialize()
+        except Exception:
+            fire_event(TrackingInitializeFailure(exc_info=traceback.format_exc()))
+            active_user = User(None)
     else:
-        do_not_track()
+        active_user = User(None)
+
+
+@contextmanager
+def track_run(run_command=None):
+    invocation_context = get_base_invocation_context()
+    invocation_context["command"] = run_command
+
+    track_invocation_start(invocation_context)
+    try:
+        yield
+        track_invocation_end(invocation_context, result_type="ok")
+    except (NotImplementedError, FailedToConnectError) as e:
+        fire_event(MainEncounteredError(exc=str(e)))
+        track_invocation_end(invocation_context, result_type="error")
+    except Exception:
+        track_invocation_end(invocation_context, result_type="error")
+        raise
+    finally:
+        flush()

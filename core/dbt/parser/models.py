@@ -4,7 +4,7 @@ from dbt.contracts.graph.nodes import ModelNode
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
 from dbt.events.functions import fire_event
-import dbt.flags as flags
+from dbt.flags import get_flags
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
@@ -236,7 +236,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
     def render_update(self, node: ModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
-
+        flags = get_flags()
         if node.language == ModelLanguage.python:
             try:
                 verify_python_model_code(node)

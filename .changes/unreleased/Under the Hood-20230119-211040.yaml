@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: dbt docs generate works with new click framework
+time: 2023-01-19T21:10:40.698851-05:00
+custom:
+  Author: michelleark
+  Issue: "5543"

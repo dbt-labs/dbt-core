@@ -123,22 +123,6 @@ class IncludeExclude(dbtClassMixin):
 
 
 class WarnErrorOptions(IncludeExclude):
-    # TODO: this method can be removed once the click CLI is in use
-    @classmethod
-    def from_yaml_string(cls, warn_error_options_str: Optional[str]):
-
-        # TODO: resolve circular import
-        from dbt.config.utils import parse_cli_yaml_string
-
-        warn_error_options_str = (
-            str(warn_error_options_str) if warn_error_options_str is not None else "{}"
-        )
-        warn_error_options = parse_cli_yaml_string(warn_error_options_str, "warn-error-options")
-        return cls(
-            include=warn_error_options.get("include", []),
-            exclude=warn_error_options.get("exclude", []),
-        )
-
     def _validate_items(self, items: List[str]):
         valid_exception_names = set(
             [name for name, cls in dbt_event_types.__dict__.items() if isinstance(cls, type)]

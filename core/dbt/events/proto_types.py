@@ -976,6 +976,22 @@ class ParseCmdOutMsg(betterproto.Message):
 
 
 @dataclass
+class ParseCmdPerfInfoPath(betterproto.Message):
+    """I010"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    path: str = betterproto.string_field(2)
+
+
+@dataclass
+class ParseCmdPerfInfoPathMsg(betterproto.Message):
+    """I010"""
+
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ParseCmdPerfInfoPath" = betterproto.message_field(2)
+
+
+@dataclass
 class GenericTestFileParse(betterproto.Message):
     """I011"""
 
@@ -2408,46 +2424,6 @@ class Formatting(betterproto.Message):
 class FormattingMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "Formatting" = betterproto.message_field(2)
-
-
-@dataclass
-class ServingDocsPort(betterproto.Message):
-    """Z018"""
-
-    address: str = betterproto.string_field(1)
-    port: int = betterproto.int32_field(2)
-
-
-@dataclass
-class ServingDocsPortMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ServingDocsPort" = betterproto.message_field(2)
-
-
-@dataclass
-class ServingDocsAccessInfo(betterproto.Message):
-    """Z019"""
-
-    port: str = betterproto.string_field(1)
-
-
-@dataclass
-class ServingDocsAccessInfoMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ServingDocsAccessInfo" = betterproto.message_field(2)
-
-
-@dataclass
-class ServingDocsExitInfo(betterproto.Message):
-    """Z020"""
-
-    pass
-
-
-@dataclass
-class ServingDocsExitInfoMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "ServingDocsExitInfo" = betterproto.message_field(2)
 
 
 @dataclass

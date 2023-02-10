@@ -1,0 +1,6 @@
+kind: Features
+body: Friendlier error messages when packages.yml is malformed
+time: 2022-09-12T12:59:35.121188+01:00
+custom:
+  Author: jared-rimmer
+  Issue: "5486"

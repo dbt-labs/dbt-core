@@ -287,8 +287,8 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args, config):
-        super().__init__(args, config)
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config, manifest)
         self.ran_hooks = []
         self._total_executed = 0
 
@@ -443,7 +443,7 @@ class RunTask(CompileTask):
         database_schema_set: Set[Tuple[Optional[str], str]] = {
             (r.node.database, r.node.schema)
             for r in results
-            if r.node.is_relational
+            if (hasattr(r, "node") and r.node.is_relational)
             and r.status not in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped)
         }
 

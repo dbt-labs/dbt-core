@@ -9,7 +9,7 @@ from typing import Dict, List
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
-from dbt.main import handle_and_check
+from dbt.cli.main import dbtRunner
 from dbt.logger import log_manager
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.functions import (
@@ -81,7 +81,17 @@ def run_dbt(args: List[str] = None, expect_pass=True):
         args = ["run"]
 
     print("\n\nInvoking dbt with {}".format(args))
-    res, success = handle_and_check(args)
+    from dbt.flags import get_flags
+
+    flags = get_flags()
+    project_dir = getattr(flags, "PROJECT_DIR", None)
+    profiles_dir = getattr(flags, "PROFILES_DIR", None)
+    if project_dir and "--project-dir" not in args:
+        args.extend(["--project-dir", project_dir])
+    if profiles_dir and "--profiles-dir" not in args:
+        args.extend(["--profiles-dir", profiles_dir])
+    dbt = dbtRunner()
+    res, success = dbt.invoke(args)
 
     if expect_pass is not None:
         assert success == expect_pass, "dbt exit state did not match expected"

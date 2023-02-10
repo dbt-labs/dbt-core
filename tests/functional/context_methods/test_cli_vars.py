@@ -99,7 +99,7 @@ class TestCLIVarsSimple:
         results = run_dbt(["test", "--vars", "{simple: abc, unused: def}"])
         assert len(results) == 1
         run_results = get_artifact(project.project_root, "target", "run_results.json")
-        assert run_results["args"]["vars"] == "{simple: abc, unused: def}"
+        assert run_results["args"]["vars"] == {"simple": "abc", "unused": "def"}
 
 
 class TestCLIVarsProfile:

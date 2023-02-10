@@ -1,0 +1,7 @@
+kind: Features
+body: incremental predicates
+time: 2022-08-23T08:57:27.640804-05:00
+custom:
+  Author: dave-connors-3
+  Issue: "5680"
+  PR: "5702"

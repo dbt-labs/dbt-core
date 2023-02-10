@@ -1,4 +1,6 @@
 import os
+
+from argparse import Namespace
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -133,8 +135,8 @@ class GraphTest(unittest.TestCase):
         cfg.update(extra_cfg)
 
         config = config_from_parts_or_dicts(project=cfg, profile=self.profile)
-        dbt.flags.set_from_args({}, config)
-        dbt.flags.PARTIAL_PARSE = False
+        dbt.flags.set_from_args(Namespace(), config)
+        object.__setattr__(dbt.flags.get_flags(), "PARTIAL_PARSE", False)
         return config
 
     def get_compiler(self, project):
@@ -299,7 +301,12 @@ class GraphTest(unittest.TestCase):
         })
         manifest.expect.side_effect = lambda n: MagicMock(unique_id=n)
         selector = NodeSelector(graph, manifest)
-        queue = selector.get_graph_queue(parse_difference(None, None))
+        # TODO:  The "eager" string below needs to be replaced with programatic access
+        #  to the default value for the indirect selection parameter in 
+        # dbt.cli.params.indirect_selection
+        #
+        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
+        queue = selector.get_graph_queue(parse_difference(None, None, "eager"))
 
         for model_id in model_ids:
             self.assertFalse(queue.empty())

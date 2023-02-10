@@ -1,0 +1,7 @@
+kind: Features
+body: Added favor-state flag to optionally favor state nodes even if unselected node
+  exists
+time: 2022-04-08T16:54:59.696564+01:00
+custom:
+  Author: daniel-murray josephberni
+  Issue: "2968"

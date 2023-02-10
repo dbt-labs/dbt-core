@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Migrate debug task to click
+time: 2023-01-25T10:26:06.735994-06:00
+custom:
+  Author: stu-k
+  Issue: "5546"

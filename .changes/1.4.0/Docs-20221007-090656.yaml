@@ -1,0 +1,6 @@
+kind: Docs
+body: Generate API docs for new CLI interface
+time: 2022-10-07T09:06:56.446078-05:00
+custom:
+  Author: stu-k
+  Issue: "5528"

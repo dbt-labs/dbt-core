@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Clean up string formatting
+time: 2022-10-17T15:58:44.676549-04:00
+custom:
+  Author: eve-johns
+  Issue: "6068"
+  PR: "6082"
