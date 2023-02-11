@@ -130,4 +130,4 @@ class PostgresAdapter(SQLAdapter):
         """The set of standard builtin strategies which this adapter supports out-of-the-box.
         Not used to validate custom strategies defined by end users.
         """
-        return ["append", "delete+insert"]
+        return ["append", "delete+insert", "merge"]
