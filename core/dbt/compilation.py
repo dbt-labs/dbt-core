@@ -376,7 +376,7 @@ class Compiler:
         if (
             node.resource_type == NodeType.Test
             and node.relation_name is None
-            and node.is_relational()
+            and node.is_relational
         ):
             adapter = get_adapter(self.config)
             relation_cls = adapter.Relation
