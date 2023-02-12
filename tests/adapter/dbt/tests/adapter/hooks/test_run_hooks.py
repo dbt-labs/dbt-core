@@ -3,7 +3,7 @@ import pytest
 
 from pathlib import Path
 
-from tests.functional.hooks.fixtures import (
+from dbt.tests.adapter.hooks.fixtures import (
     macros__hook,
     macros__before_and_after,
     models__hooks,

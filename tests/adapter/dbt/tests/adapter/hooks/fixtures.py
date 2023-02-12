@@ -2,18 +2,18 @@ macros__before_and_after = """
 {% macro custom_run_hook(state, target, run_started_at, invocation_id) %}
 
    insert into {{ target.schema }}.on_run_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
+        state,
+        target.dbname,
+        target.host,
+        target.name,
+        target.schema,
+        target.type,
+        target.user,
+        target.pass,
+        target.port,
+        target.threads,
+        run_started_at,
+        invocation_id
    ) VALUES (
     '{{ state }}',
     '{{ target.dbname }}',
@@ -22,7 +22,7 @@ macros__before_and_after = """
     '{{ target.schema }}',
     '{{ target.type }}',
     '{{ target.user }}',
-    '{{ target.get("pass", "") }}',
+    '{{ target.get(pass, ) }}',
     {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
@@ -45,20 +45,20 @@ select 1 as id
 models__hooks_configured = """
 {{
     config({
-        "pre_hook": "\
+        pre_hook: \
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -67,26 +67,26 @@ models__hooks_configured = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-        )",
-        "post-hook": "\
+        ),
+        post-hook: \
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -95,12 +95,12 @@ models__hooks_configured = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-            )"
+            )
     })
 }}
 
@@ -110,20 +110,20 @@ select 3 as id
 models__hooks_error = """
 {{
     config({
-        "pre_hook": "\
+        pre_hook: \
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -132,26 +132,26 @@ models__hooks_error = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-        )",
-        "pre-hook": "\
+        ),
+        pre-hook: \
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -160,26 +160,26 @@ models__hooks_error = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-        )",
-        "post-hook": "\
+        ),
+        post-hook: \
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -188,12 +188,12 @@ models__hooks_error = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-            )"
+            )
     })
 }}
 
@@ -203,20 +203,20 @@ select 3 as id
 models__hooks_kwargs = """
 {{
     config(
-        pre_hook="\
+        pre_hook=\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -225,26 +225,26 @@ models__hooks_kwargs = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-        )",
-        post_hook="\
+        ),
+        post_hook=\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                \\state\\,\
+                \\target.dbname\\,\
+                \\target.host\\,\
+                \\target.name\\,\
+                \\target.schema\\,\
+                \\target.type\\,\
+                \\target.user\\,\
+                \\target.pass\\,\
+                \\target.port\\,\
+                \\target.threads\\,\
+                \\run_started_at\\,\
+                \\invocation_id\\\
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -253,12 +253,12 @@ models__hooks_kwargs = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass\\", \\"\\") }}',\
+                '{{ target.get(\\pass\\, \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
-            )"
+            )
     )
 }}
 
@@ -268,22 +268,22 @@ select 3 as id
 models__hooked = """
 {{
     config({
-        "pre_hook": "\
+        pre_hook: \
             insert into {{this.schema}}.on_model_hook select
                 state,
-                '{{ target.dbname }}' as \\"target.dbname\\",\
-                '{{ target.host }}' as \\"target.host\\",\
-                '{{ target.name }}' as \\"target.name\\",\
-                '{{ target.schema }}' as \\"target.schema\\",\
-                '{{ target.type }}' as \\"target.type\\",\
-                '{{ target.user }}' as \\"target.user\\",\
-                '{{ target.get(\\"pass\\", \\"\\") }}' as \\"target.pass\\",\
-                {{ target.port }} as \\"target.port\\",\
-                {{ target.threads }} as \\"target.threads\\",\
-                '{{ run_started_at }}' as \\"run_started_at\\",\
-                '{{ invocation_id }}' as \\"invocation_id\\"\
+                '{{ target.dbname }}' as \\target.dbname\\,\
+                '{{ target.host }}' as \\target.host\\,\
+                '{{ target.name }}' as \\target.name\\,\
+                '{{ target.schema }}' as \\target.schema\\,\
+                '{{ target.type }}' as \\target.type\\,\
+                '{{ target.user }}' as \\target.user\\,\
+                '{{ target.get(\\pass\\, \\\\) }}' as \\target.pass\\,\
+                {{ target.port }} as \\target.port\\,\
+                {{ target.threads }} as \\target.threads\\,\
+                '{{ run_started_at }}' as \\run_started_at\\,\
+                '{{ invocation_id }}' as \\invocation_id\\\
                 from {{ ref('pre') }}\
-        "
+
     })
 }}
 select 1 as id

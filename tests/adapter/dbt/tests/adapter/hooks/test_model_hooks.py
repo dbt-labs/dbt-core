@@ -9,7 +9,7 @@ from dbt.tests.util import (
     write_file,
 )
 
-from tests.functional.hooks.fixtures import (
+from dbt.tests.adapter.hooks.fixtures import (
     models__hooked,
     models__hooks,
     models__hooks_configured,
@@ -25,29 +25,29 @@ from tests.functional.hooks.fixtures import (
 
 MODEL_PRE_HOOK = """
    insert into {{this.schema}}.on_model_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
+        state,
+        target_dbname,
+        target_host,
+        target_name,
+        target_schema,
+        target_type,
+        target_user,
+        target_pass,
+        target_port,
+        target_threads,
+        run_started_at,
+        invocation_id
    ) VALUES (
     'start',
-    '{{ target.dbname }}',
-    '{{ target.host }}',
-    '{{ target.name }}',
-    '{{ target.schema }}',
-    '{{ target.type }}',
-    '{{ target.user }}',
-    '{{ target.get("pass", "") }}',
-    {{ target.port }},
-    {{ target.threads }},
+    '{{ target_dbname }}',
+    '{{ target_host }}',
+    '{{ target_name }}',
+    '{{ target_schema }}',
+    '{{ target_type }}',
+    '{{ target_user }}',
+    '{{ target_get("pass", "") }}',
+    {{ target_port }},
+    {{ target_threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
    )
@@ -55,29 +55,29 @@ MODEL_PRE_HOOK = """
 
 MODEL_POST_HOOK = """
    insert into {{this.schema}}.on_model_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
+        test_state,
+        target_dbname,
+        target_host,
+        target_name,
+        target_schema,
+        target_type,
+        target_user,
+        target_pass,
+        target_port,
+        target_threads,
+        run_started_at,
+        invocation_id
    ) VALUES (
     'end',
-    '{{ target.dbname }}',
-    '{{ target.host }}',
-    '{{ target.name }}',
-    '{{ target.schema }}',
-    '{{ target.type }}',
-    '{{ target.user }}',
-    '{{ target.get("pass", "") }}',
-    {{ target.port }},
-    {{ target.threads }},
+    '{{ target_dbname }}',
+    '{{ target_host }}',
+    '{{ target_name }}',
+    '{{ target_schema }}',
+    '{{ target_type }}',
+    '{{ target_user }}',
+    '{{ target_get("pass", "") }}',
+    {{ target_port }},
+    {{ target_threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
    )
@@ -119,15 +119,15 @@ class BaseTestPrePost(object):
         ctxs = self.get_ctx_vars(state, count=count, project=project)
         for ctx in ctxs:
             assert ctx["state"] == state
-            assert ctx["target.dbname"] == "dbt"
-            assert ctx["target.host"] == host
-            assert ctx["target.name"] == "default"
-            assert ctx["target.port"] == 5432
-            assert ctx["target.schema"] == project.test_schema
-            assert ctx["target.threads"] == 4
-            assert ctx["target.type"] == "postgres"
-            assert ctx["target.user"] == "root"
-            assert ctx["target.pass"] == ""
+            assert ctx["target_dbname"] == "dbt"
+            assert ctx["target_host"] == host
+            assert ctx["target_name"] == "default"
+            assert ctx["target_port"] == 5432
+            assert ctx["target_schema"] == project.test_schema
+            assert ctx["target_threads"] == 4
+            assert ctx["target_type"] == "postgres"
+            assert ctx["target_user"] == "root"
+            assert ctx["target_pass"] == ""
 
             assert (
                 ctx["run_started_at"] is not None and len(ctx["run_started_at"]) > 0
