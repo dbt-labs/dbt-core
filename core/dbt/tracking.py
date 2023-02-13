@@ -20,12 +20,11 @@ from dbt.events.types import (
     FlushEvents,
     FlushEventsFailure,
     MainEncounteredError,
-    MainStackTrace,
     SendEventFailure,
     SendingEvent,
     TrackingInitializeFailure,
 )
-from dbt.exceptions import Exception as dbtException, FailedToConnectError, NotImplementedError
+from dbt.exceptions import FailedToConnectError, NotImplementedError
 
 sp_logger.setLevel(100)
 
@@ -454,14 +453,7 @@ def track_run(run_command=None):
         track_invocation_end(invocation_context, result_type="ok")
     except (NotImplementedError, FailedToConnectError) as e:
         fire_event(MainEncounteredError(exc=str(e)))
-        if not isinstance(e, dbtException):
-            fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
         track_invocation_end(invocation_context, result_type="error")
-    # import click.Abort as clickAbortError
-    # except clickAbortError: # a.k.a. MainKeyboardInterrupt
-    # if the logger isn't configured yet, it will use the default logger
-    #    fire_event(MainKeyboardInterrupt())  # how much do we care about this?
-    #    raise
     except Exception:
         track_invocation_end(invocation_context, result_type="error")
         raise
