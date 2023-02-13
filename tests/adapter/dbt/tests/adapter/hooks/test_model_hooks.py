@@ -25,7 +25,7 @@ from dbt.tests.adapter.hooks.fixtures import (
 
 MODEL_PRE_HOOK = """
    insert into {{this.schema}}.on_model_hook (
-        state,
+        test_state,
         target_dbname,
         target_host,
         target_name,
@@ -87,7 +87,7 @@ class BaseTestPrePost(object):
 
     def get_ctx_vars(self, state, count, project):
         fields = [
-            "state",
+            "test_state",
             "target.dbname",
             "target.host",
             "target.name",
@@ -113,7 +113,7 @@ class BaseTestPrePost(object):
     def check_hooks(self, state, project, host, count=1):
         ctxs = self.get_ctx_vars(state, count=count, project=project)
         for ctx in ctxs:
-            assert ctx["state"] == state
+            assert ctx["test_state"] == state
             assert ctx["target_dbname"] == "dbt"
             assert ctx["target_host"] == host
             assert ctx["target_name"] == "default"

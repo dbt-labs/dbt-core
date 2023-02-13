@@ -2,8 +2,7 @@
 drop table if exists {schema}.on_run_hook;
 
 create table {schema}.on_run_hook (
-    "state"            STRING, -- start|end
-
+    "test_state"            STRING, -- start|end
     "target.dbname"    STRING,
     "target.host"      STRING,
     "target.name"      STRING,
