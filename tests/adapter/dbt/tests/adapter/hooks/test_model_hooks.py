@@ -39,15 +39,15 @@ MODEL_PRE_HOOK = """
         invocation_id
    ) VALUES (
     'start',
-    '{{ target_dbname }}',
-    '{{ target_host }}',
-    '{{ target_name }}',
-    '{{ target_schema }}',
-    '{{ target_type }}',
-    '{{ target_user }}',
-    '{{ target_get("pass", "") }}',
-    {{ target_port }},
-    {{ target_threads }},
+    '{{ target.dbname }}',
+    '{{ target.host }}',
+    '{{ target.name }}',
+    '{{ target.schema }}',
+    '{{ target.type }}',
+    '{{ target.user }}',
+    '{{ target.get("pass", "") }}',
+    {{ target.port }},
+    {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
    )
@@ -69,15 +69,15 @@ MODEL_POST_HOOK = """
         invocation_id
    ) VALUES (
     'end',
-    '{{ target_dbname }}',
-    '{{ target_host }}',
-    '{{ target_name }}',
-    '{{ target_schema }}',
-    '{{ target_type }}',
-    '{{ target_user }}',
-    '{{ target_get("pass", "") }}',
-    {{ target_port }},
-    {{ target_threads }},
+    '{{ target.dbname }}',
+    '{{ target.host }}',
+    '{{ target.name }}',
+    '{{ target.schema }}',
+    '{{ target.type }}',
+    '{{ target.user }}',
+    '{{ target.get("pass", "") }}',
+    {{ target.port }},
+    {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
    )
