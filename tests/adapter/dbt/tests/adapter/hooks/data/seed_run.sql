@@ -11,7 +11,6 @@ create table {schema}.on_run_hook (
     "target.type"      STRING,
     "target.user"      STRING,
     "target.pass"      STRING,
-    "target.port"      INTEGER,
     "target.threads"   INTEGER,
 
     "run_started_at"   STRING,

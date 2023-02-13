@@ -33,7 +33,6 @@ MODEL_PRE_HOOK = """
         target_type,
         target_user,
         target_pass,
-        target_port,
         target_threads,
         run_started_at,
         invocation_id
@@ -46,7 +45,6 @@ MODEL_PRE_HOOK = """
     '{{ target.type }}',
     '{{ target.user }}',
     '{{ target.get("pass", "") }}',
-    {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
@@ -63,7 +61,6 @@ MODEL_POST_HOOK = """
         target_type,
         target_user,
         target_pass,
-        target_port,
         target_threads,
         run_started_at,
         invocation_id
@@ -76,7 +73,6 @@ MODEL_POST_HOOK = """
     '{{ target.type }}',
     '{{ target.user }}',
     '{{ target.get("pass", "") }}',
-    {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
@@ -95,7 +91,6 @@ class BaseTestPrePost(object):
             "target.dbname",
             "target.host",
             "target.name",
-            "target.port",
             "target.schema",
             "target.threads",
             "target.type",
@@ -122,7 +117,6 @@ class BaseTestPrePost(object):
             assert ctx["target_dbname"] == "dbt"
             assert ctx["target_host"] == host
             assert ctx["target_name"] == "default"
-            assert ctx["target_port"] == 5432
             assert ctx["target_schema"] == project.test_schema
             assert ctx["target_threads"] == 4
             assert ctx["target_type"] == "postgres"

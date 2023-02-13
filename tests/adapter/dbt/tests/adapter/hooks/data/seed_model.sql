@@ -10,7 +10,6 @@ create table {schema}.on_model_hook (
     target_type      TEXT,
     target_user      TEXT,
     target_pass      TEXT,
-    target_port      INTEGER,
     target_threads   INTEGER,
     run_started_at   TEXT,
     invocation_id    TEXT
