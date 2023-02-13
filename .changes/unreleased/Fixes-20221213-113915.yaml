@@ -1,0 +1,6 @@
+kind: Fixes
+body: '[CT-1591] Don''t parse empty Python files'
+time: 2022-12-13T11:39:15.818464-08:00
+custom:
+  Author: aranke
+  Issue: "6345"

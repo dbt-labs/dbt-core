@@ -642,7 +642,10 @@ def args_to_dict(args):
     dict_args = {}
     # remove args keys that clutter up the dictionary
     for key in var_args:
-        if key == "cls":
+        if key.lower() in var_args and key == key.upper():
+            # skip all capped keys being introduced by Flags in dbt.cli.flags
+            continue
+        if key in ["cls", "mp_context"]:
             continue
         if var_args[key] is None:
             continue

@@ -66,7 +66,12 @@ class LinkerTest(unittest.TestCase):
     def _get_graph_queue(self, manifest, include=None, exclude=None):
         graph = compilation.Graph(self.linker.graph)
         selector = NodeSelector(graph, manifest)
-        spec = parse_difference(include, exclude)
+        # TODO:  The "eager" string below needs to be replaced with programatic access
+        #  to the default value for the indirect selection parameter in 
+        # dbt.cli.params.indirect_selection
+        #
+        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
+        spec = parse_difference(include, exclude, "eager")
         return selector.get_graph_queue(spec)
 
     def test_linker_add_dependency(self):

@@ -16,7 +16,8 @@ class ConfiguredContext(TargetContext):
     config: AdapterRequiredConfig
 
     def __init__(self, config: AdapterRequiredConfig) -> None:
-        super().__init__(config, config.cli_vars)
+        super().__init__(config.to_target_dict(), config.cli_vars)
+        self.config = config
 
     @contextproperty
     def project_name(self) -> str:

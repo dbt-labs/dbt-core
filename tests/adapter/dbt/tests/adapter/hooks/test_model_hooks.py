@@ -2,7 +2,7 @@ import pytest
 
 from pathlib import Path
 
-from dbt.exceptions import CompilationError
+from dbt.exceptions import CompilationError, ParsingError
 
 from dbt.tests.util import (
     run_dbt,
@@ -251,6 +251,8 @@ class TestPrePostModelHooksOnSeeds(object):
                 "post-hook": [
                     "alter table {{ this }} add column new_col int",
                     "update {{ this }} set new_col = 1",
+                    # call any macro to track dependency: https://github.com/dbt-labs/dbt-core/issues/6806
+                    "select null::{{ dbt.type_int() }} as id",
                 ],
                 "quote_columns": False,
             },
@@ -261,6 +263,36 @@ class TestPrePostModelHooksOnSeeds(object):
         assert len(res) == 1, "Expected exactly one item"
         res = run_dbt(["test"])
         assert len(res) == 1, "Expected exactly one item"
+
+
+class TestHooksRefsOnSeeds:
+    """
+    This should not succeed, and raise an explicit error
+    https://github.com/dbt-labs/dbt-core/issues/6806
+    """
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"example_seed.csv": seeds__example_seed_csv}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": properties__seed_models, "post.sql": models__post}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "seeds": {
+                "post-hook": [
+                    "select * from {{ ref('post') }}",
+                ],
+            },
+        }
+
+    def test_hook_with_ref_on_seeds(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+        assert "Seeds cannot depend on other nodes" in str(excinfo.value)
 
 
 class TestPrePostModelHooksOnSeedsPlusPrefixed(TestPrePostModelHooksOnSeeds):

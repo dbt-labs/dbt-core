@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: '[CT-920][CT-1900] Create Click CLI runner and use it to fix dbt docs commands'
+time: 2023-01-25T04:11:36.57506-08:00
+custom:
+  Author: aranke
+  Issue: 5544 6722

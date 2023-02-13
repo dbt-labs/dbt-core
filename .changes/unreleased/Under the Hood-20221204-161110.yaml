@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Adds Profile support to the new Click CLI
+time: 2022-12-04T16:11:10.417872-06:00
+custom:
+  Author: iknox-fa ChenyuLInx
+  Issue: "5536"
+  PR: "6336"

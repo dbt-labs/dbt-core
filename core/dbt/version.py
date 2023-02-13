@@ -11,14 +11,11 @@ import dbt.exceptions
 import dbt.semver
 
 from dbt.ui import green, red, yellow
-from dbt import flags
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
 
 def get_version_information() -> str:
-    flags.USE_COLORS = True if not flags.USE_COLORS else None
-
     installed = get_installed_version()
     latest = get_latest_version()
 

@@ -760,21 +760,19 @@ message FinishedRunningStatsMsg {
     FinishedRunningStats data = 2;
 }
 
-
 // I - Project parsing
 
-// I001
-message ParseCmdOut {
-    string msg = 1;
+// Skipping I001, I002, I003, I004, I005, I006, I007, I008, I009
+
+// I010
+message ParsePerfInfoPath {
+    string path = 1;
 }
 
-message ParseCmdOutMsg {
+message ParsePerfInfoPathMsg {
     EventInfo info = 1;
-    ParseCmdOut data = 2;
+    ParsePerfInfoPath data = 2;
 }
-
-// Skipping I002, I003, I004, I005, I006, I007, I008, I009, I010
-
 
 // I011
 message GenericTestFileParse {

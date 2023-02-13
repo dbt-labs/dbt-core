@@ -32,756 +32,868 @@
             
   <section id="dbt-core-s-api-documentation">
 <h1>dbt-core’s API documentation<a class="headerlink" href="#dbt-core-s-api-documentation" title="Permalink to this heading">¶</a></h1>
+<section id="how-to-invoke-dbt-commands-in-python-runtime">
+<h2>How to invoke dbt commands in python runtime<a class="headerlink" href="#how-to-invoke-dbt-commands-in-python-runtime" title="Permalink to this heading">¶</a></h2>
+<p>Right now the best way to invoke a command from python runtime is to use the <cite>dbtRunner</cite> we exposed</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">dbt.cli.main</span> <span class="kn">import</span> <span class="n">dbtRunner</span>
+<span class="n">cli_args</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">,</span> <span class="s1">&#39;--project-dir&#39;</span><span class="p">,</span> <span class="s1">&#39;jaffle_shop&#39;</span><span class="p">]</span>
+
+<span class="c1"># initialize the dbt runner</span>
+<span class="n">dbt</span> <span class="o">=</span> <span class="n">dbtRunner</span><span class="p">()</span>
+<span class="c1"># run the command</span>
+<span class="n">res</span><span class="p">,</span> <span class="n">success</span> <span class="o">=</span> <span class="n">dbt</span><span class="o">.</span><span class="n">invoke</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can also pass in pre constructed object into dbtRunner, and we will use those objects instead of loading up from the disk.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># preload profile and project</span>
+<span class="n">profile</span> <span class="o">=</span> <span class="n">load_profile</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="p">{},</span> <span class="s1">&#39;testing-postgres&#39;</span><span class="p">)</span>
+<span class="n">project</span> <span class="o">=</span> <span class="n">load_project</span><span class="p">(</span><span class="n">project_dir</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">profile</span><span class="p">,</span> <span class="p">{})</span>
+
+<span class="c1"># initialize the runner with pre-loaded profile and project</span>
+<span class="n">dbt</span> <span class="o">=</span> <span class="n">dbtRunner</span><span class="p">(</span><span class="n">profile</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+<span class="c1"># run the command, this will use the pre-loaded profile and project instead of loading</span>
+<span class="n">res</span><span class="p">,</span> <span class="n">success</span> <span class="o">=</span> <span class="n">dbt</span><span class="o">.</span><span class="n">invoke</span><span class="p">(</span><span class="n">cli_args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For the full example code, you can refer to <cite>core/dbt/cli/example.py</cite></p>
+</section>
+<section id="api-documentation">
+<h2>API documentation<a class="headerlink" href="#api-documentation" title="Permalink to this heading">¶</a></h2>
 <section id="dbt-section">
-<h2>Command: build<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: build<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="build|defer">
-<h3>defer<a class="headerlink" href="#build|defer" title="Permalink to this heading">¶</a></h3>
+<h4>defer<a class="headerlink" href="#build|defer" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If set, defer to the state variable for resolving unselected nodes.</p>
 </section>
 <section id="build|exclude">
-<h3>exclude<a class="headerlink" href="#build|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#build|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
 <section id="build|fail_fast">
-<h3>fail_fast<a class="headerlink" href="#build|fail_fast" title="Permalink to this heading">¶</a></h3>
+<h4>fail_fast<a class="headerlink" href="#build|fail_fast" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Stop execution on first failure.</p>
 </section>
+<section id="build|favor_state">
+<h4>favor_state<a class="headerlink" href="#build|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="build|full_refresh">
-<h3>full_refresh<a class="headerlink" href="#build|full_refresh" title="Permalink to this heading">¶</a></h3>
+<h4>full_refresh<a class="headerlink" href="#build|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
 </section>
 <section id="build|indirect_selection">
-<h3>indirect_selection<a class="headerlink" href="#build|indirect_selection" title="Permalink to this heading">¶</a></h3>
-<p>Type: choice: [‘eager’, ‘cautious’]</p>
+<h4>indirect_selection<a class="headerlink" href="#build|indirect_selection" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘eager’, ‘cautious’, ‘buildable’]</p>
 <p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
 </section>
-<section id="build|log_path">
-<h3>log_path<a class="headerlink" href="#build|log_path" title="Permalink to this heading">¶</a></h3>
-<p>Type: path</p>
-<p>Configure the ‘log-path’. Only applies this setting for the current run. Overrides the ‘DBT_LOG_PATH’ if it is set.</p>
-</section>
-<section id="build|models">
-<h3>models<a class="headerlink" href="#build|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
-<p>Specify the nodes to include.</p>
-</section>
 <section id="build|profile">
-<h3>profile<a class="headerlink" href="#build|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#build|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="build|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#build|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#build|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="build|project_dir">
-<h3>project_dir<a class="headerlink" href="#build|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#build|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
+<section id="build|resource_types">
+<h4>resource_types<a class="headerlink" href="#build|resource_types" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="build|select">
+<h4>select<a class="headerlink" href="#build|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="build|selector">
-<h3>selector<a class="headerlink" href="#build|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#build|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="build|show">
-<h3>show<a class="headerlink" href="#build|show" title="Permalink to this heading">¶</a></h3>
+<h4>show<a class="headerlink" href="#build|show" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Show a sample of the loaded data in the terminal</p>
 </section>
 <section id="build|state">
-<h3>state<a class="headerlink" href="#build|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#build|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="build|store_failures">
-<h3>store_failures<a class="headerlink" href="#build|store_failures" title="Permalink to this heading">¶</a></h3>
+<h4>store_failures<a class="headerlink" href="#build|store_failures" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Store test results (failing rows) in the database</p>
 </section>
 <section id="build|target">
-<h3>target<a class="headerlink" href="#build|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#build|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="build|target_path">
-<h3>target_path<a class="headerlink" href="#build|target_path" title="Permalink to this heading">¶</a></h3>
+<h4>target_path<a class="headerlink" href="#build|target_path" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Configure the ‘target-path’. Only applies this setting for the current run. Overrides the ‘DBT_TARGET_PATH’ if it is set.</p>
 </section>
 <section id="build|threads">
-<h3>threads<a class="headerlink" href="#build|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#build|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="build|vars">
-<h3>vars<a class="headerlink" href="#build|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#build|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="build|version_check">
-<h3>version_check<a class="headerlink" href="#build|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#build|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
 </section>
-<h2>Command: clean<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: clean<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="clean|profile">
-<h3>profile<a class="headerlink" href="#clean|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#clean|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="clean|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#clean|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#clean|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="clean|project_dir">
-<h3>project_dir<a class="headerlink" href="#clean|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#clean|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
 <section id="clean|target">
-<h3>target<a class="headerlink" href="#clean|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#clean|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="clean|vars">
-<h3>vars<a class="headerlink" href="#clean|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#clean|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
-<h2>Command: compile<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: compile<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="compile|defer">
-<h3>defer<a class="headerlink" href="#compile|defer" title="Permalink to this heading">¶</a></h3>
+<h4>defer<a class="headerlink" href="#compile|defer" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If set, defer to the state variable for resolving unselected nodes.</p>
 </section>
 <section id="compile|exclude">
-<h3>exclude<a class="headerlink" href="#compile|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#compile|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
+<section id="compile|favor_state">
+<h4>favor_state<a class="headerlink" href="#compile|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="compile|full_refresh">
-<h3>full_refresh<a class="headerlink" href="#compile|full_refresh" title="Permalink to this heading">¶</a></h3>
+<h4>full_refresh<a class="headerlink" href="#compile|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
 </section>
-<section id="compile|log_path">
-<h3>log_path<a class="headerlink" href="#compile|log_path" title="Permalink to this heading">¶</a></h3>
-<p>Type: path</p>
-<p>Configure the ‘log-path’. Only applies this setting for the current run. Overrides the ‘DBT_LOG_PATH’ if it is set.</p>
-</section>
-<section id="compile|models">
-<h3>models<a class="headerlink" href="#compile|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
-<p>Specify the nodes to include.</p>
-</section>
 <section id="compile|parse_only">
-<h3>parse_only<a class="headerlink" href="#compile|parse_only" title="Permalink to this heading">¶</a></h3>
+<h4>parse_only<a class="headerlink" href="#compile|parse_only" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>TODO:  No help text currently available</p>
 </section>
 <section id="compile|profile">
-<h3>profile<a class="headerlink" href="#compile|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#compile|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="compile|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#compile|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#compile|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="compile|project_dir">
-<h3>project_dir<a class="headerlink" href="#compile|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#compile|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
+<section id="compile|select">
+<h4>select<a class="headerlink" href="#compile|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="compile|selector">
-<h3>selector<a class="headerlink" href="#compile|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#compile|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="compile|state">
-<h3>state<a class="headerlink" href="#compile|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#compile|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="compile|target">
-<h3>target<a class="headerlink" href="#compile|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#compile|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="compile|target_path">
-<h3>target_path<a class="headerlink" href="#compile|target_path" title="Permalink to this heading">¶</a></h3>
+<h4>target_path<a class="headerlink" href="#compile|target_path" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Configure the ‘target-path’. Only applies this setting for the current run. Overrides the ‘DBT_TARGET_PATH’ if it is set.</p>
 </section>
 <section id="compile|threads">
-<h3>threads<a class="headerlink" href="#compile|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#compile|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="compile|vars">
-<h3>vars<a class="headerlink" href="#compile|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#compile|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="compile|version_check">
-<h3>version_check<a class="headerlink" href="#compile|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#compile|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
 </section>
-<h2>Command: debug<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: debug<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="debug|config_dir">
-<h3>config_dir<a class="headerlink" href="#debug|config_dir" title="Permalink to this heading">¶</a></h3>
+<h4>config_dir<a class="headerlink" href="#debug|config_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>If specified, DBT will show path information for this project</p>
 </section>
 <section id="debug|profile">
-<h3>profile<a class="headerlink" href="#debug|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#debug|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="debug|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#debug|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#debug|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="debug|project_dir">
-<h3>project_dir<a class="headerlink" href="#debug|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#debug|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
 <section id="debug|target">
-<h3>target<a class="headerlink" href="#debug|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#debug|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="debug|vars">
-<h3>vars<a class="headerlink" href="#debug|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#debug|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="debug|version_check">
-<h3>version_check<a class="headerlink" href="#debug|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#debug|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
 </section>
-<h2>Command: deps<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: deps<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="deps|profile">
-<h3>profile<a class="headerlink" href="#deps|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#deps|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="deps|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#deps|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#deps|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="deps|project_dir">
-<h3>project_dir<a class="headerlink" href="#deps|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#deps|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
 <section id="deps|target">
-<h3>target<a class="headerlink" href="#deps|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#deps|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="deps|vars">
-<h3>vars<a class="headerlink" href="#deps|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#deps|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
-<h2>Command: docs<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
-<h2>Command: init<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: docs<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
+<h3>Command: init<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
+<section id="init|project_name">
+<h4>project_name<a class="headerlink" href="#init|project_name" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+</section>
 <section id="init|profile">
-<h3>profile<a class="headerlink" href="#init|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#init|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="init|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#init|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#init|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="init|project_dir">
-<h3>project_dir<a class="headerlink" href="#init|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#init|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
 <section id="init|skip_profile_setup">
-<h3>skip_profile_setup<a class="headerlink" href="#init|skip_profile_setup" title="Permalink to this heading">¶</a></h3>
+<h4>skip_profile_setup<a class="headerlink" href="#init|skip_profile_setup" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Skip interactive profile setup.</p>
 </section>
 <section id="init|target">
-<h3>target<a class="headerlink" href="#init|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#init|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="init|vars">
-<h3>vars<a class="headerlink" href="#init|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#init|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
-<h2>Command: list<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: list<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="list|exclude">
-<h3>exclude<a class="headerlink" href="#list|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#list|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
 <section id="list|indirect_selection">
-<h3>indirect_selection<a class="headerlink" href="#list|indirect_selection" title="Permalink to this heading">¶</a></h3>
-<p>Type: choice: [‘eager’, ‘cautious’]</p>
+<h4>indirect_selection<a class="headerlink" href="#list|indirect_selection" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘eager’, ‘cautious’, ‘buildable’]</p>
 <p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
 </section>
 <section id="list|models">
-<h3>models<a class="headerlink" href="#list|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>models<a class="headerlink" href="#list|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to include.</p>
 </section>
 <section id="list|output">
-<h3>output<a class="headerlink" href="#list|output" title="Permalink to this heading">¶</a></h3>
+<h4>output<a class="headerlink" href="#list|output" title="Permalink to this heading">¶</a></h4>
 <p>Type: choice: [‘json’, ‘name’, ‘path’, ‘selector’]</p>
 <p>TODO: No current help text</p>
 </section>
 <section id="list|output_keys">
-<h3>output_keys<a class="headerlink" href="#list|output_keys" title="Permalink to this heading">¶</a></h3>
+<h4>output_keys<a class="headerlink" href="#list|output_keys" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>TODO: No current help text</p>
 </section>
 <section id="list|profile">
-<h3>profile<a class="headerlink" href="#list|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#list|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="list|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#list|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#list|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="list|project_dir">
-<h3>project_dir<a class="headerlink" href="#list|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#list|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
-<section id="list|resource_type">
-<h3>resource_type<a class="headerlink" href="#list|resource_type" title="Permalink to this heading">¶</a></h3>
-<p>Type: choice: [‘metric’, ‘source’, ‘analysis’, ‘model’, ‘test’, ‘exposure’, ‘snapshot’, ‘seed’, ‘default’, ‘all’]</p>
+<section id="list|resource_types">
+<h4>resource_types<a class="headerlink" href="#list|resource_types" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>TODO: No current help text</p>
 </section>
+<section id="list|select">
+<h4>select<a class="headerlink" href="#list|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="list|selector">
-<h3>selector<a class="headerlink" href="#list|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#list|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="list|state">
-<h3>state<a class="headerlink" href="#list|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#list|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="list|target">
-<h3>target<a class="headerlink" href="#list|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#list|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="list|vars">
-<h3>vars<a class="headerlink" href="#list|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#list|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
-<h2>Command: parse<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: list<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
+<section id="list|exclude">
+<h4>exclude<a class="headerlink" href="#list|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to exclude.</p>
+</section>
+<section id="list|indirect_selection">
+<h4>indirect_selection<a class="headerlink" href="#list|indirect_selection" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘eager’, ‘cautious’, ‘buildable’]</p>
+<p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
+</section>
+<section id="list|models">
+<h4>models<a class="headerlink" href="#list|models" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
+<section id="list|output">
+<h4>output<a class="headerlink" href="#list|output" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘json’, ‘name’, ‘path’, ‘selector’]</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="list|output_keys">
+<h4>output_keys<a class="headerlink" href="#list|output_keys" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="list|profile">
+<h4>profile<a class="headerlink" href="#list|profile" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Which profile to load. Overrides setting in dbt_project.yml.</p>
+</section>
+<section id="list|profiles_dir">
+<h4>profiles_dir<a class="headerlink" href="#list|profiles_dir" title="Permalink to this heading">¶</a></h4>
+<p>Type: path</p>
+<p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
+</section>
+<section id="list|project_dir">
+<h4>project_dir<a class="headerlink" href="#list|project_dir" title="Permalink to this heading">¶</a></h4>
+<p>Type: path</p>
+<p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
+</section>
+<section id="list|resource_types">
+<h4>resource_types<a class="headerlink" href="#list|resource_types" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>TODO: No current help text</p>
+</section>
+<section id="list|select">
+<h4>select<a class="headerlink" href="#list|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
+<section id="list|selector">
+<h4>selector<a class="headerlink" href="#list|selector" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>The selector name to use, as defined in selectors.yml</p>
+</section>
+<section id="list|state">
+<h4>state<a class="headerlink" href="#list|state" title="Permalink to this heading">¶</a></h4>
+<p>Type: path</p>
+<p>If set, use the given directory as the source for json files to compare with this project.</p>
+</section>
+<section id="list|target">
+<h4>target<a class="headerlink" href="#list|target" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+<p>Which target to load for the given profile</p>
+</section>
+<section id="list|vars">
+<h4>vars<a class="headerlink" href="#list|vars" title="Permalink to this heading">¶</a></h4>
+<p>Type: YAML</p>
+<p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
+</section>
+<h3>Command: parse<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="parse|compile">
-<h3>compile<a class="headerlink" href="#parse|compile" title="Permalink to this heading">¶</a></h3>
+<h4>compile<a class="headerlink" href="#parse|compile" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>TODO: No help text currently available</p>
 </section>
-<section id="parse|log_path">
-<h3>log_path<a class="headerlink" href="#parse|log_path" title="Permalink to this heading">¶</a></h3>
-<p>Type: path</p>
-<p>Configure the ‘log-path’. Only applies this setting for the current run. Overrides the ‘DBT_LOG_PATH’ if it is set.</p>
-</section>
 <section id="parse|profile">
-<h3>profile<a class="headerlink" href="#parse|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#parse|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="parse|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#parse|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#parse|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="parse|project_dir">
-<h3>project_dir<a class="headerlink" href="#parse|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#parse|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
 <section id="parse|target">
-<h3>target<a class="headerlink" href="#parse|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#parse|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="parse|target_path">
-<h3>target_path<a class="headerlink" href="#parse|target_path" title="Permalink to this heading">¶</a></h3>
+<h4>target_path<a class="headerlink" href="#parse|target_path" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Configure the ‘target-path’. Only applies this setting for the current run. Overrides the ‘DBT_TARGET_PATH’ if it is set.</p>
 </section>
 <section id="parse|threads">
-<h3>threads<a class="headerlink" href="#parse|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#parse|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="parse|vars">
-<h3>vars<a class="headerlink" href="#parse|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#parse|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="parse|version_check">
-<h3>version_check<a class="headerlink" href="#parse|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#parse|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
 </section>
 <section id="parse|write_manifest">
-<h3>write_manifest<a class="headerlink" href="#parse|write_manifest" title="Permalink to this heading">¶</a></h3>
+<h4>write_manifest<a class="headerlink" href="#parse|write_manifest" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>TODO: No help text currently available</p>
 </section>
-<h2>Command: run<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: run<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="run|defer">
-<h3>defer<a class="headerlink" href="#run|defer" title="Permalink to this heading">¶</a></h3>
+<h4>defer<a class="headerlink" href="#run|defer" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If set, defer to the state variable for resolving unselected nodes.</p>
 </section>
+<section id="run|favor_state">
+<h4>favor_state<a class="headerlink" href="#run|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="run|exclude">
-<h3>exclude<a class="headerlink" href="#run|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#run|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
 <section id="run|fail_fast">
-<h3>fail_fast<a class="headerlink" href="#run|fail_fast" title="Permalink to this heading">¶</a></h3>
+<h4>fail_fast<a class="headerlink" href="#run|fail_fast" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Stop execution on first failure.</p>
 </section>
 <section id="run|full_refresh">
-<h3>full_refresh<a class="headerlink" href="#run|full_refresh" title="Permalink to this heading">¶</a></h3>
+<h4>full_refresh<a class="headerlink" href="#run|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
 </section>
-<section id="run|log_path">
-<h3>log_path<a class="headerlink" href="#run|log_path" title="Permalink to this heading">¶</a></h3>
-<p>Type: path</p>
-<p>Configure the ‘log-path’. Only applies this setting for the current run. Overrides the ‘DBT_LOG_PATH’ if it is set.</p>
-</section>
-<section id="run|models">
-<h3>models<a class="headerlink" href="#run|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
-<p>Specify the nodes to include.</p>
-</section>
 <section id="run|profile">
-<h3>profile<a class="headerlink" href="#run|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#run|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="run|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#run|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#run|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="run|project_dir">
-<h3>project_dir<a class="headerlink" href="#run|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#run|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
+<section id="run|select">
+<h4>select<a class="headerlink" href="#run|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="run|selector">
-<h3>selector<a class="headerlink" href="#run|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#run|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="run|state">
-<h3>state<a class="headerlink" href="#run|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#run|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="run|target">
-<h3>target<a class="headerlink" href="#run|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#run|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="run|target_path">
-<h3>target_path<a class="headerlink" href="#run|target_path" title="Permalink to this heading">¶</a></h3>
+<h4>target_path<a class="headerlink" href="#run|target_path" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Configure the ‘target-path’. Only applies this setting for the current run. Overrides the ‘DBT_TARGET_PATH’ if it is set.</p>
 </section>
 <section id="run|threads">
-<h3>threads<a class="headerlink" href="#run|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#run|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="run|vars">
-<h3>vars<a class="headerlink" href="#run|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#run|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="run|version_check">
-<h3>version_check<a class="headerlink" href="#run|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#run|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
 </section>
-<h2>Command: run_operation<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: run_operation<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
+<section id="run-operation|macro">
+<h4>macro<a class="headerlink" href="#run-operation|macro" title="Permalink to this heading">¶</a></h4>
+<p>Type: string</p>
+</section>
 <section id="run-operation|args">
-<h3>args<a class="headerlink" href="#run-operation|args" title="Permalink to this heading">¶</a></h3>
+<h4>args<a class="headerlink" href="#run-operation|args" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply arguments to the macro. This dictionary will be mapped to the keyword arguments defined in the selected macro. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="run-operation|profile">
-<h3>profile<a class="headerlink" href="#run-operation|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#run-operation|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="run-operation|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#run-operation|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#run-operation|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="run-operation|project_dir">
-<h3>project_dir<a class="headerlink" href="#run-operation|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#run-operation|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
 <section id="run-operation|target">
-<h3>target<a class="headerlink" href="#run-operation|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#run-operation|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="run-operation|vars">
-<h3>vars<a class="headerlink" href="#run-operation|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#run-operation|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
-<h2>Command: seed<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: seed<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="seed|exclude">
-<h3>exclude<a class="headerlink" href="#seed|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#seed|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
 <section id="seed|full_refresh">
-<h3>full_refresh<a class="headerlink" href="#seed|full_refresh" title="Permalink to this heading">¶</a></h3>
+<h4>full_refresh<a class="headerlink" href="#seed|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
 </section>
-<section id="seed|log_path">
-<h3>log_path<a class="headerlink" href="#seed|log_path" title="Permalink to this heading">¶</a></h3>
-<p>Type: path</p>
-<p>Configure the ‘log-path’. Only applies this setting for the current run. Overrides the ‘DBT_LOG_PATH’ if it is set.</p>
-</section>
-<section id="seed|models">
-<h3>models<a class="headerlink" href="#seed|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
-<p>Specify the nodes to include.</p>
-</section>
 <section id="seed|profile">
-<h3>profile<a class="headerlink" href="#seed|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#seed|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="seed|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#seed|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#seed|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="seed|project_dir">
-<h3>project_dir<a class="headerlink" href="#seed|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#seed|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
+<section id="seed|select">
+<h4>select<a class="headerlink" href="#seed|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="seed|selector">
-<h3>selector<a class="headerlink" href="#seed|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#seed|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="seed|show">
-<h3>show<a class="headerlink" href="#seed|show" title="Permalink to this heading">¶</a></h3>
+<h4>show<a class="headerlink" href="#seed|show" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Show a sample of the loaded data in the terminal</p>
 </section>
 <section id="seed|state">
-<h3>state<a class="headerlink" href="#seed|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#seed|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="seed|target">
-<h3>target<a class="headerlink" href="#seed|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#seed|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="seed|target_path">
-<h3>target_path<a class="headerlink" href="#seed|target_path" title="Permalink to this heading">¶</a></h3>
+<h4>target_path<a class="headerlink" href="#seed|target_path" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Configure the ‘target-path’. Only applies this setting for the current run. Overrides the ‘DBT_TARGET_PATH’ if it is set.</p>
 </section>
 <section id="seed|threads">
-<h3>threads<a class="headerlink" href="#seed|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#seed|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="seed|vars">
-<h3>vars<a class="headerlink" href="#seed|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#seed|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="seed|version_check">
-<h3>version_check<a class="headerlink" href="#seed|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#seed|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
 </section>
-<h2>Command: snapshot<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: snapshot<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="snapshot|defer">
-<h3>defer<a class="headerlink" href="#snapshot|defer" title="Permalink to this heading">¶</a></h3>
+<h4>defer<a class="headerlink" href="#snapshot|defer" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If set, defer to the state variable for resolving unselected nodes.</p>
 </section>
 <section id="snapshot|exclude">
-<h3>exclude<a class="headerlink" href="#snapshot|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#snapshot|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
-<section id="snapshot|models">
-<h3>models<a class="headerlink" href="#snapshot|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
-<p>Specify the nodes to include.</p>
+<section id="snapshot|favor_state">
+<h4>favor_state<a class="headerlink" href="#snapshot|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
 </section>
 <section id="snapshot|profile">
-<h3>profile<a class="headerlink" href="#snapshot|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#snapshot|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="snapshot|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#snapshot|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#snapshot|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="snapshot|project_dir">
-<h3>project_dir<a class="headerlink" href="#snapshot|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#snapshot|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
+<section id="snapshot|select">
+<h4>select<a class="headerlink" href="#snapshot|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="snapshot|selector">
-<h3>selector<a class="headerlink" href="#snapshot|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#snapshot|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="snapshot|state">
-<h3>state<a class="headerlink" href="#snapshot|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#snapshot|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="snapshot|target">
-<h3>target<a class="headerlink" href="#snapshot|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#snapshot|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="snapshot|threads">
-<h3>threads<a class="headerlink" href="#snapshot|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#snapshot|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="snapshot|vars">
-<h3>vars<a class="headerlink" href="#snapshot|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#snapshot|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
-<h2>Command: source<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
-<h2>Command: test<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h2>
+<h3>Command: source<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
+<h3>Command: test<a class="headerlink" href="#dbt-section" title="Permalink to this heading">¶</a></h3>
 <section id="test|defer">
-<h3>defer<a class="headerlink" href="#test|defer" title="Permalink to this heading">¶</a></h3>
+<h4>defer<a class="headerlink" href="#test|defer" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If set, defer to the state variable for resolving unselected nodes.</p>
 </section>
 <section id="test|exclude">
-<h3>exclude<a class="headerlink" href="#test|exclude" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
+<h4>exclude<a class="headerlink" href="#test|exclude" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
 <p>Specify the nodes to exclude.</p>
 </section>
 <section id="test|fail_fast">
-<h3>fail_fast<a class="headerlink" href="#test|fail_fast" title="Permalink to this heading">¶</a></h3>
+<h4>fail_fast<a class="headerlink" href="#test|fail_fast" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Stop execution on first failure.</p>
 </section>
+<section id="test|favor_state">
+<h4>favor_state<a class="headerlink" href="#test|favor_state" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.</p>
+</section>
 <section id="test|indirect_selection">
-<h3>indirect_selection<a class="headerlink" href="#test|indirect_selection" title="Permalink to this heading">¶</a></h3>
-<p>Type: choice: [‘eager’, ‘cautious’]</p>
+<h4>indirect_selection<a class="headerlink" href="#test|indirect_selection" title="Permalink to this heading">¶</a></h4>
+<p>Type: choice: [‘eager’, ‘cautious’, ‘buildable’]</p>
 <p>Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.</p>
 </section>
-<section id="test|log_path">
-<h3>log_path<a class="headerlink" href="#test|log_path" title="Permalink to this heading">¶</a></h3>
-<p>Type: path</p>
-<p>Configure the ‘log-path’. Only applies this setting for the current run. Overrides the ‘DBT_LOG_PATH’ if it is set.</p>
-</section>
-<section id="test|models">
-<h3>models<a class="headerlink" href="#test|models" title="Permalink to this heading">¶</a></h3>
-<p>Type: string</p>
-<p>Specify the nodes to include.</p>
-</section>
 <section id="test|profile">
-<h3>profile<a class="headerlink" href="#test|profile" title="Permalink to this heading">¶</a></h3>
+<h4>profile<a class="headerlink" href="#test|profile" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which profile to load. Overrides setting in dbt_project.yml.</p>
 </section>
 <section id="test|profiles_dir">
-<h3>profiles_dir<a class="headerlink" href="#test|profiles_dir" title="Permalink to this heading">¶</a></h3>
+<h4>profiles_dir<a class="headerlink" href="#test|profiles_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/</p>
 </section>
 <section id="test|project_dir">
-<h3>project_dir<a class="headerlink" href="#test|project_dir" title="Permalink to this heading">¶</a></h3>
+<h4>project_dir<a class="headerlink" href="#test|project_dir" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.</p>
 </section>
+<section id="test|select">
+<h4>select<a class="headerlink" href="#test|select" title="Permalink to this heading">¶</a></h4>
+<p>Type: unknown</p>
+<p>Specify the nodes to include.</p>
+</section>
 <section id="test|selector">
-<h3>selector<a class="headerlink" href="#test|selector" title="Permalink to this heading">¶</a></h3>
+<h4>selector<a class="headerlink" href="#test|selector" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>The selector name to use, as defined in selectors.yml</p>
 </section>
 <section id="test|state">
-<h3>state<a class="headerlink" href="#test|state" title="Permalink to this heading">¶</a></h3>
+<h4>state<a class="headerlink" href="#test|state" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>If set, use the given directory as the source for json files to compare with this project.</p>
 </section>
 <section id="test|store_failures">
-<h3>store_failures<a class="headerlink" href="#test|store_failures" title="Permalink to this heading">¶</a></h3>
+<h4>store_failures<a class="headerlink" href="#test|store_failures" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Store test results (failing rows) in the database</p>
 </section>
 <section id="test|target">
-<h3>target<a class="headerlink" href="#test|target" title="Permalink to this heading">¶</a></h3>
+<h4>target<a class="headerlink" href="#test|target" title="Permalink to this heading">¶</a></h4>
 <p>Type: string</p>
 <p>Which target to load for the given profile</p>
 </section>
 <section id="test|target_path">
-<h3>target_path<a class="headerlink" href="#test|target_path" title="Permalink to this heading">¶</a></h3>
+<h4>target_path<a class="headerlink" href="#test|target_path" title="Permalink to this heading">¶</a></h4>
 <p>Type: path</p>
 <p>Configure the ‘target-path’. Only applies this setting for the current run. Overrides the ‘DBT_TARGET_PATH’ if it is set.</p>
 </section>
 <section id="test|threads">
-<h3>threads<a class="headerlink" href="#test|threads" title="Permalink to this heading">¶</a></h3>
+<h4>threads<a class="headerlink" href="#test|threads" title="Permalink to this heading">¶</a></h4>
 <p>Type: int</p>
 <p>Specify number of threads to use while executing models. Overrides settings in profiles.yml.</p>
 </section>
 <section id="test|vars">
-<h3>vars<a class="headerlink" href="#test|vars" title="Permalink to this heading">¶</a></h3>
+<h4>vars<a class="headerlink" href="#test|vars" title="Permalink to this heading">¶</a></h4>
 <p>Type: YAML</p>
 <p>Supply variables to the project. This argument overrides variables defined in your dbt_project.yml file. This argument should be a YAML string, eg. ‘{my_variable: my_value}’</p>
 </section>
 <section id="test|version_check">
-<h3>version_check<a class="headerlink" href="#test|version_check" title="Permalink to this heading">¶</a></h3>
+<h4>version_check<a class="headerlink" href="#test|version_check" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>Ensure dbt’s version matches the one specified in the dbt_project.yml file (‘require-dbt-version’)</p>
+</section>
 </section>
 </section>
 </section>

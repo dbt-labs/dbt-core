@@ -8,6 +8,7 @@ from dbt.exceptions import DbtRuntimeError
 from dbt import flags
 from dbt.task.sql import SqlCompileRunner
 from dataclasses import dataclass
+from dbt.cli.resolvers import default_profiles_dir
 
 
 @dataclass
@@ -69,7 +70,11 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     if os.getenv("DBT_PROFILES_DIR"):
         profiles_dir = os.getenv("DBT_PROFILES_DIR")
     else:
-        profiles_dir = flags.DEFAULT_PROFILES_DIR
+        profiles_dir = default_profiles_dir()
+
+    profile_name = getattr(args, "profile", None)
+
+    profile_name = getattr(args, "profile", None)
 
     profile_name = getattr(args, "profile", None)
 

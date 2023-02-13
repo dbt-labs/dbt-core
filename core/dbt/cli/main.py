@@ -1,22 +1,71 @@
-import inspect  # This is temporary for RAT-ing
 from copy import copy
-from pprint import pformat as pf  # This is temporary for RAT-ing
+from typing import List, Tuple, Optional
 
 import click
-from dbt.adapters.factory import adapter_management
-from dbt.cli import params as p
-from dbt.cli.flags import Flags
-from dbt.profiler import profiler
+from dbt.cli import requires, params as p
+from dbt.config.project import Project
+from dbt.config.profile import Profile
+from dbt.contracts.graph.manifest import Manifest
+from dbt.task.clean import CleanTask
+from dbt.task.compile import CompileTask
+from dbt.task.deps import DepsTask
+from dbt.task.debug import DebugTask
+from dbt.task.run import RunTask
+from dbt.task.serve import ServeTask
+from dbt.task.test import TestTask
+from dbt.task.snapshot import SnapshotTask
+from dbt.task.seed import SeedTask
+from dbt.task.list import ListTask
+from dbt.task.freshness import FreshnessTask
+from dbt.task.run_operation import RunOperationTask
+from dbt.task.build import BuildTask
+from dbt.task.generate import GenerateTask
+from dbt.task.init import InitTask
 
 
-def cli_runner():
-    # Alias "list" to "ls"
-    ls = copy(cli.commands["list"])
-    ls.hidden = True
-    cli.add_command(ls, "ls")
+class dbtUsageException(Exception):
+    pass
 
-    # Run the cli
-    cli()
+
+class dbtInternalException(Exception):
+    pass
+
+
+# Programmatic invocation
+class dbtRunner:
+    def __init__(
+        self, project: Project = None, profile: Profile = None, manifest: Manifest = None
+    ):
+        self.project = project
+        self.profile = profile
+        self.manifest = manifest
+
+    def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
+        try:
+            dbt_ctx = cli.make_context(cli.name, args)
+            dbt_ctx.obj = {
+                "project": self.project,
+                "profile": self.profile,
+                "manifest": self.manifest,
+            }
+            return cli.invoke(dbt_ctx)
+        except click.exceptions.Exit as e:
+            # 0 exit code, expected for --version early exit
+            if str(e) == "0":
+                return [], True
+            raise dbtInternalException(f"unhandled exit code {str(e)}")
+        except (click.NoSuchOption, click.UsageError) as e:
+            raise dbtUsageException(e.message)
+
+
+def handle(args):
+    res, _ = handle_and_check(args)
+    return res
+
+
+def handle_and_check(args):
+    dbt = dbtRunner()
+    return dbt.invoke(args)
 
 
 # dbt
@@ -27,19 +76,21 @@ def cli_runner():
     epilog="Specify one of these sub-commands and you can find more help from there.",
 )
 @click.pass_context
-@p.anonymous_usage_stats
+@p.send_anonymous_usage_stats
 @p.cache_selected_only
 @p.debug
 @p.enable_legacy_logger
 @p.fail_fast
 @p.log_cache_events
 @p.log_format
+@p.log_path
 @p.macro_debugging
 @p.partial_parse
 @p.print
 @p.printer_width
 @p.quiet
 @p.record_timing_info
+@p.single_threaded
 @p.static_parser
 @p.use_colors
 @p.use_experimental_parser
@@ -52,21 +103,6 @@ def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com
     """
-    incomplete_flags = Flags()
-
-    # Profiling
-    if incomplete_flags.RECORD_TIMING_INFO:
-        ctx.with_resource(profiler(enable=True, outfile=incomplete_flags.RECORD_TIMING_INFO))
-
-    # Adapter management
-    ctx.with_resource(adapter_management())
-
-    # Version info
-    if incomplete_flags.VERSION:
-        click.echo(f"`version` called\n ctx.params: {pf(ctx.params)}")
-        return
-    else:
-        del ctx.params["version"]
 
 
 # dbt build
@@ -75,13 +111,14 @@ def cli(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.fail_fast
+@p.favor_state
 @p.full_refresh
 @p.indirect_selection
-@p.log_path
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.resource_type
+@p.select
 @p.selector
 @p.show
 @p.state
@@ -91,10 +128,22 @@ def cli(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def build(ctx, **kwargs):
     """Run all Seeds, Models, Snapshots, and tests in DAG order"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = BuildTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt clean
@@ -105,10 +154,16 @@ def build(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
+@requires.unset_profile
+@requires.project
 def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt docs
@@ -124,11 +179,11 @@ def docs(ctx, **kwargs):
 @p.compile_docs
 @p.defer
 @p.exclude
-@p.log_path
-@p.models
+@p.favor_state
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -136,10 +191,22 @@ def docs(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest(write=False)
 def docs_generate(ctx, **kwargs):
     """Generate the documentation website for your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = GenerateTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt docs serve
@@ -152,10 +219,22 @@ def docs_generate(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = ServeTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt compile
@@ -163,13 +242,13 @@ def docs_serve(ctx, **kwargs):
 @click.pass_context
 @p.defer
 @p.exclude
+@p.favor_state
 @p.full_refresh
-@p.log_path
-@p.models
 @p.parse_only
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -177,10 +256,23 @@ def docs_serve(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def compile(ctx, **kwargs):
-    """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the target/ directory."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
+    target/ directory."""
+    task = CompileTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt debug
@@ -188,15 +280,22 @@ def compile(ctx, **kwargs):
 @click.pass_context
 @p.config_dir
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.target
 @p.vars
 @p.version_check
+@requires.preflight
 def debug(ctx, **kwargs):
     """Show some helpful information about dbt for debugging. Not to be confused with the --debug option which increases verbosity."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = DebugTask(
+        ctx.obj["flags"],
+        None,
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt deps
@@ -207,25 +306,36 @@ def debug(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
+@requires.unset_profile
+@requires.project
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = DepsTask(ctx.obj["flags"], ctx.obj["project"])
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt init
 @cli.command("init")
 @click.pass_context
+# for backwards compatibility, accept 'project_name' as an optional positional argument
+@click.argument("project_name", required=False)
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.skip_profile_setup
 @p.target
 @p.vars
+@requires.preflight
 def init(ctx, **kwargs):
-    """Initialize a new DBT project."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    """Initialize a new dbt project."""
+    task = InitTask(ctx.obj["flags"], None)
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt list
@@ -240,21 +350,39 @@ def init(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.resource_type
+@p.raw_select
 @p.selector
 @p.state
 @p.target
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def list(ctx, **kwargs):
     """List the resources in your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = ListTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# Alias "list" to "ls"
+ls = copy(cli.commands["list"])
+ls.hidden = True
+cli.add_command(ls, "ls")
 
 
 # dbt parse
 @cli.command("parse")
 @click.pass_context
 @p.compile_parse
-@p.log_path
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -264,24 +392,29 @@ def list(ctx, **kwargs):
 @p.vars
 @p.version_check
 @p.write_manifest
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    # manifest generation and writing happens in @requires.manifest
+    return None, True
 
 
 # dbt run
 @cli.command("run")
 @click.pass_context
 @p.defer
+@p.favor_state
 @p.exclude
 @p.fail_fast
 @p.full_refresh
-@p.log_path
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
@@ -289,25 +422,50 @@ def parse(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = RunTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt run operation
 @cli.command("run-operation")
 @click.pass_context
+@click.argument("macro")
 @p.args
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.target
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def run_operation(ctx, **kwargs):
     """Run the named macro with any supplied arguments."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = RunOperationTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt seed
@@ -315,11 +473,10 @@ def run_operation(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.full_refresh
-@p.log_path
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.show
 @p.state
@@ -328,10 +485,21 @@ def run_operation(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def seed(ctx, **kwargs):
     """Load data from csv files into your data warehouse."""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = SeedTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt snapshot
@@ -339,19 +507,32 @@ def seed(ctx, **kwargs):
 @click.pass_context
 @p.defer
 @p.exclude
-@p.models
+@p.favor_state
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
 @p.threads
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def snapshot(ctx, **kwargs):
     """Execute snapshots defined in your project"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = SnapshotTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # dbt source
@@ -365,20 +546,38 @@ def source(ctx, **kwargs):
 @source.command("freshness")
 @click.pass_context
 @p.exclude
-@p.models
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.target
 @p.threads
 @p.vars
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def freshness(ctx, **kwargs):
-    """Snapshots the current freshness of the project's sources"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    """check the current freshness of the project's sources"""
+    task = FreshnessTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# Alias "source freshness" to "snapshot-freshness"
+snapshot_freshness = copy(cli.commands["source"].commands["freshness"])  # type: ignore
+snapshot_freshness.hidden = True
+cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # type: ignore
 
 
 # dbt test
@@ -387,12 +586,12 @@ def freshness(ctx, **kwargs):
 @p.defer
 @p.exclude
 @p.fail_fast
+@p.favor_state
 @p.indirect_selection
-@p.log_path
-@p.models
 @p.profile
 @p.profiles_dir
 @p.project_dir
+@p.select
 @p.selector
 @p.state
 @p.store_failures
@@ -401,12 +600,24 @@ def freshness(ctx, **kwargs):
 @p.threads
 @p.vars
 @p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
-    flags = Flags()
-    click.echo(f"`{inspect.stack()[0][3]}` called\n flags: {flags}")
+    task = TestTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
 
 
 # Support running as a module
 if __name__ == "__main__":
-    cli_runner()
+    cli()

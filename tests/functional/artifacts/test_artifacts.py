@@ -503,7 +503,6 @@ class TestVerifyArtifacts(BaseVerifyProject):
         start_time = datetime.utcnow()
         results = run_dbt(["compile"])
         assert len(results) == 7
-
         verify_manifest(
             project,
             expected_seeded_manifest(project, quote_model=False),

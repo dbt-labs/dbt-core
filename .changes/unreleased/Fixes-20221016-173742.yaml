@@ -1,0 +1,8 @@
+kind: Fixes
+body: Add functors to ensure event types with str-type attributes are initialized
+  to spec, even when provided non-str type params.
+time: 2022-10-16T17:37:42.846683-07:00
+custom:
+  Author: versusfacit
+  Issue: "5436"
+  PR: "5874"

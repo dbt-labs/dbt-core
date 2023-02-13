@@ -250,7 +250,6 @@ def upgrade_seed_content(node_content):
         "refs",
         "sources",
         "metrics",
-        "depends_on",
         "compiled_path",
         "compiled",
         "compiled_code",
@@ -260,6 +259,8 @@ def upgrade_seed_content(node_content):
     ):
         if attr_name in node_content:
             del node_content[attr_name]
+        # In v1.4, we switched SeedNode.depends_on from DependsOn to MacroDependsOn
+        node_content.get("depends_on", {}).pop("nodes", None)
 
 
 def upgrade_manifest_json(manifest: dict) -> dict:

@@ -1,8 +1,5 @@
-import ast
-from inspect import getsource
-
 import click
-from dbt.cli import params
+
 from dbt.cli.main import cli
 
 
@@ -23,7 +20,8 @@ class TestCLI:
     def test_unhidden_params_have_help_texts(self):
         def run_test(command):
             for param in command.params:
-                if not param.hidden:
+                # arguments can't have help text
+                if not isinstance(param, click.Argument) and not param.hidden:
                     assert param.help is not None
             if type(command) is click.Group:
                 for command in command.commands.values():
@@ -41,10 +39,3 @@ class TestCLI:
                     run_test(command)
 
         run_test(cli)
-
-    def test_params_are_alpha_sorted(self):
-        root_node = ast.parse(getsource(params))
-        param_var_names = [
-            node.targets[0].id for node in ast.walk(root_node) if isinstance(node, ast.Assign)
-        ]
-        assert param_var_names == sorted(param_var_names)

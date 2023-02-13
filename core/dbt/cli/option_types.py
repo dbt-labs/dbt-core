@@ -1,5 +1,7 @@
-from click import ParamType
-import yaml
+from click import ParamType, Choice
+
+from dbt.config.utils import parse_cli_vars
+from dbt.exceptions import ValidationError
 
 from dbt.helper_types import WarnErrorOptions
 
@@ -14,8 +16,8 @@ class YAML(ParamType):
         if not isinstance(value, str):
             self.fail(f"Cannot load YAML from type {type(value)}", param, ctx)
         try:
-            return yaml.load(value, Loader=yaml.Loader)
-        except yaml.parser.ParserError:
+            return parse_cli_vars(value)
+        except ValidationError:
             self.fail(f"String '{value}' is not valid YAML", param, ctx)
 
 
@@ -25,6 +27,7 @@ class WarnErrorOptionsType(YAML):
     name = "WarnErrorOptionsType"
 
     def convert(self, value, param, ctx):
+        # this function is being used by param in click
         include_exclude = super().convert(value, param, ctx)
 
         return WarnErrorOptions(
@@ -46,3 +49,13 @@ class Truthy(ParamType):
             return None
         else:
             return value
+
+
+class ChoiceTuple(Choice):
+    name = "CHOICE_TUPLE"
+
+    def convert(self, value, param, ctx):
+        for value_item in value:
+            super().convert(value_item, param, ctx)
+
+        return value

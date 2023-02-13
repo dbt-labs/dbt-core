@@ -1,0 +1,7 @@
+kind: Features
+body: This pulls the profile name from args when constructing a RuntimeConfig in lib.py,
+  enabling the dbt-server to override the value that's in the dbt_project.yml
+time: 2022-11-02T15:00:03.000805-05:00
+custom:
+  Author: racheldaniel
+  Issue: "6201"

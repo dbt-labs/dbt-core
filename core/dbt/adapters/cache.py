@@ -17,7 +17,7 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import fire_event, fire_event_if
 from dbt.events.types import CacheAction, CacheDumpGraph
-import dbt.flags as flags
+from dbt.flags import get_flags
 from dbt.utils import lowercase
 
 
@@ -319,6 +319,7 @@ class RelationsCache:
 
         :param BaseRelation relation: The underlying relation.
         """
+        flags = get_flags()
         cached = _CachedRelation(relation)
         fire_event_if(
             flags.LOG_CACHE_EVENTS,
@@ -456,7 +457,7 @@ class RelationsCache:
                 ref_key_2=_make_msg_from_ref_key(new),
             )
         )
-
+        flags = get_flags()
         fire_event_if(
             flags.LOG_CACHE_EVENTS,
             lambda: CacheDumpGraph(before_after="before", action="rename", dump=self.dump_graph()),

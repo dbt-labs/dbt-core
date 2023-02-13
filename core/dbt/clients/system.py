@@ -1,30 +1,32 @@
 import errno
-import functools
 import fnmatch
+import functools
 import json
 import os
 import os.path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
-import requests
-import stat
-from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
-from pathspec import PathSpec  # type: ignore
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NoReturn, Optional, Tuple, Type, Union
 
+import dbt.exceptions
+import requests
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SystemErrorRetrievingModTime,
     SystemCouldNotWrite,
+    SystemErrorRetrievingModTime,
     SystemExecutingCmd,
     SystemStdOut,
     SystemStdErr,
     SystemReportReturnCode,
 )
-import dbt.exceptions
+from dbt.exceptions import DbtInternalError
 from dbt.utils import _connection_exception_retry as connection_exception_retry
+from pathspec import PathSpec  # type: ignore
 
 if sys.platform == "win32":
     from ctypes import WinDLL, c_bool
@@ -106,12 +108,18 @@ def load_file_contents(path: str, strip: bool = True) -> str:
     return to_return
 
 
-def make_directory(path: str) -> None:
+@functools.singledispatch
+def make_directory(path=None) -> None:
     """
     Make a directory and any intermediate directories that don't already
     exist. This function handles the case where two threads try to create
     a directory at once.
     """
+    raise DbtInternalError(f"Can not create directory from {type(path)} ")
+
+
+@make_directory.register
+def _(path: str) -> None:
     path = convert_path(path)
     if not os.path.exists(path):
         # concurrent writes that try to create the same dir can fail
@@ -123,6 +131,11 @@ def make_directory(path: str) -> None:
                 pass
             else:
                 raise e
+
+
+@make_directory.register
+def _(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def make_file(path: str, contents: str = "", overwrite: bool = False) -> bool:

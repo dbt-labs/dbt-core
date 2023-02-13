@@ -963,16 +963,16 @@ class FinishedRunningStatsMsg(betterproto.Message):
 
 
 @dataclass
-class ParseCmdOut(betterproto.Message):
-    """I001"""
+class ParsePerfInfoPath(betterproto.Message):
+    """I010"""
 
-    msg: str = betterproto.string_field(1)
+    path: str = betterproto.string_field(1)
 
 
 @dataclass
-class ParseCmdOutMsg(betterproto.Message):
+class ParsePerfInfoPathMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "ParseCmdOut" = betterproto.message_field(2)
+    data: "ParsePerfInfoPath" = betterproto.message_field(2)
 
 
 @dataclass

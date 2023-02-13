@@ -7,7 +7,7 @@ import sqlparse
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
 
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
 from dbt.clients.system import make_directory
@@ -378,6 +378,7 @@ class Compiler:
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
         graph_path = os.path.join(self.config.target_path, filename)
+        flags = get_flags()
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
 

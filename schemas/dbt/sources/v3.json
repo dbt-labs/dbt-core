@@ -39,12 +39,12 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.2.0a1"
+          "default": "1.5.0a1"
         },
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2022-04-15T20:38:22.697740Z"
+          "default": "2023-02-09T23:46:55.263337Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -55,7 +55,7 @@
               "type": "null"
             }
           ],
-          "default": "34abf75e-59d3-442f-920c-fa3843d98014"
+          "default": "e6a9b266-203d-4fec-93af-fb8f55423a6b"
         },
         "env": {
           "type": "object",
@@ -66,7 +66,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "FreshnessMetadata(dbt_schema_version: str = <factory>, dbt_version: str = '1.2.0a1', generated_at: datetime.datetime = <factory>, invocation_id: Union[str, NoneType] = <factory>, env: Dict[str, str] = <factory>)"
+      "description": "FreshnessMetadata(dbt_schema_version: str = <factory>, dbt_version: str = '1.5.0a1', generated_at: datetime.datetime = <factory>, invocation_id: Optional[str] = <factory>, env: Dict[str, str] = <factory>)"
     },
     "SourceFreshnessRuntimeError": {
       "type": "object",
@@ -205,7 +205,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "FreshnessThreshold(warn_after: Union[dbt.contracts.graph.unparsed.Time, NoneType] = <factory>, error_after: Union[dbt.contracts.graph.unparsed.Time, NoneType] = <factory>, filter: Union[str, NoneType] = None)"
+      "description": "FreshnessThreshold(warn_after: Optional[dbt.contracts.graph.unparsed.Time] = <factory>, error_after: Optional[dbt.contracts.graph.unparsed.Time] = <factory>, filter: Optional[str] = None)"
     },
     "Time": {
       "type": "object",
@@ -238,7 +238,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Time(count: Union[int, NoneType] = None, period: Union[dbt.contracts.graph.unparsed.TimePeriod, NoneType] = None)"
+      "description": "Time(count: Optional[int] = None, period: Optional[dbt.contracts.graph.unparsed.TimePeriod] = None)"
     },
     "TimingInfo": {
       "type": "object",
@@ -273,7 +273,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "TimingInfo(name: str, started_at: Union[datetime.datetime, NoneType] = None, completed_at: Union[datetime.datetime, NoneType] = None)"
+      "description": "TimingInfo(name: str, started_at: Optional[datetime.datetime] = None, completed_at: Optional[datetime.datetime] = None)"
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",
