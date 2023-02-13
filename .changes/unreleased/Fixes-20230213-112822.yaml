@@ -1,0 +1,6 @@
+kind: Fixes
+body: hoist dbt.cli.main into dbt.main namespace
+time: 2023-02-13T11:28:22.809596-08:00
+custom:
+  Author: aranke
+  Issue: ''
