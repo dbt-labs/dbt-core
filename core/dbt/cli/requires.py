@@ -10,6 +10,7 @@ from dbt.exceptions import DbtProjectError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
+from dbt.utils import cast_dict_to_dict_of_strings
 
 from click import Context
 from functools import update_wrapper
@@ -41,7 +42,8 @@ def preflight(func):
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
-        fire_event(MainReportArgs(args=get_flag_dict()))
+        flags_dict_str = cast_dict_to_dict_of_strings(get_flag_dict())
+        fire_event(MainReportArgs(args=flags_dict_str))
 
         if active_user is not None:  # mypy appeasement, always true
             fire_event(MainTrackingUserState(user_state=active_user.state()))
