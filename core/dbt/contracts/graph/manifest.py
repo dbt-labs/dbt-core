@@ -1181,7 +1181,7 @@ class WritableManifest(ArtifactMixin):
     selectors: Mapping[UniqueID, Any] = field(
         metadata=dict(description=("The selectors defined in selectors.yml"))
     )
-    disabled: Optional[Mapping[UniqueID, List[ResultNode]]] = field(
+    disabled: Optional[Mapping[UniqueID, List[GraphMemberNode]]] = field(
         metadata=dict(description="A mapping of the disabled nodes in the target")
     )
     parent_map: Optional[NodeEdgeMap] = field(

@@ -252,6 +252,8 @@ class TestPreviousVersionState:
         }
 
     def test_project(self, project):
+        # This is mainly used to test changes to the test project in isolation from
+        # the other noise.
         results = run_dbt(["run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
@@ -300,7 +302,7 @@ class TestPreviousVersionState:
             results = run_dbt(cli_args, expect_pass=expect_pass)
             # We have different numbers of nodes in older versions
             if compare_manifest_version < 7:
-                assert len(results) == 4
+                assert len(results) == 5
             else:
                 assert len(results) == 1
         else:
