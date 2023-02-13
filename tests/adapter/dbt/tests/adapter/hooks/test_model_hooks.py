@@ -159,9 +159,12 @@ class TestPrePostModelHooks(BaseTestPrePost):
 
     def test_pre_and_post_run_hooks(self, project, dbt_profile_target):
         run_dbt()
-
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        if "host" in dbt_profile_target:
+            self.check_hooks("start", project, dbt_profile_target["host"])
+            self.check_hooks("end", project, dbt_profile_target["host"])
+        else:
+            self.check_hooks("start", project, None)
+            self.check_hooks("end", project, None)
 
 
 class TestPrePostModelHooksUnderscores(TestPrePostModelHooks):
@@ -223,8 +226,12 @@ class TestHookRefs(BaseTestPrePost):
     def test_pre_post_model_hooks_refed(self, project, dbt_profile_target):
         run_dbt()
 
-        self.check_hooks("start", project, dbt_profile_target["host"], count=1)
-        self.check_hooks("end", project, dbt_profile_target["host"], count=1)
+        if "host" in dbt_profile_target:
+            self.check_hooks("start", project, dbt_profile_target["host"])
+            self.check_hooks("end", project, dbt_profile_target["host"])
+        else:
+            self.check_hooks("start", project, None)
+            self.check_hooks("end", project, None)
 
 
 class TestPrePostModelHooksOnSeeds(object):
