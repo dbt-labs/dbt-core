@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: '`dbt clean` works with click cli'
-time: 2022-12-02T12:30:46.711184-06:00
-custom:
-  Author: stu-k
-  Issue: "5542"
-  PR: "6369"

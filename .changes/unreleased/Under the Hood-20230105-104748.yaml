@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Remove UnsetProfileConfig
-time: 2023-01-05T10:47:48.707656-05:00
-custom:
-  Author: MichelleArk
-  Issue: "5539"
-  PR: "6504"

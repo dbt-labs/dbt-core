@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Pin ubuntu at 20.04 for some workflows
-time: 2022-12-05T09:22:17.614875-06:00
-custom:
-  Author: stu-k
-  Issue: "9999"
-  PR: "6380"
