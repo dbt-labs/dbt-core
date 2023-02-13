@@ -28,7 +28,7 @@ from dbt.contracts.graph.nodes import (
 
 from dbt.contracts.graph.unparsed import (
     ExposureType,
-    ExposureOwner,
+    Owner,
     MaturityType,
     MetricFilter,
     MetricTime
@@ -85,7 +85,7 @@ class ManifestTest(unittest.TestCase):
             'exposure.root.my_exposure': Exposure(
                 name='my_exposure',
                 type=ExposureType.Dashboard,
-                owner=ExposureOwner(email='some@email.com'),
+                owner=Owner(email='some@email.com'),
                 resource_type=NodeType.Exposure,
                 description='Test description',
                 maturity=MaturityType.High,

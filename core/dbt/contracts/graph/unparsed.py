@@ -424,8 +424,8 @@ class MaturityType(StrEnum):
 
 
 @dataclass
-class ExposureOwner(dbtClassMixin, Replaceable):
-    email: str
+class Owner(AdditionalPropertiesAllowed, Replaceable):
+    email: Optional[str] = None
     name: Optional[str] = None
 
 
@@ -433,7 +433,7 @@ class ExposureOwner(dbtClassMixin, Replaceable):
 class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
     type: ExposureType
-    owner: ExposureOwner
+    owner: Owner
     description: str = ""
     label: Optional[str] = None
     maturity: Optional[MaturityType] = None
@@ -450,6 +450,9 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
             # name can only contain alphanumeric chars and underscores
             if not (re.match(r"[\w-]+$", data["name"])):
                 deprecations.warn("exposure-name", exposure=data["name"])
+
+        if data["owner"].get("name") is None and data["owner"].get("email") is None:
+            raise ValidationError("Exposure owner must have at least one of 'name' or 'email'.")
 
 
 @dataclass

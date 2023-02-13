@@ -30,7 +30,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Documentation,
     HookNode,
-    ExposureOwner,
+    Owner,
     TestMetadata,
 )
 from dbt.contracts.graph.unparsed import (
@@ -2145,7 +2145,7 @@ def basic_parsed_exposure_object():
         package_name='test',
         path='models/something.yml',
         original_file_path='models/something.yml',
-        owner=ExposureOwner(email='test@example.com'),
+        owner=Owner(email='test@example.com'),
         description='',
         meta={},
         tags=[],
@@ -2198,7 +2198,7 @@ def complex_parsed_exposure_object():
         name='my_exposure',
         resource_type=NodeType.Exposure,
         type=ExposureType.Analysis,
-        owner=ExposureOwner(email='test@example.com', name='A Name'),
+        owner=Owner(email='test@example.com', name='A Name'),
         maturity=MaturityType.Low,
         url='https://example.com/analyses/1',
         description='my description',
