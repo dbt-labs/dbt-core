@@ -201,12 +201,16 @@ class TestSemver(unittest.TestCase):
             '1.1.0')
 
     def test__filter_installable(self):
-        assert filter_installable(
+        installable = filter_installable(
             ['1.1.0',  '1.2.0a1', '1.0.0','2.1.0-alpha','2.2.0asdf','2.1.0','2.2.0','2.2.0-fishtown-beta','2.2.0-2'],
             install_prerelease=True
-        ) == ['1.0.0', '1.1.0', '1.2.0a1','2.1.0-alpha','2.1.0','2.2.0asdf','2.2.0-fishtown-beta','2.2.0-2','2.2.0']
+        )
+        expected = ['1.0.0', '1.1.0', '1.2.0a1','2.1.0-alpha','2.1.0','2.2.0-2','2.2.0asdf','2.2.0-fishtown-beta','2.2.0']
+        assert installable == expected
 
-        assert filter_installable(
+        installable = filter_installable(
             ['1.1.0',  '1.2.0a1', '1.0.0','2.1.0-alpha','2.2.0asdf','2.1.0','2.2.0','2.2.0-fishtown-beta'],
             install_prerelease=False
-        ) == ['1.0.0', '1.1.0','2.1.0','2.2.0']
+        )
+        expected = ['1.0.0', '1.1.0','2.1.0','2.2.0']
+        assert installable == expected
