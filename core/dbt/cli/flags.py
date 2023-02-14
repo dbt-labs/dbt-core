@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
-from pathlib import Path
 from typing import Set, List
 
 from click import Context, get_current_context, BadOptionUsage
@@ -14,9 +13,7 @@ from click.core import ParameterSource
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
 from dbt.helper_types import WarnErrorOptions
-from dbt.config.project import PartialProject
-from dbt.exceptions import DbtProjectError
-from dbt.cli.resolvers import default_project_dir
+from dbt.cli.resolvers import default_project_dir, default_log_path
 
 
 if os.name != "nt":
@@ -135,22 +132,9 @@ class Flags:
 
         # Default LOG_PATH from PROJECT_DIR, if available.
         if getattr(self, "LOG_PATH", None) is None:
-            log_path = "logs"
-            # If available, set LOG_PATH from log-path in dbt_project.yml
-            # Known limitations:
-            #  1. Using PartialProject here, so no jinja rendering of log-path.
-            #  2. Programmatic invocations of the cli via dbtRunner may pass a Project object directly,
-            #     which is not being used here to extract log-path.
             project_dir = getattr(self, "PROJECT_DIR", default_project_dir())
-            try:
-                partial = PartialProject.from_project_root(
-                    project_dir, verify_version=getattr(self, "VERSION_CHECK", True)
-                )
-                log_path = Path(project_dir) / partial.project_dict.get("log-path", log_path)
-            except DbtProjectError:
-                pass
-
-            object.__setattr__(self, "LOG_PATH", log_path)
+            version_check = getattr(self, "VERSION_CHECK", True)
+            object.__setattr__(self, "LOG_PATH", default_log_path(project_dir, version_check))
 
         # Support console DO NOT TRACK initiave
         if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes"):

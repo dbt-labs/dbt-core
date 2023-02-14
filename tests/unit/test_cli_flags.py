@@ -2,6 +2,7 @@ import pytest
 
 import click
 from multiprocessing import get_context
+from pathlib import Path
 from typing import List
 
 from dbt.cli.main import cli
@@ -42,7 +43,7 @@ class TestFlags:
     def test_log_path_default(self, run_context):
         flags = Flags(run_context)
         assert hasattr(flags, "LOG_PATH")
-        assert getattr(flags, "LOG_PATH") == "logs"
+        assert getattr(flags, "LOG_PATH") == Path("logs")
 
     @pytest.mark.parametrize(
         "set_stats_param,do_not_track,expected_anonymous_usage_stats",
