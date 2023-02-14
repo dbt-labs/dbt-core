@@ -19,6 +19,7 @@ def get_rendered_model_config(**updates):
         "schema": None,
         "alias": None,
         "enabled": True,
+        "group": None,
         "materialized": "view",
         "pre-hook": [],
         "post-hook": [],
@@ -47,6 +48,7 @@ def get_unrendered_model_config(**updates):
 def get_rendered_seed_config(**updates):
     result = {
         "enabled": True,
+        "group": None,
         "materialized": "seed",
         "persist_docs": {},
         "pre-hook": [],
@@ -84,6 +86,7 @@ def get_rendered_snapshot_config(**updates):
         "schema": None,
         "alias": None,
         "enabled": True,
+        "group": None,
         "materialized": "snapshot",
         "pre-hook": [],
         "post-hook": [],
@@ -119,6 +122,7 @@ def get_unrendered_snapshot_config(**updates):
 def get_rendered_tst_config(**updates):
     result = {
         "enabled": True,
+        "group": None,
         "materialized": "test",
         "tags": [],
         "severity": "ERROR",

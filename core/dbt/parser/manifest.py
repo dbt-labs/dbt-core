@@ -874,6 +874,13 @@ class ManifestLoader:
     # node, and updates 'depends_on.nodes' with the unique id
     def process_metrics(self, config: RuntimeConfig):
         current_project = config.project_name
+        group_names = {group.name for group in self.manifest.groups.values()}
+        for metric in self.manifest.metrics.values():
+            if metric.config.group and metric.config.group not in group_names:
+                raise dbt.exceptions.DbtInternalError(
+                    f"Invalid group '{metric.config.group}', expected one of {sorted(list(group_names))}"
+                )
+
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
@@ -985,6 +992,15 @@ class ManifestLoader:
                     self.manifest.add_node_nofile(node)
 
         self.manifest.rebuild_ref_lookup()
+
+        # Validate that any configured groups on nodes exist in manifest
+        group_names = {group.name for group in self.manifest.groups.values()}
+        for node in self.manifest.nodes.values():
+            if node.config.group and node.config.group not in group_names:
+                raise dbt.exceptions.ParsingError(
+                    f"Invalid group '{node.config.group}', expected one of {sorted(list(group_names))}",
+                    node=node,
+                )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
