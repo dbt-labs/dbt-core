@@ -293,6 +293,8 @@ class TestPreviousVersionState:
         state_path = os.path.join(project.test_data_dir, f"state/v{compare_manifest_version}")
         cli_args = [
             "list",
+            "--resource-types",
+            "model",
             "--select",
             "state:modified",
             "--state",
@@ -300,11 +302,7 @@ class TestPreviousVersionState:
         ]
         if expect_pass:
             results = run_dbt(cli_args, expect_pass=expect_pass)
-            # We have different numbers of nodes in older versions
-            if compare_manifest_version < 7:
-                assert len(results) == 5
-            else:
-                assert len(results) == 1
+            assert len(results) == 0
         else:
             with pytest.raises(IncompatibleSchemaError):
                 run_dbt(cli_args, expect_pass=expect_pass)
