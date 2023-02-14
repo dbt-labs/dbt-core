@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix previous state tests and disabled exposures, metrics
+time: 2023-02-13T17:07:23.185679-05:00
+custom:
+  Author: gshank
+  Issue: 6752 6753

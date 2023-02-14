@@ -143,8 +143,7 @@ jobs:
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
 
-    secrets:
-      FISHTOWN_BOT_PAT: ${{ secrets.FISHTOWN_BOT_PAT }}
+    secrets: inherit
 
   log-outputs-bump-version-generate-changelog:
     name: "[Log output] Bump package version, Generate changelog"

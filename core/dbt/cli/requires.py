@@ -1,13 +1,16 @@
+from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter
-from dbt.flags import set_flags
+from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.functions import setup_event_logger
+from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
+from dbt.events.types import MainReportVersion, MainReportArgs, MainTrackingUserState
 from dbt.exceptions import DbtProjectError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
-from dbt.tracking import initialize_from_flags, track_run
+from dbt.tracking import active_user, initialize_from_flags, track_run
+from dbt.utils import cast_dict_to_dict_of_strings
 
 from click import Context
 from functools import update_wrapper
@@ -36,6 +39,14 @@ def preflight(func):
             flags.USE_COLORS,
             flags.DEBUG,
         )
+
+        # Now that we have our logger, fire away!
+        fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
+        flags_dict_str = cast_dict_to_dict_of_strings(get_flag_dict())
+        fire_event(MainReportArgs(args=flags_dict_str))
+
+        if active_user is not None:  # mypy appeasement, always true
+            fire_event(MainTrackingUserState(user_state=active_user.state()))
 
         # Profiling
         if flags.RECORD_TIMING_INFO:

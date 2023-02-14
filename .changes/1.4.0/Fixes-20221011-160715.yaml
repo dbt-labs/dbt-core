@@ -1,6 +1,0 @@
-kind: Fixes
-body: check length of args of python model function before accessing it
-time: 2022-10-11T16:07:15.464093-04:00
-custom:
-  Author: chamini2
-  Issue: "6041"

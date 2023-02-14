@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add mypy configs so `mypy` passes from CLI
-time: 2022-10-05T12:03:10.061263-07:00
-custom:
-  Author: max-sixty
-  Issue: "5983"

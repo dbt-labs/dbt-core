@@ -4,6 +4,7 @@ headerPath: header.tpl.md
 versionHeaderPath: ""
 changelogPath: CHANGELOG.md
 versionExt: md
+envPrefix: "CHANGIE_"
 versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: '### {{.Kind}}'
 changeFormat: |-
@@ -87,15 +88,21 @@ custom:
 
 footerFormat: |
   {{- $contributorDict := dict }}
-  {{- /* any names added to this list should be all lowercase for later matching purposes */}}
-  {{- $core_team := list "michelleark" "peterallenwebb" "emmyoop" "nathaniel-may" "gshank" "leahwicz" "chenyulinx" "stu-k" "iknox-fa" "versusfacit" "mcknight-42" "jtcohen6" "aranke" "dependabot[bot]" "snyk-bot" "colin-rogers-dbt" }}
+  {{- /* ensure all names in this list are all lowercase for later matching purposes */}}
+  {{- $core_team := splitList " " .Env.CORE_TEAM }}
+  {{- /* ensure we always skip snyk and dependabot in addition to the core team */}}
+  {{- $maintainers := list "dependabot[bot]" "snyk-bot"}}
+  {{- range $team_member := $core_team }}
+    {{- $team_member_lower := lower $team_member }}
+    {{- $maintainers = append $maintainers $team_member_lower }}
+  {{- end }}
   {{- range $change := .Changes }}
     {{- $authorList := splitList " " $change.Custom.Author }}
     {{- /* loop through all authors for a single changelog */}}
     {{- range $author := $authorList }}
       {{- $authorLower := lower $author }}
       {{- /* we only want to include non-core team contributors */}}
-      {{- if not (has $authorLower $core_team)}}
+      {{- if not (has $authorLower $maintainers)}}
         {{- $changeList := splitList " " $change.Custom.Author }}
           {{- $IssueList := list }}
           {{- $changeLink := $change.Kind }}

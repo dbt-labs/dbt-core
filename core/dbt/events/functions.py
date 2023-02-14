@@ -4,8 +4,7 @@ from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
-from dbt.flags import get_flags
-import dbt.flags as flags_module
+from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
 import json
@@ -23,7 +22,7 @@ def setup_event_logger(log_path: str, log_format: str, use_colors: bool, debug: 
     cleanup_event_logger()
     make_log_dir_if_missing(log_path)
 
-    if get_flags().ENABLE_LEGACY_LOGGER:
+    if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(_get_logbook_log_config(debug))
     else:
         EVENT_MANAGER.add_logger(_get_stdout_config(log_format, debug, use_colors))
@@ -43,12 +42,18 @@ def setup_event_logger(log_path: str, log_format: str, use_colors: bool, debug: 
 
 
 def _get_stdout_config(log_format: str, debug: bool, use_colors: bool) -> LoggerConfig:
+    flags = get_flags()
     fmt = LineFormat.PlainText
     if log_format == "json":
         fmt = LineFormat.Json
     elif debug:
         fmt = LineFormat.DebugText
     level = EventLevel.DEBUG if debug else EventLevel.INFO
+    # We don't have access to these values when we need to setup the default stdout logger!
+    log_cache_events = (
+        bool(flags.LOG_CACHE_EVENTS) if hasattr(flags, "LOG_CACHE_EVENTS") else False
+    )
+    quiet = bool(flags.QUIET) if hasattr(flags, "QUIET") else False
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -57,9 +62,9 @@ def _get_stdout_config(log_format: str, debug: bool, use_colors: bool) -> Logger
         scrubber=env_scrubber,
         filter=partial(
             _stdout_filter,
-            bool(flags_module.LOG_CACHE_EVENTS),
+            log_cache_events,
             debug,
-            bool(flags_module.QUIET),
+            quiet,
             log_format,
         ),
         output_stream=sys.stdout,
@@ -124,10 +129,11 @@ def cleanup_event_logger():
 # currently fire before logs can be configured by setup_event_logger(), we
 # create a default configuration with default settings and no file output.
 EVENT_MANAGER: EventManager = EventManager()
+# Problem: This needs to be set *BEFORE* we've resolved any flags (even CLI params)
 EVENT_MANAGER.add_logger(
-    _get_logbook_log_config(flags_module.DEBUG)  # type: ignore
-    if flags_module.ENABLE_LEGACY_LOGGER
-    else _get_stdout_config(flags_module.LOG_FORMAT, flags_module.DEBUG, flags_module.USE_COLORS)  # type: ignore
+    _get_logbook_log_config(debug=False)  # type: ignore
+    if ENABLE_LEGACY_LOGGER
+    else _get_stdout_config(log_format="text", debug=False, use_colors=True)  # type: ignore
 )
 
 # This global, and the following two functions for capturing stdout logs are
