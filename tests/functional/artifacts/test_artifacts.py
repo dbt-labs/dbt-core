@@ -428,6 +428,7 @@ def verify_run_results(project, expected_run_results, start_time, run_results_sc
 class BaseVerifyProject:
     @pytest.fixture(scope="class", autouse=True)
     def setup(self, project):
+        dbt.flags.STORE_FAILURES = False
         alternate_schema_name = project.test_schema + "_test"
         project.create_test_schema(schema_name=alternate_schema_name)
         os.environ["DBT_ENV_CUSTOM_ENV_env_key"] = "env_value"
