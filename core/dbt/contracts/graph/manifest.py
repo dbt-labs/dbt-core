@@ -1092,7 +1092,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def add_group(self, source_file: SchemaSourceFile, group: Group):
         _check_duplicates(group, self.groups)
         self.groups[group.unique_id] = group
-        source_file.metrics.append(group.unique_id)
+        source_file.groups.append(group.unique_id)
 
     def add_disabled_nofile(self, node: GraphMemberNode):
         # There can be multiple disabled nodes for the same unique_id

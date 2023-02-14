@@ -754,10 +754,10 @@ class PartialParsing:
                 self.delete_schema_group(schema_file, group)
                 self.merge_patch(schema_file, dict_key, group)
         if group_diff["deleted"]:
-            for metric in group_diff["deleted"]:
+            for group in group_diff["deleted"]:
                 self.delete_schema_group(schema_file, group)
         if group_diff["added"]:
-            for metric in group_diff["added"]:
+            for group in group_diff["added"]:
                 self.merge_patch(schema_file, dict_key, group)
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
