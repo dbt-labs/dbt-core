@@ -378,6 +378,18 @@ class Compiler:
                 node,
             )
 
+        # relation_name is set at parse time, except for tests without store_failures,
+        # but cli param can turn on store_failures, so we set here.
+        if (
+            node.resource_type == NodeType.Test
+            and node.relation_name is None
+            and node.is_relational
+        ):
+            adapter = get_adapter(self.config)
+            relation_cls = adapter.Relation
+            relation_name = str(relation_cls.create_from(self.config, node))
+            node.relation_name = relation_name
+
         node.compiled = True
 
         return node

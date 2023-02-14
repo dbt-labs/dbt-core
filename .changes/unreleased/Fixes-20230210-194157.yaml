@@ -1,0 +1,6 @@
+kind: Fixes
+body: Set relation_name in test nodes at compile time
+time: 2023-02-10T19:41:57.386766-05:00
+custom:
+  Author: gshank
+  Issue: "6930"
