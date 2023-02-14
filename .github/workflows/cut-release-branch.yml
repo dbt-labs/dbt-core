@@ -31,8 +31,7 @@ permissions:
 jobs:
   cut_branch:
     name: "Cut branch and clean up main for dbt-core"
-    # TODO: update to point at `main` once testing is complete
-    uses: dbt-labs/actions/.github/workflows/cut-release-branch.yaml@er/ct-495-cleanup
+    uses: dbt-labs/actions/.github/workflows/cut-release-branch.yaml@main
     with:
       version_to_bump_main: ${{ inputs.version_to_bump_main }}
       new_branch_name: ${{ inputs.new_branch_name }}
