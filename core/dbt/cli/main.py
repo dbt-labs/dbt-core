@@ -83,6 +83,9 @@ def handle_and_check(args):
 @p.fail_fast
 @p.log_cache_events
 @p.log_format
+@p.log_format_file
+@p.log_level
+@p.log_level_file
 @p.log_path
 @p.macro_debugging
 @p.partial_parse
@@ -93,6 +96,7 @@ def handle_and_check(args):
 @p.single_threaded
 @p.static_parser
 @p.use_colors
+@p.use_colors_file
 @p.use_experimental_parser
 @p.version
 @p.version_check

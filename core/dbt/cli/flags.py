@@ -130,6 +130,11 @@ class Flags:
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)
         object.__setattr__(self, "MP_CONTEXT", get_context("spawn"))
 
+        # Apply the lead/follow relationship between some parameters
+        self._override_if_set("USE_COLORS", "USE_COLORS_FILE", params_assigned_from_default)
+        self._override_if_set("LOG_LEVEL", "LOG_LEVEL_FILE", params_assigned_from_default)
+        self._override_if_set("LOG_FORMAT", "LOG_FORMAT_FILE", params_assigned_from_default)
+
         # Default LOG_PATH from PROJECT_DIR, if available.
         if getattr(self, "LOG_PATH", None) is None:
             log_path = "logs"
@@ -165,6 +170,12 @@ class Flags:
         )
         for param in params:
             object.__setattr__(self, param.lower(), getattr(self, param))
+
+    # If the value of the lead parameter was set explicitly, apply the value to follow,
+    # unless follow was also set explicitly.
+    def _override_if_set(self, lead: str, follow: str, defaulted: set[str]) -> None:
+        if lead.lower() not in defaulted and follow.lower() in defaulted:
+            object.__setattr__(self, follow.upper(), getattr(self, lead.upper(), None))
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))
