@@ -18,7 +18,7 @@ Here's what you came for:
 | 1.2 ✅ | July 2022    | Henry George | Built-in support for grants. Migrate cross-db macros into dbt-core / adapters. Improvements to metrics. | 100% |
 | 1.3 ✅ | October 2022 || Python models in dbt. More improvements to metrics. | 100% |
 | 1.4 ✅ | Jan || Behind-the-scenes improvements to technical interfaces. A real, documented Python API/library, with an improved CLI to wrap it. Further investments in structured logging. | 100% |
-| 1.5 ⚒️ | May || More internal improvements, the beginning Multi-project deployments and Materialized views | 95% |
+| 1.5 ⚒️ | May || More internal improvements, the beginning of Multi-project deployments and Materialized views | 95% |
 | 1.6 🌀 | Sep || A fuller story around stream processing : materialized tests, managed sources, etc. | 75% |
 | 1.7 💡 | Jan 2024 || 2024? That's becoming ridiculous. Is that time for a v2? Or can we keep pushing on v1? | 25% |
 
