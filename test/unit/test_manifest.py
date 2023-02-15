@@ -427,11 +427,13 @@ class ManifestTest(unittest.TestCase):
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_exposures = flat_graph['exposures']
+        flat_groups = flat_graph['groups']
         flat_metrics = flat_graph['metrics']
         flat_nodes = flat_graph['nodes']
         flat_sources = flat_graph['sources']
-        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources', 'metrics']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'groups', 'nodes', 'sources', 'metrics']))
         self.assertEqual(set(flat_exposures), set(self.exposures))
+        self.assertEqual(set(flat_groups), set(self.groups))
         self.assertEqual(set(flat_metrics), set(self.metrics))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         self.assertEqual(set(flat_sources), set(self.sources))
@@ -843,7 +845,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['exposures', 'metrics', 'nodes', 'sources']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'groups', 'metrics', 'nodes', 'sources']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
         for node in flat_nodes.values():
