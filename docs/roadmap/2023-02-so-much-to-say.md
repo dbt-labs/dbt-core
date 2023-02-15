@@ -1,25 +1,26 @@
 # dbt Core: So much to say (February 2023)
 
-We're back, and we have way more to say than time to write it down. Is it a good thing? Maybe?
+We're back, and there's so much to say! So much that if we're not mindful, we may end-up in short novela territory in no time. Nobody has the patience to read that, so we will try to be brief (*he writes mostly to convince himself*).
 
 Since last August, we:
-- Released dbt Core v1.3 and v1.4 - with Python models among other goodness
+- Released dbt Core v1.3, unleashing Python models onto the world. The adoption has met our expectations, we are still gathering feedback on where to go next
+- Released dbt Core v1.4, reworking a lot of the internals, paving the way to a saner experience contributing to dbt core (for us and all contributors) and a faster development time 
+- Started workong on dbt Core v1.5, continuing the work started on internals in v1.4, but also adding fun bits like Materialized Views and 
 - Something about Transform?
-- ...
 
-Let's cut to the chase
-
-This update is going to be a touch shorter, as we have many fewer surprises to share. That's a good thing. We've been talking more in public about what we're building: on [the blog](https://www.getdbt.com/blog/), on [the other (cooler) blog](https://docs.getdbt.com/blog), at [Staging](https://www.getdbt.com/blog/staging-highlights-the-latest-from-dbt-labs/), and in [GitHub discussions](https://github.com/dbt-labs/dbt-core/discussions). And, while the meta conceit was good once ("welcome to my mind, it's an improvised play in four acts, how's that for stream[-of-consciousness] transformation"), I don't want to risk overdoing it.
+As always, to keep track of what's happening between these roadmap updates, the places to be are [the blog](https://www.getdbt.com/blog/), [the other (cooler) blog](https://docs.getdbt.com/blog), [Staging](https://www.getdbt.com/blog/staging-highlights-the-latest-from-dbt-labs/), and the [GitHub discussions](https://github.com/dbt-labs/dbt-core/discussions). 
 
 Here's what you came for:
 
 | Version | When          | Namesake<sup>a</sup>      | Stuff | Confidence<sup>b</sup>  |
 | ------- | ------------- | -------------- | ----- | ------------ |
-| 1.1 ✅   | April        | Gloria Casarez | Testing framework for dbt-core + adapters. Tools and processes for sustainable OSS maintenance. | 100% |
-| 1.2 ✅   | July         | Henry George   | Built-in support for grants. Migrate cross-db macros into dbt-core / adapters. Improvements to metrics. | 100% |
-| 1.3 🌀   | October      |                | Python models in dbt. More improvements to metrics. (Other things, too—but those are the main events.) | 95% |
-| 1.4 ⚒️    | Jan 2023     |                | Behind-the-scenes improvements to technical interfaces. A real, documented Python API/library, with an improved CLI to wrap it. Further investments in structured logging. | 80% |
-| 1.5+ 💡  | Next year<sup>c</sup> |                | Multi-project deployments: split up the monolith. The same DAG, more active: external orchestration. Python in dbt: next steps. Start imagining dbt Core v2. | 50% |
+| 1.1 ✅   | April 2022   | Gloria Casarez | Testing framework for dbt-core + adapters. Tools and processes for sustainable OSS maintenance. | 100% |
+| 1.2 ✅   | July 2022    | Henry George   | Built-in support for grants. Migrate cross-db macros into dbt-core / adapters. Improvements to metrics. | 100% |
+| 1.3 🌀   | October 2022 |                | Python models in dbt. More improvements to metrics. (Other things, too—but those are the main events.) | 95% |
+| 1.4 ⚒️    | Jan |                | Behind-the-scenes improvements to technical interfaces. A real, documented Python API/library, with an improved CLI to wrap it. Further investments in structured logging. | 80% |
+| 1.5+ 💡  | May |                | Multi-project deployments: split up the monolith. The same DAG, more active: external orchestration. Python in dbt: next steps. Start imagining dbt Core v2. | 50% |
+| 1.6 | 
+| 1.7 | 
 
 `updated_at: 2023-02-15`
 
@@ -33,24 +34,6 @@ Here's what you came for:
 
 Hopefully, you're already well aware of, and happily making use of, the capabilities that shipped in dbt Core v1.1 and v1.2 earlier this year. If you're not, the [upgrade guides](https://docs.getdbt.com/guides/migration/versions) are a good place to get up to speed.
 
-## v1.3 (October): Coalesce
-
-I got to see a very small number of you a few months ago at a London dbt meetup, where I presented May's edition of roadmap. I'm looking forward—we're all (!) looking forward—to seeing and talking with many more of you in October for [Coalesce](https://coalesce.getdbt.com/). For those who are able and comfortable to make the trip to New Orleans, London, or Sydney—and for all the many more who are planning on a "classic Coalesce" experience, from the comfort of your laptop—we're very excited to have you.
-
-The big thing coming in dbt Core v1.3 is support for Python models. You already knew that. All the details are in [the beta docs](https://docs.getdbt.com/docs/building-a-dbt-project/building-models/python-models), so give 'em a read now if you haven't yet.
-
-There are a couple of FAQs (Frequently Associated Qualms) that I want to address, here and now, in case you're thinking one of them:
-
-**Will I need to know Python to start using dbt?** Not at all. At the same time, if you don't know it, and want to learn, that's great! The open source Python-for-data ecosystem is powerful, and often also overwhelming. We'll be creating resources to help light the way, plus highlighting guides, walkthroughs, and recommendations made by members of the community.
-
-**Is now the time to start experimenting with advanced statistical processing, predictive analytics, …?** Maybe! Or maybe not. Developing a solid, foundational set of data models should always come first. Deeply understand your data. Use it to power reliable analytical reporting. Whether you're ready to take the next step now or later, dbt is here to make it possible.
-
-**Does adding Python fundamentally change the nature of dbt Core?** Honestly, yes and no.
-
-- **No:** For all the SQL you're already writing and running successfully, we think you should keep it that way. SQL remains the most expedient and accessible way to write most forms of data transformation. We are *not* going to stop investing in dbt's support for SQL—and in Jinja as its templating engine, for the foreseeable future. (dbt-core v1.3 also includes a long-awaited upgrade to Jinja3, which should help folks installing alongside other Jinja-powered tools.)
-- **Yes:** Adding support for Python has clarified our thinking on multilingual dbt. It's helped us realize that the real value of dbt is not in Jinja-templated SQL. (Anyone can build that in a weekend; many have.) It's the framework, the environment-aware workflow, the DAG, the integrated testing and documentation—more things than I can name here. That's more language-agnostic than you might expect. At the same time, each language brings its strengths; there will be things you can do in Python that you cannot do in Jinja-SQL, and vice versa.
-
-Note that, while Python is the main event, it's not the only new thing coming in v1.3. Every release includes a bunch of exciting community contributions, and this one's got [something long awaited](https://docs.getdbt.com/reference/resource-configs/docs#custom-node-colors?version=1.3). We're also making improvements to metrics to support the launch of the **dbt Semantic Layer**. That's been a *huge* initiative, long in the works, and a long time coming. It's not my place to offer spoilers. I recommend you check out [Drew's blog](https://www.getdbt.com/blog/dbt-semantic-layer/), if you haven't already, and [join us for the show](https://coalesce.getdbt.com/).
 
 ## v1.4 (January): For us, for you, for Core
 
