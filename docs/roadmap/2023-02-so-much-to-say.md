@@ -1,18 +1,18 @@
 # dbt Core: So much to say (February 2023)
 
-We're back, and there's so much to say! So much that if we're not mindful, we may end-up in short novela territory in no time. Nobody has the patience to read that, so we will try to be brief (*he writes mostly to convince himself*).
+We're back, and there's so much to say! So much that if we're not mindful, we may end-up in short novela territory in no time. Nobody has the patience to read that, so we will do the opposite this time: minimalism. But we will link to wherever more details can be found for each item!
 
 Since last August, we:
-- Released dbt Core v1.3, unleashing Python models onto the world. The adoption has met our expectations, we are still gathering feedback on where to go next
-- Released dbt Core v1.4, reworking a lot of the internals, paving the way to a saner experience contributing to dbt core (for us and all contributors) and a faster development time 
-- Started workong on dbt Core v1.5, continuing the work started on internals in v1.4, pushing a bit more on getting the issues and PRs in good shape, but also getting started on "small" things multi-project deployments, or streaming support via materialized views. Small stuff. 
+- Released dbt Core v1.3, unleashing Python models onto the world. The adoption has met our expectations, we are still gathering feedback on where to go next - get in touch!
+- Released dbt Core v1.4, reworking a lot of the internals, paving the way to a saner experience for contributing to dbt core (for us and all contributors)
+- Started working on dbt Core v1.5, continuing the effort started on internals in v1.4, but also getting started on "small" things like multi-project deployments, or streaming support via materialized views. Small stuff. 
 - Something about Transform?
 
-As always, to keep track of what's happening between these roadmap updates, the places to be are [the blog](https://www.getdbt.com/blog/), [the other (cooler) blog](https://docs.getdbt.com/blog), [Staging](https://www.getdbt.com/blog/staging-highlights-the-latest-from-dbt-labs/), and the [GitHub discussions](https://github.com/dbt-labs/dbt-core/discussions). 
+As always, to keep track of what's happening between these roadmap updates, the places to be are [the blog](https://www.getdbt.com/blog/), [the other (cooler) blog](https://docs.getdbt.com/blog), and the [GitHub discussions](https://github.com/dbt-labs/dbt-core/discussions). 
 
 Here's what you came for:
 
-| Version | When<sup>c</sup>| Namesake<sup>a</sup>| Stuff | Confidence<sup>b</sup> |
+| Version | When<sup>a</sup>| Namesake<sup>b</sup>| Stuff | Confidence<sup>c</sup> |
 | ------- | ------------- | -------------- | ----- | ------------ |
 | 1.1 ✅ | April 2022   | Gloria Casarez | Testing framework for dbt-core + adapters. Tools and processes for sustainable OSS maintenance. | 100% |
 | 1.2 ✅ | July 2022    | Henry George | Built-in support for grants. Migrate cross-db macros into dbt-core / adapters. Improvements to metrics. | 100% |
@@ -24,15 +24,15 @@ Here's what you came for:
 
 `updated_at: 2023-02-15`
 
-<sup>a</sup>Always a [phamous Philadelphian](https://en.wikipedia.org/wiki/List_of_people_from_Philadelphia), true to our roots. If you have ideas or recommendations for future version namesakes, my DMs are open :)
+<sup>a</sup>We're sticking with one minor version release per quarter, for the foreseeable. I haven't split those out here because, 6+ months into the future, we care more about the _what_ and the _why_ than the _when_. As we get closer, we'll be able to detail the more-specific functionality that might land in specific releases. Note too that these ideas, though we're already devoting meaningful time and effort to thinking through them, are not definite commitments.
 
-<sup>b</sup>dbt Core is, increasingly, a standard-bearer and direction-setter. We need to tell you about the things we're thinking about, long in advance of actually building them, because it has real impacts for the plans of data teams and the roadmaps of other tools in the ecosystem. We also know that we don't know now everything we will know a year from now. As new things come up, as you tell us which ones are important to you, we reserve the right to pivot. So we'll keep sharing our future plans, on an ongoing basis, wrapped in a confidence interval.
+<sup>b</sup>Always a [phamous Philadelphian](https://en.wikipedia.org/wiki/List_of_people_from_Philadelphia), true to our roots. If you have ideas or recommendations for future version namesakes, my DMs are open :)
 
-<sup>c</sup>We're sticking with one minor version release per quarter, for the foreseeable. I haven't split those out here because, 6+ months into the future, we care more about the _what_ and the _why_ than the _when_. As we get closer, we'll be able to detail the more-specific functionality that might land in specific releases. Note too that these ideas, though we're already devoting meaningful time and effort to thinking through them, are not definite commitments.
+<sup>c</sup>dbt Core is, increasingly, a standard-bearer and direction-setter. We need to tell you about the things we're thinking about, long in advance of actually building them, because it has real impacts for the plans of data teams and the roadmaps of other tools in the ecosystem. We also know that we don't know now everything we will know a year from now. As new things come up, as you tell us which ones are important to you, we reserve the right to pivot. So we'll keep sharing our future plans, on an ongoing basis, wrapped in a confidence interval.
 
 # Commentary
 
-Hopefully, you're already well aware of, and happily making use of, the capabilities that shipped in dbt Core v1.1 and v1.2 earlier this year. If you're not, the [upgrade guides](https://docs.getdbt.com/guides/migration/versions) are a good place to get up to speed.
+Don't forget to ~~like and subscribe~~ [upgrade](https://docs.getdbt.com/guides/migration/versions).
 
 ## v1.5 (May)
 
@@ -48,4 +48,4 @@ If you've been following our GitHub discussions, or the Analytics Engineering ro
 
 ---
 
-This covers mostly the big rocks. The pebbles and the sand, we have our hands full off, and most of the time it's fun.
+This covers the big rocks. The pebbles and the sand, we have our ~~mouths~~ hands full off, and most of the time it's fun.
