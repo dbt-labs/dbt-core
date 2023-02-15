@@ -76,6 +76,7 @@ def populated_node_config_dict():
         'grants': {},
         'packages': [],
         'docs': {'show': True},
+        'constraints_enabled': False,
     }
 
 
@@ -158,10 +159,12 @@ def base_parsed_model_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'deferred': False,
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
@@ -256,9 +259,11 @@ def complex_parsed_model_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {
             'a': {
                 'name': 'a',
@@ -314,6 +319,10 @@ def complex_parsed_model_object():
         },
     )
 
+
+{'enabled': True, 'tags': [], 'meta': {}, 'materialized': 'ephemeral', 'persist_docs': {}, 'quoting': {}, 'column_types': {'a': 'text'}, 'on_schema_change': 'ignore', 'grants': {}, 'packages': [], 'docs': {'show': True}, 'constraints_enabled': False, 'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}], 'pre-hook': []}
+
+{'column_types': {'a': 'text'}, 'enabled': True, 'materialized': 'ephemeral', 'persist_docs': {}, 'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}], 'pre-hook': [], 'quoting': {}, 'tags': [], 'on_schema_change': 'ignore', 'meta': {}, 'grants': {}, 'docs': {'show': True}, 'packages': []}
 
 def test_model_basic(basic_parsed_model_object, base_parsed_model_dict, minimal_parsed_model_dict):
     node = basic_parsed_model_object
@@ -450,6 +459,7 @@ def basic_parsed_seed_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'deferred': False,
@@ -540,6 +550,7 @@ def complex_parsed_seed_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'deferred': False,
@@ -796,9 +807,11 @@ def base_parsed_hook_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
@@ -873,9 +886,11 @@ def complex_parsed_hook_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {
             'a': {
                 'name': 'a',
@@ -1023,6 +1038,7 @@ def basic_parsed_schema_test_dict():
             'schema': 'dbt_test__audit',
         },
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {},
         'test_metadata': {
             'name': 'foo',
@@ -1099,6 +1115,7 @@ def complex_parsed_schema_test_dict():
             'schema': 'dbt_test__audit',
         },
         'docs': {'show': False},
+        'constraints_enabled': False,
         'columns': {
             'a': {
                 'name': 'a',
@@ -1219,6 +1236,7 @@ def basic_timestamp_snapshot_config_dict():
         'grants': {},
         'packages': [],
         'docs': {'show': True},
+        'constraints_enabled': False,
     }
 
 
@@ -1255,6 +1273,7 @@ def complex_timestamp_snapshot_config_dict():
         'grants': {},
         'packages': [],
         'docs': {'show': True},
+        'constraints_enabled': False,
     }
 
 
@@ -1315,6 +1334,7 @@ def basic_check_snapshot_config_dict():
         'grants': {},
         'packages': [],
         'docs': {'show': True},
+        'constraints_enabled': False,
     }
 
 
@@ -1351,6 +1371,7 @@ def complex_set_snapshot_config_dict():
         'grants': {},
         'packages': [],
         'docs': {'show': True},
+        'constraints_enabled': False,
     }
 
 
@@ -1460,9 +1481,11 @@ def basic_timestamp_snapshot_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
@@ -1600,9 +1623,11 @@ def basic_check_snapshot_dict():
             'meta': {},
             'grants': {},
             'docs': {'show': True},
+            'constraints_enabled': False,
         'packages': [],
         },
         'docs': {'show': True},
+        'constraints_enabled': False,
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},

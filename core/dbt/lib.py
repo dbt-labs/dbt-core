@@ -1,6 +1,5 @@
 import os
 from dbt.config.project import Project
-from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.contracts.results import RunningStatus, collect_timing_info
 from dbt.events.functions import fire_event
 from dbt.events.types import NodeCompiling, NodeExecuting
@@ -9,6 +8,8 @@ from dbt import flags
 from dbt.task.sql import SqlCompileRunner
 from dataclasses import dataclass
 from dbt.cli.resolvers import default_profiles_dir
+from dbt.config.runtime import load_profile, load_project
+from dbt.flags import set_from_args
 
 
 @dataclass
@@ -62,6 +63,12 @@ class SqlCompileRunnerNoIntrospection(SqlCompileRunner):
         return result
 
 
+def load_profile_project(project_dir, profile_name_override=None):
+    profile = load_profile(project_dir, {}, profile_name_override)
+    project = load_project(project_dir, False, profile, {})
+    return profile, project
+
+
 def get_dbt_config(project_dir, args=None, single_threaded=False):
     from dbt.config.runtime import RuntimeConfig
     import dbt.adapters.factory
@@ -74,10 +81,6 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
 
     profile_name = getattr(args, "profile", None)
 
-    profile_name = getattr(args, "profile", None)
-
-    profile_name = getattr(args, "profile", None)
-
     runtime_args = RuntimeArgs(
         project_dir=project_dir,
         profiles_dir=profiles_dir,
@@ -86,9 +89,8 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
         target=getattr(args, "target", None),
     )
 
-    profile = RuntimeConfig.collect_profile(args=runtime_args, profile_name=profile_name)
-    project_renderer = DbtProjectYamlRenderer(profile, None)
-    project = RuntimeConfig.collect_project(args=runtime_args, project_renderer=project_renderer)
+    set_from_args(runtime_args, None)
+    profile, project = load_profile_project(project_dir, profile_name)
     assert type(project) is Project
 
     config = RuntimeConfig.from_parts(project, profile, runtime_args)

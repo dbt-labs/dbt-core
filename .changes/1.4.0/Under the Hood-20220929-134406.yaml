@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Added flat_graph attribute the Manifest class's deepcopy() coverage
-time: 2022-09-29T13:44:06.275941-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "5809"
