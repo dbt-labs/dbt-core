@@ -116,6 +116,9 @@ A different sub-parser is called for each main dictionary key in the yaml.
 * 'exposures' - SchemaParser.parse\_exposures
 	* no 'patches'
 	* Manifest: exposures
+* 'groups' - SchemaParser.parse\_groups
+	* no 'patches'
+	* Manifest: groups
 
 # dbt Manifest
 

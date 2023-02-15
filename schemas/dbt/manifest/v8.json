@@ -8,6 +8,7 @@
     "docs",
     "exposures",
     "metrics",
+    "groups",
     "selectors"
   ],
   "properties": {
@@ -84,6 +85,13 @@
         "$ref": "#/definitions/Metric"
       },
       "description": "The metrics defined in the dbt project and its dependencies"
+    },
+    "groups": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Group"
+      },
+      "description": "The groups defined in the dbt project"
     },
     "selectors": {
       "type": "object",
@@ -179,7 +187,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], selectors: Mapping[str, Any], disabled: Optional[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric]]]], parent_map: Optional[Dict[str, List[str]]], child_map: Optional[Dict[str, List[str]]])",
+  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Optional[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric]]]], parent_map: Optional[Dict[str, List[str]]], child_map: Optional[Dict[str, List[str]]])",
   "definitions": {
     "ManifestMetadata": {
       "type": "object",
@@ -196,7 +204,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-14T21:54:19.556509Z"
+          "default": "2023-02-15T15:58:34.862418Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -207,7 +215,7 @@
               "type": "null"
             }
           ],
-          "default": "94c0abb0-a621-40a5-abe5-b7f2d26c3bd6"
+          "default": "577bb71e-6097-4b45-a229-fc47954b6fd9"
         },
         "env": {
           "type": "object",
@@ -413,7 +421,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.559374
+          "default": 1676476714.863889
         },
         "config_call_dict": {
           "type": "object",
@@ -998,7 +1006,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.561325
+          "default": 1676476714.864901
         },
         "config_call_dict": {
           "type": "object",
@@ -1362,7 +1370,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.562434
+          "default": 1676476714.8654652
         },
         "config_call_dict": {
           "type": "object",
@@ -1624,7 +1632,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.5636091
+          "default": 1676476714.8660212
         },
         "config_call_dict": {
           "type": "object",
@@ -1876,7 +1884,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.5646772
+          "default": 1676476714.8665721
         },
         "config_call_dict": {
           "type": "object",
@@ -2128,7 +2136,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.5657442
+          "default": 1676476714.867108
         },
         "config_call_dict": {
           "type": "object",
@@ -2375,7 +2383,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.5669792
+          "default": 1676476714.8677619
         },
         "config_call_dict": {
           "type": "object",
@@ -2650,7 +2658,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.569141
+          "default": 1676476714.8687968
         },
         "config_call_dict": {
           "type": "object",
@@ -3119,7 +3127,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.571127
+          "default": 1676476714.8697689
         },
         "config_call_dict": {
           "type": "object",
@@ -3516,7 +3524,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.572991
+          "default": 1676476714.871045
         }
       },
       "additionalProperties": false,
@@ -3631,7 +3639,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-14T21:54:19.552782Z"
+          "default": "2023-02-15T15:58:34.860278Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -3642,7 +3650,7 @@
               "type": "null"
             }
           ],
-          "default": "94c0abb0-a621-40a5-abe5-b7f2d26c3bd6"
+          "default": "577bb71e-6097-4b45-a229-fc47954b6fd9"
         },
         "env": {
           "type": "object",
@@ -3995,7 +4003,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.573476
+          "default": 1676476714.871335
         },
         "supported_languages": {
           "oneOf": [
@@ -4238,7 +4246,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.574655
+          "default": 1676476714.872013
         }
       },
       "additionalProperties": false,
@@ -4460,7 +4468,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676411659.575802
+          "default": 1676476714.8726609
         }
       },
       "additionalProperties": false,
@@ -4532,6 +4540,46 @@
       },
       "additionalProperties": true,
       "description": "MetricConfig(_extra: Dict[str, Any] = <factory>, enabled: bool = True)"
+    },
+    "Group": {
+      "type": "object",
+      "required": [
+        "name",
+        "resource_type",
+        "package_name",
+        "path",
+        "original_file_path",
+        "unique_id",
+        "owner"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "resource_type": {
+          "type": "string",
+          "enum": [
+            "group"
+          ]
+        },
+        "package_name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "original_file_path": {
+          "type": "string"
+        },
+        "unique_id": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/definitions/Owner"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Group(name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, owner: dbt.contracts.graph.unparsed.Owner)"
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",

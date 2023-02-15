@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Fixing target type exposure error
+time: 2023-02-10T08:46:47.72936-06:00
+custom:
+  Author: callum-mcdata
+  Issue: "6928"

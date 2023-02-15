@@ -1264,7 +1264,7 @@ def _process_metrics_for_node(
             invalid_target_fail_unless_test(
                 node=node,
                 target_name=target_metric_name,
-                target_kind="source",
+                target_kind="metric",
                 target_package=target_metric_package,
                 disabled=(isinstance(target_metric, Disabled)),
             )

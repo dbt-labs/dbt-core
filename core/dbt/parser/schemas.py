@@ -34,6 +34,7 @@ from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     Exposure,
     Metric,
+    Group,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -47,6 +48,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedExposure,
     UnparsedMetric,
     UnparsedSourceDefinition,
+    UnparsedGroup,
 )
 from dbt.exceptions import (
     CompilationError,
@@ -540,6 +542,11 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
             if "metrics" in dct:
                 metric_parser = MetricParser(self, yaml_block)
                 metric_parser.parse()
+
+            # parse groups
+            if "groups" in dct:
+                group_parser = GroupParser(self, yaml_block)
+                group_parser.parse()
 
 
 def check_format_version(file_path, yaml_dct) -> None:
@@ -1257,3 +1264,37 @@ class MetricParser(YamlReader):
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             self.parse_metric(unparsed)
+
+
+class GroupParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, NodeType.Group.pluralize())
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_group(self, unparsed: UnparsedGroup):
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        parsed = Group(
+            resource_type=NodeType.Group,
+            package_name=package_name,
+            path=path,
+            original_file_path=self.yaml.path.original_file_path,
+            unique_id=unique_id,
+            name=unparsed.name,
+            owner=unparsed.owner,
+        )
+
+        self.manifest.add_group(self.yaml.file, parsed)
+
+    def parse(self):
+        for data in self.get_key_dicts():
+            try:
+                UnparsedGroup.validate(data)
+                unparsed = UnparsedGroup.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+            self.parse_group(unparsed)

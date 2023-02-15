@@ -1105,6 +1105,18 @@ class Metric(GraphNode):
 
 
 # ====================================
+# Group node
+# ====================================
+
+
+@dataclass
+class Group(BaseNode):
+    name: str
+    owner: Owner
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Group]})
+
+
+# ====================================
 # Patches
 # ====================================
 
@@ -1172,6 +1184,7 @@ Resource = Union[
     GraphMemberNode,
     Documentation,
     Macro,
+    Group,
 ]
 
 TestNode = Union[
