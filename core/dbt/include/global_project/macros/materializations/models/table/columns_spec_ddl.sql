@@ -28,24 +28,27 @@
 {%- endmacro %}
 
 {% macro assert_columns_equivalent(sql) %}
-  {#- loop through user_provided_columns to get column names -#}
-    {%- set user_provided_columns = model['columns'] -%}
-    {%- set column_names_config_only = [] -%}
-    {%- for i in user_provided_columns -%}
-      {%- set col = user_provided_columns[i] -%}
-      {%- set col_name = col['name'] -%}
-      {%- set column_names_config_only = column_names_config_only.append(col_name) -%}
-    {%- endfor -%}
-    {%- set sql_file_provided_columns = get_columns_in_query(sql) -%}
+  {%- set sql_file_provided_columns = get_column_schema_from_query(sql) -%}
+  {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(model['columns'])) -%}
 
-    {#- uppercase both schema and sql file columns -#}
-    {%- set column_names_config_upper= column_names_config_only|map('upper')|join(',')  -%}
-    {%- set column_names_config_formatted = column_names_config_upper.split(',')  -%}
-    {%- set sql_file_provided_columns_upper = sql_file_provided_columns|map('upper')|join(',') -%}
-    {%- set sql_file_provided_columns_formatted = sql_file_provided_columns_upper.split(',') -%}
+  {%- set sql_file_provided_columns_formatted = format_columns(sql_file_provided_columns)  -%}
+  {%- set schema_file_provided_columns_formatted = format_columns(schema_file_provided_columns)  -%}
 
-    {%- if column_names_config_formatted != sql_file_provided_columns_formatted -%}
-      {%- do exceptions.raise_compiler_error('Please ensure the name, order, and number of columns in your `yml` file match the columns in your SQL file.\nSchema File Columns: ' ~ column_names_config_formatted ~ '\nSQL File Columns: ' ~ sql_file_provided_columns_formatted ~ ' ' ) %}
-    {%- endif -%}
+  {%- if sql_file_provided_columns_formatted != schema_file_provided_columns_formatted -%}
+    {%- do exceptions.raise_compiler_error('Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file.\nSchema File Columns: ' ~ sql_file_provided_columns_formatted ~ '\n\nSQL File Columns: ' ~ schema_file_provided_columns_formatted ~ ' ' ) %}
+  {%- endif -%}
 
 {% endmacro %}
+
+{% macro format_columns(columns) %}
+  {{ adapter.dispatch('format_columns', 'dbt')(columns) }}
+{%- endmacro %}
+
+{% macro default__format_columns(columns) -%}
+  {% set formatted_columns = [] %}
+  {% for column in columns %}
+    {%- set formatted_column = column.column.lower() ~ " " ~ column.dtype -%}
+    {%- do formatted_columns.append(formatted_column) -%}
+  {% endfor %}
+  {{ return(formatted_columns|join(', ')) }}
+{%- endmacro -%}

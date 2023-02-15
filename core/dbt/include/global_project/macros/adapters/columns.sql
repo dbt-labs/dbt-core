@@ -29,6 +29,19 @@
     limit 0
 {% endmacro %}
 
+
+{% macro get_empty_schema_sql(columns) -%}
+  {{ return(adapter.dispatch('get_empty_schema_sql', 'dbt')(columns)) }}
+{% endmacro %}
+
+{% macro default__get_empty_schema_sql(columns) %}
+    select
+    {% for i in columns %}
+      {%- set col = columns[i] -%}
+      cast(null as {{ col['data_type'] }}) as {{ col['name'] }}{{ ", " if not loop.last }}
+    {%- endfor -%}
+{% endmacro %}
+
 {% macro get_column_schema_from_query(select_sql) -%}
   {{ return(adapter.dispatch('get_column_schema_from_query', 'dbt')(select_sql)) }}
 {% endmacro %}
