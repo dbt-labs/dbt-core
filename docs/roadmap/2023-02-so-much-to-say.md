@@ -48,4 +48,4 @@ If you've been following our GitHub discussions, or the Analytics Engineering ro
 
 ---
 
-This covers the big rocks. The pebbles and the sand, we have our ~~mouths~~ hands full off, and most of the time it's fun.
+This covers the big rocks. The pebbles and the sand, we have our ~~mouths~~ hands full of, and most of the time it's fun.
