@@ -2,16 +2,15 @@
 drop table if exists {schema}.on_run_hook;
 
 create table {schema}.on_run_hook (
-    "test_state"            STRING, -- start|end
-    "target.dbname"    STRING,
-    "target.host"      STRING,
-    "target.name"      STRING,
-    "target.schema"    STRING,
-    "target.type"      STRING,
-    "target.user"      STRING,
-    "target.pass"      STRING,
-    "target.threads"   INTEGER,
-
-    "run_started_at"   STRING,
-    "invocation_id"    STRING
+    test_state       TEXT, -- start|end
+    target_dbname    TEXT,
+    target_host      TEXT,
+    target_name      TEXT,
+    target_schema    TEXT,
+    target_type      TEXT,
+    target_user      TEXT,
+    target_pass      TEXT,
+    target_threads   INTEGER,
+    run_started_at   TEXT,
+    invocation_id    TEXT
 );

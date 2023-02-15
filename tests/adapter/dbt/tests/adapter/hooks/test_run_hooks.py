@@ -66,22 +66,23 @@ class TestPrePostRunHooks(object):
 
     def get_ctx_vars(self, state, project):
         fields = [
-            "state",
-            "target.dbname",
-            "target.host",
-            "target.name",
-            "target.port",
-            "target.schema",
-            "target.threads",
-            "target.type",
-            "target.user",
-            "target.pass",
+            "test_state",
+            "target_dbname",
+            "target_host",
+            "target_name",
+            "target_schema",
+            "target_threads",
+            "target_type",
+            "target_user",
+            "target_pass",
             "run_started_at",
             "invocation_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
-        query = "select {field_list} from {schema}.on_run_hook where state = '{state}'".format(
-            field_list=field_list, schema=project.test_schema, state=state
+        query = (
+            "select {field_list} from {schema}.on_run_hook where test_state = '{state}'".format(
+                field_list=field_list, schema=project.test_schema, state=state
+            )
         )
 
         vals = project.run_sql(query, fetch="all")
@@ -106,16 +107,15 @@ class TestPrePostRunHooks(object):
     def check_hooks(self, state, project, host):
         ctx = self.get_ctx_vars(state, project)
 
-        assert ctx["state"] == state
-        assert ctx["target.dbname"] == "dbt"
-        assert ctx["target.host"] == host
-        assert ctx["target.name"] == "default"
-        assert ctx["target.port"] == 5432
-        assert ctx["target.schema"] == project.test_schema
-        assert ctx["target.threads"] == 4
-        assert ctx["target.type"] == "postgres"
-        assert ctx["target.user"] == "root"
-        assert ctx["target.pass"] == ""
+        assert ctx["test_state"] == state
+        assert ctx["target_dbname"] == "dbt"
+        assert ctx["target_host"] == host
+        assert ctx["target_name"] == "default"
+        assert ctx["target_schema"] == project.test_schema
+        assert ctx["target_threads"] == 4
+        assert ctx["target_type"] == "postgres"
+        assert ctx["target_user"] == "root"
+        assert ctx["target_pass"] == ""
 
         assert (
             ctx["run_started_at"] is not None and len(ctx["run_started_at"]) > 0

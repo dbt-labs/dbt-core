@@ -203,17 +203,16 @@ class TestHookRefs(BaseTestPrePost):
                             """
                         insert into {{this.schema}}.on_model_hook select
                         test_state,
-                        '{{ target.dbname }}' as "target_dbname",
-                        '{{ target.host }}' as "target_host",
-                        '{{ target.name }}' as "target.name",
-                        '{{ target.schema }}' as "target_schema",
-                        '{{ target.type }}' as "target_type",
-                        '{{ target.user }}' as "target_user",
-                        '{{ target.get("pass", "") }}' as "target_pass",
-                        {{ target.port }} as "target_port",
-                        {{ target.threads }} as "target_threads",
-                        '{{ run_started_at }}' as "run_started_at",
-                        '{{ invocation_id }}' as "invocation_id"
+                        '{{ target.dbname }}' as target_dbname,
+                        '{{ target.host }}' as target_host,
+                        '{{ target.name }}' as target_name,
+                        '{{ target.schema }}' as target_schema,
+                        '{{ target.type }}' as target_type,
+                        '{{ target.user }}' as target_user,
+                        '{{ target.get(pass, ) }}' as target_pass,
+                        {{ target.threads }} as target_threads,
+                        '{{ run_started_at }}' as run_started_at,
+                        '{{ invocation_id }}' as invocation_id
                     from {{ ref('post') }}""".strip()
                         ],
                     }
