@@ -209,11 +209,11 @@ class TestHookRefs(BaseTestPrePost):
                         '{{ target.schema }}' as target_schema,
                         '{{ target.type }}' as target_type,
                         '{{ target.user }}' as target_user,
-                        '{{ target.get(pass, ) }}' as target_pass,
+                        '{{ target.get(pass, "") }}' as target_pass,
                         {{ target.threads }} as target_threads,
                         '{{ run_started_at }}' as run_started_at,
                         '{{ invocation_id }}' as invocation_id
-                    from {{ ref('post') }}""".strip()
+                        from {{ ref('post') }}""".strip()
                         ],
                     }
                 },
