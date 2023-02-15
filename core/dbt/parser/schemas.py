@@ -3,7 +3,6 @@ import os
 import pathlib
 
 from abc import ABCMeta, abstractmethod
-from hashlib import md5
 from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
@@ -80,7 +79,7 @@ from dbt.parser.generic_test_builders import (
     TestBlock,
     Testable,
 )
-from dbt.utils import get_pseudo_test_path, coerce_dict_str
+from dbt.utils import get_pseudo_test_path, coerce_dict_str, md5
 
 
 TestDef = Union[str, Dict[str, Any]]
@@ -222,8 +221,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 return str(data)
 
         hashable_metadata = repr(get_hashable_md(test_metadata))
-        hash_string = "".join([name, hashable_metadata]).encode("utf-8")
-        test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
+        hash_string = "".join([name, hashable_metadata])
+        test_hash = md5(hash_string)[-HASH_LENGTH:]
 
         dct = {
             "alias": name,

@@ -1,5 +1,4 @@
 import os
-import hashlib
 from typing import List, Optional
 
 from dbt.clients import git, system
@@ -12,10 +11,11 @@ from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import EnsureGitInstalled, DepsUnpinned
+from dbt.utils import md5
 
 
 def md5sum(s: str):
-    return hashlib.md5(s.encode("latin-1")).hexdigest()
+    return md5(s, "latin-1")
 
 
 class GitPackageMixin:

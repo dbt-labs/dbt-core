@@ -12,7 +12,6 @@ from typing import (
 )
 from typing_extensions import Protocol, runtime_checkable
 
-import hashlib
 import os
 
 from dbt import flags, deprecations
@@ -30,7 +29,7 @@ from dbt.graph import SelectionSpec
 from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
-from dbt.utils import MultiDict
+from dbt.utils import MultiDict, md5
 from dbt.node_types import NodeType
 from dbt.config.selectors import SelectorDict
 from dbt.contracts.project import (
@@ -663,7 +662,7 @@ class Project:
         return partial.render(renderer)
 
     def hashed_name(self):
-        return hashlib.md5(self.project_name.encode("utf-8")).hexdigest()
+        return md5(self.project_name)
 
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:

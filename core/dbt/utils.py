@@ -10,6 +10,7 @@ import jinja2
 import json
 import os
 import requests
+import sys
 from tarfile import ReadError
 import time
 from pathlib import PosixPath, WindowsPath
@@ -252,16 +253,19 @@ def get_pseudo_hook_path(hook_name):
     return os.path.join(*path_parts)
 
 
-def md5(string):
-    return hashlib.md5(string.encode("utf-8")).hexdigest()
+def md5(string, charset="utf-8"):
+    if sys.version_info >= (3, 9):
+        return hashlib.md5(string.encode(charset), usedforsecurity=False).hexdigest()
+    else:
+        return hashlib.md5(string.encode(charset)).hexdigest()
 
 
 def get_hash(model):
-    return hashlib.md5(model.unique_id.encode("utf-8")).hexdigest()
+    return md5(model.unique_id)
 
 
 def get_hashed_contents(model):
-    return hashlib.md5(model.raw_code.encode("utf-8")).hexdigest()
+    return md5(model.raw_code)
 
 
 def flatten_nodes(dep_list):
