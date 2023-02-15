@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: functional tests run using click cli through dbtRunner
-time: 2022-12-14T11:20:48.521869-05:00
-custom:
-  Author: MichelleArk
-  Issue: "6096"
-  PR: "6387"

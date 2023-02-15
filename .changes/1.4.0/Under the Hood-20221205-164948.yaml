@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Consolidate ParsedNode and CompiledNode classes
-time: 2022-12-05T16:49:48.563583-05:00
-custom:
-  Author: gshank
-  Issue: "6383"
-  PR: "6384"

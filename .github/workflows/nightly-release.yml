@@ -68,7 +68,7 @@ jobs:
       - name: "Generate Nightly Release Version Number"
         id: nightly-release-version
         run: |
-          number="${{ steps.semver.outputs.version }}.dev${{ steps.current-date.outputs.date }}+nightly"
+          number="${{ steps.semver.outputs.version }}.dev${{ steps.current-date.outputs.date }}"
           echo "number=$number" >> $GITHUB_OUTPUT
 
       - name: "Audit Nightly Release Version And Parse Into Parts"
@@ -98,7 +98,7 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       sha: ${{ needs.aggregate-release-data.outputs.commit_sha }}
-      target_branch: ${{ needs.aggregate-release-data.outputs.release-branch }}
+      target_branch: ${{ needs.aggregate-release-data.outputs.release_branch }}
       version_number: ${{ needs.aggregate-release-data.outputs.version_number }}
       build_script_path: "scripts/build-dist.sh"
       env_setup_script_path: "scripts/env-setup.sh"
