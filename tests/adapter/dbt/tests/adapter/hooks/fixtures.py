@@ -50,7 +50,7 @@ macros__before_and_after = """
     '{{ target.schema }}',
     '{{ target.type }}',
     '{{ target.user }}',
-    '{{ target.get("pass", ) }}',
+    '{{ target.get("pass", "") }}',
     {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
@@ -95,7 +95,7 @@ models__hooks_configured = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\pass\\, \\"\\"") }}',\
+                '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -123,7 +123,7 @@ models__hooks_configured = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\"pass"\\, \\"\\") }}',\
+                '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -160,7 +160,7 @@ models__hooks_error = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\pass\\, \\"\\") }}',\
+                '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -188,7 +188,7 @@ models__hooks_error = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\pass\\, \\"\\") }}',\
+                '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -216,7 +216,7 @@ models__hooks_error = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\pass\\, \\"\\") }}',\
+                '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -231,7 +231,7 @@ select 3 as id
 models__hooks_kwargs = """
 {{
     config(
-        "pre_hook": "\
+        "pre_hook"="\
             insert into {{this.schema}}.on_model_hook (\
                 \\test_state\\,\
                 \\target_dbname\\,\
@@ -253,13 +253,13 @@ models__hooks_kwargs = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\pass\\, \\"\\") }}',\
+                '{{ target.get(\\"pass\\", \\"\\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
         )",
-        "post_hook": "\
+        "post_hook"="\
             insert into {{this.schema}}.on_model_hook (\
                 \\state\\,\
                 \\target_dbname\\,\
@@ -281,7 +281,7 @@ models__hooks_kwargs = """
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.get(\\pass\\, \\\\) }}',\
+                '{{ target.get(\\"pass\\", \\\\) }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -305,7 +305,7 @@ models__hooked = """
                 '{{ target.schema }}' as \\target_schema\\,\
                 '{{ target.type }}' as \\target_type\\,\
                 '{{ target.user }}' as \\target_user\\,\
-                '{{ target.get(\\pass\\, \\\\) }}' as \\target_pass\\,\
+                '{{ target.get(\\"pass\\", \\\\) }}' as \\target_pass\\,\
                 {{ target.port }} as \\target_port\\,\
                 {{ target.threads }} as \\target_threads\\,\
                 '{{ run_started_at }}' as \\run_started_at\\,\
