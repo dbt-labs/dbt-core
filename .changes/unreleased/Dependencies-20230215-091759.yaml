@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Revert hoisting dbt.cli.main into the dbt.name namespace
+time: 2023-02-15T09:17:59.04148-08:00
+custom:
+  Author: aranke
+  PR: ''
