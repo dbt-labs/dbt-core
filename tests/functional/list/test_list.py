@@ -71,6 +71,7 @@ class TestList:
                 "tags": [],
                 "config": {
                     "enabled": True,
+                    "group": None,
                     "materialized": "snapshot",
                     "post-hook": [],
                     "tags": [],
@@ -116,6 +117,7 @@ class TestList:
                 "tags": [],
                 "config": {
                     "enabled": True,
+                    "group": None,
                     "materialized": "view",
                     "post-hook": [],
                     "tags": [],
@@ -157,6 +159,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "ephemeral",
                         "post-hook": [],
                         "tags": [],
@@ -192,6 +195,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "incremental",
                         "post-hook": [],
                         "tags": [],
@@ -224,6 +228,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "view",
                         "post-hook": [],
                         "tags": [],
@@ -256,6 +261,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "view",
                         "post-hook": [],
                         "tags": [],
@@ -366,6 +372,7 @@ class TestList:
                 "tags": [],
                 "config": {
                     "enabled": True,
+                    "group": None,
                     "materialized": "seed",
                     "post-hook": [],
                     "tags": [],
@@ -412,6 +419,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
@@ -438,6 +446,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
@@ -467,6 +476,7 @@ class TestList:
                     "tags": [],
                     "config": {
                         "enabled": True,
+                        "group": None,
                         "materialized": "test",
                         "severity": "ERROR",
                         "store_failures": None,
