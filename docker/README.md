@@ -68,7 +68,7 @@ docker build \
  .
 ```
 
-To build an image named "my-third-party-dbt" that uses [Materilize third party adapter](https://github.com/MaterializeInc/materialize/tree/main/misc/dbt-materialize) and the latest release of `dbt-core`:
+To build an image named "my-third-party-dbt" that uses [Materialize third party adapter](https://github.com/MaterializeInc/materialize/tree/main/misc/dbt-materialize) and the latest release of `dbt-core`:
 ```
 cd dbt-core/docker
 docker build --tag my-third-party-dbt \
