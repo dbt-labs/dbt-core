@@ -88,20 +88,22 @@ class BaseTestPrePost(object):
     def get_ctx_vars(self, state, count, project):
         fields = [
             "test_state",
-            "target.dbname",
-            "target.host",
-            "target.name",
-            "target.schema",
-            "target.threads",
-            "target.type",
-            "target.user",
-            "target.pass",
+            "target_dbname",
+            "target_host",
+            "target_name",
+            "target_schema",
+            "target_threads",
+            "target_type",
+            "target_user",
+            "target_pass",
             "run_started_at",
             "invocation_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
-        query = "select {field_list} from {schema}.on_model_hook where state = '{state}'".format(
-            field_list=field_list, schema=project.test_schema, state=state
+        query = (
+            "select {field_list} from {schema}.on_model_hook where test_state = '{state}'".format(
+                field_list=field_list, schema=project.test_schema, state=state
+            )
         )
 
         vals = project.run_sql(query, fetch="all")
@@ -200,16 +202,16 @@ class TestHookRefs(BaseTestPrePost):
                         "post-hook": [
                             """
                         insert into {{this.schema}}.on_model_hook select
-                        state,
-                        '{{ target.dbname }}' as "target.dbname",
-                        '{{ target.host }}' as "target.host",
+                        test_state,
+                        '{{ target.dbname }}' as "target_dbname",
+                        '{{ target.host }}' as "target_host",
                         '{{ target.name }}' as "target.name",
-                        '{{ target.schema }}' as "target.schema",
-                        '{{ target.type }}' as "target.type",
-                        '{{ target.user }}' as "target.user",
-                        '{{ target.get("pass", "") }}' as "target.pass",
-                        {{ target.port }} as "target.port",
-                        {{ target.threads }} as "target.threads",
+                        '{{ target.schema }}' as "target_schema",
+                        '{{ target.type }}' as "target_type",
+                        '{{ target.user }}' as "target_user",
+                        '{{ target.get("pass", "") }}' as "target_pass",
+                        {{ target.port }} as "target_port",
+                        {{ target.threads }} as "target_threads",
                         '{{ run_started_at }}' as "run_started_at",
                         '{{ invocation_id }}' as "invocation_id"
                     from {{ ref('post') }}""".strip()
