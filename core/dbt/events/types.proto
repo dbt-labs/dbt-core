@@ -207,7 +207,7 @@ message ProfileWrittenWithTargetTemplateYAML {
 
 message ProfileWrittenWithTargetTemplateYAMLMsg {
     EventInfo info = 1;
-    ProfileWrittenWithTargetTemplateYAMLMsg data = 2;
+    ProfileWrittenWithTargetTemplateYAML data = 2;
 }
 
 // A022
@@ -1449,7 +1449,7 @@ message LogModelResult {
     string status = 3;
     int32 index = 4;
     int32 total = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
 }
 
 message LogModelResultMsg {
