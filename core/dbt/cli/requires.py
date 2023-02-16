@@ -30,12 +30,7 @@ def preflight(func):
 
         # Logging
         # N.B. Legacy logger is not supported
-        setup_event_logger(
-            flags.LOG_PATH,
-            flags.LOG_FORMAT,
-            flags.USE_COLORS,
-            flags.DEBUG,
-        )
+        setup_event_logger(flags)
 
         # Profiling
         if flags.RECORD_TIMING_INFO:
