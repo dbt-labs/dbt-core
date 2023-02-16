@@ -159,7 +159,7 @@ class Flags:
 
     # If the value of the lead parameter was set explicitly, apply the value to follow,
     # unless follow was also set explicitly.
-    def _override_if_set(self, lead: str, follow: str, defaulted: set[str]) -> None:
+    def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:
         if lead.lower() not in defaulted and follow.lower() in defaulted:
             object.__setattr__(self, follow.upper(), getattr(self, lead.upper(), None))
 
