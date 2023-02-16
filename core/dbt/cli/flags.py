@@ -56,7 +56,7 @@ def convert_config(config_name, config_value):
     return ret
 
 
-def args_to_context(args):
+def args_to_context(args: List[str]) -> Context:
     """Convert a list of args to a click context with proper hierarchy for dbt commands"""
     from dbt.cli.main import cli
 
