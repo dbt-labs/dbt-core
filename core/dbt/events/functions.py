@@ -27,12 +27,8 @@ def setup_event_logger(flags):
         EVENT_MANAGER.add_logger(_get_logbook_log_config(flags.DEBUG, flags.USE_COLORS))
     else:
         if flags.LOG_LEVEL != "none":
-            log_format = (
-                LineFormat.DebugText
-                if flags.DEBUG
-                else _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
-            )
-            log_level = EventLevel(flags.LOG_LEVEL)
+            log_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
+            log_level = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL)
             EVENT_MANAGER.add_logger(
                 _get_stdout_config(log_format, flags.DEBUG, flags.USE_COLORS, log_level)
             )
@@ -42,7 +38,7 @@ def setup_event_logger(flags):
                 # being sent to stdout.
                 # debug here is true because we need to capture debug events, and we pass in false in main
                 capture_config = _get_stdout_config(
-                    flags.LOG_FORMAT, True, flags.USE_COLORS, log_level
+                    log_format, flags.DEBUG, flags.USE_COLORS, log_level
                 )
                 capture_config.output_stream = _CAPTURE_STREAM
                 EVENT_MANAGER.add_logger(capture_config)
@@ -51,7 +47,7 @@ def setup_event_logger(flags):
             # create and add the file logger to the event manager
             log_file = os.path.join(flags.LOG_PATH, "dbt.log")
             log_file_format = _line_format_from_str(flags.LOG_FORMAT_FILE, LineFormat.DebugText)
-            log_level_file = EventLevel(flags.LOG_LEVEL_FILE)
+            log_level_file = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL_FILE)
             EVENT_MANAGER.add_logger(
                 _get_logfile_config(
                     log_file, flags.USE_COLORS_FILE, log_file_format, log_level_file
