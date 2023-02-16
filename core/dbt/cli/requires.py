@@ -38,6 +38,8 @@ def preflight(func):
             flags.LOG_FORMAT,
             flags.USE_COLORS,
             flags.DEBUG,
+            flags.LOG_CACHE_EVENTS,
+            flags.QUIET,
         )
 
         # Now that we have our logger, fire away!
