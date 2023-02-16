@@ -3,7 +3,6 @@ import os
 import pathlib
 
 from abc import ABCMeta, abstractmethod
-from hashlib import md5
 from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
@@ -35,6 +34,7 @@ from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
     Exposure,
     Metric,
+    Group,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -48,6 +48,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedExposure,
     UnparsedMetric,
     UnparsedSourceDefinition,
+    UnparsedGroup,
 )
 from dbt.exceptions import (
     CompilationError,
@@ -80,7 +81,7 @@ from dbt.parser.generic_test_builders import (
     TestBlock,
     Testable,
 )
-from dbt.utils import get_pseudo_test_path, coerce_dict_str
+from dbt.utils import get_pseudo_test_path, coerce_dict_str, md5
 
 
 TestDef = Union[str, Dict[str, Any]]
@@ -119,6 +120,8 @@ class ParserRef:
         column: Union[HasDocs, UnparsedColumn],
         description: str,
         data_type: Optional[str],
+        constraints: Optional[List[str]],
+        constraints_check: Optional[str],
         meta: Dict[str, Any],
     ):
         tags: List[str] = []
@@ -132,6 +135,8 @@ class ParserRef:
             name=column.name,
             description=description,
             data_type=data_type,
+            constraints=constraints,
+            constraints_check=constraints_check,
             meta=meta,
             tags=tags,
             quote=quote,
@@ -144,8 +149,10 @@ class ParserRef:
         for column in target.columns:
             description = column.description
             data_type = column.data_type
+            constraints = column.constraints
+            constraints_check = column.constraints_check
             meta = column.meta
-            refs.add(column, description, data_type, meta)
+            refs.add(column, description, data_type, constraints, constraints_check, meta)
         return refs
 
 
@@ -222,8 +229,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 return str(data)
 
         hashable_metadata = repr(get_hashable_md(test_metadata))
-        hash_string = "".join([name, hashable_metadata]).encode("utf-8")
-        test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
+        hash_string = "".join([name, hashable_metadata])
+        test_hash = md5(hash_string)[-HASH_LENGTH:]
 
         dct = {
             "alias": name,
@@ -535,6 +542,11 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
             if "metrics" in dct:
                 metric_parser = MetricParser(self, yaml_block)
                 metric_parser.parse()
+
+            # parse groups
+            if "groups" in dct:
+                group_parser = GroupParser(self, yaml_block)
+                group_parser.parse()
 
 
 def check_format_version(file_path, yaml_dct) -> None:
@@ -914,6 +926,75 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 self.patch_node_config(node, patch)
 
             node.patch(patch)
+            self.validate_constraints(node)
+
+    def validate_constraints(self, patched_node):
+        error_messages = []
+        if (
+            patched_node.resource_type == "model"
+            and patched_node.config.constraints_enabled is True
+        ):
+            validators = [
+                self.constraints_schema_validator(patched_node),
+                self.constraints_materialization_validator(patched_node),
+                self.constraints_language_validator(patched_node),
+                self.constraints_data_type_validator(patched_node),
+            ]
+            error_messages = [validator for validator in validators if validator != "None"]
+
+        if error_messages:
+            original_file_path = patched_node.original_file_path
+            raise ParsingError(
+                f"Original File Path: ({original_file_path})\nConstraints must be defined in a `yml` schema configuration file like `schema.yml`.\nOnly the SQL table materialization is supported for constraints. \n`data_type` values must be defined for all columns and NOT be null or blank.{self.convert_errors_to_string(error_messages)}"
+            )
+
+    def convert_errors_to_string(self, error_messages: List[str]):
+        n = len(error_messages)
+        if not n:
+            return ""
+        if n == 1:
+            return error_messages[0]
+        error_messages_string = "".join(error_messages[:-1]) + f"{error_messages[-1]}"
+        return error_messages_string
+
+    def constraints_schema_validator(self, patched_node):
+        schema_error = False
+        if patched_node.columns == {}:
+            schema_error = True
+        schema_error_msg = "\n    Schema Error: `yml` configuration does NOT exist"
+        schema_error_msg_payload = f"{schema_error_msg if schema_error else None}"
+        return schema_error_msg_payload
+
+    def constraints_materialization_validator(self, patched_node):
+        materialization_error = {}
+        if patched_node.config.materialized != "table":
+            materialization_error = {"materialization": patched_node.config.materialized}
+        materialization_error_msg = f"\n    Materialization Error: {materialization_error}"
+        materialization_error_msg_payload = (
+            f"{materialization_error_msg if materialization_error else None}"
+        )
+        return materialization_error_msg_payload
+
+    def constraints_language_validator(self, patched_node):
+        language_error = {}
+        language = str(patched_node.language)
+        if language != "sql":
+            language_error = {"language": language}
+        language_error_msg = f"\n    Language Error: {language_error}"
+        language_error_msg_payload = f"{language_error_msg if language_error else None}"
+        return language_error_msg_payload
+
+    def constraints_data_type_validator(self, patched_node):
+        data_type_errors = set()
+        for column, column_info in patched_node.columns.items():
+            if column_info.data_type is None:
+                data_type_error = {column}
+                data_type_errors.update(data_type_error)
+        data_type_errors_msg = (
+            f"\n    Columns with `data_type` Blank/Null Errors: {data_type_errors}"
+        )
+        data_type_errors_msg_payload = f"{data_type_errors_msg if data_type_errors else None}"
+        return data_type_errors_msg_payload
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
@@ -1183,3 +1264,37 @@ class MetricParser(YamlReader):
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             self.parse_metric(unparsed)
+
+
+class GroupParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, NodeType.Group.pluralize())
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_group(self, unparsed: UnparsedGroup):
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        parsed = Group(
+            resource_type=NodeType.Group,
+            package_name=package_name,
+            path=path,
+            original_file_path=self.yaml.path.original_file_path,
+            unique_id=unique_id,
+            name=unparsed.name,
+            owner=unparsed.owner,
+        )
+
+        self.manifest.add_group(self.yaml.file, parsed)
+
+    def parse(self):
+        for data in self.get_key_dicts():
+            try:
+                UnparsedGroup.validate(data)
+                unparsed = UnparsedGroup.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+            self.parse_group(unparsed)

@@ -61,6 +61,7 @@ from .model_config import (
     SnapshotConfig,
 )
 
+
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
 # in the manifest. In the "nodes" dictionary of the manifest we find
@@ -146,6 +147,8 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    constraints: Optional[List[str]] = None
+    constraints_check: Optional[str] = None
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
@@ -400,6 +403,7 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
+    constraints_enabled: bool = False
 
     @property
     def empty(self):
@@ -1101,6 +1105,18 @@ class Metric(GraphNode):
 
 
 # ====================================
+# Group node
+# ====================================
+
+
+@dataclass
+class Group(BaseNode):
+    name: str
+    owner: Owner
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Group]})
+
+
+# ====================================
 # Patches
 # ====================================
 
@@ -1168,6 +1184,7 @@ Resource = Union[
     GraphMemberNode,
     Documentation,
     Macro,
+    Group,
 ]
 
 TestNode = Union[

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Prevent doc gen workflow from running on forks
-time: 2022-12-06T09:40:15.301984-06:00
-custom:
-  Author: stu-k
-  Issue: "6386"
-  PR: "6390"

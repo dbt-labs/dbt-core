@@ -1,7 +1,0 @@
-kind: Fixes
-body: After this, will be possible to use default values for dbt.config.get
-time: 2022-11-24T16:34:19.039512764-03:00
-custom:
-  Author: devmessias
-  Issue: "6309"
-  PR: "6317"

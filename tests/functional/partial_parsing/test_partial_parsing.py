@@ -59,6 +59,9 @@ from tests.functional.partial_parsing.fixtures import (
     generic_test_sql,
     generic_test_schema_yml,
     generic_test_edited_sql,
+    groups_schema_yml_one_group,
+    groups_schema_yml_two_groups,
+    groups_schema_yml_two_groups_edited,
 )
 
 from dbt.exceptions import CompilationError
@@ -641,3 +644,55 @@ class TestTests:
             "test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
+
+
+class TestGroups:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "orders.sql": orders_sql,
+            "schema.yml": groups_schema_yml_one_group,
+        }
+
+    def test_pp_groups(self, project):
+
+        # initial run
+        results = run_dbt()
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        expected_nodes = ["model.test.orders"]
+        expected_groups = ["group.test.test_group"]
+        assert expected_nodes == list(manifest.nodes.keys())
+        assert expected_groups == list(manifest.groups.keys())
+
+        # add group to schema
+        write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        expected_nodes = ["model.test.orders"]
+        expected_groups = ["group.test.test_group", "group.test.test_group2"]
+        assert expected_nodes == list(manifest.nodes.keys())
+        assert expected_groups == list(manifest.groups.keys())
+
+        # edit group in schema
+        write_file(
+            groups_schema_yml_two_groups_edited, project.project_root, "models", "schema.yml"
+        )
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        expected_nodes = ["model.test.orders"]
+        expected_groups = ["group.test.test_group", "group.test.test_group2_edited"]
+        assert expected_nodes == list(manifest.nodes.keys())
+        assert expected_groups == list(manifest.groups.keys())
+
+        # delete group in schema
+        write_file(groups_schema_yml_one_group, project.project_root, "models", "schema.yml")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        expected_nodes = ["model.test.orders"]
+        expected_groups = ["group.test.test_group"]
+        assert expected_nodes == list(manifest.nodes.keys())
+        assert expected_groups == list(manifest.groups.keys())

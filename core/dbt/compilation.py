@@ -50,6 +50,7 @@ def print_compile_stats(stats):
         NodeType.Source: "source",
         NodeType.Exposure: "exposure",
         NodeType.Metric: "metric",
+        NodeType.Group: "group",
     }
 
     results = {k: 0 for k in names.keys()}
@@ -87,6 +88,8 @@ def _generate_stats(manifest: Manifest):
         stats[metric.resource_type] += 1
     for macro in manifest.macros.values():
         stats[macro.resource_type] += 1
+    for group in manifest.groups.values():
+        stats[group.resource_type] += 1
     return stats
 
 
@@ -370,6 +373,18 @@ class Compiler:
                 context,
                 node,
             )
+
+        # relation_name is set at parse time, except for tests without store_failures,
+        # but cli param can turn on store_failures, so we set here.
+        if (
+            node.resource_type == NodeType.Test
+            and node.relation_name is None
+            and node.is_relational
+        ):
+            adapter = get_adapter(self.config)
+            relation_cls = adapter.Relation
+            relation_name = str(relation_cls.create_from(self.config, node))
+            node.relation_name = relation_name
 
         node.compiled = True
 

@@ -1,8 +1,0 @@
-kind: Under the Hood
-body: Functionality-neutral refactor of event logging system to improve encapsulation
-  and modularity.
-time: 2022-11-18T14:57:17.792622-05:00
-custom:
-  Author: peterallenwebb
-  Issue: "6139"
-  PR: "6291"

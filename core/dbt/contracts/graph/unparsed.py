@@ -93,6 +93,8 @@ class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    constraints: Optional[List[str]] = None
+    constraints_check: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
     _extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -536,3 +538,15 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
         if data.get("model") is not None and data.get("calculation_method") == "derived":
             raise ValidationError("Derived metrics cannot have a 'model' property")
+
+
+@dataclass
+class UnparsedGroup(dbtClassMixin, Replaceable):
+    name: str
+    owner: Owner
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedGroup, cls).validate(data)
+        if data["owner"].get("name") is None and data["owner"].get("email") is None:
+            raise ValidationError("Group owner must have at least one of 'name' or 'email'.")

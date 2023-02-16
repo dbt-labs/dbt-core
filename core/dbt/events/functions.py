@@ -4,8 +4,7 @@ from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
-from dbt.flags import get_flags
-import dbt.flags as flags_module
+from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
 import json
@@ -23,7 +22,7 @@ def setup_event_logger(flags):
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
 
-    if get_flags().ENABLE_LEGACY_LOGGER:
+    if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(_get_logbook_log_config(flags.DEBUG, flags.USE_COLORS))
     else:
         if flags.LOG_LEVEL != "none":
@@ -69,6 +68,12 @@ def _line_format_from_str(format_str: str, default: LineFormat) -> LineFormat:
 def _get_stdout_config(
     line_format: LineFormat, debug: bool, use_colors: bool, level: EventLevel
 ) -> LoggerConfig:
+    flags = get_flags()
+    # We don't have access to these values when we need to setup the default stdout logger!
+    log_cache_events = (
+        bool(flags.LOG_CACHE_EVENTS) if hasattr(flags, "LOG_CACHE_EVENTS") else False
+    )
+    quiet = bool(flags.QUIET) if hasattr(flags, "QUIET") else False
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -77,9 +82,9 @@ def _get_stdout_config(
         scrubber=env_scrubber,
         filter=partial(
             _stdout_filter,
-            bool(flags_module.LOG_CACHE_EVENTS),
+            log_cache_events,
             debug,
-            bool(flags_module.QUIET),
+            quiet,
             line_format,
         ),
         output_stream=sys.stdout,
@@ -154,7 +159,7 @@ def cleanup_event_logger():
 EVENT_MANAGER: EventManager = EventManager()
 EVENT_MANAGER.add_logger(
     _get_logbook_log_config(False, True)  # type: ignore
-    if flags_module.ENABLE_LEGACY_LOGGER
+    if ENABLE_LEGACY_LOGGER
     else _get_stdout_config(LineFormat.PlainText, False, True, EventLevel.INFO)
 )
 

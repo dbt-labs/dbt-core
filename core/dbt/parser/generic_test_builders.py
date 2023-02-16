@@ -1,4 +1,3 @@
-import hashlib
 import re
 from copy import deepcopy
 from dataclasses import dataclass
@@ -35,6 +34,7 @@ from dbt.exceptions import (
     UndefinedMacroError,
 )
 from dbt.parser.search import FileBlock
+from dbt.utils import md5
 
 
 def synthesize_generic_test_names(
@@ -72,7 +72,7 @@ def synthesize_generic_test_names(
 
     if len(full_name) >= 64:
         test_trunc_identifier = test_identifier[:30]
-        label = hashlib.md5(full_name.encode("utf-8")).hexdigest()
+        label = md5(full_name)
         short_name = "{}_{}".format(test_trunc_identifier, label)
     else:
         short_name = full_name

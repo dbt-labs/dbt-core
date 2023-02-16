@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove the 'root_path' field from most nodes
-time: 2022-10-28T10:48:37.687886-04:00
-custom:
-  Author: gshank
-  Issue: "6171"
