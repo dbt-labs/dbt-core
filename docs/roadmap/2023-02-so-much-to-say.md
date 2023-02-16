@@ -24,7 +24,7 @@ Here's what you came for:
 
 `updated_at: 2023-02-15`
 
-<sup>a</sup>We're sticking with one minor version release per quarter, for the foreseeable. I haven't split those out here because, 6+ months into the future, we care more about the _what_ and the _why_ than the _when_. As we get closer, we'll be able to detail the more-specific functionality that might land in specific releases. Note too that these ideas, though we're already devoting meaningful time and effort to thinking through them, are not definite commitments.
+<sup>a</sup>We're sticking with one minor version release per quarter. Like, yes, we are doing it like we said we would. That's cool.
 
 <sup>b</sup>Always a [phamous Philadelphian](https://en.wikipedia.org/wiki/List_of_people_from_Philadelphia), true to our roots. If you have ideas or recommendations for future version namesakes, my DMs are open :)
 
