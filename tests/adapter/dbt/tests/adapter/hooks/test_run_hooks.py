@@ -126,9 +126,12 @@ class TestPrePostRunHooks(object):
 
     def test_pre_and_post_run_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["run"])
-
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        if "host" in dbt_profile_target:
+            self.check_hooks("start", project, dbt_profile_target["host"])
+            self.check_hooks("end", project, dbt_profile_target["host"])
+        else:
+            self.check_hooks("start", project, None)
+            self.check_hooks("end", project, None)
 
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")
@@ -137,8 +140,12 @@ class TestPrePostRunHooks(object):
     def test_pre_and_post_seed_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["seed"])
 
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        if "host" in dbt_profile_target:
+            self.check_hooks("start", project, dbt_profile_target["host"])
+            self.check_hooks("end", project, dbt_profile_target["host"])
+        else:
+            self.check_hooks("start", project, None)
+            self.check_hooks("end", project, None)
 
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")
