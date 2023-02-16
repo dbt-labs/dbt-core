@@ -242,6 +242,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
@@ -647,6 +648,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
+    attached_node: Optional[str] = None
 
     def same_contents(self, other) -> bool:
         if other is None:

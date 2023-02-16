@@ -268,6 +268,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "tags": [],
                 "meta": {},
                 "config": model_config,
+                "group": None,
                 "schema": my_schema_name,
                 "database": model_database,
                 "deferred": False,
@@ -360,6 +361,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "tags": [],
                 "meta": {},
                 "config": second_config,
+                "group": None,
                 "schema": alternate_schema,
                 "database": project.database,
                 "deferred": False,
@@ -431,6 +433,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "build_path": None,
                 "created_at": ANY,
                 "config": seed_config,
+                "group": None,
                 "patch_path": "test://" + seed_schema_yml_path,
                 "path": "seed.csv",
                 "name": "seed",
@@ -510,6 +513,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             },
             "test.test.not_null_model_id.d01cc630e6": {
                 "alias": "not_null_model_id",
+                "attached_node": "model.test.model",
                 "compiled_path": os.path.join(
                     compiled_model_path, "schema.yml", "not_null_model_id.sql"
                 ),
@@ -519,6 +523,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "columns": {},
                 "config": test_config,
                 "sources": [],
+                "group": None,
                 "depends_on": {
                     "macros": ["macro.dbt.test_not_null", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
@@ -572,6 +577,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "config": snapshot_config,
                 "constraints_enabled": False,
                 "database": project.database,
+                "group": None,
                 "deferred": False,
                 "depends_on": {
                     "macros": [],
@@ -608,6 +614,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             },
             "test.test.test_nothing_model_.5d38568946": {
                 "alias": "test_nothing_model_",
+                "attached_node": "model.test.model",
                 "compiled_path": os.path.join(
                     compiled_model_path, "schema.yml", "test_nothing_model_.sql"
                 ),
@@ -616,6 +623,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "column_name": None,
                 "columns": {},
                 "config": test_config,
+                "group": None,
                 "constraints_enabled": False,
                 "sources": [],
                 "depends_on": {
@@ -659,6 +667,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             },
             "test.test.unique_model_id.67b76558ff": {
                 "alias": "unique_model_id",
+                "attached_node": "model.test.model",
                 "compiled_path": os.path.join(
                     compiled_model_path, "schema.yml", "unique_model_id.sql"
                 ),
@@ -667,6 +676,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "column_name": "id",
                 "columns": {},
                 "config": test_config,
+                "group": None,
                 "constraints_enabled": False,
                 "sources": [],
                 "depends_on": {
@@ -911,6 +921,7 @@ def expected_references_manifest(project):
                 "description": "",
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_copy"],
+                "group": None,
                 "metrics": [],
                 "name": "ephemeral_copy",
                 "original_file_path": ephemeral_copy_path,
@@ -970,6 +981,7 @@ def expected_references_manifest(project):
                 "description": "A summmary table of the ephemeral copy of the seed data",
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_summary"],
+                "group": None,
                 "metrics": [],
                 "name": "ephemeral_summary",
                 "original_file_path": ephemeral_summary_path,
@@ -1030,6 +1042,7 @@ def expected_references_manifest(project):
                 "description": "A view of the summary of the ephemeral copy of the seed data",
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "view_summary"],
+                "group": None,
                 "metrics": [],
                 "name": "view_summary",
                 "original_file_path": view_summary_path,
@@ -1115,6 +1128,7 @@ def expected_references_manifest(project):
                 "description": "The test seed",
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "seed"],
+                "group": None,
                 "name": "seed",
                 "original_file_path": seed_path,
                 "package_name": "test",
@@ -1151,6 +1165,7 @@ def expected_references_manifest(project):
                 "extra_ctes": [],
                 "extra_ctes_injected": True,
                 "fqn": ["test", "snapshot_seed", "snapshot_seed"],
+                "group": None,
                 "metrics": [],
                 "meta": {},
                 "name": "snapshot_seed",

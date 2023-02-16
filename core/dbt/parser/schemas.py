@@ -408,6 +408,15 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 # we got a ValidationError - probably bad types in config()
                 raise SchemaConfigError(exc, node=node) from exc
 
+        # Set attached_node for generic test nodes defined on nodes other than sources.
+        # If the attached_node has a group, the generic test node inherits its group value.
+        if isinstance(node, GenericTestNode) and not isinstance(
+            builder.target, UnpatchedSourceDefinition
+        ):
+            node.attached_node = self.manifest.ref_lookup.get_unique_id(builder.target.name, None)
+            attached_node_group = self.manifest.nodes[node.attached_node].config.group
+            node.group, node.config.group = attached_node_group, attached_node_group
+
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the

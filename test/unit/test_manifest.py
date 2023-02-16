@@ -46,7 +46,7 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
-    'depends_on', 'database', 'schema', 'name', 'resource_type',
+    'depends_on', 'database', 'schema', 'name', 'resource_type', 'group',
     'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
     'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'constraints_enabled'
