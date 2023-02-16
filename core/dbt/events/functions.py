@@ -140,7 +140,9 @@ EVENT_MANAGER: EventManager = EventManager()
 EVENT_MANAGER.add_logger(
     _get_logbook_log_config(debug=False)  # type: ignore
     if ENABLE_LEGACY_LOGGER
-    else _get_stdout_config(log_format="text", debug=False, use_colors=True, log_cache_events=True, quiet=False)  # type: ignore
+    else _get_stdout_config(
+        log_format="text", debug=False, use_colors=True, log_cache_events=False, quiet=False
+    )  # type: ignore
 )
 
 # This global, and the following two functions for capturing stdout logs are
