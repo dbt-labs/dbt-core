@@ -413,8 +413,20 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
         if isinstance(node, GenericTestNode) and not isinstance(
             builder.target, UnpatchedSourceDefinition
         ):
-            node.attached_node = self.manifest.ref_lookup.get_unique_id(builder.target.name, None)
-            attached_node_group = self.manifest.nodes[node.attached_node].config.group
+            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
+                builder.target.name, None
+            )
+            if attached_node_unique_id:
+                attached_node_group = self.manifest.nodes[attached_node_unique_id].config.group
+            else:
+                disabled = self.manifest.disabled_lookup.find(
+                    builder.target.name, None
+                ) or self.manifest.disabled_lookup.find(builder.target.name.upper(), None)
+                attached_node_unique_id = disabled[0].unique_id
+                attached_node = self.manifest.disabled[attached_node_unique_id][0]
+                attached_node_group = attached_node.config.group
+
+            node.attached_node = attached_node_unique_id
             node.group, node.config.group = attached_node_group, attached_node_group
 
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
