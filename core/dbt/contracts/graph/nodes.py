@@ -46,7 +46,7 @@ from dbt.events.types import (
 )
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
-from dbt.node_types import ModelLanguage, NodeType
+from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt.utils import cast_dict_to_dict_of_strings
 
 
@@ -251,6 +251,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
+    access: AccessType = AccessType.Protected
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
@@ -364,6 +365,8 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        if patch.access:
+            self.access = AccessType(patch.access)
 
     def same_contents(self, old) -> bool:
         if old is None:
@@ -1136,6 +1139,7 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
 @dataclass
 class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
+    access: Optional[str]
 
 
 @dataclass

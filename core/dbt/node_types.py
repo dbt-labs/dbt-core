@@ -3,6 +3,12 @@ from typing import List
 from dbt.dataclass_schema import StrEnum
 
 
+class AccessType(StrEnum):
+    Protected = "protected"
+    Private = "private"
+    Public = "public"
+
+
 class NodeType(StrEnum):
     Model = "model"
     Analysis = "analysis"
