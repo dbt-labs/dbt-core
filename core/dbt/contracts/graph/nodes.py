@@ -403,7 +403,7 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
-    constraints_enabled: bool = False
+    contract: bool = False
 
     @property
     def empty(self):

@@ -930,10 +930,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
     def validate_constraints(self, patched_node):
         error_messages = []
-        if (
-            patched_node.resource_type == "model"
-            and patched_node.config.constraints_enabled is True
-        ):
+        if patched_node.resource_type == "model" and patched_node.config.contract is True:
             validators = [
                 self.constraints_schema_validator(patched_node),
                 self.constraints_materialization_validator(patched_node),

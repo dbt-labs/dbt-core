@@ -306,15 +306,15 @@ class ConfiguredParser(
             else:
                 parsed_node.docs = Docs(show=docs_show)
 
-        # If we have constraints_enabled in the config, copy to node level, for backwards
+        # If we have "contract" in the config, copy to node level, for backwards
         # compatibility with earlier node-only config.
-        if config_dict.get("constraints_enabled", False):
-            parsed_node.constraints_enabled = True
+        if config_dict.get("contract", False):
+            parsed_node.contract = True
 
             parser_name = type(self).__name__
             if parser_name == "ModelParser":
                 original_file_path = parsed_node.original_file_path
-                error_message = "\n    `constraints_enabled=true` can only be configured within `schema.yml` files\n      NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
+                error_message = "\n    `contract=true` can only be configured within `schema.yml` files\n      NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
                 raise ParsingError(
                     f"Original File Path: ({original_file_path})\nConstraints must be defined in a `yml` schema configuration file like `schema.yml`.\nOnly the SQL table materialization is supported for constraints. \n`data_type` values must be defined for all columns and NOT be null or blank.{error_message}"
                 )
