@@ -705,12 +705,8 @@ class ManifestLoader:
             mli._project_index[project.project_name] = project_info
         return mli
 
-    # TODO: this should be calculated per-file based on the vars() calls made in
-    # parsing, so changing one var doesn't invalidate everything. also there should
-    # be something like that for env_var - currently changing env_vars in way that
-    # impact graph selection or configs will result in weird test failures.
-    # finally, we should hash the actual profile used, not just root project +
-    # profiles.yml + relevant args. While sufficient, it is definitely overkill.
+    # TODO: handle --vars in the same way we handle env_var
+    # https://github.com/dbt-labs/dbt-core/issues/6323
     def build_manifest_state_check(self):
         config = self.root_project
         all_projects = self.all_projects
