@@ -79,11 +79,7 @@ class TestPrePostRunHooks(object):
             "invocation_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
-        query = (
-            "select {field_list} from {schema}.on_run_hook where test_state = '{state}'".format(
-                field_list=field_list, schema=project.test_schema, state=state
-            )
-        )
+        query = f"select {field_list} from {project.test_schema}.on_run_hook where test_state = '{state}'"
 
         vals = project.run_sql(query, fetch="all")
         assert len(vals) != 0, "nothing inserted into on_run_hook table"
@@ -126,12 +122,9 @@ class TestPrePostRunHooks(object):
 
     def test_pre_and_post_run_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["run"])
-        if "host" in dbt_profile_target:
-            self.check_hooks("start", project, dbt_profile_target["host"])
-            self.check_hooks("end", project, dbt_profile_target["host"])
-        else:
-            self.check_hooks("start", project, None)
-            self.check_hooks("end", project, None)
+
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")
@@ -140,12 +133,8 @@ class TestPrePostRunHooks(object):
     def test_pre_and_post_seed_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["seed"])
 
-        if "host" in dbt_profile_target:
-            self.check_hooks("start", project, dbt_profile_target["host"])
-            self.check_hooks("end", project, dbt_profile_target["host"])
-        else:
-            self.check_hooks("start", project, None)
-            self.check_hooks("end", project, None)
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")

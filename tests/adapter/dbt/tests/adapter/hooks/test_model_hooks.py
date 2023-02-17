@@ -100,11 +100,7 @@ class BaseTestPrePost(object):
             "invocation_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
-        query = (
-            "select {field_list} from {schema}.on_model_hook where test_state = '{state}'".format(
-                field_list=field_list, schema=project.test_schema, state=state
-            )
-        )
+        query = f"select {field_list} from {project.test_schema}.on_model_hook where test_state = '{state}'"
 
         vals = project.run_sql(query, fetch="all")
         assert len(vals) != 0, "nothing inserted into hooks table"
@@ -161,12 +157,8 @@ class TestPrePostModelHooks(BaseTestPrePost):
 
     def test_pre_and_post_run_hooks(self, project, dbt_profile_target):
         run_dbt()
-        if "host" in dbt_profile_target:
-            self.check_hooks("start", project, dbt_profile_target["host"])
-            self.check_hooks("end", project, dbt_profile_target["host"])
-        else:
-            self.check_hooks("start", project, None)
-            self.check_hooks("end", project, None)
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
 
 class TestPrePostModelHooksUnderscores(TestPrePostModelHooks):
@@ -226,13 +218,8 @@ class TestHookRefs(BaseTestPrePost):
 
     def test_pre_post_model_hooks_refed(self, project, dbt_profile_target):
         run_dbt()
-
-        if "host" in dbt_profile_target:
-            self.check_hooks("start", project, dbt_profile_target["host"])
-            self.check_hooks("end", project, dbt_profile_target["host"])
-        else:
-            self.check_hooks("start", project, None)
-            self.check_hooks("end", project, None)
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
 
 class TestPrePostModelHooksOnSeeds(object):
@@ -386,8 +373,8 @@ class TestPrePostModelHooksInConfig(PrePostModelHooksInConfigSetup):
     def test_pre_and_post_model_hooks_model(self, project, dbt_profile_target):
         run_dbt()
 
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
 
 class TestPrePostModelHooksInConfigWithCount(PrePostModelHooksInConfigSetup):
@@ -415,8 +402,8 @@ class TestPrePostModelHooksInConfigWithCount(PrePostModelHooksInConfigSetup):
     def test_pre_and_post_model_hooks_model_and_project(self, project, dbt_profile_target):
         run_dbt()
 
-        self.check_hooks("start", project, dbt_profile_target["host"], count=2)
-        self.check_hooks("end", project, dbt_profile_target["host"], count=2)
+        self.check_hooks("start", project, dbt_profile_target.get("host", None), count=2)
+        self.check_hooks("end", project, dbt_profile_target.get("host", None), count=2)
 
 
 class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
