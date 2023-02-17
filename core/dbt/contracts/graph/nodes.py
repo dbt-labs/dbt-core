@@ -47,7 +47,7 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType
-from dbt.utils import cast_dict_to_dict_of_strings, cast_to_str
+from dbt.utils import cast_dict_to_dict_of_strings
 
 
 from .model_config import (
@@ -221,7 +221,7 @@ class NodeInfoMixin:
             "materialized": self.config.get("materialized"),
             "node_status": str(self._event_status.get("node_status")),
             "node_started_at": self._event_status.get("started_at"),
-            "node_finished_at": cast_to_str(self._event_status.get("finished_at")),
+            "node_finished_at": self._event_status.get("finished_at"),
             "meta": meta_stringified,
         }
         node_info_msg = NodeInfo(**node_info)
