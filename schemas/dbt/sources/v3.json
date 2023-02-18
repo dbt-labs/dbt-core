@@ -44,7 +44,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-09T23:46:55.263337Z"
+          "default": "2023-02-18T14:20:00.362449Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -55,7 +55,7 @@
               "type": "null"
             }
           ],
-          "default": "e6a9b266-203d-4fec-93af-fb8f55423a6b"
+          "default": "b1e277bf-2a2c-4d49-9d37-8d1a72cf26c7"
         },
         "env": {
           "type": "object",
