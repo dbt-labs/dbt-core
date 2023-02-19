@@ -42,7 +42,7 @@ def get_latest_version(
     version_url: str = PYPI_VERSION_URL,
 ) -> Optional[dbt.semver.VersionSpecifier]:
     try:
-        resp = requests.get(version_url)
+        resp = requests.get(version_url, timeout=1)
         data = resp.json()
         version_string = data["info"]["version"]
     except (json.JSONDecodeError, KeyError, requests.RequestException):
