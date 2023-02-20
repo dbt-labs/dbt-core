@@ -1,0 +1,7 @@
+kind: Docs
+body: Improve displayed message under "Arguments" section for argumentless macro
+time: 2023-01-13T09:48:55.574898-05:00
+custom:
+  Author: MartinGuindon
+  Issue: "358"
+  PR: "359"
