@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix compilation logic for ephemeral nodes
+time: 2023-02-21T17:06:30.218568-05:00
+custom:
+  Author: gshank
+  Issue: "6885"
