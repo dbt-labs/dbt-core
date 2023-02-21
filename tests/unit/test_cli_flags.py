@@ -300,3 +300,34 @@ class TestFlags:
 
         assert flags.LOG_FORMAT == flag_log_format
         assert flags.LOG_FORMAT_FILE == flag_log_format_file
+
+    # Test that values set in UserConfig for log settings will set flags as expected
+    def test_log_settings_from_config(self):
+        context = self.make_dbt_context("run", ["run"])
+
+        config = UserConfig(log_format="json", log_level="warn", use_colors=False)
+
+        flags = Flags(context, config)
+
+        assert flags.LOG_FORMAT == "json"
+        assert flags.LOG_FORMAT_FILE == "json"
+        assert flags.LOG_LEVEL == "warn"
+        assert flags.LOG_LEVEL_FILE == "warn"
+        assert flags.USE_COLORS is False
+        assert flags.USE_COLORS_FILE is False
+
+    # Test that values set in UserConfig for log *file* settings will set flags as expected,
+    # leaving the console logging flags with their default values
+    def test_log_file_settings_from_config(self):
+        context = self.make_dbt_context("run", ["run"])
+
+        config = UserConfig(log_format_file="json", log_level_file="warn", use_colors_file=False)
+
+        flags = Flags(context, config)
+
+        assert flags.LOG_FORMAT == "default"
+        assert flags.LOG_FORMAT_FILE == "json"
+        assert flags.LOG_LEVEL == "info"
+        assert flags.LOG_LEVEL_FILE == "warn"
+        assert flags.USE_COLORS is True
+        assert flags.USE_COLORS_FILE is False

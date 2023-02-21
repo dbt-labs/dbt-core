@@ -161,7 +161,7 @@ class Flags:
             version_check = getattr(self, "VERSION_CHECK", True)
             object.__setattr__(self, "LOG_PATH", default_log_path(project_dir, version_check))
 
-        # Support console DO NOT TRACK initiave
+        # Support console DO NOT TRACK initiative
         if os.getenv("DO_NOT_TRACK", "").lower() in ("1", "t", "true", "y", "yes"):
             object.__setattr__(self, "SEND_ANONYMOUS_USAGE_STATS", False)
 
