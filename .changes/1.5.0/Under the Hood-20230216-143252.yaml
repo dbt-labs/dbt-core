@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Test binary serialization of logging events
+time: 2023-02-16T14:32:52.524225-05:00
+custom:
+  Author: gshank
+  Issue: "6852"

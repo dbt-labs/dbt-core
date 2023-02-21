@@ -264,7 +264,7 @@ class ProfileWrittenWithTargetTemplateYAML(betterproto.Message):
 @dataclass
 class ProfileWrittenWithTargetTemplateYAMLMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "ProfileWrittenWithTargetTemplateYAMLMsg" = betterproto.message_field(2)
+    data: "ProfileWrittenWithTargetTemplateYAML" = betterproto.message_field(2)
 
 
 @dataclass
@@ -1817,7 +1817,7 @@ class LogModelResult(betterproto.Message):
     status: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     total: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
 
 
 @dataclass

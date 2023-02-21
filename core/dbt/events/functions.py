@@ -18,18 +18,29 @@ LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
 
-def setup_event_logger(flags):
+def setup_event_logger(flags) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
 
     if ENABLE_LEGACY_LOGGER:
-        EVENT_MANAGER.add_logger(_get_logbook_log_config(flags.DEBUG, flags.USE_COLORS))
+        EVENT_MANAGER.add_logger(
+            _get_logbook_log_config(
+                flags.DEBUG, flags.USE_COLORS, flags.LOG_CACHE_EVENTS, flags.QUIET
+            )
+        )
     else:
         if flags.LOG_LEVEL != "none":
             log_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
             log_level = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL)
             EVENT_MANAGER.add_logger(
-                _get_stdout_config(log_format, flags.DEBUG, flags.USE_COLORS, log_level)
+                _get_stdout_config(
+                    log_format,
+                    flags.DEBUG,
+                    flags.USE_COLORS,
+                    log_level,
+                    flags.LOG_CACHE_EVENTS,
+                    flags.QUIET,
+                )
             )
 
             if _CAPTURE_STREAM:
@@ -37,7 +48,12 @@ def setup_event_logger(flags):
                 # being sent to stdout.
                 # debug here is true because we need to capture debug events, and we pass in false in main
                 capture_config = _get_stdout_config(
-                    log_format, flags.DEBUG, flags.USE_COLORS, log_level
+                    log_format,
+                    flags.DEBUG,
+                    flags.USE_COLORS,
+                    log_level,
+                    flags.LOG_CACHE_EVENTS,
+                    flags.QUIET,
                 )
                 capture_config.output_stream = _CAPTURE_STREAM
                 EVENT_MANAGER.add_logger(capture_config)
@@ -66,14 +82,14 @@ def _line_format_from_str(format_str: str, default: LineFormat) -> LineFormat:
 
 
 def _get_stdout_config(
-    line_format: LineFormat, debug: bool, use_colors: bool, level: EventLevel
+    line_format: LineFormat,
+    debug: bool,
+    use_colors: bool,
+    level: EventLevel,
+    log_cache_events: bool,
+    quiet: bool,
 ) -> LoggerConfig:
-    flags = get_flags()
-    # We don't have access to these values when we need to setup the default stdout logger!
-    log_cache_events = (
-        bool(flags.LOG_CACHE_EVENTS) if hasattr(flags, "LOG_CACHE_EVENTS") else False
-    )
-    quiet = bool(flags.QUIET) if hasattr(flags, "QUIET") else False
+
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -129,15 +145,21 @@ def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventM
     )
 
 
-def _get_logbook_log_config(debug: bool, use_colors: bool) -> LoggerConfig:
-    # use the default one since this code should be removed when we remove logbook
-    flags = get_flags()
+def _get_logbook_log_config(
+    debug: bool, use_colors: bool, log_cache_events: bool, quiet: bool
+) -> LoggerConfig:
     config = _get_stdout_config(
-        LineFormat.PlainText, debug, use_colors, EventLevel.DEBUG if debug else EventLevel.INFO
+        LineFormat.PlainText,
+        debug,
+        use_colors,
+        EventLevel.DEBUG if debug else EventLevel.INFO,
+        log_cache_events,
+        quiet,
     )
     config.name = "logbook_log"
-    config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e.data, Cache)
+    config.filter = NoFilter if log_cache_events else lambda e: not isinstance(e.data, Cache)
     config.logger = GLOBAL_LOGGER
+    config.output_stream = None
     return config
 
 
@@ -158,9 +180,9 @@ def cleanup_event_logger():
 # create a default configuration with default settings and no file output.
 EVENT_MANAGER: EventManager = EventManager()
 EVENT_MANAGER.add_logger(
-    _get_logbook_log_config(False, True)  # type: ignore
+    _get_logbook_log_config(False, True, False, False)  # type: ignore
     if ENABLE_LEGACY_LOGGER
-    else _get_stdout_config(LineFormat.PlainText, False, True, EventLevel.INFO)
+    else _get_stdout_config(LineFormat.PlainText, False, True, EventLevel.INFO, False, False)
 )
 
 # This global, and the following two functions for capturing stdout logs are

@@ -539,7 +539,7 @@ class VarProvider:
 @dataclass
 class Project:
     project_name: str
-    version: Union[SemverString, float]
+    version: Optional[Union[SemverString, float]]
     project_root: str
     profile_name: Optional[str]
     model_paths: List[str]

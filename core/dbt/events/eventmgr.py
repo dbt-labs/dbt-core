@@ -1,3 +1,4 @@
+import os
 from colorama import Style
 from dataclasses import dataclass
 from datetime import datetime
@@ -6,6 +7,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import threading
+import traceback
 from typing import Any, Callable, List, Optional, TextIO
 from uuid import uuid4
 
@@ -186,6 +188,16 @@ class EventManager:
 
     def fire_event(self, e: BaseEvent, level: EventLevel = None) -> None:
         msg = msg_from_base_event(e, level=level)
+
+        if os.environ.get("DBT_TEST_BINARY_SERIALIZATION"):
+            print(f"--- {msg.info.name}")
+            try:
+                bytes(msg)
+            except Exception as exc:
+                raise Exception(
+                    f"{msg.info.name} is not serializable to binary. Originating exception: {exc}, {traceback.format_exc()}"
+                )
+
         for logger in self.loggers:
             if logger.filter(msg):  # type: ignore
                 logger.write_line(msg)
