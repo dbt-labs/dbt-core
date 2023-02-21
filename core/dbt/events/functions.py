@@ -30,33 +30,23 @@ def setup_event_logger(flags) -> None:
         )
     else:
         if flags.LOG_LEVEL != "none":
-            log_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
+            line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
             log_level = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL)
-            EVENT_MANAGER.add_logger(
-                _get_stdout_config(
-                    log_format,
-                    flags.DEBUG,
-                    flags.USE_COLORS,
-                    log_level,
-                    flags.LOG_CACHE_EVENTS,
-                    flags.QUIET,
-                )
+            console_config = _get_stdout_config(
+                line_format,
+                flags.DEBUG,
+                flags.USE_COLORS,
+                log_level,
+                flags.LOG_CACHE_EVENTS,
+                flags.QUIET,
             )
+            EVENT_MANAGER.add_logger(console_config)
 
             if _CAPTURE_STREAM:
                 # Create second stdout logger to support test which want to know what's
                 # being sent to stdout.
-                # debug here is true because we need to capture debug events, and we pass in false in main
-                capture_config = _get_stdout_config(
-                    log_format,
-                    flags.DEBUG,
-                    flags.USE_COLORS,
-                    log_level,
-                    flags.LOG_CACHE_EVENTS,
-                    flags.QUIET,
-                )
-                capture_config.output_stream = _CAPTURE_STREAM
-                EVENT_MANAGER.add_logger(capture_config)
+                console_config.output_stream = _CAPTURE_STREAM
+                EVENT_MANAGER.add_logger(console_config)
 
         if flags.LOG_LEVEL_FILE != "none":
             # create and add the file logger to the event manager
