@@ -817,6 +817,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                     # macros don't have the 'config' key support yet
                     self.normalize_meta_attribute(data, path)
                     self.normalize_docs_attribute(data, path)
+                    self.normalize_group_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(path, self.key, data, exc)
@@ -844,6 +845,9 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
 
     def normalize_docs_attribute(self, data, path):
         return self.normalize_attribute(data, path, "docs")
+
+    def normalize_group_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "group")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
