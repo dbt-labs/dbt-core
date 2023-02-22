@@ -47,7 +47,7 @@
 {% macro default__format_columns(columns) -%}
   {% set formatted_columns = [] %}
   {% for column in columns %}
-    {%- set formatted_column = column.column.lower() ~ " " ~ column.dtype -%}
+    {%- set formatted_column = column.column.lower() ~ " " ~ column.data_type -%}
     {%- do formatted_columns.append(formatted_column) -%}
   {% endfor %}
   {{ return(formatted_columns|join(', ')) }}
