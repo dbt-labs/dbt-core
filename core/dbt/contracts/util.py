@@ -278,6 +278,8 @@ def upgrade_manifest_json(manifest: dict) -> dict:
     # add group key
     if "groups" not in manifest:
         manifest["groups"] = {}
+    if "group_map" not in manifest:
+        manifest["group_map"] = {}
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)

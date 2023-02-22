@@ -811,8 +811,22 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         forward_edges = build_macro_edges(edge_members)
         return forward_edges
 
+    def build_group_map(self):
+        groupable_nodes = list(
+            chain(
+                self.nodes.values(),
+                self.metrics.values(),
+            )
+        )
+        group_map = {group.name: [] for group in self.groups.values()}
+        for node in groupable_nodes:
+            if node.config.group is not None:
+                group_map[node.config.group].append(node.unique_id)
+        self.group_map = group_map
+
     def writable_manifest(self):
         self.build_parent_and_child_maps()
+        self.build_group_map()
         return WritableManifest(
             nodes=self.nodes,
             sources=self.sources,
@@ -826,6 +840,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             disabled=self.disabled,
             child_map=self.child_map,
             parent_map=self.parent_map,
+            group_map=self.group_map,
         )
 
     def write(self, path):
@@ -1208,6 +1223,11 @@ class WritableManifest(ArtifactMixin):
     child_map: Optional[NodeEdgeMap] = field(
         metadata=dict(
             description="A mapping from parent nodes to their dependents",
+        )
+    )
+    group_map: Optional[NodeEdgeMap] = field(
+        metadata=dict(
+            description="A mapping from group names to their nodes",
         )
     )
     metadata: ManifestMetadata = field(

@@ -184,10 +184,27 @@
         }
       ],
       "description": "A mapping from parent nodes to their dependents"
+    },
+    "group_map": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A mapping from group names to their nodes"
     }
   },
   "additionalProperties": false,
-  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Optional[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric]]]], parent_map: Optional[Dict[str, List[str]]], child_map: Optional[Dict[str, List[str]]])",
+  "description": "WritableManifest(metadata: dbt.contracts.graph.manifest.ManifestMetadata, nodes: Mapping[str, Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode]], sources: Mapping[str, dbt.contracts.graph.nodes.SourceDefinition], macros: Mapping[str, dbt.contracts.graph.nodes.Macro], docs: Mapping[str, dbt.contracts.graph.nodes.Documentation], exposures: Mapping[str, dbt.contracts.graph.nodes.Exposure], metrics: Mapping[str, dbt.contracts.graph.nodes.Metric], groups: Mapping[str, dbt.contracts.graph.nodes.Group], selectors: Mapping[str, Any], disabled: Optional[Mapping[str, List[Union[dbt.contracts.graph.nodes.AnalysisNode, dbt.contracts.graph.nodes.SingularTestNode, dbt.contracts.graph.nodes.HookNode, dbt.contracts.graph.nodes.ModelNode, dbt.contracts.graph.nodes.RPCNode, dbt.contracts.graph.nodes.SqlNode, dbt.contracts.graph.nodes.GenericTestNode, dbt.contracts.graph.nodes.SnapshotNode, dbt.contracts.graph.nodes.SeedNode, dbt.contracts.graph.nodes.SourceDefinition, dbt.contracts.graph.nodes.Exposure, dbt.contracts.graph.nodes.Metric]]]], parent_map: Optional[Dict[str, List[str]]], child_map: Optional[Dict[str, List[str]]], group_map: Optional[Dict[str, List[str]]])",
   "definitions": {
     "ManifestMetadata": {
       "type": "object",
@@ -204,7 +221,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-15T23:16:12.276796Z"
+          "default": "2023-02-22T03:40:47.744009Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -215,7 +232,7 @@
               "type": "null"
             }
           ],
-          "default": "c1869ebe-d8b9-40ea-94bf-17d112ede34e"
+          "default": "6c0badb9-7313-4278-afd0-2d0bcd8cd0b8"
         },
         "env": {
           "type": "object",
@@ -432,7 +449,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.278324
+          "default": 1677037247.745522
         },
         "config_call_dict": {
           "type": "object",
@@ -1038,7 +1055,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.2793632
+          "default": 1677037247.746568
         },
         "config_call_dict": {
           "type": "object",
@@ -1423,7 +1440,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.280323
+          "default": 1677037247.7475069
         },
         "config_call_dict": {
           "type": "object",
@@ -1696,7 +1713,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.280906
+          "default": 1677037247.748093
         },
         "config_call_dict": {
           "type": "object",
@@ -1959,7 +1976,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.281474
+          "default": 1677037247.748657
         },
         "config_call_dict": {
           "type": "object",
@@ -2222,7 +2239,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.2820292
+          "default": 1677037247.749216
         },
         "config_call_dict": {
           "type": "object",
@@ -2480,7 +2497,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.2827141
+          "default": 1677037247.749898
         },
         "config_call_dict": {
           "type": "object",
@@ -2775,7 +2792,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.283804
+          "default": 1677037247.7509918
         },
         "config_call_dict": {
           "type": "object",
@@ -3265,7 +3282,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.284801
+          "default": 1677037247.752012
         },
         "config_call_dict": {
           "type": "object",
@@ -3672,7 +3689,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.2858298
+          "default": 1677037247.753037
         }
       },
       "additionalProperties": false,
@@ -3787,7 +3804,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-15T23:16:12.274781Z"
+          "default": "2023-02-22T03:40:47.741990Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -3798,7 +3815,7 @@
               "type": "null"
             }
           ],
-          "default": "c1869ebe-d8b9-40ea-94bf-17d112ede34e"
+          "default": "6c0badb9-7313-4278-afd0-2d0bcd8cd0b8"
         },
         "env": {
           "type": "object",
@@ -4151,7 +4168,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.286123
+          "default": 1677037247.7533262
         },
         "supported_languages": {
           "oneOf": [
@@ -4394,7 +4411,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.2867799
+          "default": 1677037247.7539892
         }
       },
       "additionalProperties": false,
@@ -4617,7 +4634,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1676502972.287434
+          "default": 1677037247.7546391
         }
       },
       "additionalProperties": false,

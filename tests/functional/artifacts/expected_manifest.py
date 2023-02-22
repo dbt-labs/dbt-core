@@ -878,6 +878,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             "test.test.test_nothing_model_.5d38568946": [],
             "test.test.unique_model_id.67b76558ff": [],
         },
+        "group_map": {},
         "docs": {
             "doc.dbt.__overview__": ANY,
             "doc.test.macro_info": ANY,
@@ -1384,6 +1385,7 @@ def expected_references_manifest(project):
             "snapshot.test.snapshot_seed": ["seed.test.seed"],
             "source.test.my_source.my_table": [],
         },
+        "group_map": {},
         "disabled": {},
         "macros": {
             "macro.test.test_nothing": {

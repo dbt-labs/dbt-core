@@ -335,6 +335,7 @@ class ManifestTest(unittest.TestCase):
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
@@ -489,6 +490,7 @@ class ManifestTest(unittest.TestCase):
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
@@ -759,6 +761,7 @@ class MixedManifestTest(unittest.TestCase):
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',

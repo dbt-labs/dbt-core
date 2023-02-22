@@ -253,6 +253,8 @@ class ManifestLoader:
             else:
                 # create child_map and parent_map
                 self.saved_manifest.build_parent_and_child_maps()
+                # create group_map
+                self.saved_manifest.build_group_map()
                 # files are different, we need to create a new set of
                 # project_parser_files.
                 try:

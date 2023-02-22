@@ -354,6 +354,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "macros",
         "parent_map",
         "child_map",
+        "group_map",
         "metrics",
         "groups",
         "docs",
