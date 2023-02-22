@@ -266,7 +266,7 @@ class Compiler:
             raise DbtRuntimeError("Cannot inject ctes into an uncompiled node", model)
 
         # extra_ctes_injected flag says that we've already recursively injected the ctes
-        if model.extra_ctes_injected and model.extra_ctes_compiled():
+        if model.extra_ctes_injected:
             return (model, model.extra_ctes)
 
         # Just to make it plain that nothing is actually injected for this case
@@ -300,11 +300,7 @@ class Compiler:
             # This model has already been compiled and extra_ctes_injected, so it's been
             # through here before. We already checked above for extra_ctes_injected, but
             # checking again because updates maybe have happened in another thread.
-            if (
-                cte_model.compiled is True
-                and cte_model.extra_ctes_injected is True
-                and cte_model.extra_ctes_compiled()
-            ):
+            if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
                 new_prepended_ctes = cte_model.extra_ctes
 
             # if the cte_model isn't compiled, i.e. first time here

@@ -414,20 +414,13 @@ class CompiledNode(ParsedNode):
         do if extra_ctes were an OrderedDict
         """
         for cte in self.extra_ctes:
+            # Because it's possible that multiple threads are compiling the
+            # node at the same time, we don't want to overwrite already compiled
+            # sql in the extra_ctes with empty sql.
             if cte.id == cte_id:
-                cte.sql = sql
                 break
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
-
-    def extra_ctes_compiled(self):
-        if len(self.extra_ctes) == 0:
-            return True
-        compiled = True
-        for cte in self.extra_ctes:
-            if not cte.sql:
-                compiled = False
-        return compiled
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
