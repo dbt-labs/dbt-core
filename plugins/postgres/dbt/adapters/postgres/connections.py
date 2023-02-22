@@ -195,7 +195,3 @@ class PostgresConnectionManager(SQLConnectionManager):
     @classmethod
     def data_type_code_to_name(cls, type_code: int) -> str:
         return string_types[type_code].name
-
-    # For dbt-snowflake
-    #    from snowflake.connector.constants import FIELD_ID_TO_NAME
-    #    return FIELD_ID_TO_NAME[type_code]

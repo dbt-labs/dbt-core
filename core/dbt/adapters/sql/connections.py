@@ -165,19 +165,10 @@ class SQLConnectionManager(BaseConnectionManager):
             table = dbt.clients.agate_helper.empty_table()
         return response, table
 
-    # TODO: do we need to care about auto_begin here?
-    def get_column_schema_from_query(self, sql: str) -> List[Tuple[str, str]]:
+    def get_column_schema_from_query(self, sql: str) -> List[Tuple[str, Any]]:
         sql = self._add_query_comment(sql)
         _, cursor = self.add_query(sql)
         return self.get_column_schema_from_cursor(cursor)
-
-    # For dbt-bigquery
-    # def get_column_schema_from_query(cls, sql: str) -> List[Tuple[str, str]]:
-    #    sql = self._add_query_comment(sql)
-    #    # auto_begin is ignored on bigquery, and only included for consistency
-    #    query_job, iterator = self.raw_execute(sql)
-    #    columns = [(field.name, field.field_type) for field in resp.iterator]
-    #    return columns
 
     def add_begin_query(self):
         return self.add_query("BEGIN", auto_begin=False)

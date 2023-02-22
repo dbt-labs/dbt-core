@@ -35,7 +35,7 @@
   {%- set schema_file_provided_columns_formatted = format_columns(schema_file_provided_columns)  -%}
 
   {%- if sql_file_provided_columns_formatted != schema_file_provided_columns_formatted -%}
-    {%- do exceptions.raise_compiler_error('Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file.\nSchema File Columns: ' ~ sql_file_provided_columns_formatted ~ '\n\nSQL File Columns: ' ~ schema_file_provided_columns_formatted ~ ' ' ) %}
+    {%- do exceptions.raise_compiler_error('Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file.\nSchema File Columns:' ~ schema_file_provided_columns_formatted ~ '\n\nSQL File Columns:' ~ sql_file_provided_columns_formatted ~ ' ' ) %}
   {%- endif -%}
 
 {% endmacro %}

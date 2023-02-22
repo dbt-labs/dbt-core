@@ -271,16 +271,15 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[AdapterResponse, agate.Table]:
-        """Execute the given SQL. This is a thin wrapper around
-        ConnectionManager.execute.
+    ) -> List[Tuple[str, Any]]:
+        """Get a list of the column names and data types in the given Relation.
 
         :param str sql: The sql to execute.
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
         :return: A tuple of the query status and results (empty if fetch=False).
-        :rtype: List[(column_name: str, data_type: str]
+        :rtype: List[(column_name: str, data_type: Any]
         """
         return self.connections.get_column_schema_from_query(sql=sql)
 
