@@ -95,7 +95,7 @@ def _generate_stats(manifest: Manifest):
 
 def _add_prepended_cte(prepended_ctes, new_cte):
     for cte in prepended_ctes:
-        if cte.id == new_cte.id:
+        if cte.id == new_cte.id and new_cte.sql:
             cte.sql = new_cte.sql
             return
     prepended_ctes.append(new_cte)
@@ -306,11 +306,11 @@ class Compiler:
                 # This is an ephemeral parsed model that we can compile.
                 # Render the raw_code and set compiled to True
                 cte_model = self._compile_code(cte_model, manifest, extra_context)
-                # recursively call this method
+                # recursively call this method, sets extra_ctes_injected to True
                 cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
                     cte_model, manifest, extra_context
                 )
-                # Save compiled SQL file and sync manifest
+                # Write compiled SQL file
                 self._write_node(cte_model)
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
@@ -329,9 +329,8 @@ class Compiler:
         if not model.extra_ctes_injected:
             model._pre_injected_sql = model.compiled_code
             model.compiled_code = injected_sql
-            model.extra_ctes_injected = True
             model.extra_ctes = prepended_ctes
-            model.validate(model.to_dict(omit_none=True))
+            model.extra_ctes_injected = True
 
         return model, prepended_ctes
 
