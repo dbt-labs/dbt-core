@@ -420,6 +420,15 @@ class CompiledNode(ParsedNode):
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
+    def extra_ctes_compiled(self):
+        if len(self.extra_ctes) == 0:
+            return True
+        compiled = True
+        for cte in self.extra_ctes:
+            if not cte.sql:
+                compiled = False
+        return compiled
+
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
         if "_pre_injected_sql" in dct:

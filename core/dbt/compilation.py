@@ -98,7 +98,8 @@ def _add_prepended_cte(prepended_ctes, new_cte):
         if cte.id == new_cte.id and new_cte.sql:
             cte.sql = new_cte.sql
             return
-    prepended_ctes.append(new_cte)
+    if new_cte.sql:
+        prepended_ctes.append(new_cte)
 
 
 def _extend_prepended_ctes(prepended_ctes, new_prepended_ctes):
@@ -262,18 +263,18 @@ class Compiler:
         inserting CTEs into the SQL.
         """
         if model.compiled_code is None:
-            raise DbtRuntimeError("Cannot inject ctes into an unparsed node", model)
+            raise DbtRuntimeError("Cannot inject ctes into an uncompiled node", model)
 
         # extra_ctes_injected flag says that we've already recursively injected the ctes
-        if model.extra_ctes_injected:
+        if model.extra_ctes_injected and model.extra_ctes_compiled():
             return (model, model.extra_ctes)
 
         # Just to make it plain that nothing is actually injected for this case
-        if not model.extra_ctes:
+        if len(model.extra_ctes) == 0:
             # SeedNodes don't have compilation attributes
             if not isinstance(model, SeedNode):
                 model.extra_ctes_injected = True
-            return (model, model.extra_ctes)
+            return (model, [])
 
         # This stores the ctes which will all be recursively
         # gathered and then "injected" into the model.
@@ -282,7 +283,8 @@ class Compiler:
         # extra_ctes are added to the model by
         # RuntimeRefResolver.create_relation, which adds an
         # extra_cte for every model relation which is an
-        # ephemeral model. InjectedCTEs have a unique_id and sql
+        # ephemeral model. InjectedCTEs have a unique_id and sql.
+        # extra_ctes start out with sql set to None, and the sql is set in this loop.
         for cte in model.extra_ctes:
             if cte.id not in manifest.nodes:
                 raise DbtInternalError(
@@ -298,7 +300,11 @@ class Compiler:
             # This model has already been compiled and extra_ctes_injected, so it's been
             # through here before. We already checked above for extra_ctes_injected, but
             # checking again because updates maybe have happened in another thread.
-            if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
+            if (
+                cte_model.compiled is True
+                and cte_model.extra_ctes_injected is True
+                and cte_model.extra_ctes_compiled()
+            ):
                 new_prepended_ctes = cte_model.extra_ctes
 
             # if the cte_model isn't compiled, i.e. first time here
@@ -332,7 +338,8 @@ class Compiler:
             model.extra_ctes = prepended_ctes
             model.extra_ctes_injected = True
 
-        return model, prepended_ctes
+        # if model.extra_ctes is not set to prepended ctes, something went wrong
+        return model, model.extra_ctes
 
     # Sets compiled_code and compiled flag in the ManifestSQLNode passed in,
     # creates a "context" dictionary for jinja rendering,
