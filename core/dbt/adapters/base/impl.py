@@ -176,6 +176,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         - truncate_relation
         - rename_relation
         - get_columns_in_relation
+        - get_column_schema_from_query
         - expand_column_types
         - list_relations_without_caching
         - is_cancelable
