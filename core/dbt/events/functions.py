@@ -102,6 +102,7 @@ def _get_logbook_log_config(level: Optional[EventLevel] = None) -> LoggerConfig:
     config.name = "logbook_log"
     config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e.data, Cache)
     config.logger = GLOBAL_LOGGER
+    config.output_stream = None
     return config
 
 
