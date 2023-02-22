@@ -35,6 +35,8 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     Group,
+    ManifestNode,
+    GraphMemberNode,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -346,6 +348,23 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
 
         return node
 
+    def _lookup_attached_node(
+        self, target: Testable
+    ) -> Optional[Union[ManifestNode, GraphMemberNode]]:
+        """Look up attached node for Testable target nodes other than sources. Can be None if generic test attached to SQL node with no corresponding .sql file."""
+        attached_node = None  # type: Optional[Union[ManifestNode, GraphMemberNode]]
+        if not isinstance(target, UnpatchedSourceDefinition):
+            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(target.name, None)
+            if attached_node_unique_id:
+                attached_node = self.manifest.nodes[attached_node_unique_id]
+            else:
+                disabled_node = self.manifest.disabled_lookup.find(
+                    target.name, None
+                ) or self.manifest.disabled_lookup.find(target.name.upper(), None)
+                if disabled_node:
+                    attached_node = self.manifest.disabled[disabled_node[0].unique_id][0]
+        return attached_node
+
     def store_env_vars(self, target, schema_file_id, env_vars):
         self.manifest.env_vars.update(env_vars)
         if schema_file_id in self.manifest.files:
@@ -408,26 +427,12 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 # we got a ValidationError - probably bad types in config()
                 raise SchemaConfigError(exc, node=node) from exc
 
-        # Set attached_node for generic test nodes defined on nodes other than sources.
-        # If the attached_node has a group, the generic test node inherits its group value.
-        if isinstance(node, GenericTestNode) and not isinstance(
-            builder.target, UnpatchedSourceDefinition
-        ):
-            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
-                builder.target.name, None
-            )
-            if attached_node_unique_id:
-                attached_node_group = self.manifest.nodes[attached_node_unique_id].config.group
-            else:
-                disabled = self.manifest.disabled_lookup.find(
-                    builder.target.name, None
-                ) or self.manifest.disabled_lookup.find(builder.target.name.upper(), None)
-                attached_node_unique_id = disabled[0].unique_id
-                attached_node = self.manifest.disabled[attached_node_unique_id][0]
-                attached_node_group = attached_node.config.group
-
-            node.attached_node = attached_node_unique_id
-            node.group, node.config.group = attached_node_group, attached_node_group
+        # Set attached_node for generic test nodes, if available.
+        # Generic test node inherits attached node's group config value.
+        attached_node = self._lookup_attached_node(builder.target)
+        if attached_node:
+            node.attached_node = attached_node.unique_id
+            node.group, node.config.group = attached_node.config.group, attached_node.config.group
 
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
