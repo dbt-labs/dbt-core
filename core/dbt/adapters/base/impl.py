@@ -270,17 +270,12 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
 
     @available.parse(lambda *a, **k: [])
-    def get_column_schema_from_query(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> List[Tuple[str, Any]]:
-        """Get a list of the column names and data types in the given Relation.
+    def get_column_schema_from_query(self, sql: str) -> List[Tuple[str, Any]]:
+        """Get a list of the column names and data types from the given sql.
 
         :param str sql: The sql to execute.
-        :param bool auto_begin: If set, and dbt is not currently inside a
-            transaction, automatically begin one.
-        :param bool fetch: If set, fetch results.
-        :return: A tuple of the query status and results (empty if fetch=False).
-        :rtype: List[(column_name: str, data_type: Any]
+        :return: A tuple of column schema attributes (column_name: str, data_type: Any), which can be used to construct a Column object.
+        :rtype: List[(column_name: str, data_type: Any)]
         """
         return self.connections.get_column_schema_from_query(sql=sql)
 
