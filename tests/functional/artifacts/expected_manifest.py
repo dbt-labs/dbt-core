@@ -974,7 +974,7 @@ def expected_references_manifest(project):
                         "constraints": None,
                     },
                 },
-                "config": get_rendered_model_config(materialized="table"),
+                "config": get_rendered_model_config(materialized="table", group="test_group"),
                 "constraints_enabled": False,
                 "sources": [],
                 "depends_on": {"macros": [], "nodes": ["model.test.ephemeral_copy"]},
@@ -982,7 +982,7 @@ def expected_references_manifest(project):
                 "description": "A summmary table of the ephemeral copy of the seed data",
                 "docs": {"node_color": None, "show": True},
                 "fqn": ["test", "ephemeral_summary"],
-                "group": None,
+                "group": "test_group",
                 "metrics": [],
                 "name": "ephemeral_summary",
                 "original_file_path": ephemeral_summary_path,
@@ -1006,7 +1006,9 @@ def expected_references_manifest(project):
                 "extra_ctes_injected": True,
                 "extra_ctes": [ANY],
                 "checksum": checksum_file(ephemeral_summary_path),
-                "unrendered_config": get_unrendered_model_config(materialized="table"),
+                "unrendered_config": get_unrendered_model_config(
+                    materialized="table", group="test_group"
+                ),
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1272,7 +1274,17 @@ def expected_references_manifest(project):
             },
         },
         "metrics": {},
-        "groups": {},
+        "groups": {
+            "group.test.test_group": {
+                "name": "test_group",
+                "resource_type": "group",
+                "original_file_path": os.path.join("models", "schema.yml"),
+                "owner": {"email": "test_group@test.com", "name": None},
+                "package_name": "test",
+                "path": "schema.yml",
+                "unique_id": "group.test.test_group",
+            }
+        },
         "selectors": {},
         "docs": {
             "doc.dbt.__overview__": ANY,
@@ -1385,7 +1397,7 @@ def expected_references_manifest(project):
             "snapshot.test.snapshot_seed": ["seed.test.seed"],
             "source.test.my_source.my_table": [],
         },
-        "group_map": {},
+        "group_map": {"test_group": ["model.test.ephemeral_summary"]},
         "disabled": {},
         "macros": {
             "macro.test.test_nothing": {
