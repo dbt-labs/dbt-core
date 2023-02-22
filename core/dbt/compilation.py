@@ -519,7 +519,7 @@ class Compiler:
         """This is the main entry point into this code. It's called by
         CompileRunner.compile, GenericRPCRunner.compile, and
         RunTask.get_hook_sql. It calls '_compile_code' to render
-        the node's raw_code into ompiled_code, and then calls the
+        the node's raw_code into compiled_code, and then calls the
         recursive method to "prepend" the ctes.
         """
         node = self._compile_code(node, manifest, extra_context)
