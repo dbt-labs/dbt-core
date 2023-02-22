@@ -34,7 +34,23 @@ class BaseConstraintsColumnsEqual:
             "constraints_schema.yml": model_schema_yml,
         }
 
-    def test__constraints_wrong_column_order(self, project):
+    @pytest.fixture
+    def string_type(self):
+        return "TEXT"
+
+    @pytest.fixture
+    def int_type(self):
+        return "INT"
+
+    @pytest.fixture
+    def int_array_type(self):
+        return "INTEGERARRAY"
+
+    @pytest.fixture
+    def string_array_type(self):
+        return "STRINGARRAY"
+
+    def test__constraints_wrong_column_order(self, project, string_type, int_type):
         results, log_output = run_dbt_and_capture(
             ["run", "-s", "my_model_wrong_order"], expect_pass=False
         )
@@ -48,15 +64,17 @@ class BaseConstraintsColumnsEqual:
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
 
         expected_schema_file_columns = (
-            "Schema File Columns:\n    id INT, color TEXT, date_day DATE"
+            f"Schema File Columns:\n    id {int_type}, color {string_type}, date_day DATE"
         )
-        expected_sql_file_columns = "SQL File Columns:\n    color TEXT, id INT, date_day DATE"
+        expected_sql_file_columns = (
+            f"SQL File Columns:\n    color {string_type}, id {int_type}, date_day DATE"
+        )
 
         assert expected_compile_error in log_output
         assert expected_schema_file_columns in log_output
         assert expected_sql_file_columns in log_output
 
-    def test__constraints_wrong_column_names(self, project):
+    def test__constraints_wrong_column_names(self, project, string_type, int_type):
         results, log_output = run_dbt_and_capture(
             ["run", "-s", "my_model_wrong_name"], expect_pass=False
         )
@@ -69,15 +87,19 @@ class BaseConstraintsColumnsEqual:
 
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
-            "Schema File Columns:\n    id INT, color TEXT, date_day DATE"
+            f"Schema File Columns:\n    id {int_type}, color {string_type}, date_day DATE"
         )
-        expected_sql_file_columns = "SQL File Columns:\n    error INT, color TEXT, date_day DATE"
+        expected_sql_file_columns = (
+            f"SQL File Columns:\n    error {int_type}, color {string_type}, date_day DATE"
+        )
 
         assert expected_compile_error in log_output
         assert expected_schema_file_columns in log_output
         assert expected_sql_file_columns in log_output
 
-    def test__constraints_wrong_column_data_types(self, project):
+    def test__constraints_wrong_column_data_types(
+        self, project, string_type, int_type, int_array_type, string_array_type
+    ):
         results, log_output = run_dbt_and_capture(
             ["run", "-s", "my_model_wrong_data_type"], expect_pass=False
         )
@@ -89,10 +111,8 @@ class BaseConstraintsColumnsEqual:
         assert constraints_enabled_actual_config is True
 
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
-        expected_schema_file_columns = (
-            "Schema File Columns:\n    id INT, color TEXT, date_day DATE"
-        )
-        expected_sql_file_columns = "SQL File Columns:\n    id TEXT, color TEXT, date_day DATE"
+        expected_schema_file_columns = f"Schema File Columns:\n    id {int_type}, color {string_type}, date_day DATE, num_array {int_array_type}"
+        expected_sql_file_columns = f"SQL File Columns:\n    id {string_type}, color {string_type}, date_day DATE, num_array {string_array_type}"
 
         assert expected_compile_error in log_output
         assert expected_schema_file_columns in log_output

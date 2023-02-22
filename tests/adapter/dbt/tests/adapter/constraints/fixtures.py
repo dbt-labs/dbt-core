@@ -47,7 +47,8 @@ my_model_wrong_data_type_sql = """
 select
   '1' as id,
   'blue' as color,
-  cast('2019-01-01' as date) as date_day
+  cast('2019-01-01' as date) as date_day,
+  ARRAY['a', 'b', 'c'] as num_array
 """
 
 my_model_with_nulls_sql = """
@@ -144,4 +145,6 @@ models:
         data_type: text
       - name: date_day
         data_type: date
+      - name: num_array
+        data_type: int[]
 """
