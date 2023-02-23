@@ -132,7 +132,7 @@ models:
         data_type: date
   - name: my_model_wrong_data_type
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         data_type: integer
