@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove BigQuery-specific btye abbreviations
+time: 2023-01-30T15:33:06.28965-07:00
+custom:
+  Author: dbeatty10
+  Issue: "6741"

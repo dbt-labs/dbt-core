@@ -8,7 +8,7 @@ from pprint import pformat as pf
 from typing import Set, List
 
 from click import Context, get_current_context, BadOptionUsage
-from click.core import ParameterSource
+from click.core import ParameterSource, Command, Group
 
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
@@ -49,11 +49,31 @@ def convert_config(config_name, config_value):
     # This function should take care of converting the values from config and original
     # set_from_args to the correct type
     ret = config_value
-    if config_name.lower() == "warn_error_options":
+    if config_name.lower() == "warn_error_options" and type(config_value) == dict:
         ret = WarnErrorOptions(
             include=config_value.get("include", []), exclude=config_value.get("exclude", [])
         )
     return ret
+
+
+def args_to_context(args: List[str]) -> Context:
+    """Convert a list of args to a click context with proper hierarchy for dbt commands"""
+    from dbt.cli.main import cli
+
+    cli_ctx = cli.make_context(cli.name, args)
+    # args would get converted during make context
+    if len(args) == 1 and "," in args[0]:
+        args = args[0].split(",")
+    sub_command_name, sub_command, args = cli.resolve_command(cli_ctx, args)
+
+    # handle source and docs group
+    if type(sub_command) == Group:
+        sub_command_name, sub_command, args = sub_command.resolve_command(cli_ctx, args)
+
+    assert type(sub_command) == Command
+    sub_command_ctx = sub_command.make_context(sub_command_name, args)
+    sub_command_ctx.parent = cli_ctx
+    return sub_command_ctx
 
 
 @dataclass(frozen=True)

@@ -39,9 +39,9 @@ class BaseConstraintsColumnsEqual:
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model_wrong_order"
         my_model_config = manifest.nodes[model_id].config
-        constraints_enabled_actual_config = my_model_config.constraints_enabled
+        contract_actual_config = my_model_config.contract
 
-        assert constraints_enabled_actual_config is True
+        assert contract_actual_config is True
 
         expected_compile_error = "Please ensure the name, order, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = "Schema File Columns: ['ID', 'COLOR', 'DATE_DAY']"
@@ -58,9 +58,9 @@ class BaseConstraintsColumnsEqual:
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model_wrong_name"
         my_model_config = manifest.nodes[model_id].config
-        constraints_enabled_actual_config = my_model_config.constraints_enabled
+        contract_actual_config = my_model_config.contract
 
-        assert constraints_enabled_actual_config is True
+        assert contract_actual_config is True
 
         expected_compile_error = "Please ensure the name, order, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = "Schema File Columns: ['ID', 'COLOR', 'DATE_DAY']"
@@ -165,8 +165,8 @@ class BaseConstraintsRuntimeEnforcement:
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
         my_model_config = manifest.nodes[model_id].config
-        constraints_enabled_actual_config = my_model_config.constraints_enabled
-        assert constraints_enabled_actual_config is True
+        contract_actual_config = my_model_config.contract
+        assert contract_actual_config is True
 
         # Its result includes the expected error messages
         self.assert_expected_error_messages(failing_results[0].message, expected_error_messages)

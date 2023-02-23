@@ -3,7 +3,7 @@ import pytest
 
 from pathlib import Path
 
-from tests.functional.hooks.fixtures import (
+from dbt.tests.adapter.hooks.fixtures import (
     macros__hook,
     macros__before_and_after,
     models__hooks,
@@ -66,23 +66,20 @@ class TestPrePostRunHooks(object):
 
     def get_ctx_vars(self, state, project):
         fields = [
-            "state",
-            "target.dbname",
-            "target.host",
-            "target.name",
-            "target.port",
-            "target.schema",
-            "target.threads",
-            "target.type",
-            "target.user",
-            "target.pass",
+            "test_state",
+            "target_dbname",
+            "target_host",
+            "target_name",
+            "target_schema",
+            "target_threads",
+            "target_type",
+            "target_user",
+            "target_pass",
             "run_started_at",
             "invocation_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
-        query = "select {field_list} from {schema}.on_run_hook where state = '{state}'".format(
-            field_list=field_list, schema=project.test_schema, state=state
-        )
+        query = f"select {field_list} from {project.test_schema}.on_run_hook where test_state = '{state}'"
 
         vals = project.run_sql(query, fetch="all")
         assert len(vals) != 0, "nothing inserted into on_run_hook table"
@@ -106,16 +103,15 @@ class TestPrePostRunHooks(object):
     def check_hooks(self, state, project, host):
         ctx = self.get_ctx_vars(state, project)
 
-        assert ctx["state"] == state
-        assert ctx["target.dbname"] == "dbt"
-        assert ctx["target.host"] == host
-        assert ctx["target.name"] == "default"
-        assert ctx["target.port"] == 5432
-        assert ctx["target.schema"] == project.test_schema
-        assert ctx["target.threads"] == 4
-        assert ctx["target.type"] == "postgres"
-        assert ctx["target.user"] == "root"
-        assert ctx["target.pass"] == ""
+        assert ctx["test_state"] == state
+        assert ctx["target_dbname"] == "dbt"
+        assert ctx["target_host"] == host
+        assert ctx["target_name"] == "default"
+        assert ctx["target_schema"] == project.test_schema
+        assert ctx["target_threads"] == 4
+        assert ctx["target_type"] == "postgres"
+        assert ctx["target_user"] == "root"
+        assert ctx["target_pass"] == ""
 
         assert (
             ctx["run_started_at"] is not None and len(ctx["run_started_at"]) > 0
@@ -127,8 +123,8 @@ class TestPrePostRunHooks(object):
     def test_pre_and_post_run_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["run"])
 
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")
@@ -137,8 +133,8 @@ class TestPrePostRunHooks(object):
     def test_pre_and_post_seed_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["seed"])
 
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
         check_table_does_not_exist(project.adapter, "start_hook_order_test")
         check_table_does_not_exist(project.adapter, "end_hook_order_test")

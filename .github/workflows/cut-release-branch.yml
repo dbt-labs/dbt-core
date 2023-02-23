@@ -31,7 +31,7 @@ permissions:
 jobs:
   cut_branch:
     name: "Cut branch and clean up main for dbt-core"
-    uses: dbt-labs/actions/.github/workflows/cut-release-branch.yaml@main
+    uses: dbt-labs/actions/.github/workflows/cut-release-branch.yml@main
     with:
       version_to_bump_main: ${{ inputs.version_to_bump_main }}
       new_branch_name: ${{ inputs.new_branch_name }}

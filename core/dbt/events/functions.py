@@ -1,7 +1,7 @@
 import betterproto
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut, EventMsg
-from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
+from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
@@ -18,20 +18,31 @@ LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
 
-def setup_event_logger(log_path: str, log_format: str, use_colors: bool, debug: bool):
+def setup_event_logger(
+    log_path: str,
+    log_format: str,
+    use_colors: bool,
+    debug: bool,
+    log_cache_events: bool,
+    quiet: bool,
+) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(log_path)
 
     if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(_get_logbook_log_config(debug))
     else:
-        EVENT_MANAGER.add_logger(_get_stdout_config(log_format, debug, use_colors))
+        EVENT_MANAGER.add_logger(
+            _get_stdout_config(log_format, debug, use_colors, log_cache_events, quiet)
+        )
 
         if _CAPTURE_STREAM:
             # Create second stdout logger to support test which want to know what's
             # being sent to stdout.
             # debug here is true because we need to capture debug events, and we pass in false in main
-            capture_config = _get_stdout_config(log_format, True, use_colors)
+            capture_config = _get_stdout_config(
+                log_format, True, use_colors, log_cache_events, quiet
+            )
             capture_config.output_stream = _CAPTURE_STREAM
             EVENT_MANAGER.add_logger(capture_config)
 
@@ -41,19 +52,15 @@ def setup_event_logger(log_path: str, log_format: str, use_colors: bool, debug: 
         )
 
 
-def _get_stdout_config(log_format: str, debug: bool, use_colors: bool) -> LoggerConfig:
-    flags = get_flags()
+def _get_stdout_config(
+    log_format: str, debug: bool, use_colors: bool, log_cache_events: bool, quiet: bool
+) -> LoggerConfig:
     fmt = LineFormat.PlainText
     if log_format == "json":
         fmt = LineFormat.Json
     elif debug:
         fmt = LineFormat.DebugText
     level = EventLevel.DEBUG if debug else EventLevel.INFO
-    # We don't have access to these values when we need to setup the default stdout logger!
-    log_cache_events = (
-        bool(flags.LOG_CACHE_EVENTS) if hasattr(flags, "LOG_CACHE_EVENTS") else False
-    )
-    quiet = bool(flags.QUIET) if hasattr(flags, "QUIET") else False
     return LoggerConfig(
         name="stdout_log",
         level=level,
@@ -105,11 +112,11 @@ def _logfile_filter(log_cache_events: bool, log_format: str, msg: EventMsg) -> b
 
 def _get_logbook_log_config(debug: bool) -> LoggerConfig:
     # use the default one since this code should be removed when we remove logbook
-    flags = get_flags()
-    config = _get_stdout_config("", debug, bool(flags.USE_COLORS))
+    config = _get_stdout_config("", debug, False, False, False)
     config.name = "logbook_log"
-    config.filter = NoFilter if flags.LOG_CACHE_EVENTS else lambda e: not isinstance(e.data, Cache)
+    config.filter = lambda e: not isinstance(e.data, Cache)
     config.logger = GLOBAL_LOGGER
+    config.output_stream = None
     return config
 
 
@@ -133,7 +140,9 @@ EVENT_MANAGER: EventManager = EventManager()
 EVENT_MANAGER.add_logger(
     _get_logbook_log_config(debug=False)  # type: ignore
     if ENABLE_LEGACY_LOGGER
-    else _get_stdout_config(log_format="text", debug=False, use_colors=True)  # type: ignore
+    else _get_stdout_config(
+        log_format="text", debug=False, use_colors=True, log_cache_events=False, quiet=False
+    )  # type: ignore
 )
 
 # This global, and the following two functions for capturing stdout logs are
