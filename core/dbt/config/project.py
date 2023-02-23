@@ -12,7 +12,6 @@ from typing import (
 )
 from typing_extensions import Protocol, runtime_checkable
 
-import hashlib
 import os
 
 from dbt.flags import get_flags
@@ -31,7 +30,7 @@ from dbt.graph import SelectionSpec
 from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier, versions_compatible
 from dbt.version import get_installed_version
-from dbt.utils import MultiDict
+from dbt.utils import MultiDict, md5
 from dbt.node_types import NodeType
 from dbt.config.selectors import SelectorDict
 from dbt.contracts.project import (
@@ -138,11 +137,10 @@ def _all_source_paths(
     analysis_paths: List[str],
     macro_paths: List[str],
 ) -> List[str]:
-    # We need to turn a list of lists into just a list, then convert to a set to
-    # get only unique elements, then back to a list
-    return list(
-        set(list(chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)))
-    )
+    paths = chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)
+    # Strip trailing slashes since the path is the same even though the name is not
+    stripped_paths = map(lambda s: s.rstrip("/"), paths)
+    return list(set(stripped_paths))
 
 
 T = TypeVar("T")
@@ -540,7 +538,7 @@ class VarProvider:
 @dataclass
 class Project:
     project_name: str
-    version: Union[SemverString, float]
+    version: Optional[Union[SemverString, float]]
     project_root: str
     profile_name: Optional[str]
     model_paths: List[str]
@@ -678,7 +676,7 @@ class Project:
         return partial.render(renderer)
 
     def hashed_name(self):
-        return hashlib.md5(self.project_name.encode("utf-8")).hexdigest()
+        return md5(self.project_name)
 
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:

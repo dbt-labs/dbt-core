@@ -746,6 +746,29 @@ class PartialParsing:
                     self.delete_schema_metric(schema_file, elem)
                     self.merge_patch(schema_file, dict_key, elem)
 
+        # groups
+        dict_key = "groups"
+        group_diff = self.get_diff_for("groups", saved_yaml_dict, new_yaml_dict)
+        if group_diff["changed"]:
+            for group in group_diff["changed"]:
+                self.delete_schema_group(schema_file, group)
+                self.merge_patch(schema_file, dict_key, group)
+        if group_diff["deleted"]:
+            for group in group_diff["deleted"]:
+                self.delete_schema_group(schema_file, group)
+        if group_diff["added"]:
+            for group in group_diff["added"]:
+                self.merge_patch(schema_file, dict_key, group)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in group_diff["changed_or_deleted_names"]:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_group(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
+
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
     def get_diff_for(self, key, saved_yaml_dict, new_yaml_dict):
@@ -902,6 +925,20 @@ class PartialParsing:
                     schema_file.exposures.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
+
+    # groups are created only from schema files, so just delete the group
+    def delete_schema_group(self, schema_file, group_dict):
+        group_name = group_dict["name"]
+        groups = schema_file.groups.copy()
+        for unique_id in groups:
+            if unique_id in self.saved_manifest.groups:
+                group = self.saved_manifest.groups[unique_id]
+                if group.name == group_name:
+                    self.schedule_nodes_for_parsing(self.saved_manifest.group_map[group.name])
+                    self.deleted_manifest.groups[unique_id] = self.saved_manifest.groups.pop(
+                        unique_id
+                    )
+                    schema_file.groups.remove(unique_id)
 
     # metrics are created only from schema files, but also can be referred to by other nodes
     def delete_schema_metric(self, schema_file, metric_dict):

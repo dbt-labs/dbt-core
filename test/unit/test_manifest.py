@@ -23,7 +23,8 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SourceDefinition,
     Exposure,
-    Metric
+    Metric,
+    Group,
 )
 
 from dbt.contracts.graph.unparsed import (
@@ -45,10 +46,10 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
-    'depends_on', 'database', 'schema', 'name', 'resource_type',
+    'depends_on', 'database', 'schema', 'name', 'resource_type', 'group',
     'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
-    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'constraints_enabled'
+    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'contract'
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
@@ -130,6 +131,18 @@ class ManifestTest(unittest.TestCase):
                 package_name='root',
                 path='my_metric.yml',
                 original_file_path='my_metric.yml'
+            )
+        }
+
+        self.groups = {
+            'group.root.my_group': Group(
+                name='my_group',
+                owner=Owner(email='some@email.com'),
+                resource_type=NodeType.Group,
+                unique_id='group.root.my_group',
+                package_name='root',
+                path='my_metric.yml',
+                original_file_path='my_metric.yml',
             )
         }
 
@@ -318,9 +331,11 @@ class ManifestTest(unittest.TestCase):
                 'macros': {},
                 'exposures': {},
                 'metrics': {},
+                'groups': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
@@ -404,19 +419,22 @@ class ManifestTest(unittest.TestCase):
     def test__build_flat_graph(self):
         exposures = copy.copy(self.exposures)
         metrics = copy.copy(self.metrics)
+        groups = copy.copy(self.groups)
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
                             disabled={}, files={}, exposures=exposures,
-                            metrics=metrics, selectors={})
+                            metrics=metrics, groups=groups, selectors={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_exposures = flat_graph['exposures']
+        flat_groups = flat_graph['groups']
         flat_metrics = flat_graph['metrics']
         flat_nodes = flat_graph['nodes']
         flat_sources = flat_graph['sources']
-        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources', 'metrics']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'groups', 'nodes', 'sources', 'metrics']))
         self.assertEqual(set(flat_exposures), set(self.exposures))
+        self.assertEqual(set(flat_groups), set(self.groups))
         self.assertEqual(set(flat_metrics), set(self.metrics))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         self.assertEqual(set(flat_sources), set(self.sources))
@@ -468,9 +486,11 @@ class ManifestTest(unittest.TestCase):
                 'macros': {},
                 'exposures': {},
                 'metrics': {},
+                'groups': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
@@ -737,9 +757,11 @@ class MixedManifestTest(unittest.TestCase):
                 'sources': {},
                 'exposures': {},
                 'metrics': {},
+                'groups': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
@@ -826,7 +848,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['exposures', 'metrics', 'nodes', 'sources']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'groups', 'metrics', 'nodes', 'sources']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
         for node in flat_nodes.values():

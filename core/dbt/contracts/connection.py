@@ -1,6 +1,5 @@
 import abc
 import itertools
-import hashlib
 from dataclasses import dataclass, field
 from typing import (
     Any,
@@ -13,7 +12,7 @@ from typing import (
     Callable,
 )
 from dbt.exceptions import DbtInternalError
-from dbt.utils import translate_aliases
+from dbt.utils import translate_aliases, md5
 from dbt.events.functions import fire_event
 from dbt.events.types import NewConnectionOpening
 from dbt.events.contextvars import get_node_info
@@ -142,7 +141,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         raise NotImplementedError("unique_field not implemented for base credentials class")
 
     def hashed_unique_field(self) -> str:
-        return hashlib.md5(self.unique_field.encode("utf-8")).hexdigest()
+        return md5(self.unique_field)
 
     def connection_info(self, *, with_aliases: bool = False) -> Iterable[Tuple[str, Any]]:
         """Return an ordered iterator of key/value pairs for pretty-printing."""

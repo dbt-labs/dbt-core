@@ -18,6 +18,7 @@ class NodeType(StrEnum):
     Macro = "macro"
     Exposure = "exposure"
     Metric = "metric"
+    Group = "group"
 
     @classmethod
     def executable(cls) -> List["NodeType"]:

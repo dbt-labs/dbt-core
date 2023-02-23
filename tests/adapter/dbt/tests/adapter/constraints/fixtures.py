@@ -71,7 +71,7 @@ version: 2
 models:
   - name: my_model
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         quote: true
@@ -87,7 +87,7 @@ models:
         data_type: date
   - name: my_model_error
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         data_type: integer
@@ -102,7 +102,7 @@ models:
         data_type: date
   - name: my_model_wrong_order
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         data_type: integer
@@ -117,7 +117,7 @@ models:
         data_type: date
   - name: my_model_wrong_name
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         data_type: integer

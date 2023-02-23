@@ -181,7 +181,6 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
     project_config = {
         "config-version": 2,
         "name": "test",
-        "version": "0.1.0",
         "profile": "test",
         "log-path": logs_dir,
     }
@@ -474,7 +473,7 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
-    setup_event_logger(logs_dir, "json", False, False)
+    setup_event_logger(logs_dir, "json", False, False, False, False)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep

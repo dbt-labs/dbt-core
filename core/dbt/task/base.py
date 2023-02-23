@@ -7,7 +7,7 @@ from typing import Type, Union, Dict, Any, Optional
 from datetime import datetime
 
 from dbt import tracking
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,
@@ -56,7 +56,7 @@ class NoneConfig:
 def read_profiles(profiles_dir=None):
     """This is only used for some error handling"""
     if profiles_dir is None:
-        profiles_dir = flags.PROFILES_DIR
+        profiles_dir = get_flags().PROFILES_DIR
 
     raw_profiles = read_profile(profiles_dir)
 
@@ -86,7 +86,7 @@ class BaseTask(metaclass=ABCMeta):
 
     @classmethod
     def set_log_format(cls):
-        if flags.LOG_FORMAT == "json":
+        if get_flags().LOG_FORMAT == "json":
             log_manager.format_json()
         else:
             log_manager.format_text()
@@ -102,7 +102,7 @@ class BaseTask(metaclass=ABCMeta):
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
-            all_profile_names = list(read_profiles(flags.PROFILES_DIR).keys())
+            all_profile_names = list(read_profiles(get_flags().PROFILES_DIR).keys())
             fire_event(LogDbtProfileError(exc=str(exc), profiles=all_profile_names))
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
             raise dbt.exceptions.DbtRuntimeError("Could not run dbt") from exc
