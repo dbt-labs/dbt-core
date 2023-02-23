@@ -648,24 +648,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         obj._lock = MP_CONTEXT.Lock()
         return obj
 
-    def sync_update_node(self, new_node: ManifestNode) -> ManifestNode:
-        """update the node with a lock. The only time we should want to lock is
-        when compiling an ephemeral ancestor of a node at runtime, because
-        multiple threads could be just-in-time compiling the same ephemeral
-        dependency, and we want them to have a consistent view of the manifest.
-
-        If the existing node is not compiled, update it with the new node and
-        return that. If the existing node is compiled, do not update the
-        manifest and return the existing node.
-        """
-        with self._lock:
-            existing = self.nodes[new_node.unique_id]
-            if getattr(existing, "compiled", False):
-                # already compiled
-                return existing
-            _update_into(self.nodes, new_node)
-            return new_node
-
     def update_exposure(self, new_exposure: Exposure):
         _update_into(self.exposures, new_exposure)
 
@@ -811,8 +793,22 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         forward_edges = build_macro_edges(edge_members)
         return forward_edges
 
+    def build_group_map(self):
+        groupable_nodes = list(
+            chain(
+                self.nodes.values(),
+                self.metrics.values(),
+            )
+        )
+        group_map = {group.name: [] for group in self.groups.values()}
+        for node in groupable_nodes:
+            if node.config.group is not None:
+                group_map[node.config.group].append(node.unique_id)
+        self.group_map = group_map
+
     def writable_manifest(self):
         self.build_parent_and_child_maps()
+        self.build_group_map()
         return WritableManifest(
             nodes=self.nodes,
             sources=self.sources,
@@ -826,6 +822,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             disabled=self.disabled,
             child_map=self.child_map,
             parent_map=self.parent_map,
+            group_map=self.group_map,
         )
 
     def write(self, path):
@@ -1208,6 +1205,11 @@ class WritableManifest(ArtifactMixin):
     child_map: Optional[NodeEdgeMap] = field(
         metadata=dict(
             description="A mapping from parent nodes to their dependents",
+        )
+    )
+    group_map: Optional[NodeEdgeMap] = field(
+        metadata=dict(
+            description="A mapping from group names to their nodes",
         )
     )
     metadata: ManifestMetadata = field(

@@ -137,11 +137,10 @@ def _all_source_paths(
     analysis_paths: List[str],
     macro_paths: List[str],
 ) -> List[str]:
-    # We need to turn a list of lists into just a list, then convert to a set to
-    # get only unique elements, then back to a list
-    return list(
-        set(list(chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)))
-    )
+    paths = chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)
+    # Strip trailing slashes since the path is the same even though the name is not
+    stripped_paths = map(lambda s: s.rstrip("/"), paths)
+    return list(set(stripped_paths))
 
 
 T = TypeVar("T")
@@ -539,7 +538,7 @@ class VarProvider:
 @dataclass
 class Project:
     project_name: str
-    version: Union[SemverString, float]
+    version: Optional[Union[SemverString, float]]
     project_root: str
     profile_name: Optional[str]
     model_paths: List[str]

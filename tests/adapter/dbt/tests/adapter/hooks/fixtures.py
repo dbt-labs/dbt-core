@@ -30,18 +30,17 @@ macros__before_and_after = """
 {% macro custom_run_hook(state, target, run_started_at, invocation_id) %}
 
    insert into {{ target.schema }}.on_run_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
+        test_state,
+        target_dbname,
+        target_host,
+        target_name,
+        target_schema,
+        target_type,
+        target_user,
+        target_pass,
+        target_threads,
+        run_started_at,
+        invocation_id
    ) VALUES (
     '{{ state }}',
     '{{ target.dbname }}',
@@ -51,7 +50,6 @@ macros__before_and_after = """
     '{{ target.type }}',
     '{{ target.user }}',
     '{{ target.get("pass", "") }}',
-    {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
@@ -75,18 +73,17 @@ models__hooks_configured = """
     config({
         "pre_hook": "\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -96,25 +93,23 @@ models__hooks_configured = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
         )",
         "post-hook": "\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -124,7 +119,6 @@ models__hooks_configured = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
@@ -140,18 +134,17 @@ models__hooks_error = """
     config({
         "pre_hook": "\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -161,25 +154,23 @@ models__hooks_error = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}'
         )",
         "pre-hook": "\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -189,25 +180,23 @@ models__hooks_error = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
-                '{{ invocation_id }}'\
+                '{{ invocation_id }}'
         )",
         "post-hook": "\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -217,7 +206,6 @@ models__hooks_error = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
@@ -233,18 +221,17 @@ models__hooks_kwargs = """
     config(
         pre_hook="\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id
             ) VALUES (\
                 'start',\
                 '{{ target.dbname }}',\
@@ -254,25 +241,23 @@ models__hooks_kwargs = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
         )",
         post_hook="\
             insert into {{this.schema}}.on_model_hook (\
-                \\"state\\",\
-                \\"target.dbname\\",\
-                \\"target.host\\",\
-                \\"target.name\\",\
-                \\"target.schema\\",\
-                \\"target.type\\",\
-                \\"target.user\\",\
-                \\"target.pass\\",\
-                \\"target.port\\",\
-                \\"target.threads\\",\
-                \\"run_started_at\\",\
-                \\"invocation_id\\"\
+                test_state,\
+                target_dbname,\
+                target_host,\
+                target_name,\
+                target_schema,\
+                target_type,\
+                target_user,\
+                target_pass,\
+                target_threads,\
+                run_started_at,\
+                invocation_id\
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\
@@ -282,7 +267,6 @@ models__hooks_kwargs = """
                 '{{ target.type }}',\
                 '{{ target.user }}',\
                 '{{ target.get(\\"pass\\", \\"\\") }}',\
-                {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
@@ -298,31 +282,30 @@ models__hooked = """
     config({
         "pre_hook": "\
             insert into {{this.schema}}.on_model_hook select
-                state,
-                '{{ target.dbname }}' as \\"target.dbname\\",\
-                '{{ target.host }}' as \\"target.host\\",\
-                '{{ target.name }}' as \\"target.name\\",\
-                '{{ target.schema }}' as \\"target.schema\\",\
-                '{{ target.type }}' as \\"target.type\\",\
-                '{{ target.user }}' as \\"target.user\\",\
-                '{{ target.get(\\"pass\\", \\"\\") }}' as \\"target.pass\\",\
-                {{ target.port }} as \\"target.port\\",\
-                {{ target.threads }} as \\"target.threads\\",\
-                '{{ run_started_at }}' as \\"run_started_at\\",\
-                '{{ invocation_id }}' as \\"invocation_id\\"\
+                test_state,
+                '{{ target.dbname }}' as target_dbname,\
+                '{{ target.host }}' as target_host,\
+                '{{ target.name }}' as target_name,\
+                '{{ target.schema }}' as target_schema,\
+                '{{ target.type }}' as target_type,\
+                '{{ target.user }}' as target_user,\
+                '{{ target.get(\\"pass\\", \\"\\") }}' as target_pass,\
+                {{ target.threads }} as target_threads,\
+                '{{ run_started_at }}' as run_started_at,\
+                '{{ invocation_id }}' as invocation_id
                 from {{ ref('pre') }}\
-        "
+                "
     })
 }}
 select 1 as id
 """
 
 models__post = """
-select 'end' as state
+select 'end' as test_state
 """
 
 models__pre = """
-select 'start' as state
+select 'start' as test_state
 """
 
 snapshots__test_snapshot = """

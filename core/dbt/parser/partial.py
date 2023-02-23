@@ -934,6 +934,7 @@ class PartialParsing:
             if unique_id in self.saved_manifest.groups:
                 group = self.saved_manifest.groups[unique_id]
                 if group.name == group_name:
+                    self.schedule_nodes_for_parsing(self.saved_manifest.group_map[group.name])
                     self.deleted_manifest.groups[unique_id] = self.saved_manifest.groups.pop(
                         unique_id
                     )

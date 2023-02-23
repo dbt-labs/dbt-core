@@ -366,6 +366,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 @dataclass
 class MetricConfig(BaseConfig):
     enabled: bool = True
+    group: Optional[str] = None
 
 
 @dataclass
@@ -402,6 +403,10 @@ class NodeAndTestConfig(BaseConfig):
     meta: Dict[str, Any] = field(
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
+    )
+    group: Optional[str] = field(
+        default=None,
+        metadata=CompareBehavior.Exclude.meta(),
     )
 
 
@@ -446,7 +451,7 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=Docs,
         metadata=MergeBehavior.Update.meta(),
     )
-    constraints_enabled: Optional[bool] = False
+    contract: bool = False
 
     # we validate that node_color has a suitable value to prevent dbt-docs from crashing
     def __post_init__(self):

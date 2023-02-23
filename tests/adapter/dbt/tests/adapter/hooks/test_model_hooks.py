@@ -9,7 +9,7 @@ from dbt.tests.util import (
     write_file,
 )
 
-from tests.functional.hooks.fixtures import (
+from dbt.tests.adapter.hooks.fixtures import (
     models__hooked,
     models__hooks,
     models__hooks_configured,
@@ -25,18 +25,17 @@ from tests.functional.hooks.fixtures import (
 
 MODEL_PRE_HOOK = """
    insert into {{this.schema}}.on_model_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
+        test_state,
+        target_dbname,
+        target_host,
+        target_name,
+        target_schema,
+        target_type,
+        target_user,
+        target_pass,
+        target_threads,
+        run_started_at,
+        invocation_id
    ) VALUES (
     'start',
     '{{ target.dbname }}',
@@ -46,7 +45,6 @@ MODEL_PRE_HOOK = """
     '{{ target.type }}',
     '{{ target.user }}',
     '{{ target.get("pass", "") }}',
-    {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
@@ -55,18 +53,17 @@ MODEL_PRE_HOOK = """
 
 MODEL_POST_HOOK = """
    insert into {{this.schema}}.on_model_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
+        test_state,
+        target_dbname,
+        target_host,
+        target_name,
+        target_schema,
+        target_type,
+        target_user,
+        target_pass,
+        target_threads,
+        run_started_at,
+        invocation_id
    ) VALUES (
     'end',
     '{{ target.dbname }}',
@@ -76,7 +73,6 @@ MODEL_POST_HOOK = """
     '{{ target.type }}',
     '{{ target.user }}',
     '{{ target.get("pass", "") }}',
-    {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
@@ -91,23 +87,20 @@ class BaseTestPrePost(object):
 
     def get_ctx_vars(self, state, count, project):
         fields = [
-            "state",
-            "target.dbname",
-            "target.host",
-            "target.name",
-            "target.port",
-            "target.schema",
-            "target.threads",
-            "target.type",
-            "target.user",
-            "target.pass",
+            "test_state",
+            "target_dbname",
+            "target_host",
+            "target_name",
+            "target_schema",
+            "target_threads",
+            "target_type",
+            "target_user",
+            "target_pass",
             "run_started_at",
             "invocation_id",
         ]
         field_list = ", ".join(['"{}"'.format(f) for f in fields])
-        query = "select {field_list} from {schema}.on_model_hook where state = '{state}'".format(
-            field_list=field_list, schema=project.test_schema, state=state
-        )
+        query = f"select {field_list} from {project.test_schema}.on_model_hook where test_state = '{state}'"
 
         vals = project.run_sql(query, fetch="all")
         assert len(vals) != 0, "nothing inserted into hooks table"
@@ -118,16 +111,15 @@ class BaseTestPrePost(object):
     def check_hooks(self, state, project, host, count=1):
         ctxs = self.get_ctx_vars(state, count=count, project=project)
         for ctx in ctxs:
-            assert ctx["state"] == state
-            assert ctx["target.dbname"] == "dbt"
-            assert ctx["target.host"] == host
-            assert ctx["target.name"] == "default"
-            assert ctx["target.port"] == 5432
-            assert ctx["target.schema"] == project.test_schema
-            assert ctx["target.threads"] == 4
-            assert ctx["target.type"] == "postgres"
-            assert ctx["target.user"] == "root"
-            assert ctx["target.pass"] == ""
+            assert ctx["test_state"] == state
+            assert ctx["target_dbname"] == "dbt"
+            assert ctx["target_host"] == host
+            assert ctx["target_name"] == "default"
+            assert ctx["target_schema"] == project.test_schema
+            assert ctx["target_threads"] == 4
+            assert ctx["target_type"] == "postgres"
+            assert ctx["target_user"] == "root"
+            assert ctx["target_pass"] == ""
 
             assert (
                 ctx["run_started_at"] is not None and len(ctx["run_started_at"]) > 0
@@ -165,9 +157,8 @@ class TestPrePostModelHooks(BaseTestPrePost):
 
     def test_pre_and_post_run_hooks(self, project, dbt_profile_target):
         run_dbt()
-
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
 
 class TestPrePostModelHooksUnderscores(TestPrePostModelHooks):
@@ -203,19 +194,18 @@ class TestHookRefs(BaseTestPrePost):
                         "post-hook": [
                             """
                         insert into {{this.schema}}.on_model_hook select
-                        state,
-                        '{{ target.dbname }}' as "target.dbname",
-                        '{{ target.host }}' as "target.host",
-                        '{{ target.name }}' as "target.name",
-                        '{{ target.schema }}' as "target.schema",
-                        '{{ target.type }}' as "target.type",
-                        '{{ target.user }}' as "target.user",
-                        '{{ target.get("pass", "") }}' as "target.pass",
-                        {{ target.port }} as "target.port",
-                        {{ target.threads }} as "target.threads",
-                        '{{ run_started_at }}' as "run_started_at",
-                        '{{ invocation_id }}' as "invocation_id"
-                    from {{ ref('post') }}""".strip()
+                        test_state,
+                        '{{ target.dbname }}' as target_dbname,
+                        '{{ target.host }}' as target_host,
+                        '{{ target.name }}' as target_name,
+                        '{{ target.schema }}' as target_schema,
+                        '{{ target.type }}' as target_type,
+                        '{{ target.user }}' as target_user,
+                        '{{ target.get(pass, "") }}' as target_pass,
+                        {{ target.threads }} as target_threads,
+                        '{{ run_started_at }}' as run_started_at,
+                        '{{ invocation_id }}' as invocation_id
+                        from {{ ref('post') }}""".strip()
                         ],
                     }
                 },
@@ -228,9 +218,8 @@ class TestHookRefs(BaseTestPrePost):
 
     def test_pre_post_model_hooks_refed(self, project, dbt_profile_target):
         run_dbt()
-
-        self.check_hooks("start", project, dbt_profile_target["host"], count=1)
-        self.check_hooks("end", project, dbt_profile_target["host"], count=1)
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
 
 class TestPrePostModelHooksOnSeeds(object):
@@ -384,8 +373,8 @@ class TestPrePostModelHooksInConfig(PrePostModelHooksInConfigSetup):
     def test_pre_and_post_model_hooks_model(self, project, dbt_profile_target):
         run_dbt()
 
-        self.check_hooks("start", project, dbt_profile_target["host"])
-        self.check_hooks("end", project, dbt_profile_target["host"])
+        self.check_hooks("start", project, dbt_profile_target.get("host", None))
+        self.check_hooks("end", project, dbt_profile_target.get("host", None))
 
 
 class TestPrePostModelHooksInConfigWithCount(PrePostModelHooksInConfigSetup):
@@ -413,8 +402,8 @@ class TestPrePostModelHooksInConfigWithCount(PrePostModelHooksInConfigSetup):
     def test_pre_and_post_model_hooks_model_and_project(self, project, dbt_profile_target):
         run_dbt()
 
-        self.check_hooks("start", project, dbt_profile_target["host"], count=2)
-        self.check_hooks("end", project, dbt_profile_target["host"], count=2)
+        self.check_hooks("start", project, dbt_profile_target.get("host", None), count=2)
+        self.check_hooks("end", project, dbt_profile_target.get("host", None), count=2)
 
 
 class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
