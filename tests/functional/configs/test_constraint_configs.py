@@ -15,11 +15,11 @@ select
   cast('2019-01-01' as date) as date_day
 """
 
-my_model_constraints_enabled_sql = """
+my_model_contract_sql = """
 {{
   config(
     materialized = "table",
-    constraints_enabled = true
+    contract = true
   )
 }}
 
@@ -33,7 +33,7 @@ my_model_constraints_disabled_sql = """
 {{
   config(
     materialized = "table",
-    constraints_enabled = false
+    contract = false
   )
 }}
 
@@ -75,7 +75,7 @@ version: 2
 models:
   - name: my_model
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         quote: true
@@ -96,7 +96,7 @@ version: 2
 models:
   - name: my_model
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         data_type: integer
@@ -110,7 +110,7 @@ models:
       - name: date_day
   - name: python_model
     config:
-      constraints_enabled: true
+      contract: true
     columns:
       - name: id
         data_type: integer
@@ -130,7 +130,7 @@ version: 2
 models:
   - name: my_model
     config:
-      constraints_enabled: true
+      contract: true
 """
 
 
@@ -142,15 +142,15 @@ class TestModelLevelConstraintsEnabledConfigs:
             "constraints_schema.yml": model_schema_yml,
         }
 
-    def test__model_constraints_enabled_true(self, project):
+    def test__model_contract_true(self, project):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
         my_model_columns = manifest.nodes[model_id].columns
         my_model_config = manifest.nodes[model_id].config
-        constraints_enabled_actual_config = my_model_config.constraints_enabled
+        contract_actual_config = my_model_config.contract
 
-        assert constraints_enabled_actual_config is True
+        assert contract_actual_config is True
 
         expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=['not null', 'primary key'], constraints_check='(id > 0)', quote=True, tags=[], _extra={}), 'color': ColumnInfo(name='color', description='', meta={}, data_type='text', constraints=None, constraints_check=None, quote=None, tags=[], _extra={}), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=None, constraints_check=None, quote=None, tags=[], _extra={})}"
 
@@ -163,9 +163,9 @@ class TestProjectConstraintsEnabledConfigs:
         return {
             "models": {
                 "test": {
-                    "+constraints_enabled": True,
+                    "+contract": True,
                     "subdirectory": {
-                        "+constraints_enabled": False,
+                        "+contract": False,
                     },
                 }
             }
@@ -189,7 +189,7 @@ class TestModelConstraintsEnabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_constraints_enabled_sql,
+            "my_model.sql": my_model_contract_sql,
         }
 
     def test__model_error(self, project):
@@ -208,15 +208,15 @@ class TestModelLevelConstraintsDisabledConfigs:
             "constraints_schema.yml": model_schema_yml,
         }
 
-    def test__model_constraints_enabled_false(self, project):
+    def test__model_contract_false(self, project):
 
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
         my_model_config = manifest.nodes[model_id].config
-        constraints_enabled_actual_config = my_model_config.constraints_enabled
+        contract_actual_config = my_model_config.contract
 
-        assert constraints_enabled_actual_config is False
+        assert contract_actual_config is False
 
 
 class TestModelLevelConstraintsErrorMessages:

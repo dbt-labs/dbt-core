@@ -242,6 +242,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
@@ -403,7 +404,7 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
-    constraints_enabled: bool = False
+    contract: bool = False
 
     @property
     def empty(self):
@@ -414,8 +415,10 @@ class CompiledNode(ParsedNode):
         do if extra_ctes were an OrderedDict
         """
         for cte in self.extra_ctes:
+            # Because it's possible that multiple threads are compiling the
+            # node at the same time, we don't want to overwrite already compiled
+            # sql in the extra_ctes with empty sql.
             if cte.id == cte_id:
-                cte.sql = sql
                 break
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
@@ -647,6 +650,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
+    attached_node: Optional[str] = None
 
     def same_contents(self, other) -> bool:
         if other is None:

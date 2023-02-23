@@ -4,7 +4,7 @@ from dataclasses import field
 from datetime import datetime
 import os
 import traceback
-from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
+from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple, Set
 from itertools import chain
 import time
 from dbt.events.base_types import EventLevel
@@ -253,6 +253,8 @@ class ManifestLoader:
             else:
                 # create child_map and parent_map
                 self.saved_manifest.build_parent_and_child_maps()
+                # create group_map
+                self.saved_manifest.build_group_map()
                 # files are different, we need to create a new set of
                 # project_parser_files.
                 try:
@@ -1061,6 +1063,27 @@ def _check_resource_uniqueness(
         alias_resources[full_node_name] = node
 
 
+def _check_valid_group_config(manifest: Manifest):
+    group_names = {group.name for group in manifest.groups.values()}
+
+    for metric in manifest.metrics.values():
+        _check_valid_group_config_node(metric, group_names)
+
+    for node in manifest.nodes.values():
+        _check_valid_group_config_node(node, group_names)
+
+
+def _check_valid_group_config_node(
+    groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+):
+    groupable_node_group = groupable_node.config.group
+    if groupable_node_group and groupable_node_group not in valid_group_names:
+        raise dbt.exceptions.ParsingError(
+            f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
+            node=groupable_node,
+        )
+
+
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
     disabled_fqns: PathSet = frozenset(
@@ -1072,6 +1095,7 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
+    _check_valid_group_config(manifest)
 
 
 def _get_node_column(node, column_name):

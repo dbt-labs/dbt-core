@@ -1,0 +1,7 @@
+kind: Fixes
+body: Remove trailing slashes from source paths (#6102)
+time: 2022-10-30T10:21:14.660221Z
+custom:
+  Author: jmg-duarte
+  Issue: "6102"
+  PR: "6179"

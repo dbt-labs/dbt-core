@@ -46,10 +46,10 @@ from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMater
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'metrics', 'meta',
-    'depends_on', 'database', 'schema', 'name', 'resource_type',
+    'depends_on', 'database', 'schema', 'name', 'resource_type', 'group',
     'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
-    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'constraints_enabled'
+    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'contract'
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
@@ -335,6 +335,7 @@ class ManifestTest(unittest.TestCase):
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
@@ -489,6 +490,7 @@ class ManifestTest(unittest.TestCase):
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
@@ -759,6 +761,7 @@ class MixedManifestTest(unittest.TestCase):
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},
+                'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',

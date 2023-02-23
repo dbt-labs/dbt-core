@@ -1047,6 +1047,20 @@ models:
     description: "Some order data"
 """
 
+groups_schema_yml_one_group_model_in_group2 = """
+version: 2
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+
+models:
+  - name: orders
+    description: "Some order data"
+    config:
+      group: test_group2
+"""
 
 groups_schema_yml_two_groups_edited = """
 version: 2

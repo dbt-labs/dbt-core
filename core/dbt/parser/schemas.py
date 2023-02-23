@@ -35,6 +35,8 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     Group,
+    ManifestNode,
+    GraphMemberNode,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -346,6 +348,23 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
 
         return node
 
+    def _lookup_attached_node(
+        self, target: Testable
+    ) -> Optional[Union[ManifestNode, GraphMemberNode]]:
+        """Look up attached node for Testable target nodes other than sources. Can be None if generic test attached to SQL node with no corresponding .sql file."""
+        attached_node = None  # type: Optional[Union[ManifestNode, GraphMemberNode]]
+        if not isinstance(target, UnpatchedSourceDefinition):
+            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(target.name, None)
+            if attached_node_unique_id:
+                attached_node = self.manifest.nodes[attached_node_unique_id]
+            else:
+                disabled_node = self.manifest.disabled_lookup.find(
+                    target.name, None
+                ) or self.manifest.disabled_lookup.find(target.name.upper(), None)
+                if disabled_node:
+                    attached_node = self.manifest.disabled[disabled_node[0].unique_id][0]
+        return attached_node
+
     def store_env_vars(self, target, schema_file_id, env_vars):
         self.manifest.env_vars.update(env_vars)
         if schema_file_id in self.manifest.files:
@@ -407,6 +426,13 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
                 raise SchemaConfigError(exc, node=node) from exc
+
+        # Set attached_node for generic test nodes, if available.
+        # Generic test node inherits attached node's group config value.
+        attached_node = self._lookup_attached_node(builder.target)
+        if attached_node:
+            node.attached_node = attached_node.unique_id
+            node.group, node.config.group = attached_node.config.group, attached_node.config.group
 
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
@@ -791,6 +817,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                     # macros don't have the 'config' key support yet
                     self.normalize_meta_attribute(data, path)
                     self.normalize_docs_attribute(data, path)
+                    self.normalize_group_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(path, self.key, data, exc)
@@ -818,6 +845,9 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
 
     def normalize_docs_attribute(self, data, path):
         return self.normalize_attribute(data, path, "docs")
+
+    def normalize_group_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "group")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
@@ -930,10 +960,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
     def validate_constraints(self, patched_node):
         error_messages = []
-        if (
-            patched_node.resource_type == "model"
-            and patched_node.config.constraints_enabled is True
-        ):
+        if patched_node.resource_type == "model" and patched_node.config.contract is True:
             validators = [
                 self.constraints_schema_validator(patched_node),
                 self.constraints_materialization_validator(patched_node),
