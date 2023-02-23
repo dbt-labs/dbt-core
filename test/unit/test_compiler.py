@@ -303,6 +303,30 @@ class CompilerTest(unittest.TestCase):
             raw_code='select * from source_table',
             checksum=FileHash.from_contents(''),
         )
+        compiled_ephemeral = ModelNode(
+            name='ephemeral',
+            database='dbt',
+            schema='analytics',
+            alias='ephemeral',
+            resource_type=NodeType.Model,
+            unique_id='model.root.ephemeral',
+            fqn=['root', 'ephemeral'],
+            package_name='root',
+            refs=[],
+            sources=[],
+            depends_on=DependsOn(),
+            config=ephemeral_config,
+            tags=[],
+            path='ephemeral.sql',
+            original_file_path='ephemeral.sql',
+            language='sql',
+            raw_code='select * from source_table',
+            compiled=True,
+            compiled_code='select * from source_table',
+            extra_ctes_injected=True,
+            extra_ctes=[],
+            checksum=FileHash.from_contents(''),
+        )
         manifest = Manifest(
             macros={},
             nodes={
@@ -343,17 +367,24 @@ class CompilerTest(unittest.TestCase):
         )
 
         compiler = dbt.compilation.Compiler(self.config)
-        node = compiler.compile_node(
-            manifest.nodes['model.root.view'],
-            manifest,
-            {},
-            False
-        )
+        with patch.object(compiler, '_compile_node') as compile_node:
+            compile_node.return_value = compiled_ephemeral
+
+            result, _ = compiler._recursively_prepend_ctes(
+                manifest.nodes['model.root.view'],
+                manifest,
+                {}
+            )
+            compile_node.assert_called_once_with(
+                parsed_ephemeral, manifest, {})
+
+        self.assertEqual(result,
+                         manifest.nodes.get('model.root.view'))
 
         self.assertTrue(manifest.nodes['model.root.ephemeral'].compiled)
-        self.assertTrue(node.extra_ctes_injected)
+        self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
-            node.compiled_code,
+            result.compiled_code,
             ('with __dbt__cte__ephemeral as ('
              'select * from source_table'
              ') '

@@ -410,10 +410,8 @@ class CompiledNode(ParsedNode):
         do if extra_ctes were an OrderedDict
         """
         for cte in self.extra_ctes:
-            # Because it's possible that multiple threads are compiling the
-            # node at the same time, we don't want to overwrite already compiled
-            # sql in the extra_ctes with empty sql.
             if cte.id == cte_id:
+                cte.sql = sql
                 break
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
