@@ -41,14 +41,14 @@
 {% endmacro %}
 
 {% macro format_columns(columns) %}
-  {{ adapter.dispatch('format_columns', 'dbt')(columns) }}
-{%- endmacro %}
-
-{% macro default__format_columns(columns) -%}
   {% set formatted_columns = [] %}
   {% for column in columns %}
-    {%- set formatted_column = column.column.lower() ~ " " ~ column.data_type -%}
+    {%- set formatted_column = adapter.dispatch('format_column', 'dbt')(column) -%}
     {%- do formatted_columns.append(formatted_column) -%}
   {% endfor %}
   {{ return(formatted_columns|join(', ')) }}
+{%- endmacro -%}
+
+{% macro default__format_column(column) -%}
+  {{ return(column.column.lower() ~ " " ~ column.dtype) }}
 {%- endmacro -%}
