@@ -64,10 +64,10 @@ class BaseConstraintsColumnsEqual:
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
 
         expected_schema_file_columns = (
-            f"Schema File Columns:\n    id {int_type}, color {string_type}, date_day DATE"
+            f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
         )
         expected_sql_file_columns = (
-            f"SQL File Columns:\n    color {string_type}, id {int_type}, date_day DATE"
+            f"SQL File Columns: color {string_type}, id {int_type}, date_day DATE"
         )
 
         assert expected_compile_error in log_output
@@ -87,10 +87,10 @@ class BaseConstraintsColumnsEqual:
 
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
-            f"Schema File Columns:\n    id {int_type}, color {string_type}, date_day DATE"
+            f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
         )
         expected_sql_file_columns = (
-            f"SQL File Columns:\n    error {int_type}, color {string_type}, date_day DATE"
+            f"SQL File Columns: error {int_type}, color {string_type}, date_day DATE"
         )
 
         assert expected_compile_error in log_output
@@ -111,8 +111,8 @@ class BaseConstraintsColumnsEqual:
         assert constraints_enabled_actual_config is True
 
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
-        expected_schema_file_columns = f"Schema File Columns:\n    id {int_type}, color {string_type}, date_day DATE, num_array {int_array_type}"
-        expected_sql_file_columns = f"SQL File Columns:\n    id {string_type}, color {string_type}, date_day DATE, num_array {string_array_type}"
+        expected_schema_file_columns = f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE, num_array {int_array_type}"
+        expected_sql_file_columns = f"SQL File Columns: id {string_type}, color {string_type}, date_day DATE, num_array {string_array_type}"
 
         assert expected_compile_error in log_output
         assert expected_schema_file_columns in log_output
