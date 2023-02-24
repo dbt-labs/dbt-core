@@ -152,9 +152,9 @@ class VersionSpecifier(VersionSpecification):
                 # else is equal and will fall through
 
             else:  # major/minor/patch, should all be numbers
-                if a > b:
+                if int(a) > int(b):
                     return 1
-                elif a < b:
+                elif int(a) < int(b):
                     return -1
                 # else is equal and will fall through
 
