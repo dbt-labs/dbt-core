@@ -172,6 +172,8 @@ sample_values = [
     types.HooksRunning(num_hooks=0, hook_type=""),
     types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
     # I - Project parsing ======================
+    types.InvalidValueForField(field_name="test", field_value="test"),
+    types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
     types.GenericTestFileParse(path=""),
     types.MacroFileParse(path=""),

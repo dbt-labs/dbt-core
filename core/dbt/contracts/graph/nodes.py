@@ -37,16 +37,17 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError
+from dbt.exceptions import ParsingError, InvalidAccessTypeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    ValidationWarning,
 )
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
-from dbt.node_types import ModelLanguage, NodeType
+from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt.utils import cast_dict_to_dict_of_strings
 
 
@@ -365,6 +366,26 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        # This might not be the ideal place to validate the "access" field,
+        # but at this point we have the information we need to properly
+        # validate and we don't before this.
+        if patch.access:
+            if self.resource_type == NodeType.Model:
+                if AccessType.is_valid(patch.access):
+                    self.access = AccessType(patch.access)
+                else:
+                    raise InvalidAccessTypeError(
+                        unique_id=self.unique_id,
+                        field_value=patch.access,
+                    )
+            else:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="access",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
 
     def same_contents(self, old) -> bool:
         if old is None:
@@ -465,6 +486,7 @@ class HookNode(CompiledNode):
 @dataclass
 class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
+    access: AccessType = AccessType.Protected
 
 
 # TODO: rm?
@@ -1140,6 +1162,7 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
 @dataclass
 class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
+    access: Optional[str]
 
 
 @dataclass

@@ -342,7 +342,7 @@ class VersionedSchema(dbtClassMixin):
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )
-        if get_manifest_schema_version(data) <= 7:
+        if get_manifest_schema_version(data) <= 8:
             data = upgrade_manifest_json(data)
         return cls.from_dict(data)  # type: ignore
 

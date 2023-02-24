@@ -3,6 +3,20 @@ from typing import List
 from dbt.dataclass_schema import StrEnum
 
 
+class AccessType(StrEnum):
+    Protected = "protected"
+    Private = "private"
+    Public = "public"
+
+    @classmethod
+    def is_valid(cls, item):
+        try:
+            cls(item)
+        except ValueError:
+            return False
+        return True
+
+
 class NodeType(StrEnum):
     Model = "model"
     Analysis = "analysis"
