@@ -1,7 +1,7 @@
 import pytest
-from dbt.tests.util import run_dbt, get_manifest, write_file
+from dbt.tests.util import run_dbt, get_manifest, write_file, rm_file
 from dbt.node_types import AccessType
-from dbt.exceptions import InvalidAccessTypeError
+from dbt.exceptions import InvalidAccessTypeError, DbtReferenceError
 
 my_model_sql = "select 1 as fun"
 
@@ -34,6 +34,48 @@ models:
     access: unsupported
 """
 
+ref_my_model_sql = """
+   select fun from {{ ref('my_model') }}
+"""
+
+v3_schema_yml = """
+version: 2
+
+groups:
+  - name: analytics
+    owner:
+      name: analytics_owner
+  - name: marts
+    owner:
+      name: marts_owner
+
+models:
+  - name: my_model
+    description: "my model"
+    group: analytics
+    access: private
+  - name: another_model
+    description: "yet another model"
+  - name: ref_my_model
+    description: "a model that refs my_model"
+    group: analytics
+"""
+
+v4_schema_yml = """
+version: 2
+
+models:
+  - name: my_model
+    description: "my model"
+    group: analytics
+    access: private
+  - name: another_model
+    description: "yet another model"
+  - name: ref_my_model
+    description: "a model that refs my_model"
+    group: marts
+"""
+
 
 class TestAccess:
     @pytest.fixture(scope="class")
@@ -63,4 +105,21 @@ class TestAccess:
         write_file(v2_schema_yml, project.project_root, "models", "schema.yml")
 
         with pytest.raises(InvalidAccessTypeError):
+            run_dbt(["run"])
+
+        # Remove invalid access files and write out model that refs my_model
+        rm_file(project.project_root, "models", "yet_another_model.sql")
+        write_file(schema_yml, project.project_root, "models", "schema.yml")
+        write_file(ref_my_model_sql, project.project_root, "models", "ref_my_model.sql")
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        # make my_model private, set same group on my_model and ref_my_model
+        write_file(v3_schema_yml, project.project_root, "models", "schema.yml")
+        results = run_dbt(["run"])
+        assert len(results) == 3
+
+        # Change group on ref_my_model and it should raise
+        write_file(v4_schema_yml, project.project_root, "models", "schema.yml")
+        with pytest.raises(DbtReferenceError):
             run_dbt(["run"])
