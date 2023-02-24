@@ -1114,6 +1114,19 @@ class SnapshopConfigError(ParsingError):
         super().__init__(msg=self.msg)
 
 
+class DbtReferenceError(ParsingError):
+    def __init__(self, unique_id: str, ref_unique_id: str):
+        self.unique_id = unique_id
+        self.ref_unique_id = ref_unique_id
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        return (
+            f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
+            "which is not allowed because the referenced node is private."
+        )
+
+
 class SameKeyNestedError(CompilationError):
     def __init__(self):
         msg = "Test cannot have the same key at the top-level and in config"

@@ -37,7 +37,7 @@ from dbt.events.types import (
     Note,
 )
 from dbt.logger import DbtProcessState
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory, write_file
@@ -67,7 +67,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
 )
 from dbt.contracts.util import Writable
-from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError
+from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError, DbtReferenceError
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -1321,6 +1321,16 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             current_project,
             node.package_name,
         )
+
+        # Handle references to models that are private
+        if (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not node.group or node.group != target_model.group:
+                raise dbt.exceptions.DbtReferenceError(
+                    unique_id=node.unique_id, ref_unique_id=target_model.unique_id
+                )
 
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
