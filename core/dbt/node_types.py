@@ -8,7 +8,8 @@ class AccessType(StrEnum):
     Private = "private"
     Public = "public"
 
-    def __contains__(cls, item):
+    @classmethod
+    def is_valid(cls, item):
         try:
             cls(item)
         except ValueError:

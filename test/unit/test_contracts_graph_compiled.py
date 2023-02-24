@@ -521,7 +521,6 @@ def basic_compiled_schema_test_dict():
             'severity': 'warn',
         },
         'config_call_dict': {},
-        'access': 'protected',
     }
 
 @pytest.mark.skip("Haven't found where we would use uncompiled node")

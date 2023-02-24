@@ -372,7 +372,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         # validate and we don't before this.
         if patch.access:
             if self.resource_type == NodeType.Model:
-                if patch.access in AccessType:
+                if AccessType.is_valid(patch.access):
                     self.access = AccessType(patch.access)
                 else:
                     warn_or_error(
