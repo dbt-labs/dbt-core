@@ -37,14 +37,13 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError
+from dbt.exceptions import ParsingError, InvalidAccessTypeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
     ValidationWarning,
-    InvalidValueForField,
 )
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
@@ -375,11 +374,9 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
                 if AccessType.is_valid(patch.access):
                     self.access = AccessType(patch.access)
                 else:
-                    warn_or_error(
-                        InvalidValueForField(
-                            field_value=patch.access,
-                            field_name="access",
-                        )
+                    raise InvalidAccessTypeError(
+                        unique_id=self.unique_id,
+                        field_value=patch.access,
                     )
             else:
                 warn_or_error(
