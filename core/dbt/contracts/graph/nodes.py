@@ -43,6 +43,8 @@ from dbt.events.types import (
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    ValidationWarning,
+    InvalidValueForField,
 )
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
@@ -252,7 +254,6 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
-    access: AccessType = AccessType.Protected
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
@@ -366,8 +367,28 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        # This might not be the ideal place to validate the "access" field,
+        # but at this point we have the information we need to properly
+        # validate and we don't before this.
         if patch.access:
-            self.access = AccessType(patch.access)
+            if self.resource_type == NodeType.Model:
+                if patch.access in AccessType:
+                    self.access = AccessType(patch.access)
+                else:
+                    warn_or_error(
+                        InvalidValueForField(
+                            field_value=patch.access,
+                            field_name="access",
+                        )
+                    )
+            else:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="access",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
 
     def same_contents(self, old) -> bool:
         if old is None:
@@ -468,6 +489,7 @@ class HookNode(CompiledNode):
 @dataclass
 class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
+    access: AccessType = AccessType.Protected
 
 
 # TODO: rm?

@@ -8,6 +8,13 @@ class AccessType(StrEnum):
     Private = "private"
     Public = "public"
 
+    def __contains__(cls, item):
+        try:
+            cls(item)
+        except ValueError:
+            return False
+        return True
+
 
 class NodeType(StrEnum):
     Model = "model"
