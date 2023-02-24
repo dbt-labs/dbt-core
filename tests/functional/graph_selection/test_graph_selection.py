@@ -32,7 +32,7 @@ def clear_schema(project):
     project.run_sql("create schema {schema}")
 
 
-class TestGraphSelection(SelectionFixtures):
+class TestGraphSelectionByGroup(SelectionFixtures):
     # The tests here aiming to test whether the correct node is selected,
     # we don't need the run to pass
     @pytest.fixture(scope="class")
@@ -71,18 +71,18 @@ class TestGraphSelection(SelectionFixtures):
     def test_tags_and_children_limited(self, project):
         results = run_dbt(["run", "--select", "tag:base+2"], expect_pass=False)
         check_result_nodes_by_name(
-            results, ["emails_alt", "users_rollup", "users", "alternative.users"]
+            results,
+            [
+                "emails",
+            ],
         )
         assert_correct_schemas(project)
 
     def test_group(self, project):
-        results = run_dbt(["run", "--select", "group:special_group"], expect_pass=False)
-        check_result_nodes_by_name(
-            results, ["emails_alt", "users_rollup", "users", "alternative.users"]
-        )
-        assert_correct_schemas(project)
-
-    # def test_group_and_tests()
+        results = run_dbt(["ls", "--select", "group:users_group"])
+        assert sorted(results) == [
+            "test.unique_users_id" "test.users",
+        ]
 
     def test_specific_model_and_children(self, project):
         results = run_dbt(["run", "--select", "users+"], expect_pass=False)

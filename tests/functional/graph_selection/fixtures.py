@@ -4,19 +4,46 @@ from dbt.tests.util import read_file
 
 schema_yml = """
 version: 2
+
+groups:
+  - name: emails_group
+    owner:
+      name: Jeremy
+      email: data@jer.co
+      slack: talk-jerco-memes
+      github: jtcohen6
+      whatever: you want
+  - name: users_group
+    owner:
+      name: Jeremy
+      email: data@jer.co
+      slack: talk-jerco-memes
+      github: jtcohen6
+      whatever: you want
+  - name: users_rollup_group
+    owner:
+      name: Jeremy
+      email: data@jer.co
+      slack: talk-jerco-memes
+      github: jtcohen6
+      whatever: you want
+
 models:
   - name: emails
+    group: emails_group
     columns:
     - name: email
       tests:
       - not_null:
           severity: warn
   - name: users
+    group: users_group
     columns:
     - name: id
       tests:
       - unique
   - name: users_rollup
+    group: users_rollup_group
     columns:
     - name: gender
       tests:
