@@ -15,6 +15,7 @@ models:
     access: public
   - name: another_model
     description: "another model"
+    access: unsupported
 """
 
 
