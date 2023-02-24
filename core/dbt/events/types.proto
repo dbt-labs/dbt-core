@@ -784,7 +784,7 @@ message ValidationWarning {
 
 message ValidationWarningMsg {
     EventInfo info = 1;
-    ValidationWarningMsg data = 2;
+    ValidationWarning data = 2;
 }
 
 // I010

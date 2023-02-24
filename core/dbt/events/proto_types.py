@@ -988,7 +988,7 @@ class ValidationWarning(betterproto.Message):
 @dataclass
 class ValidationWarningMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "ValidationWarningMsg" = betterproto.message_field(2)
+    data: "ValidationWarning" = betterproto.message_field(2)
 
 
 @dataclass
