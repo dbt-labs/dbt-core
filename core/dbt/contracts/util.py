@@ -298,8 +298,6 @@ def upgrade_manifest_json(manifest: dict) -> dict:
         if "root_path" in doc_content:
             del doc_content["root_path"]
         doc_content["resource_type"] = "doc"
-    if "groups" not in manifest:
-        manifest["groups"] = {}
     return manifest
 
 
