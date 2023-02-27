@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Throw errors for invalid model access
+time: 2023-02-27T11:58:21.133458-05:00
+custom:
+  Author: gshank
+  Issue: "6826"
