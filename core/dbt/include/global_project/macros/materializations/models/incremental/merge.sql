@@ -60,7 +60,7 @@
             {%- if column_name is string %}
             {{ column_name }} = DBT_INTERNAL_SOURCE.{{ column_name }}
             {%- else %}
-            {{ column_name.name }} = {{ column_name.value }}
+            {{ column_name.get('name') }} = {{ column_name.get('value') }}
             {%- endif %}
             {%- if not loop.last %}, {%- endif %}
         {%- endfor %}
