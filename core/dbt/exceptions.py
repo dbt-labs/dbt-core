@@ -1118,12 +1118,13 @@ class DbtReferenceError(ParsingError):
     def __init__(self, unique_id: str, ref_unique_id: str, group: str):
         self.unique_id = unique_id
         self.ref_unique_id = ref_unique_id
+        self.group = group
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         return (
             f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
-            "which is not allowed because the referenced node is private to the {self.group} group."
+            f"which is not allowed because the referenced node is private to the {self.group} group."
         )
 
 
