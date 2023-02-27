@@ -1202,7 +1202,9 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
         ):
             # Exposures do not have a group and so can never reference private models
             raise dbt.exceptions.DbtReferenceError(
-                unique_id=exposure.unique_id, ref_unique_id=target_model.unique_id
+                unique_id=exposure.unique_id,
+                ref_unique_id=target_model.unique_id,
+                group=dbt.utils.cast_to_str(target_model.group),
             )
 
         target_model_id = target_model.unique_id
@@ -1253,7 +1255,9 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
         ):
             if not metric.group or metric.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
-                    unique_id=metric.unique_id, ref_unique_id=target_model.unique_id
+                    unique_id=metric.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=dbt.utils.cast_to_str(target_model.group),
                 )
 
         target_model_id = target_model.unique_id
@@ -1359,7 +1363,9 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
         ):
             if not node.group or node.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
-                    unique_id=node.unique_id, ref_unique_id=target_model.unique_id
+                    unique_id=node.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=dbt.utils.cast_to_str(target_model.group),
                 )
 
         target_model_id = target_model.unique_id
