@@ -58,14 +58,12 @@ models:
   - name: my_model
     description: "my model"
     access: private
-    config:
-      group: analytics
+    group: analytics
   - name: another_model
     description: "yet another model"
   - name: ref_my_model
     description: "a model that refs my_model"
-    config:
-      group: analytics
+    group: analytics
 """
 
 v4_schema_yml = """
@@ -75,14 +73,12 @@ models:
   - name: my_model
     description: "my model"
     access: private
-    config:
-      group: analytics
+    group: analytics
   - name: another_model
     description: "yet another model"
   - name: ref_my_model
     description: "a model that refs my_model"
-    config:
-      group: marts
+    group: marts
 """
 
 simple_exposure_yml = """
@@ -105,23 +101,19 @@ models:
   - name: my_model
     description: "my model"
     access: private
-    config:
-      group: analytics
+    group: analytics
   - name: another_model
     description: "yet another model"
   - name: ref_my_model
     description: "a model that refs my_model"
-    config:
-      group: marts
+    group: marts
   - name: ref_my_model
     description: "a model that refs my_model"
-    config:
-      group: analytics
+    group: analytics
   - name: people_model
     description: "some people"
     access: private
-    config:
-      group: analytics
+    group: analytics
 """
 
 people_model_sql = """
