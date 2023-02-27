@@ -74,17 +74,17 @@ _Read more: ["Multi-project deployments"](https://github.com/dbt-labs/dbt-core/d
 
 ## Support for streaming
 
-<!-- TODO -->
+Back in 2020, one of Jeremy's very first projects, as newly designated Associate Product Manager, was investigating the implementation of Materialized Views across our most popular data platforms. The findings: while the dream of MVs was a happy one, every real MV was unhappy in its own way, motivated by different use cases and beset by subtle limitations.
+
+A few years later, the major data platform vendors are taking another swing at first-class support for streaming transformation. We're also lucky to have Florian, who talked & thought streaming databases for a living. Our vision is a dbt DAG that can combine batch & streaming, without distorting the core framework that's gotten dbt where it is.
 
 _Read more: ["Let's add Materialized View as a materialization, finally"](https://github.com/dbt-labs/dbt-core/issues/6911)_
 
 ## dbt Semantic Layer
 
-Metrics <> MetricFlow
+We've officially welcomed many new colleagues from Transform. We're going to be spending time over the next several weeks talking about how to integrate dbt Core's existing metrics spec with MetricFlow's.
 
-<!-- TODO -->
-
-_Read more: ["dbt should know more semantic information"](https://github.com/dbt-labs/dbt-core/discussions/6644)_
+We expect to be writing much more about this in public. Until then, you can read our previous thinking. The specifics are liable to change, but the foundational concept still holds: ["dbt should know more semantic information"](https://github.com/dbt-labs/dbt-core/discussions/6644)
 
 ## What's **not** here?
 
@@ -95,7 +95,7 @@ Each of the topics below has appeared in the lower-confidence portions of previo
 - **External orchestration.** Can dbt trigger external APIs to ingest `sources`, and sync `exposures`? To run `models` that require tools outside the data platform? I'd like the answer here to be "yes," but it isn't a priority for this year.
 - **Python models.** We have some ideas of what can be compelling & ergonomic here.
 - **Modeling languages**, or "bring your own" SQL transpiler / Python framework / ???. I've also discussed this as one way of eventually offering **column-level lineage,** which—while still capturing our hearts—also doesn't make it onto the list of top priorities for the year.
-- **Unit testing.**
+- **Unit testing.** ~Let's just take a day—just one day!—and try to hack together a working demo.~ (We might, though.)
 
 ## What we'll keep doing
 
