@@ -38,7 +38,7 @@ ref_my_model_sql = """
    select fun from {{ ref('my_model') }}
 """
 
-v3_schema_yml = """
+groups_yml = """
 version: 2
 
 groups:
@@ -48,6 +48,11 @@ groups:
   - name: marts
     owner:
       name: marts_owner
+"""
+
+
+v3_schema_yml = """
+version: 2
 
 models:
   - name: my_model
@@ -108,6 +113,10 @@ models:
     description: "a model that refs my_model"
     config:
       group: marts
+  - name: ref_my_model
+    description: "a model that refs my_model"
+    config:
+      group: analytics
   - name: people_model
     description: "some people"
     access: private
@@ -141,6 +150,30 @@ metrics:
       - loves_dbt
     meta:
         my_meta: 'testing'
+    config:
+      group: analytics
+"""
+
+v2_people_metric_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people_model')"
+    calculation_method: count
+    expression: "*"
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+    config:
+      group: marts
 """
 
 
@@ -182,6 +215,7 @@ class TestAccess:
         assert len(results) == 3
 
         # make my_model private, set same group on my_model and ref_my_model
+        write_file(groups_yml, project.project_root, "models", "groups.yml")
         write_file(v3_schema_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["run"])
         assert len(results) == 3
@@ -211,6 +245,15 @@ class TestAccess:
         rm_file(project.project_root, "models", "simple_exposure.yml")
         write_file(people_model_sql, "models", "people_model.sql")
         write_file(people_metric_yml, "models", "people_metric.yml")
-        # Fails with reference error
+        # Should succeed
+        results = run_dbt(["run"])
+        assert len(results) == 4
+        manifest = get_manifest(project.project_root)
+        metric_id = "metric.test.number_of_people"
+        assert manifest.metrics[metric_id].group == "analytics"
+
+        # Change group of metric
+        write_file(v2_people_metric_yml, "models", "people_metric.yml")
+        # Should raise a reference error
         with pytest.raises(DbtReferenceError):
             run_dbt(["run"])
