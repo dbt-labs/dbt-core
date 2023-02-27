@@ -172,7 +172,12 @@ output = click.option(
 )
 
 output_keys = click.option(
-    "--output-keys", envvar=None, help="TODO: No current help text", type=click.STRING
+    "--output-keys",
+    envvar=None,
+    help="TODO: No current help text",
+    type=list,
+    cls=MultiOption,
+    default=[],
 )
 
 output_path = click.option(
