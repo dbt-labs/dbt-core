@@ -43,7 +43,7 @@ def macros():
 
 
 @pytest.fixture(scope="class")
-def seeds(self):
+def seeds():
     return {"seed.csv": seeds__seed_csv}
 
 
