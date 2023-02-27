@@ -802,8 +802,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
         group_map = {group.name: [] for group in self.groups.values()}
         for node in groupable_nodes:
-            if node.config.group is not None:
-                group_map[node.config.group].append(node.unique_id)
+            if node.group is not None:
+                group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
     def writable_manifest(self):
