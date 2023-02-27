@@ -1,0 +1,9 @@
+kind: Features
+body: |2-
+   introduces a delete_column to allow the merge strategy to use the delete option when this column is true. The delete_column is expected to be a boolean and only expected to be present when is_incremental is true.
+
+  In addition to this, the merge_update_columns can be specified as a name/value dictionary for a given column to allow custom updating.
+time: 2023-02-27T09:10:26.389686-05:00
+custom:
+  Author: acurtis-evi
+  Issue: "7057"
