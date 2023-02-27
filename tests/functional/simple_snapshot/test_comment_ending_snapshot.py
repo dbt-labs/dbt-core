@@ -4,6 +4,7 @@ from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
     macros__test_no_overlaps_sql,
+    seeds__seed_csv,
 )
 
 snapshots_with_comment_at_end__snapshot_sql = """
@@ -35,11 +36,13 @@ def models():
         "ref_snapshot.sql": models__ref_snapshot_sql,
     }
 
-
 @pytest.fixture(scope="class")
 def macros():
     return {"test_no_overlaps.sql": macros__test_no_overlaps_sql}
 
+@pytest.fixture(scope="class")
+def seeds(self):
+    return {"seed.csv": seeds__seed_csv}
 
 def test_comment_ending(project):
     results = run_dbt(["snapshot"])
