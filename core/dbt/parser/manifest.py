@@ -1076,7 +1076,7 @@ def _check_valid_group_config(manifest: Manifest):
 def _check_valid_group_config_node(
     groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
 ):
-    groupable_node_group = groupable_node.config.group
+    groupable_node_group = groupable_node.group
     if groupable_node_group and groupable_node_group not in valid_group_names:
         raise dbt.exceptions.ParsingError(
             f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",

@@ -432,7 +432,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
         attached_node = self._lookup_attached_node(builder.target)
         if attached_node:
             node.attached_node = attached_node.unique_id
-            node.group, node.config.group = attached_node.config.group, attached_node.config.group
+            node.group, node.group = attached_node.group, attached_node.group
 
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
