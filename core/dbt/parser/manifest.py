@@ -1196,6 +1196,14 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            # Exposures do not have a group and so can never reference private models
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=exposure.unique_id, ref_unique_id=target_model.unique_id
+            )
 
         target_model_id = target_model.unique_id
 
@@ -1206,6 +1214,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
 def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: Metric):
     """Given a manifest and a metric in that manifest, process its refs"""
     for ref in metric.refs:
+        print(f"\n\n\n--- process ref {ref} for metric {metric.unique_id}\n\n\n")
         target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str
         target_model_package: Optional[str] = None
@@ -1239,6 +1248,14 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 should_warn_if_disabled=False,
             )
             continue
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            # Metrics do not have a group and so can never reference private models
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=metric.unique_id, ref_unique_id=target_model.unique_id
+            )
 
         target_model_id = target_model.unique_id
 

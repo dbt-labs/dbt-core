@@ -76,6 +76,66 @@ models:
     group: marts
 """
 
+simple_exposure_yml = """
+version: 2
+
+exposures:
+  - name: simple_exposure
+    label: simple exposure label
+    type: dashboard
+    depends_on:
+      - ref('my_model')
+    owner:
+      email: something@example.com
+"""
+
+v5_schema_yml = """
+version: 2
+
+models:
+  - name: my_model
+    description: "my model"
+    group: analytics
+    access: private
+  - name: another_model
+    description: "yet another model"
+  - name: ref_my_model
+    description: "a model that refs my_model"
+    group: marts
+  - name: people_model
+    description: "some people"
+    group: analytics
+    access: private
+"""
+
+people_model_sql = """
+select 1 as id, 'Drew' as first_name, 'Banin' as last_name, 'yellow' as favorite_color, true as loves_dbt, 5 as tenure, current_timestamp as created_at
+union all
+select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
+union all
+select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
+"""
+
+people_metric_yml = """
+version: 2
+
+metrics:
+
+  - name: number_of_people
+    label: "Number of people"
+    description: Total count of people
+    model: "ref('people_model')"
+    calculation_method: count
+    expression: "*"
+    timestamp: created_at
+    time_grains: [day, week, month]
+    dimensions:
+      - favorite_color
+      - loves_dbt
+    meta:
+        my_meta: 'testing'
+"""
+
 
 class TestAccess:
     @pytest.fixture(scope="class")
@@ -118,8 +178,32 @@ class TestAccess:
         write_file(v3_schema_yml, project.project_root, "models", "schema.yml")
         results = run_dbt(["run"])
         assert len(results) == 3
+        manifest = get_manifest(project.project_root)
+        ref_my_model_id = "model.test.ref_my_model"
+        assert manifest.nodes[my_model_id].group == "analytics"
+        assert manifest.nodes[ref_my_model_id].group == "analytics"
 
         # Change group on ref_my_model and it should raise
         write_file(v4_schema_yml, project.project_root, "models", "schema.yml")
+        with pytest.raises(DbtReferenceError):
+            run_dbt(["run"])
+
+        # put back group on ref_my_model, add exposure with ref to private model
+        write_file(v3_schema_yml, project.project_root, "models", "schema.yml")
+        # verify it works again
+        results = run_dbt(["run"])
+        assert len(results) == 3
+        # Write out exposure refing private my_model
+        write_file(simple_exposure_yml, project.project_root, "models", "simple_exposure.yml")
+        # Fails with reference error
+        with pytest.raises(DbtReferenceError):
+            run_dbt(["run"])
+
+        # Remove exposure and add people model and metric file
+        write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
+        rm_file(project.project_root, "models", "simple_exposure.yml")
+        write_file(people_model_sql, "models", "people_model.sql")
+        write_file(people_metric_yml, "models", "people_metric.yml")
+        # Fails with reference error
         with pytest.raises(DbtReferenceError):
             run_dbt(["run"])
