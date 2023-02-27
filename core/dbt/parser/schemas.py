@@ -788,7 +788,6 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 refs = ParserRef()
 
             # There's no unique_id on the node yet so cannot add to disabled dict
-            print(f"--- node_plock in parse: {node_block}")
             self.parse_patch(node_block, refs)
 
         # This will always be empty if the node a macro or analysis
