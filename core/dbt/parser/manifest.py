@@ -398,6 +398,7 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.check_valid_group_config()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -984,6 +985,26 @@ class ManifestLoader:
 
         self.manifest.rebuild_ref_lookup()
 
+    def check_valid_group_config(self):
+        manifest = self.manifest
+        group_names = {group.name for group in manifest.groups.values()}
+
+        for metric in manifest.metrics.values():
+            self.check_valid_group_config_node(metric, group_names)
+
+        for node in manifest.nodes.values():
+            self.check_valid_group_config_node(node, group_names)
+
+    def check_valid_group_config_node(
+        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+    ):
+        groupable_node_group = groupable_node.group
+        if groupable_node_group and groupable_node_group not in valid_group_names:
+            raise dbt.exceptions.ParsingError(
+                f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
+                node=groupable_node,
+            )
+
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
@@ -1063,27 +1084,6 @@ def _check_resource_uniqueness(
         alias_resources[full_node_name] = node
 
 
-def _check_valid_group_config(manifest: Manifest):
-    group_names = {group.name for group in manifest.groups.values()}
-
-    for metric in manifest.metrics.values():
-        _check_valid_group_config_node(metric, group_names)
-
-    for node in manifest.nodes.values():
-        _check_valid_group_config_node(node, group_names)
-
-
-def _check_valid_group_config_node(
-    groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
-):
-    groupable_node_group = groupable_node.group
-    if groupable_node_group and groupable_node_group not in valid_group_names:
-        raise dbt.exceptions.ParsingError(
-            f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
-            node=groupable_node,
-        )
-
-
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
     disabled_fqns: PathSet = frozenset(
@@ -1095,7 +1095,6 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-    _check_valid_group_config(manifest)
 
 
 def _get_node_column(node, column_name):
