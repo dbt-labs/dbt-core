@@ -172,7 +172,15 @@ output = click.option(
 )
 
 output_keys = click.option(
-    "--output-keys", envvar=None, help="TODO: No current help text", type=click.STRING
+    "--output-keys",
+    envvar=None,
+    help=(
+        "Space-delimited listing of node properties to include as custom keys for JSON output "
+        "(e.g. `--output json --output-keys name resource_type description`)"
+    ),
+    type=list,
+    cls=MultiOption,
+    default=[],
 )
 
 output_path = click.option(

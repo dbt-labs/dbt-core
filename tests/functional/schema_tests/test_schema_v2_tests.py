@@ -1034,7 +1034,8 @@ class TestWrongSpecificationBlock:
                     "--output",
                     "json",
                     "--output-keys",
-                    "name, description",
+                    "name",
+                    "description",
                 ]
             )
 

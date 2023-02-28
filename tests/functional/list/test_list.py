@@ -563,7 +563,16 @@ class TestList:
             {"database": project.database, "schema": project.test_schema, "alias": "inner"}
         ]
         results = self.run_dbt_ls(
-            ["--model", "inner", "--output", "json", "--output-keys", "database,schema,alias"]
+            [
+                "--model",
+                "inner",
+                "--output",
+                "json",
+                "--output-keys",
+                "database",
+                "schema",
+                "alias",
+            ]
         )
         assert len(results) == len(expectations)
 
@@ -578,7 +587,15 @@ class TestList:
             {"name": "unique_outer_id", "column_name": "id"},
         ]
         results = self.run_dbt_ls(
-            ["--resource-type", "test", "--output", "json", "--output-keys", "name,column_name"]
+            [
+                "--resource-type",
+                "test",
+                "--output",
+                "json",
+                "--output-keys",
+                "name",
+                "column_name",
+            ]
         )
         assert len(results) == len(expectations)
 
@@ -592,7 +609,14 @@ class TestList:
         """
         expectations = [{}, {}]
         results = self.run_dbt_ls(
-            ["--model", "inner outer", "--output", "json", "--output-keys", "non_existent_key"]
+            [
+                "--model",
+                "inner outer",
+                "--output",
+                "json",
+                "--output-keys",
+                "non_existent_key",
+            ]
         )
         assert len(results) == len(expectations)
 
