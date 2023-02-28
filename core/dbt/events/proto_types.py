@@ -447,6 +447,20 @@ class InternalDeprecationMsg(betterproto.Message):
 
 
 @dataclass
+class EnvironmentVariableRenamed(betterproto.Message):
+    """D009"""
+
+    old_name: str = betterproto.string_field(1)
+    new_name: str = betterproto.string_field(2)
+
+
+@dataclass
+class EnvironmentVariableRenamedMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "EnvironmentVariableRenamed" = betterproto.message_field(2)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 

@@ -2,6 +2,7 @@ from copy import copy
 from typing import List, Tuple, Optional
 
 import click
+
 from dbt.cli import requires, params as p
 from dbt.config.project import Project
 from dbt.config.profile import Profile
@@ -80,6 +81,7 @@ class dbtRunner:
 @p.macro_debugging
 @p.partial_parse
 @p.print
+@p.deprecated_print
 @p.printer_width
 @p.quiet
 @p.record_timing_info
