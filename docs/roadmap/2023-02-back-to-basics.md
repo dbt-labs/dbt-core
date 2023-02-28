@@ -78,6 +78,8 @@ Back in 2020, one of Jeremy's very first projects, as newly designated Associate
 
 A few years later, the major data platform vendors are taking another swing at first-class support for streaming transformation. We're also lucky to have Florian, who talked & thought streaming databases for a living. Our vision is a dbt DAG that can combine batch & streaming, without distorting the core framework that's gotten dbt where it is.
 
+Because what does streaming look like in the world of dbt, under the law of [ELT](https://www.getdbt.com/analytics-engineering/case-for-elt-workflow/)? The answer to that question is very anticlimactic: it looks like a Materialized View. We will talk more about this in a blog post to come. In the meantime, the work is starting.
+
 _Read more: ["Let's add Materialized View as a materialization, finally"](https://github.com/dbt-labs/dbt-core/issues/6911)_
 
 ## dbt Semantic Layer
