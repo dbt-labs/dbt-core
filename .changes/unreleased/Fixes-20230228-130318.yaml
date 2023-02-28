@@ -1,0 +1,6 @@
+kind: Fixes
+body: add pytz dependency
+time: 2023-02-28T13:03:18.353468+01:00
+custom:
+  Author: sdebruyn
+  Issue: "7077"
