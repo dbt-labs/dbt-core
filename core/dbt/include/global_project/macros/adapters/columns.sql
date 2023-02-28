@@ -21,6 +21,10 @@
   {{ return(adapter.dispatch('get_empty_subquery_sql', 'dbt')(select_sql)) }}
 {% endmacro %}
 
+{#
+  Builds a query that results in the same schema as the given select_sql statement, without necessating a data scan.
+  Useful for running a query in a 'pre-flight' context, such as model contract enforcement (assert_columns_equivalent macro).
+#}
 {% macro default__get_empty_subquery_sql(select_sql) %}
     select * from (
         {{ select_sql }}
@@ -48,11 +52,12 @@
 
 {% macro default__get_column_schema_from_query(select_sql) %}
     {% set columns = [] %}
+    {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessating a data scan.#}
     {% set sql = get_empty_subquery_sql(select_sql) %}
     {% set column_schema = adapter.get_column_schema_from_query(sql) %}
     {% for col in column_schema %}
-        -- api.Column.create includes a step for translating data type
-        -- TODO: could include size, precision, scale here
+        {# -- api.Column.create includes a step for translating data type #}
+        {# -- TODO: could include size, precision, scale here #}
         {% set column = api.Column.create(col[0], col[1]) %}
         {% do columns.append(column) %}
     {% endfor %}

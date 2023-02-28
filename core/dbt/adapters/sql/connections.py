@@ -138,6 +138,10 @@ class SQLConnectionManager(BaseConnectionManager):
 
     @classmethod
     def get_column_schema_from_cursor(cls, cursor: Any) -> List[Tuple[str, str]]:
+        """
+        Return a list of tuples representing (column_name, data_type) given a cursor with a populated description attribute.
+        If cursor.description is None or empty, returns an empty list.
+        """
         # (column_name, data_type)
         columns: List[Tuple[str, str]] = []
 
