@@ -78,8 +78,6 @@ Back in 2020, one of Jeremy's very first projects, as newly designated Associate
 
 A few years later, the major data platform vendors are taking another swing at first-class support for streaming transformation. We're also lucky to have Florian, who talked & thought streaming databases for a living. Our vision is a dbt DAG that can combine batch & streaming, without distorting the core framework that's gotten dbt where it is.
 
-Because what does streaming look like in the world of dbt, under the law of [ELT](https://www.getdbt.com/analytics-engineering/case-for-elt-workflow/)? The answer to that question is very anticlimactic: it looks like a Materialized View. We will talk more about this in a blog post to come. In the meantime, the work is starting.
-
 _Read more: ["Let's add Materialized View as a materialization, finally"](https://github.com/dbt-labs/dbt-core/issues/6911)_
 
 ## dbt Semantic Layer
@@ -96,7 +94,7 @@ Each of the topics below has appeared in the lower-confidence portions of previo
 
 - **External orchestration.** Can dbt trigger external APIs to ingest `sources`, and sync `exposures`? To run `models` that require tools outside the data platform? I'd like the answer here to be "yes," but it isn't a priority for this year.
 - **Next steps for Python models.** It's worth restating: This is very new functionality, and we're still very early. We have some ideas of what could be compelling and ergonomic, and there are some small usability improvements we'll try to make over the year—but we need to learn more about how you all are using, and want to be using, Python models, before we once again tackle these as a top priority.
-- **More modeling languages**, or "Bring Your Own SQL transpiler / Python framework / ???". This is  I've also discussed this as one way of eventually offering **column-level lineage,** which—while still capturing our hearts—also doesn't make it onto the list of top priorities for the year.
+- **More modeling languages**, or "Bring Your Own SQL transpiler / Python framework / ???". This is one of the more boundary-pushing ideas we've had, for continuing to expand dbt's reach as a framework for (language-agnostic!) data transformation. It's not one of the foundational reinvestments that we must make sooner rather than later. We've also [discussed this pattern](https://github.com/dbt-labs/dbt-core/discussions/4458#discussioncomment-4176217) as one potential path toward unlocking **column-level lineage,** which—while always present in our hearts & among our [most popular discussions](https://github.com/dbt-labs/dbt-core/discussions?discussions_q=sort%3Atop+)—also doesn't appear on this year's list of top priorities.
 - **Unit testing.** ~Let's just take a day—just one day!—and try to hack together a working demo.~ (We might, though.)
 
 ## What we'll keep doing
