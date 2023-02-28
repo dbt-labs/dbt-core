@@ -432,7 +432,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
         attached_node = self._lookup_attached_node(builder.target)
         if attached_node:
             node.attached_node = attached_node.unique_id
-            node.group, node.config.group = attached_node.config.group, attached_node.config.group
+            node.group, node.group = attached_node.group, attached_node.group
 
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
@@ -878,6 +878,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             meta=block.target.meta,
             docs=block.target.docs,
             config=block.target.config,
+            access=block.target.access,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -1234,6 +1235,7 @@ class MetricParser(YamlReader):
             tags=unparsed.tags,
             config=config,
             unrendered_config=unrendered_config,
+            group=config.group,
         )
 
         ctx = generate_parse_metrics(
@@ -1273,7 +1275,7 @@ class MetricParser(YamlReader):
         # first apply metric configs
         precedence_configs.update(target.config)
 
-        return generator.calculate_node_config(
+        config = generator.calculate_node_config(
             config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.Metric,
@@ -1281,6 +1283,7 @@ class MetricParser(YamlReader):
             base=False,
             patch_config_dict=precedence_configs,
         )
+        return config
 
     def parse(self):
         for data in self.get_key_dicts():

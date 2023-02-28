@@ -121,8 +121,32 @@ log_format = click.option(
     "--log-format",
     envvar="DBT_LOG_FORMAT",
     help="Specify the log format, overriding the command's default.",
-    type=click.Choice(["text", "json", "default"], case_sensitive=False),
+    type=click.Choice(["text", "debug", "json", "default"], case_sensitive=False),
     default="default",
+)
+
+log_format_file = click.option(
+    "--log-format-file",
+    envvar="DBT_LOG_FORMAT_FILE",
+    help="Specify the file log format, overriding the command's default and the value of --log-format.",
+    type=click.Choice(["text", "debug", "json", "default"], case_sensitive=False),
+    default="debug",
+)
+
+log_level = click.option(
+    "--log-level",
+    envvar="DBT_LOG_LEVEL",
+    help="Specify the minimum severity of events that are logged.",
+    type=click.Choice(["debug", "info", "warn", "error", "none"], case_sensitive=False),
+    default="info",
+)
+
+log_level_file = click.option(
+    "--log-level-file",
+    envvar="DBT_LOG_LEVEL_FILE",
+    help="Specify the minimum severity of events that are logged to file, overriding the value of --log-level-file.",
+    type=click.Choice(["debug", "info", "warn", "error", "none"], case_sensitive=False),
+    default="debug",
 )
 
 log_path = click.option(
@@ -148,7 +172,15 @@ output = click.option(
 )
 
 output_keys = click.option(
-    "--output-keys", envvar=None, help="TODO: No current help text", type=click.STRING
+    "--output-keys",
+    envvar=None,
+    help=(
+        "Space-delimited listing of node properties to include as custom keys for JSON output "
+        "(e.g. `--output json --output-keys name resource_type description`)"
+    ),
+    type=list,
+    cls=MultiOption,
+    default=[],
 )
 
 output_path = click.option(
@@ -365,7 +397,14 @@ threads = click.option(
 use_colors = click.option(
     "--use-colors/--no-use-colors",
     envvar="DBT_USE_COLORS",
-    help="Output is colorized by default and may also be set in a profile or at the command line.",
+    help="Specify whether log output is colorized.",
+    default=True,
+)
+
+use_colors_file = click.option(
+    "--use-colors-file/--no-use-colors-file",
+    envvar="DBT_USE_COLORS_FILE",
+    help="Specify whether log file output is colorized overriding --use-colors/--no-use-colors.",
     default=True,
 )
 

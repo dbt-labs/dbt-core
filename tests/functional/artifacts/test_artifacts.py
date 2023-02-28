@@ -207,7 +207,8 @@ groups:
 models:
   - name: ephemeral_summary
     description: "{{ doc('ephemeral_summary') }}"
-    group: test_group
+    config:
+      group: test_group
     columns: &summary_columns
       - name: first_name
         description: "{{ doc('summary_first_name') }}"

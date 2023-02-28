@@ -473,7 +473,19 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
-    setup_event_logger(logs_dir, "json", False, False, False, False)
+    log_flags = Namespace(
+        LOG_PATH=logs_dir,
+        LOG_FORMAT="json",
+        LOG_FORMAT_FILE="json",
+        USE_COLORS=False,
+        USE_COLORS_FILE=False,
+        LOG_LEVEL="info",
+        LOG_LEVEL_FILE="debug",
+        DEBUG=False,
+        LOG_CACHE_EVENTS=False,
+        QUIET=False,
+    )
+    setup_event_logger(log_flags)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep

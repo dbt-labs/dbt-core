@@ -32,6 +32,7 @@ SELECTOR_DELIMITER = ":"
 class MethodName(StrEnum):
     FQN = "fqn"
     Tag = "tag"
+    Group = "group"
     Source = "source"
     Path = "path"
     File = "file"
@@ -143,6 +144,15 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.metric_nodes(included_nodes),
         )
 
+    def groupable_nodes(
+        self,
+        included_nodes: Set[UniqueId],
+    ) -> Iterator[Tuple[UniqueId, Union[ManifestNode, Metric]]]:
+        yield from chain(
+            self.parsed_nodes(included_nodes),
+            self.metric_nodes(included_nodes),
+        )
+
     @abc.abstractmethod
     def search(
         self,
@@ -186,6 +196,14 @@ class TagSelectorMethod(SelectorMethod):
         """yields nodes from included that have the specified tag"""
         for node, real_node in self.all_nodes(included_nodes):
             if selector in real_node.tags:
+                yield node
+
+
+class GroupSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """yields nodes from included in the specified group"""
+        for node, real_node in self.groupable_nodes(included_nodes):
+            if selector == real_node.config.get("group"):
                 yield node
 
 
@@ -605,6 +623,7 @@ class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
         MethodName.Tag: TagSelectorMethod,
+        MethodName.Group: GroupSelectorMethod,
         MethodName.Source: SourceSelectorMethod,
         MethodName.Path: PathSelectorMethod,
         MethodName.File: FileSelectorMethod,

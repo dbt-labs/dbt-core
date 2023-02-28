@@ -49,7 +49,8 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
     'depends_on', 'database', 'schema', 'name', 'resource_type', 'group',
     'package_name', 'path', 'original_file_path', 'raw_code', 'language',
     'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
-    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'contract'
+    'deferred', 'checksum', 'unrendered_config', 'created_at', 'config_call_dict', 'relation_name', 'contract',
+    'access',
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
@@ -338,7 +339,7 @@ class ManifestTest(unittest.TestCase):
                 'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v9.json',
                     'dbt_version': dbt.version.__version__,
                     'env': {ENV_KEY_NAME: 'value'},
                     'invocation_id': invocation_id,
@@ -494,7 +495,7 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v9.json',
                     'dbt_version': dbt.version.__version__,
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -764,7 +765,7 @@ class MixedManifestTest(unittest.TestCase):
                 'group_map': {},
                 'metadata': {
                     'generated_at': '2018-02-14T09:15:13Z',
-                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v8.json',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v9.json',
                     'dbt_version': dbt.version.__version__,
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                     'env': {ENV_KEY_NAME: 'value'},

@@ -204,7 +204,7 @@ seeds:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 8
+    CURRENT_EXPECTED_MANIFEST_VERSION = 9
 
     @pytest.fixture(scope="class")
     def models(self):

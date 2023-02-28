@@ -1,0 +1,6 @@
+kind: Features
+body: Add access attribute to parsed nodes
+time: 2023-02-18T09:28:16.448175-05:00
+custom:
+  Author: gshank
+  Issue: "6824"

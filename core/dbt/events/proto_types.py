@@ -963,6 +963,35 @@ class FinishedRunningStatsMsg(betterproto.Message):
 
 
 @dataclass
+class InvalidValueForField(betterproto.Message):
+    """I008"""
+
+    field_name: str = betterproto.string_field(1)
+    field_value: str = betterproto.string_field(2)
+
+
+@dataclass
+class InvalidValueForFieldMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "InvalidValueForField" = betterproto.message_field(2)
+
+
+@dataclass
+class ValidationWarning(betterproto.Message):
+    """I009"""
+
+    resource_type: str = betterproto.string_field(1)
+    field_name: str = betterproto.string_field(2)
+    node_name: str = betterproto.string_field(3)
+
+
+@dataclass
+class ValidationWarningMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ValidationWarning" = betterproto.message_field(2)
+
+
+@dataclass
 class ParsePerfInfoPath(betterproto.Message):
     """I010"""
 

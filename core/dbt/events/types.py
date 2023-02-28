@@ -768,7 +768,25 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 # =======================================================
 
 
-# Skipping I001, I002, I003, I004, I005, I006, I007, I008, I009
+# Skipping I001, I002, I003, I004, I005, I006, I007
+
+
+@dataclass
+class InvalidValueForField(WarnLevel, pt.InvalidValueForField):
+    def code(self):
+        return "I008"
+
+    def message(self) -> str:
+        return f"Invalid value ({self.field_value}) for field {self.field_name}"
+
+
+@dataclass
+class ValidationWarning(WarnLevel, pt.ValidationWarning):
+    def code(self):
+        return "I009"
+
+    def message(self) -> str:
+        return f"Field {self.field_name} is not valid for {self.resource_type} ({self.node_name})"
 
 
 @dataclass

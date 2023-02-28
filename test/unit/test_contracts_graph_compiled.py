@@ -207,6 +207,7 @@ def basic_compiled_dict():
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {},
         'config_call_dict': {},
+        'access': 'protected',
     }
 
 @pytest.mark.skip("Haven't found where we would use uncompiled node")

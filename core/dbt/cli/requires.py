@@ -33,14 +33,7 @@ def preflight(func):
 
         # Logging
         # N.B. Legacy logger is not supported
-        setup_event_logger(
-            flags.LOG_PATH,
-            flags.LOG_FORMAT,
-            flags.USE_COLORS,
-            flags.DEBUG,
-            flags.LOG_CACHE_EVENTS,
-            flags.QUIET,
-        )
+        setup_event_logger(flags)
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))

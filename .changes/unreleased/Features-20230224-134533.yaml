@@ -1,0 +1,6 @@
+kind: Features
+body: Add ability to select by group resource
+time: 2023-02-24T13:45:33.974287-06:00
+custom:
+  Author: emmyoop
+  Issue: "6825"
