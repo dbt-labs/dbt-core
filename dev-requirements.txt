@@ -17,7 +17,6 @@ pytest-dotenv
 pytest-logbook
 pytest-mock
 pytest-xdist
-pytz
 sphinx
 tox>=3.13
 twine
