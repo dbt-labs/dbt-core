@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
-from typing import Set, List
+from typing import Callable, Dict, List, Set
 
 from click import Context, get_current_context, BadOptionUsage
 from click.core import ParameterSource, Command, Group
 
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
+from dbt.deprecations import renamed_env_var
 from dbt.helper_types import WarnErrorOptions
 from dbt.cli.resolvers import default_project_dir, default_log_path
 
@@ -76,6 +77,11 @@ def args_to_context(args: List[str]) -> Context:
     return sub_command_ctx
 
 
+DEPRECATED_PARAMS = {
+    "deprecated_print": "print",
+}
+
+
 @dataclass(frozen=True)
 class Flags:
     def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
@@ -87,7 +93,7 @@ class Flags:
         if ctx is None:
             ctx = get_current_context()
 
-        def assign_params(ctx, params_assigned_from_default):
+        def assign_params(ctx, params_assigned_from_default, deprecated_env_vars):
             """Recursively adds all click params to flag object"""
             for param_name, param_value in ctx.params.items():
                 # TODO: this is to avoid duplicate params being defined in two places (version_check in run and cli)
@@ -97,6 +103,10 @@ class Flags:
                 # when using frozen dataclasses.
                 # https://docs.python.org/3/library/dataclasses.html#frozen-instances
                 if hasattr(self, param_name.upper()):
+                    if param_name in deprecated_env_vars:
+                        # param already set via its deprecated but still respected env var
+                        continue
+
                     if param_name not in EXPECTED_DUPLICATE_PARAMS:
                         raise Exception(
                             f"Duplicate flag names found in click command: {param_name}"
@@ -107,15 +117,56 @@ class Flags:
                         if ctx.get_parameter_source(param_name) != ParameterSource.DEFAULT:
                             object.__setattr__(self, param_name.upper(), param_value)
                 else:
-                    object.__setattr__(self, param_name.upper(), param_value)
-                    if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT:
-                        params_assigned_from_default.add(param_name)
+                    # handle deprecated env vars while still respecting old values
+                    # e.g. DBT_NO_PRINT -> DBT_PRINT if DBT_NO_PRINT is set, it is
+                    # respected over DBT_PRINT or --print
+                    if param_name in DEPRECATED_PARAMS:
+
+                        # deprecated env vars can only be set via env var.
+                        # we use the deprecated option in click to serialize the value
+                        # from the env var string
+                        param_source = ctx.get_parameter_source(param_name)
+                        if param_source == ParameterSource.DEFAULT:
+                            continue
+                        elif param_source != ParameterSource.ENVIRONMENT:
+                            raise BadOptionUsage(
+                                "Deprecated parameters can only be set via environment variables"
+                            )
+
+                        # rename for clarity
+                        dep_name = param_name
+                        new_name = DEPRECATED_PARAMS.get(dep_name)
+
+                        # find param objects for their envvar name
+                        try:
+                            dep_opt = [x for x in ctx.command.params if x.name == dep_name][0]
+                            new_opt = [x for x in ctx.command.params if x.name == new_name][0]
+                        except IndexError:
+                            raise Exception(
+                                f"No deprecated param name match from {dep_name} to {new_name}"
+                            )
+
+                        # adding the deprecation warning function to the set
+                        deprecated_env_vars[new_name] = renamed_env_var(
+                            old_name=dep_opt.envvar,
+                            new_name=new_opt.envvar,
+                        )
+
+                        object.__setattr__(self, new_name.upper(), param_value)
+                    else:
+                        object.__setattr__(self, param_name.upper(), param_value)
+                        if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT:
+                            params_assigned_from_default.add(param_name)
 
             if ctx.parent:
-                assign_params(ctx.parent, params_assigned_from_default)
+                assign_params(ctx.parent, params_assigned_from_default, deprecated_env_vars)
 
         params_assigned_from_default = set()  # type: Set[str]
-        assign_params(ctx, params_assigned_from_default)
+        deprecated_env_vars: Dict[str, Callable] = {}
+        assign_params(ctx, params_assigned_from_default, deprecated_env_vars)
+
+        # set deprecated_env_var_warnings to be fired later after events have been init
+        object.__setattr__(self, "deprecated_env_var_warnings", deprecated_env_vars.values())
 
         # Get the invoked command flags
         invoked_subcommand_name = (
@@ -126,7 +177,9 @@ class Flags:
             invoked_subcommand.allow_extra_args = True
             invoked_subcommand.ignore_unknown_options = True
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
-            assign_params(invoked_subcommand_ctx, params_assigned_from_default)
+            assign_params(
+                invoked_subcommand_ctx, params_assigned_from_default, deprecated_env_vars
+            )
 
         if not user_config:
             profiles_dir = getattr(self, "PROFILES_DIR", None)
