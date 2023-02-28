@@ -1,26 +1,26 @@
 # dbt: Back to basics (February 2023)
 
-We're back, and there's a lot to say—so much that if we're not mindful, we risk writing a(nother) novella. We're going to try for the opposite this time: minimalism. A lot's already been written, so we'll be linking to those discussions, where you can also weigh in with thoughts.
+We're back, and there's a lot to say—so much that if we're not mindful, we risk writing a(nother) novella. We're going to try for concision this time; it's a year of focus. Of course, a lot more has already been written, so we'll also link to those issues & discussions, where we encourage you to weigh in with thoughts.
 
 Since last August, we've released two new versions of dbt Core:
-- v1.3 unleashed Python models onto the world. This is very new functionality, and we are still gathering feedback on where to go next. Read & comment on [the ideas](https://github.com/dbt-labs/dbt-core/discussions/categories/ideas?discussions_q=label%3Apython_models+category%3AIdeas).
-- dbt Core v1.4 reworked some internals, paid down some tech debt, and paved the way for better APIs going forward. (Much more on this below!)
+- v1.3 unleashed Python models onto the world. This is very new functionality, and we are still gathering feedback on where to go next. Read & comment on [the big ideas](https://github.com/dbt-labs/dbt-core/discussions/categories/ideas?discussions_q=label%3Apython_models+category%3AIdeas).
+- v1.4 reworked some internals, paid down some tech debt, and paved the way for better APIs going forward.
 
 | Version | When | Namesake | Stuff |
 | ------- | ------------- | -------------- | ----- |
 | 1.3 ✅ | Oct 2022 | Edgar Allen Poe | Python models in dbt. More improvements to metrics. |
 | 1.4 ✅ | Jan 2023 | Alain LeRoy Locke | Behind-the-scenes improvements to technical interfaces, especially structured logging. |
 
-This year, we're returning to our fundamentals. If you're someone who already uses dbt, and appreciates all that you can do with it, we want to give you more of the same. This necessarily means fewer big surprises—fewer bottom-of-the-ninth pinch-hit walkoff home runs, in favor of playing small ball, and playing it _well_.
+This year, we're returning to our fundamentals. This means fewer big surprises—fewer new answers to the question, "What is dbt?"—and more of the things that dbt needs—the dbt that you know, the dbt that you & your teams have come to rely on for getting your job done.
 
-There are four big themes we want to tackle, captured in the questions below. We aim to provide compelling answers, sometimes with new functionality, sometimes with polish on top of existing capabilities. These aren't the only questions that interest us, but they are the ones we're prioritizing this year.
+There are four big themes we want to tackle, reflected in the questions below. We will aim to provide compelling answers, sometimes with new functionality, sometimes with polish on top of existing capabilities. These aren't the only questions that interest us, but they are the ones we're prioritizing this year.
 
 1. **Our APIs.** How can we enable the thousands of people who want to use dbt today, ? Can we enable community members to build more powerful extensions of dbt's framework, by exposing more & more of its functionality as a stable Python library? Can we provide an experience as delightful as dbt-core's CLI, via a reliable `dbt-server`, and RESTful APIs in dbt Cloud?
 2. **Your models, as APIs.** Can dbt as a framework scale to complex deployments, across multiple teams, entering their third or fourth year of project maturity? Can it scale to some of the largest organizations who have adopted it as a standard pattern? What can we learn from the scaling challenges that software teams have encountered and surmounted over the last decade?
 3. **Streaming.** How must dbt's essential building blocks—models, tests, sources, materializations—change (or not) to finally leverage data platforms' capabilities around streaming transformation?
 4. **Semantic Layer.** How can we combine the existing power of dbt metrics, defined as an extension of your dbt DAG, with the depth of MetricFlow (!) as a framework for defining richer metrics and generating optimized queries?
 
-If I had to summarize: **The same dbt, for more people.** More community members who might build plugins and extensions, without having to read `dbt-core` source code and hack together undocumented internal methods. More embedded analysts who can confidently contribute the right change to the right model in the right project, without having to first navigate through thousands of preexisting models with unclear ownership. More use cases that can be solved in "the dbt way," for batch as well as streaming. More downstream queriers who can benefit from asking questions on top of a dbt Semantic Layer.
+In a sentence: **The same dbt, for more people.** More community members who might build plugins and extensions, without having to read `dbt-core` source code and hack together undocumented internal methods. More embedded analysts who can confidently contribute the right change to the right model in the right project, without having to first navigate through thousands of preexisting models with unclear ownership. More use cases that can be solved in "the dbt way," for batch as well as streaming. More downstream queriers who can benefit from asking questions on top of a dbt Semantic Layer.
 
 We're sticking with one minor version release every three months. There won't be a version dedicated to _just_ API improvements, multi-project deployments, streaming, or semantic layer. Rather, we expect to make incremental progress as we go along. With that, here's our near-sighted lay of the land:
 
@@ -92,21 +92,21 @@ We expect to be writing much more about this in public. Until then, you can read
 
 In 2023, we need to be focused & disciplined. There's a lot we wish we could be making progress on, but we can only guarantee that progress in a precious few areas, by devoting our attention & energy to them.
 
-Each of the topics below has appeared in the lower-confidence portions of previous roadmaps, and they continue to interest us greatly. We have all been guilty of saying, "Let's just take a day—just one day!—and try to hack together a working demo." You might even see some proof-of-concept code appear, here or there. We won't turn down opportunities to make small forward progress. But none of these is something we expect us to be launching at Coalesce in October.
+Each of the topics below has appeared in the lower-confidence portions of previous roadmaps, and they continue to interest us greatly. We have all been guilty of saying, "Let's just take a day—just one day!—and try to hack together a working demo." You might even see some proof-of-concept code appear, here or there. We won't turn down opportunities to take small steps, to make incremental forward progress. But none of these is something we expect us to be launching at Coalesce in October.
 
 - **External orchestration.** Can dbt trigger external APIs to ingest `sources`, and sync `exposures`? To run `models` that require tools outside the data platform? I'd like the answer here to be "yes," but it isn't a priority for this year.
-- **Python models.** We have some ideas of what can be compelling & ergonomic here.
-- **Modeling languages**, or "bring your own" SQL transpiler / Python framework / ???. I've also discussed this as one way of eventually offering **column-level lineage,** which—while still capturing our hearts—also doesn't make it onto the list of top priorities for the year.
+- **Next steps for Python models.** It's worth restating: This is very new functionality, and we're still very early. We have some ideas of what could be compelling and ergonomic, and there are some small usability improvements we'll try to make over the year—but we need to learn more about how you all are using, and want to be using, Python models, before we once again tackle these as a top priority.
+- **More modeling languages**, or "Bring Your Own SQL transpiler / Python framework / ???". This is  I've also discussed this as one way of eventually offering **column-level lineage,** which—while still capturing our hearts—also doesn't make it onto the list of top priorities for the year.
 - **Unit testing.** ~Let's just take a day—just one day!—and try to hack together a working demo.~ (We might, though.)
 
 ## What we'll keep doing
 
 This covers the big rocks. The pebbles and the sand, we already have our ~~mouths~~ hands full. Most of the time, it's even fun.
 
-We'll keep reading & responding to your issues, bug reports, feature requests, ideas. We can't respond to every comment everywhere, but I can promise you that at least one of us reads them all.
-
 We'll keep releasing patches with fixes for bugs and any regressions that crop up in new versions of dbt-core.
 
 We'll keep a swimlane open for developer ergonomics. Not fundamental changes to the dbt framework, but quality-of-life improvements for those who use it every day. We've created [a new label to track these "paper cuts"](https://github.com/dbt-labs/dbt-core/issues?q=is%3Aissue+is%3Aopen+label%3Apaper_cut+sort%3Areactions-%2B1-desc)—often among the most upvoted issues!—and we're very interested in supporting community members who want to help us refine & contribute these improvements.
 
-Yours truly - Doug, Florian, Jeremy, & the entire Core team
+We'll keep reading & responding to your issues, bug reports, feature requests, ideas. We can't respond to every comment everywhere, but we read them all. You come to dbt, and so we build it & keep building it—with ambition & with vision, with discipline & with focus.
+
+Yours truly - Jeremy, Florian, Doug, & the entire Core team
