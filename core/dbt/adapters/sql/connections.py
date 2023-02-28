@@ -1,6 +1,6 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict
+from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
 
 import agate
 
@@ -129,7 +129,7 @@ class SQLConnectionManager(BaseConnectionManager):
         return dbt.clients.agate_helper.table_from_data_flat(data, column_names)
 
     @classmethod
-    def data_type_code_to_name(cls, int) -> str:
+    def data_type_code_to_name(cls, type_code: Union[int, str]) -> str:
         """Get the string representation of the data type from the type_code."""
         # https://peps.python.org/pep-0249/#type-objects
         raise dbt.exceptions.NotImplementedError(
