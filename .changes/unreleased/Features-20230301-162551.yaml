@@ -1,0 +1,21 @@
+kind: Features
+body: |-
+  This removes the selector check when the yaml is read in and treats it like any other method. This allows the dictionary to serve as a reference and selectors to be included in the normal command line syntax. This also supports decorators on the selector:some_selector.
+
+  I also added --exclude as a way of specifying exclude logic in a single string.
+
+  dbt ls --select 'selector:some_selector+1 --exclude selector:some_selector'
+  would select the children of some_selector one level and then subsequently remove the original.
+
+  Most of the code removes the selectors dictionary from being passed around and instead opts to pass the project to the graph/cli get_selected and get_graph_queue methods.
+
+  Also supports syntax like
+
+  - definition:
+      union:
+        - selector:some_other_selector+1 --exclude some_model+2
+      name: some_selector
+time: 2023-03-01T16:25:51.627771-05:00
+custom:
+  Author: acurtis-evi
+  Issue: "5009"
