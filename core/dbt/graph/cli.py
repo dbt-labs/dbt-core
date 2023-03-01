@@ -39,6 +39,7 @@ def parse_union(
     flags = get_flags()
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
+        print(raw_spec)
         if in_exclude == False and raw_spec == '--exclude':
             in_exclude = True
             if len(union_components) == 0:
@@ -266,7 +267,7 @@ def parse_from_definition(
             f"in a root level selector definition; found {keys}."
         )
     if isinstance(definition, str):
-        return parse_union_from_default(raw=definition, default=[])
+        return parse_union_from_default(raw=[definition], default=[])
     elif "union" in definition:
         return parse_union_definition(definition)
     elif "intersection" in definition:

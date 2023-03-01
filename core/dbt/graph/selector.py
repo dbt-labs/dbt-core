@@ -1,4 +1,4 @@
-from typing import Set, List, Optional, Tuple
+from typing import Set, List, Optional, Tuple, Any
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
