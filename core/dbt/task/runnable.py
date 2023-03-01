@@ -125,7 +125,7 @@ class GraphRunnableTask(ConfiguredTask):
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
         spec = self.get_selection_spec()
-        return selector.get_graph_queue(spec)
+        return selector.get_graph_queue(spec, self.config)
 
     def _runtime_initialize(self):
         self.compile_manifest()

@@ -45,6 +45,7 @@ class MethodName(StrEnum):
     Metric = "metric"
     Result = "result"
     SourceStatus = "source_status"
+    Selector = "selector"
 
 
 def is_selected_node(fqn: List[str], node_selector: str):
