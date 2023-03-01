@@ -33,28 +33,64 @@ def parse_union(
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(r.split(" ") for r in components)
     union_components: List[SelectionSpec] = []
+    exclude_components: List[SelectionSpec] = []
+    in_exclude = False
+
     flags = get_flags()
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
+        if in_exclude == False and raw_spec == '--exclude':
+            in_exclude = True
+            if len(union_components) == 0:
+                for include in DEFAULT_INCLUDES:
+                    union_components.append(
+                        SelectionCriteria.from_single_spec(include, indirect_selection=False)
+                    )
+            continue
+
         intersection_components: List[SelectionSpec] = [
             SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
-        union_components.append(
-            SelectionIntersection(
-                components=intersection_components,
-                expect_exists=expect_exists,
-                raw=raw_spec,
-                indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+        if in_exclude:
+            exclude_components.append(
+                SelectionIntersection(
+                    components=intersection_components,
+                    expect_exists=expect_exists,
+                    raw=raw_spec,
+                    indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+                )
             )
-        )
-    return SelectionUnion(
+        else:
+            union_components.append(
+                SelectionIntersection(
+                    components=intersection_components,
+                    expect_exists=expect_exists,
+                    raw=raw_spec,
+                    indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
+                )
+            )
+    res = SelectionUnion(
         components=union_components,
         expect_exists=False,
         raw=components,
         indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
     )
 
+    if len(exclude_components) == 0:
+        return res
+    else:
+        return SelectionDifference(
+            components=[
+                res,
+                SelectionUnion(
+                    components=exclude_components,
+                    expect_exists=False,
+                    raw=components,
+                    indirect_selection=False
+                )
+            ]
+        )
 
 def parse_union_from_default(
     raw: Optional[List[str]],
@@ -230,7 +266,7 @@ def parse_from_definition(
             f"in a root level selector definition; found {keys}."
         )
     if isinstance(definition, str):
-        return SelectionCriteria.from_single_spec(definition)
+        return parse_union_from_default(raw=definition, default=[])
     elif "union" in definition:
         return parse_union_definition(definition)
     elif "intersection" in definition:
