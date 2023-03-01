@@ -39,7 +39,6 @@ def parse_union(
     flags = get_flags()
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
-        print(raw_spec)
         if in_exclude == False and raw_spec == '--exclude':
             in_exclude = True
             if len(union_components) == 0:
