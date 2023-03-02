@@ -166,7 +166,9 @@ class Flags:
         assign_params(ctx, params_assigned_from_default, deprecated_env_vars)
 
         # set deprecated_env_var_warnings to be fired later after events have been init
-        object.__setattr__(self, "deprecated_env_var_warnings", deprecated_env_vars.values())
+        object.__setattr__(
+            self, "deprecated_env_var_warnings", [x for x in deprecated_env_vars.values()]
+        )
 
         # Get the invoked command flags
         invoked_subcommand_name = (
