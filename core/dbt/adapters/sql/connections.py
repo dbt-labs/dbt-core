@@ -51,10 +51,7 @@ class SQLConnectionManager(BaseConnectionManager):
         auto_begin: bool = True,
         bindings: Optional[Any] = None,
         abridge_sql_log: bool = False,
-        add_comment: bool = False,
     ) -> Tuple[Connection, Any]:
-        if add_comment:
-            sql = self._add_query_comment(sql)
 
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
@@ -157,6 +154,10 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def add_commit_query(self):
         return self.add_query("COMMIT", auto_begin=False)
+
+    def add_select_query(self, sql: str) -> Tuple[Connection, Any]:
+        sql = self._add_query_comment(sql)
+        return self.add_query(sql, auto_begin=False)
 
     def begin(self):
         connection = self.get_thread_connection()

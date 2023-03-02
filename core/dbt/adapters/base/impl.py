@@ -269,12 +269,8 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
-        """Get a list of the column names and data types from the given sql.
-
-        :param str sql: The sql to execute.
-        :return: List[Column]
-        """
-        _, cursor = self.connections.add_query(sql, add_comment=True)
+        """Get a list of the Columns with names and data types from the given sql."""
+        _, cursor = self.connections.add_select_query(sql)
         columns = [
             self.Column.create(
                 column_name, self.connections.data_type_code_to_name(column_type_code)
