@@ -47,21 +47,11 @@
 {% endmacro %}
 
 {% macro get_column_schema_from_query(select_sql) -%}
-  {{ return(adapter.dispatch('get_column_schema_from_query', 'dbt')(select_sql)) }}
-{% endmacro %}
-
-{% macro default__get_column_schema_from_query(select_sql) %}
     {% set columns = [] %}
     {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessating a data scan.#}
     {% set sql = get_empty_subquery_sql(select_sql) %}
     {% set column_schema = adapter.get_column_schema_from_query(sql) %}
-    {% for col in column_schema %}
-        {# -- api.Column.create includes a step for translating data type #}
-        {# -- TODO: could include size, precision, scale here #}
-        {% set column = api.Column.create(col[0], col[1]) %}
-        {% do columns.append(column) %}
-    {% endfor %}
-    {{ return(columns) }}
+    {{ return(column_schema) }}
 {% endmacro %}
 
 -- here for back compat

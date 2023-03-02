@@ -51,7 +51,11 @@ class SQLConnectionManager(BaseConnectionManager):
         auto_begin: bool = True,
         bindings: Optional[Any] = None,
         abridge_sql_log: bool = False,
+        add_comment: bool = False,
     ) -> Tuple[Connection, Any]:
+        if add_comment:
+            sql = self._add_query_comment(sql)
+
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
@@ -136,27 +140,6 @@ class SQLConnectionManager(BaseConnectionManager):
             "`data_type_code_to_name` is not implemented for this adapter!"
         )
 
-    @classmethod
-    def get_column_schema_from_cursor(cls, cursor: Any) -> List[Tuple[str, str]]:
-        """
-        Return a list of tuples representing (column_name, data_type) given a cursor with a populated description attribute.
-        If cursor.description is None or empty, returns an empty list.
-        """
-        # (column_name, data_type)
-        columns: List[Tuple[str, str]] = []
-
-        if cursor.description is not None:
-            # https://peps.python.org/pep-0249/#description
-            columns = [
-                # TODO: ignoring size, precision, scale for now
-                # (though it is part of DB-API standard, and our Column class does have these attributes)
-                # IMO user-defined contracts shouldn't have to match an exact size/precision/scale
-                (col[0], cls.data_type_code_to_name(col[1]))
-                for col in cursor.description
-            ]
-
-        return columns
-
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> Tuple[AdapterResponse, agate.Table]:
@@ -168,11 +151,6 @@ class SQLConnectionManager(BaseConnectionManager):
         else:
             table = dbt.clients.agate_helper.empty_table()
         return response, table
-
-    def get_column_schema_from_query(self, sql: str) -> List[Tuple[str, Any]]:
-        sql = self._add_query_comment(sql)
-        _, cursor = self.add_query(sql)
-        return self.get_column_schema_from_cursor(cursor)
 
     def add_begin_query(self):
         return self.add_query("BEGIN", auto_begin=False)

@@ -17,6 +17,7 @@ from typing import (
     Iterator,
     Set,
 )
+
 import agate
 import pytz
 
@@ -37,10 +38,7 @@ from dbt.exceptions import (
     UnexpectedNonTimestampError,
 )
 
-from dbt.adapters.protocol import (
-    AdapterConfig,
-    ConnectionManagerProtocol,
-)
+from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
@@ -270,14 +268,21 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
 
     @available.parse(lambda *a, **k: [])
-    def get_column_schema_from_query(self, sql: str) -> List[Tuple[str, Any]]:
+    def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
         """Get a list of the column names and data types from the given sql.
 
         :param str sql: The sql to execute.
-        :return: A tuple of column schema attributes (column_name: str, data_type: Any), which can be used to construct a Column object.
-        :rtype: List[(column_name: str, data_type: Any)]
+        :return: List[Column]
         """
-        return self.connections.get_column_schema_from_query(sql=sql)
+        _, cursor = self.connections.add_query(sql, add_comment=True)
+        columns = [
+            self.Column.create(
+                column_name, self.connections.data_type_code_to_name(column_type_code)
+            )
+            # https://peps.python.org/pep-0249/#description
+            for column_name, column_type_code, *_ in cursor.description
+        ]
+        return columns
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(self, table: str) -> Tuple[agate.Table]:
