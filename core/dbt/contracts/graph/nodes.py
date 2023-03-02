@@ -16,6 +16,12 @@ from typing import (
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
+from dbt.contracts.comparators import (
+    DictComparator,
+    TextComparator,
+    SimpleComparator,
+    SetComparator,
+)
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
     Quoting,
@@ -135,8 +141,8 @@ class GraphNode(BaseNode):
 
     fqn: List[str]
 
-    def same_fqn(self, other) -> bool:
-        return self.fqn == other.fqn
+    def same_fqn(self, other) -> TextComparator:
+        return TextComparator(self.fqn, other.fqn, left_name=self.name, right_name=other.name)
 
 
 @dataclass
@@ -315,43 +321,51 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
             return bool(self.config.persist_docs.get("relation"))
         return False
 
-    def same_persisted_description(self, other) -> bool:
+    def same_persisted_description(self, other) -> Union[DictComparator, TextComparator]:
         # the check on configs will handle the case where we have different
         # persist settings, so we only have to care about the cases where they
         # are the same..
         if self._persist_relation_docs():
-            if self.description != other.description:
-                return False
+            return TextComparator(
+                self.description, other.description, left_name=self.name, right_name=other.name
+            )
 
         if self._persist_column_docs():
             # assert other._persist_column_docs()
             column_descriptions = {k: v.description for k, v in self.columns.items()}
             other_column_descriptions = {k: v.description for k, v in other.columns.items()}
-            if column_descriptions != other_column_descriptions:
-                return False
+            return DictComparator(
+                column_descriptions,
+                other_column_descriptions,
+                left_name=self.name,
+                right_name=other.name,
+            )
 
-        return True
+        return TextComparator("<same-descriptions>", "<same-descriptions>")
 
-    def same_body(self, other) -> bool:
-        return self.raw_code == other.raw_code
+    def same_body(self, other) -> TextComparator:
+        return TextComparator(self.raw_code, other.raw_code)
 
-    def same_database_representation(self, other) -> bool:
+    def same_database_representation(self, other) -> DictComparator:
         # compare the config representation, not the node's config value. This
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
         # ignored)
         keys = ("database", "schema", "alias")
-        for key in keys:
-            mine = self.unrendered_config.get(key)
-            others = other.unrendered_config.get(key)
-            if mine != others:
-                return False
-        return True
+        return DictComparator(
+            {self.unrendered_config.get(key) for key in keys},
+            {other.unrendered_config.get(key) for key in keys},
+            left_name=self.name,
+            right_name=other.name,
+        )
 
-    def same_config(self, old) -> bool:
-        return self.config.same_contents(
+    def same_config(self, old) -> DictComparator:
+        return DictComparator(
             self.unrendered_config,
             old.unrendered_config,
+            operator=self.config.same_contents,
+            left_name=self.name,
+            right_name=old.name,
         )
 
     def patch(self, patch: "ParsedNodePatch"):
@@ -365,17 +379,16 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.description = patch.description
         self.columns = patch.columns
 
-    def same_contents(self, old) -> bool:
+    def same_contents(self, old) -> SimpleComparator:
         if old is None:
-            return False
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name="none")
 
         return (
             self.same_body(old)
-            and self.same_config(old)
-            and self.same_persisted_description(old)
-            and self.same_fqn(old)
-            and self.same_database_representation(old)
-            and True
+            | self.same_config(old)
+            | self.same_persisted_description(old)
+            | self.same_fqn(old)
+            | self.same_database_representation(old)
         )
 
 
@@ -489,12 +502,14 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
 
-    def same_seeds(self, other: "SeedNode") -> bool:
+    def same_seeds(self, other: "SeedNode") -> TextComparator:
         # for seeds, we check the hashes. If the hashes are different types,
         # no match. If the hashes are both the same 'path', log a warning and
         # assume they are the same
         # if the current checksum is a path, we want to log a warning.
-        result = self.checksum == other.checksum
+        result = TextComparator(
+            self.checksum, other.checksum, left_name=self.name, right_name=other.name
+        )
 
         if self.checksum.name == "path":
             msg: str
@@ -562,7 +577,7 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
     def metrics(self):
         self._disallow_implicit_dependencies()
 
-    def same_body(self, other) -> bool:
+    def same_body(self, other) -> TextComparator:
         return self.same_seeds(other)
 
     @property
@@ -648,11 +663,11 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
 
-    def same_contents(self, other) -> bool:
+    def same_contents(self, other) -> SimpleComparator:
         if other is None:
-            return False
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name=other.name)
 
-        return self.same_config(other) and self.same_fqn(other) and True
+        return self.same_config(other) | self.same_fqn(other)
 
     @property
     def test_node_type(self):
@@ -709,12 +724,14 @@ class Macro(BaseNode):
         self.docs = patch.docs
         self.arguments = patch.arguments
 
-    def same_contents(self, other: Optional["Macro"]) -> bool:
+    def same_contents(self, other: Optional["Macro"]) -> SimpleComparator:
         if other is None:
-            return False
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name=other.name)
         # the only thing that makes one macro different from another with the
         # same name/package is its content
-        return self.macro_sql == other.macro_sql
+        return TextComparator(
+            self.macro_sql, other.macro_sql, left_name=self.name, right_name=other.name
+        )
 
     @property
     def depends_on_macros(self):
@@ -735,12 +752,14 @@ class Documentation(BaseNode):
     def search_name(self):
         return self.name
 
-    def same_contents(self, other: Optional["Documentation"]) -> bool:
+    def same_contents(self, other: Optional["Documentation"]) -> SimpleComparator:
         if other is None:
-            return False
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name=other.name)
         # the only thing that makes one doc different from another with the
         # same name/package is its content
-        return self.block_contents == other.block_contents
+        return TextComparator(
+            self.block_contents, other.block_contents, left_name=self.name, right_name=other.name
+        )
 
 
 # ====================================
@@ -830,37 +849,42 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
             del dct["_event_status"]
         return dct
 
-    def same_database_representation(self, other: "SourceDefinition") -> bool:
-        return (
-            self.database == other.database
-            and self.schema == other.schema
-            and self.identifier == other.identifier
-            and True
+    def same_database_representation(self, other: "SourceDefinition") -> DictComparator:
+        return DictComparator(
+            {"database": self.database, "schema": self.schema, "identifier": self.identifier},
+            {"database": other.database, "schema": other.schema, "identifier": other.identifier},
+            left_name=self.name,
+            right_name=other.name,
         )
 
-    def same_quoting(self, other: "SourceDefinition") -> bool:
-        return self.quoting == other.quoting
-
-    def same_freshness(self, other: "SourceDefinition") -> bool:
-        return (
-            self.freshness == other.freshness
-            and self.loaded_at_field == other.loaded_at_field
-            and True
+    def same_quoting(self, other: "SourceDefinition") -> TextComparator:
+        return TextComparator(
+            self.quoting, other.quoting, left_name=self.name, right_name=other.name
         )
 
-    def same_external(self, other: "SourceDefinition") -> bool:
-        return self.external == other.external
-
-    def same_config(self, old: "SourceDefinition") -> bool:
-        return self.config.same_contents(
-            self.unrendered_config,
-            old.unrendered_config,
+    def same_freshness(self, other: "SourceDefinition") -> DictComparator:
+        return DictComparator(
+            {"freshness": self.freshness, "loaded_at_field": self.loaded_at_field},
+            {"freshness": other.freshness, "loaded_at_field": other.loaded_at_field},
+            left_name=self.name,
+            right_name=other.name,
         )
 
-    def same_contents(self, old: Optional["SourceDefinition"]) -> bool:
+    def same_external(self, other: "SourceDefinition") -> TextComparator:
+        return TextComparator(
+            self.external, other.external, left_name=self.name, right_name=other.name
+        )
+
+    def same_config(self, old: "SourceDefinition") -> DictComparator:
+        rv = self.config.same_contents(self.unrendered_config, old.unrendered_config)
+        rv.left_name = self.name
+        rv.right_name = old.name
+        return rv
+
+    def same_contents(self, old: Optional["SourceDefinition"]) -> SimpleComparator:
         # existing when it didn't before is a change!
         if old is None:
-            return True
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name=old.name)
 
         # config changes are changes (because the only config is "enabled", and
         # enabling a source is a change!)
@@ -872,12 +896,11 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         # patching/description changes are not "changes"
         return (
             self.same_database_representation(old)
-            and self.same_fqn(old)
-            and self.same_config(old)
-            and self.same_quoting(old)
-            and self.same_freshness(old)
-            and self.same_external(old)
-            and True
+            | self.same_fqn(old)
+            | self.same_config(old)
+            | self.same_quoting(old)
+            | self.same_freshness(old)
+            | self.same_external(old)
         )
 
     def get_full_source_name(self):
@@ -955,50 +978,63 @@ class Exposure(GraphNode):
     def search_name(self):
         return self.name
 
-    def same_depends_on(self, old: "Exposure") -> bool:
-        return set(self.depends_on.nodes) == set(old.depends_on.nodes)
+    def same_depends_on(self, old: "Exposure") -> SetComparator:
+        return SetComparator(
+            set(self.depends_on.nodes),
+            set(old.depends_on.nodes),
+            left_name=self.name,
+            right_name=old.name,
+        )
 
-    def same_description(self, old: "Exposure") -> bool:
-        return self.description == old.description
+    def same_description(self, old: "Exposure") -> TextComparator:
+        return TextComparator(
+            self.description, old.description, left_name=self.name, right_name=old.name
+        )
 
-    def same_label(self, old: "Exposure") -> bool:
-        return self.label == old.label
+    def same_label(self, old: "Exposure") -> TextComparator:
+        return TextComparator(self.label, old.label, left_name=self.name, right_name=old.name)
 
-    def same_maturity(self, old: "Exposure") -> bool:
-        return self.maturity == old.maturity
+    def same_maturity(self, old: "Exposure") -> TextComparator:
+        return TextComparator(
+            self.maturity, old.maturity, left_name=self.name, right_name=old.name
+        )
 
-    def same_owner(self, old: "Exposure") -> bool:
-        return self.owner == old.owner
+    def same_owner(self, old: "Exposure") -> DictComparator:
+        return DictComparator(
+            self.owner.to_dict(), old.owner.to_dict(), left_name=self.name, right_name=old.name
+        )
 
-    def same_exposure_type(self, old: "Exposure") -> bool:
-        return self.type == old.type
+    def same_exposure_type(self, old: "Exposure") -> TextComparator:
+        return TextComparator(self.type, old.type, left_name=self.name, right_name=old.name)
 
-    def same_url(self, old: "Exposure") -> bool:
-        return self.url == old.url
+    def same_url(self, old: "Exposure") -> TextComparator:
+        return TextComparator(self.url, old.url, left_name=self.name, right_name=old.name)
 
-    def same_config(self, old: "Exposure") -> bool:
-        return self.config.same_contents(
+    def same_config(self, old: "Exposure") -> DictComparator:
+        rv = self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
+        rv.left_name = self.name
+        rv.right_name = old.name
+        return rv
 
     def same_contents(self, old: Optional["Exposure"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:
-            return True
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name=old.name)
 
         return (
             self.same_fqn(old)
-            and self.same_exposure_type(old)
-            and self.same_owner(old)
-            and self.same_maturity(old)
-            and self.same_url(old)
-            and self.same_description(old)
-            and self.same_label(old)
-            and self.same_depends_on(old)
-            and self.same_config(old)
-            and True
+            | self.same_exposure_type(old)
+            | self.same_owner(old)
+            | self.same_maturity(old)
+            | self.same_url(old)
+            | self.same_description(old)
+            | self.same_label(old)
+            | self.same_depends_on(old)
+            | self.same_config(old)
         )
 
 
@@ -1046,61 +1082,85 @@ class Metric(GraphNode):
     def search_name(self):
         return self.name
 
-    def same_model(self, old: "Metric") -> bool:
-        return self.model == old.model
+    def same_model(self, old: "Metric") -> TextComparator:
+        return TextComparator(self.model, old.model, left_name=self.name, right_name=old.name)
 
-    def same_window(self, old: "Metric") -> bool:
-        return self.window == old.window
+    def same_window(self, old: "Metric") -> DictComparator:
+        return DictComparator(
+            self.window.to_dict(), old.window.to_dict(), left_name=self.name, right_name=old.name
+        )
 
-    def same_dimensions(self, old: "Metric") -> bool:
-        return self.dimensions == old.dimensions
+    def same_dimensions(self, old: "Metric") -> SetComparator:
+        return SetComparator(
+            set(self.dimensions), set(old.dimensions), left_name=self.name, right_name=old.name
+        )
 
-    def same_filters(self, old: "Metric") -> bool:
-        return self.filters == old.filters
+    def same_filters(self, old: "Metric") -> SetComparator:
+        return SetComparator(
+            set(self.filters),
+            set(old.filters),
+            left_name=self.name,
+            right_name=old.name,
+        )
 
-    def same_description(self, old: "Metric") -> bool:
-        return self.description == old.description
+    def same_description(self, old: "Metric") -> TextComparator:
+        return TextComparator(
+            self.description, old.description, left_name=self.name, right_name=old.name
+        )
 
-    def same_label(self, old: "Metric") -> bool:
-        return self.label == old.label
+    def same_label(self, old: "Metric") -> TextComparator:
+        return TextComparator(self.label, old.label, left_name=self.name, right_name=old.name)
 
-    def same_calculation_method(self, old: "Metric") -> bool:
-        return self.calculation_method == old.calculation_method
+    def same_calculation_method(self, old: "Metric") -> TextComparator:
+        return TextComparator(
+            self.calculation_method,
+            old.calculation_method,
+            left_name=self.name,
+            right_name=old.name,
+        )
 
-    def same_expression(self, old: "Metric") -> bool:
-        return self.expression == old.expression
+    def same_expression(self, old: "Metric") -> TextComparator:
+        return TextComparator(
+            self.expression, old.expression, left_name=self.name, right_name=old.name
+        )
 
-    def same_timestamp(self, old: "Metric") -> bool:
-        return self.timestamp == old.timestamp
+    def same_timestamp(self, old: "Metric") -> TextComparator:
+        return TextComparator(
+            self.timestamp, old.timestamp, left_name=self.name, right_name=old.name
+        )
 
-    def same_time_grains(self, old: "Metric") -> bool:
-        return self.time_grains == old.time_grains
+    def same_time_grains(self, old: "Metric") -> SetComparator:
+        return SetComparator(
+            set(self.time_grains), set(old.time_grains), left_name=self.name, right_name=old.name
+        )
 
-    def same_config(self, old: "Metric") -> bool:
-        return self.config.same_contents(
+    def same_config(self, old: "Metric") -> DictComparator:
+        rv = self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
+        rv.left_name = self.name
+        rv.right_name = old.name
+        return rv
 
-    def same_contents(self, old: Optional["Metric"]) -> bool:
+    def same_contents(self, old: Optional["Metric"]) -> SimpleComparator:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:
-            return True
+            return SimpleComparator("<new>", "<none>", left_name=self.name, right_name=old.name)
 
         return (
             self.same_model(old)
-            and self.same_window(old)
-            and self.same_dimensions(old)
-            and self.same_filters(old)
-            and self.same_description(old)
-            and self.same_label(old)
-            and self.same_calculation_method(old)
-            and self.same_expression(old)
-            and self.same_timestamp(old)
-            and self.same_time_grains(old)
-            and self.same_config(old)
-            and True
+            | self.same_window(old)
+            | self.same_dimensions(old)
+            | self.same_filters(old)
+            | self.same_description(old)
+            | self.same_label(old)
+            | self.same_calculation_method(old)
+            | self.same_expression(old)
+            | self.same_timestamp(old)
+            | self.same_time_grains(old)
+            | self.same_config(old)
         )
 
 

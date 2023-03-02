@@ -7,6 +7,7 @@ from dbt.dataclass_schema import (
     ValidationError,
     register_pattern,
 )
+from dbt.contracts.comparators import DictComparator
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
 from dbt.contracts.graph.utils import validate_color
 from dbt.exceptions import DbtInternalError, CompilationError
@@ -265,22 +266,22 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
             return unrendered[key] == other[key]
 
     @classmethod
-    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
+    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> DictComparator:
         """This is like __eq__, except it ignores some fields."""
         seen = set()
+        left, right = {}, {}
         for fld, target_name in cls._get_fields():
             key = target_name
             seen.add(key)
             if CompareBehavior.should_include(fld):
                 if not cls.compare_key(unrendered, other, key):
-                    return False
-
+                    left[key], right[key] = unrendered.get(key), other.get(key)
         for key in chain(unrendered, other):
             if key not in seen:
                 seen.add(key)
                 if not cls.compare_key(unrendered, other, key):
-                    return False
-        return True
+                    left[key], right[key] = unrendered.get(key), other.get(key)
+        return DictComparator(left, right)
 
     # This is used in 'add_config_call' to created the combined config_call_dict.
     # 'meta' moved here from node
@@ -520,7 +521,7 @@ class TestConfig(NodeAndTestConfig):
     error_if: str = "!= 0"
 
     @classmethod
-    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
+    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> DictComparator:
         """This is like __eq__, except it explicitly checks certain fields."""
         modifiers = [
             "severity",
@@ -533,13 +534,14 @@ class TestConfig(NodeAndTestConfig):
         ]
 
         seen = set()
+        left, right = {}, {}
         for _, target_name in cls._get_fields():
             key = target_name
             seen.add(key)
             if key in modifiers:
                 if not cls.compare_key(unrendered, other, key):
-                    return False
-        return True
+                    left[key], right[key] = unrendered[key], other[key]
+        return DictComparator(left, right)
 
     @classmethod
     def validate(cls, data):
