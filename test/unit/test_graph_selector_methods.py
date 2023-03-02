@@ -30,7 +30,6 @@ from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
     MethodManager,
     QualifiedNameSelectorMethod,
-    WildcardSelectorMethod,
     TagSelectorMethod,
     GroupSelectorMethod,
     SourceSelectorMethod,
@@ -682,17 +681,7 @@ def test_select_fqn(manifest):
         'mynamespace.union_model', 'mynamespace.ephemeral_model', 'mynamespace.seed'}
     assert search_manifest_using_method(
         manifest, method, 'ext') == {'ext_model'}
-
-
-def test_select_wildcard(manifest):
-    methods = MethodManager(manifest, None)
-    # TODO: this is just here so the PR reviewers can see the parity between the two methods
-    # we may merge these test cases later or rename this to test_select_advanced_fqn
-    method = methods.get_method('fqn', [])
-    assert isinstance(method, (QualifiedNameSelectorMethod, WildcardSelectorMethod))
-    assert method.arguments == []
-
-    # useful example
+    # wildcards
     assert search_manifest_using_method(manifest, method, '*.*.*_model') == {
         'mynamespace.union_model', 'mynamespace.ephemeral_model', 'union_model'}
     # multiple wildcards
@@ -723,7 +712,8 @@ def test_select_tag(manifest):
     assert search_manifest_using_method(manifest, method, 'uses_ephemeral') == {
         'view_model', 'table_model'}
     assert not search_manifest_using_method(manifest, method, 'missing')
-
+    assert search_manifest_using_method(manifest, method, 'uses_eph*') == {
+            'view_model', 'table_model'}
 
 def test_select_group(manifest, view_model):
     group_name = 'my_group'
@@ -771,7 +761,8 @@ def test_select_source(manifest):
     assert search_manifest_using_method(
         manifest, method, 'ext.ext_raw.*') == {'ext_raw.ext_source', 'ext_raw.ext_source_2'}
     assert not search_manifest_using_method(manifest, method, 'pkg.ext_raw.*')
-
+    assert search_manifest_using_method(manifest, method, '*.ext_[s]ourc?') == {
+            'ext_raw.ext_source', 'raw.ext_source'}
 
 # TODO: this requires writing out files
 @pytest.mark.skip('TODO: write manifest files to disk')
@@ -812,7 +803,8 @@ def test_select_file(manifest):
         manifest, method, 'missing.sql')
     assert not search_manifest_using_method(
         manifest, method, 'missing.py')
-
+    assert search_manifest_using_method(
+        manifest, method, 'table_*.csv') == {'table_model_csv'}
 
 def test_select_package(manifest):
     methods = MethodManager(manifest, None)
@@ -828,6 +820,9 @@ def test_select_package(manifest):
         'ext_model', 'ext_raw.ext_source', 'ext_raw.ext_source_2', 'raw.ext_source', 'raw.ext_source_2', 'unique_ext_raw_ext_source_id'}
 
     assert not search_manifest_using_method(manifest, method, 'missing')
+
+    assert search_manifest_using_method(manifest, method, 'ex*') == {
+        'ext_model', 'ext_raw.ext_source', 'ext_raw.ext_source_2', 'raw.ext_source', 'raw.ext_source_2', 'unique_ext_raw_ext_source_id'}
 
 
 def test_select_config_materialized(manifest):
@@ -875,7 +870,8 @@ def test_select_test_name(manifest):
     assert search_manifest_using_method(manifest, method, 'not_null') == {
         'not_null_table_model_id'}
     assert not search_manifest_using_method(manifest, method, 'notatest')
-
+    assert search_manifest_using_method(manifest, method, 'not_*') == {
+        'not_null_table_model_id'}
 
 def test_select_test_type(manifest):
     methods = MethodManager(manifest, None)
@@ -903,7 +899,8 @@ def test_select_exposure(manifest):
         manifest, method, 'my_exposure') == {'my_exposure'}
     assert not search_manifest_using_method(
         manifest, method, 'not_my_exposure')
-
+    assert search_manifest_using_method(
+        manifest, method, 'my_e*e') == {'my_exposure'}
 
 def test_select_metric(manifest):
     metric = make_metric('test', 'my_metric')
@@ -915,7 +912,8 @@ def test_select_metric(manifest):
         manifest, method, 'my_metric') == {'my_metric'}
     assert not search_manifest_using_method(
         manifest, method, 'not_my_metric')
-
+    assert search_manifest_using_method(
+        manifest, method, '*_metric') == {'my_metric'}
 
 @pytest.fixture
 def previous_state(manifest):
