@@ -1,0 +1,6 @@
+kind: Features
+body: Make MAXIMUM_SEED_SIZE configurable
+time: 2023-03-03T14:47:00.079887-05:00
+custom:
+  Author: acurtis-evi
+  Issue: "7117"
