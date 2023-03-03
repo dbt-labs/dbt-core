@@ -27,10 +27,10 @@ body: |-
   
   The yaml is very useful in defining routine selections.  This inconsistency with the command line forces the end user to learn two approaches.
   
-  Furthermore, there is support from the command line to union and intersect using the --select operator.  However, if one wishes to exclude, the separate --exclude operator is needed.  The syntax is very straight forward for the command line approach, but again the yaml approach is different.  I see value in the yaml approach.  I just believe that the two should be compatible.  In this PR, I propose that the --select can include --exclude as a way of embedding excluded models in a single string.
+  Furthermore, there is support from the command line to union and intersect using the --select operator.  However, if one wishes to exclude, the separate --exclude operator is needed.  The syntax is very straight forward for the command line approach, but again the yaml approach is different.  I see value in the yaml approach.  I just believe that the two should be compatible.  In this PR, I propose that the --select can include NOT as a way of embedding excluded models in a single string.
   
   ```bash
-  dbt ls --select 'selector:some_selector+1 --exclude selector:some_selector'
+  dbt ls --select 'selector:some_selector+1 NOT selector:some_selector'
   ```
   
   In addition, dbt doesn't allow selectors to be expanded using the children/parent/ancestor operators.  This PR addresses that and makes selectors just like any other method.
@@ -39,7 +39,7 @@ body: |-
   ```yaml
   - definition:
     union:
-      - selector:some_other_selector+1 --exclude some_model+2
+      - selector:some_other_selector+1 NOT some_model+2
     name: some_selector
   ```
   
