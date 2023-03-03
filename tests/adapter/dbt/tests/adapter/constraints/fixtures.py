@@ -37,18 +37,15 @@ select
   cast('2019-01-01' as date) as date_day
 """
 
-my_model_wrong_data_type_sql = """
-{{
+my_model_data_type_sql = """
+{{{{
   config(
     materialized = "table"
   )
-}}
+}}}}
 
 select
-  '1' as id,
-  'blue' as color,
-  cast('2019-01-01' as date) as date_day,
-  ARRAY['a', 'b', 'c'] as num_array
+  {sql_value} as wrong_data_type_column_name
 """
 
 my_model_with_nulls_sql = """
@@ -130,21 +127,15 @@ models:
         data_type: text
       - name: date_day
         data_type: date
-  - name: my_model_wrong_data_type
+"""
+
+model_data_type_schema_yml = """
+version: 2
+models:
+  - name: my_model_data_type
     config:
       contract: true
     columns:
-      - name: id
-        data_type: integer
-        description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
-        tests:
-          - unique
-      - name: color
-        data_type: text
-      - name: date_day
-        data_type: date
-      - name: num_array
-        data_type: int[]
+      - name: wrong_data_type_column_name
+        data_type: {data_type}
 """

@@ -14,7 +14,8 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_sql,
     my_model_wrong_order_sql,
     my_model_wrong_name_sql,
-    my_model_wrong_data_type_sql,
+    my_model_data_type_sql,
+    model_data_type_schema_yml,
     my_model_with_nulls_sql,
     model_schema_yml,
 )
@@ -30,7 +31,6 @@ class BaseConstraintsColumnsEqual:
         return {
             "my_model_wrong_order.sql": my_model_wrong_order_sql,
             "my_model_wrong_name.sql": my_model_wrong_name_sql,
-            "my_model_wrong_data_type.sql": my_model_wrong_data_type_sql,
             "constraints_schema.yml": model_schema_yml,
         }
 
@@ -43,12 +43,24 @@ class BaseConstraintsColumnsEqual:
         return "INT"
 
     @pytest.fixture
-    def int_array_type(self):
-        return "INTEGERARRAY"
+    def schema_int_type(self, int_type):
+        return int_type
 
     @pytest.fixture
-    def string_array_type(self):
-        return "STRINGARRAY"
+    def data_types(self, schema_int_type, int_type, string_type):
+        # sql_column_value, schema_data_type, error_data_type
+        return [
+            ["1", schema_int_type, int_type],
+            ["'1'", string_type, string_type],
+            ["cast('2019-01-01' as date)", "date", "DATE"],
+            ["true", "bool", "BOOL"],
+            ["'2013-11-03 00:00:00-07'::timestamptz", "timestamptz", "DATETIMETZ"],
+            ["'2013-11-03 00:00:00-07'::timestamp", "timestamp", "DATETIME"],
+            ["ARRAY['a','b','c']", "text[]", "STRINGARRAY"],
+            ["ARRAY[1,2,3]", "int[]", "INTEGERARRAY"],
+            ["'1'::numeric", "numeric", "DECIMAL"],
+            ["""'{"bar": "baz", "balance": 7.77, "active": false}'::json""", "json", "JSON"],
+        ]
 
     def test__constraints_wrong_column_order(self, project, string_type, int_type):
         results, log_output = run_dbt_and_capture(
@@ -98,25 +110,77 @@ class BaseConstraintsColumnsEqual:
         assert expected_sql_file_columns in log_output
 
     def test__constraints_wrong_column_data_types(
-        self, project, string_type, int_type, int_array_type, string_array_type
+        self, project, string_type, int_type, schema_int_type, data_types
     ):
-        results, log_output = run_dbt_and_capture(
-            ["run", "-s", "my_model_wrong_data_type"], expect_pass=False
-        )
-        manifest = get_manifest(project.project_root)
-        model_id = "model.test.my_model_wrong_data_type"
-        my_model_config = manifest.nodes[model_id].config
-        contract_actual_config = my_model_config.contract
+        for (sql_column_value, schema_data_type, error_data_type) in data_types:
+            # Write parametrized data_type to sql file
+            write_file(
+                my_model_data_type_sql.format(sql_value=sql_column_value),
+                "models",
+                "my_model_data_type.sql",
+            )
 
-        assert contract_actual_config is True
+            # Write wrong data_type to corresponding schema file
+            # Write integer type for all schema yaml values except when testing integer type itself
+            wrong_schema_data_type = (
+                schema_int_type
+                if schema_data_type.upper() != schema_int_type.upper()
+                else string_type
+            )
+            wrong_schema_error_data_type = (
+                int_type if schema_data_type.upper() != schema_int_type.upper() else string_type
+            )
+            write_file(
+                model_data_type_schema_yml.format(data_type=wrong_schema_data_type),
+                "models",
+                "constraints_schema.yml",
+            )
 
-        expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
-        expected_schema_file_columns = f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE, num_array {int_array_type}"
-        expected_sql_file_columns = f"SQL File Columns: id {string_type}, color {string_type}, date_day DATE, num_array {string_array_type}"
+            results, log_output = run_dbt_and_capture(
+                ["run", "-s", "my_model_data_type"], expect_pass=False
+            )
+            manifest = get_manifest(project.project_root)
+            model_id = "model.test.my_model_data_type"
+            my_model_config = manifest.nodes[model_id].config
+            contract_actual_config = my_model_config.contract
 
-        assert expected_compile_error in log_output
-        assert expected_schema_file_columns in log_output
-        assert expected_sql_file_columns in log_output
+            assert contract_actual_config is True
+
+            expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
+            expected_sql_file_columns = (
+                f"SQL File Columns: wrong_data_type_column_name {error_data_type}"
+            )
+            expected_schema_file_columns = (
+                f"Schema File Columns: wrong_data_type_column_name {wrong_schema_error_data_type}"
+            )
+
+            assert expected_compile_error in log_output
+            assert expected_schema_file_columns in log_output
+            assert expected_sql_file_columns in log_output
+
+    def test__constraints_correct_column_data_types(self, project, data_types):
+        for (sql_column_value, schema_data_type, _) in data_types:
+            # Write parametrized data_type to sql file
+            write_file(
+                my_model_data_type_sql.format(sql_value=sql_column_value),
+                "models",
+                "my_model_data_type.sql",
+            )
+            # Write correct data_type to corresponding schema file
+            write_file(
+                model_data_type_schema_yml.format(data_type=schema_data_type),
+                "models",
+                "constraints_schema.yml",
+            )
+
+            run_dbt(["run", "-s", "my_model_data_type"])
+
+            manifest = get_manifest(project.project_root)
+            model_id = "model.test.my_model_data_type"
+            my_model_config = manifest.nodes[model_id].config
+            contract_actual_config = my_model_config.contract
+
+            assert contract_actual_config is True
 
 
 # This is SUPER specific to Postgres, and will need replacing on other adapters
