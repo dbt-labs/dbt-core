@@ -17,6 +17,7 @@ from typing import (
     Iterator,
     Set,
 )
+
 import agate
 import pytz
 
@@ -37,10 +38,7 @@ from dbt.exceptions import (
     UnexpectedNonTimestampError,
 )
 
-from dbt.adapters.protocol import (
-    AdapterConfig,
-    ConnectionManagerProtocol,
-)
+from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
@@ -176,6 +174,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         - truncate_relation
         - rename_relation
         - get_columns_in_relation
+        - get_column_schema_from_query
         - expand_column_types
         - list_relations_without_caching
         - is_cancelable
@@ -267,6 +266,19 @@ class BaseAdapter(metaclass=AdapterMeta):
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
+
+    @available.parse(lambda *a, **k: [])
+    def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
+        """Get a list of the Columns with names and data types from the given sql."""
+        _, cursor = self.connections.add_select_query(sql)
+        columns = [
+            self.Column.create(
+                column_name, self.connections.data_type_code_to_name(column_type_code)
+            )
+            # https://peps.python.org/pep-0249/#description
+            for column_name, column_type_code, *_ in cursor.description
+        ]
+        return columns
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(self, table: str) -> Tuple[agate.Table]:

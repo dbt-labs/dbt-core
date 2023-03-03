@@ -17,22 +17,54 @@
 {% endmacro %}
 
 
+{% macro get_empty_subquery_sql(select_sql) -%}
+  {{ return(adapter.dispatch('get_empty_subquery_sql', 'dbt')(select_sql)) }}
+{% endmacro %}
+
+{#
+  Builds a query that results in the same schema as the given select_sql statement, without necessitating a data scan.
+  Useful for running a query in a 'pre-flight' context, such as model contract enforcement (assert_columns_equivalent macro).
+#}
+{% macro default__get_empty_subquery_sql(select_sql) %}
+    select * from (
+        {{ select_sql }}
+    ) as __dbt_sbq
+    where false
+    limit 0
+{% endmacro %}
+
+
+{% macro get_empty_schema_sql(columns) -%}
+  {{ return(adapter.dispatch('get_empty_schema_sql', 'dbt')(columns)) }}
+{% endmacro %}
+
+{% macro default__get_empty_schema_sql(columns) %}
+    select
+    {% for i in columns %}
+      {%- set col = columns[i] -%}
+      cast(null as {{ col['data_type'] }}) as {{ col['name'] }}{{ ", " if not loop.last }}
+    {%- endfor -%}
+{% endmacro %}
+
+{% macro get_column_schema_from_query(select_sql) -%}
+    {% set columns = [] %}
+    {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessitating a data scan.#}
+    {% set sql = get_empty_subquery_sql(select_sql) %}
+    {% set column_schema = adapter.get_column_schema_from_query(sql) %}
+    {{ return(column_schema) }}
+{% endmacro %}
+
+-- here for back compat
 {% macro get_columns_in_query(select_sql) -%}
   {{ return(adapter.dispatch('get_columns_in_query', 'dbt')(select_sql)) }}
 {% endmacro %}
 
 {% macro default__get_columns_in_query(select_sql) %}
     {% call statement('get_columns_in_query', fetch_result=True, auto_begin=False) -%}
-        select * from (
-            {{ select_sql }}
-        ) as __dbt_sbq
-        where false
-        limit 0
+        {{ get_empty_subquery_sql(select_sql) }}
     {% endcall %}
-
     {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
 {% endmacro %}
-
 
 {% macro alter_column_type(relation, column_name, new_column_type) -%}
   {{ return(adapter.dispatch('alter_column_type', 'dbt')(relation, column_name, new_column_type)) }}
