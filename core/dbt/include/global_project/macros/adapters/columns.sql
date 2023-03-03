@@ -22,7 +22,7 @@
 {% endmacro %}
 
 {#
-  Builds a query that results in the same schema as the given select_sql statement, without necessating a data scan.
+  Builds a query that results in the same schema as the given select_sql statement, without necessitating a data scan.
   Useful for running a query in a 'pre-flight' context, such as model contract enforcement (assert_columns_equivalent macro).
 #}
 {% macro default__get_empty_subquery_sql(select_sql) %}
@@ -48,7 +48,7 @@
 
 {% macro get_column_schema_from_query(select_sql) -%}
     {% set columns = [] %}
-    {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessating a data scan.#}
+    {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessitating a data scan.#}
     {% set sql = get_empty_subquery_sql(select_sql) %}
     {% set column_schema = adapter.get_column_schema_from_query(sql) %}
     {{ return(column_schema) }}
