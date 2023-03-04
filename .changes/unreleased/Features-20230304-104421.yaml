@@ -1,0 +1,28 @@
+kind: Features
+body: |-
+  In my company, we have a need to run operations on our materialized tables such as user deletion requests.  The dbt run-operation is single threaded and doesn't take advantage of the node yml structure.  Other submaterializations might be things like 'clone' which just implements snowflake's clone feature.
+
+  I was thinking that an improvement would be to (for a particular model)
+
+  materialized: incremental
+  submaterializations:
+    - user_delete
+
+  Another model might be
+
+  materialized: table
+  submaterializations:
+    - user_delete
+
+
+  Materializations named incremental_user_delete and table_user_delete could be created to match above
+
+  And it could be run using
+
+  dbt run-sub --submaterialization user_delete ...
+
+  Any model which has the submaterialization would respond to the above run and it would use the dag order / threads to run the operation.
+time: 2023-03-04T10:44:21.210789-05:00
+custom:
+  Author: acurtis-evi
+  Issue: "7122"
