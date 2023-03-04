@@ -306,7 +306,6 @@ class ResourceTypeSelector(NodeSelector):
         manifest: Manifest,
         previous_state: Optional[PreviousState],
         resource_types: List[NodeType],
-        submaterialization: str = None,
     ):
         super().__init__(
             graph=graph,
@@ -314,11 +313,10 @@ class ResourceTypeSelector(NodeSelector):
             previous_state=previous_state,
         )
         self.resource_types: Set[NodeType] = set(resource_types)
-        self.submaterialization = submaterialization
 
     def node_is_match(self, node):
         if self.submaterialization is not None:
-            if node.config is not None and node.config.submaterializations is not None and self.submaterialization in node.config.submaterializations:
+            if node.config is not None and node.config.get('submaterializations') is not None and self.submaterialization in node.config.get('submaterializations'):
                 return node.resource_type in self.resource_types
             return False
         return node.resource_type in self.resource_types

@@ -234,6 +234,7 @@ def docs_serve(ctx, **kwargs):
 # dbt compile
 @cli.command("compile")
 @click.pass_context
+@p.submaterialization
 @p.defer
 @p.exclude
 @p.favor_state
@@ -272,6 +273,7 @@ def compile(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
+@p.submaterialization
 @p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
@@ -335,6 +337,7 @@ def init(ctx, **kwargs):
 # dbt list
 @cli.command("list")
 @click.pass_context
+@p.submaterialization
 @p.exclude
 @p.indirect_selection
 @p.models
@@ -400,6 +403,7 @@ def parse(ctx, **kwargs):
 # dbt run
 @cli.command("run")
 @click.pass_context
+@p.submaterialization
 @p.defer
 @p.favor_state
 @p.exclude
@@ -432,44 +436,6 @@ def run(ctx, **kwargs):
     results = task.run()
     success = task.interpret_results(results)
     return results, success
-
-# dbt run-sub
-@cli.command("run-sub")
-@click.pass_context
-@click.argument("submaterialization")
-@p.defer
-@p.favor_state
-@p.exclude
-@p.fail_fast
-@p.full_refresh
-@p.profile
-@p.profiles_dir
-@p.project_dir
-@p.select
-@p.selector
-@p.state
-@p.target
-@p.target_path
-@p.threads
-@p.vars
-@p.version_check
-@requires.preflight
-@requires.profile
-@requires.project
-@requires.runtime_config
-@requires.manifest
-def run(ctx, **kwargs):
-    """Compile SQL and execute against the current target database."""
-    task = RunTask(
-        ctx.obj["flags"],
-        ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
-    )
-
-    results = task.run()
-    success = task.interpret_results(results)
-    return results, success
-
 
 # dbt run operation
 @cli.command("run-operation")

@@ -627,6 +627,10 @@ class MethodManager:
     ):
         self.manifest = manifest
         self.previous_state = previous_state
+        self.submaterialization = None
+
+    def set_submaterialization(self, submaterialization):
+        self.submaterialization = submaterialization
 
     def get_method(self, method: MethodName, method_arguments: List[str]) -> SelectorMethod:
 

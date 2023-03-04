@@ -367,6 +367,12 @@ store_failures = click.option(
     is_flag=True,
 )
 
+submaterialization = click.option(
+    "--submaterialization",
+    envvar=None,
+    help="Which submaterialization to select and/or run"
+)
+
 target = click.option(
     "--target", "-t", envvar=None, help="Which target to load for the given profile"
 )

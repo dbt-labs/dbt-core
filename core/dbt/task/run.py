@@ -295,8 +295,6 @@ class RunTask(CompileTask):
         super().__init__(args, config, manifest)
         self.ran_hooks = []
         self._total_executed = 0
-        if self.args.submaterialization is not None:
-            self.config.submaterialization = self.args.submaterialization
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
@@ -470,8 +468,7 @@ class RunTask(CompileTask):
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
-            resource_types=[NodeType.Model],
-            submaterialization=self.args.submaterialization,
+            resource_types=[NodeType.Model]
         )
 
     def get_runner_type(self, _):
