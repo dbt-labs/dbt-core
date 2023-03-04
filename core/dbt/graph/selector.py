@@ -318,8 +318,7 @@ class ResourceTypeSelector(NodeSelector):
 
     def node_is_match(self, node):
         if self.submaterialization is not None:
-            if node.config is not None and node.config.submaterializations is not None
-               and self.submaterialization in node.config.submaterializations:
+            if node.config is not None and node.config.submaterializations is not None and self.submaterialization in node.config.submaterializations:
                 return node.resource_type in self.resource_types
             return False
         return node.resource_type in self.resource_types
