@@ -248,13 +248,17 @@ class ModelRunner(CompileRunner):
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)
 
+        materialized = model.get_materialization()
+        if self.config.submaterialization is not None:
+            materialized = materialized + '_' + self.config.submaterialization
+
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name, model.get_materialization(), self.adapter.type()
+            self.config.project_name, materialized, self.adapter.type()
         )
 
         if materialization_macro is None:
             raise MissingMaterializationError(
-                materialization=model.get_materialization(), adapter_type=self.adapter.type()
+                materialization=materialized, adapter_type=self.adapter.type()
             )
 
         if "config" not in context:
@@ -287,10 +291,12 @@ class ModelRunner(CompileRunner):
 
 
 class RunTask(CompileTask):
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config, manifest, submaterialization: str = None):
         super().__init__(args, config, manifest)
         self.ran_hooks = []
         self._total_executed = 0
+        if self.args.submaterialization is not None:
+            self.config.submaterialization = self.args.submaterialization
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
@@ -465,6 +471,7 @@ class RunTask(CompileTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=[NodeType.Model],
+            submaterialization=self.args.submaterialization,
         )
 
     def get_runner_type(self, _):

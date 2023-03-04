@@ -433,6 +433,43 @@ def run(ctx, **kwargs):
     success = task.interpret_results(results)
     return results, success
 
+# dbt run-sub
+@cli.command("run-sub")
+@click.pass_context
+@click.argument("submaterialization")
+@p.defer
+@p.favor_state
+@p.exclude
+@p.fail_fast
+@p.full_refresh
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.select
+@p.selector
+@p.state
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+def run(ctx, **kwargs):
+    """Compile SQL and execute against the current target database."""
+    task = RunTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
 
 # dbt run operation
 @cli.command("run-operation")
