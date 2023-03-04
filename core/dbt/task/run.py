@@ -468,7 +468,7 @@ class RunTask(CompileTask):
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
-            resource_types=[NodeType.Model]
+            resource_types=[NodeType.Model],
         )
 
     def get_runner_type(self, _):
