@@ -19,7 +19,11 @@ body: |-
 
   And it could be run using
 
-  dbt run-sub --submaterialization user_delete ...
+  dbt run --submaterialization user_delete ...
+
+  or
+  
+  dbt ls --submaterialization user_delete ...
 
   Any model which has the submaterialization would respond to the above run and it would use the dag order / threads to run the operation.
 time: 2023-03-04T10:44:21.210789-05:00
