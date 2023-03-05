@@ -98,8 +98,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
     else:
-        file_contents = load_file_contents(match.absolute_path, strip=False)
-        checksum = FileHash.from_contents(file_contents)
+        checksum = FileHash.from_path(match.absolute_path)
         source_file = SourceFile(path=match, checksum=checksum)
         source_file.contents = ""
     source_file.parse_file_type = ParseFileType.Seed

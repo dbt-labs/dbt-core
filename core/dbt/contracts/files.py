@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from mashumaro.types import SerializableType
 from typing import List, Optional, Union, Dict, Any
 
+from dbt.clients.system import convert_path
 from dbt.constants import MAXIMUM_SEED_SIZE
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
@@ -108,6 +109,19 @@ class FileHash(dbtClassMixin):
         data = contents.encode("utf-8")
         checksum = hashlib.new(name, data).hexdigest()
         return cls(name=name, checksum=checksum)
+
+    @classmethod
+    def from_path(cls, path: str, name="sha256") -> "FileHash":
+        """Create a file hash from the file at given path."""
+        path = convert_path(path)
+        chunk_size = 1 * 1024 * 1024
+        file_hash = hashlib.new(name)
+        with open(path, "rb") as handle:
+            chunk = handle.read(chunk_size)
+            while chunk:
+                file_hash.update(chunk)
+                chunk = handle.read(chunk_size)
+        return cls(name=name, checksum=file_hash.hexdigest())
 
 
 @dataclass
