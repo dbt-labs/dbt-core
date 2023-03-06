@@ -43,10 +43,10 @@ select
   cast('2019-01-01' as date) as date_day
 """
 
-my_view_model_sql = """
+my_incremental_model_sql = """
 {{
   config(
-    materialized = "view"
+    materialized = "Incremental"
   )
 }}
 
@@ -181,8 +181,9 @@ class TestProjectConstraintsEnabledConfigs:
         with pytest.raises(ParsingError) as err_info:
             run_dbt(["parse"], expect_pass=False)
 
+        exc_str = " ".join(str(err_info.value).split())
         error_message_expected = "NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
-        assert error_message_expected in str(err_info)
+        assert error_message_expected in exc_str
 
 
 class TestModelConstraintsEnabledConfigs:
@@ -196,8 +197,9 @@ class TestModelConstraintsEnabledConfigs:
         with pytest.raises(ParsingError) as err_info:
             run_dbt(["parse"], expect_pass=False)
 
+        exc_str = " ".join(str(err_info.value).split())
         error_message_expected = "NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
-        assert error_message_expected in str(err_info)
+        assert error_message_expected in exc_str
 
 
 class TestModelLevelConstraintsDisabledConfigs:
@@ -223,7 +225,7 @@ class TestModelLevelConstraintsErrorMessages:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_view_model_sql,
+            "my_model.sql": my_incremental_model_sql,
             "constraints_schema.yml": model_schema_errors_yml,
         }
 
@@ -231,10 +233,13 @@ class TestModelLevelConstraintsErrorMessages:
         with pytest.raises(ParsingError) as err_info:
             run_dbt(["parse"], expect_pass=False)
 
-        expected_materialization_error = "Materialization Error: {'materialization': 'view'}"
+        exc_str = " ".join(str(err_info.value).split())
+        expected_materialization_error = (
+            "Materialization Error: {'materialization': 'Incremental'}"
+        )
         expected_empty_data_type_error = "Columns with `data_type` Blank/Null Errors: {'date_day'}"
-        assert expected_materialization_error in str(err_info)
-        assert expected_empty_data_type_error in str(err_info)
+        assert expected_materialization_error in str(exc_str)
+        assert expected_empty_data_type_error in str(exc_str)
 
 
 class TestSchemaConstraintsEnabledConfigs:
@@ -249,8 +254,9 @@ class TestSchemaConstraintsEnabledConfigs:
         with pytest.raises(ParsingError) as err_info:
             run_dbt(["parse"], expect_pass=False)
 
+        exc_str = " ".join(str(err_info.value).split())
         schema_error_expected = "Schema Error: `yml` configuration does NOT exist"
-        assert schema_error_expected in str(err_info)
+        assert schema_error_expected in str(exc_str)
 
 
 class TestPythonModelLevelConstraintsErrorMessages:
@@ -265,5 +271,6 @@ class TestPythonModelLevelConstraintsErrorMessages:
         with pytest.raises(ParsingError) as err_info:
             run_dbt(["parse"], expect_pass=False)
 
+        exc_str = " ".join(str(err_info.value).split())
         expected_python_error = "Language Error: {'language': 'python'}"
-        assert expected_python_error in str(err_info)
+        assert expected_python_error in exc_str
