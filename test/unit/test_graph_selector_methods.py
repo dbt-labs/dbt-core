@@ -14,6 +14,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     Exposure,
     Metric,
+    Group,
     SeedNode,
     SingularTestNode,
     GenericTestNode,
@@ -30,6 +31,7 @@ from dbt.graph.selector_methods import (
     MethodManager,
     QualifiedNameSelectorMethod,
     TagSelectorMethod,
+    GroupSelectorMethod,
     SourceSelectorMethod,
     PathSelectorMethod,
     FileSelectorMethod,
@@ -353,7 +355,7 @@ def make_metric(pkg, name, path=None):
     return Metric(
         name=name,
         resource_type=NodeType.Metric,
-        path='schema.yml',
+        path=path,
         package_name=pkg,
         original_file_path=path,
         unique_id=f'metric.{pkg}.{name}',
@@ -376,6 +378,20 @@ def make_metric(pkg, name, path=None):
         tags=['okrs'],
     )
 
+
+def make_group(pkg, name, path=None):
+    if path is None:
+        path = 'schema.yml'
+
+    return Group(
+        name=name,
+        resource_type=NodeType.Group,
+        path=path,
+        package_name=pkg,
+        original_file_path=path,
+        unique_id=f'group.{pkg}.{name}',
+        owner='email@gmail.com',
+    )
 
 @pytest.fixture
 def macro_test_unique():
@@ -638,6 +654,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, table_model
         metrics={},
         disabled=[],
         selectors={},
+        groups={},
     )
     return manifest
 
@@ -664,6 +681,26 @@ def test_select_fqn(manifest):
         'mynamespace.union_model', 'mynamespace.ephemeral_model', 'mynamespace.seed'}
     assert search_manifest_using_method(
         manifest, method, 'ext') == {'ext_model'}
+    # wildcards
+    assert search_manifest_using_method(manifest, method, '*.*.*_model') == {
+        'mynamespace.union_model', 'mynamespace.ephemeral_model', 'union_model'}
+    # multiple wildcards
+    assert search_manifest_using_method(
+        manifest, method, '*unions*') == {'union_model', 'mynamespace.union_model'}
+    # negation
+    assert not search_manifest_using_method(manifest, method, '!pkg*')
+    # single wildcard
+    assert search_manifest_using_method(manifest, method, 'pkg.t*') == {
+        'table_model', 'table_model_py', 'table_model_csv'}
+    # wildcard and ? (matches exactly one character)
+    assert search_manifest_using_method(
+        manifest, method, '*ext_m?del') == {'ext_model'}
+    # multiple ?
+    assert search_manifest_using_method(manifest, method, '*.?????_model') == {
+        'union_model', 'table_model', 'mynamespace.union_model'}
+    # multiple ranges
+    assert search_manifest_using_method(manifest, method, '*.[t-u][a-n][b-i][l-o][e-n]_model') == {
+        'union_model', 'table_model', 'mynamespace.union_model'}
 
 
 def test_select_tag(manifest):
@@ -675,6 +712,22 @@ def test_select_tag(manifest):
     assert search_manifest_using_method(manifest, method, 'uses_ephemeral') == {
         'view_model', 'table_model'}
     assert not search_manifest_using_method(manifest, method, 'missing')
+    assert search_manifest_using_method(manifest, method, 'uses_eph*') == {
+            'view_model', 'table_model'}
+
+def test_select_group(manifest, view_model):
+    group_name = 'my_group'
+    group = make_group('test', group_name)
+    manifest.groups[group.unique_id] = group
+    change_node(manifest, view_model.replace(config={'materialized': 'view', 'group': group_name},))
+    methods = MethodManager(manifest, None)
+    method = methods.get_method('group', [])
+    assert isinstance(method, GroupSelectorMethod)
+    assert method.arguments == []
+
+    assert search_manifest_using_method(manifest, method, group_name) == {
+        'view_model'}
+    assert not search_manifest_using_method(manifest, method, 'not_my_group')
 
 
 def test_select_source(manifest):
@@ -708,7 +761,8 @@ def test_select_source(manifest):
     assert search_manifest_using_method(
         manifest, method, 'ext.ext_raw.*') == {'ext_raw.ext_source', 'ext_raw.ext_source_2'}
     assert not search_manifest_using_method(manifest, method, 'pkg.ext_raw.*')
-
+    assert search_manifest_using_method(manifest, method, '*.ext_[s]ourc?') == {
+            'ext_raw.ext_source', 'raw.ext_source'}
 
 # TODO: this requires writing out files
 @pytest.mark.skip('TODO: write manifest files to disk')
@@ -749,7 +803,8 @@ def test_select_file(manifest):
         manifest, method, 'missing.sql')
     assert not search_manifest_using_method(
         manifest, method, 'missing.py')
-
+    assert search_manifest_using_method(
+        manifest, method, 'table_*.csv') == {'table_model_csv'}
 
 def test_select_package(manifest):
     methods = MethodManager(manifest, None)
@@ -765,6 +820,9 @@ def test_select_package(manifest):
         'ext_model', 'ext_raw.ext_source', 'ext_raw.ext_source_2', 'raw.ext_source', 'raw.ext_source_2', 'unique_ext_raw_ext_source_id'}
 
     assert not search_manifest_using_method(manifest, method, 'missing')
+
+    assert search_manifest_using_method(manifest, method, 'ex*') == {
+        'ext_model', 'ext_raw.ext_source', 'ext_raw.ext_source_2', 'raw.ext_source', 'raw.ext_source_2', 'unique_ext_raw_ext_source_id'}
 
 
 def test_select_config_materialized(manifest):
@@ -812,7 +870,8 @@ def test_select_test_name(manifest):
     assert search_manifest_using_method(manifest, method, 'not_null') == {
         'not_null_table_model_id'}
     assert not search_manifest_using_method(manifest, method, 'notatest')
-
+    assert search_manifest_using_method(manifest, method, 'not_*') == {
+        'not_null_table_model_id'}
 
 def test_select_test_type(manifest):
     methods = MethodManager(manifest, None)
@@ -840,7 +899,8 @@ def test_select_exposure(manifest):
         manifest, method, 'my_exposure') == {'my_exposure'}
     assert not search_manifest_using_method(
         manifest, method, 'not_my_exposure')
-
+    assert search_manifest_using_method(
+        manifest, method, 'my_e*e') == {'my_exposure'}
 
 def test_select_metric(manifest):
     metric = make_metric('test', 'my_metric')
@@ -852,7 +912,8 @@ def test_select_metric(manifest):
         manifest, method, 'my_metric') == {'my_metric'}
     assert not search_manifest_using_method(
         manifest, method, 'not_my_metric')
-
+    assert search_manifest_using_method(
+        manifest, method, '*_metric') == {'my_metric'}
 
 @pytest.fixture
 def previous_state(manifest):

@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Move validation of group earlier
+time: 2023-02-28T14:04:40.978022-05:00
+custom:
+  Author: gshank
+  Issue: "7087"

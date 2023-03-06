@@ -37,7 +37,7 @@ from dbt.events.types import (
     Note,
 )
 from dbt.logger import DbtProcessState
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory, write_file
@@ -398,6 +398,7 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.check_valid_group_config()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -984,6 +985,26 @@ class ManifestLoader:
 
         self.manifest.rebuild_ref_lookup()
 
+    def check_valid_group_config(self):
+        manifest = self.manifest
+        group_names = {group.name for group in manifest.groups.values()}
+
+        for metric in manifest.metrics.values():
+            self.check_valid_group_config_node(metric, group_names)
+
+        for node in manifest.nodes.values():
+            self.check_valid_group_config_node(node, group_names)
+
+    def check_valid_group_config_node(
+        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+    ):
+        groupable_node_group = groupable_node.group
+        if groupable_node_group and groupable_node_group not in valid_group_names:
+            raise dbt.exceptions.ParsingError(
+                f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
+                node=groupable_node,
+            )
+
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
@@ -1063,27 +1084,6 @@ def _check_resource_uniqueness(
         alias_resources[full_node_name] = node
 
 
-def _check_valid_group_config(manifest: Manifest):
-    group_names = {group.name for group in manifest.groups.values()}
-
-    for metric in manifest.metrics.values():
-        _check_valid_group_config_node(metric, group_names)
-
-    for node in manifest.nodes.values():
-        _check_valid_group_config_node(node, group_names)
-
-
-def _check_valid_group_config_node(
-    groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
-):
-    groupable_node_group = groupable_node.config.group
-    if groupable_node_group and groupable_node_group not in valid_group_names:
-        raise dbt.exceptions.ParsingError(
-            f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
-            node=groupable_node,
-        )
-
-
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
     disabled_fqns: PathSet = frozenset(
@@ -1095,7 +1095,6 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-    _check_valid_group_config(manifest)
 
 
 def _get_node_column(node, column_name):
@@ -1196,6 +1195,16 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            # Exposures do not have a group and so can never reference private models
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=exposure.unique_id,
+                ref_unique_id=target_model.unique_id,
+                group=dbt.utils.cast_to_str(target_model.group),
+            )
 
         target_model_id = target_model.unique_id
 
@@ -1239,6 +1248,16 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 should_warn_if_disabled=False,
             )
             continue
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not metric.group or metric.group != target_model.group:
+                raise dbt.exceptions.DbtReferenceError(
+                    unique_id=metric.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=dbt.utils.cast_to_str(target_model.group),
+                )
 
         target_model_id = target_model.unique_id
 
@@ -1335,6 +1354,18 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 should_warn_if_disabled=False,
             )
             continue
+
+        # Handle references to models that are private
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not node.group or node.group != target_model.group:
+                raise dbt.exceptions.DbtReferenceError(
+                    unique_id=node.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=dbt.utils.cast_to_str(target_model.group),
+                )
 
         target_model_id = target_model.unique_id
 

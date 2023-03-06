@@ -1,0 +1,6 @@
+kind: Features
+body: get_column_schema_from_query_macro
+time: 2023-02-22T13:06:32.583743-05:00
+custom:
+  Author: jtcohen6 michelleark
+  Issue: "6751"
