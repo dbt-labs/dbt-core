@@ -3,7 +3,7 @@
 {% endmacro %}
 
 {%- macro default__resolve_model_name(input_model_name) -%}
-    {{  input_model_name | string | replace('"', '\"') }}
+    "{{  input_model_name | string | replace('"', '\"') }}"
 {%- endmacro -%}
 
 {% macro build_ref_function(model) %}
@@ -75,7 +75,7 @@ class this:
     identifier = "{{ this.identifier }}"
     {% set this_relation_name = resolve_model_name(this) %}
     def __repr__(self):
-        return "{{ this_relation_name  }}"
+        return {{ this_relation_name  }}
 
 
 class dbtObj:
