@@ -16,6 +16,7 @@ from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
 from typing import Optional
 
+from dbt.constants import MAXIMUM_SEED_SIZE, DEFAULT_MAXIMUM_SEED_SIZE
 
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
@@ -94,14 +95,17 @@ def validate_yaml(file_path, dct):
 
 # Special processing for big seed files
 def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
-    if match.seed_too_large():
+    if match.file_size() < MAXIMUM_SEED_SIZE:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
-    else:
+    elif match.file_size() <= DEFAULT_MAXIMUM_SEED_SIZE:
         file_contents = load_file_contents(match.absolute_path, strip=False)
         checksum = FileHash.from_contents(file_contents)
         source_file = SourceFile(path=match, checksum=checksum)
         source_file.contents = ""
+    else:
+        # Do new hash method
+        pass
     source_file.parse_file_type = ParseFileType.Seed
     source_file.project_name = project_name
     return source_file

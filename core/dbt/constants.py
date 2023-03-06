@@ -8,8 +8,9 @@ def get_max_seed_size():
     mx = os.getenv('DBT_MAXIMUM_SEED_SIZE', '1')
     return int(mx)
 
-MAXIMUM_SEED_SIZE = get_max_seed_size() * 1024 * 1024
-MAXIMUM_SEED_SIZE_NAME = str(get_max_seed_size()) + "MiB"
+DEFAULT_MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
+MAXIMUM_SEED_SIZE = get_max_seed_size() * DEFAULT_MAXIMUM_SEED_SIZE
+MAXIMUM_SEED_SIZE_NAME = str(get_max_seed_size()) + "MB"
 
 PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"
