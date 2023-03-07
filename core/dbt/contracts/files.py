@@ -70,6 +70,7 @@ class FilePath(dbtClassMixin):
     def file_size(self) -> int:
         return os.stat(self.full_path).st_size
 
+
 @dataclass
 class FileHash(dbtClassMixin):
     name: str  # the hash type name

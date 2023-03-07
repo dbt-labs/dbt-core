@@ -18,6 +18,7 @@ from typing import Optional
 
 from dbt.constants import MAXIMUM_SEED_SIZE, DEFAULT_MAXIMUM_SEED_SIZE
 
+
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
     path: FilePath,
@@ -95,7 +96,8 @@ def validate_yaml(file_path, dct):
 
 # Special processing for big seed files
 def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
-    if match.file_size() > MAXIMUM_SEED_SIZE:
+    # MAXIMUM_SEED_SIZE = 0 means no limit
+    if match.file_size() > MAXIMUM_SEED_SIZE and MAXIMUM_SEED_SIZE != 0:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
     elif match.file_size() <= DEFAULT_MAXIMUM_SEED_SIZE:
