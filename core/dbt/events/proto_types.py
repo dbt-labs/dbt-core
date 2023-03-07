@@ -2268,19 +2268,6 @@ class MainStackTraceMsg(betterproto.Message):
 
 
 @dataclass
-class SystemErrorRetrievingModTime(betterproto.Message):
-    """Z004"""
-
-    path: str = betterproto.string_field(1)
-
-
-@dataclass
-class SystemErrorRetrievingModTimeMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "SystemErrorRetrievingModTime" = betterproto.message_field(2)
-
-
-@dataclass
 class SystemCouldNotWrite(betterproto.Message):
     """Z005"""
 
