@@ -297,9 +297,7 @@ class NodeSelector(MethodManager):
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
         """
-        if project is not None:
-            self.project = project
-        selected_nodes = self.get_selected(spec)
+        selected_nodes = self.get_selected(spec, project)
         selected_resources.set_selected_resources(selected_nodes)
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?
