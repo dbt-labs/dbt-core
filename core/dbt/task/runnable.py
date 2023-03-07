@@ -77,6 +77,8 @@ class GraphRunnableTask(ConfiguredTask):
         self.set_previous_state()
         if self.args.submaterialization is not None:
             self.config.submaterialization = self.args.submaterialization
+        else:
+            self.config.submaterialization = None
 
     def set_previous_state(self):
         if self.args.state is not None:

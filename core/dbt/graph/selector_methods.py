@@ -206,11 +206,11 @@ class QualifiedNameSelectorMethod(SelectorMethod):
             if self.node_is_match(selector, real_node.fqn):
                 yield node
 
-class SubSelectorMethod(SelectorMethod):
+class SubMaterializationSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included that have the specified tag"""
         for node, real_node in self.all_nodes(included_nodes):
-            if selector in real_node.submaterializations:
+            if real_node.config.get('submaterializations') and any(fnmatch(sub, selector) for sub in real_node.config.get('submaterializations')):
                 yield node
 
 class TagSelectorMethod(SelectorMethod):
