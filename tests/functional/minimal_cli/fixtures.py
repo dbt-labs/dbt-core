@@ -62,7 +62,7 @@ class BaseConfigProject:
         }
 
     @pytest.fixture(scope="class")
-    def profiles_config_update(self):
+    def profiles_config_update(self, dbt_profile_target):
         return {
             "jaffle_shop": {
                 "outputs": {
@@ -72,7 +72,7 @@ class BaseConfigProject:
                         "schema": "jaffle_shop",
                         "host": "localhost",
                         "user": "root",
-                        "port": 5432,
+                        "port": dbt_profile_target["port"],
                         "pass": "password",
                     }
                 },
