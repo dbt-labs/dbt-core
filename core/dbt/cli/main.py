@@ -234,6 +234,7 @@ def docs_serve(ctx, **kwargs):
 # dbt compile
 @cli.command("compile")
 @click.pass_context
+@p.submaterialization
 @p.defer
 @p.exclude
 @p.favor_state
@@ -272,6 +273,7 @@ def compile(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
+@p.submaterialization
 @p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
@@ -335,6 +337,7 @@ def init(ctx, **kwargs):
 # dbt list
 @cli.command("list")
 @click.pass_context
+@p.submaterialization
 @p.exclude
 @p.indirect_selection
 @p.models
@@ -400,6 +403,7 @@ def parse(ctx, **kwargs):
 # dbt run
 @cli.command("run")
 @click.pass_context
+@p.submaterialization
 @p.defer
 @p.favor_state
 @p.exclude
@@ -432,7 +436,6 @@ def run(ctx, **kwargs):
     results = task.run()
     success = task.interpret_results(results)
     return results, success
-
 
 # dbt run operation
 @cli.command("run-operation")

@@ -315,4 +315,8 @@ class ResourceTypeSelector(NodeSelector):
         self.resource_types: Set[NodeType] = set(resource_types)
 
     def node_is_match(self, node):
+        if self.submaterialization is not None:
+            if node.config is not None and node.config.get('submaterializations') is not None and self.submaterialization in node.config.get('submaterializations'):
+                return node.resource_type in self.resource_types
+            return False
         return node.resource_type in self.resource_types

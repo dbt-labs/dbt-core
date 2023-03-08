@@ -75,6 +75,10 @@ class GraphRunnableTask(ConfiguredTask):
         self._raise_next_tick = None
         self.previous_state: Optional[PreviousState] = None
         self.set_previous_state()
+        if self.args.submaterialization is not None:
+            self.config.submaterialization = self.args.submaterialization
+        else:
+            self.config.submaterialization = None
 
     def set_previous_state(self):
         if self.args.state is not None:
@@ -124,6 +128,8 @@ class GraphRunnableTask(ConfiguredTask):
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
+        if self.config.submaterialization:
+            selector.set_submaterialization(self.config.submaterialization)
         spec = self.get_selection_spec()
         return selector.get_graph_queue(spec)
 

@@ -57,6 +57,8 @@ class ListTask(GraphRunnableTask):
 
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
+        if self.config.submaterialization:
+            selector.set_submaterialization(self.config.submaterialization)
         spec = self.get_selection_spec()
         nodes = sorted(selector.get_selected(spec))
         if not nodes:

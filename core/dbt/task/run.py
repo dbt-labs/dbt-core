@@ -248,13 +248,17 @@ class ModelRunner(CompileRunner):
     def execute(self, model, manifest):
         context = generate_runtime_model_context(model, self.config, manifest)
 
+        materialized = model.get_materialization()
+        if self.config.submaterialization is not None:
+            materialized = materialized + '_' + self.config.submaterialization
+
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name, model.get_materialization(), self.adapter.type()
+            self.config.project_name, materialized, self.adapter.type()
         )
 
         if materialization_macro is None:
             raise MissingMaterializationError(
-                materialization=model.get_materialization(), adapter_type=self.adapter.type()
+                materialization=materialized, adapter_type=self.adapter.type()
             )
 
         if "config" not in context:
