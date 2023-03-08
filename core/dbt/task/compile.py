@@ -43,9 +43,13 @@ class CompileTask(GraphRunnableTask):
         return True
 
     def get_node_selector(self) -> ResourceTypeSelector:
-        resource_types = (
-            [NodeType.SqlOperation] if getattr(self.args, "inline", None) else [NodeType.Model]
-        )
+        if getattr(self.args, "inline", None):
+            resource_types = [NodeType.SqlOperation]
+        elif getattr(self.args, "select", None):
+            resource_types = [NodeType.Model]
+        else:
+            resource_types = NodeType.executable()
+
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
         return ResourceTypeSelector(

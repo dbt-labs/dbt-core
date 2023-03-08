@@ -25,3 +25,18 @@ select * from {{ ref('second_ephemeral_model')}}
 union all
 select 2 as fun
 """
+
+schema_yml = """
+version: 2
+
+models:
+  - name: second_model
+    description: "The second model"
+    columns:
+      - name: fun
+        tests:
+          - not_null
+      - name: schema
+        tests:
+          - unique
+"""

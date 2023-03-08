@@ -8,6 +8,7 @@ from tests.functional.compile.fixtures import (
     first_ephemeral_model_sql,
     second_ephemeral_model_sql,
     third_ephemeral_model_sql,
+    schema_yml,
 )
 
 
@@ -30,6 +31,7 @@ class TestIntrospectFlag:
         return {
             "first_model.sql": first_model_sql,
             "second_model.sql": second_model_sql,
+            "schema.yml": schema_yml,
         }
 
     def test_default(self, project):
@@ -92,7 +94,16 @@ class TestEphemeralModels:
 class TestCompile:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"first_model.sql": first_model_sql, "second_model.sql": second_model_sql}
+        return {
+            "first_model.sql": first_model_sql,
+            "second_model.sql": second_model_sql,
+            "schema.yml": schema_yml,
+        }
+
+    def test_none(self, project):
+        (results, log_output) = run_dbt_and_capture(["compile"])
+        assert len(results) == 4
+        assert "Compiled node" not in log_output
 
     def test_inline_pass(self, project):
         (results, log_output) = run_dbt_and_capture(
