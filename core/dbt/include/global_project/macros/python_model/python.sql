@@ -1,14 +1,22 @@
+{% macro resolve_model_name(input_model_name) %}
+    {{ return(adapter.dispatch('resolve_model_name', 'dbt')(input_model_name)) }}
+{% endmacro %}
+
+{%- macro default__resolve_model_name(input_model_name) -%}
+    {{  input_model_name | string | replace('"', '\"') }}
+{%- endmacro -%}
+
 {% macro build_ref_function(model) %}
 
     {%- set ref_dict = {} -%}
     {%- for _ref in model.refs -%}
         {%- set resolved = ref(*_ref) -%}
-        {%- do ref_dict.update({_ref | join("."): resolved.quote(database=False, schema=False, identifier=False) | string}) -%}
+        {%- do ref_dict.update({_ref | join('.'): resolve_model_name(resolved)}) -%}
     {%- endfor -%}
 
 def ref(*args,dbt_load_df_function):
     refs = {{ ref_dict | tojson }}
-    key = ".".join(args)
+    key = '.'.join(args)
     return dbt_load_df_function(refs[key])
 
 {% endmacro %}
@@ -18,12 +26,12 @@ def ref(*args,dbt_load_df_function):
     {%- set source_dict = {} -%}
     {%- for _source in model.sources -%}
         {%- set resolved = source(*_source) -%}
-        {%- do source_dict.update({_source | join("."): resolved.quote(database=False, schema=False, identifier=False) | string}) -%}
+        {%- do source_dict.update({_source | join('.'): resolve_model_name(resolved)}) -%}
     {%- endfor -%}
 
 def source(*args, dbt_load_df_function):
     sources = {{ source_dict | tojson }}
-    key = ".".join(args)
+    key = '.'.join(args)
     return dbt_load_df_function(sources[key])
 
 {% endmacro %}
@@ -33,8 +41,8 @@ def source(*args, dbt_load_df_function):
     {% set config_dbt_used = zip(model.config.config_keys_used, model.config.config_keys_defaults) | list %}
     {%- for key, default in config_dbt_used -%}
         {# weird type testing with enum, would be much easier to write this logic in Python! #}
-        {%- if key == 'language' -%}
-          {%- set value = 'python' -%}
+        {%- if key == "language" -%}
+          {%- set value = "python" -%}
         {%- endif -%}
         {%- set value = model.config.get(key, default) -%}
         {%- do config_dict.update({key: value}) -%}
@@ -62,11 +70,12 @@ class config:
 
 class this:
     """dbt.this() or dbt.this.identifier"""
-    database = '{{ this.database }}'
-    schema = '{{ this.schema }}'
-    identifier = '{{ this.identifier }}'
+    database = "{{ this.database }}"
+    schema = "{{ this.schema }}"
+    identifier = "{{ this.identifier }}"
+    {% set this_relation_name = resolve_model_name(this) %}
     def __repr__(self):
-        return '{{ this }}'
+        return '{{ this_relation_name  }}'
 
 
 class dbtObj:
