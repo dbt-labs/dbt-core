@@ -483,7 +483,7 @@ def get_environment(
     native: bool = False,
 ) -> jinja2.Environment:
     args: Dict[str, List[Union[str, Type[jinja2.ext.Extension]]]] = {
-        "extensions": ["jinja2.ext.do"]
+        "extensions": ["jinja2.ext.do", "jinja2.ext.loopcontrols"]
     }
 
     if capture_macros:

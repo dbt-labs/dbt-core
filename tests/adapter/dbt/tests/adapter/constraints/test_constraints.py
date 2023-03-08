@@ -65,8 +65,9 @@ class BaseConstraintsColumnsEqual:
         ]
 
     def test__constraints_wrong_column_order(self, project, string_type, int_type):
+        # This no longer causes an error, since we enforce yaml column order
         results, log_output = run_dbt_and_capture(
-            ["run", "-s", "my_model_wrong_order"], expect_pass=False
+            ["run", "-s", "my_model_wrong_order"], expect_pass=True
         )
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model_wrong_order"
@@ -74,18 +75,6 @@ class BaseConstraintsColumnsEqual:
         contract_actual_config = my_model_config.contract
 
         assert contract_actual_config is True
-
-        expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
-        expected_schema_file_columns = (
-            f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
-        )
-        expected_sql_file_columns = (
-            f"SQL File Columns: color {string_type}, id {int_type}, date_day DATE"
-        )
-
-        assert expected_compile_error in log_output
-        assert expected_schema_file_columns in log_output
-        assert expected_sql_file_columns in log_output
 
     def test__constraints_wrong_column_names(self, project, string_type, int_type):
         results, log_output = run_dbt_and_capture(
@@ -98,7 +87,7 @@ class BaseConstraintsColumnsEqual:
 
         assert contract_actual_config is True
 
-        expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
+        expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
             f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
         )
@@ -147,7 +136,7 @@ class BaseConstraintsColumnsEqual:
 
             assert contract_actual_config is True
 
-            expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
+            expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
             expected_sql_file_columns = (
                 f"SQL File Columns: wrong_data_type_column_name {error_data_type}"
             )
@@ -196,11 +185,19 @@ insert into {0} (
     id ,
     color ,
     date_day
-) (
+)
+(
     select
-        1 as id,
-        'blue' as color,
-        cast('2019-01-01' as date) as date_day
+       id,
+       color,
+       date_day
+       from
+    (
+        select
+            1 as id,
+            'blue' as color,
+            cast('2019-01-01' as date) as date_day
+    ) as model_subq
 );
 """
 
@@ -248,10 +245,10 @@ class BaseConstraintsRuntimeEnforcement:
             expected_sql_check == generated_sql_check
         ), f"""
 -- GENERATED SQL
-{generated_sql}
+{generated_sql_check}
 
 -- EXPECTED SQL
-{expected_sql}
+{expected_sql_check}
 """
 
     def test__constraints_enforcement_rollback(

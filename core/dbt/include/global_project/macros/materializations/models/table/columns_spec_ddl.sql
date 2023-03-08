@@ -37,12 +37,33 @@
   {#--Obtain the column schema provided by the schema file by generating an 'empty schema' query from the model's columns. #}
   {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(model['columns'])) -%}
 
+  {#-- Build compiler error msg #}
   {%- set sql_file_provided_columns_formatted = format_columns(sql_file_provided_columns)  -%}
   {%- set schema_file_provided_columns_formatted = format_columns(schema_file_provided_columns)  -%}
+  {%- set compiler_error_msg = 'Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file.\nSchema File Columns: ' ~ (schema_file_provided_columns_formatted|trim) ~ '\n\nSQL File Columns: ' ~ (sql_file_provided_columns_formatted|trim) ~ ' ' -%}
 
-  {%- if sql_file_provided_columns_formatted != schema_file_provided_columns_formatted -%}
-    {%- do exceptions.raise_compiler_error('Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file.\nSchema File Columns: ' ~ (schema_file_provided_columns_formatted|trim) ~ '\n\nSQL File Columns: ' ~ (sql_file_provided_columns_formatted|trim) ~ ' ' ) %}
+
+  {%- if sql_file_provided_columns|length != schema_file_provided_columns|length -%}
+    {%- do exceptions.raise_compiler_error(compiler_error_msg) -%}
   {%- endif -%}
+
+  {%- for sql_col in sql_file_provided_columns -%}
+    {%- set yaml_col = [] -%}
+    {%- for schema_col in schema_file_provided_columns -%}
+      {%- if schema_col.name == sql_col.name -%}
+        {%- do yaml_col.append(schema_col) -%}
+        {% break %}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- if not yaml_col -%}
+      {#-- Column with name not found in yaml --#}
+      {%- do exceptions.raise_compiler_error(compiler_error_msg) -%}
+    {%- endif -%}
+    {%- if sql_col.dtype != yaml_col[0].dtype -%}
+      {#-- Column data types don't match --#}
+      {%- do exceptions.raise_compiler_error(compiler_error_msg) -%}
+    {%- endif -%}
+  {%- endfor -%}
 
 {% endmacro %}
 
