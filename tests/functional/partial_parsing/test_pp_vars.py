@@ -1,30 +1,28 @@
-import pytest
+import os
+from pathlib import Path
 
-from dbt.tests.util import run_dbt, write_file, run_dbt_and_capture, get_manifest
+import pytest
+from dbt.constants import SECRET_ENV_PREFIX
+from dbt.exceptions import FailedToConnectError, ParsingError
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
 
 from tests.functional.partial_parsing.fixtures import (
-    model_color_sql,
-    env_var_model_sql,
-    env_var_schema_yml,
-    env_var_model_one_sql,
-    raw_customers_csv,
-    env_var_sources_yml,
-    test_color_sql,
-    env_var_schema2_yml,
-    env_var_schema3_yml,
     env_var_macro_sql,
     env_var_macros_yml,
-    env_var_model_test_yml,
-    people_sql,
     env_var_metrics_yml,
+    env_var_model_one_sql,
+    env_var_model_sql,
+    env_var_model_test_yml,
+    env_var_schema2_yml,
+    env_var_schema3_yml,
+    env_var_schema_yml,
+    env_var_sources_yml,
+    model_color_sql,
     model_one_sql,
+    people_sql,
+    raw_customers_csv,
+    test_color_sql,
 )
-
-
-from dbt.exceptions import ParsingError
-from dbt.constants import SECRET_ENV_PREFIX
-import os
-
 
 os.environ["DBT_PP_TEST"] = "true"
 
@@ -325,14 +323,20 @@ class TestProfileEnvVars:
         os.environ["ENV_VAR_USER"] = "root"
         os.environ["ENV_VAR_PASS"] = "password"
 
-        results = run_dbt(["run"])
+        run_dbt(["run"])
         manifest = get_manifest(project.project_root)
         env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change env_vars, the user doesn't exist, this should fail
         os.environ["ENV_VAR_USER"] = "fake_user"
-        (results, log_output) = run_dbt_and_capture(["run"], expect_pass=False)
+
+        # N.B. run_dbt_and_capture won't work here because FailedToConnectError ends the test entirely
+        with pytest.raises(FailedToConnectError):
+            run_dbt(["run"], expect_pass=False)
+
+        log_output = Path(project.logs_dir, "dbt.log").read_text()
         assert "env vars used in profiles.yml have changed" in log_output
+
         manifest = get_manifest(project.project_root)
         assert env_vars_checksum != manifest.state_check.profile_env_vars_hash.checksum
 

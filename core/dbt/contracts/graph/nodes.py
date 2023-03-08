@@ -28,7 +28,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
     TestDef,
-    ExposureOwner,
+    Owner,
     ExposureType,
     MaturityType,
     MetricFilter,
@@ -37,15 +37,17 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
 from dbt.events.functions import warn_or_error
+from dbt.exceptions import ParsingError, InvalidAccessTypeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
+    ValidationWarning,
 )
 from dbt.events.contextvars import set_contextvars
-from dbt import flags
-from dbt.node_types import ModelLanguage, NodeType
+from dbt.flags import get_flags
+from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt.utils import cast_dict_to_dict_of_strings
 
 
@@ -59,6 +61,7 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
 )
+
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -145,6 +148,8 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    constraints: Optional[List[str]] = None
+    constraints_check: Optional[str] = None
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
@@ -238,6 +243,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
@@ -360,6 +366,26 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        # This might not be the ideal place to validate the "access" field,
+        # but at this point we have the information we need to properly
+        # validate and we don't before this.
+        if patch.access:
+            if self.resource_type == NodeType.Model:
+                if AccessType.is_valid(patch.access):
+                    self.access = AccessType(patch.access)
+                else:
+                    raise InvalidAccessTypeError(
+                        unique_id=self.unique_id,
+                        field_value=patch.access,
+                    )
+            else:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="access",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
 
     def same_contents(self, old) -> bool:
         if old is None:
@@ -399,6 +425,7 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
+    contract: bool = False
 
     @property
     def empty(self):
@@ -409,8 +436,10 @@ class CompiledNode(ParsedNode):
         do if extra_ctes were an OrderedDict
         """
         for cte in self.extra_ctes:
+            # Because it's possible that multiple threads are compiling the
+            # node at the same time, we don't want to overwrite already compiled
+            # sql in the extra_ctes with empty sql.
             if cte.id == cte_id:
-                cte.sql = sql
                 break
         else:
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
@@ -457,6 +486,7 @@ class HookNode(CompiledNode):
 @dataclass
 class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
+    access: AccessType = AccessType.Protected
 
 
 # TODO: rm?
@@ -482,6 +512,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # seeds need the root_path because the contents are not loaded initially
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
+    depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -523,6 +554,39 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
         """Seeds are never empty"""
         return False
 
+    def _disallow_implicit_dependencies(self):
+        """Disallow seeds to take implicit upstream dependencies via pre/post hooks"""
+        # Seeds are root nodes in the DAG. They cannot depend on other nodes.
+        # However, it's possible to define pre- and post-hooks on seeds, and for those
+        # hooks to include {{ ref(...) }}. This worked in previous versions, but it
+        # was never officially documented or supported behavior. Let's raise an explicit error,
+        # which will surface during parsing if the user has written code such that we attempt
+        # to capture & record a ref/source/metric call on the SeedNode.
+        # For more details: https://github.com/dbt-labs/dbt-core/issues/6806
+        hooks = [f'- pre_hook: "{hook.sql}"' for hook in self.config.pre_hook] + [
+            f'- post_hook: "{hook.sql}"' for hook in self.config.post_hook
+        ]
+        hook_list = "\n".join(hooks)
+        message = f"""
+Seeds cannot depend on other nodes. dbt detected a seed with a pre- or post-hook
+that calls 'ref', 'source', or 'metric', either directly or indirectly via other macros.
+
+Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list}
+        """
+        raise ParsingError(message)
+
+    @property
+    def refs(self):
+        self._disallow_implicit_dependencies()
+
+    @property
+    def sources(self):
+        self._disallow_implicit_dependencies()
+
+    @property
+    def metrics(self):
+        self._disallow_implicit_dependencies()
+
     def same_body(self, other) -> bool:
         return self.same_seeds(other)
 
@@ -531,8 +595,8 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
         return []
 
     @property
-    def depends_on_macros(self):
-        return []
+    def depends_on_macros(self) -> List[str]:
+        return self.depends_on.macros
 
     @property
     def extra_ctes(self):
@@ -557,7 +621,7 @@ class TestShouldStoreFailures:
     def should_store_failures(self):
         if self.config.store_failures:
             return self.config.store_failures
-        return flags.STORE_FAILURES
+        return get_flags().STORE_FAILURES
 
     @property
     def is_relational(self):
@@ -608,6 +672,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
+    attached_node: Optional[str] = None
 
     def same_contents(self, other) -> bool:
         if other is None:
@@ -892,7 +957,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
 @dataclass
 class Exposure(GraphNode):
     type: ExposureType
-    owner: ExposureOwner
+    owner: Owner
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Exposure]})
     description: str = ""
     label: Optional[str] = None
@@ -998,6 +1063,7 @@ class Metric(GraphNode):
     refs: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
+    group: Optional[str] = None
 
     @property
     def depends_on_nodes(self):
@@ -1066,6 +1132,18 @@ class Metric(GraphNode):
 
 
 # ====================================
+# Group node
+# ====================================
+
+
+@dataclass
+class Group(BaseNode):
+    name: str
+    owner: Owner
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Group]})
+
+
+# ====================================
 # Patches
 # ====================================
 
@@ -1085,6 +1163,7 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
 @dataclass
 class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
+    access: Optional[str]
 
 
 @dataclass
@@ -1133,6 +1212,7 @@ Resource = Union[
     GraphMemberNode,
     Documentation,
     Macro,
+    Group,
 ]
 
 TestNode = Union[

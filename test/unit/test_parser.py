@@ -101,7 +101,7 @@ class BaseParserTest(unittest.TestCase):
         self.root_project_config = config_from_parts_or_dicts(
             project=root_project,
             profile=profile_data,
-            cli_vars='{"test_schema_name": "foo"}'
+            cli_vars={"test_schema_name": "foo"}
         )
 
         snowplow_project = {

@@ -393,6 +393,21 @@ class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
         return warning_tag(msg)
 
 
+@dataclass
+class EnvironmentVariableRenamed(WarnLevel, pt.EnvironmentVariableRenamed):  # noqa
+    def code(self):
+        return "D009"
+
+    def message(self):
+        description = (
+            f"The environment variable `{self.old_name}` has been renamed as `{self.new_name}`.\n"
+            f"If `{self.old_name}` is currently set, its value will be used instead of `{self.old_name}`.\n"
+            f"Set `{self.new_name}` and unset `{self.old_name}` to avoid this deprecation warning and "
+            "ensure it works properly in a future release."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -769,15 +784,42 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 
 
 @dataclass
-class ParseCmdOut(InfoLevel, pt.ParseCmdOut):
+class InputFileDiffError(DebugLevel, pt.InputFileDiffError):
     def code(self):
         return "I001"
 
     def message(self) -> str:
-        return self.msg
+        return f"Error processing file diff: {self.category}, {self.file_id}"
 
 
-# Skipping I002, I003, I004, I005, I006, I007, I008, I009, I010
+# Skipping I002, I003, I004, I005, I006, I007
+
+
+@dataclass
+class InvalidValueForField(WarnLevel, pt.InvalidValueForField):
+    def code(self):
+        return "I008"
+
+    def message(self) -> str:
+        return f"Invalid value ({self.field_value}) for field {self.field_name}"
+
+
+@dataclass
+class ValidationWarning(WarnLevel, pt.ValidationWarning):
+    def code(self):
+        return "I009"
+
+    def message(self) -> str:
+        return f"Field {self.field_name} is not valid for {self.resource_type} ({self.node_name})"
+
+
+@dataclass
+class ParsePerfInfoPath(InfoLevel, pt.ParsePerfInfoPath):
+    def code(self):
+        return "I010"
+
+    def message(self) -> str:
+        return f"Performance info: {self.path}"
 
 
 @dataclass
@@ -1873,13 +1915,7 @@ class MainStackTrace(ErrorLevel, pt.MainStackTrace):
         return self.stack_trace
 
 
-@dataclass
-class SystemErrorRetrievingModTime(ErrorLevel, pt.SystemErrorRetrievingModTime):
-    def code(self):
-        return "Z004"
-
-    def message(self) -> str:
-        return f"Error retrieving modification time for file {self.path}"
+# Skipped Z004
 
 
 @dataclass
@@ -2013,33 +2049,6 @@ class Formatting(InfoLevel, pt.Formatting):
 
     def message(self) -> str:
         return self.msg
-
-
-@dataclass
-class ServingDocsPort(InfoLevel, pt.ServingDocsPort):
-    def code(self):
-        return "Z018"
-
-    def message(self) -> str:
-        return f"Serving docs at {self.address}:{self.port}"
-
-
-@dataclass
-class ServingDocsAccessInfo(InfoLevel, pt.ServingDocsAccessInfo):
-    def code(self):
-        return "Z019"
-
-    def message(self) -> str:
-        return f"To access from your browser, navigate to:  http://localhost:{self.port}"
-
-
-@dataclass
-class ServingDocsExitInfo(InfoLevel, pt.ServingDocsExitInfo):
-    def code(self):
-        return "Z020"
-
-    def message(self) -> str:
-        return "Press Ctrl+C to exit."
 
 
 @dataclass

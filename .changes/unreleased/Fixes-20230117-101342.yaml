@@ -1,6 +1,0 @@
-kind: Fixes
-body: Provide backward compatibility for `get_merge_sql` arguments
-time: 2023-01-17T10:13:42.118336-06:00
-custom:
-  Author: dave-connors-3
-  Issue: "6625"

@@ -1114,6 +1114,30 @@ class SnapshopConfigError(ParsingError):
         super().__init__(msg=self.msg)
 
 
+class DbtReferenceError(ParsingError):
+    def __init__(self, unique_id: str, ref_unique_id: str, group: str):
+        self.unique_id = unique_id
+        self.ref_unique_id = ref_unique_id
+        self.group = group
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        return (
+            f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
+            f"which is not allowed because the referenced node is private to the {self.group} group."
+        )
+
+
+class InvalidAccessTypeError(ParsingError):
+    def __init__(self, unique_id: str, field_value: str):
+        self.unique_id = unique_id
+        self.field_value = field_value
+        msg = (
+            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        )
+        super().__init__(msg=msg)
+
+
 class SameKeyNestedError(CompilationError):
     def __init__(self):
         msg = "Test cannot have the same key at the top-level and in config"

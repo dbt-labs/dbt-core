@@ -75,6 +75,11 @@ class TestGraphSelection(SelectionFixtures):
         )
         assert_correct_schemas(project)
 
+    def test_group(self, project):
+        expected = ["test.unique_users_id", "test.users"]
+        results = run_dbt(["ls", "--select", "group:users_group"])
+        assert sorted(results) == expected
+
     def test_specific_model_and_children(self, project):
         results = run_dbt(["run", "--select", "users+"], expect_pass=False)
         check_result_nodes_by_name(

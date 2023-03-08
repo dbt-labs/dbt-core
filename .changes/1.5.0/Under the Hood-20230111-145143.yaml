@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: '[CT-921] dbt compile works in click'
+time: 2023-01-11T14:51:43.324107-08:00
+custom:
+  Author: aranke
+  Issue: "5545"

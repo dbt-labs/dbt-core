@@ -207,7 +207,7 @@ message ProfileWrittenWithTargetTemplateYAML {
 
 message ProfileWrittenWithTargetTemplateYAMLMsg {
     EventInfo info = 1;
-    ProfileWrittenWithTargetTemplateYAMLMsg data = 2;
+    ProfileWrittenWithTargetTemplateYAML data = 2;
 }
 
 // A022
@@ -347,6 +347,17 @@ message InternalDeprecation {
 message InternalDeprecationMsg {
     EventInfo info = 1;
     InternalDeprecation data = 2;
+}
+
+//D009
+message EnvironmentVariableRenamed {
+    string old_name = 1;
+    string new_name = 2;
+}
+
+message EnvironmentVariableRenamedMsg {
+    EventInfo info = 1;
+    EnvironmentVariableRenamed data = 2;
 }
 
 // E - DB Adapter
@@ -760,21 +771,53 @@ message FinishedRunningStatsMsg {
     FinishedRunningStats data = 2;
 }
 
-
 // I - Project parsing
 
 // I001
-message ParseCmdOut {
-    string msg = 1;
+message InputFileDiffError {
+    string category = 1;
+    string file_id = 2;
 }
 
-message ParseCmdOutMsg {
+message InputFileDiffErrorMsg {
     EventInfo info = 1;
-    ParseCmdOut data = 2;
+    InputFileDiffError data = 2;
 }
 
-// Skipping I002, I003, I004, I005, I006, I007, I008, I009, I010
+// Skipping I002, I003, I004, I005, I006, I007
 
+// I008
+message InvalidValueForField {
+    string field_name = 1;
+    string field_value = 2;
+}
+
+message InvalidValueForFieldMsg {
+    EventInfo info = 1;
+    InvalidValueForField data = 2;
+}
+
+// I009
+message ValidationWarning {
+    string resource_type = 1;
+    string field_name = 2;
+    string node_name = 3;
+}
+
+message ValidationWarningMsg {
+    EventInfo info = 1;
+    ValidationWarning data = 2;
+}
+
+// I010
+message ParsePerfInfoPath {
+    string path = 1;
+}
+
+message ParsePerfInfoPathMsg {
+    EventInfo info = 1;
+    ParsePerfInfoPath data = 2;
+}
 
 // I011
 message GenericTestFileParse {
@@ -1451,7 +1494,7 @@ message LogModelResult {
     string status = 3;
     int32 index = 4;
     int32 total = 5;
-    int32 execution_time = 6;
+    float execution_time = 6;
 }
 
 message LogModelResultMsg {
@@ -1787,15 +1830,7 @@ message MainStackTraceMsg {
     MainStackTrace data = 2;
 }
 
-// Z004
-message SystemErrorRetrievingModTime {
-    string path = 1;
-}
-
-message SystemErrorRetrievingModTimeMsg {
-    EventInfo info = 1;
-    SystemErrorRetrievingModTime data = 2;
-}
+// skipping Z004
 
 // Z005
 message SystemCouldNotWrite {

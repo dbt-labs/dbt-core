@@ -1,0 +1,6 @@
+kind: Features
+body: Make project version optional
+time: 2023-01-24T13:55:50.86071024-08:00
+custom:
+  Author: seub
+  Issue: "6603"

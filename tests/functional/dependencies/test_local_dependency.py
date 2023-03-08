@@ -12,7 +12,6 @@ from unittest import mock
 import dbt.semver
 import dbt.config
 import dbt.exceptions
-import dbt.flags
 
 from dbt.tests.util import (
     check_relations_equal,
@@ -263,7 +262,6 @@ class TestSimpleDependencyNoVersionCheckConfig(BaseDependencyTest):
 
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string("0.0.1")
         run_dbt(["deps", "--vars", vars_arg])
-        assert not dbt.flags.VERSION_CHECK
         run_dbt(["seed", "--vars", vars_arg])
         results = run_dbt(["run", "--vars", vars_arg])
         len(results) == 5

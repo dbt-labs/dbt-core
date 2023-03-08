@@ -1,0 +1,6 @@
+kind: Fixes
+body: Reapply logging fixes which were accidentally reverted
+time: 2023-02-10T10:30:28.179997-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6936"

@@ -264,7 +264,7 @@ class ProfileWrittenWithTargetTemplateYAML(betterproto.Message):
 @dataclass
 class ProfileWrittenWithTargetTemplateYAMLMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "ProfileWrittenWithTargetTemplateYAMLMsg" = betterproto.message_field(2)
+    data: "ProfileWrittenWithTargetTemplateYAML" = betterproto.message_field(2)
 
 
 @dataclass
@@ -444,6 +444,20 @@ class InternalDeprecation(betterproto.Message):
 class InternalDeprecationMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "InternalDeprecation" = betterproto.message_field(2)
+
+
+@dataclass
+class EnvironmentVariableRenamed(betterproto.Message):
+    """D009"""
+
+    old_name: str = betterproto.string_field(1)
+    new_name: str = betterproto.string_field(2)
+
+
+@dataclass
+class EnvironmentVariableRenamedMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "EnvironmentVariableRenamed" = betterproto.message_field(2)
 
 
 @dataclass
@@ -963,16 +977,59 @@ class FinishedRunningStatsMsg(betterproto.Message):
 
 
 @dataclass
-class ParseCmdOut(betterproto.Message):
+class InputFileDiffError(betterproto.Message):
     """I001"""
 
-    msg: str = betterproto.string_field(1)
+    category: str = betterproto.string_field(1)
+    file_id: str = betterproto.string_field(2)
 
 
 @dataclass
-class ParseCmdOutMsg(betterproto.Message):
+class InputFileDiffErrorMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
-    data: "ParseCmdOut" = betterproto.message_field(2)
+    data: "InputFileDiffError" = betterproto.message_field(2)
+
+
+@dataclass
+class InvalidValueForField(betterproto.Message):
+    """I008"""
+
+    field_name: str = betterproto.string_field(1)
+    field_value: str = betterproto.string_field(2)
+
+
+@dataclass
+class InvalidValueForFieldMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "InvalidValueForField" = betterproto.message_field(2)
+
+
+@dataclass
+class ValidationWarning(betterproto.Message):
+    """I009"""
+
+    resource_type: str = betterproto.string_field(1)
+    field_name: str = betterproto.string_field(2)
+    node_name: str = betterproto.string_field(3)
+
+
+@dataclass
+class ValidationWarningMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ValidationWarning" = betterproto.message_field(2)
+
+
+@dataclass
+class ParsePerfInfoPath(betterproto.Message):
+    """I010"""
+
+    path: str = betterproto.string_field(1)
+
+
+@dataclass
+class ParsePerfInfoPathMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ParsePerfInfoPath" = betterproto.message_field(2)
 
 
 @dataclass
@@ -1817,7 +1874,7 @@ class LogModelResult(betterproto.Message):
     status: str = betterproto.string_field(3)
     index: int = betterproto.int32_field(4)
     total: int = betterproto.int32_field(5)
-    execution_time: int = betterproto.int32_field(6)
+    execution_time: float = betterproto.float_field(6)
 
 
 @dataclass
@@ -2222,19 +2279,6 @@ class MainStackTrace(betterproto.Message):
 class MainStackTraceMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "MainStackTrace" = betterproto.message_field(2)
-
-
-@dataclass
-class SystemErrorRetrievingModTime(betterproto.Message):
-    """Z004"""
-
-    path: str = betterproto.string_field(1)
-
-
-@dataclass
-class SystemErrorRetrievingModTimeMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "SystemErrorRetrievingModTime" = betterproto.message_field(2)
 
 
 @dataclass

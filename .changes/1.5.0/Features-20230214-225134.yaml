@@ -1,0 +1,6 @@
+kind: Features
+body: parse 'group' config on groupable nodes
+time: 2023-02-14T22:51:34.936228-05:00
+custom:
+  Author: michelleark
+  Issue: "6823"

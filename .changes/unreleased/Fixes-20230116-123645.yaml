@@ -1,6 +1,0 @@
-kind: Fixes
-body: Respect quoting config for dbt.ref(), dbt.source(), and dbt.this() in dbt-py models
-time: 2023-01-16T12:36:45.63092+01:00
-custom:
-  Author: jtcohen6
-  Issue: 6103 6619

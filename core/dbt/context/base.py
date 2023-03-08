@@ -2,7 +2,8 @@ import json
 import os
 from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
 
-from dbt import flags
+from dbt.flags import get_flags
+import dbt.flags as flags_module
 from dbt import tracking
 from dbt import utils
 from dbt.clients.jinja import get_rendered
@@ -635,7 +636,7 @@ class BaseContext(metaclass=ContextMeta):
 
         This supports all flags defined in flags submodule (core/dbt/flags.py)
         """
-        return flags.get_flag_obj()
+        return flags_module.get_flag_obj()
 
     @contextmember
     @staticmethod
@@ -651,7 +652,7 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
 
-        if not flags.NO_PRINT:
+        if not get_flags().PRINT:
             print(msg)
         return ""
 
