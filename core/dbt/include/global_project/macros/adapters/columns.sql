@@ -40,10 +40,17 @@
 
 {% macro default__get_empty_schema_sql(columns) %}
     select
+    {%- set col_err = [] -%}
     {% for i in columns %}
       {%- set col = columns[i] -%}
+      {%- if col['data_type'] == '' -%}
+        {%- do col_err.append(col['name']) -%}
+      {%- endif -%}
       cast(null as {{ col['data_type'] }}) as {{ col['name'] }}{{ ", " if not loop.last }}
     {%- endfor -%}
+    {%- if len(col_err) > 0 -%}
+        {{ exceptions.column_type_missing(col_err) }}
+      {%- endif -%}
 {% endmacro %}
 
 {% macro get_column_schema_from_query(select_sql) -%}

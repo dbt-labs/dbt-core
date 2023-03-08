@@ -1803,6 +1803,17 @@ class DuplicateMaterializationNameError(CompilationError):
 
 
 # jinja exceptions
+class ColumnTypeMissingError(CompilationError):
+    def __init__(self, column_names: List, model: str):
+        self.column_names = column_names
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        # `data_type` values must be defined for all columns and NOT be null or blank.
+        msg = f"Columns with `data_type` Blank/Null Errors: {self.column_names}"
+        return msg
+
+
 class PatchTargetNotFoundError(CompilationError):
     def __init__(self, patches: Dict):
         self.patches = patches
