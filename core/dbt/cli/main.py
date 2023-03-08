@@ -80,6 +80,7 @@ class dbtRunner:
 @p.macro_debugging
 @p.partial_parse
 @p.print
+@p.deprecated_print
 @p.printer_width
 @p.quiet
 @p.record_timing_info

@@ -16,6 +16,8 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_wrong_name_sql,
     my_model_data_type_sql,
     model_data_type_schema_yml,
+    my_model_view_wrong_order_sql,
+    my_model_view_wrong_name_sql,
     my_model_with_nulls_sql,
     model_schema_yml,
 )
@@ -74,7 +76,6 @@ class BaseConstraintsColumnsEqual:
         assert contract_actual_config is True
 
         expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
-
         expected_schema_file_columns = (
             f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
         )
@@ -284,7 +285,31 @@ class BaseConstraintsRuntimeEnforcement:
         self.assert_expected_error_messages(failing_results[0].message, expected_error_messages)
 
 
-class TestConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+class BaseTableConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_wrong_order.sql": my_model_wrong_order_sql,
+            "my_model_wrong_name.sql": my_model_wrong_name_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+
+class BaseViewConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_wrong_order.sql": my_model_view_wrong_order_sql,
+            "my_model_wrong_name.sql": my_model_view_wrong_name_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+
+class TestTableConstraintsColumnsEqual(BaseTableConstraintsColumnsEqual):
+    pass
+
+
+class TestViewConstraintsColumnsEqual(BaseViewConstraintsColumnsEqual):
     pass
 
 

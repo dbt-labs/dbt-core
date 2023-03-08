@@ -393,6 +393,21 @@ class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
         return warning_tag(msg)
 
 
+@dataclass
+class EnvironmentVariableRenamed(WarnLevel, pt.EnvironmentVariableRenamed):  # noqa
+    def code(self):
+        return "D009"
+
+    def message(self):
+        description = (
+            f"The environment variable `{self.old_name}` has been renamed as `{self.new_name}`.\n"
+            f"If `{self.old_name}` is currently set, its value will be used instead of `{self.old_name}`.\n"
+            f"Set `{self.new_name}` and unset `{self.old_name}` to avoid this deprecation warning and "
+            "ensure it works properly in a future release."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -768,7 +783,16 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 # =======================================================
 
 
-# Skipping I001, I002, I003, I004, I005, I006, I007
+@dataclass
+class InputFileDiffError(DebugLevel, pt.InputFileDiffError):
+    def code(self):
+        return "I001"
+
+    def message(self) -> str:
+        return f"Error processing file diff: {self.category}, {self.file_id}"
+
+
+# Skipping I002, I003, I004, I005, I006, I007
 
 
 @dataclass
@@ -1897,13 +1921,7 @@ class MainStackTrace(ErrorLevel, pt.MainStackTrace):
         return self.stack_trace
 
 
-@dataclass
-class SystemErrorRetrievingModTime(ErrorLevel, pt.SystemErrorRetrievingModTime):
-    def code(self):
-        return "Z004"
-
-    def message(self) -> str:
-        return f"Error retrieving modification time for file {self.path}"
+# Skipped Z004
 
 
 @dataclass

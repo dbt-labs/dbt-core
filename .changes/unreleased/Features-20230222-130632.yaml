@@ -1,6 +1,6 @@
 kind: Features
-body: get_column_schema_from_query_macro
+body: Enforce contracts on models materialized as tables and views
 time: 2023-02-22T13:06:32.583743-05:00
 custom:
-  Author: jtcohen6 michelleark
-  Issue: "6751"
+  Author: jtcohen6 michelleark emmyoop
+  Issue: 6751 7034
