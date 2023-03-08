@@ -1,0 +1,6 @@
+kind: Features
+body: Enable diff based partial parsing
+time: 2023-02-06T08:47:49.688889-05:00
+custom:
+  Author: gshank
+  Issue: "6592"

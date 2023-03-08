@@ -139,3 +139,57 @@ models:
       - name: wrong_data_type_column_name
         data_type: {data_type}
 """
+
+my_model_view_sql = """
+{{
+  config(
+    materialized = "table"
+  )
+}}
+
+select
+  1 as id,
+  'blue' as color,
+  cast('2019-01-01' as date) as date_day
+"""
+
+my_model_view_wrong_order_sql = """
+{{
+  config(
+    materialized = "view"
+  )
+}}
+
+select
+  'blue' as color,
+  1 as id,
+  cast('2019-01-01' as date) as date_day
+"""
+
+my_model_view_wrong_name_sql = """
+{{
+  config(
+    materialized = "view"
+  )
+}}
+
+select
+  1 as error,
+  'blue' as color,
+  cast('2019-01-01' as date) as date_day
+"""
+
+my_model_view_with_nulls_sql = """
+{{
+  config(
+    materialized = "view"
+  )
+}}
+
+select
+  -- null value for 'id'
+  cast(null as {{ dbt.type_int() }}) as id,
+  -- change the color as well (to test rollback)
+  'red' as color,
+  cast('2019-01-01' as date) as date_day
+"""

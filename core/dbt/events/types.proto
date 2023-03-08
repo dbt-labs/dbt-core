@@ -762,7 +762,18 @@ message FinishedRunningStatsMsg {
 
 // I - Project parsing
 
-// Skipping I001, I002, I003, I004, I005, I006, I007
+// I001
+message InputFileDiffError {
+    string category = 1;
+    string file_id = 2;
+}
+
+message InputFileDiffErrorMsg {
+    EventInfo info = 1;
+    InputFileDiffError data = 2;
+}
+
+// Skipping I002, I003, I004, I005, I006, I007
 
 // I008
 message InvalidValueForField {
@@ -1808,15 +1819,7 @@ message MainStackTraceMsg {
     MainStackTrace data = 2;
 }
 
-// Z004
-message SystemErrorRetrievingModTime {
-    string path = 1;
-}
-
-message SystemErrorRetrievingModTimeMsg {
-    EventInfo info = 1;
-    SystemErrorRetrievingModTime data = 2;
-}
+// skipping Z004
 
 // Z005
 message SystemCouldNotWrite {

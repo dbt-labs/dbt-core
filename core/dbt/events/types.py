@@ -768,7 +768,16 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 # =======================================================
 
 
-# Skipping I001, I002, I003, I004, I005, I006, I007
+@dataclass
+class InputFileDiffError(DebugLevel, pt.InputFileDiffError):
+    def code(self):
+        return "I001"
+
+    def message(self) -> str:
+        return f"Error processing file diff: {self.category}, {self.file_id}"
+
+
+# Skipping I002, I003, I004, I005, I006, I007
 
 
 @dataclass
@@ -1891,13 +1900,7 @@ class MainStackTrace(ErrorLevel, pt.MainStackTrace):
         return self.stack_trace
 
 
-@dataclass
-class SystemErrorRetrievingModTime(ErrorLevel, pt.SystemErrorRetrievingModTime):
-    def code(self):
-        return "Z004"
-
-    def message(self) -> str:
-        return f"Error retrieving modification time for file {self.path}"
+# Skipped Z004
 
 
 @dataclass

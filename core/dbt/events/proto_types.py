@@ -963,6 +963,20 @@ class FinishedRunningStatsMsg(betterproto.Message):
 
 
 @dataclass
+class InputFileDiffError(betterproto.Message):
+    """I001"""
+
+    category: str = betterproto.string_field(1)
+    file_id: str = betterproto.string_field(2)
+
+
+@dataclass
+class InputFileDiffErrorMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "InputFileDiffError" = betterproto.message_field(2)
+
+
+@dataclass
 class InvalidValueForField(betterproto.Message):
     """I008"""
 
@@ -2251,19 +2265,6 @@ class MainStackTrace(betterproto.Message):
 class MainStackTraceMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "MainStackTrace" = betterproto.message_field(2)
-
-
-@dataclass
-class SystemErrorRetrievingModTime(betterproto.Message):
-    """Z004"""
-
-    path: str = betterproto.string_field(1)
-
-
-@dataclass
-class SystemErrorRetrievingModTimeMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "SystemErrorRetrievingModTime" = betterproto.message_field(2)
 
 
 @dataclass
