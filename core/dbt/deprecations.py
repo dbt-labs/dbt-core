@@ -81,6 +81,21 @@ class ExposureNameDeprecation(DBTDeprecation):
     _event = "ExposureNameDeprecation"
 
 
+def renamed_env_var(old_name: str, new_name: str):
+    class EnvironmentVariableRenamed(DBTDeprecation):
+        _name = f"environment-variable-renamed:{old_name}"
+        _event = "EnvironmentVariableRenamed"
+
+    dep = EnvironmentVariableRenamed()
+    deprecations_list.append(dep)
+    deprecations[dep.name] = dep
+
+    def cb():
+        dep.show(old_name=old_name, new_name=new_name)
+
+    return cb
+
+
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen

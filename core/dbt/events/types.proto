@@ -349,6 +349,17 @@ message InternalDeprecationMsg {
     InternalDeprecation data = 2;
 }
 
+//D009
+message EnvironmentVariableRenamed {
+    string old_name = 1;
+    string new_name = 2;
+}
+
+message EnvironmentVariableRenamedMsg {
+    EventInfo info = 1;
+    EnvironmentVariableRenamed data = 2;
+}
+
 // E - DB Adapter
 
 // E001

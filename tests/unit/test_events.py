@@ -126,6 +126,7 @@ sample_values = [
     types.MetricAttributesRenamed(metric_name=""),
     types.ExposureNameDeprecation(exposure=""),
     types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
+    types.EnvironmentVariableRenamed(old_name="", new_name=""),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
