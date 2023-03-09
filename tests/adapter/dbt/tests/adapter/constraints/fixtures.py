@@ -74,8 +74,11 @@ models:
         quote: true
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+          - type: not_null
+          - type: primary_key
+          - type: check
+            expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -89,8 +92,11 @@ models:
       - name: id
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+          - type: not_null
+          - type: primary_key
+          - type: check
+            expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -104,8 +110,11 @@ models:
       - name: id
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+          - type: not_null
+          - type: primary_key
+          - type: check
+            expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -119,8 +128,11 @@ models:
       - name: id
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+          - type: not_null
+          - type: primary_key
+          - type: check
+            expression: (id > 0)
         tests:
           - unique
       - name: color

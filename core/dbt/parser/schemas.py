@@ -29,6 +29,7 @@ from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ColumnInfo,
+    ColumnLevelConstraint,
     GenericTestNode,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
@@ -129,8 +130,7 @@ class ParserRef:
             name=column.name,
             description=column.description,
             data_type=column.data_type,
-            constraints=column.constraints,
-            constraints_check=column.constraints_check,
+            constraints=[ColumnLevelConstraint.from_dict(c) for c in column.constraints],
             meta=column.meta,
             tags=tags,
             quote=quote,

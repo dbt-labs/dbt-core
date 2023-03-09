@@ -93,8 +93,7 @@ class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replace
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
-    constraints: Optional[List[str]] = None
-    constraints_check: Optional[str] = None
+    constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     access: Optional[str] = None
     _extra: Dict[str, Any] = field(default_factory=dict)

@@ -1,6 +1,8 @@
 import os
 import time
 from dataclasses import dataclass, field
+from enum import Enum
+
 from mashumaro.types import SerializableType
 from typing import (
     Optional,
@@ -140,6 +142,28 @@ class GraphNode(BaseNode):
         return self.fqn == other.fqn
 
 
+class ConstraintType(str, Enum):
+    check = "check"
+    not_null = "not_null"
+    unique = "unique"
+    primary_key = "primary_key"
+    foreign_key = "foreign_key"
+    custom = "custom"
+
+
+@dataclass
+class ColumnLevelConstraint(dbtClassMixin):
+    type: ConstraintType
+    name: Optional[str] = None
+    expression: Optional[str] = None
+    warn_unenforced: bool = (
+        True  # Warn if constraint cannot be enforced by platform but will be in DDL
+    )
+    warn_unsupported: bool = (
+        True  # Warn if constraint is not supported by the platform and won't be in DDL
+    )
+
+
 @dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     """Used in all ManifestNodes and SourceDefinition"""
@@ -148,8 +172,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
-    constraints: Optional[List[str]] = None
-    constraints_check: Optional[str] = None
+    constraints: List[ColumnLevelConstraint] = field(default_factory=list)
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)

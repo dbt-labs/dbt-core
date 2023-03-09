@@ -820,18 +820,26 @@
             {
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "expression": {
+                    "type": "string"
+                  },
+                  "warn_unenforced": {
+                    "type": "boolean"
+                  },
+                  "warn_unsupported": {
+                    "type": "boolean"
+                  }
+                }
               }
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "constraints_check": {
-          "oneOf": [
-            {
-              "type": "string"
             },
             {
               "type": "null"

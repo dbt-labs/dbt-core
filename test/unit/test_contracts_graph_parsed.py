@@ -273,6 +273,7 @@ def complex_parsed_model_dict():
                 'description': 'a text field',
                 'meta': {},
                 'tags': [],
+                'constraints': []
             },
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
@@ -555,11 +556,13 @@ def complex_parsed_seed_dict():
             'grants': {},
             'docs': {'show': True},
             'contract': False,
-        'packages': [],
+            'packages': [],
         },
         'deferred': False,
         'docs': {'show': True},
-        'columns': {'a': {'name': 'a', 'description': 'a column description', 'meta': {}, 'tags': []}},
+        'columns': {
+            'a': {'name': 'a', 'description': 'a column description', 'meta': {}, 'tags': [], 'constraints': []}
+        },
         'meta': {'foo': 1000},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {
@@ -696,6 +699,7 @@ def basic_parsed_model_patch_dict():
                 'description': 'a text field',
                 'meta': {},
                 'tags': [],
+                'constraints': []
             },
         },
         'config': {},
@@ -904,6 +908,7 @@ def complex_parsed_hook_dict():
                 'description': 'a text field',
                 'meta': {},
                 'tags': [],
+                'constraints': [],
             },
         },
         'index': 13,
@@ -1129,6 +1134,7 @@ def complex_parsed_schema_test_dict():
                 'description': 'a text field',
                 'meta': {},
                 'tags': [],
+                'constraints': []
             },
         },
         'column_name': 'id',
@@ -1779,6 +1785,7 @@ def populated_parsed_node_patch_dict():
                 'description': 'a text field',
                 'meta': {},
                 'tags': [],
+                'constraints': [],
             },
         },
         'docs': {'show': False},

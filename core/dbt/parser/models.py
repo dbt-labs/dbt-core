@@ -152,12 +152,6 @@ class PythonParseVisitor(ast.NodeVisitor):
             self.packages.append(node.module.split(".")[0])
 
 
-def merge_packages(original_packages_with_version, new_packages):
-    original_packages = [package.split("==")[0] for package in original_packages_with_version]
-    additional_packages = [package for package in new_packages if package not in original_packages]
-    return original_packages_with_version + list(set(additional_packages))
-
-
 def verify_python_model_code(node):
     # TODO: add a test for this
     try:
