@@ -174,16 +174,10 @@ def project_config_update():
     return {}
 
 
-# Data used to remove keys from project configs
-@pytest.fixture(scope="class")
-def project_config_remove():
-    return []
-
-
 # Combines the project_config_update dictionary with project_config defaults to
 # produce a project_yml config and write it out as dbt_project.yml
 @pytest.fixture(scope="class")
-def dbt_project_yml(project_root, project_config_update, project_config_remove, logs_dir):
+def dbt_project_yml(project_root, project_config_update, logs_dir):
     project_config = {
         "config-version": 2,
         "name": "test",
@@ -196,9 +190,6 @@ def dbt_project_yml(project_root, project_config_update, project_config_remove, 
         elif isinstance(project_config_update, str):
             updates = yaml.safe_load(project_config_update)
             project_config.update(updates)
-    if project_config_remove:
-        for key in project_config_remove:
-            project_config.pop(key, None)
     write_file(yaml.safe_dump(project_config), project_root, "dbt_project.yml")
     return project_config
 
