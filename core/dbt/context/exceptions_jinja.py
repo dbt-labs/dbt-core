@@ -98,8 +98,8 @@ def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:
     raise RelationWrongTypeError(relation, expected_type, model)
 
 
-def column_type_missing(column_names, model=None) -> NoReturn:
-    raise ColumnTypeMissingError(column_names, model)
+def column_type_missing(column_names) -> NoReturn:
+    raise ColumnTypeMissingError(column_names)
 
 
 # Update this when a new function should be added to the

@@ -1,5 +1,5 @@
 import pytest
-from dbt.exceptions import ParsingError
+from dbt.exceptions import ParsingError, CompilationError
 from dbt.tests.util import run_dbt, get_manifest
 
 my_model_sql = """
@@ -134,6 +134,25 @@ models:
 """
 
 
+model_schema_incomplete_datatypes_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints: ['not null','primary key']
+        constraints_check: (id > 0)
+        tests:
+          - unique
+      - name: color
+      - name: date_day
+        data_type: date
+"""
+
+
 class TestModelLevelConstraintsEnabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
@@ -165,7 +184,7 @@ class TestProjectConstraintsEnabledConfigs:
                 "test": {
                     "+contract": True,
                     "subdirectory": {
-                        "+contract": False,
+                        "+contract": True,
                     },
                 }
             }
@@ -175,14 +194,18 @@ class TestProjectConstraintsEnabledConfigs:
     def models(self):
         return {
             "my_model.sql": my_model_sql,
+            "constraints_schema.yml": model_schema_incomplete_datatypes_yml,
         }
 
     def test__project_error(self, project):
-        with pytest.raises(ParsingError) as err_info:
-            run_dbt(["parse"], expect_pass=False)
+        # parse should pass, we don't expect to catch it until runtime
+        run_dbt(["parse"], expect_pass=True)
+
+        with pytest.raises(CompilationError) as err_info:
+            run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
-        error_message_expected = "NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
+        error_message_expected = "Errors: ['color']"
         assert error_message_expected in exc_str
 
 
