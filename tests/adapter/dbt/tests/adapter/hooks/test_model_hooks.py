@@ -27,6 +27,7 @@ MODEL_PRE_HOOK = """
         test_state,
         target_dbname,
         target_host,
+        target_port,
         target_name,
         target_schema,
         target_type,
@@ -39,6 +40,7 @@ MODEL_PRE_HOOK = """
     'start',
     '{{ target.dbname }}',
     '{{ target.host }}',
+    '{{ target.port }}',
     '{{ target.name }}',
     '{{ target.schema }}',
     '{{ target.type }}',
@@ -55,6 +57,7 @@ MODEL_POST_HOOK = """
         test_state,
         target_dbname,
         target_host,
+        target_port,
         target_name,
         target_schema,
         target_type,
@@ -67,6 +70,7 @@ MODEL_POST_HOOK = """
     'end',
     '{{ target.dbname }}',
     '{{ target.host }}',
+    '{{ target.port }}',
     '{{ target.name }}',
     '{{ target.schema }}',
     '{{ target.type }}',
@@ -89,7 +93,7 @@ class BaseTestPrePost(object):
             "test_state",
             "target_dbname",
             "target_host",
-            # "target_port",
+            "target_port",
             "target_name",
             "target_schema",
             "target_threads",
@@ -114,7 +118,7 @@ class BaseTestPrePost(object):
             assert ctx["test_state"] == state
             assert ctx["target_dbname"] == "dbt"
             assert ctx["target_host"] == host
-            # assert ctx["target_port"] == project.dbt_profile_target["port"]
+            assert ctx["target_port"] == project.dbt_profile_target["port"]
             assert ctx["target_name"] == "default"
             assert ctx["target_schema"] == project.test_schema
             assert ctx["target_threads"] == 4
@@ -198,6 +202,7 @@ class TestHookRefs(BaseTestPrePost):
                         test_state,
                         '{{ target.dbname }}' as target_dbname,
                         '{{ target.host }}' as target_host,
+                        {{ target.port }} as target_port,
                         '{{ target.name }}' as target_name,
                         '{{ target.schema }}' as target_schema,
                         '{{ target.type }}' as target_type,

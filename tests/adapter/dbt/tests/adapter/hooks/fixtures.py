@@ -33,6 +33,7 @@ macros__before_and_after = """
         test_state,
         target_dbname,
         target_host,
+        target_port,
         target_name,
         target_schema,
         target_type,
@@ -45,6 +46,7 @@ macros__before_and_after = """
     '{{ state }}',
     '{{ target.dbname }}',
     '{{ target.host }}',
+    {{ target.port }},
     '{{ target.name }}',
     '{{ target.schema }}',
     '{{ target.type }}',
@@ -76,6 +78,7 @@ models__hooks_configured = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -88,6 +91,7 @@ models__hooks_configured = """
                 'start',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -102,6 +106,7 @@ models__hooks_configured = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -114,6 +119,7 @@ models__hooks_configured = """
                 'end',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -137,6 +143,7 @@ models__hooks_error = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -149,6 +156,7 @@ models__hooks_error = """
                 'start',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -163,6 +171,7 @@ models__hooks_error = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -175,6 +184,7 @@ models__hooks_error = """
                 'start',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -189,6 +199,7 @@ models__hooks_error = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -201,6 +212,7 @@ models__hooks_error = """
                 'end',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -224,6 +236,7 @@ models__hooks_kwargs = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -236,6 +249,7 @@ models__hooks_kwargs = """
                 'start',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -250,6 +264,7 @@ models__hooks_kwargs = """
                 test_state,\
                 target_dbname,\
                 target_host,\
+                target_port,\
                 target_name,\
                 target_schema,\
                 target_type,\
@@ -262,6 +277,7 @@ models__hooks_kwargs = """
                 'end',\
                 '{{ target.dbname }}',\
                 '{{ target.host }}',\
+                {{ target.port }},\
                 '{{ target.name }}',\
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
@@ -285,6 +301,7 @@ models__hooked = """
                 test_state,
                 '{{ target.dbname }}' as target_dbname,\
                 '{{ target.host }}' as target_host,\
+                {{ target.port }} as port,\
                 '{{ target.name }}' as target_name,\
                 '{{ target.schema }}' as target_schema,\
                 '{{ target.type }}' as target_type,\

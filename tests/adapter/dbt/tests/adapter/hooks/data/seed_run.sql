@@ -5,6 +5,7 @@ create table {schema}.on_run_hook (
     test_state       TEXT, -- start|end
     target_dbname    TEXT,
     target_host      TEXT,
+    target_port      INTEGER,
     target_name      TEXT,
     target_schema    TEXT,
     target_type      TEXT,
