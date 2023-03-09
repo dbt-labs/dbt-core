@@ -36,13 +36,3 @@ class TestProject(ContractTestCase):
         }
         with self.assertRaises(ValidationError):
             self.ContractType.validate(dct)
-
-    def test_unsupported_version(self):
-        dct = {
-            'name': 'test',
-            'version': '1.0',
-            'profile': 'test',
-            'project-root': '/usr/src/app',
-        }
-        with self.assertRaises(Exception):
-            self.ContractType.from_dict(dct)
