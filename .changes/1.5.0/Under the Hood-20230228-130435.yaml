@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove cli doc generation workflow
+time: 2023-02-28T13:04:35.20038-06:00
+custom:
+  Author: stu-k
+  Issue: "7088"

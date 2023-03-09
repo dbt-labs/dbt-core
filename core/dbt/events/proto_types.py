@@ -447,6 +447,20 @@ class InternalDeprecationMsg(betterproto.Message):
 
 
 @dataclass
+class EnvironmentVariableRenamed(betterproto.Message):
+    """D009"""
+
+    old_name: str = betterproto.string_field(1)
+    new_name: str = betterproto.string_field(2)
+
+
+@dataclass
+class EnvironmentVariableRenamedMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "EnvironmentVariableRenamed" = betterproto.message_field(2)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 
@@ -960,6 +974,20 @@ class FinishedRunningStats(betterproto.Message):
 class FinishedRunningStatsMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "FinishedRunningStats" = betterproto.message_field(2)
+
+
+@dataclass
+class InputFileDiffError(betterproto.Message):
+    """I001"""
+
+    category: str = betterproto.string_field(1)
+    file_id: str = betterproto.string_field(2)
+
+
+@dataclass
+class InputFileDiffErrorMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "InputFileDiffError" = betterproto.message_field(2)
 
 
 @dataclass
@@ -2251,19 +2279,6 @@ class MainStackTrace(betterproto.Message):
 class MainStackTraceMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "MainStackTrace" = betterproto.message_field(2)
-
-
-@dataclass
-class SystemErrorRetrievingModTime(betterproto.Message):
-    """Z004"""
-
-    path: str = betterproto.string_field(1)
-
-
-@dataclass
-class SystemErrorRetrievingModTimeMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "SystemErrorRetrievingModTime" = betterproto.message_field(2)
 
 
 @dataclass

@@ -6,13 +6,6 @@ from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
-# TODO:  Rename this to meet naming conventions (the word "send" is redundant)
-send_anonymous_usage_stats = click.option(
-    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
-    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
-    help="Send anonymous usage stats to dbt Labs.",
-    default=True,
-)
 
 args = click.option(
     "--args",
@@ -172,7 +165,15 @@ output = click.option(
 )
 
 output_keys = click.option(
-    "--output-keys", envvar=None, help="TODO: No current help text", type=click.STRING
+    "--output-keys",
+    envvar=None,
+    help=(
+        "Space-delimited listing of node properties to include as custom keys for JSON output "
+        "(e.g. `--output json --output-keys name resource_type description`)"
+    ),
+    type=list,
+    cls=MultiOption,
+    default=[],
 )
 
 output_path = click.option(
@@ -206,15 +207,21 @@ port = click.option(
     type=click.INT,
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `NO_PRINT` and used the env var `DBT_NO_PRINT`.
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
+# envvar was previously named DBT_NO_PRINT
 print = click.option(
     "--print/--no-print",
     envvar="DBT_PRINT",
     help="Output all {{ print() }} macro calls.",
     default=True,
+)
+
+deprecated_print = click.option(
+    "--deprecated-print/--deprecated-no-print",
+    envvar="DBT_NO_PRINT",
+    help="Internal flag for deprecating old env var.",
+    default=True,
+    hidden=True,
+    callback=lambda ctx, param, value: not value,
 )
 
 printer_width = click.option(
@@ -250,7 +257,7 @@ profiles_dir_exists_false = click.option(
 
 project_dir = click.option(
     "--project-dir",
-    envvar=None,
+    envvar="DBT_PROJECT_DIR",
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
     default=default_project_dir,
     type=click.Path(exists=True),
@@ -313,6 +320,13 @@ select = click.option(*select_decls, *model_decls, **select_attrs)
 
 selector = click.option(
     "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
+)
+
+send_anonymous_usage_stats = click.option(
+    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
+    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
+    help="Send anonymous usage stats to dbt Labs.",
+    default=True,
 )
 
 show = click.option(

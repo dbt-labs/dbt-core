@@ -1063,6 +1063,7 @@ class Metric(GraphNode):
     refs: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
+    group: Optional[str] = None
 
     @property
     def depends_on_nodes(self):

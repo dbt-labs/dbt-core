@@ -73,7 +73,6 @@ class PartialParsing:
         self.project_parser_files: Dict = {}
         self.saved_files = self.saved_manifest.files
         self.project_parser_files = {}
-        self.deleted_manifest = Manifest()
         self.macro_child_map: Dict[str, List[str]] = {}
         (
             self.env_vars_changed_source_files,
@@ -268,7 +267,7 @@ class PartialParsing:
         # macros/tests
         if saved_source_file.parse_file_type in mssat_files:
             self.remove_mssat_file(saved_source_file)
-            self.deleted_manifest.files[file_id] = self.saved_manifest.files.pop(file_id)
+            self.saved_manifest.files.pop(file_id)
 
         # macros
         if saved_source_file.parse_file_type in mg_files:
@@ -311,7 +310,6 @@ class PartialParsing:
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
-        self.deleted_manifest.files[file_id] = old_source_file
         self.saved_files[file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
         for unique_id in unique_ids:
@@ -321,7 +319,6 @@ class PartialParsing:
         if unique_id in self.saved_manifest.nodes:
             # delete node in saved
             node = self.saved_manifest.nodes.pop(unique_id)
-            self.deleted_manifest.nodes[unique_id] = node
         elif (
             source_file.file_id in self.disabled_by_file_id
             and unique_id in self.saved_manifest.disabled
@@ -456,7 +453,7 @@ class PartialParsing:
         file_id = source_file.file_id
         # It's not clear when this file_id would not exist in saved_files
         if file_id in self.saved_files:
-            self.deleted_manifest.files[file_id] = self.saved_files.pop(file_id)
+            self.saved_files.pop(file_id)
 
     def check_for_special_deleted_macros(self, source_file):
         for unique_id in source_file.macros:
@@ -487,7 +484,6 @@ class PartialParsing:
                 continue
 
             base_macro = self.saved_manifest.macros.pop(unique_id)
-            self.deleted_manifest.macros[unique_id] = base_macro
 
             # Recursively check children of this macro
             # The macro_child_map might not exist if a macro is removed by
@@ -565,16 +561,14 @@ class PartialParsing:
         # remove the nodes in the 'docs' dictionary
         docs = source_file.docs.copy()
         for unique_id in docs:
-            self.deleted_manifest.docs[unique_id] = self.saved_manifest.docs.pop(unique_id)
+            self.saved_manifest.docs.pop(unique_id)
             source_file.docs.remove(unique_id)
         # The unique_id of objects that contain a doc call are stored in the
         # doc source_file.nodes
         self.schedule_nodes_for_parsing(source_file.nodes)
         source_file.nodes = []
         # Remove the file object
-        self.deleted_manifest.files[source_file.file_id] = self.saved_manifest.files.pop(
-            source_file.file_id
-        )
+        self.saved_manifest.files.pop(source_file.file_id)
 
     # Schema files -----------------------
     # Changed schema files
@@ -608,7 +602,7 @@ class PartialParsing:
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
-        self.deleted_manifest.files[file_id] = self.saved_manifest.files.pop(file_id)
+        self.saved_manifest.files.pop(file_id)
 
     # For each key in a schema file dictionary, process the changed, deleted, and added
     # elemnts for the key lists
@@ -876,8 +870,7 @@ class PartialParsing:
         tests = schema_file.get_tests(dict_key, name)
         for test_unique_id in tests:
             if test_unique_id in self.saved_manifest.nodes:
-                node = self.saved_manifest.nodes.pop(test_unique_id)
-                self.deleted_manifest.nodes[test_unique_id] = node
+                self.saved_manifest.nodes.pop(test_unique_id)
         schema_file.remove_tests(dict_key, name)
 
     def delete_schema_source(self, schema_file, source_dict):
@@ -892,7 +885,6 @@ class PartialParsing:
                 source = self.saved_manifest.sources[unique_id]
                 if source.source_name == source_name:
                     source = self.saved_manifest.sources.pop(unique_id)
-                    self.deleted_manifest.sources[unique_id] = source
                     schema_file.sources.remove(unique_id)
                     self.schedule_referencing_nodes_for_parsing(unique_id)
 
@@ -904,7 +896,6 @@ class PartialParsing:
             del schema_file.macro_patches[macro["name"]]
         if macro_unique_id and macro_unique_id in self.saved_manifest.macros:
             macro = self.saved_manifest.macros.pop(macro_unique_id)
-            self.deleted_manifest.macros[macro_unique_id] = macro
             macro_file_id = macro.file_id
             if macro_file_id in self.new_files:
                 self.saved_files[macro_file_id] = deepcopy(self.new_files[macro_file_id])
@@ -919,9 +910,7 @@ class PartialParsing:
             if unique_id in self.saved_manifest.exposures:
                 exposure = self.saved_manifest.exposures[unique_id]
                 if exposure.name == exposure_name:
-                    self.deleted_manifest.exposures[unique_id] = self.saved_manifest.exposures.pop(
-                        unique_id
-                    )
+                    self.saved_manifest.exposures.pop(unique_id)
                     schema_file.exposures.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
@@ -935,9 +924,7 @@ class PartialParsing:
                 group = self.saved_manifest.groups[unique_id]
                 if group.name == group_name:
                     self.schedule_nodes_for_parsing(self.saved_manifest.group_map[group.name])
-                    self.deleted_manifest.groups[unique_id] = self.saved_manifest.groups.pop(
-                        unique_id
-                    )
+                    self.saved_manifest.groups.pop(unique_id)
                     schema_file.groups.remove(unique_id)
 
     # metrics are created only from schema files, but also can be referred to by other nodes
@@ -951,9 +938,7 @@ class PartialParsing:
                     # Need to find everything that referenced this metric and schedule for parsing
                     if unique_id in self.saved_manifest.child_map:
                         self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
-                    self.deleted_manifest.metrics[unique_id] = self.saved_manifest.metrics.pop(
-                        unique_id
-                    )
+                    self.saved_manifest.metrics.pop(unique_id)
                     schema_file.metrics.remove(unique_id)
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)

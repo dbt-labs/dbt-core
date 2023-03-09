@@ -192,6 +192,11 @@ def get_artifact(*paths):
     return dct
 
 
+def write_artifact(dct, *paths):
+    json_output = json.dumps(dct)
+    write_file(json_output, *paths)
+
+
 # For updating yaml config files
 def update_config_file(updates, *paths):
     current_yaml = read_file(*paths)

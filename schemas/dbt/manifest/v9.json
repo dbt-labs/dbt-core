@@ -221,7 +221,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-24T18:16:27.384938Z"
+          "default": "2023-02-27T20:52:53.570061Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -232,7 +232,7 @@
               "type": "null"
             }
           ],
-          "default": "678dd0f6-ab20-41c8-a3d8-bbc986a26583"
+          "default": "f578f819-6554-4f6f-8af4-635e35249cb2"
         },
         "env": {
           "type": "object",
@@ -449,7 +449,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.389697
+          "default": 1677531173.5741172
         },
         "config_call_dict": {
           "type": "object",
@@ -1048,7 +1048,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.3926132
+          "default": 1677531173.577135
         },
         "config_call_dict": {
           "type": "object",
@@ -1433,7 +1433,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.394294
+          "default": 1677531173.578816
         },
         "config_call_dict": {
           "type": "object",
@@ -1706,7 +1706,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.39604
+          "default": 1677531173.580534
         },
         "config_call_dict": {
           "type": "object",
@@ -1978,7 +1978,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.397707
+          "default": 1677531173.5821729
         },
         "config_call_dict": {
           "type": "object",
@@ -2241,7 +2241,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.399359
+          "default": 1677531173.5838
         },
         "config_call_dict": {
           "type": "object",
@@ -2499,7 +2499,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.4014988
+          "default": 1677531173.5856462
         },
         "config_call_dict": {
           "type": "object",
@@ -2794,7 +2794,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.404913
+          "default": 1677531173.588902
         },
         "config_call_dict": {
           "type": "object",
@@ -3277,7 +3277,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.40784
+          "default": 1677531173.591784
         },
         "config_call_dict": {
           "type": "object",
@@ -3677,7 +3677,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.410422
+          "default": 1677531173.594429
         }
       },
       "additionalProperties": false,
@@ -3792,7 +3792,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-02-24T18:16:27.379048Z"
+          "default": "2023-02-27T20:52:53.564664Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -3803,7 +3803,7 @@
               "type": "null"
             }
           ],
-          "default": "678dd0f6-ab20-41c8-a3d8-bbc986a26583"
+          "default": "f578f819-6554-4f6f-8af4-635e35249cb2"
         },
         "env": {
           "type": "object",
@@ -4156,7 +4156,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.411136
+          "default": 1677531173.595732
         },
         "supported_languages": {
           "oneOf": [
@@ -4399,7 +4399,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.4128408
+          "default": 1677531173.597582
         }
       },
       "additionalProperties": false,
@@ -4622,11 +4622,21 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1677262587.414759
+          "default": 1677531173.599355
+        },
+        "group": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
-      "description": "Metric(name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, fqn: List[str], description: str, label: str, calculation_method: str, expression: str, filters: List[dbt.contracts.graph.unparsed.MetricFilter], time_grains: List[str], dimensions: List[str], timestamp: Optional[str] = None, window: Optional[dbt.contracts.graph.unparsed.MetricTime] = None, model: Optional[str] = None, model_unique_id: Optional[str] = None, meta: Dict[str, Any] = <factory>, tags: List[str] = <factory>, config: dbt.contracts.graph.model_config.MetricConfig = <factory>, unrendered_config: Dict[str, Any] = <factory>, sources: List[List[str]] = <factory>, depends_on: dbt.contracts.graph.nodes.DependsOn = <factory>, refs: List[List[str]] = <factory>, metrics: List[List[str]] = <factory>, created_at: float = <factory>)"
+      "description": "Metric(name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, fqn: List[str], description: str, label: str, calculation_method: str, expression: str, filters: List[dbt.contracts.graph.unparsed.MetricFilter], time_grains: List[str], dimensions: List[str], timestamp: Optional[str] = None, window: Optional[dbt.contracts.graph.unparsed.MetricTime] = None, model: Optional[str] = None, model_unique_id: Optional[str] = None, meta: Dict[str, Any] = <factory>, tags: List[str] = <factory>, config: dbt.contracts.graph.model_config.MetricConfig = <factory>, unrendered_config: Dict[str, Any] = <factory>, sources: List[List[str]] = <factory>, depends_on: dbt.contracts.graph.nodes.DependsOn = <factory>, refs: List[List[str]] = <factory>, metrics: List[List[str]] = <factory>, created_at: float = <factory>, group: Optional[str] = None)"
     },
     "MetricFilter": {
       "type": "object",
