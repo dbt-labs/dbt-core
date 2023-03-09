@@ -86,7 +86,6 @@ class TestPrePostRunHooks(object):
         assert len(vals) != 0, "nothing inserted into on_run_hook table"
         assert len(vals) == 1, "too many rows in hooks table"
         ctx = dict([(k, v) for (k, v) in zip(fields, vals[0])])
-        print(ctx)
         return ctx
 
     def assert_used_schemas(self, project):
