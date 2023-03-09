@@ -1809,7 +1809,6 @@ class ColumnTypeMissingError(CompilationError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        # `data_type` values must be defined for all columns and NOT be null or blank.
         msg = f"Columns with `data_type` Blank/Null not allowed on contracted models. Columns Blank/Null: {self.column_names}"
         return msg
 
