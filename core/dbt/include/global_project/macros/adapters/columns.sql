@@ -39,8 +39,8 @@
 {% endmacro %}
 
 {% macro default__get_empty_schema_sql(columns) %}
-    select
     {%- set col_err = [] -%}
+    select
     {% for i in columns %}
       {%- set col = columns[i] -%}
       {%- if col['data_type'] is not defined -%}
