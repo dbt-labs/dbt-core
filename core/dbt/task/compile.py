@@ -61,14 +61,21 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        matched_results = [
-            result for result in results if result.node.name == self.selection_arg[0]
-        ]
-        if len(matched_results) == 1:
-            result = matched_results[0]
+        if self.args.inline and len(results) == 1:
+            result = results[0]
             fire_event(
                 CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
             )
+
+        if self.selection_arg:
+            matched_results = [
+                result for result in results if result.node.name == self.selection_arg[0]
+            ]
+            if len(matched_results) == 1:
+                result = matched_results[0]
+                fire_event(
+                    CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
+                )
 
         fire_event(CompileComplete())
 
