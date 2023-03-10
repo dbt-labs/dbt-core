@@ -61,8 +61,11 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        if len(results) == 1:
-            result = results[0]
+        model_results = [
+            result for result in results if result.node.resource_type == NodeType.Model
+        ]
+        if len(model_results) == 1:
+            result = model_results[0]
             fire_event(
                 CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
             )
