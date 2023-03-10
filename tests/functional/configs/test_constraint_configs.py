@@ -248,7 +248,7 @@ class TestProjectConstraintsEnabledConfigsError:
 
         assert contract_actual_config is True
 
-        expected_compile_error = "Columns with `data_type` Blank/Null not allowed on contracted models. Columns Blank/Null: ['color']"
+        expected_compile_error = "Please ensure that the column name and data_type are defined within the YAML configuration for the ['color'] column(s)."
 
         assert expected_compile_error in log_output
 
@@ -284,7 +284,7 @@ class TestModelConstraintsEnabledConfigsMissingDataTypes:
 
         assert contract_actual_config is True
 
-        expected_compile_error = "Columns with `data_type` Blank/Null not allowed on contracted models. Columns Blank/Null: ['color']"
+        expected_compile_error = "Please ensure that the column name and data_type are defined within the YAML configuration for the ['color'] column(s)."
 
         assert expected_compile_error in log_output
 
