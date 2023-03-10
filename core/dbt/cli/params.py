@@ -107,7 +107,7 @@ indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",
     help="Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.",
-    type=click.Choice(["eager", "cautious", "buildable"], case_sensitive=False),
+    type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
 )
 

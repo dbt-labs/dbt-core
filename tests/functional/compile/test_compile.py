@@ -114,6 +114,13 @@ class TestCompile:
 
     def test_select_pass(self, project):
         (results, log_output) = run_dbt_and_capture(["compile", "--select", "second_model"])
+        assert len(results) == 3
+        assert "Compiled node 'second_model' is:" in log_output
+
+    def test_select_pass_empty(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--indirect-selection", "empty", "--select", "second_model"]
+        )
         assert len(results) == 1
         assert "Compiled node 'second_model' is:" in log_output
 

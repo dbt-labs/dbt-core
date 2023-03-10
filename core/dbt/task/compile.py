@@ -45,8 +45,6 @@ class CompileTask(GraphRunnableTask):
     def get_node_selector(self) -> ResourceTypeSelector:
         if getattr(self.args, "inline", None):
             resource_types = [NodeType.SqlOperation]
-        elif getattr(self.args, "select", None):
-            resource_types = [NodeType.Model]
         else:
             resource_types = NodeType.executable()
 
