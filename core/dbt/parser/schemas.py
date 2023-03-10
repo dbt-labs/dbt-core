@@ -63,9 +63,6 @@ from dbt.exceptions import (
     SchemaConfigError,
     TestConfigError,
     ParsingError,
-    PropertyYMLInvalidTagError,
-    PropertyYMLMissingVersionError,
-    PropertyYMLVersionNotIntError,
     DbtValidationError,
     YamlLoadError,
     YamlParseDictError,
@@ -560,20 +557,6 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
             if "groups" in dct:
                 group_parser = GroupParser(self, yaml_block)
                 group_parser.parse()
-
-
-def check_format_version(file_path, yaml_dct) -> None:
-    if "version" not in yaml_dct:
-        raise PropertyYMLMissingVersionError(file_path)
-
-    version = yaml_dct["version"]
-    # if it's not an integer, the version is malformed, or not
-    # set. Either way, only 'version: 2' is supported.
-    if not isinstance(version, int):
-        raise PropertyYMLVersionNotIntError(file_path, version)
-
-    if version != 2:
-        raise PropertyYMLInvalidTagError(file_path, version)
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)

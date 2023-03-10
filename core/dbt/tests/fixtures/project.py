@@ -179,7 +179,6 @@ def project_config_update():
 @pytest.fixture(scope="class")
 def dbt_project_yml(project_root, project_config_update, logs_dir):
     project_config = {
-        "config-version": 2,
         "name": "test",
         "profile": "test",
         "log-path": logs_dir,

@@ -13,7 +13,7 @@ from dbt.contracts.files import (
 )
 from dbt.config import Project
 from dbt.dataclass_schema import dbtClassMixin
-from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
+from dbt.parser.schemas import yaml_from_file, schema_file_keys
 from dbt.exceptions import ParsingError
 from dbt.parser.search import filesystem_search
 from typing import Optional, Dict, List, Mapping
@@ -87,7 +87,6 @@ def load_source_file(
 # Check version, that key values are lists and that each element in
 # the lists has a 'name' key
 def validate_yaml(file_path, dct):
-    check_format_version(file_path, dct)
     for key in schema_file_keys:
         if key in dct:
             if not isinstance(dct[key], list):
