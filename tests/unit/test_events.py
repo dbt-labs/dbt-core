@@ -297,6 +297,7 @@ sample_values = [
     types.NodeFinished(node_info=types.NodeInfo()),
     types.QueryCancelationUnsupported(type=""),
     types.ConcurrencyLine(num_threads=0, target_name=""),
+    types.CompiledNode(node_name="", compiled=""),
     types.WritingInjectedSQLForNode(node_info=types.NodeInfo()),
     types.NodeCompiling(node_info=types.NodeInfo()),
     types.NodeExecuting(node_info=types.NodeInfo()),

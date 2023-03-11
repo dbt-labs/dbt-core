@@ -30,6 +30,7 @@ FLAGS_DEFAULTS = {
     "FULL_REFRESH": False,
     "STRICT_MODE": False,
     "STORE_FAILURES": False,
+    "INTROSPECT": True,
 }
 
 
@@ -43,6 +44,7 @@ EXPECTED_DUPLICATE_PARAMS = [
     "fail_fast",
     "indirect_selection",
     "store_failures",
+    "introspect",
 ]
 
 

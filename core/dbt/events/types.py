@@ -1711,7 +1711,13 @@ class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-# Skipped Q028
+@dataclass
+class CompiledNode(InfoLevel, pt.CompiledNode):
+    def code(self):
+        return "Q028"
+
+    def message(self) -> str:
+        return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
 
 
 @dataclass
@@ -2306,7 +2312,7 @@ class ListCmdOut(InfoLevel, pt.ListCmdOut):
 
 
 # The Note event provides a way to log messages which aren't likely to be useful as more structured events.
-# For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
+# For console formatting text like empty lines and separator bars, use the Formatting event instead.
 @dataclass
 class Note(InfoLevel, pt.Note):
     def code(self):

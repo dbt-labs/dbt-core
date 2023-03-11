@@ -27,10 +27,17 @@ cache_selected_only = click.option(
     help="Pre cache database objects relevant to selected resource only.",
 )
 
+introspect = click.option(
+    "--introspect/--no-introspect",
+    envvar="DBT_INTROSPECT",
+    help="Whether to scaffold introspective queries as part of compilation",
+    default=True,
+)
+
 compile_docs = click.option(
     "--compile/--no-compile",
     envvar=None,
-    help="Wether or not to run 'dbt compile' as part of docs generation",
+    help="Whether or not to run 'dbt compile' as part of docs generation",
     default=True,
 )
 
@@ -100,7 +107,7 @@ indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",
     help="Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.",
-    type=click.Choice(["eager", "cautious", "buildable"], case_sensitive=False),
+    type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
 )
 
@@ -309,6 +316,8 @@ select_attrs = {
     "cls": MultiOption,
     "type": tuple,
 }
+
+inline = click.option("--inline", envvar=None, help="Pass SQL inline to dbt compile and preview")
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
