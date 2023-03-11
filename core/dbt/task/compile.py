@@ -61,7 +61,7 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        if self.args.inline and len(results) == 1:
+        if getattr(self.args, "inline", None):
             result = results[0]
             fire_event(
                 CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
