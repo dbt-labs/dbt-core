@@ -43,7 +43,7 @@
     select
     {% for column in model['columns'] %}
       {{ column }}{{ ", " if not loop.last }}
-    {%- endfor %}
+    {% endfor %}
     from (
         {{ sql }}
     ) as model_subq
