@@ -2144,6 +2144,7 @@ class ContractError(CompilationError):
 
     def get_message(self) -> str:
         msg = (
+            "Contracts are enabled for this model. "
             "Please ensure the name, data_type, and number of columns in your `yml` file "
             "match the columns in your SQL file.\n"
             f"Schema File Columns: {self.yaml_columns}\n"
