@@ -4,6 +4,7 @@ import pytest
 from dbt.tests.util import run_dbt
 
 
+# Canada/Saskatchewan does not observe DST so the time diff won't change depending on when it is in the year
 model_sql = """
 {{
     config(
@@ -12,7 +13,7 @@ model_sql = """
 }}
 
 select
-    '{{ run_started_at.astimezone(modules.pytz.timezone("America/New_York")) }}' as run_started_at_est,
+    '{{ run_started_at.astimezone(modules.pytz.timezone("Canada/Saskatchewan")) }}' as run_started_at_saskatchewan,
     '{{ run_started_at }}' as run_started_at_utc
 """
 
@@ -46,7 +47,7 @@ class TestTimezones:
     def query(self, project):
         return """
             select
-              run_started_at_est,
+              run_started_at_saskatchewan,
               run_started_at_utc
             from {schema}.timezones
         """.format(
@@ -61,7 +62,7 @@ class TestTimezones:
         assert len(results) == 1
 
         result = project.run_sql(query, fetch="all")[0]
-        est, utc = result
+        saskatchewan, utc = result
 
         assert "+00:00" in utc
-        assert "-05:00" in est
+        assert "-06:00" in saskatchewan
