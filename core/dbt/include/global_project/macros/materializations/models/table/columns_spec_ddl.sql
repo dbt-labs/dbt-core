@@ -29,7 +29,7 @@
 
 {#
   Compares the column schema provided by a model's sql file to the column schema provided by a model's schema file.
-  If any differences in name, data_type or order of columns exist between the two schemas, raises a compiler error
+  If any differences in name, data_type or number of columns exist between the two schemas, raises a compiler error
 #}
 {% macro assert_columns_equivalent(sql) %}
   {#-- Obtain the column schema provided by sql file. #}
