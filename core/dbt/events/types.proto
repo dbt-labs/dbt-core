@@ -1622,7 +1622,16 @@ message ConcurrencyLineMsg {
     ConcurrencyLine data = 2;
 }
 
-// Skipped Q028
+// Q028
+message CompiledNode {
+    string node_name = 1;
+    string compiled = 2;
+}
+
+message CompiledNodeMsg {
+    EventInfo info = 1;
+    CompiledNode data = 2;
+}
 
 // Q029
 message WritingInjectedSQLForNode {

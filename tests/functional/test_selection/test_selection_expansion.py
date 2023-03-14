@@ -444,6 +444,10 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
         self.run_tests_and_assert(select, exclude, expected, indirect_selection=indirect_selection)
 
+    def test_model_a_indirect_selection_empty(self, project):
+        results = run_dbt(["ls", "--indirect-selection", "empty", "--select", "model_a"])
+        assert len(results) == 1
+
 
 class TestExpansionWithSelectors(TestSelectionExpansion):
     @pytest.fixture(scope="class")

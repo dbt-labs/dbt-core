@@ -24,6 +24,7 @@ from dbt.exceptions import (
     NotImplementedError,
     RelationWrongTypeError,
     ContractError,
+    ColumnTypeMissingError,
 )
 
 
@@ -102,6 +103,10 @@ def relation_wrong_type(relation, expected_type, model=None) -> NoReturn:
     raise RelationWrongTypeError(relation, expected_type, model)
 
 
+def column_type_missing(column_names) -> NoReturn:
+    raise ColumnTypeMissingError(column_names)
+
+
 # Update this when a new function should be added to the
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
@@ -125,6 +130,7 @@ CONTEXT_EXPORTS = {
         raise_not_implemented,
         relation_wrong_type,
         raise_contract_error,
+        column_type_missing,
     ]
 }
 

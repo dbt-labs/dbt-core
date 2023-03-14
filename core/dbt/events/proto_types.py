@@ -2025,6 +2025,20 @@ class ConcurrencyLineMsg(betterproto.Message):
 
 
 @dataclass
+class CompiledNode(betterproto.Message):
+    """Q028"""
+
+    node_name: str = betterproto.string_field(1)
+    compiled: str = betterproto.string_field(2)
+
+
+@dataclass
+class CompiledNodeMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "CompiledNode" = betterproto.message_field(2)
+
+
+@dataclass
 class WritingInjectedSQLForNode(betterproto.Message):
     """Q029"""
 

@@ -3,6 +3,7 @@ import threading
 import time
 import traceback
 from abc import ABCMeta, abstractmethod
+from contextlib import nullcontext
 from typing import Type, Union, Dict, Any, Optional
 from datetime import datetime
 
@@ -309,7 +310,7 @@ class BaseRunner(metaclass=ABCMeta):
 
     def compile_and_execute(self, manifest, ctx):
         result = None
-        with self.adapter.connection_for(self.node):
+        with self.adapter.connection_for(self.node) if get_flags().INTROSPECT else nullcontext():
             ctx.node.update_event_status(node_status=RunningStatus.Compiling)
             fire_event(
                 NodeCompiling(

@@ -499,13 +499,6 @@ class PartialProject(RenderComponents):
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
         project_dict = load_raw_project(project_root)
-        config_version = project_dict.get("config-version", 1)
-        if config_version != 2:
-            raise DbtProjectError(
-                f"Invalid config version: {config_version}, expected 2",
-                path=os.path.join(project_root, "dbt_project.yml"),
-            )
-
         packages_dict = package_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
         return cls.from_dicts(

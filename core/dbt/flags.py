@@ -83,6 +83,7 @@ def get_flag_dict():
         "quiet",
         "no_print",
         "cache_selected_only",
+        "introspect",
         "target_path",
         "log_path",
     }

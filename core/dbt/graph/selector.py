@@ -87,11 +87,14 @@ class NodeSelector(MethodManager):
             )
             return set(), set()
 
-        neighbors = self.collect_specified_neighbors(spec, collected)
-        direct_nodes, indirect_nodes = self.expand_selection(
-            selected=(collected | neighbors), indirect_selection=spec.indirect_selection
-        )
-        return direct_nodes, indirect_nodes
+        if spec.indirect_selection == IndirectSelection.Empty:
+            return collected, set()
+        else:
+            neighbors = self.collect_specified_neighbors(spec, collected)
+            direct_nodes, indirect_nodes = self.expand_selection(
+                selected=(collected | neighbors), indirect_selection=spec.indirect_selection
+            )
+            return direct_nodes, indirect_nodes
 
     def collect_specified_neighbors(
         self, spec: SelectionCriteria, selected: Set[UniqueId]
@@ -199,7 +202,7 @@ class NodeSelector(MethodManager):
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         # Test selection by default expands to include an implicitly/indirectly selected tests.
         # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
-        # Expansion has three modes, EAGER, CAUTIOUS and BUILDABLE.
+        # Expansion has four modes, EAGER, CAUTIOUS and BUILDABLE, EMPTY.
         #
         # EAGER mode: If ANY parent is selected, select the test.
         #
@@ -212,6 +215,8 @@ class NodeSelector(MethodManager):
         #  - If ALL parents are selected, or the parents of the test are themselves parents of the selected, select the test.
         #  - If ANY parent is missing, return it separately. We'll keep it around
         #    for later and see if its other parents show up.
+        #
+        # EMPTY mode: Only select the given node and ignore attached nodes (i.e. ignore tests attached to a model)
         #
         # Users can opt out of inclusive EAGER mode by passing --indirect-selection cautious
         # CLI argument or by specifying `indirect_selection: true` in a yaml selector
@@ -237,6 +242,8 @@ class NodeSelector(MethodManager):
                         node.depends_on_nodes
                     ) <= set(selected_and_parents):
                         direct_nodes.add(unique_id)
+                    elif indirect_selection == IndirectSelection.Empty:
+                        pass
                     else:
                         indirect_nodes.add(unique_id)
 

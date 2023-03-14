@@ -1,0 +1,6 @@
+kind: Features
+body: add support for DBT_PROJECT_DIR env var
+time: 2023-01-19T14:11:56.638325919+01:00
+custom:
+  Author: leo-schick
+  Issue: "6078"

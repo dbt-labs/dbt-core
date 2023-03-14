@@ -239,12 +239,15 @@ def docs_serve(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.full_refresh
+@p.indirect_selection
+@p.introspect
 @p.parse_only
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
 @p.selector
+@p.inline
 @p.state
 @p.target
 @p.target_path

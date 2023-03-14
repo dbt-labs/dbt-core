@@ -20,6 +20,7 @@ from dbt.events.functions import (
 )
 from dbt.events.test_types import IntegrationTestDebug
 
+
 # =============================================================================
 # Test utilities
 #   run_dbt
@@ -158,6 +159,11 @@ def rm_file(*paths) -> None:
 def write_file(contents, *paths):
     with open(os.path.join(*paths), "w", encoding="utf-8") as fp:
         fp.write(contents)
+
+
+def file_exists(*paths):
+    """Check if file exists at path"""
+    return os.path.exists(os.path.join(*paths))
 
 
 # Used in test utilities
@@ -385,7 +391,6 @@ def check_relation_has_expected_schema(adapter, relation_name, expected_schema: 
 def check_relations_equal_with_relations(
     adapter: Adapter, relations: List, compare_snapshot_cols=False
 ):
-
     with get_connection(adapter):
         basis, compares = relations[0], relations[1:]
         # Skip columns starting with "dbt_" because we don't want to

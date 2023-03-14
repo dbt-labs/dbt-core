@@ -1,6 +1,6 @@
 import pytest
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, get_manifest, get_artifact
+from dbt.tests.util import run_dbt, get_manifest, get_artifact, run_dbt_and_capture
 
 my_model_sql = """
 {{
@@ -133,6 +133,43 @@ models:
       contract: true
 """
 
+model_schema_complete_datatypes_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints: ['not null','primary key']
+        constraints_check: (id > 0)
+        tests:
+          - unique
+      - name: color
+        data_type: text
+      - name: date_day
+        data_type: date
+"""
+
+model_schema_incomplete_datatypes_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints: ['not null','primary key']
+        constraints_check: (id > 0)
+        tests:
+          - unique
+      - name: color
+      - name: date_day
+        data_type: date
+"""
+
 
 class TestModelLevelContractEnabledConfigs:
     @pytest.fixture(scope="class")
@@ -174,9 +211,6 @@ class TestProjectContractEnabledConfigs:
             "models": {
                 "test": {
                     "+contract": True,
-                    "subdirectory": {
-                        "+contract": False,
-                    },
                 }
             }
         }
@@ -185,31 +219,84 @@ class TestProjectContractEnabledConfigs:
     def models(self):
         return {
             "my_model.sql": my_model_sql,
+            "constraints_schema.yml": model_schema_complete_datatypes_yml,
         }
 
-    def test__project_error(self, project):
-        with pytest.raises(ParsingError) as err_info:
-            run_dbt(["parse"], expect_pass=False)
+    def test_defined_column_type(self, project):
+        run_dbt(["run"], expect_pass=True)
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model"
+        my_model_config = manifest.nodes[model_id].config
+        contract_actual_config = my_model_config.contract
+        assert contract_actual_config is True
 
-        exc_str = " ".join(str(err_info.value).split())
-        error_message_expected = "NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
-        assert error_message_expected in exc_str
+
+class TestProjectContractEnabledConfigsError:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "models": {
+                "test": {
+                    "+contract": True,
+                }
+            }
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "constraints_schema.yml": model_schema_incomplete_datatypes_yml,
+        }
+
+    def test_undefined_column_type(self, project):
+        results, log_output = run_dbt_and_capture(["run", "-s", "my_model"], expect_pass=False)
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model"
+        my_model_config = manifest.nodes[model_id].config
+        contract_actual_config = my_model_config.contract
+
+        assert contract_actual_config is True
+
+        expected_compile_error = "Please ensure that the column name and data_type are defined within the YAML configuration for the ['color'] column(s)."
+
+        assert expected_compile_error in log_output
 
 
 class TestModelContractEnabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
+        return {"my_model.sql": my_model_contract_sql, "constraints_schema.yml": model_schema_yml}
+
+    def test__model_contract(self, project):
+        run_dbt(["run"])
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model"
+        my_model_config = manifest.nodes[model_id].config
+        contract_actual_config = my_model_config.contract
+        assert contract_actual_config is True
+
+
+class TestModelContractEnabledConfigsMissingDataTypes:
+    @pytest.fixture(scope="class")
+    def models(self):
         return {
             "my_model.sql": my_model_contract_sql,
+            "constraints_schema.yml": model_schema_incomplete_datatypes_yml,
         }
 
-    def test__model_error(self, project):
-        with pytest.raises(ParsingError) as err_info:
-            run_dbt(["parse"], expect_pass=False)
+    def test_undefined_column_type(self, project):
+        results, log_output = run_dbt_and_capture(["run", "-s", "my_model"], expect_pass=False)
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model"
+        my_model_config = manifest.nodes[model_id].config
+        contract_actual_config = my_model_config.contract
 
-        exc_str = " ".join(str(err_info.value).split())
-        error_message_expected = "NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
-        assert error_message_expected in exc_str
+        assert contract_actual_config is True
+
+        expected_compile_error = "Please ensure that the column name and data_type are defined within the YAML configuration for the ['color'] column(s)."
+
+        assert expected_compile_error in log_output
 
 
 class TestModelLevelContractDisabledConfigs:
@@ -241,15 +328,16 @@ class TestModelLevelContractErrorMessages:
 
     def test__config_errors(self, project):
         with pytest.raises(ParsingError) as err_info:
-            run_dbt(["parse"], expect_pass=False)
+            run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
         expected_materialization_error = (
             "Materialization Error: {'materialization': 'Incremental'}"
         )
-        expected_empty_data_type_error = "Columns with `data_type` Blank/Null Errors: {'date_day'}"
         assert expected_materialization_error in str(exc_str)
-        assert expected_empty_data_type_error in str(exc_str)
+        # This is a compile time error and we won't get here because the materialization is parse time
+        expected_empty_data_type_error = "Columns with `data_type` Blank/Null not allowed on contracted models. Columns Blank/Null: ['date_day']"
+        assert expected_empty_data_type_error not in str(exc_str)
 
 
 class TestSchemaContractEnabledConfigs:
