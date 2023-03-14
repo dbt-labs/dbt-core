@@ -77,6 +77,21 @@ select
   '2019-01-01' as date_day
 """
 
+my_model_incremental_with_nulls_sql = """
+{{
+  config(
+    materialized = "incremental",
+    on_schema_change='append_new_columns'  )
+}}
+
+select
+  -- null value for 'id'
+  cast(null as {{ dbt.type_int() }}) as id,
+  -- change the color as well (to test rollback)
+  'red' as color,
+  cast('2019-01-01' as date) as date_day
+"""
+
 model_schema_yml = """
 version: 2
 models:

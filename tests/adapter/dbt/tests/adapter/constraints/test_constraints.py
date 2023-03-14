@@ -22,6 +22,7 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_incremental_wrong_order_sql,
     my_model_incremental_wrong_name_sql,
     my_model_with_nulls_sql,
+    my_model_incremental_with_nulls_sql,
     model_schema_yml,
 )
 
@@ -196,7 +197,7 @@ insert into {0} (
 """
 
 
-class BaseConstraintsRuntimeEnforcement:
+class BaseConstraintsRuntimeDdlEnforcement:
     """
     These constraints pass muster for dbt's preflight checks. Make sure they're
     passed into the DDL statement. If they don't match up with the underlying data,
@@ -216,17 +217,6 @@ class BaseConstraintsRuntimeEnforcement:
         tmp_relation = relation.incorporate(path={"identifier": relation.identifier + "__dbt_tmp"})
         return _expected_sql.format(tmp_relation)
 
-    @pytest.fixture(scope="class")
-    def expected_color(self):
-        return "blue"
-
-    @pytest.fixture(scope="class")
-    def expected_error_messages(self):
-        return ['null value in column "id"', "violates not-null constraint"]
-
-    def assert_expected_error_messages(self, error_message, expected_error_messages):
-        assert all(msg in error_message for msg in expected_error_messages)
-
     def test__constraints_ddl(self, project, expected_sql):
         results = run_dbt(["run", "-s", "my_model"])
         assert len(results) == 1
@@ -245,14 +235,38 @@ class BaseConstraintsRuntimeEnforcement:
 {expected_sql_check}
 """
 
+
+class BaseConstraintsRollback:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def null_model_sql(self):
+        return my_model_with_nulls_sql
+
+    @pytest.fixture(scope="class")
+    def expected_color(self):
+        return "blue"
+
+    @pytest.fixture(scope="class")
+    def expected_error_messages(self):
+        return ['null value in column "id"', "violates not-null constraint"]
+
+    def assert_expected_error_messages(self, error_message, expected_error_messages):
+        assert all(msg in error_message for msg in expected_error_messages)
+
     def test__constraints_enforcement_rollback(
-        self, project, expected_color, expected_error_messages
+        self, project, expected_color, expected_error_messages, null_model_sql
     ):
         results = run_dbt(["run", "-s", "my_model"])
         assert len(results) == 1
 
         # Make a contract-breaking change to the model
-        write_file(my_model_with_nulls_sql, "models", "my_model.sql")
+        write_file(null_model_sql, "models", "my_model.sql")
 
         failing_results = run_dbt(["run", "-s", "my_model"], expect_pass=False)
         assert len(failing_results) == 1
@@ -306,11 +320,15 @@ class TestIncrementalConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
         }
 
 
-class TestTableConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforcement):
+class TestTableConstraintsRuntimeDdlEnforcement(BaseConstraintsRuntimeDdlEnforcement):
     pass
 
 
-class TestIncrementalConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforcement):
+class TestTableConstraintsRollback(BaseConstraintsRollback):
+    pass
+
+
+class TestIncrementalConstraintsRuntimeEnforcement(BaseConstraintsRuntimeDdlEnforcement):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -318,8 +336,20 @@ class TestIncrementalConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforce
             "constraints_schema.yml": model_schema_yml,
         }
 
-    # @pytest.fixture(scope="class")
-    # def expected_sql(self, project):
-    #     relation = relation_from_name(project.adapter, "my_model")
-    #     tmp_relation = relation.incorporate(path={"identifier": relation.identifier})
-    #     return _expected_sql.format(tmp_relation)
+    @pytest.fixture(scope="class")
+    def expected_sql(self, project):
+        relation = relation_from_name(project.adapter, "my_model")
+        return _expected_sql.format(relation)
+
+
+class TestIncrementalConstraintsRollback(BaseConstraintsRollback):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_incremental_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def null_model_sql(self):
+        return my_model_incremental_with_nulls_sql
