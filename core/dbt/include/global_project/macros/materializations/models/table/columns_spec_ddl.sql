@@ -37,29 +37,31 @@
   {#--Obtain the column schema provided by the schema file by generating an 'empty schema' query from the model's columns. #}
   {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(model['columns'])) -%}
 
-  {#-- For compiler error msg #}
-  {%- set sql_columns = (format_columns(sql_file_provided_columns)|trim)  -%}
-  {%- set yaml_columns = (format_columns(schema_file_provided_columns)|trim)  -%}
+  {#-- create dictionaries with name and formatted data type and strings for exception #}
+  {%- set sql_columns = format_columns(sql_file_provided_columns) -%}
+  {%- set string_sql_columns = stringify_formatted_columns(sql_columns) -%}
+  {%- set yaml_columns = format_columns(schema_file_provided_columns)  -%}
+  {%- set string_yaml_columns = stringify_formatted_columns(yaml_columns) -%}
 
-  {%- if sql_file_provided_columns|length != schema_file_provided_columns|length -%}
-    {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
+  {%- if sql_columns|length != yaml_columns|length -%}
+    {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
   {%- endif -%}
 
-  {%- for sql_col in sql_file_provided_columns -%}
+  {%- for sql_col in sql_columns -%}
     {%- set yaml_col = [] -%}
-    {%- for schema_col in schema_file_provided_columns -%}
-      {%- if schema_col.name == sql_col.name -%}
-        {%- do yaml_col.append(schema_col) -%}
+    {%- for this_col in yaml_columns -%}
+      {%- if this_col['name'] == sql_col['name'] -%}
+        {%- do yaml_col.append(this_col) -%}
         {%- break -%}
       {%- endif -%}
     {%- endfor -%}
     {%- if not yaml_col -%}
-      {#-- Column with name not found in yaml --#}
-      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
+      {#-- Column with name not found in yaml #}
+      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
     {%- endif -%}
-    {%- if sql_col.dtype != yaml_col[0].dtype -%}
-      {#-- Column data types don't match --#}
-      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
+    {%- if sql_col['formatted'] != yaml_col[0]['formatted'] -%}
+      {#-- Column data types don't match #}
+      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
     {%- endif -%}
   {%- endfor -%}
 
@@ -69,10 +71,18 @@
   {% set formatted_columns = [] %}
   {% for column in columns %}
     {%- set formatted_column = adapter.dispatch('format_column', 'dbt')(column) -%}
-    {%- do formatted_columns.append(formatted_column) -%}
+    {%- do formatted_columns.append({'name': column.name, 'formatted': formatted_column}) -%}
   {% endfor %}
-  {{ return(formatted_columns|join(', ')) }}
-{%- endmacro -%}
+  {{ return(formatted_columns) }}
+{% endmacro %}
+
+{% macro stringify_formatted_columns(formatted_columns) %}
+  {% set column_strings = [] %}
+  {% for column in formatted_columns %}
+     {% do column_strings.append(column['formatted']) %}
+  {% endfor %}
+  {{ return(column_strings|join(', ')) }}
+{% endmacro %}
 
 {% macro default__format_column(column) -%}
   {{ return(column.column.lower() ~ " " ~ column.dtype) }}
