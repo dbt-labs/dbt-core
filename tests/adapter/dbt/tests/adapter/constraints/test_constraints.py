@@ -92,7 +92,7 @@ class BaseConstraintsColumnsEqual:
             f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
         )
         expected_sql_file_columns = (
-            f"SQL File Columns: error {int_type}, color {string_type}, date_day DATE"
+            f"SQL File Columns: color {string_type}, error {int_type}, date_day DATE"
         )
 
         assert expected_compile_error in log_output

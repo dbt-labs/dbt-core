@@ -174,8 +174,8 @@ my_model_view_wrong_name_sql = """
 }}
 
 select
-  1 as error,
   'blue' as color,
+  1 as error,
   cast('2019-01-01' as date) as date_day
 """
 
