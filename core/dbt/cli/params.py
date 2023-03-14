@@ -83,6 +83,7 @@ exclude = click.option(
     envvar=None,
     type=tuple,
     cls=MultiOption,
+    multiple=True,
     help="Specify the nodes to exclude.",
 )
 
@@ -318,6 +319,7 @@ select_attrs = {
     "envvar": None,
     "help": "Specify the nodes to include.",
     "cls": MultiOption,
+    "multiple": True,
     "type": tuple,
 }
 
