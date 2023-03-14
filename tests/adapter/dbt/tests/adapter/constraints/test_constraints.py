@@ -12,12 +12,15 @@ from dbt.tests.util import (
 
 from dbt.tests.adapter.constraints.fixtures import (
     my_model_sql,
+    my_incremental_model_sql,
     my_model_wrong_order_sql,
     my_model_wrong_name_sql,
     my_model_data_type_sql,
     model_data_type_schema_yml,
     my_model_view_wrong_order_sql,
     my_model_view_wrong_name_sql,
+    my_model_incremental_wrong_order_sql,
+    my_model_incremental_wrong_name_sql,
     my_model_with_nulls_sql,
     model_schema_yml,
 )
@@ -27,14 +30,6 @@ class BaseConstraintsColumnsEqual:
     """
     dbt should catch these mismatches during its "preflight" checks.
     """
-
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model_wrong_order.sql": my_model_wrong_order_sql,
-            "my_model_wrong_name.sql": my_model_wrong_name_sql,
-            "constraints_schema.yml": model_schema_yml,
-        }
 
     @pytest.fixture
     def string_type(self):
@@ -281,7 +276,7 @@ class BaseConstraintsRuntimeEnforcement:
         self.assert_expected_error_messages(failing_results[0].message, expected_error_messages)
 
 
-class BaseTableConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+class TestTableConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -291,7 +286,7 @@ class BaseTableConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
         }
 
 
-class BaseViewConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+class TestViewConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -301,13 +296,30 @@ class BaseViewConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
         }
 
 
-class TestTableConstraintsColumnsEqual(BaseTableConstraintsColumnsEqual):
+class TestIncrementalConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_wrong_order.sql": my_model_incremental_wrong_order_sql,
+            "my_model_wrong_name.sql": my_model_incremental_wrong_name_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+
+class TestTableConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforcement):
     pass
 
 
-class TestViewConstraintsColumnsEqual(BaseViewConstraintsColumnsEqual):
-    pass
+class TestIncrementalConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforcement):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_incremental_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
 
-
-class TestConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforcement):
-    pass
+    @pytest.fixture(scope="class")
+    def expected_sql(self, project):
+        relation = relation_from_name(project.adapter, "my_model")
+        tmp_relation = relation.incorporate(path={"identifier": relation.identifier})
+        return _expected_sql.format(tmp_relation)

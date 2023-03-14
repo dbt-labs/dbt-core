@@ -11,6 +11,19 @@ select
   '2019-01-01' as date_day
 """
 
+my_incremental_model_sql = """
+{{
+  config(
+    materialized = "incremental"
+  )
+}}
+
+select
+  1 as id,
+  'blue' as color,
+  cast('2019-01-01' as date) as date_day
+"""
+
 my_model_wrong_order_sql = """
 {{
   config(
@@ -189,6 +202,32 @@ select
   'blue' as color,
   1 as error,
   '2019-01-01' as date_day
+"""
+
+my_model_incremental_wrong_order_sql = """
+{{
+  config(
+    materialized = "incremental"
+  )
+}}
+
+select
+  'blue' as color,
+  1 as id,
+  cast('2019-01-01' as date) as date_day
+"""
+
+my_model_incremental_wrong_name_sql = """
+{{
+  config(
+    materialized = "incremental"
+  )
+}}
+
+select
+  1 as error,
+  'blue' as color,
+  cast('2019-01-01' as date) as date_day
 """
 
 my_model_view_with_nulls_sql = """
