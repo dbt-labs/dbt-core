@@ -35,11 +35,11 @@
   );
 {%- endmacro %}
 
-{% macro get_select_subquery(sql) -%}
+{% macro get_select_subquery(sql) %}
   {{ return(adapter.dispatch('get_select_subquery', 'dbt')(sql)) }}
 {% endmacro %}
 
-{% macro default__get_select_subquery(sql) -%}
+{% macro default__get_select_subquery(sql) %}
     select
     {% for column in model['columns'] %}
       {{ column }}{{ ", " if not loop.last }}
