@@ -318,8 +318,8 @@ class TestIncrementalConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforce
             "constraints_schema.yml": model_schema_yml,
         }
 
-    @pytest.fixture(scope="class")
-    def expected_sql(self, project):
-        relation = relation_from_name(project.adapter, "my_model")
-        tmp_relation = relation.incorporate(path={"identifier": relation.identifier})
-        return _expected_sql.format(tmp_relation)
+    # @pytest.fixture(scope="class")
+    # def expected_sql(self, project):
+    #     relation = relation_from_name(project.adapter, "my_model")
+    #     tmp_relation = relation.incorporate(path={"identifier": relation.identifier})
+    #     return _expected_sql.format(tmp_relation)

@@ -14,7 +14,8 @@ select
 my_incremental_model_sql = """
 {{
   config(
-    materialized = "incremental"
+    materialized = "incremental",
+    on_schema_change='append_new_columns'
   )
 }}
 
@@ -207,7 +208,8 @@ select
 my_model_incremental_wrong_order_sql = """
 {{
   config(
-    materialized = "incremental"
+    materialized = "incremental",
+    on_schema_change='append_new_columns'
   )
 }}
 
@@ -220,7 +222,8 @@ select
 my_model_incremental_wrong_name_sql = """
 {{
   config(
-    materialized = "incremental"
+    materialized = "incremental",
+    on_schema_change='append_new_columns'
   )
 }}
 
