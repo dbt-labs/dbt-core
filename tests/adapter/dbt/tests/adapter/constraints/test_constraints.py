@@ -88,10 +88,10 @@ class BaseConstraintsColumnsEqual:
 
         expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
-            f"Schema File Columns: id {int_type}, color {string_type}, date_day TEXT"
+            f"Schema File Columns: id {int_type}, color {string_type}, date_day {string_type}"
         )
         expected_sql_file_columns = (
-            f"SQL File Columns: color {string_type}, error {int_type}, date_day TEXT"
+            f"SQL File Columns: color {string_type}, error {int_type}, date_day {string_type}"
         )
 
         assert expected_compile_error in log_output
