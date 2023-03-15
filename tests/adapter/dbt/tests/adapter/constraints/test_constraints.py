@@ -54,7 +54,6 @@ class BaseConstraintsColumnsEqual:
         return [
             ["1", schema_int_type, int_type],
             ["'1'", string_type, string_type],
-            ["cast('2019-01-01' as date)", "date", "DATE"],
             ["true", "bool", "BOOL"],
             ["'2013-11-03 00:00:00-07'::timestamptz", "timestamptz", "DATETIMETZ"],
             ["'2013-11-03 00:00:00-07'::timestamp", "timestamp", "DATETIME"],
@@ -89,10 +88,10 @@ class BaseConstraintsColumnsEqual:
 
         expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
-            f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
+            f"Schema File Columns: id {int_type}, color {string_type}, date_day TEXT"
         )
         expected_sql_file_columns = (
-            f"SQL File Columns: color {string_type}, error {int_type}, date_day DATE"
+            f"SQL File Columns: color {string_type}, error {int_type}, date_day TEXT"
         )
 
         assert expected_compile_error in log_output
@@ -179,7 +178,7 @@ _expected_sql = """
 create table {0} (
     id integer not null primary key check (id > 0) ,
     color text ,
-    date_day date
+    date_day text
 ) ;
 insert into {0} (
     id ,
@@ -196,7 +195,7 @@ insert into {0} (
         select
             'blue' as color,
             1 as id,
-            cast('2019-01-01' as date) as date_day
+            '2019-01-01' as date_day
     ) as model_subq
 );
 """
