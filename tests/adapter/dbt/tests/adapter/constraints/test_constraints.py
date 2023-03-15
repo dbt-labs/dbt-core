@@ -169,14 +169,13 @@ class BaseConstraintsColumnsEqual:
 
 
 # This is SUPER specific to Postgres, and will need replacing on other adapters
-# TODO: make more generic
 _expected_sql = """
-create table {0} (
+create table <model_identifier> (
     id integer not null primary key check (id > 0),
     color text,
     date_day text
 ) ;
-insert into {0} (
+insert into <model_identifier> (
     id ,
     color ,
     date_day
@@ -211,25 +210,26 @@ class BaseConstraintsRuntimeDdlEnforcement:
             "constraints_schema.yml": model_schema_yml,
         }
 
-    @pytest.fixture(scope="class")
-    def expected_sql(self, project):
-        relation = relation_from_name(project.adapter, "my_model")
-        tmp_relation = relation.incorporate(path={"identifier": relation.identifier + "__dbt_tmp"})
-        return _expected_sql.format(tmp_relation)
-
-    def test__constraints_ddl(self, project, expected_sql):
+    def test__constraints_ddl(self, project):
         results = run_dbt(["run", "-s", "my_model"])
         assert len(results) == 1
-        # TODO: consider refactoring this to introspect logs instead
-        generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
 
-        generated_sql_check = re.sub(r"\s+", " ", generated_sql).lower().strip()
-        expected_sql_check = re.sub(r"\s+", " ", expected_sql).lower().strip()
+        # grab the sql and replace the model identifier to make it generic for all adapters
+        # the name is not what we're testing here anyways and varies based on materialization
+        generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
+        generated_sql_modified = re.sub(r"\s+", " ", generated_sql).lower().strip()
+        generated_sql_list = generated_sql_modified.split(" ")
+        for idx in [n for n, x in enumerate(generated_sql_list) if "my_model" in x]:
+            generated_sql_list[idx] = "<model_identifier>"
+        generated_sql_generic = " ".join(generated_sql_list)
+
+        expected_sql_check = re.sub(r"\s+", " ", _expected_sql).lower().strip()
+
         assert (
-            expected_sql_check == generated_sql_check
+            expected_sql_check == generated_sql_generic
         ), f"""
 -- GENERATED SQL
-{generated_sql_check}
+{generated_sql_generic}
 
 -- EXPECTED SQL
 {expected_sql_check}
@@ -335,11 +335,6 @@ class TestIncrementalConstraintsRuntimeEnforcement(BaseConstraintsRuntimeDdlEnfo
             "my_model.sql": my_incremental_model_sql,
             "constraints_schema.yml": model_schema_yml,
         }
-
-    @pytest.fixture(scope="class")
-    def expected_sql(self, project):
-        relation = relation_from_name(project.adapter, "my_model")
-        return _expected_sql.format(relation)
 
 
 class TestIncrementalConstraintsRollback(BaseConstraintsRollback):
