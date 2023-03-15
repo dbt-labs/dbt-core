@@ -216,6 +216,7 @@ class BaseConstraintsRuntimeDdlEnforcement:
 
         # grab the sql and replace the model identifier to make it generic for all adapters
         # the name is not what we're testing here anyways and varies based on materialization
+        # TODO: consider refactoring this to introspect logs instead
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
         generated_sql_modified = re.sub(r"\s+", " ", generated_sql).lower().strip()
         generated_sql_list = generated_sql_modified.split(" ")
