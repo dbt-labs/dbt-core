@@ -18,7 +18,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ManifestNode, BaseNode
 from dbt.contracts.graph.unparsed import UnparsedNode, Docs
-from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError, ParsingError
+from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
 from dbt.parser.search import FileBlock
@@ -314,14 +314,6 @@ class ConfiguredParser(
         # compatibility with earlier node-only config.
         if config_dict.get("contract", False):
             parsed_node.contract = True
-
-            parser_name = type(self).__name__
-            if parser_name == "ModelParser":
-                original_file_path = parsed_node.original_file_path
-                error_message = "\n    `contract=true` can only be configured within `schema.yml` files\n      NOT within a model file(ex: .sql, .py) or `dbt_project.yml`."
-                raise ParsingError(
-                    f"Original File Path: ({original_file_path})\nConstraints must be defined in a `yml` schema configuration file like `schema.yml`.\nOnly the SQL table and view materializations are supported for constraints. \n`data_type` values must be defined for all columns and NOT be null or blank.{error_message}"
-                )
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

@@ -936,7 +936,6 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 self.constraints_schema_validator(patched_node),
                 self.constraints_materialization_validator(patched_node),
                 self.constraints_language_validator(patched_node),
-                self.constraints_data_type_validator(patched_node),
             ]
             error_messages = [validator for validator in validators if validator != "None"]
 
@@ -981,18 +980,6 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         language_error_msg = f"\n    Language Error: {language_error}"
         language_error_msg_payload = f"{language_error_msg if language_error else None}"
         return language_error_msg_payload
-
-    def constraints_data_type_validator(self, patched_node):
-        data_type_errors = set()
-        for column, column_info in patched_node.columns.items():
-            if column_info.data_type is None:
-                data_type_error = {column}
-                data_type_errors.update(data_type_error)
-        data_type_errors_msg = (
-            f"\n    Columns with `data_type` Blank/Null Errors: {data_type_errors}"
-        )
-        data_type_errors_msg_payload = f"{data_type_errors_msg if data_type_errors else None}"
-        return data_type_errors_msg_payload
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):

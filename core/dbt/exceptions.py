@@ -1803,6 +1803,20 @@ class DuplicateMaterializationNameError(CompilationError):
 
 
 # jinja exceptions
+class ColumnTypeMissingError(CompilationError):
+    def __init__(self, column_names: List):
+        self.column_names = column_names
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            "Contracted models require data_type to be defined for each column. "
+            "Please ensure that the column name and data_type are defined within "
+            f"the YAML configuration for the {self.column_names} column(s)."
+        )
+        return msg
+
+
 class PatchTargetNotFoundError(CompilationError):
     def __init__(self, patches: Dict):
         self.patches = patches
