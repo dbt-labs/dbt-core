@@ -9,7 +9,14 @@
   {%- elif unlogged -%}
     unlogged
   {%- endif %} table {{ relation }}
-  as (
+  {% if config.get('contract', False) %}
+    {{ get_assert_columns_equivalent(sql) }}
+    {{ get_columns_spec_ddl() }} ;
+    insert into {{ relation }} {{ get_column_names() }}
+    {% else %}
+      as
+  {% endif %}
+    (
     {{ sql }}
   );
 {%- endmacro %}

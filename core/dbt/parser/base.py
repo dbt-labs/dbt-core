@@ -290,6 +290,10 @@ class ConfiguredParser(
         if "meta" in config_dict and config_dict["meta"]:
             parsed_node.meta = config_dict["meta"]
 
+        # If we have group in the config, copy to node level
+        if "group" in config_dict and config_dict["group"]:
+            parsed_node.group = config_dict["group"]
+
         # If we have docs in the config, merge with the node level, for backwards
         # compatibility with earlier node-only config.
         if "docs" in config_dict and config_dict["docs"]:
@@ -305,6 +309,11 @@ class ConfiguredParser(
                 )
             else:
                 parsed_node.docs = Docs(show=docs_show)
+
+        # If we have "contract" in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if config_dict.get("contract", False):
+            parsed_node.contract = True
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

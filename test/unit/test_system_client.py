@@ -53,6 +53,17 @@ class SystemClient(unittest.TestCase):
         self.assertTrue(written)
         self.assertEqual(self.get_profile_text(), 'NEW_TEXT')
 
+    def test__make_dir_from_str(self):
+        test_dir_str = self.tmp_dir + "/test_make_from_str/sub_dir"
+        dbt.clients.system.make_directory(test_dir_str)
+        self.assertTrue(Path(test_dir_str).is_dir())
+
+    def test__make_dir_from_pathobj(self):
+        test_dir_pathobj = Path(self.tmp_dir + "/test_make_from_pathobj/sub_dir")
+        dbt.clients.system.make_directory(test_dir_pathobj)
+        self.assertTrue(test_dir_pathobj.is_dir())
+        
+
 
 class TestRunCmd(unittest.TestCase):
     """Test `run_cmd`.

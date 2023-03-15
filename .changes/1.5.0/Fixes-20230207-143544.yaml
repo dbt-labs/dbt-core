@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix regression of --quiet cli parameter behavior
+time: 2023-02-07T14:35:44.160163-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "6749"

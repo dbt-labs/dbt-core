@@ -13,7 +13,7 @@ from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
 from dbt.utils import MACRO_PREFIX
-from dbt import flags
+from dbt.flags import get_flags
 
 
 class GenericTestParser(BaseParser[GenericTestNode]):
@@ -87,7 +87,7 @@ class GenericTestParser(BaseParser[GenericTestNode]):
         source_file = block.file
         assert isinstance(source_file.contents, str)
         original_file_path = source_file.path.original_file_path
-        if flags.MACRO_DEBUGGING:
+        if get_flags().MACRO_DEBUGGING:
             fire_event(GenericTestFileParse(path=original_file_path))
 
         # this is really only used for error messages

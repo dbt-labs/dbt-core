@@ -4,6 +4,7 @@ import yaml
 
 from contextlib import contextmanager
 from pathlib import Path
+from argparse import Namespace
 
 import dbt.flags as flags
 
@@ -91,7 +92,7 @@ def environ(env):
 class TestProfiles:
     def dbt_debug(self, project_dir_cli_arg=None, profiles_dir_cli_arg=None):
         # begin with no command-line args or user config (from profiles.yml)
-        flags.set_from_args({}, {})
+        flags.set_from_args(Namespace(), {})
         command = ["debug"]
 
         if project_dir_cli_arg:
@@ -144,7 +145,6 @@ class TestProfiles:
         # start in the specified directory
         if working_directory is not None:
             os.chdir(working_directory)
-
         # default case with profiles.yml in the HOME directory
         _, stdout = self.dbt_debug(project_dir_cli_arg)
         assert f"Using profiles.yml file at {profiles_home_root}" in stdout

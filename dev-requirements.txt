@@ -6,7 +6,7 @@ flake8
 flaky
 freezegun==0.3.12
 ipdb
-mypy==0.971
+mypy==0.981
 pip-tools
 pre-commit
 protobuf
@@ -17,7 +17,6 @@ pytest-dotenv
 pytest-logbook
 pytest-mock
 pytest-xdist
-pytz
 sphinx
 tox>=3.13
 twine

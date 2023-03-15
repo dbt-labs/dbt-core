@@ -179,9 +179,7 @@ def project_config_update():
 @pytest.fixture(scope="class")
 def dbt_project_yml(project_root, project_config_update, logs_dir):
     project_config = {
-        "config-version": 2,
         "name": "test",
-        "version": "0.1.0",
         "profile": "test",
         "log-path": logs_dir,
     }
@@ -254,7 +252,11 @@ def adapter(
 ):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
-        profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None
+        profiles_dir=str(profiles_root),
+        project_dir=str(project_root),
+        target=None,
+        profile=None,
+        threads=None,
     )
     flags.set_from_args(args, {})
     runtime_config = RuntimeConfig.from_args(args)
@@ -377,6 +379,7 @@ class TestProjInfo:
         test_data_dir,
         test_schema,
         database,
+        logs_dir,
         test_config,
     ):
         self.project_root = project_root
@@ -387,6 +390,7 @@ class TestProjInfo:
         self.test_data_dir = test_data_dir
         self.test_schema = test_schema
         self.database = database
+        self.logs_dir = logs_dir
         self.test_config = test_config
         self.created_schemas = []
 
@@ -468,7 +472,19 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
-    setup_event_logger(logs_dir)
+    log_flags = Namespace(
+        LOG_PATH=logs_dir,
+        LOG_FORMAT="json",
+        LOG_FORMAT_FILE="json",
+        USE_COLORS=False,
+        USE_COLORS_FILE=False,
+        LOG_LEVEL="info",
+        LOG_LEVEL_FILE="debug",
+        DEBUG=False,
+        LOG_CACHE_EVENTS=False,
+        QUIET=False,
+    )
+    setup_event_logger(log_flags)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
@@ -482,6 +498,7 @@ def project(
         test_data_dir=test_data_dir,
         test_schema=unique_schema,
         database=adapter.config.credentials.database,
+        logs_dir=logs_dir,
         test_config=test_config,
     )
     project.drop_test_schema()

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Remove pin on packaging and stop using it for prerelease comparisons
+time: 2023-02-01T15:44:18.279158-05:00
+custom:
+  Author: gshank
+  Issue: "6834"

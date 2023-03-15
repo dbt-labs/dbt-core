@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump ubuntu from 22.04 to 23.04"
+time: 2023-02-06T00:09:26.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 6865

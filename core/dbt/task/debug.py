@@ -10,13 +10,11 @@ from dbt.events.types import (
     DebugCmdOut,
     DebugCmdResult,
 )
-from dbt import flags
 import dbt.clients.system
 import dbt.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
-from dbt.config import Project, Profile
+from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
-from dbt.config.utils import parse_cli_vars
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
@@ -63,10 +61,10 @@ FILE_NOT_FOUND = "file not found"
 class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
-        self.profiles_dir = flags.PROFILES_DIR
+        self.profiles_dir = args.PROFILES_DIR
         self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
-            self.project_dir = get_nearest_project_dir(self.args)
+            self.project_dir = get_nearest_project_dir(self.args.project_dir)
         except dbt.exceptions.Exception:
             # we probably couldn't find a project directory. Set project dir
             # to whatever was given, or default to the current directory.
@@ -75,7 +73,7 @@ class DebugTask(BaseTask):
             else:
                 self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
-        self.cli_vars = parse_cli_vars(getattr(self.args, "vars", "{}"))
+        self.cli_vars: Dict[str, Any] = args.vars
 
         # set by _load_*
         self.profile: Optional[Profile] = None
@@ -139,7 +137,7 @@ class DebugTask(BaseTask):
             self.project = Project.from_project_root(
                 self.project_dir,
                 renderer,
-                verify_version=flags.VERSION_CHECK,
+                verify_version=self.args.VERSION_CHECK,
             )
         except dbt.exceptions.DbtConfigError as exc:
             self.project_fail_details = str(exc)
@@ -175,9 +173,9 @@ class DebugTask(BaseTask):
         project_profile: Optional[str] = None
         if os.path.exists(self.project_path):
             try:
-                partial = Project.partial_load(
+                partial = PartialProject.from_project_root(
                     os.path.dirname(self.project_path),
-                    verify_version=bool(flags.VERSION_CHECK),
+                    verify_version=bool(self.args.VERSION_CHECK),
                 )
                 renderer = DbtProjectYamlRenderer(None, self.cli_vars)
                 project_profile = partial.render_profile_name(renderer)
@@ -253,7 +251,15 @@ class DebugTask(BaseTask):
         renderer = ProfileRenderer(self.cli_vars)
         for profile_name in profile_names:
             try:
-                profile: Profile = Profile.render_from_args(self.args, renderer, profile_name)
+                profile: Profile = Profile.render(
+                    renderer,
+                    profile_name,
+                    self.args.profile,
+                    self.args.target,
+                    # TODO: Generalize safe access to flags.THREADS:
+                    # https://github.com/dbt-labs/dbt-core/issues/6259
+                    getattr(self.args, "threads", None),
+                )
             except dbt.exceptions.DbtConfigError as exc:
                 profile_errors.append(str(exc))
             else:

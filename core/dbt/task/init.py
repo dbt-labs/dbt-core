@@ -11,7 +11,7 @@ import click
 
 import dbt.config
 import dbt.clients.system
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
@@ -89,7 +89,7 @@ class InitTask(BaseTask):
             # Use a regex to replace the name of the sample_profile with
             # that of the project without losing any comments from the sample
             sample_profile = re.sub(f"^{sample_profile_name}:", f"{profile_name}:", sample_profile)
-            profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+            profiles_filepath = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
             if profiles_filepath.exists():
                 with open(profiles_filepath, "a") as f:
                     f.write("\n" + sample_profile)
@@ -144,7 +144,7 @@ class InitTask(BaseTask):
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
         # Create the profile directory if it doesn't exist
-        profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+        profiles_filepath = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
         if profiles_filepath.exists():
             with open(profiles_filepath, "r+") as f:
                 profiles = yaml.safe_load(f) or {}
@@ -178,7 +178,7 @@ class InitTask(BaseTask):
             with open(profile_template_path) as f:
                 profile_template = yaml.safe_load(f)
             self.create_profile_from_profile_template(profile_template, profile_name)
-            profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+            profiles_filepath = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
             fire_event(
                 ProfileWrittenWithTargetTemplateYAML(
                     name=profile_name, path=str(profiles_filepath)
@@ -193,7 +193,7 @@ class InitTask(BaseTask):
         """Using either a provided profile name or that specified in dbt_project.yml,
         check if the profile already exists in profiles.yml, and if so ask the
         user whether to proceed and overwrite it."""
-        profiles_file = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+        profiles_file = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
         if not profiles_file.exists():
             return True
         profile_name = profile_name or self.get_profile_name_from_current_project()
@@ -213,7 +213,7 @@ class InitTask(BaseTask):
         with open("profile_template.yml") as f:
             profile_template = yaml.safe_load(f)
         self.create_profile_from_profile_template(profile_template, profile_name)
-        profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+        profiles_filepath = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
         fire_event(
             ProfileWrittenWithProjectTemplateYAML(name=profile_name, path=str(profiles_filepath))
         )
@@ -246,11 +246,11 @@ class InitTask(BaseTask):
 
     def run(self):
         """Entry point for the init task."""
-        profiles_dir = flags.PROFILES_DIR
+        profiles_dir = get_flags().PROFILES_DIR
         self.create_profiles_dir(profiles_dir)
 
         try:
-            move_to_nearest_project_dir(self.args)
+            move_to_nearest_project_dir(self.args.project_dir)
             in_project = True
         except dbt.exceptions.DbtRuntimeError:
             in_project = False

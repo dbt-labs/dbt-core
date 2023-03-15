@@ -1016,6 +1016,69 @@ models:
 
 """
 
+
+groups_schema_yml_one_group = """
+version: 2
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+
+models:
+  - name: orders
+    description: "Some order data"
+"""
+
+
+groups_schema_yml_two_groups = """
+version: 2
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    description: "Some order data"
+"""
+
+groups_schema_yml_one_group_model_in_group2 = """
+version: 2
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+
+models:
+  - name: orders
+    description: "Some order data"
+    config:
+      group: test_group2
+"""
+
+groups_schema_yml_two_groups_edited = """
+version: 2
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2_edited
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    description: "Some order data"
+"""
+
+
 snapshot2_sql = """
 - add a comment
 {% snapshot orders_snapshot %}

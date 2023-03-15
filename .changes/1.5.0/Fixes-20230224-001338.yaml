@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix semver comparison logic by ensuring numeric values
+time: 2023-02-24T00:13:38.23242+01:00
+custom:
+  Author: jtcohen6
+  Issue: "7039"

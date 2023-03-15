@@ -1,9 +1,9 @@
 import os
-import hashlib
 from typing import List, Optional
 
 from dbt.clients import git, system
-from dbt.config import Project
+from dbt.config.project import PartialProject, Project
+from dbt.config.renderer import PackageRenderer
 from dbt.contracts.project import (
     ProjectPackageMetadata,
     GitPackage,
@@ -12,10 +12,11 @@ from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import EnsureGitInstalled, DepsUnpinned
+from dbt.utils import md5
 
 
 def md5sum(s: str):
-    return hashlib.md5(s.encode("latin-1")).hexdigest()
+    return md5(s, "latin-1")
 
 
 class GitPackageMixin:
@@ -76,13 +77,15 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             raise
         return os.path.join(get_downloads_path(), dir_)
 
-    def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
+    def _fetch_metadata(
+        self, project: Project, renderer: PackageRenderer
+    ) -> ProjectPackageMetadata:
         path = self._checkout()
 
         if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
             warn_or_error(DepsUnpinned(git=self.git))
-        loaded = Project.from_project_root(path, renderer)
-        return ProjectPackageMetadata.from_project(loaded)
+        partial = PartialProject.from_project_root(path)
+        return partial.render_package_metadata(renderer)
 
     def install(self, project, renderer):
         dest_path = self.get_installation_path(project, renderer)

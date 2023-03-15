@@ -1114,6 +1114,30 @@ class SnapshopConfigError(ParsingError):
         super().__init__(msg=self.msg)
 
 
+class DbtReferenceError(ParsingError):
+    def __init__(self, unique_id: str, ref_unique_id: str, group: str):
+        self.unique_id = unique_id
+        self.ref_unique_id = ref_unique_id
+        self.group = group
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        return (
+            f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
+            f"which is not allowed because the referenced node is private to the {self.group} group."
+        )
+
+
+class InvalidAccessTypeError(ParsingError):
+    def __init__(self, unique_id: str, field_value: str):
+        self.unique_id = unique_id
+        self.field_value = field_value
+        msg = (
+            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        )
+        super().__init__(msg=msg)
+
+
 class SameKeyNestedError(CompilationError):
     def __init__(self):
         msg = "Test cannot have the same key at the top-level and in config"
@@ -1779,6 +1803,20 @@ class DuplicateMaterializationNameError(CompilationError):
 
 
 # jinja exceptions
+class ColumnTypeMissingError(CompilationError):
+    def __init__(self, column_names: List):
+        self.column_names = column_names
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            "Contracted models require data_type to be defined for each column. "
+            "Please ensure that the column name and data_type are defined within "
+            f"the YAML configuration for the {self.column_names} column(s)."
+        )
+        return msg
+
+
 class PatchTargetNotFoundError(CompilationError):
     def __init__(self, patches: Dict):
         self.patches = patches
@@ -2066,32 +2104,6 @@ class PropertyYMLError(CompilationError):
             "syntax:\n\nhttps://docs.getdbt.com/reference/configs-and-properties"
         )
         return msg
-
-
-class PropertyYMLMissingVersionError(PropertyYMLError):
-    def __init__(self, path: str):
-        self.path = path
-        self.issue = f"the yml property file {self.path} is missing a version tag"
-        super().__init__(self.path, self.issue)
-
-
-class PropertyYMLVersionNotIntError(PropertyYMLError):
-    def __init__(self, path: str, version: Any):
-        self.path = path
-        self.version = version
-        self.issue = (
-            "its 'version:' tag must be an integer (e.g. version: 2)."
-            f" {self.version} is not an integer"
-        )
-        super().__init__(self.path, self.issue)
-
-
-class PropertyYMLInvalidTagError(PropertyYMLError):
-    def __init__(self, path: str, version: int):
-        self.path = path
-        self.version = version
-        self.issue = f"its 'version:' tag is set to {self.version}.  Only 2 is supported"
-        super().__init__(self.path, self.issue)
 
 
 class RelationWrongTypeError(CompilationError):

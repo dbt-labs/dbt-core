@@ -1,0 +1,6 @@
+kind: Fixes
+body: Readd initialization events, --log-cache-events in new CLI
+time: 2023-02-13T13:05:22.989477+01:00
+custom:
+  Author: jtcohen6
+  Issue: "6933"

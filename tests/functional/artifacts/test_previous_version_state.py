@@ -1,18 +1,132 @@
 import pytest
 import os
 import shutil
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, get_manifest
 from dbt.exceptions import IncompatibleSchemaError
 from dbt.contracts.graph.manifest import WritableManifest
 
-# This is a *very* simple project, with just one model in it.
+# This project must have one of each kind of node type, plus disabled versions, for
+# test coverage to be complete.
 models__my_model_sql = """
 select 1 as id
 """
 
+models__disabled_model_sql = """
+{{ config(enabled=False) }}
+select 2 as id
+"""
+
+seeds__my_seed_csv = """
+id,value
+4,2
+"""
+
+seeds__disabled_seed_csv = """
+id,value
+6,4
+"""
+
+docs__somedoc_md = """
+{% docs somedoc %}
+Testing, testing
+{% enddocs %}
+"""
+
+macros__do_nothing_sql = """
+{% macro do_nothing(foo2, bar2) %}
+    select
+        '{{ foo2 }}' as foo2,
+        '{{ bar2 }}' as bar2
+{% endmacro %}
+"""
+
+macros__dummy_test_sql = """
+{% test check_nothing(model) %}
+-- a silly test to make sure that table-level tests show up in the manifest
+-- without a column_name field
+
+select 0
+
+{% endtest %}
+"""
+
+macros__disabled_dummy_test_sql = """
+{% test disabled_check_nothing(model) %}
+-- a silly test to make sure that table-level tests show up in the manifest
+-- without a column_name field
+
+{{ config(enabled=False) }}
+select 0
+
+{% endtest %}
+"""
+
+snapshot__snapshot_seed_sql = """
+{% snapshot snapshot_seed %}
+{{
+    config(
+      unique_key='id',
+      strategy='check',
+      check_cols='all',
+      target_schema=schema,
+    )
+}}
+select * from {{ ref('my_seed') }}
+{% endsnapshot %}
+"""
+
+snapshot__disabled_snapshot_seed_sql = """
+{% snapshot disabled_snapshot_seed %}
+{{
+    config(
+      unique_key='id',
+      strategy='check',
+      check_cols='all',
+      target_schema=schema,
+      enabled=False,
+    )
+}}
+select * from {{ ref('my_seed') }}
+{% endsnapshot %}
+"""
+
+tests__just_my_sql = """
+{{ config(tags = ['data_test_tag']) }}
+
+select * from {{ ref('my_model') }}
+where false
+"""
+
+tests__disabled_just_my_sql = """
+{{ config(enabled=False) }}
+
+select * from {{ ref('my_model') }}
+where false
+"""
+
+analyses__a_sql = """
+select 4 as id
+"""
+
+analyses__disabled_a_sql = """
+{{ config(enabled=False) }}
+select 9 as id
+"""
+
 # Use old attribute names (v1.0-1.2) to test forward/backward compatibility with the rename in v1.3
-models__metric_yml = """
+models__schema_yml = """
 version: 2
+models:
+  - name: my_model
+    description: "Example model"
+    tests:
+      - check_nothing
+      - disabled_check_nothing
+    columns:
+     - name: id
+       tests:
+       - not_null
+
 metrics:
   - name: my_metric
     label: Count records
@@ -22,6 +136,50 @@ metrics:
     sql: "*"
     timestamp: updated_at
     time_grains: [day]
+  - name: disabled_metric
+    label: Count records
+    model: ref('my_model')
+    config:
+        enabled: False
+    type: count
+    sql: "*"
+    timestamp: updated_at
+    time_grains: [day]
+
+sources:
+  - name: my_source
+    description: "My source"
+    loader: a_loader
+    tables:
+      - name: my_table
+        description: "My table"
+        identifier: my_seed
+      - name: disabled_table
+        description: "Disabled table"
+        config:
+           enabled: False
+
+exposures:
+  - name: simple_exposure
+    type: dashboard
+    depends_on:
+      - ref('my_model')
+      - source('my_source', 'my_table')
+    owner:
+      email: something@example.com
+  - name: disabled_exposure
+    type: dashboard
+    config:
+      enabled: False
+    depends_on:
+      - ref('my_model')
+    owner:
+      email: something@example.com
+
+seeds:
+  - name: disabled_seed
+    config:
+      enabled: False
 """
 
 # SETUP: Using this project, we have run past minor versions of dbt
@@ -41,12 +199,72 @@ metrics:
 # of older JSON manifests.
 
 
+# We are creating enabled versions of every node type that might be in the manifest,
+# plus disabled versions for types that support it (everything except macros and docs).
+
+
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 8
+    CURRENT_EXPECTED_MANIFEST_VERSION = 9
 
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": models__my_model_sql, "metric.yml": models__metric_yml}
+        return {
+            "my_model.sql": models__my_model_sql,
+            "schema.yml": models__schema_yml,
+            "somedoc.md": docs__somedoc_md,
+            "disabled_model.sql": models__disabled_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "my_seed.csv": seeds__my_seed_csv,
+            "disabled_seed.csv": seeds__disabled_seed_csv,
+        }
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {
+            "snapshot_seed.sql": snapshot__snapshot_seed_sql,
+            "disabled_snapshot_seed.sql": snapshot__disabled_snapshot_seed_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        return {
+            "just_my.sql": tests__just_my_sql,
+            "disabled_just_my.sql": tests__disabled_just_my_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "do_nothing.sql": macros__do_nothing_sql,
+            "dummy_test.sql": macros__dummy_test_sql,
+            "disabled_dummy_test.sql": macros__disabled_dummy_test_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def analyses(self):
+        return {
+            "a.sql": analyses__a_sql,
+            "disabled_al.sql": analyses__disabled_a_sql,
+        }
+
+    def test_project(self, project):
+        # This is mainly used to test changes to the test project in isolation from
+        # the other noise.
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        # model, snapshot, seed, singular test, generic test, analysis
+        assert len(manifest.nodes) == 7
+        assert len(manifest.sources) == 1
+        assert len(manifest.exposures) == 1
+        assert len(manifest.metrics) == 1
+        # disabled model, snapshot, seed, singular test, generic test, analysis, source, exposure, metric
+        assert len(manifest.disabled) == 9
+        assert "macro.test.do_nothing" in manifest.macros
 
     # Use this method when generating a new manifest version for the first time.
     # Once generated, we shouldn't need to re-generate or modify the manifest.
@@ -75,6 +293,8 @@ class TestPreviousVersionState:
         state_path = os.path.join(project.test_data_dir, f"state/v{compare_manifest_version}")
         cli_args = [
             "list",
+            "--resource-types",
+            "model",
             "--select",
             "state:modified",
             "--state",

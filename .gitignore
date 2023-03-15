@@ -51,6 +51,7 @@ coverage.xml
 *,cover
 .hypothesis/
 test.env
+makefile.test.env
 *.pytest_cache/
 
 

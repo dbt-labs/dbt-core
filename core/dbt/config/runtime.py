@@ -1,7 +1,7 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     Any,
@@ -13,17 +13,18 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    Union,
 )
 
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
-from dbt.config.profile import read_user_config
-from dbt.contracts.connection import AdapterRequiredConfig, Credentials
+from dbt.config.project import load_raw_project
+from dbt.contracts.connection import AdapterRequiredConfig, Credentials, HasCredentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration, UserConfig
 from dbt.contracts.relation import ComponentName
 from dbt.dataclass_schema import ValidationError
+from dbt.events.functions import warn_or_error
+from dbt.events.types import UnusedResourceConfigPath
 from dbt.exceptions import (
     ConfigContractBrokenError,
     DbtProjectError,
@@ -31,14 +32,46 @@ from dbt.exceptions import (
     DbtRuntimeError,
     UninstalledPackagesFoundError,
 )
-from dbt.events.functions import warn_or_error
-from dbt.events.types import UnusedResourceConfigPath
 from dbt.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
-
 from .profile import Profile
-from .project import Project, PartialProject
+from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
-from .utils import parse_cli_vars
+
+
+def load_project(
+    project_root: str,
+    version_check: bool,
+    profile: HasCredentials,
+    cli_vars: Optional[Dict[str, Any]] = None,
+) -> Project:
+    # get the project with all of the provided information
+    project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
+    project = Project.from_project_root(
+        project_root, project_renderer, verify_version=version_check
+    )
+
+    # Save env_vars encountered in rendering for partial parsing
+    project.project_env_vars = project_renderer.ctx_obj.env_vars
+    return project
+
+
+def load_profile(
+    project_root: str,
+    cli_vars: Dict[str, Any],
+    profile_name_override: Optional[str] = None,
+    target_override: Optional[str] = None,
+    threads_override: Optional[int] = None,
+) -> Profile:
+    raw_project = load_raw_project(project_root)
+    raw_profile_name = raw_project.get("profile")
+    profile_renderer = ProfileRenderer(cli_vars)
+    profile_name = profile_renderer.render_value(raw_profile_name)
+    profile = Profile.render(
+        profile_renderer, profile_name, profile_name_override, target_override, threads_override
+    )
+    # Save env_vars encountered in rendering for partial parsing
+    profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
+    return profile
 
 
 def _project_quoting_dict(proj: Project, profile: Profile) -> Dict[ComponentName, bool]:
@@ -62,6 +95,21 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     def __post_init__(self):
         self.validate()
 
+    @classmethod
+    def get_profile(
+        cls,
+        project_root: str,
+        cli_vars: Dict[str, Any],
+        args: Any,
+    ) -> Profile:
+        return load_profile(
+            project_root,
+            cli_vars,
+            args.profile,
+            args.target,
+            args.threads,
+        )
+
     # Called by 'new_project' and 'from_args'
     @classmethod
     def from_parts(
@@ -84,7 +132,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict(omit_none=True)
 
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
 
         return cls(
             project_name=project.project_name,
@@ -149,11 +197,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         # load the new project and its packages. Don't pass cli variables.
         renderer = DbtProjectYamlRenderer(profile)
-
         project = Project.from_project_root(
             project_root,
             renderer,
-            verify_version=bool(flags.VERSION_CHECK),
+            verify_version=bool(getattr(self.args, "VERSION_CHECK", True)),
         )
 
         runtime_config = self.from_parts(
@@ -190,63 +237,18 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             raise ConfigContractBrokenError(e) from e
 
     @classmethod
-    def _get_rendered_profile(
-        cls,
-        args: Any,
-        profile_renderer: ProfileRenderer,
-        profile_name: Optional[str],
-    ) -> Profile:
-
-        return Profile.render_from_args(args, profile_renderer, profile_name)
-
-    @classmethod
     def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
-
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
-
-        profile = cls.collect_profile(args=args)
-        project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
-        project = cls.collect_project(args=args, project_renderer=project_renderer)
-        assert type(project) is Project
-        return (project, profile)
-
-    @classmethod
-    def collect_profile(
-        cls: Type["RuntimeConfig"], args: Any, profile_name: Optional[str] = None
-    ) -> Profile:
-
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
-        profile_renderer = ProfileRenderer(cli_vars)
-
-        # build the profile using the base renderer and the one fact we know
-        if profile_name is None:
-            # Note: only the named profile section is rendered here. The rest of the
-            # profile is ignored.
-            partial = cls.collect_project(args)
-            assert type(partial) is PartialProject
-            profile_name = partial.render_profile_name(profile_renderer)
-
-        profile = cls._get_rendered_profile(args, profile_renderer, profile_name)
-        # Save env_vars encountered in rendering for partial parsing
-        profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
-        return profile
-
-    @classmethod
-    def collect_project(
-        cls: Type["RuntimeConfig"],
-        args: Any,
-        project_renderer: Optional[DbtProjectYamlRenderer] = None,
-    ) -> Union[Project, PartialProject]:
-
+        # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
-        version_check = bool(flags.VERSION_CHECK)
-        partial = Project.partial_load(project_root, verify_version=version_check)
-        if project_renderer is None:
-            return partial
-        else:
-            project = partial.render(project_renderer)
-            project.project_env_vars = project_renderer.ctx_obj.env_vars
-            return project
+        cli_vars: Dict[str, Any] = getattr(args, "vars", {})
+        profile = cls.get_profile(
+            project_root,
+            cli_vars,
+            args,
+        )
+        flags = get_flags()
+        project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
+        return project, profile
 
     # Called in main.py, lib.py, task/base.py
     @classmethod
@@ -411,8 +413,8 @@ class UnsetCredentials(Credentials):
         return ()
 
 
-# This is used by UnsetProfileConfig, for commands which do
-# not require a profile, i.e. dbt deps and clean
+# This is used by commands which do not require
+# a profile, i.e. dbt deps and clean
 class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
@@ -431,182 +433,12 @@ class UnsetProfile(Profile):
         return Profile.__getattribute__(self, name)
 
 
-# This class is used by the dbt deps and clean commands, because they don't
-# require a functioning profile.
-@dataclass
-class UnsetProfileConfig(RuntimeConfig):
-    """This class acts a lot _like_ a RuntimeConfig, except if your profile is
-    missing, any access to profile members results in an exception.
-    """
-
-    profile_name: str = field(repr=False)
-    target_name: str = field(repr=False)
-
-    def __post_init__(self):
-        # instead of futzing with InitVar overrides or rewriting __init__, just
-        # `del` the attrs we don't want  users touching.
-        del self.profile_name
-        del self.target_name
-        # don't call super().__post_init__(), as that calls validate(), and
-        # this object isn't very valid
-
-    def __getattribute__(self, name):
-        # Override __getattribute__ to check that the attribute isn't 'banned'.
-        if name in {"profile_name", "target_name"}:
-            raise DbtRuntimeError(f'Error: disallowed attribute "{name}" - no profile!')
-
-        # avoid every attribute access triggering infinite recursion
-        return RuntimeConfig.__getattribute__(self, name)
-
-    def to_target_dict(self):
-        # re-override the poisoned profile behavior
-        return DictDefaultEmptyStr({})
-
-    def to_project_config(self, with_packages=False):
-        """Return a dict representation of the config that could be written to
-        disk with `yaml.safe_dump` to get this configuration.
-
-        Overrides dbt.config.Project.to_project_config to omit undefined profile
-        attributes.
-
-        :param with_packages bool: If True, include the serialized packages
-            file in the root.
-        :returns dict: The serialized profile.
-        """
-        result = deepcopy(
-            {
-                "name": self.project_name,
-                "version": self.version,
-                "project-root": self.project_root,
-                "profile": "",
-                "model-paths": self.model_paths,
-                "macro-paths": self.macro_paths,
-                "seed-paths": self.seed_paths,
-                "test-paths": self.test_paths,
-                "analysis-paths": self.analysis_paths,
-                "docs-paths": self.docs_paths,
-                "asset-paths": self.asset_paths,
-                "target-path": self.target_path,
-                "snapshot-paths": self.snapshot_paths,
-                "clean-targets": self.clean_targets,
-                "log-path": self.log_path,
-                "quoting": self.quoting,
-                "models": self.models,
-                "on-run-start": self.on_run_start,
-                "on-run-end": self.on_run_end,
-                "dispatch": self.dispatch,
-                "seeds": self.seeds,
-                "snapshots": self.snapshots,
-                "sources": self.sources,
-                "tests": self.tests,
-                "metrics": self.metrics,
-                "exposures": self.exposures,
-                "vars": self.vars.to_dict(),
-                "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
-                "config-version": self.config_version,
-            }
-        )
-        if self.query_comment:
-            result["query-comment"] = self.query_comment.to_dict(omit_none=True)
-
-        if with_packages:
-            result.update(self.packages.to_dict(omit_none=True))
-
-        return result
-
-    @classmethod
-    def from_parts(
-        cls,
-        project: Project,
-        profile: Profile,
-        args: Any,
-        dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None,
-    ) -> "RuntimeConfig":
-        """Instantiate a RuntimeConfig from its components.
-
-        :param profile: Ignored.
-        :param project: A parsed dbt Project.
-        :param args: The parsed command-line arguments.
-        :returns RuntimeConfig: The new configuration.
-        """
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
-
-        return cls(
-            project_name=project.project_name,
-            version=project.version,
-            project_root=project.project_root,
-            model_paths=project.model_paths,
-            macro_paths=project.macro_paths,
-            seed_paths=project.seed_paths,
-            test_paths=project.test_paths,
-            analysis_paths=project.analysis_paths,
-            docs_paths=project.docs_paths,
-            asset_paths=project.asset_paths,
-            target_path=project.target_path,
-            snapshot_paths=project.snapshot_paths,
-            clean_targets=project.clean_targets,
-            log_path=project.log_path,
-            packages_install_path=project.packages_install_path,
-            quoting=project.quoting,  # we never use this anyway.
-            models=project.models,
-            on_run_start=project.on_run_start,
-            on_run_end=project.on_run_end,
-            dispatch=project.dispatch,
-            seeds=project.seeds,
-            snapshots=project.snapshots,
-            dbt_version=project.dbt_version,
-            packages=project.packages,
-            manifest_selectors=project.manifest_selectors,
-            selectors=project.selectors,
-            query_comment=project.query_comment,
-            sources=project.sources,
-            tests=project.tests,
-            metrics=project.metrics,
-            exposures=project.exposures,
-            vars=project.vars,
-            config_version=project.config_version,
-            unrendered=project.unrendered,
-            project_env_vars=project.project_env_vars,
-            profile_env_vars=profile.profile_env_vars,
-            profile_name="",
-            target_name="",
-            user_config=UserConfig(),
-            threads=getattr(args, "threads", 1),
-            credentials=UnsetCredentials(),
-            args=args,
-            cli_vars=cli_vars,
-            dependencies=dependencies,
-        )
-
-    @classmethod
-    def _get_rendered_profile(
-        cls,
-        args: Any,
-        profile_renderer: ProfileRenderer,
-        profile_name: Optional[str],
-    ) -> Profile:
-
-        profile = UnsetProfile()
-        # The profile (for warehouse connection) is not needed, but we want
-        # to get the UserConfig, which is also in profiles.yml
-        user_config = read_user_config(flags.PROFILES_DIR)
-        profile.user_config = user_config
-        return profile
-
-    @classmethod
-    def from_args(cls: Type[RuntimeConfig], args: Any) -> "RuntimeConfig":
-        """Given arguments, read in dbt_project.yml from the current directory,
-        read in packages.yml if it exists, and use them to find the profile to
-        load.
-
-        :param args: The arguments as parsed from the cli.
-        :raises DbtProjectError: If the project is invalid or missing.
-        :raises DbtProfileError: If the profile is invalid or missing.
-        :raises DbtValidationError: If the cli variables are invalid.
-        """
-        project, profile = cls.collect_parts(args)
-
-        return cls.from_parts(project=project, profile=profile, args=args)
+UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
+Configuration paths exist in your dbt_project.yml file which do not \
+apply to any resources.
+There are {} unused configuration paths:
+{}
+"""
 
 
 def _is_config_used(path, fqns):

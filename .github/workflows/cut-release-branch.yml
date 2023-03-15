@@ -1,0 +1,41 @@
+# **what?**
+# Cuts a new `*.latest` branch
+# Also cleans up all files in `.changes/unreleased` and `.changes/previous verion on
+# `main` and bumps `main` to the input version.
+
+# **why?**
+# Generally reduces the workload of engineers and reduces error.  Allow automation.
+
+# **when?**
+# This will run when called manually.
+
+name: Cut new release branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_to_bump_main:
+        description: 'The alpha version main should bump to (ex. 1.6.0a1)'
+        required: true
+      new_branch_name:
+        description: 'The full name of the new branch (ex. 1.5.latest)'
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: write
+
+jobs:
+  cut_branch:
+    name: "Cut branch and clean up main for dbt-core"
+    uses: dbt-labs/actions/.github/workflows/cut-release-branch.yml@main
+    with:
+      version_to_bump_main: ${{ inputs.version_to_bump_main }}
+      new_branch_name: ${{ inputs.new_branch_name }}
+      PR_title: "Cleanup main after cutting new ${{ inputs.new_branch_name }} branch"
+      PR_body: "All adapter PRs will fail CI until the dbt-core PR has been merged due to release version conflicts."
+    secrets:
+      FISHTOWN_BOT_PAT: ${{ secrets.FISHTOWN_BOT_PAT }}

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Readd depends_on.macros to SeedNode, to support seeds with hooks calling macros
+time: 2023-02-03T13:55:57.853715+01:00
+custom:
+  Author: jtcohen6
+  Issue: "6806"

@@ -6,18 +6,26 @@ ifeq ($(USE_DOCKER),true)
 	DOCKER_CMD := docker-compose run --rm test
 endif
 
-LOGS_DIR := ./logs
+#
+# To override CI_flags, create a file at this repo's root dir named `makefile.test.env`. Fill it
+# with any ENV_VAR overrides required by your test environment, e.g.
+#    DBT_TEST_USER_1=user
+#    LOG_DIR="dir with a space in it"
+#
+# Warn: Restrict each line to one variable only.
+#
+ifeq (./makefile.test.env,$(wildcard ./makefile.test.env))
+	include ./makefile.test.env
+endif
 
-# Optional flag to invoke tests using our CI env.
-# But we always want these active for structured
-# log testing.
 CI_FLAGS =\
-	DBT_TEST_USER_1=dbt_test_user_1\
-	DBT_TEST_USER_2=dbt_test_user_2\
-	DBT_TEST_USER_3=dbt_test_user_3\
-	RUSTFLAGS="-D warnings"\
-	LOG_DIR=./logs\
-	DBT_LOG_FORMAT=json
+	DBT_TEST_USER_1=$(if $(DBT_TEST_USER_1),$(DBT_TEST_USER_1),dbt_test_user_1)\
+	DBT_TEST_USER_2=$(if $(DBT_TEST_USER_2),$(DBT_TEST_USER_2),dbt_test_user_2)\
+	DBT_TEST_USER_3=$(if $(DBT_TEST_USER_3),$(DBT_TEST_USER_3),dbt_test_user_3)\
+	RUSTFLAGS=$(if $(RUSTFLAGS),$(RUSTFLAGS),"-D warnings")\
+	LOG_DIR=$(if $(LOG_DIR),$(LOG_DIR),./logs)\
+	DBT_LOG_FORMAT=$(if $(DBT_LOG_FORMAT),$(DBT_LOG_FORMAT),json)
+
 
 .PHONY: dev_req
 dev_req: ## Installs dbt-* packages in develop mode along with only development dependencies.
@@ -66,7 +74,7 @@ test: .env ## Runs unit tests with py and code checks against staged changes.
 .PHONY: integration
 integration: .env ## Runs postgres integration tests with py-integration
 	@\
-	$(if $(USE_CI_FLAGS), $(CI_FLAGS)) $(DOCKER_CMD) tox -e py-integration -- -nauto
+	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto
 
 .PHONY: integration-fail-fast
 integration-fail-fast: .env ## Runs postgres integration tests with py-integration in "fail fast" mode.
@@ -76,9 +84,9 @@ integration-fail-fast: .env ## Runs postgres integration tests with py-integrati
 .PHONY: interop
 interop: clean
 	@\
-	mkdir $(LOGS_DIR) && \
+	mkdir $(LOG_DIR) && \
 	$(CI_FLAGS) $(DOCKER_CMD) tox -e py-integration -- -nauto && \
-	LOG_DIR=$(LOGS_DIR) cargo run --manifest-path test/interop/log_parsing/Cargo.toml
+	LOG_DIR=$(LOG_DIR) cargo run --manifest-path test/interop/log_parsing/Cargo.toml
 
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.

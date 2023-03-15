@@ -27,6 +27,9 @@ macros__validate_zip_sql = """
 
 macros__validate_invocation_sql = """
 {% macro validate_invocation(my_variable) %}
+    -- check a specific value
+    {{ log("use_colors: "~ invocation_args_dict['use_colors']) }}
+    -- whole dictionary (as string)
     {{ log("invocation_result: "~ invocation_args_dict) }}
 {% endmacro %}
 """
@@ -61,7 +64,11 @@ def parse_json_logs(json_log_output):
 
 def find_result_in_parsed_logs(parsed_logs, result_name):
     return next(
-        (item for item in parsed_logs if result_name in item["info"].get("msg", "msg")),
+        (
+            item["data"]["msg"]
+            for item in parsed_logs
+            if result_name in item["data"].get("msg", "msg")
+        ),
         False,
     )
 
@@ -104,27 +111,22 @@ class TestContextBuiltins:
         )
 
         parsed_logs = parse_json_logs(log_output)
-        result = find_result_in_parsed_logs(parsed_logs, "invocation_result")
-
+        use_colors = result = find_result_in_parsed_logs(parsed_logs, "use_colors")
+        assert use_colors == "use_colors: True"
+        invocation_dict = find_result_in_parsed_logs(parsed_logs, "invocation_result")
         assert result
-
-        # Result is checked in two parts because profiles_dir is unique each test run
-        expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
-        assert expected in str(result)
-
+        # The result should include a dictionary of all flags with values that aren't None
         expected = (
             "'send_anonymous_usage_stats': False",
             "'quiet': False",
-            "'no_print': False",
+            "'print': True",
             "'cache_selected_only': False",
             "'macro': 'validate_invocation'",
-            "'args': '{my_variable: test_variable}'",
+            "'args': {'my_variable': 'test_variable'}",
             "'which': 'run-operation'",
-            "'rpc_method': 'run-operation'",
             "'indirect_selection': 'eager'",
         )
-        for element in expected:
-            assert element in str(result)
+        assert all(element in invocation_dict for element in expected)
 
     def test_builtin_dbt_metadata_envs_function(self, project, monkeypatch):
         envs = {
