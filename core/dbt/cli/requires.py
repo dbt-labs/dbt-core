@@ -42,6 +42,7 @@ def preflight(func):
 
         # Deprecation warnings
         [dep_fn() for dep_fn in flags.deprecated_env_var_warnings]
+        flags.clear_deprecations()
 
         if active_user is not None:  # mypy appeasement, always true
             fire_event(MainTrackingUserState(user_state=active_user.state()))

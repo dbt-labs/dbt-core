@@ -62,14 +62,19 @@ debug = click.option(
     help="Display debug logging during dbt execution. Useful for debugging and making bug reports.",
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `DEFER_MODE` and used an env var called "DBT_DEFER_TO_STATE"
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
+# flag was previously named DEFER_MODE
 defer = click.option(
     "--defer/--no-defer",
     envvar="DBT_DEFER",
     help="If set, defer to the state variable for resolving unselected nodes.",
+)
+
+deprecated_defer = click.option(
+    "--deprecated-defer",
+    envvar="DBT_DEFER_TO_STATE",
+    help="Internal flag for deprecating old env var.",
+    default=False,
+    hidden=True,
 )
 
 enable_legacy_logger = click.option(
@@ -93,6 +98,12 @@ favor_state = click.option(
     "--favor-state/--no-favor-state",
     envvar="DBT_FAVOR_STATE",
     help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
+)
+
+deprecated_favor_state = click.option(
+    "--deprecated-favor-state",
+    envvar="DBT_FAVOR_STATE_MODE",
+    help="Internal flag for deprecating old env var.",
 )
 
 full_refresh = click.option(
@@ -214,7 +225,6 @@ port = click.option(
     type=click.INT,
 )
 
-# envvar was previously named DBT_NO_PRINT
 print = click.option(
     "--print/--no-print",
     envvar="DBT_PRINT",
@@ -359,14 +369,24 @@ skip_profile_setup = click.option(
     "--skip-profile-setup", "-s", envvar=None, help="Skip interactive profile setup.", is_flag=True
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `ARTIFACT_STATE_PATH` and used the env var `DBT_ARTIFACT_STATE_PATH`.
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
 state = click.option(
     "--state",
     envvar="DBT_STATE",
     help="If set, use the given directory as the source for json files to compare with this project.",
+    type=click.Path(
+        dir_okay=True,
+        file_okay=False,
+        readable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+)
+
+deprecated_state = click.option(
+    "--deprecated-state",
+    envvar="DBT_ARTIFACT_STATE_PATH",
+    help="Internal flag for deprecating old env var.",
+    hidden=True,
     type=click.Path(
         dir_okay=True,
         file_okay=False,
