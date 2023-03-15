@@ -183,7 +183,7 @@ output_keys = click.option(
         "Space-delimited listing of node properties to include as custom keys for JSON output "
         "(e.g. `--output json --output-keys name resource_type description`)"
     ),
-    type=list,
+    type=tuple,
     cls=MultiOption,
     default=[],
 )
