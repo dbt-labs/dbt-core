@@ -185,6 +185,7 @@ output_keys = click.option(
     ),
     type=tuple,
     cls=MultiOption,
+    multiple=True,
     default=[],
 )
 
@@ -310,6 +311,7 @@ resource_type = click.option(
         case_sensitive=False,
     ),
     cls=MultiOption,
+    multiple=True,
     default=(),
 )
 
