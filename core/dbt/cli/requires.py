@@ -62,16 +62,29 @@ def preflight(func):
 
         start_func = time.perf_counter()
 
-        (results, success) = func(*args, **kwargs)
+        try:
+            (results, success) = func(*args, **kwargs)
 
-        fire_event(
-            CommandCompleted(
-                command=ctx.command_path,
-                success=success,
-                completed_at=datetime.datetime.utcnow(),
-                elapsed=time.perf_counter() - start_func,
+            fire_event(
+                CommandCompleted(
+                    command=ctx.command_path,
+                    success=success,
+                    completed_at=datetime.datetime.utcnow(),
+                    elapsed=time.perf_counter() - start_func,
+                )
             )
-        )
+        # Bare except because we really do want to catch ALL exceptions,
+        # i.e. we want to fire this event in ALL cases.
+        except:  # noqa
+            fire_event(
+                CommandCompleted(
+                    command=ctx.command_path,
+                    success=False,
+                    completed_at=datetime.datetime.utcnow(),
+                    elapsed=time.perf_counter() - start_func,
+                )
+            )
+            raise
 
         return (results, success)
 
