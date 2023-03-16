@@ -1827,6 +1827,16 @@ class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
         return "No nodes selected!"
 
 
+@dataclass
+class CommandCompleted(InfoLevel, pt.CommandCompleted):
+    def code(self):
+        return "Q039"
+
+    def message(self) -> str:
+        status = "succeeded" if self.success else "failed"
+        return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
+
+
 # =======================================================
 # W - Node testing
 # =======================================================

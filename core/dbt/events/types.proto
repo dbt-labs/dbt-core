@@ -1747,6 +1747,19 @@ message NoNodesSelectedMsg {
     NoNodesSelected data = 2;
 }
 
+// Q039
+message CommandCompleted {
+    string command = 1;
+    bool success = 2;
+    google.protobuf.Timestamp completed_at = 3;
+    float elapsed = 4;
+}
+
+message CommandCompletedMsg {
+    EventInfo info = 1;
+    CommandCompleted data = 2;
+}
+
 // W - Node testing
 
 // Skipped W001

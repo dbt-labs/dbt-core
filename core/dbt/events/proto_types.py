@@ -2185,6 +2185,22 @@ class NoNodesSelectedMsg(betterproto.Message):
 
 
 @dataclass
+class CommandCompleted(betterproto.Message):
+    """Q039"""
+
+    command: str = betterproto.string_field(1)
+    success: bool = betterproto.bool_field(2)
+    completed_at: datetime = betterproto.message_field(3)
+    elapsed: float = betterproto.float_field(4)
+
+
+@dataclass
+class CommandCompletedMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "CommandCompleted" = betterproto.message_field(2)
+
+
+@dataclass
 class CatchableExceptionOnRun(betterproto.Message):
     """W002"""
 
