@@ -5,7 +5,12 @@ from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
 from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
-from dbt.events.types import MainReportVersion, MainReportArgs, MainTrackingUserState
+from dbt.events.types import (
+    CommandCompleted,
+    MainReportVersion,
+    MainReportArgs,
+    MainTrackingUserState,
+)
 from dbt.exceptions import DbtProjectError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
@@ -13,7 +18,9 @@ from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
 
 from click import Context
+import datetime
 from functools import update_wrapper
+import time
 
 
 def preflight(func):
@@ -53,7 +60,20 @@ def preflight(func):
         # Adapter management
         ctx.with_resource(adapter_management())
 
-        return func(*args, **kwargs)
+        start_func = time.perf_counter()
+
+        (results, success) = func(*args, **kwargs)
+
+        fire_event(
+            CommandCompleted(
+                command=ctx.command_path,
+                success=success,
+                completed_at=datetime.datetime.utcnow(),
+                elapsed=time.perf_counter() - start_func,
+            )
+        )
+
+        return (results, success)
 
     return update_wrapper(wrapper, func)
 
