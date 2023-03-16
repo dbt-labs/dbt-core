@@ -1828,7 +1828,7 @@ class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
 
 
 @dataclass
-class CommandCompleted(InfoLevel, pt.CommandCompleted):
+class CommandCompleted(DebugLevel, pt.CommandCompleted):
     def code(self):
         return "Q039"
 
