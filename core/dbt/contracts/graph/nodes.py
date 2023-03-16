@@ -150,6 +150,14 @@ class ConstraintType(str, Enum):
     foreign_key = "foreign_key"
     custom = "custom"
 
+    @classmethod
+    def is_valid(cls, item):
+        try:
+            cls(item)
+        except ValueError:
+            return False
+        return True
+
 
 @dataclass
 class ColumnLevelConstraint(dbtClassMixin):

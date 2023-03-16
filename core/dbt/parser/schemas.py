@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     Group,
     ManifestNode,
     GraphMemberNode,
+    ConstraintType,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -123,6 +124,14 @@ class ParserRef:
             quote = column.quote
         else:
             quote = None
+
+        if any(
+            c
+            for c in column.constraints
+            if not c["type"] or not ConstraintType.is_valid(c["type"])
+        ):
+            raise ParsingError(f"Invalid constraint type on column {column.name}")
+
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
             description=column.description,
