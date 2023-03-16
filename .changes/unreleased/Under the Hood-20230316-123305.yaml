@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add CommandCompleted event, and fire it upon completion of every command
+time: 2023-03-16T12:33:05.696752-07:00
+custom:
+  Author: QMalcolm
+  Issue: "6878"
