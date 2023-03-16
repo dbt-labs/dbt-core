@@ -18,7 +18,6 @@ import requests
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     SystemCouldNotWrite,
-    SystemErrorRetrievingModTime,
     SystemExecutingCmd,
     SystemStdOut,
     SystemStdErr,
@@ -77,11 +76,7 @@ def find_matching(
                 relative_path = os.path.relpath(absolute_path, absolute_path_to_search)
                 relative_path_to_root = os.path.join(relative_path_to_search, relative_path)
 
-                modification_time = 0.0
-                try:
-                    modification_time = os.path.getmtime(absolute_path)
-                except OSError:
-                    fire_event(SystemErrorRetrievingModTime(path=absolute_path))
+                modification_time = os.path.getmtime(absolute_path)
                 if reobj.match(local_file) and (
                     not ignore_spec or not ignore_spec.match_file(relative_path_to_root)
                 ):

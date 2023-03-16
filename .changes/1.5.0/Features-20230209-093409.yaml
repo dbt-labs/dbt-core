@@ -1,0 +1,6 @@
+kind: Features
+body: Parse 'group' resource
+time: 2023-02-09T09:34:09.547006-05:00
+custom:
+  Author: michelleark
+  Issue: "6921"

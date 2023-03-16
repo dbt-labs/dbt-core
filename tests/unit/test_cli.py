@@ -32,7 +32,9 @@ class TestCLI:
     def test_param_names_match_envvars(self):
         def run_test(command):
             for param in command.params:
-                if param.envvar is not None:
+                # deprecated params are named "deprecated_x" and do not need to have
+                # a parallel name like "DBT_"
+                if param.envvar is not None and "deprecated_" not in param.name:
                     assert "DBT_" + param.name.upper() == param.envvar
             if type(command) is click.Group:
                 for command in command.commands.values():

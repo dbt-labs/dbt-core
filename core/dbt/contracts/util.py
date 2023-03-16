@@ -275,6 +275,11 @@ def upgrade_manifest_json(manifest: dict) -> dict:
             upgrade_node_content(node_content)
             if node_content["resource_type"] == "seed":
                 upgrade_seed_content(node_content)
+    # add group key
+    if "groups" not in manifest:
+        manifest["groups"] = {}
+    if "group_map" not in manifest:
+        manifest["group_map"] = {}
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
@@ -337,7 +342,7 @@ class VersionedSchema(dbtClassMixin):
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )
-        if get_manifest_schema_version(data) <= 7:
+        if get_manifest_schema_version(data) <= 8:
             data = upgrade_manifest_json(data)
         return cls.from_dict(data)  # type: ignore
 

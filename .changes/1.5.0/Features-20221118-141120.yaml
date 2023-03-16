@@ -1,0 +1,8 @@
+kind: Features
+body: Data type constraints are now native to SQL table materializations. Enforce
+  columns are specific data types and not null depending on database functionality.
+time: 2022-11-18T14:11:20.868062-08:00
+custom:
+  Author: sungchun12
+  Issue: "6079"
+  PR: "6271"

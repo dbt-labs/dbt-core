@@ -393,6 +393,21 @@ class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
         return warning_tag(msg)
 
 
+@dataclass
+class EnvironmentVariableRenamed(WarnLevel, pt.EnvironmentVariableRenamed):  # noqa
+    def code(self):
+        return "D009"
+
+    def message(self):
+        description = (
+            f"The environment variable `{self.old_name}` has been renamed as `{self.new_name}`.\n"
+            f"If `{self.old_name}` is currently set, its value will be used instead of `{self.old_name}`.\n"
+            f"Set `{self.new_name}` and unset `{self.old_name}` to avoid this deprecation warning and "
+            "ensure it works properly in a future release."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -768,7 +783,34 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 # =======================================================
 
 
-# Skipping I001, I002, I003, I004, I005, I006, I007, I008, I009
+@dataclass
+class InputFileDiffError(DebugLevel, pt.InputFileDiffError):
+    def code(self):
+        return "I001"
+
+    def message(self) -> str:
+        return f"Error processing file diff: {self.category}, {self.file_id}"
+
+
+# Skipping I002, I003, I004, I005, I006, I007
+
+
+@dataclass
+class InvalidValueForField(WarnLevel, pt.InvalidValueForField):
+    def code(self):
+        return "I008"
+
+    def message(self) -> str:
+        return f"Invalid value ({self.field_value}) for field {self.field_name}"
+
+
+@dataclass
+class ValidationWarning(WarnLevel, pt.ValidationWarning):
+    def code(self):
+        return "I009"
+
+    def message(self) -> str:
+        return f"Field {self.field_name} is not valid for {self.resource_type} ({self.node_name})"
 
 
 @dataclass
@@ -1669,7 +1711,13 @@ class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-# Skipped Q028
+@dataclass
+class CompiledNode(InfoLevel, pt.CompiledNode):
+    def code(self):
+        return "Q028"
+
+    def message(self) -> str:
+        return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
 
 
 @dataclass
@@ -1873,13 +1921,7 @@ class MainStackTrace(ErrorLevel, pt.MainStackTrace):
         return self.stack_trace
 
 
-@dataclass
-class SystemErrorRetrievingModTime(ErrorLevel, pt.SystemErrorRetrievingModTime):
-    def code(self):
-        return "Z004"
-
-    def message(self) -> str:
-        return f"Error retrieving modification time for file {self.path}"
+# Skipped Z004
 
 
 @dataclass
@@ -2270,7 +2312,7 @@ class ListCmdOut(InfoLevel, pt.ListCmdOut):
 
 
 # The Note event provides a way to log messages which aren't likely to be useful as more structured events.
-# For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
+# For console formatting text like empty lines and separator bars, use the Formatting event instead.
 @dataclass
 class Note(InfoLevel, pt.Note):
     def code(self):

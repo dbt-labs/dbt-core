@@ -25,6 +25,7 @@ class IndirectSelection(StrEnum):
     Eager = "eager"
     Cautious = "cautious"
     Buildable = "buildable"
+    Empty = "empty"
 
 
 def _probably_path(value: str):

@@ -4,7 +4,7 @@ from dataclasses import field
 from datetime import datetime
 import os
 import traceback
-from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
+from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple, Set
 from itertools import chain
 import time
 from dbt.events.base_types import EventLevel
@@ -37,17 +37,22 @@ from dbt.events.types import (
     Note,
 )
 from dbt.logger import DbtProcessState
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.clients.system import make_directory, write_file
+from dbt.clients.system import make_directory, path_exists, read_json, write_file
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider
 from dbt.contracts.files import FileHash, ParseFileType, SchemaSourceFile
-from dbt.parser.read_files import read_files, load_source_file
+from dbt.parser.read_files import (
+    ReadFilesFromFileSystem,
+    load_source_file,
+    FileDiff,
+    ReadFilesFromDiff,
+)
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
     Manifest,
@@ -153,9 +158,11 @@ class ManifestLoader:
         root_project: RuntimeConfig,
         all_projects: Mapping[str, Project],
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
+        file_diff: Optional[FileDiff] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
+        self.file_diff = file_diff
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
@@ -190,6 +197,7 @@ class ManifestLoader:
         cls,
         config: RuntimeConfig,
         *,
+        file_diff: Optional[FileDiff] = None,
         reset: bool = False,
         write_perf_info=False,
     ) -> Manifest:
@@ -202,12 +210,19 @@ class ManifestLoader:
             adapter.clear_macro_manifest()
         macro_hook = adapter.connections.set_query_header
 
+        # Hack to test file_diffs
+        if os.environ.get("DBT_PP_FILE_DIFF_TEST"):
+            file_diff_path = "file_diff.json"
+            if path_exists(file_diff_path):
+                file_diff_dct = read_json(file_diff_path)
+                file_diff = FileDiff.from_dict(file_diff_dct)
+
         with PARSING_STATE:  # set up logbook.Processor for parsing
             # Start performance counting
             start_load_all = time.perf_counter()
 
             projects = config.load_dependencies()
-            loader = cls(config, projects, macro_hook)
+            loader = cls(config, projects, macro_hook=macro_hook, file_diff=file_diff)
 
             manifest = loader.load()
 
@@ -229,17 +244,35 @@ class ManifestLoader:
 
     # This is where the main action happens
     def load(self):
-        # Read files creates a dictionary of projects to a dictionary
+        start_read_files = time.perf_counter()
+
+        # This updates the "files" dictionary in self.manifest, and creates
+        # the partial_parser_files dictionary (see read_files.py),
+        # which is a dictionary of projects to a dictionary
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
-        start_read_files = time.perf_counter()
-        project_parser_files = {}
-        saved_files = {}
-        if self.saved_manifest:
-            saved_files = self.saved_manifest.files
-        for project in self.all_projects.values():
-            read_files(project, self.manifest.files, project_parser_files, saved_files)
-        orig_project_parser_files = project_parser_files
+        saved_files = self.saved_manifest.files if self.saved_manifest else {}
+        if self.file_diff:
+            # We're getting files from a file diff
+            file_reader = ReadFilesFromDiff(
+                all_projects=self.all_projects,
+                files=self.manifest.files,
+                saved_files=saved_files,
+                root_project_name=self.root_project.project_name,
+                file_diff=self.file_diff,
+            )
+        else:
+            # We're getting files from the file system
+            file_reader = ReadFilesFromFileSystem(
+                all_projects=self.all_projects,
+                files=self.manifest.files,
+                saved_files=saved_files,
+            )
+
+        # Set the files in the manifest and save the project_parser_files
+        file_reader.read_files()
+        self.manifest.files = file_reader.files
+        project_parser_files = orig_project_parser_files = file_reader.project_parser_files
         self._perf_info.path_count = len(self.manifest.files)
         self._perf_info.read_files_elapsed = time.perf_counter() - start_read_files
 
@@ -253,6 +286,8 @@ class ManifestLoader:
             else:
                 # create child_map and parent_map
                 self.saved_manifest.build_parent_and_child_maps()
+                # create group_map
+                self.saved_manifest.build_group_map()
                 # files are different, we need to create a new set of
                 # project_parser_files.
                 try:
@@ -396,6 +431,7 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.check_valid_group_config()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -705,12 +741,8 @@ class ManifestLoader:
             mli._project_index[project.project_name] = project_info
         return mli
 
-    # TODO: this should be calculated per-file based on the vars() calls made in
-    # parsing, so changing one var doesn't invalidate everything. also there should
-    # be something like that for env_var - currently changing env_vars in way that
-    # impact graph selection or configs will result in weird test failures.
-    # finally, we should hash the actual profile used, not just root project +
-    # profiles.yml + relevant args. While sufficient, it is definitely overkill.
+    # TODO: handle --vars in the same way we handle env_var
+    # https://github.com/dbt-labs/dbt-core/issues/6323
     def build_manifest_state_check(self):
         config = self.root_project
         all_projects = self.all_projects
@@ -986,6 +1018,26 @@ class ManifestLoader:
 
         self.manifest.rebuild_ref_lookup()
 
+    def check_valid_group_config(self):
+        manifest = self.manifest
+        group_names = {group.name for group in manifest.groups.values()}
+
+        for metric in manifest.metrics.values():
+            self.check_valid_group_config_node(metric, group_names)
+
+        for node in manifest.nodes.values():
+            self.check_valid_group_config_node(node, group_names)
+
+    def check_valid_group_config_node(
+        self, groupable_node: Union[Metric, ManifestNode], valid_group_names: Set[str]
+    ):
+        groupable_node_group = groupable_node.group
+        if groupable_node_group and groupable_node_group not in valid_group_names:
+            raise dbt.exceptions.ParsingError(
+                f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
+                node=groupable_node,
+            )
+
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
@@ -1176,6 +1228,16 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            # Exposures do not have a group and so can never reference private models
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=exposure.unique_id,
+                ref_unique_id=target_model.unique_id,
+                group=dbt.utils.cast_to_str(target_model.group),
+            )
 
         target_model_id = target_model.unique_id
 
@@ -1219,6 +1281,16 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 should_warn_if_disabled=False,
             )
             continue
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not metric.group or metric.group != target_model.group:
+                raise dbt.exceptions.DbtReferenceError(
+                    unique_id=metric.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=dbt.utils.cast_to_str(target_model.group),
+                )
 
         target_model_id = target_model.unique_id
 
@@ -1264,7 +1336,7 @@ def _process_metrics_for_node(
             invalid_target_fail_unless_test(
                 node=node,
                 target_name=target_metric_name,
-                target_kind="source",
+                target_kind="metric",
                 target_package=target_metric_package,
                 disabled=(isinstance(target_metric, Disabled)),
             )
@@ -1315,6 +1387,18 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 should_warn_if_disabled=False,
             )
             continue
+
+        # Handle references to models that are private
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not node.group or node.group != target_model.group:
+                raise dbt.exceptions.DbtReferenceError(
+                    unique_id=node.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=dbt.utils.cast_to_str(target_model.group),
+                )
 
         target_model_id = target_model.unique_id
 

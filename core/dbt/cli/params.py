@@ -6,13 +6,6 @@ from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
-# TODO:  Rename this to meet naming conventions (the word "send" is redundant)
-send_anonymous_usage_stats = click.option(
-    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
-    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
-    help="Send anonymous usage stats to dbt Labs.",
-    default=True,
-)
 
 args = click.option(
     "--args",
@@ -34,10 +27,17 @@ cache_selected_only = click.option(
     help="Pre cache database objects relevant to selected resource only.",
 )
 
+introspect = click.option(
+    "--introspect/--no-introspect",
+    envvar="DBT_INTROSPECT",
+    help="Whether to scaffold introspective queries as part of compilation",
+    default=True,
+)
+
 compile_docs = click.option(
     "--compile/--no-compile",
     envvar=None,
-    help="Wether or not to run 'dbt compile' as part of docs generation",
+    help="Whether or not to run 'dbt compile' as part of docs generation",
     default=True,
 )
 
@@ -107,7 +107,7 @@ indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",
     help="Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.",
-    type=click.Choice(["eager", "cautious", "buildable"], case_sensitive=False),
+    type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
 )
 
@@ -121,8 +121,32 @@ log_format = click.option(
     "--log-format",
     envvar="DBT_LOG_FORMAT",
     help="Specify the log format, overriding the command's default.",
-    type=click.Choice(["text", "json", "default"], case_sensitive=False),
+    type=click.Choice(["text", "debug", "json", "default"], case_sensitive=False),
     default="default",
+)
+
+log_format_file = click.option(
+    "--log-format-file",
+    envvar="DBT_LOG_FORMAT_FILE",
+    help="Specify the file log format, overriding the command's default and the value of --log-format.",
+    type=click.Choice(["text", "debug", "json", "default"], case_sensitive=False),
+    default="debug",
+)
+
+log_level = click.option(
+    "--log-level",
+    envvar="DBT_LOG_LEVEL",
+    help="Specify the minimum severity of events that are logged.",
+    type=click.Choice(["debug", "info", "warn", "error", "none"], case_sensitive=False),
+    default="info",
+)
+
+log_level_file = click.option(
+    "--log-level-file",
+    envvar="DBT_LOG_LEVEL_FILE",
+    help="Specify the minimum severity of events that are logged to file, overriding the value of --log-level-file.",
+    type=click.Choice(["debug", "info", "warn", "error", "none"], case_sensitive=False),
+    default="debug",
 )
 
 log_path = click.option(
@@ -148,7 +172,15 @@ output = click.option(
 )
 
 output_keys = click.option(
-    "--output-keys", envvar=None, help="TODO: No current help text", type=click.STRING
+    "--output-keys",
+    envvar=None,
+    help=(
+        "Space-delimited listing of node properties to include as custom keys for JSON output "
+        "(e.g. `--output json --output-keys name resource_type description`)"
+    ),
+    type=list,
+    cls=MultiOption,
+    default=[],
 )
 
 output_path = click.option(
@@ -182,15 +214,21 @@ port = click.option(
     type=click.INT,
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `NO_PRINT` and used the env var `DBT_NO_PRINT`.
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
+# envvar was previously named DBT_NO_PRINT
 print = click.option(
     "--print/--no-print",
     envvar="DBT_PRINT",
     help="Output all {{ print() }} macro calls.",
     default=True,
+)
+
+deprecated_print = click.option(
+    "--deprecated-print/--deprecated-no-print",
+    envvar="DBT_NO_PRINT",
+    help="Internal flag for deprecating old env var.",
+    default=True,
+    hidden=True,
+    callback=lambda ctx, param, value: not value,
 )
 
 printer_width = click.option(
@@ -226,7 +264,7 @@ profiles_dir_exists_false = click.option(
 
 project_dir = click.option(
     "--project-dir",
-    envvar=None,
+    envvar="DBT_PROJECT_DIR",
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
     default=default_project_dir,
     type=click.Path(exists=True),
@@ -279,6 +317,8 @@ select_attrs = {
     "type": tuple,
 }
 
+inline = click.option("--inline", envvar=None, help="Pass SQL inline to dbt compile and preview")
+
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
@@ -289,6 +329,13 @@ select = click.option(*select_decls, *model_decls, **select_attrs)
 
 selector = click.option(
     "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
+)
+
+send_anonymous_usage_stats = click.option(
+    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
+    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
+    help="Send anonymous usage stats to dbt Labs.",
+    default=True,
 )
 
 show = click.option(
@@ -365,7 +412,14 @@ threads = click.option(
 use_colors = click.option(
     "--use-colors/--no-use-colors",
     envvar="DBT_USE_COLORS",
-    help="Output is colorized by default and may also be set in a profile or at the command line.",
+    help="Specify whether log output is colorized.",
+    default=True,
+)
+
+use_colors_file = click.option(
+    "--use-colors-file/--no-use-colors-file",
+    envvar="DBT_USE_COLORS_FILE",
+    help="Specify whether log file output is colorized overriding --use-colors/--no-use-colors.",
     default=True,
 )
 

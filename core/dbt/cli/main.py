@@ -58,16 +58,6 @@ class dbtRunner:
             raise dbtUsageException(e.message)
 
 
-def handle(args):
-    res, _ = handle_and_check(args)
-    return res
-
-
-def handle_and_check(args):
-    dbt = dbtRunner()
-    return dbt.invoke(args)
-
-
 # dbt
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -83,16 +73,21 @@ def handle_and_check(args):
 @p.fail_fast
 @p.log_cache_events
 @p.log_format
+@p.log_format_file
+@p.log_level
+@p.log_level_file
 @p.log_path
 @p.macro_debugging
 @p.partial_parse
 @p.print
+@p.deprecated_print
 @p.printer_width
 @p.quiet
 @p.record_timing_info
 @p.single_threaded
 @p.static_parser
 @p.use_colors
+@p.use_colors_file
 @p.use_experimental_parser
 @p.version
 @p.version_check
@@ -244,12 +239,15 @@ def docs_serve(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.full_refresh
+@p.indirect_selection
+@p.introspect
 @p.parse_only
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
 @p.selector
+@p.inline
 @p.state
 @p.target
 @p.target_path

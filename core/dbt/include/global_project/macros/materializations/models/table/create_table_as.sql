@@ -25,6 +25,10 @@
 
   create {% if temporary: -%}temporary{%- endif %} table
     {{ relation.include(database=(not temporary), schema=(not temporary)) }}
+    {% if config.get('contract', False) %}
+      {{ get_assert_columns_equivalent(sql) }}
+      {{ get_columns_spec_ddl() }}
+    {% endif %}
   as (
     {{ sql }}
   );

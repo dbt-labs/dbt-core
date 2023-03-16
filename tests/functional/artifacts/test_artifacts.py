@@ -199,9 +199,16 @@ select * from {{ ref('seed') }}
 ref_models__schema_yml = """
 version: 2
 
+groups:
+  - name: test_group
+    owner:
+      email: test_group@test.com
+
 models:
   - name: ephemeral_summary
     description: "{{ doc('ephemeral_summary') }}"
+    config:
+      group: test_group
     columns: &summary_columns
       - name: first_name
         description: "{{ doc('summary_first_name') }}"
@@ -354,7 +361,9 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "macros",
         "parent_map",
         "child_map",
+        "group_map",
         "metrics",
+        "groups",
         "docs",
         "metadata",
         "docs",
@@ -385,7 +394,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
             for unique_id, node in expected_manifest[key].items():
                 assert unique_id in manifest[key]
                 assert manifest[key][unique_id] == node, f"{unique_id} did not match"
-        else:  # ['docs', 'parent_map', 'child_map', 'selectors']
+        else:  # ['docs', 'parent_map', 'child_map', 'group_map', 'selectors']
             assert manifest[key] == expected_manifest[key]
 
 

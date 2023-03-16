@@ -20,6 +20,7 @@ from dbt.events.functions import (
 )
 from dbt.events.test_types import IntegrationTestDebug
 
+
 # =============================================================================
 # Test utilities
 #   run_dbt
@@ -160,6 +161,11 @@ def write_file(contents, *paths):
         fp.write(contents)
 
 
+def file_exists(*paths):
+    """Check if file exists at path"""
+    return os.path.exists(os.path.join(*paths))
+
+
 # Used in test utilities
 def read_file(*paths):
     contents = ""
@@ -190,6 +196,11 @@ def get_artifact(*paths):
     contents = read_file(*paths)
     dct = json.loads(contents)
     return dct
+
+
+def write_artifact(dct, *paths):
+    json_output = json.dumps(dct)
+    write_file(json_output, *paths)
 
 
 # For updating yaml config files
@@ -380,7 +391,6 @@ def check_relation_has_expected_schema(adapter, relation_name, expected_schema: 
 def check_relations_equal_with_relations(
     adapter: Adapter, relations: List, compare_snapshot_cols=False
 ):
-
     with get_connection(adapter):
         basis, compares = relations[0], relations[1:]
         # Skip columns starting with "dbt_" because we don't want to

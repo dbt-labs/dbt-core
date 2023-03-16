@@ -126,6 +126,7 @@ sample_values = [
     types.MetricAttributesRenamed(metric_name=""),
     types.ExposureNameDeprecation(exposure=""),
     types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
+    types.EnvironmentVariableRenamed(old_name="", new_name=""),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
@@ -172,6 +173,9 @@ sample_values = [
     types.HooksRunning(num_hooks=0, hook_type=""),
     types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
     # I - Project parsing ======================
+    types.InputFileDiffError(category="testing", file_id="my_file"),
+    types.InvalidValueForField(field_name="test", field_value="test"),
+    types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
     types.GenericTestFileParse(path=""),
     types.MacroFileParse(path=""),
@@ -293,6 +297,7 @@ sample_values = [
     types.NodeFinished(node_info=types.NodeInfo()),
     types.QueryCancelationUnsupported(type=""),
     types.ConcurrencyLine(num_threads=0, target_name=""),
+    types.CompiledNode(node_name="", compiled=""),
     types.WritingInjectedSQLForNode(node_info=types.NodeInfo()),
     types.NodeCompiling(node_info=types.NodeInfo()),
     types.NodeExecuting(node_info=types.NodeInfo()),
@@ -331,7 +336,6 @@ sample_values = [
     types.MainKeyboardInterrupt(),
     types.MainEncounteredError(exc=""),
     types.MainStackTrace(stack_trace=""),
-    types.SystemErrorRetrievingModTime(path=""),
     types.SystemCouldNotWrite(path="", reason="", exc=""),
     types.SystemExecutingCmd(cmd=[""]),
     types.SystemStdOut(bmsg=b""),
@@ -401,18 +405,31 @@ class TestEventJSONSerialization:
             assert type(event) != type
 
         # if we have everything we need to test, try to serialize everything
+        count = 0
         for event in sample_values:
             msg = msg_from_base_event(event)
+            print(f"--- msg: {msg.info.name}")
+            # Serialize to dictionary
             try:
                 msg_to_dict(msg)
             except Exception as e:
                 raise Exception(
                     f"{event} can not be converted to a dict. Originating exception: {e}"
                 )
+            # Serialize to json
             try:
                 msg_to_json(msg)
             except Exception as e:
                 raise Exception(f"{event} is not serializable to json. Originating exception: {e}")
+            # Serialize to binary
+            try:
+                bytes(msg)
+            except Exception as e:
+                raise Exception(
+                    f"{event} is not serializable to binary protobuf. Originating exception: {e}"
+                )
+            count += 1
+        print(f"--- Found {count} events")
 
 
 T = TypeVar("T")
