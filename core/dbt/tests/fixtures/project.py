@@ -177,11 +177,10 @@ def project_config_update():
 # Combines the project_config_update dictionary with project_config defaults to
 # produce a project_yml config and write it out as dbt_project.yml
 @pytest.fixture(scope="class")
-def dbt_project_yml(project_root, project_config_update, logs_dir):
+def dbt_project_yml(project_root, project_config_update):
     project_config = {
         "name": "test",
         "profile": "test",
-        "log-path": logs_dir,
     }
     if project_config_update:
         if isinstance(project_config_update, dict):
@@ -355,7 +354,10 @@ def project_files(project_root, models, macros, snapshots, properties, seeds, te
 # We have a separate logs dir for every test
 @pytest.fixture(scope="class")
 def logs_dir(request, prefix):
-    return os.path.join(request.config.rootdir, "logs", prefix)
+    dbt_log_dir = os.path.join(request.config.rootdir, "logs", prefix)
+    os.environ["DBT_LOG_PATH"] = str(dbt_log_dir)
+    yield dbt_log_dir
+    del os.environ["DBT_LOG_PATH"]
 
 
 # This fixture is for customizing tests that need overrides in adapter
@@ -379,7 +381,6 @@ class TestProjInfo:
         test_data_dir,
         test_schema,
         database,
-        logs_dir,
         test_config,
     ):
         self.project_root = project_root
@@ -390,7 +391,6 @@ class TestProjInfo:
         self.test_data_dir = test_data_dir
         self.test_schema = test_schema
         self.database = database
-        self.logs_dir = logs_dir
         self.test_config = test_config
         self.created_schemas = []
 
@@ -498,7 +498,6 @@ def project(
         test_data_dir=test_data_dir,
         test_schema=unique_schema,
         database=adapter.config.credentials.database,
-        logs_dir=logs_dir,
         test_config=test_config,
     )
     project.drop_test_schema()

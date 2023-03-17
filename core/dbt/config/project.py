@@ -298,7 +298,7 @@ class PartialProject(RenderComponents):
             raise DbtProjectError("Package dbt_project.yml must have a name!")
         return ProjectPackageMetadata(self.project_name, packages_config.packages)
 
-    def check_config_path(self, project_dict, deprecated_path, exp_path):
+    def check_config_path(self, project_dict, deprecated_path, exp_path=None, default=None):
         if deprecated_path in project_dict:
             if exp_path in project_dict:
                 msg = (
@@ -310,11 +310,20 @@ class PartialProject(RenderComponents):
                 raise DbtProjectError(
                     msg.format(deprecated_path=deprecated_path, exp_path=exp_path)
                 )
-            deprecations.warn(
-                f"project-config-{deprecated_path}",
-                deprecated_path=deprecated_path,
-                exp_path=exp_path,
-            )
+            # this field has been renamed
+            if exp_path:
+                deprecations.warn(
+                    f"project-config-{deprecated_path}",
+                    deprecated_path=deprecated_path,
+                    exp_path=exp_path,
+                )
+            # this field is no longer supported, but many projects may specify it with the default value
+            # if so, let's only raise this deprecation warning if they set a custom value
+            if not default or project_dict[deprecated_path] != default:
+                deprecations.warn(
+                    f"project-config-{deprecated_path}",
+                    deprecated_path=deprecated_path,
+                )
 
     def create_project(self, rendered: RenderComponents) -> "Project":
         unrendered = RenderComponents(
@@ -329,6 +338,8 @@ class PartialProject(RenderComponents):
 
         self.check_config_path(rendered.project_dict, "source-paths", "model-paths")
         self.check_config_path(rendered.project_dict, "data-paths", "seed-paths")
+        self.check_config_path(rendered.project_dict, "log-path", default="logs")
+        self.check_config_path(rendered.project_dict, "target-path", default="target")
 
         try:
             ProjectContract.validate(rendered.project_dict)

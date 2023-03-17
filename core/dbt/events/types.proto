@@ -305,7 +305,7 @@ message ConfigDataPathDeprecationMsg {
     ConfigDataPathDeprecation data = 2;
 }
 
-//D005
+// D005
 message AdapterDeprecationWarning {
     string old_name = 1;
     string new_name = 2;
@@ -316,7 +316,7 @@ message AdapterDeprecationWarningMsg {
     AdapterDeprecationWarning data = 2;
 }
 
-//D006
+// D006
 message MetricAttributesRenamed {
     string metric_name = 1;
 }
@@ -326,7 +326,7 @@ message MetricAttributesRenamedMsg {
     MetricAttributesRenamed data = 2;
 }
 
-//D007
+// D007
 message ExposureNameDeprecation {
     string exposure = 1;
 }
@@ -336,7 +336,7 @@ message ExposureNameDeprecationMsg {
     ExposureNameDeprecation data = 2;
 }
 
-//D008
+// D008
 message InternalDeprecation {
     string name = 1;
     string reason = 2;
@@ -349,7 +349,7 @@ message InternalDeprecationMsg {
     InternalDeprecation data = 2;
 }
 
-//D009
+// D009
 message EnvironmentVariableRenamed {
     string old_name = 1;
     string new_name = 2;
@@ -358,6 +358,26 @@ message EnvironmentVariableRenamed {
 message EnvironmentVariableRenamedMsg {
     EventInfo info = 1;
     EnvironmentVariableRenamed data = 2;
+}
+
+// D010
+message ConfigLogPathDeprecation {
+    string deprecated_path = 1;
+}
+
+message ConfigLogPathDeprecationMsg {
+    EventInfo info = 1;
+    ConfigLogPathDeprecation data = 2;
+}
+
+// D011
+message ConfigTargetPathDeprecation {
+    string deprecated_path = 1;
+}
+
+message ConfigTargetPathDeprecationMsg {
+    EventInfo info = 1;
+    ConfigTargetPathDeprecation data = 2;
 }
 
 // E - DB Adapter

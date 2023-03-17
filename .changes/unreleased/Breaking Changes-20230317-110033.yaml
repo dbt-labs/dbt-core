@@ -1,0 +1,9 @@
+kind: Breaking Changes
+body: Specifying "log-path" and "target-path" in "dbt_project.yml" is deprecated.
+  This functionality will be removed in a future version of dbt-core. If you need
+  to specify a custom path for logs or artifacts, please set via CLI flag or env var
+  instead.
+time: 2023-03-17T11:00:33.448472+01:00
+custom:
+  Author: jtcohen6
+  Issue: "6882"

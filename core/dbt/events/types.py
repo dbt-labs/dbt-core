@@ -408,6 +408,42 @@ class EnvironmentVariableRenamed(WarnLevel, pt.EnvironmentVariableRenamed):  # n
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+@dataclass
+class ConfigLogPathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
+    def code(self):
+        return "D010"
+
+    def message(self):
+        output = "logs"
+        cli_flag = "--log-path"
+        env_var = "DBT_LOG_PATH"
+        description = (
+            f"The `{self.deprecated_path}` config in `dbt_project.yml` has been deprecated, "
+            f"and will no longer be supported in a future version of dbt-core. "
+            f"If you wish to write dbt {output} to a custom directory, please use "
+            f"the {cli_flag} CLI flag or {env_var} env var instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+@dataclass
+class ConfigTargetPathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
+    def code(self):
+        return "D011"
+
+    def message(self):
+        output = "artifacts"
+        cli_flag = "--target-path"
+        env_var = "DBT_TARGET_PATH"
+        description = (
+            f"The `{self.deprecated_path}` config in `dbt_project.yml` has been deprecated, "
+            f"and will no longer be supported in a future version of dbt-core. "
+            f"If you wish to write dbt {output} to a custom directory, please use "
+            f"the {cli_flag} CLI flag or {env_var} env var instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
