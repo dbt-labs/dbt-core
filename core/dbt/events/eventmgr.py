@@ -149,7 +149,8 @@ class _TextLogger(_Logger):
             log_line = (
                 f"\n\n{separator} {msg.info.ts} | {self.event_manager.invocation_id} {separator}\n"
             )
-        ts: str = msg.info.ts.strftime("%H:%M:%S.%f")
+        # TODO: fix formatting her. ts: str = msg.info.ts.strftime("%H:%M:%S.%f")
+        ts: str = msg.info.ts
         scrubbed_msg: str = self.scrubber(msg.info.msg)  # type: ignore
         level = msg.info.level
         log_line += (
@@ -192,7 +193,7 @@ class EventManager:
         if os.environ.get("DBT_TEST_BINARY_SERIALIZATION"):
             print(f"--- {msg.info.name}")
             try:
-                bytes(msg)
+                msg.SerializeToString()
             except Exception as exc:
                 raise Exception(
                     f"{msg.info.name} is not serializable to binary. Originating exception: {exc}, {traceback.format_exc()}"

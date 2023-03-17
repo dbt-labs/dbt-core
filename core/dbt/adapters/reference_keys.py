@@ -2,7 +2,6 @@
 
 from collections import namedtuple
 from typing import Any, Optional
-from dbt.events.proto_types import ReferenceKeyMsg
 
 
 _ReferenceKey = namedtuple("_ReferenceKey", "database schema identifier")
@@ -30,11 +29,9 @@ def _make_ref_key(relation: Any) -> _ReferenceKey:
     )
 
 
-def _make_ref_key_msg(relation: Any):
-    return _make_msg_from_ref_key(_make_ref_key(relation))
-
-
-def _make_msg_from_ref_key(ref_key: _ReferenceKey) -> ReferenceKeyMsg:
-    return ReferenceKeyMsg(
-        database=ref_key.database, schema=ref_key.schema, identifier=ref_key.identifier
-    )
+def _make_ref_key_dict(relation: Any):
+    return {
+        "database": relation.database,
+        "schema": relation.schema,
+        "identifier": relation.identifier,
+    }

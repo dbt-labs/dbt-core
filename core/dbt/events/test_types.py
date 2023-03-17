@@ -1,16 +1,12 @@
-from dataclasses import dataclass
 from dbt.events.types import InfoLevel, DebugLevel, WarnLevel, ErrorLevel
 from dbt.events.base_types import NoFile
-from dbt.events import proto_types as pl
-from dbt.events.proto_types import EventInfo  # noqa
 
 
 # Keeping log messages for testing separate since they are used for debugging.
 # Reuse the existing messages when adding logs to tests.
 
 
-@dataclass
-class IntegrationTestInfo(InfoLevel, NoFile, pl.IntegrationTestInfo):
+class IntegrationTestInfo(InfoLevel, NoFile):
     def code(self):
         return "T001"
 
@@ -18,8 +14,7 @@ class IntegrationTestInfo(InfoLevel, NoFile, pl.IntegrationTestInfo):
         return f"Integration Test: {self.msg}"
 
 
-@dataclass
-class IntegrationTestDebug(DebugLevel, NoFile, pl.IntegrationTestDebug):
+class IntegrationTestDebug(DebugLevel, NoFile):
     def code(self):
         return "T002"
 
@@ -27,8 +22,7 @@ class IntegrationTestDebug(DebugLevel, NoFile, pl.IntegrationTestDebug):
         return f"Integration Test: {self.msg}"
 
 
-@dataclass
-class IntegrationTestWarn(WarnLevel, NoFile, pl.IntegrationTestWarn):
+class IntegrationTestWarn(WarnLevel, NoFile):
     def code(self):
         return "T003"
 
@@ -36,8 +30,7 @@ class IntegrationTestWarn(WarnLevel, NoFile, pl.IntegrationTestWarn):
         return f"Integration Test: {self.msg}"
 
 
-@dataclass
-class IntegrationTestError(ErrorLevel, NoFile, pl.IntegrationTestError):
+class IntegrationTestError(ErrorLevel, NoFile):
     def code(self):
         return "T004"
 
@@ -45,8 +38,7 @@ class IntegrationTestError(ErrorLevel, NoFile, pl.IntegrationTestError):
         return f"Integration Test: {self.msg}"
 
 
-@dataclass
-class IntegrationTestException(ErrorLevel, NoFile, pl.IntegrationTestException):
+class IntegrationTestException(ErrorLevel, NoFile):
     def code(self):
         return "T005"
 
@@ -54,8 +46,7 @@ class IntegrationTestException(ErrorLevel, NoFile, pl.IntegrationTestException):
         return f"Integration Test: {self.msg}"
 
 
-@dataclass
-class UnitTestInfo(InfoLevel, NoFile, pl.UnitTestInfo):
+class UnitTestInfo(InfoLevel, NoFile):
     def code(self):
         return "T006"
 

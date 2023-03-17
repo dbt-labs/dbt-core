@@ -10,10 +10,9 @@ from dbt.contracts.util import (
 from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.types import TimingInfoCollected
-from dbt.events.proto_types import RunResultMsg, TimingInfoMsg
 from dbt.events.contextvars import get_node_info
 from dbt.logger import TimingProcessor
-from dbt.utils import lowercase, cast_to_str, cast_to_int, cast_dict_to_dict_of_strings
+from dbt.utils import lowercase, cast_to_str, cast_to_int
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 import agate
@@ -45,11 +44,13 @@ class TimingInfo(dbtClassMixin):
     def end(self):
         self.completed_at = datetime.utcnow()
 
-    def to_msg(self):
-        timsg = TimingInfoMsg(
-            name=self.name, started_at=self.started_at, completed_at=self.completed_at
-        )
-        return timsg
+    def to_msg_dict(self):
+        msg_dict = {"name": self.name}
+        if self.started_at:
+            msg_dict["started_at"] = self.started_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if self.completed_at:
+            msg_dict["completed_at"] = self.completed_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return msg_dict
 
 
 # This is a context manager
@@ -67,7 +68,7 @@ class collect_timing_info:
         with TimingProcessor(self.timing_info):
             fire_event(
                 TimingInfoCollected(
-                    timing_info=self.timing_info.to_msg(), node_info=get_node_info()
+                    timing_info=self.timing_info.to_msg_dict(), node_info=get_node_info()
                 )
             )
 
@@ -129,16 +130,17 @@ class BaseResult(dbtClassMixin):
             data["failures"] = None
         return data
 
-    def to_msg(self):
-        msg = RunResultMsg()
-        msg.status = str(self.status)
-        msg.message = cast_to_str(self.message)
-        msg.thread = self.thread_id
-        msg.execution_time = self.execution_time
-        msg.num_failures = cast_to_int(self.failures)
-        msg.timing_info = [ti.to_msg() for ti in self.timing]
-        msg.adapter_response = cast_dict_to_dict_of_strings(self.adapter_response)
-        return msg
+    def to_msg_dict(self):
+        msg_dict = {
+            "status": str(self.status),
+            "message": cast_to_str(self.message),
+            "thread": self.thread_id,
+            "execution_time": self.execution_time,
+            "num_failures": cast_to_int(self.failures),
+            "timing_info": [ti.to_msg_dict() for ti in self.timing],
+            "adapter_response": self.adapter_response,
+        }
+        return msg_dict
 
 
 @dataclass

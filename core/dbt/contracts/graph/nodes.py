@@ -35,7 +35,6 @@ from dbt.contracts.graph.unparsed import (
     MetricTime,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
-from dbt.events.proto_types import NodeInfo
 from dbt.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, InvalidAccessTypeError
 from dbt.events.types import (
@@ -48,7 +47,6 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
-from dbt.utils import cast_dict_to_dict_of_strings
 
 
 from .model_config import (
@@ -212,8 +210,6 @@ class NodeInfoMixin:
 
     @property
     def node_info(self):
-        meta = getattr(self, "meta", {})
-        meta_stringified = cast_dict_to_dict_of_strings(meta)
         node_info = {
             "node_path": getattr(self, "path", None),
             "node_name": getattr(self, "name", None),
@@ -223,10 +219,9 @@ class NodeInfoMixin:
             "node_status": str(self._event_status.get("node_status")),
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
-            "meta": meta_stringified,
+            "meta": getattr(self, "meta", {}),
         }
-        node_info_msg = NodeInfo(**node_info)
-        return node_info_msg
+        return node_info
 
     def update_event_status(self, **kwargs):
         for k, v in kwargs.items():

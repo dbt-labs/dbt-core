@@ -1,4 +1,3 @@
-import betterproto
 from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
@@ -12,6 +11,7 @@ import os
 import sys
 from typing import Callable, Dict, Optional, TextIO
 import uuid
+from google.protobuf.json_format import MessageToDict
 
 
 LOG_VERSION = 3
@@ -203,8 +203,10 @@ def msg_to_json(msg: EventMsg) -> str:
 def msg_to_dict(msg: EventMsg) -> dict:
     msg_dict = dict()
     try:
-        msg_dict = msg.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
-    except AttributeError as exc:
+        msg_dict = MessageToDict(
+            msg, preserving_proto_field_name=True, including_default_value_fields=True  # type: ignore
+        )
+    except Exception as exc:
         event_type = type(msg).__name__
         raise Exception(f"type {event_type} is not serializable. {str(exc)}")
     # We don't want an empty NodeInfo in output

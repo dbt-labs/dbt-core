@@ -1,10 +1,11 @@
-from dataclasses import dataclass
 from enum import Enum
 import os
 import threading
 from datetime import datetime
-import dbt.events.proto_types as pt
+from dbt.events import types_pb2
 import sys
+from google.protobuf.json_format import ParseDict, MessageToDict, MessageToJson
+from google.protobuf.message import Message
 
 if sys.version_info >= (3, 8):
     from typing import Protocol
@@ -61,24 +62,42 @@ class EventLevel(str, Enum):
     ERROR = "error"
 
 
-@dataclass
 class BaseEvent:
     """BaseEvent for proto message generated python events"""
 
-    #   def __post_init__(self):
-    #       super().__post_init__()
-    #       if not self.info.level:
-    #           self.info.level = self.level_tag()
-    #       assert self.info.level in ["info", "warn", "error", "debug", "test"]
-    #       if not hasattr(self.info, "msg") or not self.info.msg:
-    #           self.info.msg = self.message()
-    #       self.info.invocation_id = get_invocation_id()
-    #       self.info.extra = get_global_metadata_vars()
-    #       self.info.ts = datetime.utcnow()
-    #       self.info.pid = get_pid()
-    #       self.info.thread = get_thread_name()
-    #       self.info.code = self.code()
-    #       self.info.name = type(self).__name__
+    def __init__(self, *args, **kwargs):
+        class_name = type(self).__name__
+        msg_cls = getattr(types_pb2, class_name)
+        if "base_msg" in kwargs:
+            kwargs["base_msg"] = str(kwargs["base_msg"])
+        if "msg" in kwargs:
+            kwargs["msg"] = str(kwargs["msg"])
+        try:
+            self.pb_msg = ParseDict(kwargs, msg_cls())
+        except Exception:
+            raise Exception(f"[{class_name}]: Unable to parse dict {kwargs}")
+
+    def __setattr__(self, key, value):
+        if key == "pb_msg":
+            super().__setattr__(key, value)
+        else:
+            super().__getattribute__("pb_msg").__setattr__(key, value)
+
+    def __getattr__(self, key):
+        if key == "pb_msg":
+            return super().__getattribute__(key)
+        else:
+            return super().__getattribute__("pb_msg").__getattribute__(key)
+
+    def to_dict(self):
+        return MessageToDict(
+            self.pb_msg, preserving_proto_field_name=True, including_default_value_fields=True
+        )
+
+    def to_json(self):
+        return MessageToJson(
+            self.pb_msg, preserving_proto_field_name=True, including_default_valud_fields=True
+        )
 
     def level_tag(self) -> EventLevel:
         return EventLevel.DEBUG
@@ -90,42 +109,47 @@ class BaseEvent:
         raise Exception("code() not implemented for event")
 
 
+class EventInfo(Protocol):
+    level: str
+    name: str
+    ts: str
+
+
 class EventMsg(Protocol):
-    info: pt.EventInfo
-    data: BaseEvent
+    info: EventInfo
+    data: Message
 
 
 def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
 
     msg_class_name = f"{type(event).__name__}Msg"
-    msg_cls = getattr(pt, msg_class_name)
+    msg_cls = getattr(types_pb2, msg_class_name)
 
     # level in EventInfo must be a string, not an EventLevel
     msg_level: str = level.value if level else event.level_tag().value
     assert msg_level is not None
-    event_info = pt.EventInfo(
-        level=msg_level,
-        msg=event.message(),
-        invocation_id=get_invocation_id(),
-        extra=get_global_metadata_vars(),
-        ts=datetime.utcnow(),
-        pid=get_pid(),
-        thread=get_thread_name(),
-        code=event.code(),
-        name=type(event).__name__,
-    )
-    new_event = msg_cls(data=event, info=event_info)
+    event_info = {
+        "level": msg_level,
+        "msg": event.message(),
+        "invocation_id": get_invocation_id(),
+        "extra": get_global_metadata_vars(),
+        "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pid": get_pid(),
+        "thread": get_thread_name(),
+        "code": event.code(),
+        "name": type(event).__name__,
+    }
+    new_event = ParseDict({"info": event_info}, msg_cls())
+    new_event.data.CopyFrom(event.pb_msg)
     return new_event
 
 
 # DynamicLevel requires that the level be supplied on the
 # event construction call using the "info" function from functions.py
-@dataclass  # type: ignore[misc]
 class DynamicLevel(BaseEvent):
     pass
 
 
-@dataclass
 class TestLevel(BaseEvent):
     __test__ = False
 
@@ -133,45 +157,24 @@ class TestLevel(BaseEvent):
         return EventLevel.TEST
 
 
-@dataclass  # type: ignore[misc]
 class DebugLevel(BaseEvent):
     def level_tag(self) -> EventLevel:
         return EventLevel.DEBUG
 
 
-@dataclass  # type: ignore[misc]
 class InfoLevel(BaseEvent):
     def level_tag(self) -> EventLevel:
         return EventLevel.INFO
 
 
-@dataclass  # type: ignore[misc]
 class WarnLevel(BaseEvent):
     def level_tag(self) -> EventLevel:
         return EventLevel.WARN
 
 
-@dataclass  # type: ignore[misc]
 class ErrorLevel(BaseEvent):
     def level_tag(self) -> EventLevel:
         return EventLevel.ERROR
-
-
-# Included to ensure classes with str-type message members are initialized correctly.
-@dataclass  # type: ignore[misc]
-class AdapterEventStringFunctor:
-    def __post_init__(self):
-        super().__post_init__()
-        if not isinstance(self.base_msg, str):
-            self.base_msg = str(self.base_msg)
-
-
-@dataclass  # type: ignore[misc]
-class EventStringFunctor:
-    def __post_init__(self):
-        super().__post_init__()
-        if not isinstance(self.msg, str):
-            self.msg = str(self.msg)
 
 
 # prevents an event from going to the file
