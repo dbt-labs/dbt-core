@@ -435,6 +435,7 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
     )
+    delimiter: str = ","
     full_refresh: Optional[bool] = None
     # 'unique_key' doesn't use 'Optional' because typing.get_type_hints was
     # sometimes getting the Union order wrong, causing serialization failures.
