@@ -317,7 +317,7 @@ class TestProfileEnvVars:
             "dbname": "dbt",
         }
 
-    def test_profile_env_vars(self, project):
+    def test_profile_env_vars(self, project, logs_dir):
 
         # Initial run
         os.environ["ENV_VAR_USER"] = "root"
@@ -334,7 +334,7 @@ class TestProfileEnvVars:
         with pytest.raises(FailedToConnectError):
             run_dbt(["run"], expect_pass=False)
 
-        log_output = Path(project.logs_dir, "dbt.log").read_text()
+        log_output = Path(logs_dir, "dbt.log").read_text()
         assert "env vars used in profiles.yml have changed" in log_output
 
         manifest = get_manifest(project.project_root)
