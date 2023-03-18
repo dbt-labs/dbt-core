@@ -41,10 +41,14 @@ class AdapterLogger:
 
     # The default exc_info=True is what makes this method different
     def exception(self, msg, *args):
+        exc_info = str(traceback.format_exc())
         event = AdapterEventError(
-            name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
+            name=self.name,
+            base_msg=str(msg),
+            args=list(args),
+            node_info=get_node_info(),
+            exc_info=exc_info,
         )
-        event.exc_info = traceback.format_exc()
         fire_event(event)
 
     def critical(self, msg, *args):

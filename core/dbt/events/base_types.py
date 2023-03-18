@@ -68,6 +68,12 @@ class BaseEvent:
     def __init__(self, *args, **kwargs):
         class_name = type(self).__name__
         msg_cls = getattr(types_pb2, class_name)
+        if class_name == "Formatting" and len(args) > 0:
+            kwargs["msg"] = args[0]
+            args = ()
+        assert (
+            len(args) == 0
+        ), f"[{class_name}] Don't use positional arguments when constructing logging events"
         if "base_msg" in kwargs:
             kwargs["base_msg"] = str(kwargs["base_msg"])
         if "msg" in kwargs:
