@@ -29,6 +29,7 @@ permissions: read-all
 
 jobs:
   fetch-latest-branches:
+    if: github.repository == 'dbt-labs/dbt-core'
     runs-on: ubuntu-latest
 
     outputs:
@@ -54,6 +55,7 @@ jobs:
           echo "::notice $title::$message"
 
   kick-off-ci:
+    if: github.repository == 'dbt-labs/dbt-core'
     needs: [fetch-latest-branches]
     name: Kick-off CI
     runs-on: ubuntu-latest

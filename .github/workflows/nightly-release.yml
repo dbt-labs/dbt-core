@@ -30,6 +30,7 @@ env:
 
 jobs:
   aggregate-release-data:
+    if: github.repository == 'dbt-labs/dbt-core'
     runs-on: ubuntu-latest
 
     outputs:
@@ -82,6 +83,7 @@ jobs:
           echo "name=${{ env.RELEASE_BRANCH }}" >> $GITHUB_OUTPUT
 
   log-outputs-aggregate-release-data:
+    if: github.repository == 'dbt-labs/dbt-core'
     runs-on: ubuntu-latest
     needs: [aggregate-release-data]
 
@@ -93,6 +95,7 @@ jobs:
           echo release_branch: ${{ needs.aggregate-release-data.outputs.release_branch }}
 
   release-github-pypi:
+    if: github.repository == 'dbt-labs/dbt-core'
     needs: [aggregate-release-data]
 
     uses: ./.github/workflows/release.yml

@@ -9,4 +9,5 @@ permissions:
 
 jobs:
   stale:
+    if: github.repository == 'dbt-labs/dbt-core'
     uses: dbt-labs/actions/.github/workflows/stale-bot-matrix.yml@main
