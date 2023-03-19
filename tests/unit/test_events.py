@@ -2,7 +2,7 @@ import re
 from typing import TypeVar
 
 from dbt.contracts.results import TimingInfo
-from dbt.events import AdapterLogger, test_types, types
+from dbt.events import AdapterLogger, types
 from dbt.events.base_types import (
     BaseEvent,
     DebugLevel,
@@ -376,13 +376,6 @@ sample_values = [
     types.DebugCmdResult(),
     types.ListCmdOut(),
     types.Note(msg="This is a note."),
-    # T - tests ======================
-    test_types.IntegrationTestInfo(),
-    test_types.IntegrationTestDebug(),
-    test_types.IntegrationTestWarn(),
-    test_types.IntegrationTestError(),
-    test_types.IntegrationTestException(),
-    test_types.UnitTestInfo(),
 ]
 
 
