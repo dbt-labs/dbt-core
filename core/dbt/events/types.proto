@@ -625,7 +625,7 @@ message CacheActionMsg {
 
 // E031
 message CacheDumpGraph {
-    map<string, ListOfStrings> dump = 1;
+    map<string, string> dump = 1;
     string before_after = 2;
     string action = 3;
 }

@@ -75,8 +75,8 @@ class BaseEvent:
             kwargs["msg"] = str(kwargs["msg"])
         try:
             self.pb_msg = ParseDict(kwargs, msg_cls())
-        except Exception:
-            raise Exception(f"[{class_name}]: Unable to parse dict {kwargs}")
+        except Exception as exc:
+            raise Exception(f"[{class_name}]: Unable to parse dict {kwargs},\n exc: {exc}")
 
     def __setattr__(self, key, value):
         if key == "pb_msg":

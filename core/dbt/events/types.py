@@ -557,34 +557,43 @@ class CacheAction(DebugLevel):
     def code(self):
         return "E022"
 
+    def format_ref_key(self, ref_key):
+        return f"(database={ref_key.database}, schema={ref_key.schema}, identifier={ref_key.identifier})"
+
     def message(self):
+        ref_key = self.format_ref_key(self.ref_key)
+        ref_key_2 = self.format_ref_key(self.ref_key_2)
+        ref_key_3 = self.format_ref_key(self.ref_key_3)
+        ref_list = []
+        for rfk in self.ref_list:
+            ref_list.append(self.format_ref_key(rfk))
         if self.action == "add_link":
-            return f"adding link, {self.ref_key} references {self.ref_key_2}"
+            return f"adding link, {ref_key} references {ref_key_2}"
         elif self.action == "add_relation":
-            return f"adding relation: {str(self.ref_key)}"
+            return f"adding relation: {ref_key}"
         elif self.action == "drop_missing_relation":
-            return f"dropped a nonexistent relationship: {str(self.ref_key)}"
+            return f"dropped a nonexistent relationship: {ref_key}"
         elif self.action == "drop_cascade":
-            return f"drop {self.ref_key} is cascading to {self.ref_list}"
+            return f"drop {ref_key} is cascading to {ref_list}"
         elif self.action == "drop_relation":
-            return f"Dropping relation: {self.ref_key}"
+            return f"Dropping relation: {ref_key}"
         elif self.action == "update_reference":
             return (
-                f"updated reference from {self.ref_key} -> {self.ref_key_3} to "
-                f"{self.ref_key_2} -> {self.ref_key_3}"
+                f"updated reference from {ref_key} -> {ref_key_3} to "
+                f"{ref_key_2} -> {ref_key_3}"
             )
         elif self.action == "temporary_relation":
-            return f"old key {self.ref_key} not found in self.relations, assuming temporary"
+            return f"old key {ref_key} not found in self.relations, assuming temporary"
         elif self.action == "rename_relation":
-            return f"Renaming relation {self.ref_key} to {self.ref_key_2}"
+            return f"Renaming relation {ref_key} to {ref_key_2}"
         elif self.action == "uncached_relation":
             return (
-                f"{self.ref_key_2} references {str(self.ref_key)} "
+                f"{ref_key_2} references {ref_key} "
                 f"but {self.ref_key.database}.{self.ref_key.schema}"
                 "is not in the cache, skipping assumed external relation"
             )
         else:
-            return f"{self.ref_key}"
+            return ref_key
 
 
 # Skipping E023, E024, E025, E026, E027, E028, E029, E030
@@ -595,7 +604,7 @@ class CacheDumpGraph(DebugLevel):
         return "E031"
 
     def message(self) -> str:
-        return f"{self.before_after} {self.action} : {self.dump}"
+        return f"dump {self.before_after} {self.action} : {self.dump}"
 
 
 # Skipping E032, E033, E034
