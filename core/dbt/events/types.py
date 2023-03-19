@@ -2,7 +2,6 @@ from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
     DynamicLevel,
-    NoFile,
     DebugLevel,
     InfoLevel,
     WarnLevel,
@@ -1831,7 +1830,7 @@ class LogDebugStackTrace(DebugLevel):  # noqa
 # may have removed the log directory.
 
 
-class CheckCleanPath(InfoLevel, NoFile):
+class CheckCleanPath(InfoLevel):
     def code(self):
         return "Z012"
 
@@ -1839,7 +1838,7 @@ class CheckCleanPath(InfoLevel, NoFile):
         return f"Checking {self.path}/*"
 
 
-class ConfirmCleanPath(InfoLevel, NoFile):
+class ConfirmCleanPath(InfoLevel):
     def code(self):
         return "Z013"
 
@@ -1847,7 +1846,7 @@ class ConfirmCleanPath(InfoLevel, NoFile):
         return f"Cleaned {self.path}/*"
 
 
-class ProtectedCleanPath(InfoLevel, NoFile):
+class ProtectedCleanPath(InfoLevel):
     def code(self):
         return "Z014"
 
@@ -1855,7 +1854,7 @@ class ProtectedCleanPath(InfoLevel, NoFile):
         return f"ERROR: not cleaning {self.path}/* because it is protected"
 
 
-class FinishedCleanPaths(InfoLevel, NoFile):
+class FinishedCleanPaths(InfoLevel):
     def code(self):
         return "Z015"
 

@@ -1,12 +1,11 @@
 from dbt.events.types import InfoLevel, DebugLevel, WarnLevel, ErrorLevel
-from dbt.events.base_types import NoFile
 
 
 # Keeping log messages for testing separate since they are used for debugging.
 # Reuse the existing messages when adding logs to tests.
 
 
-class IntegrationTestInfo(InfoLevel, NoFile):
+class IntegrationTestInfo(InfoLevel):
     def code(self):
         return "T001"
 
@@ -14,7 +13,7 @@ class IntegrationTestInfo(InfoLevel, NoFile):
         return f"Integration Test: {self.msg}"
 
 
-class IntegrationTestDebug(DebugLevel, NoFile):
+class IntegrationTestDebug(DebugLevel):
     def code(self):
         return "T002"
 
@@ -22,7 +21,7 @@ class IntegrationTestDebug(DebugLevel, NoFile):
         return f"Integration Test: {self.msg}"
 
 
-class IntegrationTestWarn(WarnLevel, NoFile):
+class IntegrationTestWarn(WarnLevel):
     def code(self):
         return "T003"
 
@@ -30,7 +29,7 @@ class IntegrationTestWarn(WarnLevel, NoFile):
         return f"Integration Test: {self.msg}"
 
 
-class IntegrationTestError(ErrorLevel, NoFile):
+class IntegrationTestError(ErrorLevel):
     def code(self):
         return "T004"
 
@@ -38,7 +37,7 @@ class IntegrationTestError(ErrorLevel, NoFile):
         return f"Integration Test: {self.msg}"
 
 
-class IntegrationTestException(ErrorLevel, NoFile):
+class IntegrationTestException(ErrorLevel):
     def code(self):
         return "T005"
 
@@ -46,7 +45,7 @@ class IntegrationTestException(ErrorLevel, NoFile):
         return f"Integration Test: {self.msg}"
 
 
-class UnitTestInfo(InfoLevel, NoFile):
+class UnitTestInfo(InfoLevel):
     def code(self):
         return "T006"
 

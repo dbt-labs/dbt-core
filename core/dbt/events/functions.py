@@ -1,5 +1,5 @@
 from dbt.constants import METADATA_ENV_PREFIX
-from dbt.events.base_types import BaseEvent, EventLevel, NoFile, NoStdOut, EventMsg
+from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
@@ -16,6 +16,8 @@ from google.protobuf.json_format import MessageToDict
 
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
+
+nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
 
 
 def setup_event_logger(flags) -> None:
@@ -105,8 +107,7 @@ def _stdout_filter(
     msg: EventMsg,
 ) -> bool:
     return (
-        not isinstance(msg.data, NoStdOut)
-        and (msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events)
+        (msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events)
         and (EventLevel(msg.info.level) != EventLevel.DEBUG or debug_mode)
         and (EventLevel(msg.info.level) == EventLevel.ERROR or not quiet_mode)
         and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
@@ -129,7 +130,7 @@ def _get_logfile_config(
 
 def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventMsg) -> bool:
     return (
-        not isinstance(msg.data, NoFile)
+        msg.info.code not in nofile_codes
         and not (msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events)
         and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
     )

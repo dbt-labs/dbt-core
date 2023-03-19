@@ -114,6 +114,7 @@ class EventInfo(Protocol):
     level: str
     name: str
     ts: str
+    code: str
 
 
 class EventMsg(Protocol):
@@ -176,15 +177,3 @@ class WarnLevel(BaseEvent):
 class ErrorLevel(BaseEvent):
     def level_tag(self) -> EventLevel:
         return EventLevel.ERROR
-
-
-# prevents an event from going to the file
-# This should rarely be used in core code. It is currently
-# only used in integration tests and for the 'clean' command.
-class NoFile:
-    pass
-
-
-# prevents an event from going to stdout
-class NoStdOut:
-    pass
