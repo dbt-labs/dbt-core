@@ -139,7 +139,7 @@ def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
         "msg": event.message(),
         "invocation_id": get_invocation_id(),
         "extra": get_global_metadata_vars(),
-        "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "pid": get_pid(),
         "thread": get_thread_name(),
         "code": event.code(),

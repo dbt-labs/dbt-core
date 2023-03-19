@@ -144,13 +144,10 @@ class _TextLogger(_Logger):
         log_line: str = ""
         # Create a separator if this is the beginning of an invocation
         # TODO: This is an ugly hack, get rid of it if we can
+        ts: str = timestamp_to_datetime_string(msg.info.ts)
         if msg.info.name == "MainReportVersion":
             separator = 30 * "="
-            log_line = (
-                f"\n\n{separator} {msg.info.ts} | {self.event_manager.invocation_id} {separator}\n"
-            )
-        # TODO: fix formatting her. ts: str = msg.info.ts.strftime("%H:%M:%S.%f")
-        ts: str = msg.info.ts
+            log_line = f"\n\n{separator} {ts} | {self.event_manager.invocation_id} {separator}\n"
         scrubbed_msg: str = self.scrubber(msg.info.msg)  # type: ignore
         level = msg.info.level
         log_line += (
@@ -218,3 +215,8 @@ class EventManager:
     def flush(self):
         for logger in self.loggers:
             logger.flush()
+
+
+def timestamp_to_datetime_string(ts):
+    timestamp_dt = datetime.fromtimestamp(ts.seconds + ts.nanos / 1e9)
+    return timestamp_dt.strftime("%H:%M:%S.%f")
