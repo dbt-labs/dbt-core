@@ -7,7 +7,6 @@ from dbt.events.base_types import (
     InfoLevel,
     WarnLevel,
     ErrorLevel,
-    Cache,
     EventLevel,
 )
 from dbt.events.format import format_fancy_output_line, pluralize
@@ -555,7 +554,7 @@ class SchemaDrop(DebugLevel):
         return f'Dropping schema "{self.relation}".'
 
 
-class CacheAction(DebugLevel, Cache):
+class CacheAction(DebugLevel):
     def code(self):
         return "E022"
 
@@ -592,7 +591,7 @@ class CacheAction(DebugLevel, Cache):
 # Skipping E023, E024, E025, E026, E027, E028, E029, E030
 
 
-class CacheDumpGraph(DebugLevel, Cache):
+class CacheDumpGraph(DebugLevel):
     def code(self):
         return "E031"
 

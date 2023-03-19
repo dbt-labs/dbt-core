@@ -1,5 +1,5 @@
 from dbt.constants import METADATA_ENV_PREFIX
-from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut, EventMsg
+from dbt.events.base_types import BaseEvent, EventLevel, NoFile, NoStdOut, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
@@ -106,7 +106,7 @@ def _stdout_filter(
 ) -> bool:
     return (
         not isinstance(msg.data, NoStdOut)
-        and (not isinstance(msg.data, Cache) or log_cache_events)
+        and (msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events)
         and (EventLevel(msg.info.level) != EventLevel.DEBUG or debug_mode)
         and (EventLevel(msg.info.level) == EventLevel.ERROR or not quiet_mode)
         and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
@@ -130,7 +130,7 @@ def _get_logfile_config(
 def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventMsg) -> bool:
     return (
         not isinstance(msg.data, NoFile)
-        and not (isinstance(msg.data, Cache) and not log_cache_events)
+        and not (msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events)
         and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
     )
 
@@ -147,7 +147,11 @@ def _get_logbook_log_config(
         quiet,
     )
     config.name = "logbook_log"
-    config.filter = NoFilter if log_cache_events else lambda e: not isinstance(e.data, Cache)
+    config.filter = (
+        NoFilter
+        if log_cache_events
+        else lambda e: e.info.name not in ["CacheAction", "CacheDumpGraph"]
+    )
     config.logger = GLOBAL_LOGGER
     config.output_stream = None
     return config

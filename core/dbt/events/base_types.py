@@ -18,11 +18,6 @@ else:
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-class Cache:
-    # Events with this class will only be logged when the `--log-cache-events` flag is passed
-    pass
-
-
 def get_global_metadata_vars() -> dict:
     from dbt.events.functions import get_metadata_vars
 
