@@ -1513,7 +1513,7 @@ message LogSnapshotResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
-    google.protobuf.Struct cfg = 7;
+    map<string, string> cfg = 7;
 }
 
 message LogSnapshotResultMsg {
