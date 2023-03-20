@@ -11,7 +11,7 @@ You can use the google protobuf package to generate Python "classes", using the 
 
 * It's not readable. There are no identifiable classes in the output.
 * A "class" is generated using a metaclass when it is used.
-* There are lots of warnings about not subclassing the generated "classes".
+* You can't subclass the generated classes, which don't act much like Python objects
 * Since you can't put defaults or methods of any kind in these classes, and you can't subclass them, they aren't very usable in Python.
 * Generated classes are not easily importable
 * Serialization is via external utilities.
@@ -28,8 +28,24 @@ You can use the google protobuf package to generate Python "classes", using the 
 * Additional benefits listed: [betterproto](https://github.com/danielgtaylor/python-betterproto)
 
 
+## Revisited
 
-## Status
-Implementing
+We are switching away from using betterproto because of the following reasons:
+* betterproto only suppports Optional fields in a beta release
+* betterproto has had only beta releases for a few years
+* betterproto doesn't support Struct, which we really need
 
-# Consequences
+Steps taken to mitigate the drawbacks of Google protobuf from above:
+* We are using a wrapping class around the logging events to enable a constructor that looks more like a Python constructor, as long as only keyword arguments are used.
+* The generated file is skipped in the pre-commit config
+* We can live with the awkward interfaces. It's just code.
+
+Advantages of Google protobuf:
+* Message can be constructed from a dictionary of all message values. With betterproto you had to pre-construct nested message objects, which kind of forced you to sprinkle generated message objects through the codebase.
+* The Struct support works really well
+
+Disadvantages of Google protobuf:
+* You can't just set nested message objects, you have to use CopyFrom. Just code, again.
+* If you try to stringify parts of the message (like in the constructed event message) it outputs in a bizarre "user friendly" format. Really bad for Struct, in particular. 
+* Python messages aren't really Python. You can't expect them to *act* like normal Python objects. So they are best kept isolated to the logging code only.
+* As part of the not-really-Python, you can't use added classes to act like flags (Cache, NoFile, etc), since you can only use the bare generated message to construct other messages.
