@@ -152,7 +152,8 @@ class Flags:
                                 f"No deprecated param name match from {dep_name} to {new_name}"
                             )
 
-                        # remove from defaulted set
+                        # remove param from defaulted set since the deprecated
+                        # value is not set from default, but from an env var
                         if new_name in params_assigned_from_default:
                             params_assigned_from_default.remove(new_name)
 
@@ -268,5 +269,8 @@ class Flags:
             elif flag_set_by_user:
                 set_flag = flag
 
-    def clear_deprecations(self):
+    def fire_deprecations(self):
+        [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
+        # it is necessary to remove this attr from the class so it does
+        # not get pickled when written to disk as json
         object.__delattr__(self, "deprecated_env_var_warnings")
