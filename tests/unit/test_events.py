@@ -129,6 +129,8 @@ sample_values = [
     types.ExposureNameDeprecation(exposure=""),
     types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
     types.EnvironmentVariableRenamed(old_name="", new_name=""),
+    types.ConfigLogPathDeprecation(deprecated_path=""),
+    types.ConfigTargetPathDeprecation(deprecated_path=""),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),

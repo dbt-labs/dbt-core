@@ -298,23 +298,27 @@ class PartialProject(RenderComponents):
             raise DbtProjectError("Package dbt_project.yml must have a name!")
         return ProjectPackageMetadata(self.project_name, packages_config.packages)
 
-    def check_config_path(self, project_dict, deprecated_path, exp_path):
+    def check_config_path(
+        self, project_dict, deprecated_path, expected_path=None, default_value=None
+    ):
         if deprecated_path in project_dict:
-            if exp_path in project_dict:
+            if expected_path in project_dict:
                 msg = (
-                    "{deprecated_path} and {exp_path} cannot both be defined. The "
-                    "`{deprecated_path}` config has been deprecated in favor of `{exp_path}`. "
+                    "{deprecated_path} and {expected_path} cannot both be defined. The "
+                    "`{deprecated_path}` config has been deprecated in favor of `{expected_path}`. "
                     "Please update your `dbt_project.yml` configuration to reflect this "
                     "change."
                 )
                 raise DbtProjectError(
-                    msg.format(deprecated_path=deprecated_path, exp_path=exp_path)
+                    msg.format(deprecated_path=deprecated_path, expected_path=expected_path)
                 )
-            deprecations.warn(
-                f"project-config-{deprecated_path}",
-                deprecated_path=deprecated_path,
-                exp_path=exp_path,
-            )
+            # this field is no longer supported, but many projects may specify it with the default value
+            # if so, let's only raise this deprecation warning if they set a custom value
+            if not default_value or project_dict[deprecated_path] != default_value:
+                deprecations.warn(
+                    f"project-config-{deprecated_path}",
+                    deprecated_path=deprecated_path,
+                )
 
     def create_project(self, rendered: RenderComponents) -> "Project":
         unrendered = RenderComponents(
@@ -329,6 +333,8 @@ class PartialProject(RenderComponents):
 
         self.check_config_path(rendered.project_dict, "source-paths", "model-paths")
         self.check_config_path(rendered.project_dict, "data-paths", "seed-paths")
+        self.check_config_path(rendered.project_dict, "log-path", default_value="logs")
+        self.check_config_path(rendered.project_dict, "target-path", default_value="target")
 
         try:
             ProjectContract.validate(rendered.project_dict)
