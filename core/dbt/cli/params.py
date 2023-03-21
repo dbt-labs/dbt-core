@@ -363,6 +363,7 @@ skip_catalog_generation = click.option(
     "--skip-catalog-generation",
     help="If specified, skip the generation of the catalog.json file during the `dbt docs generate` command.",
     default=False,
+    is_flag=True,
 )
 
 # TODO:  The env var and name (reflected in flags) are corrections!
