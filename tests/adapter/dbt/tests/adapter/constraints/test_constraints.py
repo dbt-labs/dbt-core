@@ -59,6 +59,10 @@ class BaseConstraintsColumnsEqual:
             ["""'{"bar": "baz", "balance": 7.77, "active": false}'::json""", "json", "JSON"],
         ]
 
+    @pytest.fixture
+    def expected_sql_file_columns(self, string_type, int_type):
+        return f"SQL File Columns: color {string_type}, error {int_type}, date_day {string_type}"
+
     def test__constraints_wrong_column_order(self, project, string_type, int_type):
         # This no longer causes an error, since we enforce yaml column order
         results, log_output = run_dbt_and_capture(
@@ -71,7 +75,9 @@ class BaseConstraintsColumnsEqual:
 
         assert contract_actual_config is True
 
-    def test__constraints_wrong_column_names(self, project, string_type, int_type):
+    def test__constraints_wrong_column_names(
+        self, project, string_type, int_type, expected_sql_file_columns
+    ):
         results, log_output = run_dbt_and_capture(
             ["run", "-s", "my_model_wrong_name"], expect_pass=False
         )
@@ -85,9 +91,6 @@ class BaseConstraintsColumnsEqual:
         expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
             f"Schema File Columns: id {int_type}, color {string_type}, date_day {string_type}"
-        )
-        expected_sql_file_columns = (
-            f"SQL File Columns: color {string_type}, error {int_type}, date_day {string_type}"
         )
 
         assert expected_compile_error in log_output
@@ -178,7 +181,7 @@ class BaseConstraintsRuntimeDdlEnforcement:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_sql,
+            "my_model.sql": my_model_wrong_order_sql,
             "constraints_schema.yml": model_schema_yml,
         }
 
@@ -320,12 +323,16 @@ class BaseIncrementalConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
             "constraints_schema.yml": model_schema_yml,
         }
 
+    @pytest.fixture
+    def expected_sql_file_columns(self, string_type, int_type):
+        return f"SQL File Columns: error {int_type}, color {string_type}, date_day {string_type}"
+
 
 class BaseIncrementalConstraintsRuntimeDdlEnforcement(BaseConstraintsRuntimeDdlEnforcement):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_incremental_model_sql,
+            "my_model.sql": my_model_incremental_wrong_order_sql,
             "constraints_schema.yml": model_schema_yml,
         }
 

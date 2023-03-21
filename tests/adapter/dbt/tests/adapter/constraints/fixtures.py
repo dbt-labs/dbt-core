@@ -6,8 +6,8 @@ my_model_sql = """
 }}
 
 select
-  'blue' as color,
   1 as id,
+  'blue' as color,
   '2019-01-01' as date_day
 """
 
@@ -22,7 +22,7 @@ my_incremental_model_sql = """
 select
   1 as id,
   'blue' as color,
-  cast('2019-01-01' as date) as date_day
+  '2019-01-01' as date_day
 """
 
 my_model_wrong_order_sql = """
@@ -89,7 +89,7 @@ select
   cast(null as {{ dbt.type_int() }}) as id,
   -- change the color as well (to test rollback)
   'red' as color,
-  cast('2019-01-01' as date) as date_day
+  '2019-01-01' as date_day
 """
 
 model_schema_yml = """
@@ -231,7 +231,7 @@ my_model_incremental_wrong_order_sql = """
 select
   'blue' as color,
   1 as id,
-  cast('2019-01-01' as date) as date_day
+  '2019-01-01' as date_day
 """
 
 my_model_incremental_wrong_name_sql = """
@@ -245,7 +245,7 @@ my_model_incremental_wrong_name_sql = """
 select
   1 as error,
   'blue' as color,
-  cast('2019-01-01' as date) as date_day
+  '2019-01-01' as date_day
 """
 
 my_model_view_with_nulls_sql = """
