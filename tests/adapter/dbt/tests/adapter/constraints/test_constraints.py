@@ -59,11 +59,9 @@ class BaseConstraintsColumnsEqual:
             ["""'{"bar": "baz", "balance": 7.77, "active": false}'::json""", "json", "JSON"],
         ]
 
-    def test__constraints_wrong_column_order(self, project, string_type, int_type):
+    def test__constraints_wrong_column_order(self, project):
         # This no longer causes an error, since we enforce yaml column order
-        results, log_output = run_dbt_and_capture(
-            ["run", "-s", "my_model_wrong_order"], expect_pass=True
-        )
+        run_dbt(["run", "-s", "my_model_wrong_order"], expect_pass=True)
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model_wrong_order"
         my_model_config = manifest.nodes[model_id].config
