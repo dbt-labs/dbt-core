@@ -104,9 +104,11 @@ def cli(ctx, **kwargs):
 @cli.command("build")
 @click.pass_context
 @p.defer
+@p.deprecated_defer
 @p.exclude
 @p.fail_fast
 @p.favor_state
+@p.deprecated_favor_state
 @p.full_refresh
 @p.indirect_selection
 @p.profile
@@ -117,6 +119,7 @@ def cli(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.deprecated_state
 @p.store_failures
 @p.target
 @p.target_path
@@ -173,8 +176,10 @@ def docs(ctx, **kwargs):
 @click.pass_context
 @p.compile_docs
 @p.defer
+@p.deprecated_defer
 @p.exclude
 @p.favor_state
+@p.deprecated_favor_state
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -182,6 +187,7 @@ def docs(ctx, **kwargs):
 @p.selector
 @p.skip_catalog_generation
 @p.state
+@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -237,8 +243,10 @@ def docs_serve(ctx, **kwargs):
 @cli.command("compile")
 @click.pass_context
 @p.defer
+@p.deprecated_defer
 @p.exclude
 @p.favor_state
+@p.deprecated_favor_state
 @p.full_refresh
 @p.indirect_selection
 @p.introspect
@@ -250,6 +258,7 @@ def docs_serve(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -352,6 +361,7 @@ def init(ctx, **kwargs):
 @p.raw_select
 @p.selector
 @p.state
+@p.deprecated_state
 @p.target
 @p.vars
 @requires.preflight
@@ -406,7 +416,9 @@ def parse(ctx, **kwargs):
 @cli.command("run")
 @click.pass_context
 @p.defer
+@p.deprecated_defer
 @p.favor_state
+@p.deprecated_favor_state
 @p.exclude
 @p.fail_fast
 @p.full_refresh
@@ -416,6 +428,7 @@ def parse(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -479,6 +492,7 @@ def run_operation(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.deprecated_state
 @p.target
 @p.target_path
 @p.threads
@@ -505,14 +519,17 @@ def seed(ctx, **kwargs):
 @cli.command("snapshot")
 @click.pass_context
 @p.defer
+@p.deprecated_defer
 @p.exclude
 @p.favor_state
+@p.deprecated_favor_state
 @p.profile
 @p.profiles_dir
 @p.project_dir
 @p.select
 @p.selector
 @p.state
+@p.deprecated_state
 @p.target
 @p.threads
 @p.vars
@@ -552,6 +569,7 @@ def source(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.deprecated_state
 @p.target
 @p.threads
 @p.vars
@@ -583,9 +601,11 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @cli.command("test")
 @click.pass_context
 @p.defer
+@p.deprecated_defer
 @p.exclude
 @p.fail_fast
 @p.favor_state
+@p.deprecated_favor_state
 @p.indirect_selection
 @p.profile
 @p.profiles_dir
@@ -593,6 +613,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.select
 @p.selector
 @p.state
+@p.deprecated_state
 @p.store_failures
 @p.target
 @p.target_path

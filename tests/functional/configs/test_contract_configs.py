@@ -1,6 +1,6 @@
 import pytest
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, get_manifest, run_dbt_and_capture
+from dbt.tests.util import run_dbt, get_manifest, get_artifact, run_dbt_and_capture
 
 my_model_sql = """
 {{
@@ -10,8 +10,8 @@ my_model_sql = """
 }}
 
 select
-  1 as id,
   'blue' as color,
+  1 as id,
   cast('2019-01-01' as date) as date_day
 """
 
@@ -29,7 +29,7 @@ select
   cast('2019-01-01' as date) as date_day
 """
 
-my_model_constraints_disabled_sql = """
+my_model_contract_disabled_sql = """
 {{
   config(
     materialized = "table",
@@ -171,7 +171,7 @@ models:
 """
 
 
-class TestModelLevelConstraintsEnabledConfigs:
+class TestModelLevelContractEnabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -180,11 +180,12 @@ class TestModelLevelConstraintsEnabledConfigs:
         }
 
     def test__model_contract_true(self, project):
-        run_dbt(["parse"])
+        run_dbt(["run"])
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model"
-        my_model_columns = manifest.nodes[model_id].columns
-        my_model_config = manifest.nodes[model_id].config
+        model = manifest.nodes[model_id]
+        my_model_columns = model.columns
+        my_model_config = model.config
         contract_actual_config = my_model_config.contract
 
         assert contract_actual_config is True
@@ -193,8 +194,17 @@ class TestModelLevelConstraintsEnabledConfigs:
 
         assert expected_columns == str(my_model_columns)
 
+        # compiled fields aren't in the manifest above because it only has parsed fields
+        manifest_json = get_artifact(project.project_root, "target", "manifest.json")
+        compiled_code = manifest_json["nodes"][model_id]["compiled_code"]
+        cleaned_code = " ".join(compiled_code.split())
+        assert (
+            "select 'blue' as color, 1 as id, cast('2019-01-01' as date) as date_day"
+            == cleaned_code
+        )
 
-class TestProjectConstraintsEnabledConfigs:
+
+class TestProjectContractEnabledConfigs:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -221,7 +231,7 @@ class TestProjectConstraintsEnabledConfigs:
         assert contract_actual_config is True
 
 
-class TestProjectConstraintsEnabledConfigsError:
+class TestProjectContractEnabledConfigsError:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -253,7 +263,7 @@ class TestProjectConstraintsEnabledConfigsError:
         assert expected_compile_error in log_output
 
 
-class TestModelConstraintsEnabledConfigs:
+class TestModelContractEnabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
         return {"my_model.sql": my_model_contract_sql, "constraints_schema.yml": model_schema_yml}
@@ -267,7 +277,7 @@ class TestModelConstraintsEnabledConfigs:
         assert contract_actual_config is True
 
 
-class TestModelConstraintsEnabledConfigsMissingDataTypes:
+class TestModelContractEnabledConfigsMissingDataTypes:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -289,11 +299,11 @@ class TestModelConstraintsEnabledConfigsMissingDataTypes:
         assert expected_compile_error in log_output
 
 
-class TestModelLevelConstraintsDisabledConfigs:
+class TestModelLevelContractDisabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "my_model.sql": my_model_constraints_disabled_sql,
+            "my_model.sql": my_model_contract_disabled_sql,
             "constraints_schema.yml": model_schema_yml,
         }
 
@@ -308,7 +318,7 @@ class TestModelLevelConstraintsDisabledConfigs:
         assert contract_actual_config is False
 
 
-class TestModelLevelConstraintsErrorMessages:
+class TestModelLevelContractErrorMessages:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -330,7 +340,7 @@ class TestModelLevelConstraintsErrorMessages:
         assert expected_empty_data_type_error not in str(exc_str)
 
 
-class TestSchemaConstraintsEnabledConfigs:
+class TestSchemaContractEnabledConfigs:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -347,7 +357,7 @@ class TestSchemaConstraintsEnabledConfigs:
         assert schema_error_expected in str(exc_str)
 
 
-class TestPythonModelLevelConstraintsErrorMessages:
+class TestPythonModelLevelContractErrorMessages:
     @pytest.fixture(scope="class")
     def models(self):
         return {

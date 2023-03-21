@@ -13,10 +13,11 @@
     {{ get_assert_columns_equivalent(sql) }}
     {{ get_columns_spec_ddl() }} ;
     insert into {{ relation }} {{ get_column_names() }}
-    {% else %}
-      as
+    {%- set sql = get_select_subquery(sql) %}
+  {% else %}
+    as
   {% endif %}
-    (
+  (
     {{ sql }}
   );
 {%- endmacro %}
