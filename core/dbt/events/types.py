@@ -247,7 +247,7 @@ Happy modeling!
 # =======================================================
 
 
-class PackageRedirectDeprecation(WarnLevel):  # noqa
+class PackageRedirectDeprecation(WarnLevel):
     def code(self):
         return "D001"
 
@@ -259,7 +259,7 @@ class PackageRedirectDeprecation(WarnLevel):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-class PackageInstallPathDeprecation(WarnLevel):  # noqa
+class PackageInstallPathDeprecation(WarnLevel):
     def code(self):
         return "D002"
 
@@ -272,7 +272,7 @@ class PackageInstallPathDeprecation(WarnLevel):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-class ConfigSourcePathDeprecation(WarnLevel):  # noqa
+class ConfigSourcePathDeprecation(WarnLevel):
     def code(self):
         return "D003"
 
@@ -284,7 +284,7 @@ class ConfigSourcePathDeprecation(WarnLevel):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-class ConfigDataPathDeprecation(WarnLevel):  # noqa
+class ConfigDataPathDeprecation(WarnLevel):
     def code(self):
         return "D004"
 
@@ -296,7 +296,7 @@ class ConfigDataPathDeprecation(WarnLevel):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-class AdapterDeprecationWarning(WarnLevel):  # noqa
+class AdapterDeprecationWarning(WarnLevel):
     def code(self):
         return "D005"
 
@@ -310,7 +310,7 @@ class AdapterDeprecationWarning(WarnLevel):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-class MetricAttributesRenamed(WarnLevel):  # noqa
+class MetricAttributesRenamed(WarnLevel):
     def code(self):
         return "D006"
 
@@ -327,7 +327,7 @@ class MetricAttributesRenamed(WarnLevel):  # noqa
         return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
-class ExposureNameDeprecation(WarnLevel):  # noqa
+class ExposureNameDeprecation(WarnLevel):
     def code(self):
         return "D007"
 
@@ -357,7 +357,7 @@ class InternalDeprecation(WarnLevel):
         return warning_tag(msg)
 
 
-class EnvironmentVariableRenamed(WarnLevel):  # noqa
+class EnvironmentVariableRenamed(WarnLevel):
     def code(self):
         return "D009"
 
@@ -371,8 +371,7 @@ class EnvironmentVariableRenamed(WarnLevel):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class ConfigLogPathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
+class ConfigLogPathDeprecation(WarnLevel):
     def code(self):
         return "D010"
 
@@ -389,8 +388,7 @@ class ConfigLogPathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # no
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class ConfigTargetPathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
+class ConfigTargetPathDeprecation(WarnLevel):
     def code(self):
         return "D011"
 
@@ -412,7 +410,7 @@ class ConfigTargetPathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  #
 # =======================================================
 
 
-class AdapterEventDebug(DebugLevel):  # noqa
+class AdapterEventDebug(DebugLevel):
     def code(self):
         return "E001"
 
@@ -420,7 +418,7 @@ class AdapterEventDebug(DebugLevel):  # noqa
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-class AdapterEventInfo(InfoLevel):  # noqa
+class AdapterEventInfo(InfoLevel):
     def code(self):
         return "E002"
 
@@ -428,7 +426,7 @@ class AdapterEventInfo(InfoLevel):  # noqa
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-class AdapterEventWarning(WarnLevel):  # noqa
+class AdapterEventWarning(WarnLevel):
     def code(self):
         return "E003"
 
@@ -436,7 +434,7 @@ class AdapterEventWarning(WarnLevel):  # noqa
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-class AdapterEventError(ErrorLevel):  # noqa
+class AdapterEventError(ErrorLevel):
     def code(self):
         return "E004"
 
@@ -476,15 +474,12 @@ class ConnectionClosedInCleanup(DebugLevel):
         return f"Connection '{self.conn_name}' was properly closed."
 
 
-class RollbackFailed(DebugLevel):  # noqa
+class RollbackFailed(DebugLevel):
     def code(self):
         return "E009"
 
     def message(self) -> str:
         return f"Failed to rollback '{self.conn_name}'"
-
-
-# TODO: can we combine this with ConnectionClosed?
 
 
 class ConnectionClosed(DebugLevel):
@@ -493,9 +488,6 @@ class ConnectionClosed(DebugLevel):
 
     def message(self) -> str:
         return f"On {self.conn_name}: Close"
-
-
-# TODO: can we combine this with ConnectionLeftOpen?
 
 
 class ConnectionLeftOpen(DebugLevel):
@@ -654,7 +646,7 @@ class AdapterImportError(InfoLevel):
         return f"Error importing adapter: {self.exc}"
 
 
-class PluginLoadError(DebugLevel):  # noqa
+class PluginLoadError(DebugLevel):
     def code(self):
         return "E036"
 
@@ -870,7 +862,7 @@ class PartialParsingNotEnabled(DebugLevel):
         return "Partial parsing not enabled"
 
 
-class ParsedFileLoadFailed(DebugLevel):  # noqa
+class ParsedFileLoadFailed(DebugLevel):
     def code(self):
         return "I029"
 
@@ -1381,7 +1373,7 @@ class SeedHeader(InfoLevel):
         return self.header
 
 
-class SQLRunnerException(DebugLevel):  # noqa
+class SQLRunnerException(DebugLevel):
     def code(self):
         return "Q006"
 
@@ -1434,8 +1426,7 @@ class LogTestResult(DynamicLevel):
 # Skipped Q008, Q009, Q010
 
 
-#
-class LogStartLine(InfoLevel):  # noqa
+class LogStartLine(InfoLevel):
     def code(self):
         return "Q011"
 
@@ -1606,7 +1597,7 @@ class QueryCancelationUnsupported(InfoLevel):
         return yellow(msg)
 
 
-class ConcurrencyLine(InfoLevel):  # noqa
+class ConcurrencyLine(InfoLevel):
     def code(self):
         return "Q027"
 
@@ -1646,7 +1637,7 @@ class NodeExecuting(DebugLevel):
         return f"Began executing node {self.node_info.unique_id}"
 
 
-class LogHookStartLine(InfoLevel):  # noqa
+class LogHookStartLine(InfoLevel):
     def code(self):
         return "Q032"
 
@@ -1657,7 +1648,7 @@ class LogHookStartLine(InfoLevel):  # noqa
         )
 
 
-class LogHookEndLine(InfoLevel):  # noqa
+class LogHookEndLine(InfoLevel):
     def code(self):
         return "Q033"
 
@@ -1726,7 +1717,7 @@ class NoNodesSelected(WarnLevel):
 # Skipped W001
 
 
-class CatchableExceptionOnRun(DebugLevel):  # noqa
+class CatchableExceptionOnRun(DebugLevel):
     def code(self):
         return "W002"
 
@@ -1760,7 +1751,7 @@ class GenericExceptionOnRun(ErrorLevel):
         return f"{red(prefix)}\n{str(self.exc).strip()}"
 
 
-class NodeConnectionReleaseError(DebugLevel):  # noqa
+class NodeConnectionReleaseError(DebugLevel):
     def code(self):
         return "W005"
 
@@ -1789,7 +1780,7 @@ class MainKeyboardInterrupt(InfoLevel):
         return "ctrl-c"
 
 
-class MainEncounteredError(ErrorLevel):  # noqa
+class MainEncounteredError(ErrorLevel):
     def code(self):
         return "Z002"
 
@@ -1863,7 +1854,7 @@ class TimingInfoCollected(DebugLevel):
 # at the error level - or whatever other level chosen.  Used in multiple places.
 
 
-class LogDebugStackTrace(DebugLevel):  # noqa
+class LogDebugStackTrace(DebugLevel):
     def code(self):
         return "Z011"
 
@@ -2124,7 +2115,7 @@ class FlushEventsFailure(DebugLevel):
         return "An error was encountered while trying to flush usage events"
 
 
-class TrackingInitializeFailure(DebugLevel):  # noqa
+class TrackingInitializeFailure(DebugLevel):
     def code(self):
         return "Z044"
 
