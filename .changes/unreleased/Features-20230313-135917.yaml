@@ -1,0 +1,6 @@
+kind: Features
+body: Make model contracts agnostic to ordering
+time: 2023-03-13T13:59:17.255368-04:00
+custom:
+  Author: gshank
+  Issue: 6975 7064

@@ -2124,6 +2124,23 @@ class RelationWrongTypeError(CompilationError):
         return msg
 
 
+class ContractError(CompilationError):
+    def __init__(self, yaml_columns, sql_columns):
+        self.yaml_columns = yaml_columns
+        self.sql_columns = sql_columns
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            "Contracts are enabled for this model. "
+            "Please ensure the name, data_type, and number of columns in your `yml` file "
+            "match the columns in your SQL file.\n"
+            f"Schema File Columns: {self.yaml_columns}\n"
+            f"SQL File Columns: {self.sql_columns}"
+        )
+        return msg
+
+
 # not modifying these since rpc should be deprecated soon
 class UnknownAsyncIDException(Exception):
     CODE = 10012
