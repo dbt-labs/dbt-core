@@ -451,7 +451,7 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
-    contract: bool = False
+    contract: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def empty(self):

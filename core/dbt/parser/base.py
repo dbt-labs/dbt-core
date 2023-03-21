@@ -310,10 +310,10 @@ class ConfiguredParser(
             else:
                 parsed_node.docs = Docs(show=docs_show)
 
-        # If we have "contract" in the config, copy to node level, for backwards
+        # If we have "strict" contract in the config, copy to node level, for backwards
         # compatibility with earlier node-only config.
-        if config_dict.get("contract", False):
-            parsed_node.contract = True
+        if "contract" in config_dict and config_dict["contract"]:
+            parsed_node.contract = config_dict["contract"]
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

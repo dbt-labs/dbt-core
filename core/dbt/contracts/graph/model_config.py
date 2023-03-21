@@ -451,7 +451,9 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=Docs,
         metadata=MergeBehavior.Update.meta(),
     )
-    contract: bool = False
+    contract: Dict[str, Any] = field(
+        default_factory=dict, metadata=MergeBehavior.DictKeyAppend.meta()
+    )
 
     # we validate that node_color has a suitable value to prevent dbt-docs from crashing
     def __post_init__(self):
