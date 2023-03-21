@@ -168,8 +168,23 @@ class BaseConstraintsColumnsEqual:
             assert contract_actual_config is True
 
 
-# This is SUPER specific to Postgres, and will need replacing on other adapters
-_expected_sql = """
+class BaseConstraintsRuntimeDdlEnforcement:
+    """
+    These constraints pass muster for dbt's preflight checks. Make sure they're
+    passed into the DDL statement. If they don't match up with the underlying data,
+    the data platform should raise an error at runtime.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def expected_sql(self):
+        return """
 create table <model_identifier> (
     id integer not null primary key check (id > 0),
     color text,
@@ -194,41 +209,6 @@ insert into <model_identifier> (
     ) as model_subq
 );
 """
-
-
-class BaseConstraintsRuntimeDdlEnforcement:
-    """
-    These constraints pass muster for dbt's preflight checks. Make sure they're
-    passed into the DDL statement. If they don't match up with the underlying data,
-    the data platform should raise an error at runtime.
-    """
-
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": my_model_sql,
-            "constraints_schema.yml": model_schema_yml,
-        }
-
-    @pytest.fixture(scope="class")
-    def expected_sql(self):
-        return """
-            create table <model_identifier> (
-                id integer not null primary key check (id > 0) ,
-                color text ,
-                date_day date
-            ) ;
-            insert into <model_identifier> (
-                id ,
-                color ,
-                date_day
-            ) (
-                select
-                    1 as id,
-                    'blue' as color,
-                    cast('2019-01-01' as date) as date_day
-            );
-            """
 
     def test__constraints_ddl(self, project, expected_sql):
         results = run_dbt(["run", "-s", "my_model"])
