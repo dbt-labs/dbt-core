@@ -359,6 +359,12 @@ skip_profile_setup = click.option(
     "--skip-profile-setup", "-s", envvar=None, help="Skip interactive profile setup.", is_flag=True
 )
 
+skip_catalog_generation = click.option(
+    "--skip-catalog-generation",
+    help="If specified, skip the generation of the catalog.json file during the `dbt docs generate` command.",
+    default=False,
+)
+
 # TODO:  The env var and name (reflected in flags) are corrections!
 # The original name was `ARTIFACT_STATE_PATH` and used the env var `DBT_ARTIFACT_STATE_PATH`.
 # Both of which break existing naming conventions.

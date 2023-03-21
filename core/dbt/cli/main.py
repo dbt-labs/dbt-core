@@ -180,6 +180,7 @@ def docs(ctx, **kwargs):
 @p.project_dir
 @p.select
 @p.selector
+@p.skip_catalog_generation
 @p.state
 @p.target
 @p.target_path
