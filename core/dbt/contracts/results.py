@@ -11,6 +11,7 @@ from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.types import TimingInfoCollected
 from dbt.events.contextvars import get_node_info
+from dbt.events.helpers import datetime_to_json_string
 from dbt.logger import TimingProcessor
 from dbt.utils import lowercase, cast_to_str, cast_to_int
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
@@ -47,9 +48,9 @@ class TimingInfo(dbtClassMixin):
     def to_msg_dict(self):
         msg_dict = {"name": self.name}
         if self.started_at:
-            msg_dict["started_at"] = self.started_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            msg_dict["started_at"] = datetime_to_json_string(self.started_at)
         if self.completed_at:
-            msg_dict["completed_at"] = self.completed_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            msg_dict["completed_at"] = datetime_to_json_string(self.completed_at)
         return msg_dict
 
 

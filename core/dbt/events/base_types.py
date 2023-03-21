@@ -1,16 +1,17 @@
 from enum import Enum
 import os
 import threading
-from datetime import datetime
 from dbt.events import types_pb2
 import sys
 from google.protobuf.json_format import ParseDict, MessageToDict, MessageToJson
 from google.protobuf.message import Message
+from dbt.events.helpers import get_json_string_utcnow
 
 if sys.version_info >= (3, 8):
     from typing import Protocol
 else:
     from typing_extensions import Protocol
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # These base types define the _required structure_ for the concrete event #
@@ -33,13 +34,6 @@ def get_invocation_id() -> str:
 # exactly one pid per concrete event
 def get_pid() -> int:
     return os.getpid()
-
-
-# preformatted time stamp
-def get_ts_rfc3339() -> str:
-    ts = datetime.utcnow()
-    ts_rfc3339 = ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    return ts_rfc3339
 
 
 # in theory threads can change so we don't cache them.
@@ -135,7 +129,7 @@ def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
         "msg": event.message(),
         "invocation_id": get_invocation_id(),
         "extra": get_global_metadata_vars(),
-        "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        "ts": get_json_string_utcnow(),
         "pid": get_pid(),
         "thread": get_thread_name(),
         "code": event.code(),

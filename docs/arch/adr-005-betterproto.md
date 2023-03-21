@@ -3,7 +3,7 @@
 ## Context
 We are providing proto definitions for our structured logging messages, and as part of that we need to also have Python classes for use in our Python codebase
 
-### Options
+### Options, August 30, 2022
 
 #### Google protobuf package
 
@@ -28,12 +28,13 @@ You can use the google protobuf package to generate Python "classes", using the 
 * Additional benefits listed: [betterproto](https://github.com/danielgtaylor/python-betterproto)
 
 
-## Revisited
+## Revisited, March 21, 2023
 
 We are switching away from using betterproto because of the following reasons:
 * betterproto only suppports Optional fields in a beta release
 * betterproto has had only beta releases for a few years
 * betterproto doesn't support Struct, which we really need
+* betterproto started changing our message names to be more "pythonic"
 
 Steps taken to mitigate the drawbacks of Google protobuf from above:
 * We are using a wrapping class around the logging events to enable a constructor that looks more like a Python constructor, as long as only keyword arguments are used.
@@ -43,6 +44,7 @@ Steps taken to mitigate the drawbacks of Google protobuf from above:
 Advantages of Google protobuf:
 * Message can be constructed from a dictionary of all message values. With betterproto you had to pre-construct nested message objects, which kind of forced you to sprinkle generated message objects through the codebase.
 * The Struct support works really well
+* Type errors are caught much earlier and more consistently. Betterproto would accept fields of the wrong types, which was sometimes caught on serialization to a dictionary, and sometimes not until serialized to a binary string. Sometimes not at all.
 
 Disadvantages of Google protobuf:
 * You can't just set nested message objects, you have to use CopyFrom. Just code, again.
