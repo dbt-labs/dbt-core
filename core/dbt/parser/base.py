@@ -314,6 +314,7 @@ class ConfiguredParser(
         # compatibility with earlier node-only config.
         if config_dict.get("contract", False):
             parsed_node.contract = True
+            parsed_node.build_contract_checksum()
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

@@ -2,6 +2,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+import hashlib
 
 from mashumaro.types import SerializableType
 from typing import (
@@ -39,7 +40,7 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.proto_types import NodeInfo
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, InvalidAccessTypeError
+from dbt.exceptions import ParsingError, InvalidAccessTypeError, ModelContractError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -387,6 +388,12 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
             old.unrendered_config,
         )
 
+    def build_contract_checksum(self):
+        pass
+
+    def same_contract(self, old) -> bool:
+        return True
+
     def patch(self, patch: "ParsedNodePatch"):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
@@ -428,6 +435,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
             and self.same_persisted_description(old)
             and self.same_fqn(old)
             and self.same_database_representation(old)
+            and self.same_contract(old)
             and True
         )
 
@@ -457,6 +465,7 @@ class CompiledNode(ParsedNode):
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
     contract: bool = False
+    contract_checksum: Optional[str] = None
 
     @property
     def empty(self):
@@ -496,6 +505,39 @@ class CompiledNode(ParsedNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+    def build_contract_checksum(self):
+        # We don't need to construct the checksum if the model does not
+        # have contract enabled, because it won't be used.
+        # This needs to be executed after contract config is set
+        if self.contract is True:
+            contract_state = ""
+            # We need to sort the columns so that order doesn't matter
+            # columns is a str: ColumnInfo dictionary
+            sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
+            for column in sorted_columns:
+                contract_state += f"|{column.name}"
+                contract_state += column.data_type
+                contract_state += str(column.constraints)
+            data = contract_state.encode("utf-8")
+            self.contract_checksum = hashlib.new("sha256", data).hexdigest()
+
+    def same_contract(self, old) -> bool:
+        if old.contract is False and self.contract is False:
+            # Not a change
+            return True
+        if old.contract is False and self.contract is True:
+            # A change, but not a breaking change
+            return False
+        if old.contract is True and self.contract is False:
+            # Breaking change: throw an error
+            raise (ModelContractError(node=self))
+        if self.contract_checksum == old.contract_checksum:
+            # Breaking change: throw an error
+            raise (ModelContractError(node=self))
+        else:
+            # No change
+            return False
 
 
 # ====================================

@@ -50,6 +50,58 @@ models:
       - name: name
 """
 
+contract_schema_yml = """
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+  - name: table_model
+    config:
+      contract: true
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+modified_contract_schema_yml = """
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+  - name: table_model
+    config:
+      contract: true
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+        constraints:
+          - type: not_null
+"""
+
 exposures_yml = """
 version: 2
 exposures:

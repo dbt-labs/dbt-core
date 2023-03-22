@@ -209,6 +209,24 @@ class CompilationError(DbtRuntimeError):
             )
 
 
+class ModelContractError(DbtRuntimeError):
+    CODE = 10016
+    MESSAGE = "Contract Error"
+
+    def __init__(self, node=None):
+        super().__init__(self.message(), node)
+
+    @property
+    def type(self):
+        return "Contract"
+
+    def message(self):
+        return (
+            "There is a breaking change in the model contract; "
+            "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+        )
+
+
 class RecursionError(DbtRuntimeError):
     pass
 
