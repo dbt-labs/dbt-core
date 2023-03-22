@@ -1,11 +1,12 @@
 from copy import copy
-from typing import List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional
 
 import click
 from dbt.cli import requires, params as p
 from dbt.config.project import Project
 from dbt.config.profile import Profile
 from dbt.contracts.graph.manifest import Manifest
+from dbt.events.base_types import EventMsg
 from dbt.task.clean import CleanTask
 from dbt.task.compile import CompileTask
 from dbt.task.deps import DepsTask
@@ -34,11 +35,16 @@ class dbtInternalException(Exception):
 # Programmatic invocation
 class dbtRunner:
     def __init__(
-        self, project: Project = None, profile: Profile = None, manifest: Manifest = None
+        self,
+        project: Project = None,
+        profile: Profile = None,
+        manifest: Manifest = None,
+        callbacks: List[Callable[[EventMsg], None]] = [],
     ):
         self.project = project
         self.profile = profile
         self.manifest = manifest
+        self.callbacks = callbacks
 
     def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
         try:
@@ -47,6 +53,7 @@ class dbtRunner:
                 "project": self.project,
                 "profile": self.profile,
                 "manifest": self.manifest,
+                "callbacks": self.callbacks,
             }
             return cli.invoke(dbt_ctx)
         except click.exceptions.Exit as e:
