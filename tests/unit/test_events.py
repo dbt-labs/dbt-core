@@ -1,6 +1,7 @@
 import re
 from typing import TypeVar
 
+from datetime import datetime
 from dbt.contracts.results import TimingInfo
 from dbt.events import AdapterLogger, test_types, types
 from dbt.events.base_types import (
@@ -328,6 +329,7 @@ sample_values = [
     types.NoNodesSelected(),
     types.DepsUnpinned(revision="", git=""),
     types.NoNodesForSelectionCriteria(spec_raw=""),
+    types.CommandCompleted(command="", success=True, elapsed=0.1, completed_at=datetime.utcnow()),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),

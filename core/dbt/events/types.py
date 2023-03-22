@@ -1905,6 +1905,16 @@ class CompiledNodeJson(InfoLevel, pt.CompiledNodeJson):
             return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
 
 
+@dataclass
+class CommandCompleted(DebugLevel, pt.CommandCompleted):
+    def code(self):
+        return "Q039"
+
+    def message(self) -> str:
+        status = "succeeded" if self.success else "failed"
+        return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
+
+
 # =======================================================
 # W - Node testing
 # =======================================================
