@@ -370,6 +370,14 @@ _MODELS__GET_AND_REF = """
 select * from {{ ref('materialized') }}
 """
 
+
+_MODELS_GET_AND_REF_UPPERCASE = """
+{%- do adapter.get_relation(database=target.database, schema=target.schema, identifier='MATERIALIZED') -%}
+
+select * from {{ ref('MATERIALIZED') }}
+"""
+
+
 _MODELS__INCREMENTAL = """
 {{
   config(
