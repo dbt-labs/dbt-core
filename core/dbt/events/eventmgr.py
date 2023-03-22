@@ -215,12 +215,8 @@ class EventManager:
         self.loggers.append(logger)
 
     def add_callbacks(self, callbacks: List[Callable[[EventMsg], None]]):
-        """Helper for bulk adding a sequence of Callbacks to the EventManager"""
+        """Helper for adding a sequence of Callbacks to the EventManager"""
         self.callbacks.extend(callbacks)
-
-    def add_callback(self, callback: Callable[[EventMsg], None]):
-        """Helper which adds a singular Callback to the EventManager"""
-        self.callbacks.append(callback)
 
     def flush(self):
         for logger in self.loggers:
