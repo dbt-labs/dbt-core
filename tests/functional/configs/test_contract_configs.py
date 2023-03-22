@@ -19,7 +19,7 @@ my_model_contract_sql = """
 {{
   config(
     materialized = "table",
-    contract = true
+    contract = {"strict": true}
   )
 }}
 
@@ -33,7 +33,7 @@ my_model_contract_disabled_sql = """
 {{
   config(
     materialized = "table",
-    contract = false
+    contract = {"strict": false}
   )
 }}
 
@@ -75,7 +75,8 @@ version: 2
 models:
   - name: my_model
     config:
-      contract: true
+      contract:
+        strict: true
     columns:
       - name: id
         quote: true
@@ -99,7 +100,8 @@ version: 2
 models:
   - name: my_model
     config:
-      contract: true
+      contract:
+        strict: true
     columns:
       - name: id
         data_type: integer
@@ -116,7 +118,8 @@ models:
       - name: date_day
   - name: python_model
     config:
-      contract: true
+      contract:
+        strict: true
     columns:
       - name: id
         data_type: integer
@@ -139,7 +142,8 @@ version: 2
 models:
   - name: my_model
     config:
-      contract: true
+      contract:
+        strict: true
 """
 
 model_schema_complete_datatypes_yml = """
@@ -203,7 +207,7 @@ class TestModelLevelContractEnabledConfigs:
         my_model_config = model.config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config is True
+        assert contract_actual_config.strict is True
 
         expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=[ColumnLevelConstraint(type=<ConstraintType.not_null: 'not_null'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.primary_key: 'primary_key'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.check: 'check'>, name=None, expression='(id > 0)', warn_unenforced=True, warn_unsupported=True)], quote=True, tags=[], _extra={}), 'color': ColumnInfo(name='color', description='', meta={}, data_type='text', constraints=[], quote=None, tags=[], _extra={}), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=[], quote=None, tags=[], _extra={})}"
 
@@ -222,13 +226,7 @@ class TestModelLevelContractEnabledConfigs:
 class TestProjectContractEnabledConfigs:
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {
-            "models": {
-                "test": {
-                    "+contract": True,
-                }
-            }
-        }
+        return {"models": {"test": {"+contract": {"strict": True}}}}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -243,7 +241,7 @@ class TestProjectContractEnabledConfigs:
         model_id = "model.test.my_model"
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
-        assert contract_actual_config is True
+        assert contract_actual_config.strict is True
 
 
 class TestProjectContractEnabledConfigsError:
@@ -271,7 +269,7 @@ class TestProjectContractEnabledConfigsError:
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config is True
+        assert contract_actual_config.strict is True
 
         expected_compile_error = "Please ensure that the column name and data_type are defined within the YAML configuration for the ['color'] column(s)."
 
@@ -289,7 +287,7 @@ class TestModelContractEnabledConfigs:
         model_id = "model.test.my_model"
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
-        assert contract_actual_config is True
+        assert contract_actual_config.strict is True
 
 
 class TestModelContractEnabledConfigsMissingDataTypes:
@@ -307,7 +305,7 @@ class TestModelContractEnabledConfigsMissingDataTypes:
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config is True
+        assert contract_actual_config.strict is True
 
         expected_compile_error = "Please ensure that the column name and data_type are defined within the YAML configuration for the ['color'] column(s)."
 
@@ -330,7 +328,7 @@ class TestModelLevelContractDisabledConfigs:
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config is False
+        assert contract_actual_config.strict is False
 
 
 class TestModelLevelContractErrorMessages:
