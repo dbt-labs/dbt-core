@@ -1,0 +1,6 @@
+kind: Features
+body: Support setting of callbacks for programmatic uses of `dbtRunner`
+time: 2023-03-22T12:46:15.877884-07:00
+custom:
+  Author: QMalcolm
+  Issue: "6763"
