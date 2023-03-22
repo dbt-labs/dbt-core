@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.cli.main import dbtRunner, dbtUsageException
+from unittest import mock
 
 
 class TestDbtRunner:
@@ -26,3 +27,11 @@ class TestDbtRunner:
 
     def test_invoke_version(self, dbt: dbtRunner) -> None:
         dbt.invoke(["--version"])
+
+    def test_callbacks(self) -> None:
+        mock_callback = mock.MagicMock()
+        dbt = dbtRunner(callbacks=[mock_callback])
+        # the `debug` command is one of the few commands wherein you don't need
+        # to have a project to run it and it will emit events
+        dbt.invoke(["debug"])
+        mock_callback.assert_called()
