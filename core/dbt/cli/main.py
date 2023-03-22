@@ -12,6 +12,7 @@ from dbt.task.deps import DepsTask
 from dbt.task.debug import DebugTask
 from dbt.task.run import RunTask
 from dbt.task.serve import ServeTask
+from dbt.task.show import ShowTask
 from dbt.task.test import TestTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.seed import SeedTask
@@ -247,6 +248,7 @@ def docs_serve(ctx, **kwargs):
 @p.favor_state
 @p.deprecated_favor_state
 @p.full_refresh
+@p.show_output_format
 @p.indirect_selection
 @p.introspect
 @p.parse_only
@@ -272,6 +274,52 @@ def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
     target/ directory."""
     task = CompileTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# dbt show
+@cli.command("show")
+@click.pass_context
+@p.defer
+@p.deprecated_defer
+@p.exclude
+@p.favor_state
+@p.deprecated_favor_state
+@p.full_refresh
+@p.show_output_format
+@p.show_limit
+@p.indirect_selection
+@p.introspect
+@p.parse_only
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.select
+@p.selector
+@p.inline
+@p.state
+@p.deprecated_state
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+def show(ctx, **kwargs):
+    """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
+    target/ directory."""
+    task = ShowTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],

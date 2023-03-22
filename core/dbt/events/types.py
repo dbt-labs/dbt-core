@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
@@ -1748,15 +1749,6 @@ class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
 
 
 @dataclass
-class CompiledNode(InfoLevel, pt.CompiledNode):
-    def code(self):
-        return "Q028"
-
-    def message(self) -> str:
-        return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
-
-
-@dataclass
 class WritingInjectedSQLForNode(DebugLevel, pt.WritingInjectedSQLForNode):
     def code(self):
         return "Q029"
@@ -1861,6 +1853,56 @@ class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
 
     def message(self) -> str:
         return "No nodes selected!"
+
+
+@dataclass
+class ShowNodeText(InfoLevel, pt.ShowNodeText):
+    def code(self):
+        return "Q039"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return f"Previewing inline node:\n{self.preview}"
+        else:
+            return f"Previewing node '{self.node_name}':\n{self.preview}"
+
+
+@dataclass
+class ShowNodeJson(InfoLevel, pt.ShowNodeText):
+    def code(self):
+        return "Q040"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return json.dumps({"preview": json.loads(self.preview)}, indent=2)
+        else:
+            return json.dumps(
+                {"node": self.node_name, "preview": json.loads(self.preview)}, indent=2
+            )
+
+
+@dataclass
+class CompiledNodeText(InfoLevel, pt.CompiledNodeText):
+    def code(self):
+        return "Q042"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return f"Compiled inline node is:\n{self.compiled}"
+        else:
+            return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
+
+
+@dataclass
+class CompiledNodeJson(InfoLevel, pt.CompiledNodeJson):
+    def code(self):
+        return "Q043"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return json.dumps({"compiled": self.compiled}, indent=2)
+        else:
+            return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
 
 
 # =======================================================

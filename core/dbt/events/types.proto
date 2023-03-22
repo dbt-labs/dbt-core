@@ -1642,17 +1642,6 @@ message ConcurrencyLineMsg {
     ConcurrencyLine data = 2;
 }
 
-// Q028
-message CompiledNode {
-    string node_name = 1;
-    string compiled = 2;
-}
-
-message CompiledNodeMsg {
-    EventInfo info = 1;
-    CompiledNode data = 2;
-}
-
 // Q029
 message WritingInjectedSQLForNode {
     NodeInfo node_info = 1;
@@ -1765,6 +1754,56 @@ message NoNodesSelected {
 message NoNodesSelectedMsg {
     EventInfo info = 1;
     NoNodesSelected data = 2;
+}
+
+// Q039
+message ShowNodeText {
+    string node_name = 1;
+    string preview = 2;
+    bool is_inline = 3;
+}
+
+message ShowNodeTextMsg {
+    EventInfo info = 1;
+    ShowNodeText data = 2;
+}
+
+// Q040
+message ShowNodeJson {
+    string node_name = 1;
+    string preview = 2;
+    bool is_inline = 3;
+}
+
+message ShowNodeJsonMsg {
+    EventInfo info = 1;
+    ShowNodeText data = 2;
+}
+
+// Skipped Q041
+
+// Q042
+message CompiledNodeText {
+    string node_name = 1;
+    string compiled = 2;
+    bool is_inline = 3;
+}
+
+message CompiledNodeTextMsg {
+    EventInfo info = 1;
+    CompiledNodeText data = 2;
+}
+
+// Q043
+message CompiledNodeJson {
+    string node_name = 1;
+    string compiled = 2;
+    bool is_inline = 3;
+}
+
+message CompiledNodeJsonMsg {
+    EventInfo info = 1;
+    CompiledNodeJson data = 2;
 }
 
 // W - Node testing

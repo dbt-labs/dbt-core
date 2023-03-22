@@ -4,11 +4,14 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
-from typing import Type, Union, Dict, Any, Optional
 from datetime import datetime
+from typing import Type, Union, Dict, Any, Optional
 
+import dbt.exceptions
 from dbt import tracking
-from dbt.flags import get_flags
+from dbt.adapters.factory import get_adapter
+from dbt.config import RuntimeConfig, Project
+from dbt.config.profile import read_profile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,
@@ -17,13 +20,7 @@ from dbt.contracts.results import (
     RunStatus,
     RunningStatus,
 )
-from dbt.exceptions import (
-    NotImplementedError,
-    CompilationError,
-    DbtRuntimeError,
-    DbtInternalError,
-)
-from dbt.logger import log_manager
+from dbt.events.contextvars import get_node_info
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     LogDbtProjectError,
@@ -38,14 +35,16 @@ from dbt.events.types import (
     NodeCompiling,
     NodeExecuting,
 )
-from dbt.events.contextvars import get_node_info
-from .printer import print_run_result_error
-
-from dbt.adapters.factory import get_adapter
-from dbt.config import RuntimeConfig, Project
-from dbt.config.profile import read_profile
-import dbt.exceptions
+from dbt.exceptions import (
+    NotImplementedError,
+    CompilationError,
+    DbtRuntimeError,
+    DbtInternalError,
+)
+from dbt.flags import get_flags
 from dbt.graph import Graph
+from dbt.logger import log_manager
+from .printer import print_run_result_error
 
 
 class NoneConfig:

@@ -2051,20 +2051,6 @@ class ConcurrencyLineMsg(betterproto.Message):
 
 
 @dataclass
-class CompiledNode(betterproto.Message):
-    """Q028"""
-
-    node_name: str = betterproto.string_field(1)
-    compiled: str = betterproto.string_field(2)
-
-
-@dataclass
-class CompiledNodeMsg(betterproto.Message):
-    info: "EventInfo" = betterproto.message_field(1)
-    data: "CompiledNode" = betterproto.message_field(2)
-
-
-@dataclass
 class WritingInjectedSQLForNode(betterproto.Message):
     """Q029"""
 
@@ -2208,6 +2194,66 @@ class NoNodesSelected(betterproto.Message):
 class NoNodesSelectedMsg(betterproto.Message):
     info: "EventInfo" = betterproto.message_field(1)
     data: "NoNodesSelected" = betterproto.message_field(2)
+
+
+@dataclass
+class ShowNodeText(betterproto.Message):
+    """Q039"""
+
+    node_name: str = betterproto.string_field(1)
+    preview: str = betterproto.string_field(2)
+    is_inline: bool = betterproto.bool_field(3)
+
+
+@dataclass
+class ShowNodeTextMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ShowNodeText" = betterproto.message_field(2)
+
+
+@dataclass
+class ShowNodeJson(betterproto.Message):
+    """Q040"""
+
+    node_name: str = betterproto.string_field(1)
+    preview: str = betterproto.string_field(2)
+    is_inline: bool = betterproto.bool_field(3)
+
+
+@dataclass
+class ShowNodeJsonMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ShowNodeText" = betterproto.message_field(2)
+
+
+@dataclass
+class CompiledNodeText(betterproto.Message):
+    """Q042"""
+
+    node_name: str = betterproto.string_field(1)
+    compiled: str = betterproto.string_field(2)
+    is_inline: bool = betterproto.bool_field(3)
+
+
+@dataclass
+class CompiledNodeTextMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "CompiledNodeText" = betterproto.message_field(2)
+
+
+@dataclass
+class CompiledNodeJson(betterproto.Message):
+    """Q043"""
+
+    node_name: str = betterproto.string_field(1)
+    compiled: str = betterproto.string_field(2)
+    is_inline: bool = betterproto.bool_field(3)
+
+
+@dataclass
+class CompiledNodeJsonMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "CompiledNodeJson" = betterproto.message_field(2)
 
 
 @dataclass

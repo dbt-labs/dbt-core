@@ -182,6 +182,22 @@ output = click.option(
     default="selector",
 )
 
+show_output_format = click.option(
+    "--output",
+    envvar=None,
+    help="Output format for dbt compile and dbt show",
+    type=click.Choice(["json", "text"], case_sensitive=False),
+    default="text",
+)
+
+show_limit = click.option(
+    "--limit",
+    envvar=None,
+    help="Limit the number of results returned by dbt show",
+    type=click.INT,
+    default=5,
+)
+
 output_keys = click.option(
     "--output-keys",
     envvar=None,

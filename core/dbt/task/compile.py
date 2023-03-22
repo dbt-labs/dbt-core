@@ -4,7 +4,7 @@ from typing import AbstractSet, Optional
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.events.functions import fire_event
-from dbt.events.types import CompileComplete, CompiledNode
+from dbt.events.types import CompileComplete, CompiledNodeText, CompiledNodeJson
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -62,19 +62,35 @@ class CompileTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         if getattr(self.args, "inline", None):
-            result = results[0]
-            fire_event(
-                CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
-            )
-
-        if self.selection_arg:
+            matched_results = results
+            is_inline = True
+        elif self.selection_arg:
             matched_results = [
                 result for result in results if result.node.name == self.selection_arg[0]
             ]
-            if len(matched_results) == 1:
-                result = matched_results[0]
+            is_inline = False
+        # No selector passed, compiling all nodes
+        else:
+            matched_results = results
+            is_inline = False
+
+        if len(matched_results) == 1:
+            result = matched_results[0]
+            if self.args.output == "json":
                 fire_event(
-                    CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
+                    CompiledNodeJson(
+                        node_name=result.node.name,
+                        compiled=result.node.compiled_code,
+                        is_inline=is_inline,
+                    )
+                )
+            else:
+                fire_event(
+                    CompiledNodeText(
+                        node_name=result.node.name,
+                        compiled=result.node.compiled_code,
+                        is_inline=is_inline,
+                    )
                 )
 
         fire_event(CompileComplete())
@@ -119,3 +135,9 @@ class CompileTask(GraphRunnableTask):
             process_node(self.config, self.manifest, sql_node)
 
         super()._runtime_initialize()
+
+    def _handle_result(self, result):
+        super()._handle_result(result)
+
+        if result.node.is_ephemeral_model:
+            self.node_results.append(result)
