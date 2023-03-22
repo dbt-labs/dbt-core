@@ -23,7 +23,7 @@ from dbt.tests.adapter.simple_copy.fixtures import (
 )
 
 
-class SimpleCopyBase:
+class SimpleCopySetup:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -53,7 +53,7 @@ class SimpleCopyBase:
         return {"seeds": {"quote_columns": False}}
 
 
-class TestSimpleCopy(SimpleCopyBase):
+class SimpleCopyBase(SimpleCopySetup):
     def test_simple_copy(self, project):
         # Load the seed file and check that it worked
         results = run_dbt(["seed"])
@@ -107,3 +107,7 @@ class TestSimpleCopy(SimpleCopyBase):
 
         assert "empty" not in tables.keys()
         assert "disabled" not in tables.keys()
+
+
+class TestSimpleCopyBase(SimpleCopyBase):
+    pass
