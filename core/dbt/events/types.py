@@ -1710,8 +1710,7 @@ class NoNodesSelected(WarnLevel):
         return "No nodes selected!"
 
 
-@dataclass
-class CommandCompleted(DebugLevel, pt.CommandCompleted):
+class CommandCompleted(DebugLevel):
     def code(self):
         return "Q039"
 
