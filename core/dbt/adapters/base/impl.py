@@ -1266,7 +1266,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return model_context[macro_name]
 
     @classmethod
-    def _parse_constraint(cls, raw_constraint: Dict[str, Any]) -> ColumnLevelConstraint:
+    def _parse_column_constraint(cls, raw_constraint: Dict[str, Any]) -> ColumnLevelConstraint:
         try:
             ColumnLevelConstraint.validate(raw_constraint)
             return ColumnLevelConstraint.from_dict(raw_constraint)
@@ -1276,7 +1276,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available
     @classmethod
     def render_raw_column_constraint(cls, raw_constraint: Dict[str, Any]) -> str:
-        constraint = cls._parse_constraint(raw_constraint)
+        constraint = cls._parse_column_constraint(raw_constraint)
         return cls.render_column_constraint(constraint)
 
     @classmethod
