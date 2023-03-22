@@ -10,7 +10,7 @@ from functools import partial
 import json
 import os
 import sys
-from typing import Callable, Dict, Optional, TextIO
+from typing import Callable, Dict, List, Optional, TextIO
 import uuid
 
 
@@ -18,9 +18,10 @@ LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
 
-def setup_event_logger(flags) -> None:
+def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
+    EVENT_MANAGER.add_callbacks(callbacks=callbacks)
 
     if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(
