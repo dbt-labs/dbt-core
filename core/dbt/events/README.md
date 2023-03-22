@@ -50,4 +50,8 @@ logger = AdapterLogger("<database name>")
 
 ## Compiling types.proto
 
-After adding a new message in types.proto, in the core/dbt/events directory: ```protoc --python_betterproto_out . types.proto```
+After adding a new message in types.proto:
+```
+cd core/dbt/events
+protoc --python_betterproto_out . types.proto
+```

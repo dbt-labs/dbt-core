@@ -51,13 +51,22 @@ class TestConfigPathDeprecation:
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"config-version": 2, "data-paths": ["data"]}
+        return {
+            "config-version": 2,
+            "data-paths": ["data"],
+            "log-path": "customlogs",
+            "target-path": "customtarget",
+        }
 
     def test_data_path(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         run_dbt(["debug"])
-        expected = {"project-config-data-paths"}
+        expected = {
+            "project-config-data-paths",
+            "project-config-log-path",
+            "project-config-target-path",
+        }
         assert expected == deprecations.active_deprecations
 
     def test_data_path_fail(self, project):

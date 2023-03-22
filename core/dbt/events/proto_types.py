@@ -461,6 +461,32 @@ class EnvironmentVariableRenamedMsg(betterproto.Message):
 
 
 @dataclass
+class ConfigLogPathDeprecation(betterproto.Message):
+    """D010"""
+
+    deprecated_path: str = betterproto.string_field(1)
+
+
+@dataclass
+class ConfigLogPathDeprecationMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ConfigLogPathDeprecation" = betterproto.message_field(2)
+
+
+@dataclass
+class ConfigTargetPathDeprecation(betterproto.Message):
+    """D011"""
+
+    deprecated_path: str = betterproto.string_field(1)
+
+
+@dataclass
+class ConfigTargetPathDeprecationMsg(betterproto.Message):
+    info: "EventInfo" = betterproto.message_field(1)
+    data: "ConfigTargetPathDeprecation" = betterproto.message_field(2)
+
+
+@dataclass
 class AdapterEventDebug(betterproto.Message):
     """E001"""
 

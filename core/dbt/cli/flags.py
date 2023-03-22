@@ -222,6 +222,8 @@ class Flags:
         self._override_if_set("LOG_FORMAT", "LOG_FORMAT_FILE", params_assigned_from_default)
 
         # Default LOG_PATH from PROJECT_DIR, if available.
+        # Starting in v1.5, if `log-path` is set in `dbt_project.yml`, it will raise a deprecation warning,
+        # with the possibility of removing it in a future release.
         if getattr(self, "LOG_PATH", None) is None:
             project_dir = getattr(self, "PROJECT_DIR", default_project_dir())
             version_check = getattr(self, "VERSION_CHECK", True)

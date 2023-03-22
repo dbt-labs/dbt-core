@@ -2,9 +2,7 @@ import dbt.exceptions
 import textwrap
 import yaml
 import unittest
-from dbt.config.selectors import (
-    selector_config_from_data
-)
+from dbt.config.selectors import selector_config_from_data
 
 from dbt.config.selectors import SelectorConfig
 
@@ -16,9 +14,9 @@ def get_selector_dict(txt: str) -> dict:
 
 
 class SelectorUnitTest(unittest.TestCase):
-
     def test_parse_multiple_excludes(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
             selectors:
                 - name: mult_excl
                   definition:
@@ -31,15 +29,16 @@ class SelectorUnitTest(unittest.TestCase):
                       - exclude:
                          - method: tag
                            value: daily
-            ''')
+            """
+        )
         with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                'cannot provide multiple exclude arguments'
+            dbt.exceptions.DbtSelectorsError, "cannot provide multiple exclude arguments"
         ):
             selector_config_from_data(dct)
 
     def test_parse_set_op_plus(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
             selectors:
                 - name: union_plus
                   definition:
@@ -51,30 +50,32 @@ class SelectorUnitTest(unittest.TestCase):
                             value: hourly
                     - method: tag
                       value: foo
-            ''')
+            """
+        )
         with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                'Valid root-level selector definitions'
+            dbt.exceptions.DbtSelectorsError, "Valid root-level selector definitions"
         ):
             selector_config_from_data(dct)
 
     def test_parse_multiple_methods(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
             selectors:
                 - name: mult_methods
                   definition:
                     - tag:hourly
                     - tag:nightly
                     - fqn:start
-            ''')
+            """
+        )
         with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                'Valid root-level selector definitions'
+            dbt.exceptions.DbtSelectorsError, "Valid root-level selector definitions"
         ):
             selector_config_from_data(dct)
 
     def test_parse_set_with_method(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: mixed_syntaxes
                     definition:
@@ -87,15 +88,17 @@ class SelectorUnitTest(unittest.TestCase):
                         - exclude:
                           - method: tag
                             value: m5678
-            ''')
+            """
+        )
         with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                "Only a single 'union' or 'intersection' key is allowed"
+            dbt.exceptions.DbtSelectorsError,
+            "Only a single 'union' or 'intersection' key is allowed",
         ):
             selector_config_from_data(dct)
 
     def test_complex_sector(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: nightly_diet_snowplow
                     definition:
@@ -116,12 +119,14 @@ class SelectorUnitTest(unittest.TestCase):
                                   value: incremental
                             - method: fqn
                               value: export_performance_timing
-            ''')
+            """
+        )
         selectors = selector_config_from_data(dct)
-        assert(isinstance(selectors, SelectorConfig))
+        assert isinstance(selectors, SelectorConfig)
 
     def test_exclude_not_list(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: summa_exclude
                     definition:
@@ -131,58 +136,54 @@ class SelectorUnitTest(unittest.TestCase):
                         - exclude:
                             method: tag
                             value: daily
-            ''')
-        with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                "Expected a list"
-        ):
+            """
+        )
+        with self.assertRaisesRegex(dbt.exceptions.DbtSelectorsError, "Expected a list"):
             selector_config_from_data(dct)
 
     def test_invalid_key(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: summa_nothing
                     definition:
                       method: tag
                       key: nightly
-            ''')
-        with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                "Expected either 1 key"
-        ):
+            """
+        )
+        with self.assertRaisesRegex(dbt.exceptions.DbtSelectorsError, "Expected either 1 key"):
             selector_config_from_data(dct)
 
     def test_invalid_single_def(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: summa_nothing
                     definition:
                       fubar: tag
-            ''')
-        with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                "not a valid method name"
-        ):
+            """
+        )
+        with self.assertRaisesRegex(dbt.exceptions.DbtSelectorsError, "not a valid method name"):
             selector_config_from_data(dct)
 
     def test_method_no_value(self):
-        dct = get_selector_dict('''\
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: summa_nothing
                     definition:
                       method: tag
-            ''')
-        with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                "not a valid method name"
-        ):
+            """
+        )
+        with self.assertRaisesRegex(dbt.exceptions.DbtSelectorsError, "not a valid method name"):
             selector_config_from_data(dct)
 
     def test_multiple_default_true(self):
-      """Test selector_config_from_data returns the correct error when multiple
-      default values are set
-      """
-      dct = get_selector_dict('''\
+        """Test selector_config_from_data returns the correct error when multiple
+        default values are set
+        """
+        dct = get_selector_dict(
+            """\
                 selectors:
                   - name: summa_nothing
                     definition:
@@ -194,9 +195,9 @@ class SelectorUnitTest(unittest.TestCase):
                       method: tag
                       value: daily
                     default: true
-        ''')
-      with self.assertRaisesRegex(
-                dbt.exceptions.DbtSelectorsError,
-                'Found multiple selectors with `default: true`:'
-      ):
-        selector_config_from_data(dct)
+        """
+        )
+        with self.assertRaisesRegex(
+            dbt.exceptions.DbtSelectorsError, "Found multiple selectors with `default: true`:"
+        ):
+            selector_config_from_data(dct)
