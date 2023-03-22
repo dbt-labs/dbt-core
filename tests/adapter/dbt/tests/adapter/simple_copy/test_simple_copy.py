@@ -97,6 +97,8 @@ class SimpleCopyBase(SimpleCopySetup):
         results = run_dbt()
         assert len(results) == 7
 
+
+class EmptyModelsArentRunBase(SimpleCopySetup):
     def test_dbt_doesnt_run_empty_models(self, project):
         results = run_dbt(["seed"])
         assert len(results) == 1
@@ -110,4 +112,8 @@ class SimpleCopyBase(SimpleCopySetup):
 
 
 class TestSimpleCopyBase(SimpleCopyBase):
+    pass
+
+
+class TestEmptyModelsArentRun(EmptyModelsArentRunBase):
     pass
