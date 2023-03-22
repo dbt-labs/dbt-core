@@ -2,6 +2,8 @@ import pytest
 from dbt.tests.util import run_dbt, get_manifest, read_file
 import json
 import os
+from dbt.events.functions import fire_event
+from dbt.events.types import InvalidOptionYAML
 
 
 my_model_sql = """
@@ -64,3 +66,39 @@ def test_basic(project, logs_dir):
         for data in connection_reused_data:
             assert "conn_name" in data and data["conn_name"]
             assert "orig_conn_name" in data and data["orig_conn_name"]
+
+
+def test_invalid_event_value(project, logs_dir):
+    results = run_dbt(["--log-format=json", "run"])
+    assert len(results) == 1
+    with pytest.raises(Exception):
+        # This should raise because positional arguments are provided to the event
+        fire_event(InvalidOptionYAML("testing"))
+
+    # Provide invalid type to "option_name"
+    fire_event(InvalidOptionYAML(option_name=1))
+
+    log_file = read_file(logs_dir, "dbt.log")
+    invalid_kwarg_event = None
+    invalid_kwarg_note = None
+    for log_line in log_file.split("\n"):
+        # skip empty lines
+        if len(log_line) == 0:
+            continue
+        # The adapter logging also shows up, so skip non-json lines
+        if "[debug]" in log_line:
+            continue
+        log_dct = json.loads(log_line)
+        if log_dct["info"]["name"] == "InvalidOptionYAML":
+            invalid_kwarg_event = log_dct
+        if log_dct["info"]["name"] == "Note":
+            invalid_kwarg_note = log_dct
+    assert invalid_kwarg_event
+    assert (
+        invalid_kwarg_event["info"]["msg"] == "The YAML provided in the -- argument is not valid."
+    )
+    assert invalid_kwarg_note
+    assert (
+        invalid_kwarg_note["info"]["msg"]
+        == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
+    )

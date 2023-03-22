@@ -27,8 +27,9 @@ from .utils import (
     clear_plugin,
 )
 from .mock_adapter import adapter_factory
-from dbt.flags import set_from_args                         
+from dbt.flags import set_from_args
 from argparse import Namespace
+
 set_from_args(Namespace(WARN_ERROR=False), None)
 
 

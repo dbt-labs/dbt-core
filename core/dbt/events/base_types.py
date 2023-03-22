@@ -69,8 +69,13 @@ class BaseEvent:
             kwargs["msg"] = str(kwargs["msg"])
         try:
             self.pb_msg = ParseDict(kwargs, msg_cls())
-        except Exception as exc:
-            raise Exception(f"[{class_name}]: Unable to parse dict {kwargs},\n exc: {exc}")
+        except Exception:
+            # Imports need to be here to avoid circular imports
+            from dbt.events.types import Note
+            from dbt.events.functions import fire_event
+
+            fire_event(Note(msg=f"[{class_name}]: Unable to parse dict {kwargs}"))
+            self.pb_msg = msg_cls()
 
     def __setattr__(self, key, value):
         if key == "pb_msg":
