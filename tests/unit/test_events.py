@@ -1,7 +1,6 @@
 import re
 from typing import TypeVar
 
-from datetime import datetime
 from dbt.contracts.results import TimingInfo
 from dbt.events import AdapterLogger, types
 from dbt.events.base_types import (
@@ -15,6 +14,7 @@ from dbt.events.base_types import (
     msg_from_base_event,
 )
 from dbt.events.functions import msg_to_dict, msg_to_json
+from dbt.events.helpers import get_json_string_utcnow
 from dbt.flags import set_from_args
 from argparse import Namespace
 
@@ -331,7 +331,9 @@ sample_values = [
     types.NoNodesSelected(),
     types.DepsUnpinned(revision="", git=""),
     types.NoNodesForSelectionCriteria(spec_raw=""),
-    types.CommandCompleted(command="", success=True, elapsed=0.1, completed_at=datetime.utcnow()),
+    types.CommandCompleted(
+        command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
+    ),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),

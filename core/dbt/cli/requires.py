@@ -11,6 +11,7 @@ from dbt.events.types import (
     MainReportArgs,
     MainTrackingUserState,
 )
+from dbt.events.helpers import get_json_string_utcnow
 from dbt.exceptions import DbtProjectError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
@@ -18,7 +19,6 @@ from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
 
 from click import Context
-import datetime
 from functools import update_wrapper
 import time
 
@@ -69,7 +69,7 @@ def preflight(func):
                 CommandCompleted(
                     command=ctx.command_path,
                     success=success,
-                    completed_at=datetime.datetime.utcnow(),
+                    completed_at=get_json_string_utcnow(),
                     elapsed=time.perf_counter() - start_func,
                 )
             )
@@ -80,7 +80,7 @@ def preflight(func):
                 CommandCompleted(
                     command=ctx.command_path,
                     success=False,
-                    completed_at=datetime.datetime.utcnow(),
+                    completed_at=get_json_string_utcnow(),
                     elapsed=time.perf_counter() - start_func,
                 )
             )
