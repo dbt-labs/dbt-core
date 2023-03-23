@@ -392,6 +392,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         pass
 
     def same_contract(self, old) -> bool:
+        # This would only apply to seeds
         return True
 
     def patch(self, patch: "ParsedNodePatch"):
@@ -531,10 +532,10 @@ class CompiledNode(ParsedNode):
             return False
         if old.contract is True and self.contract is False:
             # Breaking change: throw an error
-            raise (ModelContractError(node=self))
+            raise (ModelContractError(reason="contract has been disabled", node=self))
         if self.contract_checksum == old.contract_checksum:
             # Breaking change: throw an error
-            raise (ModelContractError(node=self))
+            raise (ModelContractError(reason="column definitions have changed", node=self))
         else:
             # No change
             return False

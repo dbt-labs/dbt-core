@@ -213,7 +213,8 @@ class ModelContractError(DbtRuntimeError):
     CODE = 10016
     MESSAGE = "Contract Error"
 
-    def __init__(self, node=None):
+    def __init__(self, reason, node=None):
+        self.reason = reason
         super().__init__(self.message(), node)
 
     @property
@@ -222,7 +223,7 @@ class ModelContractError(DbtRuntimeError):
 
     def message(self):
         return (
-            "There is a breaking change in the model contract; "
+            "There is a breaking change in the model contract because {self.reason}; "
             "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
         )
 
