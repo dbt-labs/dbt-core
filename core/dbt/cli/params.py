@@ -6,7 +6,6 @@ from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
-
 args = click.option(
     "--args",
     envvar=None,

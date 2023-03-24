@@ -4,7 +4,7 @@ from typing import AbstractSet, Optional
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.events.functions import fire_event
-from dbt.events.types import CompileComplete, CompiledNodeText, CompiledNodeJson
+from dbt.events.types import CompiledNodeText, CompiledNodeJson
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -93,8 +93,6 @@ class CompileTask(GraphRunnableTask):
                     )
                 )
 
-        fire_event(CompileComplete())
-
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
         if not self.args.defer:
             return None
@@ -139,5 +137,9 @@ class CompileTask(GraphRunnableTask):
     def _handle_result(self, result):
         super()._handle_result(result)
 
-        if result.node.is_ephemeral_model:
+        if (
+            result.node.is_ephemeral_model
+            and type(self) is CompileTask
+            and (self.args.select or getattr(self.args, "inline", None))
+        ):
             self.node_results.append(result)

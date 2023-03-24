@@ -9,6 +9,7 @@ from tests.functional.compile.fixtures import (
     second_ephemeral_model_sql,
     third_ephemeral_model_sql,
     schema_yml,
+    model_multiline_jinja,
 )
 
 
@@ -120,7 +121,7 @@ class TestCompile:
             ["compile", "--inline", "select * from {{ ref('first_model') }}"]
         )
         assert len(results) == 1
-        assert "Compiled node is:" in log_output
+        assert "Compiled inline node is:" in log_output
 
     def test_select_pass(self, project):
         (results, log_output) = run_dbt_and_capture(["compile", "--select", "second_model"])
@@ -139,3 +140,18 @@ class TestCompile:
             TargetNotFoundError, match="depends on a node named 'third_model' which was not found"
         ):
             run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
+
+
+class TestCompileJinja:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_model.sql": first_model_sql,
+            "second_model.sql": second_model_sql,
+            "schema.yml": schema_yml,
+        }
+
+    def test_multiline_jinja(self, project):
+        (results, log_output) = run_dbt_and_capture(["compile", "--inline", model_multiline_jinja])
+        assert len(results) == 1
+        assert "Compiled inline node is:" in log_output

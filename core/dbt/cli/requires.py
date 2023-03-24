@@ -1,6 +1,10 @@
-from dbt.version import installed as installed_version
+import time
+from functools import update_wrapper
+
+from click import Context
+from google.protobuf.timestamp_pb2 import Timestamp
+
 from dbt.adapters.factory import adapter_management, register_adapter
-from dbt.flags import set_flags, get_flag_dict
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
@@ -12,15 +16,12 @@ from dbt.events.types import (
     MainTrackingUserState,
 )
 from dbt.exceptions import DbtProjectError
+from dbt.flags import set_flags, get_flag_dict
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
-
-from click import Context
-import datetime
-from functools import update_wrapper
-import time
+from dbt.version import installed as installed_version
 
 
 def preflight(func):
@@ -70,7 +71,7 @@ def preflight(func):
                 CommandCompleted(
                     command=ctx.command_path,
                     success=success,
-                    completed_at=datetime.datetime.utcnow(),
+                    completed_at=Timestamp().GetCurrentTime(),
                     elapsed=time.perf_counter() - start_func,
                 )
             )
@@ -81,7 +82,7 @@ def preflight(func):
                 CommandCompleted(
                     command=ctx.command_path,
                     success=False,
-                    completed_at=datetime.datetime.utcnow(),
+                    completed_at=Timestamp().GetCurrentTime(),
                     elapsed=time.perf_counter() - start_func,
                 )
             )
