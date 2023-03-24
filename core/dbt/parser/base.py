@@ -310,7 +310,7 @@ class ConfiguredParser(
             else:
                 parsed_node.docs = Docs(show=docs_show)
 
-        # If we have "strict" contract in the config, copy to node level, for backwards
+        # If we have contract in the config, copy to node level, for backwards
         # compatibility with earlier node-only config.
         if "contract" in config_dict and config_dict["contract"]:
             parsed_node.contract = config_dict["contract"]
