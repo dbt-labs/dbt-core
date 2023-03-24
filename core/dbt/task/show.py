@@ -29,7 +29,7 @@ class ShowRunner(CompileRunner):
 
 class ShowTask(CompileTask):
     def _runtime_initialize(self):
-        if not self.args.select or getattr(self.args, "inline", None):
+        if not (self.args.select or getattr(self.args, "inline", None)):
             raise DbtRuntimeError("Either --select or --inline must be passed to show")
         super()._runtime_initialize()
 
@@ -37,7 +37,7 @@ class ShowTask(CompileTask):
         return ShowRunner
 
     def task_end_messages(self, results):
-        is_inline = bool(getattr(self.args, "inline"))
+        is_inline = bool(getattr(self.args, "inline", None))
 
         if is_inline:
             matched_results = [result for result in results if result.node.name == "inline_query"]
@@ -65,3 +65,13 @@ class ShowTask(CompileTask):
                     node_name=result.node.name, preview=output.getvalue(), is_inline=is_inline
                 )
             )
+
+    def _handle_result(self, result):
+        super()._handle_result(result)
+
+        if (
+            result.node.is_ephemeral_model
+            and type(self) is ShowTask
+            and (self.args.select or getattr(self.args, "inline", None))
+        ):
+            self.node_results.append(result)

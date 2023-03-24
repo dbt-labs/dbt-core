@@ -38,5 +38,44 @@ class TestShow(BaseConfigProject):
         (results, log_output) = run_dbt_and_capture(
             ["show", "--select", "sample_model", "--output", "json"]
         )
+        assert "Previewing node 'sample_model'" in log_output
+        assert '"sample_num"' in log_output
+        assert '"sample_bool"' in log_output
+
+    def test_select_overflow_limit(self, project):
+        run_dbt(["deps"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_model", "--limit", "6"]
+        )
+        assert "Previewing node 'sample_model'" in log_output
+        assert "6" in log_output
+
+    def test_select_negative_limit(self, project):
+        run_dbt(["deps"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_model", "--limit", "-1"]
+        )
+        assert "7" in log_output
+
+    def test_inline_pass(self, project):
+        run_dbt(["deps"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--inline", "select * from {{ ref('sample_model') }}"]
+        )
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+    def test_inline_fail(self, project):
+        run_dbt(["deps"])
+        with pytest.raises(
+            DbtRuntimeError, match="depends on a node named 'third_model' which was not found"
+        ):
+            run_dbt(["show", "--inline", "select * from {{ ref('third_model') }}"])
+
+    def test_ephemeral_model(self, project):
+        run_dbt(["deps"])
+        (results, log_output) = run_dbt_and_capture(["show", "--select", "ephemeral_model"])
+        assert "Previewing node 'ephemeral_model'" in log_output
         assert "sample_num" in log_output
         assert "sample_bool" in log_output

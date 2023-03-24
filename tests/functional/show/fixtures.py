@@ -28,6 +28,11 @@ select
 from {{ ref('sample_model') }}
 """
 
+models__ephemeral_model = """
+{{ config(materialized = 'ephemeral') }}
+select * from {{ ref('sample_model') }}
+"""
+
 snapshots__sample_snapshot = """
 {% snapshot orders_snapshot %}
 
@@ -50,6 +55,10 @@ seeds__sample_seed = """sample_num,sample_bool
 1,true
 2,false
 ,true
+4,false
+5,true
+6,false
+7,true
 """
 
 tests__failing_sql = """
@@ -98,6 +107,7 @@ class BaseConfigProject:
             "schema.yml": models__schema_yml,
             "sample_model.sql": models__sample_model,
             "second_model.sql": models__second_model,
+            "ephemeral_model.sql": models__ephemeral_model,
         }
 
     @pytest.fixture(scope="class")
