@@ -36,7 +36,7 @@ class HandledExit(ClickException):
 
 
 class UnhandledExit(ClickException):
-    exit_code = 2
+    exit_code = ExitCodes.UnhandledError.value
 
     def __init__(self, exception: Exception, message: str) -> None:
         self.exception = exception
