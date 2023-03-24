@@ -330,6 +330,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     "docs": {"show": True},
                     "tests": [],
                     "columns": [],
+                    "constraints": [],
                     "quoting": {},
                     "freshness": {"error_after": {}, "warn_after": {}},
                     "meta": {},
@@ -342,6 +343,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     "docs": {"show": True},
                     "tests": [],
                     "columns": [],
+                    "constraints": [],
                     "quoting": {"database": True},
                     "freshness": {"error_after": {}, "warn_after": {}},
                     "meta": {},
@@ -415,6 +417,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "tests": [],
             "meta": {},
             "config": {},
+            "constraints": [],
         }
         self.assert_from_dict(minimum, from_dict)
         self.assert_to_dict(minimum, to_dict)
@@ -452,6 +455,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             "description": "a description",
             "tests": ["table_test"],
             "meta": {"key": ["value1", "value2"]},
+            "constraints": [],
             "columns": [
                 {
                     "name": "x",
@@ -460,6 +464,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "tests": [],
                     "meta": {"key2": "value3"},
                     "tags": [],
+                    "constraints": [],
                 },
                 {
                     "name": "y",
@@ -468,6 +473,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
                     "meta": {},
                     "tags": ["a", "b"],
+                    "constraints": [],
                 },
             ],
             "docs": {"show": False},

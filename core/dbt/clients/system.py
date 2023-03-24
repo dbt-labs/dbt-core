@@ -449,8 +449,8 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    fire_event(SystemStdOut(bmsg=out))
-    fire_event(SystemStdErr(bmsg=err))
+    fire_event(SystemStdOut(bmsg=str(out)))
+    fire_event(SystemStdErr(bmsg=str(err)))
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))

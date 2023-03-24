@@ -2,7 +2,6 @@ import contextlib
 import contextvars
 
 from typing import Any, Generator, Mapping, Dict
-from dbt.events.proto_types import NodeInfo
 
 
 LOG_PREFIX = "log_"
@@ -27,7 +26,7 @@ def get_node_info():
     if "node_info" in cvars:
         return cvars["node_info"]
     else:
-        return NodeInfo()
+        return {}
 
 
 def clear_contextvars() -> None:

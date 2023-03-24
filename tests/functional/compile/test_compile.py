@@ -41,7 +41,7 @@ class TestIntrospectFlag:
 
     @pytest.mark.skip("Investigate flaky test #7179")
     def test_no_introspect(self, project):
-        with pytest.raises(DbtRuntimeError, match="connection never acquired for thread"):
+        with pytest.raises(DbtRuntimeError):
             run_dbt(["compile", "--no-introspect"])
 
 

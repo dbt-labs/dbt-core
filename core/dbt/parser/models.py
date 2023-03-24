@@ -152,12 +152,6 @@ class PythonParseVisitor(ast.NodeVisitor):
             self.packages.append(node.module.split(".")[0])
 
 
-def merge_packages(original_packages_with_version, new_packages):
-    original_packages = [package.split("==")[0] for package in original_packages_with_version]
-    additional_packages = [package for package in new_packages if package not in original_packages]
-    return original_packages_with_version + list(set(additional_packages))
-
-
 def verify_python_model_code(node):
     # TODO: add a test for this
     try:
@@ -253,7 +247,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # jinja rendering
             super().render_update(node, config)
             fire_event(
-                Note(f"1605: jinja rendering because of STATIC_PARSER flag. file: {node.path}"),
+                Note(
+                    msg=f"1605: jinja rendering because of STATIC_PARSER flag. file: {node.path}"
+                ),
                 EventLevel.DEBUG,
             )
             return
@@ -290,7 +286,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # sample the experimental parser only during a normal run
         if exp_sample and not flags.USE_EXPERIMENTAL_PARSER:
             fire_event(
-                Note(f"1610: conducting experimental parser sample on {node.path}"),
+                Note(msg=f"1610: conducting experimental parser sample on {node.path}"),
                 EventLevel.DEBUG,
             )
             experimental_sample = self.run_experimental_parser(node)
@@ -323,7 +319,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # it 40% of the time. So I've opted to keep all the rng code colocated above.
             if stable_sample and not flags.USE_EXPERIMENTAL_PARSER:
                 fire_event(
-                    Note(f"1611: conducting full jinja rendering sample on {node.path}"),
+                    Note(msg=f"1611: conducting full jinja rendering sample on {node.path}"),
                     EventLevel.DEBUG,
                 )
                 # if this will _never_ mutate anything `self` we could avoid these deep copies,
@@ -361,7 +357,8 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # jinja rendering
             super().render_update(node, config)
             fire_event(
-                Note(f"1602: parser fallback to jinja rendering on {node.path}"), EventLevel.DEBUG
+                Note(msg=f"1602: parser fallback to jinja rendering on {node.path}"),
+                EventLevel.DEBUG,
             )
 
             # if sampling, add the correct messages for tracking
@@ -400,7 +397,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # test/integration/072_experimental_parser_tests/test_all_experimental_parser.py
             fire_event(
                 Note(
-                    f"1601: detected macro override of ref/source/config in the scope of {node.path}"
+                    msg=f"1601: detected macro override of ref/source/config in the scope of {node.path}"
                 ),
                 EventLevel.DEBUG,
             )
@@ -410,14 +407,14 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         try:
             statically_parsed = py_extract_from_source(node.raw_code)
             fire_event(
-                Note(f"1699: static parser successfully parsed {node.path}"), EventLevel.DEBUG
+                Note(msg=f"1699: static parser successfully parsed {node.path}"), EventLevel.DEBUG
             )
             return _shift_sources(statically_parsed)
         # if we want information on what features are barring the static
         # parser from reading model files, this is where we would add that
         # since that information is stored in the `ExtractionError`.
         except ExtractionError:
-            fire_event(Note(f"1603: static parser failed on {node.path}"), EventLevel.DEBUG)
+            fire_event(Note(msg=f"1603: static parser failed on {node.path}"), EventLevel.DEBUG)
             return "cannot_parse"
 
     def run_experimental_parser(
@@ -430,7 +427,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # test/integration/072_experimental_parser_tests/test_all_experimental_parser.py
             fire_event(
                 Note(
-                    f"1601: detected macro override of ref/source/config in the scope of {node.path}"
+                    msg=f"1601: detected macro override of ref/source/config in the scope of {node.path}"
                 ),
                 EventLevel.DEBUG,
             )
@@ -443,7 +440,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             # experimental call when we add additional features.
             experimentally_parsed = py_extract_from_source(node.raw_code)
             fire_event(
-                Note(f"1698: experimental parser successfully parsed {node.path}"),
+                Note(msg=f"1698: experimental parser successfully parsed {node.path}"),
                 EventLevel.DEBUG,
             )
             return _shift_sources(experimentally_parsed)
@@ -451,7 +448,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # parser from reading model files, this is where we would add that
         # since that information is stored in the `ExtractionError`.
         except ExtractionError:
-            fire_event(Note(f"1604: experimental parser failed on {node.path}"), EventLevel.DEBUG)
+            fire_event(
+                Note(msg=f"1604: experimental parser failed on {node.path}"), EventLevel.DEBUG
+            )
             return "cannot_parse"
 
     # checks for banned macros

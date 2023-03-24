@@ -7,10 +7,15 @@ from dbt.events.types import (
     LogStartLine,
     LogTestResult,
 )
-from dbt.events.functions import msg_to_dict, LOG_VERSION, reset_metadata_vars
-from dbt.events import proto_types as pt
+from dbt.events.functions import msg_to_dict, msg_to_json, LOG_VERSION, reset_metadata_vars
+from dbt.events import types_pb2
 from dbt.events.base_types import msg_from_base_event, EventLevel
 from dbt.version import installed
+from google.protobuf.json_format import MessageToDict
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 info_keys = {
@@ -33,8 +38,8 @@ def test_events():
     event = MainReportVersion(version=str(installed), log_version=LOG_VERSION)
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
-    msg_json = msg.to_json()
-    serialized = bytes(msg)
+    msg_json = msg_to_json(msg)
+    serialized = msg.SerializeToString()
     assert "Running with dbt=" in str(serialized)
     assert set(msg_dict.keys()) == {"info", "data"}
     assert set(msg_dict["data"].keys()) == {"version", "log_version"}
@@ -43,11 +48,13 @@ def test_events():
     assert msg.info.code == "A001"
 
     # Extract EventInfo from serialized message
-    generic_event = pt.GenericMessage().parse(serialized)
-    assert generic_event.info.code == "A001"
+    generic_msg = types_pb2.GenericMessage()
+    generic_msg.ParseFromString(serialized)
+    assert generic_msg.info.code == "A001"
     # get the message class for the real message from the generic message
-    message_class = getattr(pt, f"{generic_event.info.name}Msg")
-    new_msg = message_class().parse(serialized)
+    message_class = getattr(types_pb2, f"{generic_msg.info.name}Msg")
+    new_msg = message_class()
+    new_msg.ParseFromString(serialized)
     assert new_msg.info.code == msg.info.code
     assert new_msg.data.version == msg.data.version
 
@@ -55,7 +62,7 @@ def test_events():
     event = MainReportArgs(args={"one": "1", "two": "2"})
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
-    msg_json = msg.to_json()
+    msg_json = msg_to_json(msg)
 
     assert set(msg_dict.keys()) == {"info", "data"}
     assert set(msg_dict["data"].keys()) == {"args"}
@@ -68,7 +75,7 @@ def test_exception_events():
     event = RollbackFailed(conn_name="test", exc_info="something failed")
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
-    msg_json = msg.to_json()
+    msg_json = msg_to_json(msg)
     assert set(msg_dict.keys()) == {"info", "data"}
     assert set(msg_dict["data"].keys()) == {"conn_name", "exc_info"}
     assert set(msg_dict["info"].keys()) == info_keys
@@ -78,7 +85,7 @@ def test_exception_events():
     event = PluginLoadError(exc_info="something failed")
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
-    msg_json = msg.to_json()
+    msg_json = msg_to_json(msg)
     assert set(msg_dict["data"].keys()) == {"exc_info"}
     assert set(msg_dict["info"].keys()) == info_keys
     assert msg_json
@@ -89,7 +96,7 @@ def test_exception_events():
     event = MainEncounteredError(exc="Rollback failed")
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
-    msg_json = msg.to_json()
+    msg_json = msg_to_json(msg)
 
     assert set(msg_dict["data"].keys()) == {"exc"}
     assert set(msg_dict["info"].keys()) == info_keys
@@ -99,11 +106,10 @@ def test_exception_events():
 
 def test_node_info_events():
     meta_dict = {
-        "string-key1": ["value1", 2],
-        "string-key2": {"nested-dict-key": "value2"},
-        1: "value-from-non-string-key",
-        "string-key3": 1,
-        "string-key4": ["string1", 1, "string2", 2],
+        "key1": ["value1", 2],
+        "key2": {"nested-dict-key": "value2"},
+        "key3": 1,
+        "key4": ["string1", 1, "string2", 2],
     }
     node_info = {
         "node_path": "some_path",
@@ -120,11 +126,11 @@ def test_node_info_events():
         description="some description",
         index=123,
         total=111,
-        node_info=pt.NodeInfo(**node_info),
+        node_info=node_info,
     )
     assert event
     assert event.node_info.node_path == "some_path"
-    assert event.node_info.meta == meta_dict
+    assert event.to_dict()["node_info"]["meta"] == meta_dict
 
 
 def test_extra_dict_on_event(monkeypatch):
@@ -137,16 +143,20 @@ def test_extra_dict_on_event(monkeypatch):
     msg = msg_from_base_event(event)
     msg_dict = msg_to_dict(msg)
     assert set(msg_dict["info"].keys()) == info_keys
-    assert msg.info.extra == {"env_key": "env_value"}
-    serialized = bytes(msg)
+    extra_dict = {"env_key": "env_value"}
+    assert msg.info.extra == extra_dict
+    serialized = msg.SerializeToString()
 
     # Extract EventInfo from serialized message
-    generic_event = pt.GenericMessage().parse(serialized)
-    assert generic_event.info.code == "A001"
+    generic_msg = types_pb2.GenericMessage()
+    generic_msg.ParseFromString(serialized)
+    assert generic_msg.info.code == "A001"
     # get the message class for the real message from the generic message
-    message_class = getattr(pt, f"{generic_event.info.name}Msg")
-    new_msg = message_class().parse(serialized)
-    assert new_msg.info.extra == msg.info.extra
+    message_class = getattr(types_pb2, f"{generic_msg.info.name}Msg")
+    new_msg = message_class()
+    new_msg.ParseFromString(serialized)
+    new_msg_dict = MessageToDict(new_msg)
+    assert new_msg_dict["info"]["extra"] == msg.info.extra
 
     # clean up
     reset_metadata_vars()

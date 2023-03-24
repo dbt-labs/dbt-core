@@ -176,8 +176,8 @@ class BaseConstraintsColumnsEqual:
 # TODO: make more generic
 _expected_sql = """
 create table {0} (
-    id integer not null primary key check (id > 0) ,
-    color text ,
+    id integer not null primary key check (id > 0),
+    color text,
     date_day text
 ) ;
 insert into {0} (

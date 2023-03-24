@@ -40,7 +40,8 @@ def preflight(func):
 
         # Logging
         # N.B. Legacy logger is not supported
-        setup_event_logger(flags)
+        callabcks = ctx.obj.get("callbacks", [])
+        setup_event_logger(flags=flags, callbacks=callabcks)
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))

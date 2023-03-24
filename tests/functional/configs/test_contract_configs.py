@@ -81,8 +81,11 @@ models:
         quote: true
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+            - type: not_null
+            - type: primary_key
+            - type: check
+              expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -101,8 +104,11 @@ models:
       - name: id
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+            - type: not_null
+            - type: primary_key
+            - type: check
+              expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -115,8 +121,11 @@ models:
       - name: id
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+            - type: not_null
+            - type: primary_key
+            - type: check
+              expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -142,8 +151,11 @@ models:
         quote: true
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+          - type: not_null
+          - type: primary_key
+          - type: check
+            expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -161,8 +173,11 @@ models:
         quote: true
         data_type: integer
         description: hello
-        constraints: ['not null','primary key']
-        constraints_check: (id > 0)
+        constraints:
+          - type: not_null
+          - type: primary_key
+          - type: check
+            expression: (id > 0)
         tests:
           - unique
       - name: color
@@ -190,7 +205,7 @@ class TestModelLevelContractEnabledConfigs:
 
         assert contract_actual_config is True
 
-        expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=['not null', 'primary key'], constraints_check='(id > 0)', quote=True, tags=[], _extra={}), 'color': ColumnInfo(name='color', description='', meta={}, data_type='text', constraints=None, constraints_check=None, quote=None, tags=[], _extra={}), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=None, constraints_check=None, quote=None, tags=[], _extra={})}"
+        expected_columns = "{'id': ColumnInfo(name='id', description='hello', meta={}, data_type='integer', constraints=[ColumnLevelConstraint(type=<ConstraintType.not_null: 'not_null'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.primary_key: 'primary_key'>, name=None, expression=None, warn_unenforced=True, warn_unsupported=True), ColumnLevelConstraint(type=<ConstraintType.check: 'check'>, name=None, expression='(id > 0)', warn_unenforced=True, warn_unsupported=True)], quote=True, tags=[], _extra={}), 'color': ColumnInfo(name='color', description='', meta={}, data_type='text', constraints=[], quote=None, tags=[], _extra={}), 'date_day': ColumnInfo(name='date_day', description='', meta={}, data_type='date', constraints=[], quote=None, tags=[], _extra={})}"
 
         assert expected_columns == str(my_model_columns)
 

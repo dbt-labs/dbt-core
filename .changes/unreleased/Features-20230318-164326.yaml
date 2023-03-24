@@ -1,0 +1,7 @@
+kind: Features
+body: Switch from betterproto to google protobuf and enable more flexible meta dictionary
+  in logs
+time: 2023-03-18T16:43:26.782738-04:00
+custom:
+  Author: gshank
+  Issue: "6832"

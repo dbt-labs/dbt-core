@@ -29,6 +29,7 @@ from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ColumnInfo,
+    ColumnLevelConstraint,
     GenericTestNode,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
@@ -37,11 +38,12 @@ from dbt.contracts.graph.nodes import (
     Group,
     ManifestNode,
     GraphMemberNode,
+    ConstraintType,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
     HasColumnTests,
-    HasDocs,
+    HasColumnProps,
     SourcePatch,
     UnparsedAnalysisUpdate,
     UnparsedColumn,
@@ -114,15 +116,7 @@ class ParserRef:
     def __init__(self):
         self.column_info: Dict[str, ColumnInfo] = {}
 
-    def add(
-        self,
-        column: Union[HasDocs, UnparsedColumn],
-        description: str,
-        data_type: Optional[str],
-        constraints: Optional[List[str]],
-        constraints_check: Optional[str],
-        meta: Dict[str, Any],
-    ):
+    def _add(self, column: HasColumnProps):
         tags: List[str] = []
         tags.extend(getattr(column, "tags", ()))
         quote: Optional[bool]
@@ -130,13 +124,20 @@ class ParserRef:
             quote = column.quote
         else:
             quote = None
+
+        if any(
+            c
+            for c in column.constraints
+            if not c["type"] or not ConstraintType.is_valid(c["type"])
+        ):
+            raise ParsingError(f"Invalid constraint type on column {column.name}")
+
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
-            description=description,
-            data_type=data_type,
-            constraints=constraints,
-            constraints_check=constraints_check,
-            meta=meta,
+            description=column.description,
+            data_type=column.data_type,
+            constraints=[ColumnLevelConstraint.from_dict(c) for c in column.constraints],
+            meta=column.meta,
             tags=tags,
             quote=quote,
             _extra=column.extra,
@@ -146,12 +147,7 @@ class ParserRef:
     def from_target(cls, target: Union[HasColumnDocs, HasColumnTests]) -> "ParserRef":
         refs = cls()
         for column in target.columns:
-            description = column.description
-            data_type = column.data_type
-            constraints = column.constraints
-            constraints_check = column.constraints_check
-            meta = column.meta
-            refs.add(column, description, data_type, constraints, constraints_check, meta)
+            refs._add(column)
         return refs
 
 

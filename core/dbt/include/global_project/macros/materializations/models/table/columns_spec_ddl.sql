@@ -11,12 +11,11 @@
     {%- set user_provided_columns = model['columns'] -%}
     (
     {% for i in user_provided_columns %}
-      {% set col = user_provided_columns[i] %}
-      {% set constraints = col['constraints'] %}
-      {% set constraints_check = col['constraints_check'] %}
-      {{ col['name'] }} {{ col['data_type'] }} {% for x in constraints %} {{ x or "" }} {% endfor %} {% if constraints_check -%} check {{ constraints_check or "" }} {%- endif %} {{ "," if not loop.last }}
-    {% endfor %}
-  )
+      {%- set col = user_provided_columns[i] -%}
+      {%- set constraints = col['constraints'] -%}
+      {{ col['name'] }} {{ col['data_type'] }}{% for c in constraints %} {{ adapter.render_raw_column_constraint(c) }}{% endfor %}{{ "," if not loop.last }}
+    {% endfor -%}
+    )
 {% endmacro %}
 
 {%- macro get_assert_columns_equivalent(sql) -%}
