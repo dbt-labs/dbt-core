@@ -25,7 +25,7 @@
 
   create {% if temporary: -%}temporary{%- endif %} table
     {{ relation.include(database=(not temporary), schema=(not temporary)) }}
-  {% set contract_config = config.get('contract') %}
+  {% set contract_config = config.get('contract', {}) %}
   {% if contract_config.get('strict', False) %}
     {{ get_assert_columns_equivalent(sql) }}
     {{ get_columns_spec_ddl() }}
