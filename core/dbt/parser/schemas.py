@@ -937,6 +937,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
             node.patch(patch)
             self.validate_constraints(node)
+            node.build_contract_checksum()
 
     def validate_constraints(self, patched_node):
         error_messages = []

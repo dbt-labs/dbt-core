@@ -518,8 +518,7 @@ class CompiledNode(ParsedNode):
             sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
             for column in sorted_columns:
                 contract_state += f"|{column.name}"
-                contract_state += column.data_type
-                contract_state += str(column.constraints)
+                contract_state += str(column.data_type)
             data = contract_state.encode("utf-8")
             self.contract_checksum = hashlib.new("sha256", data).hexdigest()
 
@@ -530,15 +529,17 @@ class CompiledNode(ParsedNode):
         if old.contract is False and self.contract is True:
             # A change, but not a breaking change
             return False
+        breaking_change_reasons = []
         if old.contract is True and self.contract is False:
             # Breaking change: throw an error
-            raise (ModelContractError(reason="contract has been disabled", node=self))
-        if self.contract_checksum == old.contract_checksum:
+            breaking_change_reasons.append("contract has been disabled")
+        if self.contract_checksum != old.contract_checksum:
             # Breaking change: throw an error
-            raise (ModelContractError(reason="column definitions have changed", node=self))
+            breaking_change_reasons.append("column definitions have changed")
         else:
             # No change
             return False
+        raise (ModelContractError(reasons=" and ".join(breaking_change_reasons), node=self))
 
 
 # ====================================

@@ -289,7 +289,7 @@ class TestChangedContract(BaseModifiedState):
         # save a new state
         self.copy_state()
 
-        # This should raise because a column has added a constraint
+        # This should raise because a column name has changed
         write_file(modified_contract_schema_yml, "models", "schema.yml")
         with pytest.raises(ModelContractError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])

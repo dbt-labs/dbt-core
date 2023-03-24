@@ -96,10 +96,8 @@ models:
           - unique:
               severity: error
           - not_null
-      - name: name
+      - name: user_name
         data_type: text
-        constraints:
-          - type: not_null
 """
 
 exposures_yml = """
