@@ -1,3 +1,5 @@
+import json
+
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
@@ -1605,14 +1607,6 @@ class ConcurrencyLine(InfoLevel):
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-class CompiledNode(InfoLevel):
-    def code(self):
-        return "Q028"
-
-    def message(self) -> str:
-        return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
-
-
 class WritingInjectedSQLForNode(DebugLevel):
     def code(self):
         return "Q029"
@@ -1717,6 +1711,52 @@ class CommandCompleted(DebugLevel):
     def message(self) -> str:
         status = "succeeded" if self.success else "failed"
         return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
+
+
+class ShowNodeText(InfoLevel):
+    def code(self):
+        return "Q041"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return f"Previewing inline node:\n{self.preview}"
+        else:
+            return f"Previewing node '{self.node_name}':\n{self.preview}"
+
+
+class ShowNodeJson(InfoLevel):
+    def code(self):
+        return "Q042"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return json.dumps({"preview": json.loads(self.preview)}, indent=2)
+        else:
+            return json.dumps(
+                {"node": self.node_name, "preview": json.loads(self.preview)}, indent=2
+            )
+
+
+class CompiledNodeText(InfoLevel):
+    def code(self):
+        return "Q044"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return f"Compiled inline node is:\n{self.compiled}"
+        else:
+            return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
+
+
+class CompiledNodeJson(InfoLevel):
+    def code(self):
+        return "Q045"
+
+    def message(self) -> str:
+        if self.is_inline:
+            return json.dumps({"compiled": self.compiled}, indent=2)
+        else:
+            return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
 
 
 # =======================================================

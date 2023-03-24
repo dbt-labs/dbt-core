@@ -76,7 +76,7 @@ class CompileTask(GraphRunnableTask):
 
         if len(matched_results) == 1:
             result = matched_results[0]
-            if self.args.output == "json":
+            if getattr(self.args, "output", None) == "json":
                 fire_event(
                     CompiledNodeJson(
                         node_name=result.node.name,

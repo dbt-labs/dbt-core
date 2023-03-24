@@ -1758,6 +1758,19 @@ message NoNodesSelectedMsg {
 }
 
 // Q039
+message CommandCompleted {
+    string command = 1;
+    bool success = 2;
+    google.protobuf.Timestamp completed_at = 3;
+    float elapsed = 4;
+}
+
+message CommandCompletedMsg {
+    EventInfo info = 1;
+    CommandCompleted data = 2;
+}
+
+// Q041
 message ShowNodeText {
     string node_name = 1;
     string preview = 2;
@@ -1769,7 +1782,7 @@ message ShowNodeTextMsg {
     ShowNodeText data = 2;
 }
 
-// Q040
+// Q042
 message ShowNodeJson {
     string node_name = 1;
     string preview = 2;
@@ -1781,9 +1794,9 @@ message ShowNodeJsonMsg {
     ShowNodeText data = 2;
 }
 
-// Skipped Q041
+// Skipped Q043
 
-// Q042
+// Q044
 message CompiledNodeText {
     string node_name = 1;
     string compiled = 2;
@@ -1795,7 +1808,7 @@ message CompiledNodeTextMsg {
     CompiledNodeText data = 2;
 }
 
-// Q043
+// Q045
 message CompiledNodeJson {
     string node_name = 1;
     string compiled = 2;
@@ -1805,19 +1818,6 @@ message CompiledNodeJson {
 message CompiledNodeJsonMsg {
     EventInfo info = 1;
     CompiledNodeJson data = 2;
-}
-
-// Q039
-message CommandCompleted {
-    string command = 1;
-    bool success = 2;
-    google.protobuf.Timestamp completed_at = 3;
-    float elapsed = 4;
-}
-
-message CommandCompletedMsg {
-    EventInfo info = 1;
-    CommandCompleted data = 2;
 }
 
 // W - Node testing
