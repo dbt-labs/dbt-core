@@ -69,7 +69,7 @@ models:
   - name: my_model
     config:
       contract:
-        strict: true
+        enforced: true
     columns:
       - name: id
         quote: true
@@ -89,7 +89,7 @@ models:
   - name: my_model_error
     config:
       contract:
-        strict: true
+        enforced: true
     columns:
       - name: id
         data_type: integer
@@ -108,7 +108,7 @@ models:
   - name: my_model_wrong_order
     config:
       contract:
-        strict: true
+        enforced: true
     columns:
       - name: id
         data_type: integer
@@ -127,7 +127,7 @@ models:
   - name: my_model_wrong_name
     config:
       contract:
-        strict: true
+        enforced: true
     columns:
       - name: id
         data_type: integer
@@ -151,7 +151,7 @@ models:
   - name: my_model_data_type
     config:
       contract:
-        strict: true
+        enforced: true
     columns:
       - name: wrong_data_type_column_name
         data_type: {data_type}
