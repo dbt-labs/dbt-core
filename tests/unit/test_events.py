@@ -410,7 +410,6 @@ class TestEventJSONSerialization:
         # if we have everything we need to test, try to serialize everything
         count = 0
         for event in sample_values:
-            print(event.__class__.__name__)
             msg = msg_from_base_event(event)
             print(f"--- msg: {msg.info.name}")
             # Serialize to dictionary
