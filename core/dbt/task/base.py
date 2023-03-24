@@ -203,6 +203,8 @@ class BaseRunner(metaclass=ABCMeta):
         self.skip = False
         self.skip_cause: Optional[RunResult] = None
 
+        self.run_ephemeral_models = False
+
     @abstractmethod
     def compile(self, manifest: Manifest) -> Any:
         pass
@@ -324,7 +326,7 @@ class BaseRunner(metaclass=ABCMeta):
             ctx.timing.append(timing_info)
 
             # for ephemeral nodes, we only want to compile, not run
-            if not ctx.node.is_ephemeral_model:
+            if not ctx.node.is_ephemeral_model or self.run_ephemeral_models:
                 ctx.node.update_event_status(node_status=RunningStatus.Executing)
                 fire_event(
                     NodeExecuting(

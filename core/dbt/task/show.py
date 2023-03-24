@@ -9,6 +9,10 @@ from dbt.task.compile import CompileTask, CompileRunner
 
 
 class ShowRunner(CompileRunner):
+    def __init__(self, config, adapter, node, node_index, num_nodes):
+        super().__init__(config, adapter, node, node_index, num_nodes)
+        self.run_ephemeral_models = True
+
     def execute(self, compiled_node, manifest):
         adapter_response, execute_result = self.adapter.execute(
             compiled_node.compiled_code, fetch=True

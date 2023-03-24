@@ -4,6 +4,7 @@ from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt_and_capture, run_dbt
 from tests.functional.show.fixtures import (
     BaseConfigProject,
+    models__second_ephemeral_model,
 )
 
 
@@ -76,6 +77,13 @@ class TestShow(BaseConfigProject):
     def test_ephemeral_model(self, project):
         run_dbt(["deps"])
         (results, log_output) = run_dbt_and_capture(["show", "--select", "ephemeral_model"])
-        assert "Previewing node 'ephemeral_model'" in log_output
-        assert "sample_num" in log_output
-        assert "sample_bool" in log_output
+        assert "col_hundo" in log_output
+        assert "104" in log_output
+
+    def test_second_ephemeral_model(self, project):
+        run_dbt(["deps"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--inline", models__second_ephemeral_model]
+        )
+        assert "col_kilo" in log_output
+        assert "1,104" in log_output

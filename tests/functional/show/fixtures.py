@@ -30,7 +30,16 @@ from {{ ref('sample_model') }}
 
 models__ephemeral_model = """
 {{ config(materialized = 'ephemeral') }}
-select * from {{ ref('sample_model') }}
+select
+    coalesce(sample_num, 0) + 100 as col_hundo
+from {{ ref('sample_model') }}
+"""
+
+models__second_ephemeral_model = """
+{{ config(materialized = 'ephemeral') }}
+select
+    col_hundo + 1000 as col_kilo
+from {{ ref('ephemeral_model') }}
 """
 
 snapshots__sample_snapshot = """
