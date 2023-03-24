@@ -198,7 +198,7 @@ class GraphRunnableTask(ConfiguredTask):
                     fire_event(
                         NodeFinished(
                             node_info=runner.node.node_info,
-                            run_result=result.to_msg(),
+                            run_result=result.to_msg_dict(),
                         )
                     )
             # `_event_status` dict is only used for logging.  Make sure
@@ -439,11 +439,11 @@ class GraphRunnableTask(ConfiguredTask):
 
         # We have other result types here too, including FreshnessResult
         if isinstance(result, RunExecutionResult):
-            result_msgs = [result.to_msg() for result in result.results]
+            result_msgs = [result.to_msg_dict() for result in result.results]
             fire_event(
                 EndRunResult(
                     results=result_msgs,
-                    generated_at=result.generated_at,
+                    generated_at=result.generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     elapsed_time=result.elapsed_time,
                     success=GraphRunnableTask.interpret_results(result.results),
                 )

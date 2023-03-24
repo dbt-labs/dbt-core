@@ -1,7 +1,7 @@
 # Configuration for pre-commit hooks (see https://pre-commit.com/).
 # Eventually the hooks described here will be run as tests before merging each PR.
 
-exclude: ^(core/dbt/docs/build/)
+exclude: ^(core/dbt/docs/build/|core/dbt/events/types_pb2.py)
 
 # Force all unspecified python hooks to run python 3.8
 default_language_version:

@@ -3,6 +3,7 @@ syntax = "proto3";
 package proto_types;
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
 
 // Common event info
 message EventInfo {
@@ -35,7 +36,7 @@ message NodeInfo {
     string node_status = 6;
     string node_started_at = 7;
     string node_finished_at = 8;
-    map<string, string> meta = 9;
+    google.protobuf.Struct meta = 9;
 }
 
 // RunResult
@@ -45,7 +46,7 @@ message RunResultMsg {
     repeated TimingInfoMsg timing_info = 3;
     string thread = 4;
     float execution_time = 5;
-    map<string, string> adapter_response = 6;
+    google.protobuf.Struct adapter_response = 6;
     int32 num_failures = 7;
 }
 
@@ -387,7 +388,7 @@ message AdapterEventDebug {
     NodeInfo node_info = 1;
     string name = 2;
     string base_msg = 3;
-    repeated string args = 4;
+    google.protobuf.ListValue args = 4;
 }
 
 message AdapterEventDebugMsg {
@@ -400,7 +401,7 @@ message AdapterEventInfo {
     NodeInfo node_info = 1;
     string name = 2;
     string base_msg = 3;
-    repeated string args = 4;
+    google.protobuf.ListValue args = 4;
 }
 
 message AdapterEventInfoMsg {
@@ -413,7 +414,7 @@ message AdapterEventWarning {
     NodeInfo node_info = 1;
     string name = 2;
     string base_msg = 3;
-    repeated string args = 4;
+    google.protobuf.ListValue args = 4;
 }
 
 message AdapterEventWarningMsg {
@@ -426,7 +427,7 @@ message AdapterEventError {
     NodeInfo node_info = 1;
     string name = 2;
     string base_msg = 3;
-    repeated string args = 4;
+    google.protobuf.ListValue args = 4;
     string exc_info = 5;
 }
 
@@ -465,7 +466,7 @@ message ConnectionLeftOpenInCleanup {
 
 message ConnectionLeftOpenInCleanupMsg {
     EventInfo info = 1;
-    ConnectionLeftOpen data = 2;
+    ConnectionLeftOpenInCleanup data = 2;
 }
 
 // E008
@@ -644,7 +645,7 @@ message CacheActionMsg {
 
 // E031
 message CacheDumpGraph {
-    map<string, ListOfStrings> dump = 1;
+    map<string, string> dump = 1;
     string before_after = 2;
     string action = 3;
 }
@@ -1898,7 +1899,7 @@ message SystemExecutingCmdMsg {
 
 // Z007
 message SystemStdOut{
-    bytes bmsg = 1;
+    string bmsg = 1;
 }
 
 message SystemStdOutMsg {
@@ -1908,7 +1909,7 @@ message SystemStdOutMsg {
 
 // Z008
 message SystemStdErr {
-    bytes bmsg = 1;
+    string bmsg = 1;
 }
 
 message SystemStdErrMsg {
@@ -2291,66 +2292,4 @@ message Note {
 message NoteMsg {
     EventInfo info = 1;
     Note data = 2;
-}
-
-// T - Integration tests
-
-// T001
-message IntegrationTestInfo {
-    string msg = 1;
-}
-
-message IntegrationTestInfoMsg {
-    EventInfo info = 1;
-    IntegrationTestInfo data = 2;
-}
-
-// T002
-message IntegrationTestDebug {
-    string msg = 1;
-}
-
-message IntegrationTestDebugMsg {
-    EventInfo info = 1;
-    IntegrationTestDebug data = 2;
-}
-
-// T003
-message IntegrationTestWarn {
-    string msg = 1;
-}
-
-message IntegrationTestWarnMsg {
-    EventInfo info = 1;
-    IntegrationTestWarn data = 2;
-}
-
-// T004
-message IntegrationTestError {
-    string msg = 1;
-}
-
-message IntegrationTestErrorMsg {
-    EventInfo info = 1;
-    IntegrationTestError data = 2;
-}
-
-// T005
-message IntegrationTestException {
-    string msg = 1;
-}
-
-message IntegrationTestExceptionMsg {
-    EventInfo info = 1;
-    IntegrationTestException data = 2;
-}
-
-// T006
-message UnitTestInfo {
-    string msg = 1;
-}
-
-message UnitTestInfoMsg {
-    EventInfo info = 1;
-    UnitTestInfo data = 2;
 }

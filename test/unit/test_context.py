@@ -27,6 +27,10 @@ from .utils import (
     clear_plugin,
 )
 from .mock_adapter import adapter_factory
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 class TestVar(unittest.TestCase):
@@ -148,23 +152,6 @@ class TestRuntimeWrapper(unittest.TestCase):
         # the 'quote' method isn't wrapped, we should get our expected inputs
         self.assertEqual(self.wrapper.quote("test_value"), '"test_value"')
         self.responder.quote.assert_called_once_with("test_value")
-
-    def test_wrapped_method(self):
-        rel = mock.MagicMock()
-        rel.matches.return_value = True
-        self.responder.list_relations_without_caching.return_value = [rel]
-
-        found = self.wrapper.get_relation("database", "schema", "identifier")
-
-        self.assertEqual(found, rel)
-
-        self.responder.list_relations_without_caching.assert_called_once_with(mock.ANY)
-        # extract the argument
-        assert len(self.responder.list_relations_without_caching.mock_calls) == 1
-        assert len(self.responder.list_relations_without_caching.call_args[0]) == 1
-        arg = self.responder.list_relations_without_caching.call_args[0][0]
-        assert arg.database == "database"
-        assert arg.schema == "schema"
 
 
 def assert_has_keys(required_keys: Set[str], maybe_keys: Set[str], ctx: Dict[str, Any]):

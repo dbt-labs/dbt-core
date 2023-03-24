@@ -4,7 +4,7 @@ from typing import Any, Optional, Tuple, Type, List
 from dbt.contracts.connection import Connection
 from dbt.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
-from dbt.adapters.cache import _make_ref_key_msg
+from dbt.adapters.cache import _make_ref_key_dict
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.events.functions import fire_event
 from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
@@ -109,7 +109,7 @@ class SQLAdapter(BaseAdapter):
                     ColTypeChange(
                         orig_type=target_column.data_type,
                         new_type=new_type,
-                        table=_make_ref_key_msg(current),
+                        table=_make_ref_key_dict(current),
                     )
                 )
 
@@ -152,7 +152,7 @@ class SQLAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        fire_event(SchemaCreation(relation=_make_ref_key_msg(relation)))
+        fire_event(SchemaCreation(relation=_make_ref_key_dict(relation)))
         kwargs = {
             "relation": relation,
         }
@@ -163,7 +163,7 @@ class SQLAdapter(BaseAdapter):
 
     def drop_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        fire_event(SchemaDrop(relation=_make_ref_key_msg(relation)))
+        fire_event(SchemaDrop(relation=_make_ref_key_dict(relation)))
         kwargs = {
             "relation": relation,
         }

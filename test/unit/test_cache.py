@@ -6,6 +6,10 @@ import dbt.exceptions
 
 import random
 import time
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 def make_relation(database, schema, identifier):
