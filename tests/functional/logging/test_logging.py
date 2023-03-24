@@ -76,29 +76,7 @@ def test_invalid_event_value(project, logs_dir):
         fire_event(InvalidOptionYAML("testing"))
 
     # Provide invalid type to "option_name"
-    fire_event(InvalidOptionYAML(option_name=1))
+    with pytest.raises(Exception) as excinfo:
+        fire_event(InvalidOptionYAML(option_name=1))
 
-    log_file = read_file(logs_dir, "dbt.log")
-    invalid_kwarg_event = None
-    invalid_kwarg_note = None
-    for log_line in log_file.split("\n"):
-        # skip empty lines
-        if len(log_line) == 0:
-            continue
-        # The adapter logging also shows up, so skip non-json lines
-        if "[debug]" in log_line:
-            continue
-        log_dct = json.loads(log_line)
-        if log_dct["info"]["name"] == "InvalidOptionYAML":
-            invalid_kwarg_event = log_dct
-        if log_dct["info"]["name"] == "Note":
-            invalid_kwarg_note = log_dct
-    assert invalid_kwarg_event
-    assert (
-        invalid_kwarg_event["info"]["msg"] == "The YAML provided in the -- argument is not valid."
-    )
-    assert invalid_kwarg_note
-    assert (
-        invalid_kwarg_note["info"]["msg"]
-        == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
-    )
+    assert str(excinfo.value) == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
