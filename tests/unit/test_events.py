@@ -333,10 +333,8 @@ sample_values = [
     types.CommandCompleted(
         command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
     ),
-    types.ShowNodeText(node_name="", preview="", is_inline=True),
-    types.ShowNodeJson(node_name="", preview="[]", is_inline=True),
-    types.CompiledNodeText(node_name="", compiled="", is_inline=True),
-    types.CompiledNodeJson(node_name="", compiled="[]", is_inline=True),
+    types.ShowNode(node_name="", preview="", is_inline=True),
+    types.CompiledNode(node_name="", compiled="", is_inline=True),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),
