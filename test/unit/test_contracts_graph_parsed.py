@@ -86,7 +86,7 @@ def populated_node_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
     }
 
 
@@ -174,7 +174,7 @@ def base_parsed_model_dict():
         },
         "deferred": False,
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -280,7 +280,7 @@ def complex_parsed_model_dict():
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
         "columns": {
             "a": {
                 "name": "a",
@@ -354,7 +354,7 @@ def complex_parsed_model_object():
     "grants": {},
     "packages": [],
     "docs": {"show": True},
-    "contract": {"strict": False},
+    "contract": {},
     "post-hook": [{"sql": 'insert into blah(a, b) select "1", 1', "transaction": True}],
     "pre-hook": [],
 }
@@ -522,7 +522,7 @@ def basic_parsed_seed_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"strict": False},
+            "contract": {},
             "packages": [],
         },
         "deferred": False,
@@ -613,7 +613,7 @@ def complex_parsed_seed_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"strict": False},
+            "contract": {},
             "packages": [],
         },
         "deferred": False,
@@ -900,7 +900,7 @@ def base_parsed_hook_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"strict": False},
+            "contract": {},
             "packages": [],
         },
         "docs": {"show": True},
@@ -982,7 +982,7 @@ def complex_parsed_hook_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"strict": False},
+            "contract": {},
             "packages": [],
         },
         "docs": {"show": True},
@@ -1139,7 +1139,7 @@ def basic_parsed_schema_test_dict():
             "schema": "dbt_test__audit",
         },
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
         "columns": {},
         "test_metadata": {
             "name": "foo",
@@ -1219,7 +1219,7 @@ def complex_parsed_schema_test_dict():
             "schema": "dbt_test__audit",
         },
         "docs": {"show": False},
-        "contract": {"strict": False},
+        "contract": {},
         "columns": {
             "a": {
                 "name": "a",
@@ -1339,7 +1339,7 @@ def basic_timestamp_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
     }
 
 
@@ -1376,7 +1376,7 @@ def complex_timestamp_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
     }
 
 
@@ -1441,7 +1441,7 @@ def basic_check_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
     }
 
 
@@ -1478,7 +1478,7 @@ def complex_set_snapshot_config_dict():
         "grants": {},
         "packages": [],
         "docs": {"show": True},
-        "contract": {"strict": False},
+        "contract": {},
     }
 
 
@@ -1593,7 +1593,7 @@ def basic_timestamp_snapshot_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"strict": False},
+            "contract": {},
             "packages": [],
         },
         "docs": {"show": True},
@@ -1740,7 +1740,7 @@ def basic_check_snapshot_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": {"strict": False},
+            "contract": {},
             "packages": [],
         },
         "docs": {"show": True},
