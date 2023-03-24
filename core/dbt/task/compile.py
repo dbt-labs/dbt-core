@@ -4,7 +4,7 @@ from typing import AbstractSet, Optional
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.events.functions import fire_event
-from dbt.events.types import CompiledNodeText, CompiledNodeJson
+from dbt.events.types import CompiledNode
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -61,37 +61,27 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        if getattr(self.args, "inline", None):
-            matched_results = results
-            is_inline = True
+        is_inline = bool(getattr(self.args, "inline"))
+
+        if is_inline:
+            matched_results = [result for result in results if result.node.name == "inline_query"]
         elif self.selection_arg:
             matched_results = [
-                result for result in results if result.node.name == self.selection_arg[0]
+                result for result in results if result.node.name in self.selection_arg
             ]
-            is_inline = False
         # No selector passed, compiling all nodes
         else:
-            matched_results = results
-            is_inline = False
+            matched_results = []
 
-        if len(matched_results) == 1:
-            result = matched_results[0]
-            if getattr(self.args, "output", None) == "json":
-                fire_event(
-                    CompiledNodeJson(
-                        node_name=result.node.name,
-                        compiled=result.node.compiled_code,
-                        is_inline=is_inline,
-                    )
+        for result in matched_results:
+            fire_event(
+                CompiledNode(
+                    node_name=result.node.name,
+                    compiled=result.node.compiled_code,
+                    is_inline=is_inline,
+                    output_format=self.args.output,
                 )
-            else:
-                fire_event(
-                    CompiledNodeText(
-                        node_name=result.node.name,
-                        compiled=result.node.compiled_code,
-                        is_inline=is_inline,
-                    )
-                )
+            )
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
         if not self.args.defer:

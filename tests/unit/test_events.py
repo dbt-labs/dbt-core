@@ -302,10 +302,6 @@ sample_values = [
     types.NodeFinished(),
     types.QueryCancelationUnsupported(type=""),
     types.ConcurrencyLine(num_threads=0, target_name=""),
-    types.CompiledNodeText(node_name="", compiled="", is_inline=True),
-    types.CompiledNodeJson(node_name="", compiled="", is_inline=True),
-    types.ShowNodeText(node_name="", preview="", is_inline=True),
-    types.ShowNodeJson(node_name="", preview="", is_inline=True),
     types.WritingInjectedSQLForNode(),
     types.NodeCompiling(),
     types.NodeExecuting(),
@@ -337,6 +333,10 @@ sample_values = [
     types.CommandCompleted(
         command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
     ),
+    types.ShowNodeText(node_name="", preview="", is_inline=True),
+    types.ShowNodeJson(node_name="", preview="[]", is_inline=True),
+    types.CompiledNodeText(node_name="", compiled="", is_inline=True),
+    types.CompiledNodeJson(node_name="", compiled="[]", is_inline=True),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),
@@ -410,6 +410,7 @@ class TestEventJSONSerialization:
         # if we have everything we need to test, try to serialize everything
         count = 0
         for event in sample_values:
+            print(event.__class__.__name__)
             msg = msg_from_base_event(event)
             print(f"--- msg: {msg.info.name}")
             # Serialize to dictionary

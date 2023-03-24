@@ -1713,48 +1713,40 @@ class CommandCompleted(DebugLevel):
         return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
 
 
-class ShowNodeText(InfoLevel):
+class ShowNode(InfoLevel):
     def code(self):
         return "Q041"
 
     def message(self) -> str:
-        if self.is_inline:
-            return f"Previewing inline node:\n{self.preview}"
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"show": json.loads(self.preview)}, indent=2)
+            else:
+                return json.dumps(
+                    {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
+                )
         else:
-            return f"Previewing node '{self.node_name}':\n{self.preview}"
+            if self.is_inline:
+                return f"Previewing inline node:\n{self.preview}"
+            else:
+                return f"Previewing node '{self.node_name}':\n{self.preview}"
 
 
-class ShowNodeJson(InfoLevel):
+class CompiledNode(InfoLevel):
     def code(self):
         return "Q042"
 
     def message(self) -> str:
-        if self.is_inline:
-            return json.dumps({"show": json.loads(self.preview)}, indent=2)
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"compiled": self.compiled}, indent=2)
+            else:
+                return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
         else:
-            return json.dumps({"node": self.node_name, "show": json.loads(self.preview)}, indent=2)
-
-
-class CompiledNodeText(InfoLevel):
-    def code(self):
-        return "Q044"
-
-    def message(self) -> str:
-        if self.is_inline:
-            return f"Compiled inline node is:\n{self.compiled}"
-        else:
-            return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
-
-
-class CompiledNodeJson(InfoLevel):
-    def code(self):
-        return "Q045"
-
-    def message(self) -> str:
-        if self.is_inline:
-            return json.dumps({"compiled": self.compiled}, indent=2)
-        else:
-            return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
+            if self.is_inline:
+                return f"Compiled inline node is:\n{self.compiled}"
+            else:
+                return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
 
 
 # =======================================================

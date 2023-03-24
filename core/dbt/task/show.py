@@ -3,7 +3,7 @@ import threading
 
 from dbt.contracts.results import RunResult, RunStatus
 from dbt.events.functions import fire_event
-from dbt.events.types import ShowNodeText, ShowNodeJson
+from dbt.events.types import ShowNode
 from dbt.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
 
@@ -37,36 +37,31 @@ class ShowTask(CompileTask):
         return ShowRunner
 
     def task_end_messages(self, results):
-        if getattr(self.args, "inline", None):
-            matched_results = results
-            is_inline = True
+        is_inline = bool(getattr(self.args, "inline"))
+
+        if is_inline:
+            matched_results = [result for result in results if result.node.name == "inline_query"]
         else:
             matched_results = [
-                result for result in results if result.node.name == self.selection_arg[0]
+                result for result in results if result.node.name in self.selection_arg[0]
             ]
-            is_inline = False
 
-        result = matched_results[0]
+        for result in matched_results:
+            # Allow passing in -1 (or any negative number) to get all rows
+            table = result.agate_table
 
-        # Allow passing in -1 (or any negative number) to get all rows
-        table = result.agate_table
+            if self.args.limit >= 0:
+                table = table.limit(self.args.limit)
 
-        if self.args.limit >= 0:
-            table = table.limit(self.args.limit)
+            # Hack to get Agate table output as string
+            output = io.StringIO()
+            if self.args.output == "json":
+                table.to_json(path=output)
+            else:
+                table.print_table(output=output, max_rows=None)
 
-        # Hack to get Agate table output as string
-        output = io.StringIO()
-        if self.args.output == "json":
-            table.to_json(path=output)
             fire_event(
-                ShowNodeJson(
-                    node_name=result.node.name, preview=output.getvalue(), is_inline=is_inline
-                )
-            )
-        else:
-            table.print_table(output=output, max_rows=None)
-            fire_event(
-                ShowNodeText(
+                ShowNode(
                     node_name=result.node.name, preview=output.getvalue(), is_inline=is_inline
                 )
             )

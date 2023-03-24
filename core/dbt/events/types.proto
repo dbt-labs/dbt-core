@@ -1771,53 +1771,29 @@ message CommandCompletedMsg {
 }
 
 // Q041
-message ShowNodeText {
+message ShowNode {
     string node_name = 1;
     string preview = 2;
     bool is_inline = 3;
+    string output_format = 4;
 }
 
-message ShowNodeTextMsg {
+message ShowNodeMsg {
     EventInfo info = 1;
-    ShowNodeText data = 2;
+    ShowNode data = 2;
 }
 
 // Q042
-message ShowNodeJson {
-    string node_name = 1;
-    string preview = 2;
-    bool is_inline = 3;
-}
-
-message ShowNodeJsonMsg {
-    EventInfo info = 1;
-    ShowNodeText data = 2;
-}
-
-// Skipped Q043
-
-// Q044
-message CompiledNodeText {
+message CompiledNode {
     string node_name = 1;
     string compiled = 2;
     bool is_inline = 3;
+    string output_format = 4;
 }
 
-message CompiledNodeTextMsg {
+message CompiledNodeMsg {
     EventInfo info = 1;
-    CompiledNodeText data = 2;
-}
-
-// Q045
-message CompiledNodeJson {
-    string node_name = 1;
-    string compiled = 2;
-    bool is_inline = 3;
-}
-
-message CompiledNodeJsonMsg {
-    EventInfo info = 1;
-    CompiledNodeJson data = 2;
+    CompiledNode data = 2;
 }
 
 // W - Node testing

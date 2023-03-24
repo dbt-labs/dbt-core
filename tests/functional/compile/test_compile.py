@@ -83,7 +83,7 @@ class TestEphemeralModels:
         assert "Compiled node 'third_ephemeral_model' is" in log_output
 
     def test_no_selector(self, project):
-        (results, log_output) = run_dbt_and_capture(["compile"])
+        run_dbt(["compile"])
 
         assert get_lines("first_ephemeral_model") == ["select 1 as fun"]
         assert get_lines("second_ephemeral_model") == [
@@ -150,7 +150,7 @@ class TestCompile:
         (results, log_output) = run_dbt_and_capture(
             ["compile", "--select", "second_model", "--output", "json"]
         )
-        assert len(results) == 1
+        assert len(results) == 3
         assert '"node"' in log_output
         assert '"compiled"' in log_output
 
