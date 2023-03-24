@@ -193,7 +193,7 @@ def basic_compiled_dict():
             "meta": {},
             "grants": {},
             "packages": [],
-            "contract": False,
+            "contract": {},
             "docs": {"show": True},
         },
         "docs": {"show": True},

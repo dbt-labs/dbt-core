@@ -169,7 +169,7 @@ def base_parsed_model_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": False,
+            "contract": {},
             "packages": [],
         },
         "deferred": False,
@@ -276,7 +276,7 @@ def complex_parsed_model_dict():
             "meta": {},
             "grants": {},
             "docs": {"show": True},
-            "contract": False,
+            "contract": {},
             "packages": [],
         },
         "docs": {"show": True},
@@ -904,7 +904,7 @@ def base_parsed_hook_dict():
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": False,
+        "contract": {},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -986,7 +986,7 @@ def complex_parsed_hook_dict():
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": False,
+        "contract": {},
         "columns": {
             "a": {
                 "name": "a",
@@ -1597,7 +1597,7 @@ def basic_timestamp_snapshot_dict():
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": False,
+        "contract": {},
         "columns": {},
         "meta": {},
         "checksum": {
@@ -1744,7 +1744,7 @@ def basic_check_snapshot_dict():
             "packages": [],
         },
         "docs": {"show": True},
-        "contract": False,
+        "contract": {},
         "columns": {},
         "meta": {},
         "checksum": {

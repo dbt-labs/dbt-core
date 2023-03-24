@@ -67,7 +67,7 @@ class BaseConstraintsColumnsEqual:
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config.strict is True
+        assert contract_actual_config.get("strict", False) is True
 
     def test__constraints_wrong_column_names(self, project, string_type, int_type):
         results, log_output = run_dbt_and_capture(
@@ -78,7 +78,7 @@ class BaseConstraintsColumnsEqual:
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config.strict is True
+        assert contract_actual_config.get("strict", False) is True
 
         expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
@@ -127,7 +127,7 @@ class BaseConstraintsColumnsEqual:
             my_model_config = manifest.nodes[model_id].config
             contract_actual_config = my_model_config.contract
 
-            assert contract_actual_config.strict is True
+            assert contract_actual_config.get("strict", False) is True
 
             expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
             expected_sql_file_columns = (
@@ -163,7 +163,7 @@ class BaseConstraintsColumnsEqual:
             my_model_config = manifest.nodes[model_id].config
             contract_actual_config = my_model_config.contract
 
-            assert contract_actual_config.strict is True
+            assert contract_actual_config.get("strict", False) is True
 
 
 class BaseConstraintsRuntimeDdlEnforcement:
@@ -283,7 +283,7 @@ class BaseConstraintsRollback:
         model_id = "model.test.my_model"
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
-        assert contract_actual_config.strict is True
+        assert contract_actual_config.get("strict", False) is True
 
         # Its result includes the expected error messages
         self.assert_expected_error_messages(failing_results[0].message, expected_error_messages)
