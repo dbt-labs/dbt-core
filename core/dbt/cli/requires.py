@@ -15,7 +15,6 @@ from dbt.events.types import (
     MainReportArgs,
     MainTrackingUserState,
 )
-from dbt.events.helpers import get_json_string_utcnow
 from dbt.exceptions import DbtProjectError
 from dbt.flags import set_flags, get_flag_dict
 from dbt.parser.manifest import ManifestLoader, write_manifest
@@ -23,10 +22,6 @@ from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
 from dbt.version import installed as installed_version
-
-from click import Context
-from functools import update_wrapper
-import time
 
 
 def preflight(func):
