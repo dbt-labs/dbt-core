@@ -342,7 +342,7 @@ select_attrs = {
     "type": tuple,
 }
 
-inline = click.option("--inline", envvar=None, help="Pass SQL inline to dbt compile and preview")
+inline = click.option("--inline", envvar=None, help="Pass SQL inline to dbt compile and show")
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.

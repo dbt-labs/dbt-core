@@ -28,6 +28,11 @@ class ShowRunner(CompileRunner):
 
 
 class ShowTask(CompileTask):
+    def _runtime_initialize(self):
+        if not self.args.select or getattr(self.args, "inline", None):
+            raise DbtRuntimeError("Either --select or --inline must be passed to show")
+        super()._runtime_initialize()
+
     def get_runner_type(self, _):
         return ShowRunner
 
@@ -35,16 +40,11 @@ class ShowTask(CompileTask):
         if getattr(self.args, "inline", None):
             matched_results = results
             is_inline = True
-        elif self.selection_arg:
+        else:
             matched_results = [
                 result for result in results if result.node.name == self.selection_arg[0]
             ]
             is_inline = False
-        else:
-            raise DbtRuntimeError("Either --select or --inline must be passed to show")
-
-        if len(matched_results) != 1:
-            raise DbtRuntimeError("Exactly one node must be selected to show")
 
         result = matched_results[0]
 

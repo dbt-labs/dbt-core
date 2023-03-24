@@ -1730,11 +1730,9 @@ class ShowNodeJson(InfoLevel):
 
     def message(self) -> str:
         if self.is_inline:
-            return json.dumps({"preview": json.loads(self.preview)}, indent=2)
+            return json.dumps({"show": json.loads(self.preview)}, indent=2)
         else:
-            return json.dumps(
-                {"node": self.node_name, "preview": json.loads(self.preview)}, indent=2
-            )
+            return json.dumps({"node": self.node_name, "show": json.loads(self.preview)}, indent=2)
 
 
 class CompiledNodeText(InfoLevel):
