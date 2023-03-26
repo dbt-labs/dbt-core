@@ -2150,9 +2150,22 @@ class ContractError(CompilationError):
             "This model has an enforced contract that failed.\n"
             "Please ensure the name, data_type, and number of columns in your `yml` file "
             "match the columns in your SQL file.\n"
-            f"Schema File Columns: {self.yaml_columns}\n"
-            f"SQL File Columns: {self.sql_columns}"
+            # separate column headers by 20 spaces
+            f"{'yaml col:' : <20} sql col:\n"
         )
+
+        # print columns pretty
+        # split yaml and sql strings into list
+        yaml_list = self.yaml_columns.split(', ')
+        sql_list = self.sql_columns.split(', ')
+        # make sure lists are the same length, add empty string if not
+        yaml_list += ['']*(len(sql_list) - len(yaml_list))
+        sql_list += ['']*(len(yaml_list) - len(sql_list))
+        # for each col
+        for i in range(len(yaml_list)):
+            # separate yaml and sql columns by 20 spaces, append to message
+            msg += f"{yaml_list[i] : <20} {sql_list[i]}\n"
+
         return msg
 
 
