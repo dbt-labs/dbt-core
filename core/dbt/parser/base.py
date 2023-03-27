@@ -313,7 +313,6 @@ class ConfiguredParser(
         # If we have contract in the config, copy to node level, for backwards
         # compatibility with earlier node-only config.
         if "contract" in config_dict and config_dict["contract"]:
-            # breakpoint()
             parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
 
         # unrendered_config is used to compare the original database/schema/alias
