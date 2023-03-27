@@ -133,7 +133,6 @@ def basic_uncompiled_dict():
         'tags': [],
         'config': {
             'column_types': {},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -183,7 +182,6 @@ def basic_compiled_dict():
         'tags': [],
         'config': {
             'column_types': {},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},

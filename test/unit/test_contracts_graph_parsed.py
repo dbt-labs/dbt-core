@@ -65,7 +65,6 @@ def populated_node_config_object():
 def populated_node_config_dict():
     return {
         'column_types': {'a': 'text'},
-        'delimiter': ',',
         'enabled': True,
         'materialized': 'table',
         'persist_docs': {},
@@ -92,7 +91,6 @@ def test_config_populated(populated_node_config_object, populated_node_config_di
 def unrendered_node_config_dict():
     return {
         'column_types': {'a': 'text'},
-        'delimiter': ',',
         'materialized': 'table',
         'post_hook': 'insert into blah(a, b) select "1", 1',
     }
@@ -152,7 +150,6 @@ def base_parsed_model_dict():
         'tags': [],
         'config': {
             'column_types': {},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -254,7 +251,6 @@ def complex_parsed_model_dict():
         'meta': {},
         'config': {
             'column_types': {'a': 'text'},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'ephemeral',
             'persist_docs': {},
@@ -282,7 +278,6 @@ def complex_parsed_model_dict():
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {
             'column_types': {'a': 'text'},
-            'delimiter': ',',
             'materialized': 'ephemeral',
             'post_hook': ['insert into blah(a, b) select "1", 1'],
         },
@@ -316,7 +311,6 @@ def complex_parsed_model_object():
         meta={},
         config=NodeConfig(
             column_types={'a': 'text'},
-            delimiter=',',
             materialized='ephemeral',
             post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
         ),
@@ -324,16 +318,15 @@ def complex_parsed_model_object():
         checksum=FileHash.from_contents(''),
         unrendered_config={
             'column_types': {'a': 'text'},
-            'delimiter': ',',
             'materialized': 'ephemeral',
             'post_hook': ['insert into blah(a, b) select "1", 1'],
         },
     )
 
 
-{'enabled': True, 'tags': [], 'meta': {}, 'materialized': 'ephemeral', 'persist_docs': {}, 'quoting': {}, 'column_types': {'a': 'text'}, 'delimiter': ',', 'on_schema_change': 'ignore', 'grants': {}, 'packages': [], 'docs': {'show': True}, 'contract': False, 'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}], 'pre-hook': []}
+{'enabled': True, 'tags': [], 'meta': {}, 'materialized': 'ephemeral', 'persist_docs': {}, 'quoting': {}, 'column_types': {'a': 'text'}, 'on_schema_change': 'ignore', 'grants': {}, 'packages': [], 'docs': {'show': True}, 'contract': False, 'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}], 'pre-hook': []}
 
-{'column_types': {'a': 'text'}, 'delimiter': ',', 'enabled': True, 'materialized': 'ephemeral', 'persist_docs': {}, 'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}], 'pre-hook': [], 'quoting': {}, 'tags': [], 'on_schema_change': 'ignore', 'meta': {}, 'grants': {}, 'docs': {'show': True}, 'packages': []}
+{'column_types': {'a': 'text'}, 'enabled': True, 'materialized': 'ephemeral', 'persist_docs': {}, 'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}], 'pre-hook': [], 'quoting': {}, 'tags': [], 'on_schema_change': 'ignore', 'meta': {}, 'grants': {}, 'docs': {'show': True}, 'packages': []}
 
 def test_model_basic(basic_parsed_model_object, base_parsed_model_dict, minimal_parsed_model_dict):
     node = basic_parsed_model_object
@@ -597,6 +590,7 @@ def complex_parsed_seed_object():
         alias='foo',
         config=SeedConfig(
             quote_columns=True,
+            delimiter=',',
             persist_docs={'relation': True, 'columns': True},
         ),
         deferred=False,
@@ -812,7 +806,6 @@ def base_parsed_hook_dict():
         'tags': [],
         'config': {
             'column_types': {},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -892,7 +885,6 @@ def complex_parsed_hook_dict():
         'meta': {},
         'config': {
             'column_types': {'a': 'text'},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'table',
             'persist_docs': {},
@@ -921,7 +913,6 @@ def complex_parsed_hook_dict():
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {
             'column_types': {'a': 'text'},
-            'delimiter': ',',
             'materialized': 'table',
         },
         'config_call_dict': {},
@@ -953,7 +944,6 @@ def complex_parsed_hook_object():
         meta={},
         config=NodeConfig(
             column_types={'a': 'text'},
-            delimiter=',',
             materialized='table',
             post_hook=[]
         ),
@@ -962,7 +952,6 @@ def complex_parsed_hook_object():
         checksum=FileHash.from_contents(''),
         unrendered_config={
             'column_types': {'a': 'text'},
-            'delimiter': ',',
             'materialized': 'table',
         },
     )
@@ -1240,7 +1229,6 @@ def test_invalid_severity(complex_parsed_schema_test_dict):
 def basic_timestamp_snapshot_config_dict():
     return {
         'column_types': {},
-        'delimiter': ',',
         'enabled': True,
         'materialized': 'snapshot',
         'persist_docs': {},
@@ -1277,7 +1265,6 @@ def basic_timestamp_snapshot_config_object():
 def complex_timestamp_snapshot_config_dict():
     return {
         'column_types': {'a': 'text'},
-        'delimiter': ',',
         'enabled': True,
         'materialized': 'snapshot',
         'persist_docs': {},
@@ -1304,7 +1291,6 @@ def complex_timestamp_snapshot_config_dict():
 def complex_timestamp_snapshot_config_object():
     cfg = SnapshotConfig(
         column_types={'a': 'text'},
-        delimiter=',',
         materialized='snapshot',
         post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
         strategy='timestamp',
@@ -1341,7 +1327,6 @@ def test_invalid_missing_updated_at(basic_timestamp_snapshot_config_dict):
 def basic_check_snapshot_config_dict():
     return {
         'column_types': {},
-        'delimiter': ',',
         'enabled': True,
         'materialized': 'snapshot',
         'persist_docs': {},
@@ -1378,7 +1363,6 @@ def basic_check_snapshot_config_object():
 def complex_set_snapshot_config_dict():
     return {
         'column_types': {'a': 'text'},
-        'delimiter': ',',
         'enabled': True,
         'materialized': 'snapshot',
         'persist_docs': {},
@@ -1405,7 +1389,6 @@ def complex_set_snapshot_config_dict():
 def complex_set_snapshot_config_object():
     cfg = SnapshotConfig(
         column_types={'a': 'text'},
-        delimiter=',',
         materialized='snapshot',
         post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
         strategy='check',
@@ -1492,7 +1475,6 @@ def basic_timestamp_snapshot_dict():
         'tags': [],
         'config': {
             'column_types': {},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'snapshot',
             'persist_docs': {},
@@ -1635,7 +1617,6 @@ def basic_check_snapshot_dict():
         'tags': [],
         'config': {
             'column_types': {},
-            'delimiter': ',',
             'enabled': True,
             'materialized': 'snapshot',
             'persist_docs': {},
