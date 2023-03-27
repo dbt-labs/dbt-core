@@ -524,17 +524,23 @@ class CompiledNode(ParsedNode):
         if old.contract is False and self.contract is True:
             # A change, but not a breaking change
             return False
+
         breaking_change_reasons = []
         if old.contract is True and self.contract is False:
             # Breaking change: throw an error
+            # Note: we don't have contract_checksum for current node, so build
+            self.build_contract_checksum()
             breaking_change_reasons.append("contract has been disabled")
+
         if self.contract_checksum != old.contract_checksum:
-            # Breaking change: throw an error
+            # Breaking change, throw error
             breaking_change_reasons.append("column definitions have changed")
+
+        if breaking_change_reasons:
+            raise (ModelContractError(reasons=" and ".join(breaking_change_reasons), node=self))
         else:
-            # No change
-            return False
-        raise (ModelContractError(reasons=" and ".join(breaking_change_reasons), node=self))
+            # no breaking changes
+            return True
 
 
 # ====================================
