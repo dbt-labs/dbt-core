@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update hologram requirement from <=0.0.15,>=0.0.14 to >=0.0.14,<=0.0.16 in /core"
+time: 2023-03-27T01:14:56.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 7224
