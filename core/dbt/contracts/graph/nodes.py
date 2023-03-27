@@ -170,6 +170,10 @@ class ColumnLevelConstraint(dbtClassMixin):
     )
 
 
+class ModelLevelConstraint(ColumnLevelConstraint):
+    column_names: List[str] = field(default_factory=list)
+
+
 @dataclass
 class ModelLevelConstraint(ColumnLevelConstraint):
     columns: List[str] = field(default_factory=list)
