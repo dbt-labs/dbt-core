@@ -88,11 +88,6 @@ class Docs(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Contract(dbtClassMixin, Replaceable):
-    enforced: bool = False
-
-
-@dataclass
 class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""

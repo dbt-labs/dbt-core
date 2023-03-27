@@ -2,14 +2,16 @@ import pickle
 import pytest
 
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import ModelNode, InjectedCTE, GenericTestNode
+from dbt.contracts.graph.model_config import Contract
 from dbt.contracts.graph.nodes import (
-    Contract,
+    ColumnInfo,
     DependsOn,
+    GenericTestNode,
+    InjectedCTE,
+    ModelNode,
     NodeConfig,
     TestConfig,
     TestMetadata,
-    ColumnInfo,
 )
 from dbt.node_types import NodeType
 
