@@ -1,5 +1,5 @@
 kind: Under the Hood
-body: Contract config defined to be a dictionary
+body: treat Contract config as a python object
 time: 2023-02-17T10:52:23.212474-05:00
 custom:
   Author: gshank emmyoop
