@@ -176,6 +176,10 @@ class ModelLevelConstraint(ColumnLevelConstraint):
     pass  # REVIEW: The columns property above should be on this class instead
 
 
+class ModelLevelConstraint(ColumnLevelConstraint):
+    column_names: List[str] = field(default_factory=list)
+
+
 @dataclass
 class ModelLevelConstraint(ColumnLevelConstraint):
     columns: List[str] = field(default_factory=list)
