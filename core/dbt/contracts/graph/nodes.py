@@ -20,7 +20,6 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
-    Contract,
     Docs,
     ExposureType,
     ExternalTable,
@@ -52,6 +51,7 @@ from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 
 from .model_config import (
+    Contract,
     NodeConfig,
     SeedConfig,
     TestConfig,

@@ -7,7 +7,7 @@ from dbt.dataclass_schema import (
     ValidationError,
     register_pattern,
 )
-from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Contract, Docs
+from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed, Docs
 from dbt.contracts.graph.utils import validate_color
 from dbt.exceptions import DbtInternalError, CompilationError
 from dbt.contracts.util import Replaceable, list_str
@@ -187,6 +187,11 @@ class Severity(str):
 
 
 register_pattern(Severity, insensitive_patterns("warn", "error"))
+
+
+@dataclass
+class Contract(dbtClassMixin, Replaceable):
+    enforced: bool = False
 
 
 @dataclass

@@ -16,8 +16,8 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ManifestNode, BaseNode
-from dbt.contracts.graph.unparsed import Contract, Docs, UnparsedNode
+from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.unparsed import Docs, UnparsedNode
 from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
