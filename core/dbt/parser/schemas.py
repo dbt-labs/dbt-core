@@ -797,6 +797,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                     self.normalize_meta_attribute(data, path)
                     self.normalize_docs_attribute(data, path)
                     self.normalize_group_attribute(data, path)
+                    self.normalize_contract_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(path, self.key, data, exc)
@@ -827,6 +828,9 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
 
     def normalize_group_attribute(self, data, path):
         return self.normalize_attribute(data, path, "group")
+
+    def normalize_contract_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "contract")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
@@ -940,11 +944,9 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
     def validate_constraints(self, patched_node):
         error_messages = []
-        contract_config = patched_node.config.get("contract", {})
-        if (
-            patched_node.resource_type == "model"
-            and contract_config.get("enforced", False) is True
-        ):
+        contract_config = patched_node.config.get("contract")
+        # breakpoint()
+        if patched_node.resource_type == "model" and contract_config.enforced is True:
             validators = [
                 self.constraints_schema_validator(patched_node),
                 self.constraints_materialization_validator(patched_node),
