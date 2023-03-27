@@ -89,7 +89,7 @@ class Docs(dbtClassMixin, Replaceable):
 
 @dataclass
 class Contract(dbtClassMixin, Replaceable):
-    enabled: bool = False
+    enforced: bool = False
 
 
 @dataclass

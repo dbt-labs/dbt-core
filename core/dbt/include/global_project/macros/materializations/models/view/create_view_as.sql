@@ -17,7 +17,8 @@
 
   {{ sql_header if sql_header is not none }}
   create view {{ relation }}
-    {%- if config.get('contract', False) %}
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
     {%- endif %}
   as (
