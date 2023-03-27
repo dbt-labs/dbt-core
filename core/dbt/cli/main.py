@@ -185,7 +185,7 @@ def docs(ctx, **kwargs):
 @p.project_dir
 @p.select
 @p.selector
-@p.skip_catalog_generation
+@p.empty_catalog
 @p.state
 @p.deprecated_state
 @p.target

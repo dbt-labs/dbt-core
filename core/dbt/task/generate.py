@@ -231,7 +231,7 @@ class GenerateTask(CompileTask):
         catalog_table: agate.Table = agate.Table([])
         exceptions: List[Exception] = []
 
-        if not self.args.skip_catalog_generation:
+        if not self.args.empty_catalog:
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
@@ -264,7 +264,7 @@ class GenerateTask(CompileTask):
 
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
-        if not self.args.skip_catalog_generation:
+        if not self.args.empty_catalog:
             fire_event(CatalogWritten(path=os.path.abspath(path)))
         return results
 
