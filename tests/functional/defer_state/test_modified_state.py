@@ -286,11 +286,22 @@ class TestChangedContract(BaseModifiedState):
         # Run it again with "state:modified:contract", still finds modified due to contract: true
         results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
         assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        first_contract_checksum = model.contract_checksum
+        assert first_contract_checksum
         # save a new state
         self.copy_state()
 
         # This should raise because a column name has changed
         write_file(modified_contract_schema_yml, "models", "schema.yml")
+        results = run_dbt(["run"], expect_pass=False)
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract_checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
         with pytest.raises(ModelContractError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
