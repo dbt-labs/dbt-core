@@ -264,8 +264,7 @@ class GenerateTask(CompileTask):
 
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
-        if not self.args.empty_catalog:
-            fire_event(CatalogWritten(path=os.path.abspath(path)))
+        fire_event(CatalogWritten(path=os.path.abspath(path)))
         return results
 
     def get_catalog_results(
