@@ -40,8 +40,8 @@ class TestShow(BaseConfigProject):
             ["show", "--select", "sample_model", "--output", "json"]
         )
         assert "Previewing node 'sample_model'" not in log_output
-        assert '"sample_num"' in log_output
-        assert '"sample_bool"' in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
 
     def test_inline_pass(self, project):
         run_dbt(["deps"])

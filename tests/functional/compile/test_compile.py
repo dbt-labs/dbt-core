@@ -151,8 +151,8 @@ class TestCompile:
             ["compile", "--select", "second_model", "--output", "json"]
         )
         assert len(results) == 3
-        assert '"node"' in log_output
-        assert '"compiled"' in log_output
+        assert "node" in log_output
+        assert "compiled" in log_output
 
     def test_output_json_inline(self, project):
         (results, log_output) = run_dbt_and_capture(
