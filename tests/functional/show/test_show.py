@@ -24,6 +24,7 @@ class TestShow(BaseConfigProject):
         assert "col_one" in log_output
         assert "col_two" in log_output
         assert "answer" in log_output
+        assert len(results[0].agate_table) == 5
 
     def test_select_multiple_model_text(self, project):
         run_dbt(["deps"])
@@ -49,14 +50,14 @@ class TestShow(BaseConfigProject):
             ["show", "--select", "sample_model", "--limit", "6"]
         )
         assert "Previewing node 'sample_model'" in log_output
-        assert "6" in log_output
+        assert len(results[0].agate_table) == 6
 
     def test_select_negative_limit(self, project):
         run_dbt(["deps"])
         (results, log_output) = run_dbt_and_capture(
             ["show", "--select", "sample_model", "--limit", "-1"]
         )
-        assert "7" in log_output
+        assert len(results[0].agate_table) == 7
 
     def test_inline_pass(self, project):
         run_dbt(["deps"])
@@ -78,6 +79,7 @@ class TestShow(BaseConfigProject):
         run_dbt(["deps"])
         (results, log_output) = run_dbt_and_capture(["show", "--select", "ephemeral_model"])
         assert "col_deci" in log_output
+        assert results[0].agate_table[3][0] == 14
 
     def test_second_ephemeral_model(self, project):
         run_dbt(["deps"])
@@ -85,3 +87,4 @@ class TestShow(BaseConfigProject):
             ["show", "--inline", models__second_ephemeral_model]
         )
         assert "col_hundo" in log_output
+        assert results[0].agate_table[3][0] == 114
