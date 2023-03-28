@@ -63,7 +63,8 @@ models:
       - name: name
   - name: table_model
     config:
-      contract: true
+      contract:
+        enforced: True
     columns:
       - name: id
         data_type: integer
@@ -88,7 +89,8 @@ models:
       - name: name
   - name: table_model
     config:
-      contract: true
+      contract:
+        enforced: True
     columns:
       - name: id
         data_type: integer

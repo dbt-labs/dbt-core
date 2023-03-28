@@ -2,7 +2,6 @@ import pickle
 import pytest
 
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.model_config import Contract
 from dbt.contracts.graph.nodes import (
     ColumnInfo,
     DependsOn,
@@ -12,6 +11,7 @@ from dbt.contracts.graph.nodes import (
     NodeConfig,
     TestConfig,
     TestMetadata,
+    Contract,
 )
 from dbt.node_types import NodeType
 

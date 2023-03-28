@@ -52,7 +52,6 @@ from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 
 from .model_config import (
-    Contract,
     NodeConfig,
     SeedConfig,
     TestConfig,
@@ -183,6 +182,12 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Contract(dbtClassMixin, Replaceable):
+    enforced: bool = False
+    checksum: Optional[str] = None
 
 
 # Metrics, exposures,
@@ -460,7 +465,6 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
-    contract_checksum: Optional[str] = None
     contract: Contract = field(default_factory=Contract)
 
     @property
@@ -504,9 +508,9 @@ class CompiledNode(ParsedNode):
 
     def build_contract_checksum(self):
         # We don't need to construct the checksum if the model does not
-        # have contract enabled, because it won't be used.
+        # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
-        if self.contract is True:
+        if self.contract.enforced is True:
             contract_state = ""
             # We need to sort the columns so that order doesn't matter
             # columns is a str: ColumnInfo dictionary
@@ -515,24 +519,24 @@ class CompiledNode(ParsedNode):
                 contract_state += f"|{column.name}"
                 contract_state += str(column.data_type)
             data = contract_state.encode("utf-8")
-            self.contract_checksum = hashlib.new("sha256", data).hexdigest()
+            self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
     def same_contract(self, old) -> bool:
-        if old.contract is False and self.contract is False:
+        if old.contract.enforced is False and self.contract.enforced is False:
             # Not a change
             return True
-        if old.contract is False and self.contract is True:
+        if old.contract.enforced is False and self.contract.enforced is True:
             # A change, but not a breaking change
             return False
 
         breaking_change_reasons = []
-        if old.contract is True and self.contract is False:
+        if old.contract.enforced is True and self.contract.enforced is False:
             # Breaking change: throw an error
-            # Note: we don't have contract_checksum for current node, so build
+            # Note: we don't have contract.checksum for current node, so build
             self.build_contract_checksum()
             breaking_change_reasons.append("contract has been disabled")
 
-        if self.contract_checksum != old.contract_checksum:
+        if self.contract.checksum != old.contract.checksum:
             # Breaking change, throw error
             breaking_change_reasons.append("column definitions have changed")
 
@@ -964,7 +968,7 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         if old is None:
             return True
 
-        # config changes are changes (because the only config is "enabled", and
+        # config changes are changes (because the only config is "enforced", and
         # enabling a source is a change!)
         # changing the database/schema/identifier is a change
         # messing around with external stuff is a change (uh, right?)

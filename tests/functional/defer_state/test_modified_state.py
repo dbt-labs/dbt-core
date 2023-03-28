@@ -280,7 +280,7 @@ class TestChangedContract(BaseModifiedState):
         manifest = get_manifest(project.project_root)
         model_unique_id = "model.test.table_model"
         model = manifest.nodes[model_unique_id]
-        expected_unrendered_config = {"contract": True, "materialized": "table"}
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
         assert model.unrendered_config == expected_unrendered_config
 
         # Run it again with "state:modified:contract", still finds modified due to contract: true
@@ -288,7 +288,7 @@ class TestChangedContract(BaseModifiedState):
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_unique_id]
-        first_contract_checksum = model.contract_checksum
+        first_contract_checksum = model.contract.checksum
         assert first_contract_checksum
         # save a new state
         self.copy_state()
@@ -299,7 +299,7 @@ class TestChangedContract(BaseModifiedState):
         assert len(results) == 2
         manifest = get_manifest(project.project_root)
         model = manifest.nodes[model_unique_id]
-        second_contract_checksum = model.contract_checksum
+        second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
         with pytest.raises(ModelContractError):

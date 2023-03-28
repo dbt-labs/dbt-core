@@ -190,7 +190,7 @@ register_pattern(Severity, insensitive_patterns("warn", "error"))
 
 
 @dataclass
-class Contract(dbtClassMixin, Replaceable):
+class ContractConfig(dbtClassMixin, Replaceable):
     enforced: bool = False
 
 
@@ -456,8 +456,8 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=Docs,
         metadata=MergeBehavior.Update.meta(),
     )
-    contract: Contract = field(
-        default_factory=Contract,
+    contract: ContractConfig = field(
+        default_factory=ContractConfig,
         metadata=MergeBehavior.Update.meta(),
     )
 
