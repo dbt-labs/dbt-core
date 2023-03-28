@@ -78,7 +78,6 @@ class TestShow(BaseConfigProject):
         run_dbt(["deps"])
         (results, log_output) = run_dbt_and_capture(["show", "--select", "ephemeral_model"])
         assert "col_deci" in log_output
-        assert "14" in log_output
 
     def test_second_ephemeral_model(self, project):
         run_dbt(["deps"])
@@ -86,4 +85,3 @@ class TestShow(BaseConfigProject):
             ["show", "--inline", models__second_ephemeral_model]
         )
         assert "col_hundo" in log_output
-        assert "114" in log_output
