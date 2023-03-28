@@ -77,30 +77,6 @@ class BaseTask(metaclass=ABCMeta):
         self.config = config
         self.project = config if isinstance(config, Project) else project
 
-        if dbt.tracking.active_user is not None:
-
-            # N.B. The none checking below is largely due to incomplete projects used in the testing
-            # and to support tasks that don't require a complete project or a complete config (debug, init).
-            project_id = None if self.project is None else self.project.hashed_name()
-            adapter_type = (
-                getattr(self.config.credentials, "type", None)
-                if hasattr(self.config, "credentials")
-                else None
-            )
-            adapter_unique_id = (
-                self.config.credentials.hashed_unique_field()
-                if hasattr(self.config, "credentials")
-                else None
-            )
-
-            dbt.tracking.track_project_id({"project_id": project_id})
-            dbt.tracking.track_adapter_info(
-                {
-                    "adapter_type": adapter_type,
-                    "adapter_unique_id": adapter_unique_id,
-                }
-            )
-
     @classmethod
     def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""

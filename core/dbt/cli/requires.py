@@ -1,3 +1,4 @@
+import dbt.tracking
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter
 from dbt.flags import set_flags, get_flag_dict
@@ -174,6 +175,11 @@ def project(func):
             )
             ctx.obj["project"] = project
 
+            if dbt.tracking.active_user is not None:
+                project_id = None if project is None else project.hashed_name()
+
+                dbt.tracking.track_project_id({"project_id": project_id})
+
         return func(*args, **kwargs)
 
     return update_wrapper(wrapper, func)
@@ -194,11 +200,32 @@ def runtime_config(func):
         if None in reqs:
             raise DbtProjectError("profile and project required for runtime_config")
 
-        ctx.obj["runtime_config"] = RuntimeConfig.from_parts(
+        config = RuntimeConfig.from_parts(
             ctx.obj["project"],
             ctx.obj["profile"],
             ctx.obj["flags"],
         )
+
+        ctx.obj["runtime_config"] = config
+
+        if dbt.tracking.active_user is not None:
+            adapter_type = (
+                getattr(config.credentials, "type", None)
+                if hasattr(config, "credentials")
+                else None
+            )
+            adapter_unique_id = (
+                config.credentials.hashed_unique_field()
+                if hasattr(config, "credentials")
+                else None
+            )
+
+            dbt.tracking.track_adapter_info(
+                {
+                    "adapter_type": adapter_type,
+                    "adapter_unique_id": adapter_unique_id,
+                }
+            )
 
         return func(*args, **kwargs)
 
