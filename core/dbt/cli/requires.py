@@ -16,11 +16,34 @@ from dbt.exceptions import DbtProjectError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.utils import cast_dict_to_dict_of_strings, ExitCodes
 
 from click import Context
+from click.exceptions import ClickException
 from functools import update_wrapper
 import time
+import traceback
+
+
+class HandledExit(ClickException):
+    def __init__(self, result, success, exit_code: ExitCodes) -> None:
+        self.result = result
+        self.success = success
+        self.exit_code = exit_code
+
+    def show(self):
+        pass
+
+
+class UnhandledExit(ClickException):
+    exit_code = ExitCodes.UnhandledError.value
+
+    def __init__(self, exception: Exception, message: str) -> None:
+        self.exception = exception
+        self.message = message
+
+    def format_message(self) -> str:
+        return self.message
 
 
 def preflight(func):
@@ -61,11 +84,22 @@ def preflight(func):
         # Adapter management
         ctx.with_resource(adapter_management())
 
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
+
+
+def postflight(func):
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
         start_func = time.perf_counter()
+        success = False
 
         try:
-            (results, success) = func(*args, **kwargs)
-
+            result, success = func(*args, **kwargs)
+        except Exception as e:
+            raise UnhandledExit(e, message=traceback.format_exc())
+        finally:
             fire_event(
                 CommandCompleted(
                     command=ctx.command_path,
@@ -74,20 +108,15 @@ def preflight(func):
                     elapsed=time.perf_counter() - start_func,
                 )
             )
-        # Bare except because we really do want to catch ALL exceptions,
-        # i.e. we want to fire this event in ALL cases.
-        except:  # noqa
-            fire_event(
-                CommandCompleted(
-                    command=ctx.command_path,
-                    success=False,
-                    completed_at=get_json_string_utcnow(),
-                    elapsed=time.perf_counter() - start_func,
-                )
-            )
-            raise
 
-        return (results, success)
+        if not success:
+            raise HandledExit(
+                result=result,
+                success=success,
+                exit_code=ExitCodes.ModelError.value,
+            )
+
+        return (result, success)
 
     return update_wrapper(wrapper, func)
 

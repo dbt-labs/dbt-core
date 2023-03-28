@@ -1,4 +1,8 @@
 import click
+import inspect
+import typing as t
+from click import Context
+from dbt.cli.option_types import ChoiceTuple
 
 
 # Implementation from: https://stackoverflow.com/a/48394004
@@ -11,6 +15,19 @@ class MultiOption(click.Option):
         super(MultiOption, self).__init__(*args, **kwargs)
         self._previous_parser_process = None
         self._eat_all_parser = None
+
+        # validate that multiple=True
+        multiple = kwargs.pop("multiple", None)
+        msg = f"MultiOption named `{self.name}` must have multiple=True (rather than {multiple})"
+        assert multiple, msg
+
+        # validate that type=tuple or type=ChoiceTuple
+        option_type = kwargs.pop("type", None)
+        msg = f"MultiOption named `{self.name}` must be tuple or ChoiceTuple (rather than {option_type})"
+        if inspect.isclass(option_type):
+            assert issubclass(option_type, tuple), msg
+        else:
+            assert isinstance(option_type, ChoiceTuple), msg
 
     def add_to_parser(self, parser, ctx):
         def parser_process(value, state):
@@ -42,3 +59,17 @@ class MultiOption(click.Option):
                 our_parser.process = parser_process
                 break
         return retval
+
+    def type_cast_value(self, ctx: Context, value: t.Any) -> t.Any:
+        def flatten(data):
+            if isinstance(data, tuple):
+                for x in data:
+                    yield from flatten(x)
+            else:
+                yield data
+
+        # there will be nested tuples to flatten when multiple=True
+        value = super(MultiOption, self).type_cast_value(ctx, value)
+        if value:
+            value = tuple(flatten(value))
+        return value

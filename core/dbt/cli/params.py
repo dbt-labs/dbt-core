@@ -84,7 +84,12 @@ enable_legacy_logger = click.option(
 )
 
 exclude = click.option(
-    "--exclude", envvar=None, type=tuple, cls=MultiOption, help="Specify the nodes to exclude."
+    "--exclude",
+    envvar=None,
+    type=tuple,
+    cls=MultiOption,
+    multiple=True,
+    help="Specify the nodes to exclude.",
 )
 
 fail_fast = click.option(
@@ -189,8 +194,9 @@ output_keys = click.option(
         "Space-delimited listing of node properties to include as custom keys for JSON output "
         "(e.g. `--output json --output-keys name resource_type description`)"
     ),
-    type=list,
+    type=tuple,
     cls=MultiOption,
+    multiple=True,
     default=[],
 )
 
@@ -315,6 +321,7 @@ resource_type = click.option(
         case_sensitive=False,
     ),
     cls=MultiOption,
+    multiple=True,
     default=(),
 )
 
@@ -324,6 +331,7 @@ select_attrs = {
     "envvar": None,
     "help": "Specify the nodes to include.",
     "cls": MultiOption,
+    "multiple": True,
     "type": tuple,
 }
 
