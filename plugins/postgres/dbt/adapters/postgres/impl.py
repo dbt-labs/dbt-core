@@ -2,7 +2,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Set, List, Any
 from dbt.adapters.base.meta import available
-from dbt.adapters.base.impl import AdapterConfig
+from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
@@ -131,3 +131,13 @@ class PostgresAdapter(SQLAdapter):
         Not used to validate custom strategies defined by end users.
         """
         return ["append", "delete+insert"]
+
+    @property
+    def constraint_support(self):
+        return {
+            "not_null": ConstraintSupport.ENFORCED,
+            "primary_key": ConstraintSupport.ENFORCED,
+            "foreign_key": ConstraintSupport.ENFORCED,
+            "unique": ConstraintSupport.ENFORCED,
+            "check": ConstraintSupport.ENFORCED,
+        }

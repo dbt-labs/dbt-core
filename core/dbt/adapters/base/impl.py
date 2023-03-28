@@ -2,6 +2,7 @@ import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
+from enum import Enum
 import time
 from itertools import chain
 from typing import (
@@ -71,6 +72,12 @@ from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
 FRESHNESS_MACRO_NAME = "collect_freshness"
+
+
+class ConstraintSupport(str, Enum):
+    ENFORCED = "enforced"
+    NOT_ENFORCED = "not_enforced"
+    NOT_SUPPORTED = "not_supported"
 
 
 def _expect_row_value(key: str, row: agate.Row):
