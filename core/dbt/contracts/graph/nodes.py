@@ -21,21 +21,21 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
-    Quoting,
     Docs,
-    FreshnessThreshold,
+    ExposureType,
     ExternalTable,
+    FreshnessThreshold,
     HasYamlMetadata,
     MacroArgument,
-    UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition,
-    UnparsedColumn,
-    TestDef,
-    Owner,
-    ExposureType,
     MaturityType,
     MetricFilter,
     MetricTime,
+    Owner,
+    Quoting,
+    TestDef,
+    UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition,
+    UnparsedColumn,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
@@ -51,8 +51,8 @@ from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 
-
 from .model_config import (
+    Contract,
     NodeConfig,
     SeedConfig,
     TestConfig,
@@ -460,8 +460,8 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
-    contract: bool = False
     contract_checksum: Optional[str] = None
+    contract: Contract = field(default_factory=Contract)
 
     @property
     def empty(self):
