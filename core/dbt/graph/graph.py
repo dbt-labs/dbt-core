@@ -81,8 +81,10 @@ class Graph:
 
                 new_edges = product(source_nodes, target_nodes)
                 non_cyclic_new_edges = [
-                    (source, target) for source, target in new_edges if source != target
-                ]  # removes cyclic refs
+                    (source, target)
+                    for source, target in new_edges
+                    if source != target and not new_graph.has_edge(source, target)
+                ]  # removes cyclic refs and edges already existing in new graph
 
                 new_graph.add_edges_from(non_cyclic_new_edges)
                 new_graph.remove_node(node)

@@ -57,6 +57,10 @@ class dbtRunner:
                 "callbacks": self.callbacks,
             }
             return cli.invoke(dbt_ctx)
+        except requires.HandledExit as e:
+            return (e.result, e.success)
+        except requires.UnhandledExit as e:
+            raise e.exception
         except click.exceptions.Exit as e:
             # 0 exit code, expected for --version early exit
             if str(e) == "0":
@@ -139,6 +143,7 @@ def cli(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def build(ctx, **kwargs):
     """Run all Seeds, Models, Snapshots, and tests in DAG order"""
     task = BuildTask(
@@ -163,6 +168,7 @@ def build(ctx, **kwargs):
 @requires.preflight
 @requires.unset_profile
 @requires.project
+@requires.postflight
 def clean(ctx, **kwargs):
     """Delete all folders in the clean-targets list (usually the dbt_packages and target directories.)"""
     task = CleanTask(ctx.obj["flags"], ctx.obj["project"])
@@ -205,6 +211,7 @@ def docs(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest(write=False)
+@requires.postflight
 def docs_generate(ctx, **kwargs):
     """Generate the documentation website for your project"""
     task = GenerateTask(
@@ -233,6 +240,7 @@ def docs_generate(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
     task = ServeTask(
@@ -277,6 +285,7 @@ def docs_serve(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
     target/ directory."""
@@ -348,6 +357,7 @@ def show(ctx, **kwargs):
 @p.vars
 @p.version_check
 @requires.preflight
+@requires.postflight
 def debug(ctx, **kwargs):
     """Show some helpful information about dbt for debugging. Not to be confused with the --debug option which increases verbosity."""
     task = DebugTask(
@@ -371,6 +381,7 @@ def debug(ctx, **kwargs):
 @requires.preflight
 @requires.unset_profile
 @requires.project
+@requires.postflight
 def deps(ctx, **kwargs):
     """Pull the most recent version of the dependencies listed in packages.yml"""
     task = DepsTask(ctx.obj["flags"], ctx.obj["project"])
@@ -391,6 +402,7 @@ def deps(ctx, **kwargs):
 @p.target
 @p.vars
 @requires.preflight
+@requires.postflight
 def init(ctx, **kwargs):
     """Initialize a new dbt project."""
     task = InitTask(ctx.obj["flags"], None)
@@ -423,6 +435,7 @@ def init(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def list(ctx, **kwargs):
     """List the resources in your project"""
     task = ListTask(
@@ -460,6 +473,7 @@ cli.add_command(ls, "ls")
 @requires.project
 @requires.runtime_config
 @requires.manifest(write_perf_info=True)
+@requires.postflight
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
     # manifest generation and writing happens in @requires.manifest
@@ -493,6 +507,7 @@ def parse(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
     task = RunTask(
@@ -521,6 +536,7 @@ def run(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def run_operation(ctx, **kwargs):
     """Run the named macro with any supplied arguments."""
     task = RunOperationTask(
@@ -557,6 +573,7 @@ def run_operation(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def seed(ctx, **kwargs):
     """Load data from csv files into your data warehouse."""
     task = SeedTask(
@@ -592,6 +609,7 @@ def seed(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def snapshot(ctx, **kwargs):
     """Execute snapshots defined in your project"""
     task = SnapshotTask(
@@ -632,6 +650,7 @@ def source(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def freshness(ctx, **kwargs):
     """check the current freshness of the project's sources"""
     task = FreshnessTask(
@@ -679,6 +698,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def test(ctx, **kwargs):
     """Runs tests on data in deployed models. Run this after `dbt run`"""
     task = TestTask(

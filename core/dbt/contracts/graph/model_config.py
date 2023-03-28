@@ -453,8 +453,8 @@ class NodeConfig(NodeAndTestConfig):
     )
     contract: bool = False
 
-    # we validate that node_color has a suitable value to prevent dbt-docs from crashing
     def __post_init__(self):
+        # we validate that node_color has a suitable value to prevent dbt-docs from crashing
         if self.docs.node_color:
             node_color = self.docs.node_color
             if not validate_color(node_color):
@@ -462,6 +462,17 @@ class NodeConfig(NodeAndTestConfig):
                     f"Invalid color name for docs.node_color: {node_color}. "
                     "It is neither a valid HTML color name nor a valid HEX code."
                 )
+
+        if (
+            self.contract
+            and self.materialized == "incremental"
+            and self.on_schema_change != "append_new_columns"
+        ):
+            raise ValidationError(
+                f"Invalid value for on_schema_change: {self.on_schema_change}. Models "
+                "materialized as incremental with contracts enabled must set "
+                "on_schema_change to 'append_new_columns'"
+            )
 
     @classmethod
     def __pre_deserialize__(cls, data):

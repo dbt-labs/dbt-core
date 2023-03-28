@@ -322,7 +322,7 @@ def relation_from_name(adapter, name: str):
 
 
 # Ensure that models with different materialiations have the
-# corrent table/view.
+# current table/view.
 # Uses:
 #   adapter.list_relations_without_caching
 def check_relation_types(adapter, relation_to_type):

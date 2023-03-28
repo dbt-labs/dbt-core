@@ -1,5 +1,5 @@
 import pytest
-from dbt.exceptions import ParsingError
+from dbt.exceptions import ParsingError, ValidationError
 from dbt.tests.util import run_dbt, get_manifest, get_artifact, run_dbt_and_capture
 
 my_model_sql = """
@@ -46,7 +46,20 @@ select
 my_incremental_model_sql = """
 {{
   config(
-    materialized = "Incremental"
+    materialized = "incremental"
+  )
+}}
+
+select
+  1 as id,
+  'blue' as color,
+  cast('2019-01-01' as date) as date_day
+"""
+
+my_ephemeral_model_sql = """
+{{
+  config(
+    materialized = "ephemeral"
   )
 }}
 
@@ -338,6 +351,23 @@ class TestModelLevelContractErrorMessages:
     def models(self):
         return {
             "my_model.sql": my_incremental_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    def test__config_errors(self, project):
+        with pytest.raises(ValidationError) as err_info:
+            run_dbt(["run"], expect_pass=False)
+
+        exc_str = " ".join(str(err_info.value).split())
+        expected_materialization_error = "Invalid value for on_schema_change: ignore. Models materialized as incremental with contracts enabled must set on_schema_change to 'append_new_columns'"
+        assert expected_materialization_error in str(exc_str)
+
+
+class TestModelLevelConstraintsErrorMessages:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_ephemeral_model_sql,
             "constraints_schema.yml": model_schema_errors_yml,
         }
 
@@ -346,11 +376,9 @@ class TestModelLevelContractErrorMessages:
             run_dbt(["run"], expect_pass=False)
 
         exc_str = " ".join(str(err_info.value).split())
-        expected_materialization_error = (
-            "Materialization Error: {'materialization': 'Incremental'}"
-        )
+        expected_materialization_error = "Materialization Error: {'materialization': 'ephemeral'}"
         assert expected_materialization_error in str(exc_str)
-        # This is a compile time error and we won't get here because the materialization is parse time
+        # This is a compile time error and we won't get here because the materialization check is parse time
         expected_empty_data_type_error = "Columns with `data_type` Blank/Null not allowed on contracted models. Columns Blank/Null: ['date_day']"
         assert expected_empty_data_type_error not in str(exc_str)
 

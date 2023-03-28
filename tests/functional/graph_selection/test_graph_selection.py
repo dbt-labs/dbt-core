@@ -163,6 +163,12 @@ class TestGraphSelection(SelectionFixtures):
         results = run_dbt(["run", "--select", "@emails_alt", "users_rollup"], expect_pass=False)
         check_result_nodes_by_name(results, ["users_rollup", "users", "emails_alt"])
 
+    def test_concat_multiple(self, project):
+        results = run_dbt(
+            ["run", "--select", "@emails_alt", "--select", "users_rollup"], expect_pass=False
+        )
+        check_result_nodes_by_name(results, ["users_rollup", "users", "emails_alt"])
+
     def test_concat_exclude(self, project):
         results = run_dbt(
             [
@@ -176,6 +182,22 @@ class TestGraphSelection(SelectionFixtures):
             expect_pass=False,
         )
         check_result_nodes_by_name(results, ["users_rollup", "users"])
+
+    def test_concat_exclude_multiple(self, project):
+        results = run_dbt(
+            [
+                "run",
+                "--select",
+                "@emails_alt",
+                "users_rollup",
+                "--exclude",
+                "users",
+                "--exclude",
+                "emails_alt",
+            ],
+            expect_pass=False,
+        )
+        check_result_nodes_by_name(results, ["users_rollup"])
 
     def test_concat_exclude_concat(self, project):
         results = run_dbt(
