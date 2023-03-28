@@ -1,5 +1,6 @@
 import io
 import threading
+import time
 
 from dbt.contracts.results import RunResult, RunStatus
 from dbt.events.functions import fire_event
@@ -14,16 +15,18 @@ class ShowRunner(CompileRunner):
         self.run_ephemeral_models = True
 
     def execute(self, compiled_node, manifest):
+        start_time = time.time()
         adapter_response, execute_result = self.adapter.execute(
             compiled_node.compiled_code, fetch=True
         )
+        end_time = time.time()
 
         return RunResult(
             node=compiled_node,
             status=RunStatus.Success,
             timing=[],
             thread_id=threading.current_thread().name,
-            execution_time=0,
+            execution_time=end_time - start_time,
             message=None,
             adapter_response=adapter_response.to_dict(),
             agate_table=execute_result,
@@ -66,7 +69,10 @@ class ShowTask(CompileTask):
 
             fire_event(
                 ShowNode(
-                    node_name=result.node.name, preview=output.getvalue(), is_inline=is_inline
+                    node_name=result.node.name,
+                    preview=output.getvalue(),
+                    is_inline=is_inline,
+                    output_format=self.args.output,
                 )
             )
 

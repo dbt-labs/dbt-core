@@ -31,14 +31,14 @@ from {{ ref('sample_model') }}
 models__ephemeral_model = """
 {{ config(materialized = 'ephemeral') }}
 select
-    coalesce(sample_num, 0) + 100 as col_hundo
+    coalesce(sample_num, 0) + 10 as col_deci
 from {{ ref('sample_model') }}
 """
 
 models__second_ephemeral_model = """
 {{ config(materialized = 'ephemeral') }}
 select
-    col_hundo + 1000 as col_kilo
+    col_deci + 100 as col_hundo
 from {{ ref('ephemeral_model') }}
 """
 

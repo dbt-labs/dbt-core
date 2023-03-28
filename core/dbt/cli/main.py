@@ -324,8 +324,8 @@ def compile(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def show(ctx, **kwargs):
-    """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
-    target/ directory."""
+    """Generates executable SQL for a named resource or inline query, runs that SQL, and returns a preview of the
+    results. Does not materialize anything to the warehouse."""
     task = ShowTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
