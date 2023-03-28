@@ -76,6 +76,15 @@ class BaseTask(metaclass=ABCMeta):
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
+        breakpoint()
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_project_id({"project_id": self.project.hashed_name()})
+            dbt.tracking.track_adapter_info(
+                {
+                    "adapter_type": getattr(self.config.credentials, "type", None),
+                    "adapter_unique_id": self.config.credentials.hashed_unique_field(),
+                }
+            )
 
         if dbt.tracking.active_user is not None:
 
