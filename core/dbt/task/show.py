@@ -58,8 +58,8 @@ class ShowTask(CompileTask):
             table = result.agate_table
 
             if self.args.limit >= 0:
-                limit_table = table.limit(self.args.limit)
-                result.agate_table = limit_table
+                table = table.limit(self.args.limit)
+                result.agate_table = table
 
             # Hack to get Agate table output as string
             output = io.StringIO()
