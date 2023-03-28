@@ -472,7 +472,7 @@ class NodeConfig(NodeAndTestConfig):
                 )
 
         if (
-            self.contract
+            self.contract.enforced
             and self.materialized == "incremental"
             and self.on_schema_change != "append_new_columns"
         ):
