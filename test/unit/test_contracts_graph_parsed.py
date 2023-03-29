@@ -602,7 +602,7 @@ def complex_parsed_seed_dict():
         "alias": "foo",
         "config": {
             "column_types": {},
-            "delimiter", ","
+            "delimiter": ",",
             "enabled": True,
             "materialized": "seed",
             "persist_docs": {"relation": True, "columns": True},
