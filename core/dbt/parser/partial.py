@@ -577,13 +577,7 @@ class PartialParsing:
         new_schema_file = deepcopy(self.new_files[file_id])
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
-        if "version" in new_yaml_dict:
-            # despite the fact that this goes in the saved_schema_file, it
-            # should represent the new yaml dictionary, and should produce
-            # an error if the updated yaml file doesn't have a version
-            saved_schema_file.pp_dict = {"version": new_yaml_dict["version"]}
-        else:
-            saved_schema_file.pp_dict = {}
+        saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
         # copy from new schema_file to saved_schema_file to preserve references
@@ -806,8 +800,8 @@ class PartialParsing:
 
     # Merge a patch file into the pp_dict in a schema file
     def merge_patch(self, schema_file, key, patch):
-        if not schema_file.pp_dict:
-            schema_file.pp_dict = {"version": schema_file.dict_from_yaml["version"]}
+        if schema_file.pp_dict is None:
+            schema_file.pp_dict = {}
         pp_dict = schema_file.pp_dict
         if key not in pp_dict:
             pp_dict[key] = [patch]
