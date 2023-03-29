@@ -332,6 +332,7 @@ def compile(ctx, **kwargs):
 @requires.project
 @requires.runtime_config
 @requires.manifest
+@requires.postflight
 def show(ctx, **kwargs):
     """Generates executable SQL for a named resource or inline query, runs that SQL, and returns a preview of the
     results. Does not materialize anything to the warehouse."""
