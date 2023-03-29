@@ -151,7 +151,6 @@ class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMe
 class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYamlMetadata):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
-    constraints: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

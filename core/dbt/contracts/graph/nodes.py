@@ -168,10 +168,12 @@ class ColumnLevelConstraint(dbtClassMixin):
     warn_unsupported: bool = (
         True  # Warn if constraint is not supported by the platform and won't be in DDL
     )
+    columns: List[str] = field(default_factory=list)
 
 
+@dataclass
 class ModelLevelConstraint(ColumnLevelConstraint):
-    column_names: List[str] = field(default_factory=list)
+    pass  # REVIEW: The columns property above should be on this class instead
 
 
 @dataclass
