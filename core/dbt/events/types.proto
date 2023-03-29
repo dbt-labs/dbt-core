@@ -796,6 +796,28 @@ message FinishedRunningStatsMsg {
     FinishedRunningStats data = 2;
 }
 
+// E048
+message ConstraintNotEnforced {
+    repeated string constraints = 1;
+    string adapter = 2;
+}
+
+message ConstraintNotEnforcedMsg {
+    EventInfo info = 1;
+    ConstraintNotEnforced data = 2;
+}
+
+// E049
+message ConstraintNotSupported {
+    repeated string constraints = 1;
+    string adapter = 2;
+}
+
+message ConstraintNotSupportedMsg {
+    EventInfo info = 1;
+    ConstraintNotSupported data = 2;
+}
+
 // I - Project parsing
 
 // I001
