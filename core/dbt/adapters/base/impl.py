@@ -54,6 +54,8 @@ from dbt.events.types import (
     CodeExecution,
     CodeExecutionStatus,
     CatalogGenerationError,
+    ConstraintNotSupported,
+    ConstraintNotEnforced,
 )
 from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
 

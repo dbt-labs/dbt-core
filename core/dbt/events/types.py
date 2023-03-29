@@ -749,6 +749,30 @@ class FinishedRunningStats(InfoLevel):
         return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
 
 
+class ConstraintNotEnforced(WarnLevel):
+    def code(self):
+        return "E048"
+
+    def message(self) -> str:
+        msg = (
+            f"We noticed you have { self.constraints } configs, these are NOT enforced "
+            f"with { self.adapter } and will be ignored"
+        )
+        return msg
+
+
+class ConstraintNotSupported(WarnLevel):
+    def code(self):
+        return "E049"
+
+    def message(self) -> str:
+        msg = (
+            f"We noticed you have { self.constraints } configs, these are NOT supported "
+            f"with { self.adapter } and will be ignored"
+        )
+        return msg
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
