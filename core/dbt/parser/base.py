@@ -16,8 +16,8 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ManifestNode, BaseNode
-from dbt.contracts.graph.unparsed import UnparsedNode, Docs
+from dbt.contracts.graph.nodes import Contract, BaseNode, ManifestNode
+from dbt.contracts.graph.unparsed import Docs, UnparsedNode
 from dbt.exceptions import DbtInternalError, ConfigUpdateError, DictParseError
 from dbt import hooks
 from dbt.node_types import NodeType, ModelLanguage
@@ -297,7 +297,7 @@ class ConfiguredParser(
         # If we have docs in the config, merge with the node level, for backwards
         # compatibility with earlier node-only config.
         if "docs" in config_dict and config_dict["docs"]:
-            # we set show at the value of the config if it is set, otherwize, inherit the value
+            # we set show at the value of the config if it is set, otherwise, inherit the value
             docs_show = (
                 config_dict["docs"]["show"]
                 if "show" in config_dict["docs"]
@@ -310,10 +310,9 @@ class ConfiguredParser(
             else:
                 parsed_node.docs = Docs(show=docs_show)
 
-        # If we have "contract" in the config, copy to node level, for backwards
-        # compatibility with earlier node-only config.
-        if config_dict.get("contract", False):
-            parsed_node.contract = True
+        # If we have contract in the config, copy to node level
+        if "contract" in config_dict and config_dict["contract"]:
+            parsed_node.contract = Contract(enforced=config_dict["contract"]["enforced"])
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

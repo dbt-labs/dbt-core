@@ -80,7 +80,10 @@ def args_to_context(args: List[str]) -> Context:
 
 
 DEPRECATED_PARAMS = {
+    "deprecated_defer": "defer",
+    "deprecated_favor_state": "favor_state",
     "deprecated_print": "print",
+    "deprecated_state": "state",
 }
 
 
@@ -132,7 +135,8 @@ class Flags:
                             continue
                         elif param_source != ParameterSource.ENVIRONMENT:
                             raise BadOptionUsage(
-                                "Deprecated parameters can only be set via environment variables"
+                                param_name,
+                                "Deprecated parameters can only be set via environment variables",
                             )
 
                         # rename for clarity
@@ -147,6 +151,11 @@ class Flags:
                             raise Exception(
                                 f"No deprecated param name match from {dep_name} to {new_name}"
                             )
+
+                        # remove param from defaulted set since the deprecated
+                        # value is not set from default, but from an env var
+                        if new_name in params_assigned_from_default:
+                            params_assigned_from_default.remove(new_name)
 
                         # adding the deprecation warning function to the set
                         deprecated_env_vars[new_name] = renamed_env_var(
@@ -213,6 +222,8 @@ class Flags:
         self._override_if_set("LOG_FORMAT", "LOG_FORMAT_FILE", params_assigned_from_default)
 
         # Default LOG_PATH from PROJECT_DIR, if available.
+        # Starting in v1.5, if `log-path` is set in `dbt_project.yml`, it will raise a deprecation warning,
+        # with the possibility of removing it in a future release.
         if getattr(self, "LOG_PATH", None) is None:
             project_dir = getattr(self, "PROJECT_DIR", default_project_dir())
             version_check = getattr(self, "VERSION_CHECK", True)
@@ -259,3 +270,9 @@ class Flags:
                 )
             elif flag_set_by_user:
                 set_flag = flag
+
+    def fire_deprecations(self):
+        [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
+        # it is necessary to remove this attr from the class so it does
+        # not get pickled when written to disk as json
+        object.__delattr__(self, "deprecated_env_var_warnings")

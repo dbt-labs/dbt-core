@@ -29,6 +29,7 @@ from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.contracts.graph.nodes import (
     ParsedNodePatch,
     ColumnInfo,
+    ColumnLevelConstraint,
     GenericTestNode,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
@@ -37,11 +38,12 @@ from dbt.contracts.graph.nodes import (
     Group,
     ManifestNode,
     GraphMemberNode,
+    ConstraintType,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
     HasColumnTests,
-    HasDocs,
+    HasColumnProps,
     SourcePatch,
     UnparsedAnalysisUpdate,
     UnparsedColumn,
@@ -114,15 +116,7 @@ class ParserRef:
     def __init__(self):
         self.column_info: Dict[str, ColumnInfo] = {}
 
-    def add(
-        self,
-        column: Union[HasDocs, UnparsedColumn],
-        description: str,
-        data_type: Optional[str],
-        constraints: Optional[List[str]],
-        constraints_check: Optional[str],
-        meta: Dict[str, Any],
-    ):
+    def _add(self, column: HasColumnProps):
         tags: List[str] = []
         tags.extend(getattr(column, "tags", ()))
         quote: Optional[bool]
@@ -130,13 +124,20 @@ class ParserRef:
             quote = column.quote
         else:
             quote = None
+
+        if any(
+            c
+            for c in column.constraints
+            if not c["type"] or not ConstraintType.is_valid(c["type"])
+        ):
+            raise ParsingError(f"Invalid constraint type on column {column.name}")
+
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
-            description=description,
-            data_type=data_type,
-            constraints=constraints,
-            constraints_check=constraints_check,
-            meta=meta,
+            description=column.description,
+            data_type=column.data_type,
+            constraints=[ColumnLevelConstraint.from_dict(c) for c in column.constraints],
+            meta=column.meta,
             tags=tags,
             quote=quote,
             _extra=column.extra,
@@ -146,12 +147,7 @@ class ParserRef:
     def from_target(cls, target: Union[HasColumnDocs, HasColumnTests]) -> "ParserRef":
         refs = cls()
         for column in target.columns:
-            description = column.description
-            data_type = column.data_type
-            constraints = column.constraints
-            constraints_check = column.constraints_check
-            meta = column.meta
-            refs.add(column, description, data_type, constraints, constraints_check, meta)
+            refs._add(column)
         return refs
 
 
@@ -801,6 +797,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                     self.normalize_meta_attribute(data, path)
                     self.normalize_docs_attribute(data, path)
                     self.normalize_group_attribute(data, path)
+                    self.normalize_contract_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(path, self.key, data, exc)
@@ -831,6 +828,9 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
 
     def normalize_group_attribute(self, data, path):
         return self.normalize_attribute(data, path, "group")
+
+    def normalize_contract_attribute(self, data, path):
+        return self.normalize_attribute(data, path, "contract")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
@@ -941,10 +941,12 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
             node.patch(patch)
             self.validate_constraints(node)
+            node.build_contract_checksum()
 
     def validate_constraints(self, patched_node):
         error_messages = []
-        if patched_node.resource_type == "model" and patched_node.config.contract is True:
+        contract_config = patched_node.config.get("contract")
+        if patched_node.resource_type == "model" and contract_config.enforced is True:
             validators = [
                 self.constraints_schema_validator(patched_node),
                 self.constraints_materialization_validator(patched_node),
@@ -955,7 +957,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         if error_messages:
             original_file_path = patched_node.original_file_path
             raise ParsingError(
-                f"Original File Path: ({original_file_path})\nConstraints must be defined in a `yml` schema configuration file like `schema.yml`.\nOnly the SQL table and view materializations are supported for constraints. \n`data_type` values must be defined for all columns and NOT be null or blank.{self.convert_errors_to_string(error_messages)}"
+                f"Original File Path: ({original_file_path})\nConstraints must be defined in a `yml` schema configuration file like `schema.yml`.\n`data_type` values must be defined for all columns and NOT be null or blank.{self.convert_errors_to_string(error_messages)}"
             )
 
     def convert_errors_to_string(self, error_messages: List[str]):
@@ -977,7 +979,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
 
     def constraints_materialization_validator(self, patched_node):
         materialization_error = {}
-        if patched_node.config.materialized not in ["table", "view"]:
+        if patched_node.config.materialized not in ["table", "view", "incremental"]:
             materialization_error = {"materialization": patched_node.config.materialized}
         materialization_error_msg = f"\n    Materialization Error: {materialization_error}"
         materialization_error_msg_payload = (

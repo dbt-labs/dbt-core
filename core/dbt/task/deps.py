@@ -9,7 +9,6 @@ from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
 from dbt.deps.registry import RegistryPinnedPackage
 
-from dbt.events.proto_types import ListOfStrings
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DepsNoPackagesFound,
@@ -90,4 +89,4 @@ class DepsTask(BaseTask):
                 )
             if packages_to_upgrade:
                 fire_event(Formatting(""))
-                fire_event(DepsNotifyUpdatesAvailable(packages=ListOfStrings(packages_to_upgrade)))
+                fire_event(DepsNotifyUpdatesAvailable(packages=packages_to_upgrade))

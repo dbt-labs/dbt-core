@@ -1,0 +1,6 @@
+kind: Breaking Changes
+body: Allow `--select` and `--exclude` multiple times
+time: 2023-03-14T16:15:05.81741-06:00
+custom:
+  Author: dbeatty10
+  Issue: "7158"

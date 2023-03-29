@@ -18,7 +18,8 @@ from dbt.events.functions import (
     stop_capture_stdout_logs,
     reset_metadata_vars,
 )
-from dbt.events.test_types import IntegrationTestDebug
+from dbt.events.base_types import EventLevel
+from dbt.events.types import Note
 
 
 # =============================================================================
@@ -275,7 +276,7 @@ def run_sql_with_adapter(adapter, sql, fetch=None):
     sql = sql.format(**kwargs)
 
     msg = f'test connection "__test" executing: {sql}'
-    fire_event(IntegrationTestDebug(msg=msg))
+    fire_event(Note(msg=msg), level=EventLevel.DEBUG)
     with get_connection(adapter) as conn:
         return adapter.run_sql_for_tests(sql, fetch, conn)
 
@@ -321,7 +322,7 @@ def relation_from_name(adapter, name: str):
 
 
 # Ensure that models with different materialiations have the
-# corrent table/view.
+# current table/view.
 # Uses:
 #   adapter.list_relations_without_caching
 def check_relation_types(adapter, relation_to_type):

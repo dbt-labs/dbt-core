@@ -88,15 +88,13 @@ class Docs(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
-    constraints: Optional[List[str]] = None
-    constraints_check: Optional[str] = None
+    constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
-    access: Optional[str] = None
     _extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -104,7 +102,7 @@ TestDef = Union[Dict[str, Any], str]
 
 
 @dataclass
-class HasTests(HasDocs):
+class HasColumnAndTestProps(HasColumnProps):
     tests: Optional[List[TestDef]] = None
 
     def __post_init__(self):
@@ -113,18 +111,18 @@ class HasTests(HasDocs):
 
 
 @dataclass
-class UnparsedColumn(HasTests):
+class UnparsedColumn(HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
 
 
 @dataclass
 class HasColumnDocs(dbtClassMixin, Replaceable):
-    columns: Sequence[HasDocs] = field(default_factory=list)
+    columns: Sequence[HasColumnProps] = field(default_factory=list)
 
 
 @dataclass
-class HasColumnTests(HasColumnDocs):
+class HasColumnTests(dbtClassMixin, Replaceable):
     columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
@@ -145,13 +143,14 @@ class HasConfig:
 
 
 @dataclass
-class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasDocs, HasYamlMetadata):
-    pass
+class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMetadata):
+    access: Optional[str] = None
 
 
 @dataclass
-class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasTests, HasYamlMetadata):
+class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYamlMetadata):
     quote_columns: Optional[bool] = None
+    access: Optional[str] = None
 
 
 @dataclass
@@ -162,7 +161,7 @@ class MacroArgument(dbtClassMixin):
 
 
 @dataclass
-class UnparsedMacroUpdate(HasConfig, HasDocs, HasYamlMetadata):
+class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
 
 
@@ -249,7 +248,7 @@ class Quoting(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
+class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
     identifier: Optional[str] = None

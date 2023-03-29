@@ -5,15 +5,45 @@ from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
 from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
-from dbt.events.types import MainReportVersion, MainReportArgs, MainTrackingUserState
+from dbt.events.types import (
+    CommandCompleted,
+    MainReportVersion,
+    MainReportArgs,
+    MainTrackingUserState,
+)
+from dbt.events.helpers import get_json_string_utcnow
 from dbt.exceptions import DbtProjectError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.utils import cast_dict_to_dict_of_strings, ExitCodes
 
 from click import Context
+from click.exceptions import ClickException
 from functools import update_wrapper
+import time
+import traceback
+
+
+class HandledExit(ClickException):
+    def __init__(self, result, success, exit_code: ExitCodes) -> None:
+        self.result = result
+        self.success = success
+        self.exit_code = exit_code
+
+    def show(self):
+        pass
+
+
+class UnhandledExit(ClickException):
+    exit_code = ExitCodes.UnhandledError.value
+
+    def __init__(self, exception: Exception, message: str) -> None:
+        self.exception = exception
+        self.message = message
+
+    def format_message(self) -> str:
+        return self.message
 
 
 def preflight(func):
@@ -33,7 +63,8 @@ def preflight(func):
 
         # Logging
         # N.B. Legacy logger is not supported
-        setup_event_logger(flags)
+        callabcks = ctx.obj.get("callbacks", [])
+        setup_event_logger(flags=flags, callbacks=callabcks)
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
@@ -41,7 +72,7 @@ def preflight(func):
         fire_event(MainReportArgs(args=flags_dict_str))
 
         # Deprecation warnings
-        [dep_fn() for dep_fn in flags.deprecated_env_var_warnings]
+        flags.fire_deprecations()
 
         if active_user is not None:  # mypy appeasement, always true
             fire_event(MainTrackingUserState(user_state=active_user.state()))
@@ -54,6 +85,38 @@ def preflight(func):
         ctx.with_resource(adapter_management())
 
         return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
+
+
+def postflight(func):
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        start_func = time.perf_counter()
+        success = False
+
+        try:
+            result, success = func(*args, **kwargs)
+        except Exception as e:
+            raise UnhandledExit(e, message=traceback.format_exc())
+        finally:
+            fire_event(
+                CommandCompleted(
+                    command=ctx.command_path,
+                    success=success,
+                    completed_at=get_json_string_utcnow(),
+                    elapsed=time.perf_counter() - start_func,
+                )
+            )
+
+        if not success:
+            raise HandledExit(
+                result=result,
+                success=success,
+                exit_code=ExitCodes.ModelError.value,
+            )
+
+        return (result, success)
 
     return update_wrapper(wrapper, func)
 

@@ -5,37 +5,40 @@ from datetime import datetime
 import time
 from itertools import chain
 from typing import (
-    Optional,
-    Tuple,
-    Callable,
-    Iterable,
-    Type,
-    Dict,
     Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
     List,
     Mapping,
-    Iterator,
+    Optional,
     Set,
+    Tuple,
+    Type,
 )
+
+from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType
 
 import agate
 import pytz
 
 from dbt.exceptions import (
     DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
     MacroArgTypeError,
     MacroResultError,
-    QuoteConfigTypeError,
     NotImplementedError,
     NullRelationCacheAttemptedError,
     NullRelationDropAttemptedError,
+    QuoteConfigTypeError,
     RelationReturnedMultipleResultsError,
     RenameToNoneAttemptedError,
-    DbtRuntimeError,
     SnapshotTargetIncompleteError,
     SnapshotTargetNotSnapshotTableError,
-    UnexpectedNullError,
     UnexpectedNonTimestampError,
+    UnexpectedNullError,
 )
 
 from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
@@ -63,7 +66,7 @@ from dbt.adapters.base.relation import (
 )
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
-from dbt.adapters.cache import RelationsCache, _make_ref_key_msg
+from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
 
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
@@ -719,7 +722,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             ListRelations(
                 database=cast_to_str(database),
                 schema=schema,
-                relations=[_make_ref_key_msg(x) for x in relations],
+                relations=[_make_ref_key_dict(x) for x in relations],
             )
         )
 
@@ -1261,6 +1264,39 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         # This returns a callable macro
         return model_context[macro_name]
+
+    @classmethod
+    def _parse_column_constraint(cls, raw_constraint: Dict[str, Any]) -> ColumnLevelConstraint:
+        try:
+            ColumnLevelConstraint.validate(raw_constraint)
+            return ColumnLevelConstraint.from_dict(raw_constraint)
+        except Exception:
+            raise DbtValidationError(f"Could not parse constraint: {raw_constraint}")
+
+    @available
+    @classmethod
+    def render_raw_column_constraint(cls, raw_constraint: Dict[str, Any]) -> str:
+        constraint = cls._parse_column_constraint(raw_constraint)
+        return cls.render_column_constraint(constraint)
+
+    @classmethod
+    def render_column_constraint(cls, constraint: ColumnLevelConstraint) -> str:
+        """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
+        rendering."""
+        if constraint.type == ConstraintType.check and constraint.expression:
+            return f"check {constraint.expression}"
+        elif constraint.type == ConstraintType.not_null:
+            return "not null"
+        elif constraint.type == ConstraintType.unique:
+            return "unique"
+        elif constraint.type == ConstraintType.primary_key:
+            return "primary key"
+        elif constraint.type == ConstraintType.foreign_key:
+            return "foreign key"
+        elif constraint.type == ConstraintType.custom and constraint.expression:
+            return constraint.expression
+        else:
+            return ""
 
 
 COLUMNS_EQUAL_SQL = """

@@ -209,6 +209,25 @@ class CompilationError(DbtRuntimeError):
             )
 
 
+class ModelContractError(DbtRuntimeError):
+    CODE = 10016
+    MESSAGE = "Contract Error"
+
+    def __init__(self, reasons, node=None):
+        self.reasons = reasons
+        super().__init__(self.message(), node)
+
+    @property
+    def type(self):
+        return "Contract"
+
+    def message(self):
+        return (
+            f"There is a breaking change in the model contract because {self.reasons}; "
+            "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+        )
+
+
 class RecursionError(DbtRuntimeError):
     pass
 
@@ -2121,6 +2140,23 @@ class RelationWrongTypeError(CompilationError):
             "`--full-refresh` and dbt will drop it for you."
         )
 
+        return msg
+
+
+class ContractError(CompilationError):
+    def __init__(self, yaml_columns, sql_columns):
+        self.yaml_columns = yaml_columns
+        self.sql_columns = sql_columns
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = (
+            "Contracts are enabled for this model. "
+            "Please ensure the name, data_type, and number of columns in your `yml` file "
+            "match the columns in your SQL file.\n"
+            f"Schema File Columns: {self.yaml_columns}\n"
+            f"SQL File Columns: {self.sql_columns}"
+        )
         return msg
 
 

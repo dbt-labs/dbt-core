@@ -1,6 +1,5 @@
-import betterproto
 from dbt.constants import METADATA_ENV_PREFIX
-from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut, EventMsg
+from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
 from dbt.events.types import Formatting
@@ -10,17 +9,26 @@ from functools import partial
 import json
 import os
 import sys
-from typing import Callable, Dict, Optional, TextIO
+from typing import Callable, Dict, List, Optional, TextIO
 import uuid
+from google.protobuf.json_format import MessageToDict
 
 
 LOG_VERSION = 3
 metadata_vars: Optional[Dict[str, str]] = None
 
+# These are the logging events issued by the "clean" command,
+# where we can't count on having a log directory. We've removed
+# the "class" flags on the events in types.py. If necessary we
+# could still use class or method flags, but we'd have to get
+# the type class from the msg and then get the information from the class.
+nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
 
-def setup_event_logger(flags) -> None:
+
+def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
+    EVENT_MANAGER.add_callbacks(callbacks=callbacks)
 
     if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(
@@ -105,8 +113,7 @@ def _stdout_filter(
     msg: EventMsg,
 ) -> bool:
     return (
-        not isinstance(msg.data, NoStdOut)
-        and (not isinstance(msg.data, Cache) or log_cache_events)
+        (msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events)
         and (EventLevel(msg.info.level) != EventLevel.DEBUG or debug_mode)
         and (EventLevel(msg.info.level) == EventLevel.ERROR or not quiet_mode)
         and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
@@ -129,8 +136,8 @@ def _get_logfile_config(
 
 def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventMsg) -> bool:
     return (
-        not isinstance(msg.data, NoFile)
-        and not (isinstance(msg.data, Cache) and not log_cache_events)
+        msg.info.code not in nofile_codes
+        and not (msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events)
         and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
     )
 
@@ -147,7 +154,11 @@ def _get_logbook_log_config(
         quiet,
     )
     config.name = "logbook_log"
-    config.filter = NoFilter if log_cache_events else lambda e: not isinstance(e.data, Cache)
+    config.filter = (
+        NoFilter
+        if log_cache_events
+        else lambda e: e.info.name not in ["CacheAction", "CacheDumpGraph"]
+    )
     config.logger = GLOBAL_LOGGER
     config.output_stream = None
     return config
@@ -203,8 +214,10 @@ def msg_to_json(msg: EventMsg) -> str:
 def msg_to_dict(msg: EventMsg) -> dict:
     msg_dict = dict()
     try:
-        msg_dict = msg.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
-    except AttributeError as exc:
+        msg_dict = MessageToDict(
+            msg, preserving_proto_field_name=True, including_default_value_fields=True  # type: ignore
+        )
+    except Exception as exc:
         event_type = type(msg).__name__
         raise Exception(f"type {event_type} is not serializable. {str(exc)}")
     # We don't want an empty NodeInfo in output

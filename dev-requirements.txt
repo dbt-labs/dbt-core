@@ -1,4 +1,3 @@
-betterproto[compiler]==1.2.5
 black==22.12.0
 bumpversion
 docutils

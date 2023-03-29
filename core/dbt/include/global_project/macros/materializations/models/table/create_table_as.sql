@@ -25,11 +25,27 @@
 
   create {% if temporary: -%}temporary{%- endif %} table
     {{ relation.include(database=(not temporary), schema=(not temporary)) }}
-    {% if config.get('contract', False) %}
-      {{ get_assert_columns_equivalent(sql) }}
-      {{ get_columns_spec_ddl() }}
-    {% endif %}
+  {% set contract_config = config.get('contract') %}
+  {% if contract_config.enforced %}
+    {{ get_assert_columns_equivalent(sql) }}
+    {{ get_columns_spec_ddl() }}
+    {%- set sql = get_select_subquery(sql) %}
+  {% endif %}
   as (
     {{ sql }}
   );
+{%- endmacro %}
+
+{% macro get_select_subquery(sql) %}
+  {{ return(adapter.dispatch('get_select_subquery', 'dbt')(sql)) }}
+{% endmacro %}
+
+{% macro default__get_select_subquery(sql) %}
+    select
+    {% for column in model['columns'] %}
+      {{ column }}{{ ", " if not loop.last }}
+    {% endfor %}
+    from (
+        {{ sql }}
+    ) as model_subq
 {%- endmacro %}
