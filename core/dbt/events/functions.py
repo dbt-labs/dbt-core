@@ -3,7 +3,7 @@ from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, Cache, EventLevel, NoFile, NoStdOut, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.events.types import EmptyLine
+from dbt.events.types import EmptyLine, Note
 import dbt.flags as flags
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
@@ -156,7 +156,9 @@ def msg_to_dict(msg: EventMsg) -> dict:
         msg_dict = msg.to_dict(casing=betterproto.Casing.SNAKE, include_default_values=True)  # type: ignore
     except AttributeError as exc:
         event_type = type(msg).__name__
-        raise Exception(f"type {event_type} is not serializable. {str(exc)}")
+        fire_event(
+            Note(msg=f"type {event_type} is not serializable. {str(exc)}"), level=EventLevel.WARN
+        )
     # We don't want an empty NodeInfo in output
     if (
         "data" in msg_dict
