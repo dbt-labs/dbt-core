@@ -79,7 +79,7 @@ class BaseEvent:
             if "pytest" in sys.modules:
                 raise Exception(error_msg)
             else:
-                fire_event(Note(msg=error_msg))
+                fire_event(Note(msg=error_msg), level=EventLevel.WARN)
                 self.pb_msg = msg_cls()
 
     def __setattr__(self, key, value):
