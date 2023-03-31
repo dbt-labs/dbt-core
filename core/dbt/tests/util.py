@@ -24,6 +24,8 @@ from dbt.events.test_types import IntegrationTestDebug
 #   rm_file
 #   write_file
 #   read_file
+#   mkdir
+#   rm_dir
 #   get_artifact
 #   update_config_file
 #   write_config_file
@@ -149,6 +151,22 @@ def read_file(*paths):
     with open(os.path.join(*paths), "r") as fp:
         contents = fp.read()
     return contents
+
+
+# To create a directory
+def mkdir(directory_path):
+    try:
+        os.makedirs(directory_path)
+    except FileExistsError:
+        raise FileExistsError(f"{directory_path} already exists.")
+
+
+# To remove a directory
+def rm_dir(directory_path):
+    try:
+        shutil.rmtree(directory_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"{directory_path} does not exist.")
 
 
 # Get an artifact (usually from the target directory) such as

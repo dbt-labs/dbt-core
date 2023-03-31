@@ -1,12 +1,13 @@
 import csv
 import pytest
-import shutil
 
 from codecs import BOM_UTF8
 from pathlib import Path
 
 from dbt.tests.util import (
-    rm_file,
+    copy_file,
+    mkdir,
+    rm_dir,
     run_dbt,
     read_file,
     check_relations_equal,
@@ -14,16 +15,21 @@ from dbt.tests.util import (
     check_table_does_not_exist,
 )
 
-from tests.functional.simple_seed.fixtures import (
+from dbt.tests.adapter.simple_seed.fixtures import (
     models__downstream_from_seed_actual,
     models__from_basic_seed,
-    seeds__disabled_in_config,
-    seeds__enabled_in_config,
-    seeds__tricky,
-    seeds__wont_parse,
 )
 
-# from `test/integration/test_simple_seed`, test_simple_seed
+from dbt.tests.adapter.simple_seed.seeds import (
+    seed__actual_csv,
+    seeds__expected_sql,
+    seeds__enabled_in_config_csv,
+    seeds__disabled_in_config_csv,
+    seeds__tricky_csv,
+    seeds__wont_parse_csv,
+    seed__unicode_csv,
+    seed__with_dots_csv,
+)
 
 
 class SeedConfigBase(object):
@@ -40,12 +46,11 @@ class SeedTestBase(SeedConfigBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
-        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
+        project.run_sql(seeds__expected_sql)
 
     @pytest.fixture(scope="class")
     def seeds(self, test_data_dir):
-        seed_actual_csv = read_file(test_data_dir, "seed_actual.csv")
-        return {"seed_actual.csv": seed_actual_csv}
+        return {"seed_actual.csv": seed__actual_csv}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -110,7 +115,7 @@ class TestSeedConfigFullRefreshOff(SeedTestBase):
         }
 
     def test_simple_seed_full_refresh_config(self, project):
-        """Config options should override full-refresh flag because config is higher priority"""
+        """Config options should override a full-refresh flag because config is higher priority"""
         self._build_relations_for_test(project)
         self._check_relation_end_state(run_result=run_dbt(["seed"]), project=project, exists=True)
         self._check_relation_end_state(
@@ -122,7 +127,7 @@ class TestSeedCustomSchema(SeedTestBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
-        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
+        project.run_sql(seeds__expected_sql)
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -134,8 +139,8 @@ class TestSeedCustomSchema(SeedTestBase):
         }
 
     def test_simple_seed_with_schema(self, project):
-        results = run_dbt(["seed"])
-        assert len(results) == 1
+        seed_results = run_dbt(["seed"])
+        assert len(seed_results) == 1
         custom_schema = f"{project.test_schema}_custom_schema"
         check_relations_equal(project.adapter, [f"{custom_schema}.seed_actual", "seed_expected"])
 
@@ -146,13 +151,14 @@ class TestSeedCustomSchema(SeedTestBase):
         check_relations_equal(project.adapter, [f"{custom_schema}.seed_actual", "seed_expected"])
 
     def test_simple_seed_with_drop_and_schema(self, project):
-        results = run_dbt(["seed"])
-        assert len(results) == 1
+        seed_results = run_dbt(["seed"])
+        assert len(seed_results) == 1
         custom_schema = f"{project.test_schema}_custom_schema"
         check_relations_equal(project.adapter, [f"{custom_schema}.seed_actual", "seed_expected"])
 
         # this should drop the seed table, then re-create
         results = run_dbt(["seed", "--full-refresh"])
+        assert len(results) == 1
         custom_schema = f"{project.test_schema}_custom_schema"
         check_relations_equal(project.adapter, [f"{custom_schema}.seed_actual", "seed_expected"])
 
@@ -161,9 +167,9 @@ class TestSimpleSeedEnabledViaConfig(object):
     @pytest.fixture(scope="session")
     def seeds(self):
         return {
-            "seed_enabled.csv": seeds__enabled_in_config,
-            "seed_disabled.csv": seeds__disabled_in_config,
-            "seed_tricky.csv": seeds__tricky,
+            "seed_enabled.csv": seeds__enabled_in_config_csv,
+            "seed_disabled.csv": seeds__disabled_in_config_csv,
+            "seed_tricky.csv": seeds__tricky_csv,
         }
 
     @pytest.fixture(scope="class")
@@ -182,21 +188,21 @@ class TestSimpleSeedEnabledViaConfig(object):
 
     def test_simple_seed_with_disabled(self, clear_test_schema, project):
         results = run_dbt(["seed"])
-        len(results) == 2
+        assert len(results) == 2
         check_table_does_exist(project.adapter, "seed_enabled")
         check_table_does_not_exist(project.adapter, "seed_disabled")
         check_table_does_exist(project.adapter, "seed_tricky")
 
     def test_simple_seed_selection(self, clear_test_schema, project):
         results = run_dbt(["seed", "--select", "seed_enabled"])
-        len(results) == 1
+        assert len(results) == 1
         check_table_does_exist(project.adapter, "seed_enabled")
         check_table_does_not_exist(project.adapter, "seed_disabled")
         check_table_does_not_exist(project.adapter, "seed_tricky")
 
     def test_simple_seed_exclude(self, clear_test_schema, project):
         results = run_dbt(["seed", "--exclude", "seed_enabled"])
-        len(results) == 1
+        assert len(results) == 1
         check_table_does_not_exist(project.adapter, "seed_enabled")
         check_table_does_not_exist(project.adapter, "seed_disabled")
         check_table_does_exist(project.adapter, "seed_tricky")
@@ -206,11 +212,11 @@ class TestSeedParsing(SeedConfigBase):
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
-        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
+        project.run_sql(seeds__expected_sql)
 
     @pytest.fixture(scope="class")
     def seeds(self):
-        return {"seed.csv": seeds__wont_parse}
+        return {"seed.csv": seeds__wont_parse_csv}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -218,43 +224,44 @@ class TestSeedParsing(SeedConfigBase):
 
     def test_dbt_run_skips_seeds(self, project):
         # run does not try to parse the seed files
-        len(run_dbt()) == 1
+        assert len(run_dbt()) == 1
 
         # make sure 'dbt seed' fails, otherwise our test is invalid!
         run_dbt(["seed"], expect_pass=False)
 
 
-# BOM = byte order mark; see https://www.ibm.com/docs/en/netezza?topic=formats-byte-order-mark
 class TestSimpleSeedWithBOM(SeedConfigBase):
+    # Reference: BOM = byte order mark; see https://www.ibm.com/docs/en/netezza?topic=formats-byte-order-mark
+    # Tests for hidden unicode character in csv
     @pytest.fixture(scope="class", autouse=True)
     def setUp(self, project):
         """Create table for ensuring seeds and models used in tests build correctly"""
-        project.run_sql_file(project.test_data_dir / Path("seed_expected.sql"))
-
-        # manual copy because seed has a special and tricky-to-include unicode character at 0
-        shutil.copyfile(
-            project.test_data_dir / Path("seed_bom.csv"),
-            project.project_root / Path("seeds") / Path("seed_bom.csv"),
+        project.run_sql(seeds__expected_sql)
+        copy_file(
+            project.test_dir,
+            "seed_bom.csv",
+            project.project_root / Path("seeds") / "seed_bom.csv",
+            "",
         )
 
     def test_simple_seed(self, project):
-        results = run_dbt(["seed"])
-        assert len(results) == 1
-
+        seed_result = run_dbt(["seed"])
+        assert len(seed_result) == 1
         # encoding param must be specified in open, so long as Python reads files with a
         # default file encoding for character sets beyond extended ASCII.
         with open(
             project.project_root / Path("seeds") / Path("seed_bom.csv"), encoding="utf-8"
         ) as fp:
             assert fp.read(1) == BOM_UTF8.decode("utf-8")
-
         check_relations_equal(project.adapter, ["seed_expected", "seed_bom"])
 
 
 class TestSeedSpecificFormats(SeedConfigBase):
     """Expect all edge cases to build"""
 
-    def _make_big_seed(self, test_data_dir):
+    @staticmethod
+    def _make_big_seed(test_data_dir):
+        mkdir(test_data_dir)
         big_seed_path = test_data_dir / Path("tmp.csv")
         with open(big_seed_path, "w") as f:
             writer = csv.writer(f)
@@ -265,18 +272,16 @@ class TestSeedSpecificFormats(SeedConfigBase):
 
     @pytest.fixture(scope="class")
     def seeds(self, test_data_dir):
-        seed_unicode = read_file(test_data_dir, "seed_unicode.csv")
-        dotted_seed = read_file(test_data_dir, "seed.with.dots.csv")
         big_seed_path = self._make_big_seed(test_data_dir)
         big_seed = read_file(big_seed_path)
 
         yield {
             "big_seed.csv": big_seed,
-            "seed.with.dots.csv": dotted_seed,
-            "seed_unicode.csv": seed_unicode,
+            "seed.with.dots.csv": seed__with_dots_csv,
+            "seed_unicode.csv": seed__unicode_csv,
         }
-        rm_file(big_seed_path)
+        rm_dir(test_data_dir)
 
     def test_simple_seed(self, project):
         results = run_dbt(["seed"])
-        len(results) == 3
+        assert len(results) == 3
