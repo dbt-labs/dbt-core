@@ -135,9 +135,9 @@ class PostgresAdapter(SQLAdapter):
     @property
     def constraint_support(self):
         return {
-            "not_null": ConstraintSupport.NOT_ENFORCED,
+            "not_null": ConstraintSupport.ENFORCED,
             "primary_key": ConstraintSupport.ENFORCED,
             "foreign_key": ConstraintSupport.ENFORCED,
-            "unique": ConstraintSupport.NOT_SUPPORTED,
+            "unique": ConstraintSupport.ENFORCED,
             "check": ConstraintSupport.ENFORCED,
         }

@@ -11,7 +11,7 @@
     {%- set user_provided_columns = model['columns'] -%}
     {%- set raw_model_constraints = adapter.render_raw_model_constraints(model['constraints']) -%}
     (
-    {% for i in user_provided_columns %}
+    {% for i in user_provided_columns -%}
       {%- set col = user_provided_columns[i] -%}
       {%- set constraints = col['constraints'] -%}
       {{ col['name'] }} {{ col['data_type'] }}
@@ -26,6 +26,9 @@
         {{ c }}{{ "," if not loop.last }}
     {% endfor -%}
     )
+    {%- if (all_constraints | length) > 0 -%}
+      {%- do adapter.process_constraints(all_constraints) -%}
+    {%- endif %}
 {% endmacro %}
 
 {%- macro get_assert_columns_equivalent(sql) -%}
