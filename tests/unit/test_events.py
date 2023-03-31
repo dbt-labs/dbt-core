@@ -1,3 +1,4 @@
+import pytest
 import re
 from typing import TypeVar
 
@@ -442,3 +443,21 @@ def test_date_serialization():
     ti_dict = ti.to_dict()
     assert ti_dict["started_at"].endswith("Z")
     assert ti_dict["completed_at"].endswith("Z")
+
+
+def test_bad_serialization():
+    """Tests that bad serialization enters the proper exception handling
+
+    When pytest is in use the exception handling of `BaseEvent` raises an
+    exception. When pytest isn't present, it fires a Note event. Thus to test
+    that bad serializations are properly handled, the best we can do is test
+    that the exception handling path is used.
+    """
+
+    with pytest.raises(Exception) as excinfo:
+        types.Note(param_event_doesnt_have="This should break")
+
+    assert (
+        str(excinfo.value)
+        == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
+    )
