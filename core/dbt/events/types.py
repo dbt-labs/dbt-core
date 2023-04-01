@@ -10,7 +10,7 @@ from dbt.events.base_types import (
     ErrorLevel,
     EventLevel,
 )
-from dbt.events.format import format_fancy_output_line, pluralize
+from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
 
 from dbt.node_types import NodeType
 
@@ -1710,7 +1710,8 @@ class CommandCompleted(DebugLevel):
 
     def message(self) -> str:
         status = "succeeded" if self.success else "failed"
-        return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
+        completed_at = timestamp_to_datetime_string(self.completed_at)
+        return f"Command `{self.command}` {status} at {completed_at} after {self.elapsed:0.2f} seconds"
 
 
 class ShowNode(InfoLevel):
@@ -1886,7 +1887,9 @@ class TimingInfoCollected(DebugLevel):
         return "Z010"
 
     def message(self) -> str:
-        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {self.timing_info.started_at} => {self.timing_info.completed_at}"
+        started_at = timestamp_to_datetime_string(self.timing_info.started_at)
+        completed_at = timestamp_to_datetime_string(self.timing_info.completed_at)
+        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {started_at} => {completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message
