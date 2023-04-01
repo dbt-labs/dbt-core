@@ -9,7 +9,7 @@ class TestGenerate:
         assert not os.path.exists("./target/manifest.json")
 
     def test_generate_empty_catalog(self, project):
-        run_dbt(["docs", "generate", "--empty_catalog"])
+        run_dbt(["docs", "generate", "--empty-catalog"])
         with open("./target/catalog.json") as file:
             catalog = json.load(file)
         assert catalog["nodes"] == {}, "nodes should be empty"
