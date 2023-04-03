@@ -26,9 +26,6 @@
         {{ c }}{{ "," if not loop.last }}
     {% endfor -%}
     )
-    {%- if (all_constraints | length) > 0 -%}
-      {%- do adapter.process_constraints(all_constraints) -%}
-    {%- endif %}
 {% endmacro %}
 
 {%- macro get_assert_columns_equivalent(sql) -%}

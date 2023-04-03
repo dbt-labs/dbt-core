@@ -799,7 +799,6 @@ message FinishedRunningStatsMsg {
 // E048
 message ConstraintNotEnforced {
     repeated string constraints = 1;
-    string adapter = 2;
 }
 
 message ConstraintNotEnforcedMsg {
@@ -810,7 +809,6 @@ message ConstraintNotEnforcedMsg {
 // E049
 message ConstraintNotSupported {
     repeated string constraints = 1;
-    string adapter = 2;
 }
 
 message ConstraintNotSupportedMsg {

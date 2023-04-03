@@ -1,6 +1,6 @@
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, Set, List, Any
+from typing import Optional, Set, List, Any, Dict
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
@@ -132,8 +132,8 @@ class PostgresAdapter(SQLAdapter):
         """
         return ["append", "delete+insert"]
 
-    @property
-    def constraint_support(self):
+    @staticmethod
+    def constraint_support() -> Dict:
         return {
             "not_null": ConstraintSupport.ENFORCED,
             "primary_key": ConstraintSupport.ENFORCED,
