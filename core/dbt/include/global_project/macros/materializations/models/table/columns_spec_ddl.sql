@@ -43,7 +43,7 @@
   {%- set string_yaml_columns = stringify_formatted_columns(yaml_columns) -%}
 
   {%- if sql_columns|length != yaml_columns|length -%}
-    {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+    {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
   {%- endif -%}
 
   {%- for sql_col in sql_columns -%}
@@ -56,11 +56,11 @@
     {%- endfor -%}
     {%- if not yaml_col -%}
       {#-- Column with name not found in yaml #}
-      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
     {%- endif -%}
     {%- if sql_col['formatted'] != yaml_col[0]['formatted'] -%}
       {#-- Column data types don't match #}
-      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
     {%- endif -%}
   {%- endfor -%}
 

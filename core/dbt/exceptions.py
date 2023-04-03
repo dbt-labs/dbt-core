@@ -2151,23 +2151,44 @@ class ContractError(CompilationError):
             "Please ensure the name, data_type, and number of columns in your `yml` file "
             "match the columns in your SQL file.\n"
             # separate column headers by 20 spaces
-            f"{'yaml col:' : <20} sql col:\n"
+            f"{'yaml col:' : <20} {'sql col:' : <20} {'issue:' : <20}\n"
         )
 
-        # print columns pretty
-        # split yaml and sql strings into list
-        yaml_list = self.yaml_columns.split(', ')
-        sql_list = self.sql_columns.split(', ')
-        # make sure lists are the same length, add empty string if not
-        yaml_list += ['']*(len(sql_list) - len(yaml_list))
-        sql_list += ['']*(len(yaml_list) - len(sql_list))
-        # for each col
-        for i in range(len(yaml_list)):
-            # separate yaml and sql columns by 20 spaces, append to message
-            msg += f"{yaml_list[i] : <20} {sql_list[i]}\n"
+        # list of ordered matches (or not matches) for printing
+        ordered_match = []
+        # track sql cols so we don't need another for loop later
+        sql_col_set = set()
+        # for each sql col list
+        for sql_col in self.sql_columns:
+            # add sql col to set
+            sql_col_set.add(sql_col['name']) 
+            # for each yaml col list
+            for i, yaml_col in enumerate(self.yaml_columns):
+                # if name matches
+                if sql_col['name'] == yaml_col['name']:
+                    # if type matches
+                    if sql_col['formatted'] == yaml_col['formatted']:
+                        # its a perfect match!
+                        ordered_match += [[sql_col['formatted'], yaml_col['formatted'], '']]
+                        break
+                    else:
+                        # same name, diff type
+                        ordered_match += [[sql_col['formatted'], yaml_col['formatted'], 'Incorrect type']]
+                        break
+                # if last loop, then no name match
+                if i == len(self.yaml_columns)-1:
+                    ordered_match += [[sql_col['formatted'], '', 'No match']]
+
+        # now add all yaml cols without a match
+        for yaml_col in self.yaml_columns:
+            if yaml_col['name'] not in sql_col_set:
+                ordered_match += [['', yaml_col['name'], 'No match']]
+
+        # add each match to the message, printed in columns
+        for match in ordered_match:
+            msg += f'{match[0] : <20} {match[1] : <20} {match[2] : <20}\n'
 
         return msg
-
 
 # not modifying these since rpc should be deprecated soon
 class UnknownAsyncIDException(Exception):
