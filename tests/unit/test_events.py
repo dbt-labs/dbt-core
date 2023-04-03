@@ -242,7 +242,7 @@ sample_values = [
     types.DepsUpdateAvailable(version_latest=""),
     types.DepsUpToDate(),
     types.DepsListSubdirectory(subdirectory=""),
-    types.DepsNotifyUpdatesAvailable(packages=[]),
+    types.DepsNotifyUpdatesAvailable(packages=["my_pkg", "other_pkg"]),
     types.RetryExternalCall(attempt=0, max=0),
     types.RecordRetryException(exc=""),
     types.RegistryIndexProgressGETRequest(url=""),

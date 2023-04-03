@@ -1230,7 +1230,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
         return "M019"
 
     def message(self) -> str:
-        return f"Updates available for packages: {self.packages.value} \
+        return f"Updates available for packages: {self.packages} \
                 \nUpdate your versions in packages.yml, then run dbt deps"
 
 
