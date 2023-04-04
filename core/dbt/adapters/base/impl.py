@@ -1286,7 +1286,6 @@ class BaseAdapter(metaclass=AdapterMeta):
     def render_column_constraint(cls, constraint: ColumnLevelConstraint) -> str:
         """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
         rendering."""
-        breakpoint()
         if constraint.type == ConstraintType.check and constraint.expression:
             return f"check {constraint.expression}"
         elif constraint.type == ConstraintType.not_null:
