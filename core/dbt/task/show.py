@@ -4,7 +4,7 @@ import time
 
 from dbt.contracts.results import RunResult, RunStatus
 from dbt.events.functions import fire_event
-from dbt.events.types import ShowNode
+from dbt.events.types import ShowNode, Note
 from dbt.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
 
@@ -49,9 +49,12 @@ class ShowTask(CompileTask):
         if is_inline:
             matched_results = [result for result in results if result.node.name == "inline_query"]
         else:
-            matched_results = [
-                result for result in results if result.node.name in self.selection_arg[0]
-            ]
+            matched_results = []
+            for node in results:
+                if node.node.name in self.selection_arg[0]:
+                    matched_results.append(node)
+                if node not in matched_results:
+                    fire_event(Note(msg=f"Excluded node '{node.node.name}' from results"))
 
         for result in matched_results:
             # Allow passing in -1 (or any negative number) to get all rows

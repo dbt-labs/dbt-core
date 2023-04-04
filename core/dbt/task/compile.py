@@ -4,7 +4,7 @@ from typing import AbstractSet, Optional
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.events.functions import fire_event
-from dbt.events.types import CompiledNode
+from dbt.events.types import CompiledNode, Note
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -66,9 +66,12 @@ class CompileTask(GraphRunnableTask):
         if is_inline:
             matched_results = [result for result in results if result.node.name == "inline_query"]
         elif self.selection_arg:
-            matched_results = [
-                result for result in results if result.node.name in self.selection_arg
-            ]
+            matched_results = []
+            for node in results:
+                if node.node.name in self.selection_arg[0]:
+                    matched_results.append(node)
+                if node not in matched_results:
+                    fire_event(Note(msg=f"Excluded node '{node.node.name}' from results"))
         # No selector passed, compiling all nodes
         else:
             matched_results = []
