@@ -63,6 +63,7 @@ class CompileTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         is_inline = bool(getattr(self.args, "inline", None))
+        output_format = getattr(self.args, "output", "text")
 
         if is_inline:
             matched_results = [result for result in results if result.node.name == "inline_query"]
@@ -86,7 +87,7 @@ class CompileTask(GraphRunnableTask):
                     node_name=result.node.name,
                     compiled=result.node.compiled_code,
                     is_inline=is_inline,
-                    output_format=self.args.output,
+                    output_format=output_format,
                 )
             )
 
