@@ -1,6 +1,6 @@
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, Set, List, Any, Dict
+from typing import Optional, Set, List, Any
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
@@ -64,6 +64,14 @@ class PostgresAdapter(SQLAdapter):
     Column = PostgresColumn
 
     AdapterSpecificConfigs = PostgresConfig
+
+    CONSTRAINT_SUPPORT = {
+        ConstraintType.check: ConstraintSupport.ENFORCED,
+        ConstraintType.not_null: ConstraintSupport.ENFORCED,
+        ConstraintType.unique: ConstraintSupport.ENFORCED,
+        ConstraintType.primary_key: ConstraintSupport.ENFORCED,
+        ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
+    }
 
     @classmethod
     def date_function(cls):
@@ -132,13 +140,3 @@ class PostgresAdapter(SQLAdapter):
         Not used to validate custom strategies defined by end users.
         """
         return ["append", "delete+insert"]
-
-    @staticmethod
-    def constraint_support() -> Dict:
-        return {
-            ConstraintType.check: ConstraintSupport.ENFORCED,
-            ConstraintType.not_null: ConstraintSupport.ENFORCED,
-            ConstraintType.unique: ConstraintSupport.ENFORCED,
-            ConstraintType.primary_key: ConstraintSupport.ENFORCED,
-            ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
-        }
