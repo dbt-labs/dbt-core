@@ -2,8 +2,17 @@ import pickle
 import pytest
 
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import ModelNode, InjectedCTE, GenericTestNode
-from dbt.contracts.graph.nodes import DependsOn, NodeConfig, TestConfig, TestMetadata, ColumnInfo
+from dbt.contracts.graph.nodes import (
+    ColumnInfo,
+    DependsOn,
+    GenericTestNode,
+    InjectedCTE,
+    ModelNode,
+    NodeConfig,
+    TestConfig,
+    TestMetadata,
+    Contract,
+)
 from dbt.node_types import NodeType
 
 from .utils import (
@@ -69,7 +78,7 @@ def basic_compiled_model():
         alias="bar",
         tags=[],
         config=NodeConfig(),
-        contract=False,
+        contract=Contract(),
         meta={},
         compiled=True,
         extra_ctes=[InjectedCTE("whatever", "select * from other")],
@@ -193,12 +202,12 @@ def basic_compiled_dict():
             "meta": {},
             "grants": {},
             "packages": [],
-            "contract": False,
+            "contract": {"enforced": False},
             "docs": {"show": True},
         },
         "docs": {"show": True},
         "columns": {},
-        "contract": False,
+        "contract": {"enforced": False},
         "meta": {},
         "compiled": True,
         "extra_ctes": [{"id": "whatever", "sql": "select * from other"}],
@@ -437,7 +446,7 @@ def basic_compiled_schema_test_node():
         alias="bar",
         tags=[],
         config=TestConfig(severity="warn"),
-        contract=False,
+        contract=Contract(),
         meta={},
         compiled=True,
         extra_ctes=[InjectedCTE("whatever", "select * from other")],
@@ -541,7 +550,7 @@ def basic_compiled_schema_test_dict():
         },
         "docs": {"show": True},
         "columns": {},
-        "contract": False,
+        "contract": {"enforced": False},
         "meta": {},
         "compiled": True,
         "extra_ctes": [{"id": "whatever", "sql": "select * from other"}],

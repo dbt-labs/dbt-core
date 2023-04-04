@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add double type to list of float column types for the column class
+time: 2023-02-08T10:42:30.918479Z
+custom:
+  Author: rlh1994
+  Issue: "6876"

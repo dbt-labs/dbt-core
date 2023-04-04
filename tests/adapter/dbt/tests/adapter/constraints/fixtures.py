@@ -184,7 +184,8 @@ version: 2
 models:
   - name: my_model
     config:
-      contract: true
+      contract:
+        enforced: true
     columns:
       - name: id
         quote: true
@@ -203,7 +204,8 @@ models:
         data_type: text
   - name: my_model_error
     config:
-      contract: true
+      contract:
+        enforced: true
     columns:
       - name: id
         data_type: integer
@@ -221,7 +223,8 @@ models:
         data_type: text
   - name: my_model_wrong_order
     config:
-      contract: true
+      contract:
+        enforced: true
     columns:
       - name: id
         data_type: integer
@@ -239,7 +242,8 @@ models:
         data_type: text
   - name: my_model_wrong_name
     config:
-      contract: true
+      contract:
+        enforced: true
     columns:
       - name: id
         data_type: integer
@@ -262,7 +266,8 @@ version: 2
 models:
   - name: my_model_data_type
     config:
-      contract: true
+      contract:
+        enforced: true
     columns:
       - name: wrong_data_type_column_name
         data_type: {data_type}

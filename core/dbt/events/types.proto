@@ -57,11 +57,6 @@ message ReferenceKeyMsg {
     string identifier = 3;
 }
 
-// ListOfStrings
-message ListOfStrings {
-   repeated string value = 1;
-}
-
 // GenericMessage, used for deserializing only
 message GenericMessage {
     EventInfo info = 1;
@@ -1301,7 +1296,7 @@ message DepsListSubdirectoryMsg {
 
 // M019
 message DepsNotifyUpdatesAvailable {
-    ListOfStrings packages = 1;
+    repeated string packages = 1;
 }
 
 message DepsNotifyUpdatesAvailableMsg {

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Recreates missing tracking events
+time: 2023-03-27T19:38:50.657292-05:00
+custom:
+  Author: iknox-fa
+  Issue: 6097 6098

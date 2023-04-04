@@ -190,6 +190,11 @@ register_pattern(Severity, insensitive_patterns("warn", "error"))
 
 
 @dataclass
+class ContractConfig(dbtClassMixin, Replaceable):
+    enforced: bool = False
+
+
+@dataclass
 class Hook(dbtClassMixin, Replaceable):
     sql: str
     transaction: bool = True
@@ -286,7 +291,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
     # 'meta' moved here from node
     mergebehavior = {
         "append": ["pre-hook", "pre_hook", "post-hook", "post_hook", "tags"],
-        "update": ["quoting", "column_types", "meta", "docs"],
+        "update": ["quoting", "column_types", "meta", "docs", "contract"],
         "dict_key_append": ["grants"],
     }
 
@@ -451,7 +456,10 @@ class NodeConfig(NodeAndTestConfig):
         default_factory=Docs,
         metadata=MergeBehavior.Update.meta(),
     )
-    contract: bool = False
+    contract: ContractConfig = field(
+        default_factory=ContractConfig,
+        metadata=MergeBehavior.Update.meta(),
+    )
 
     def __post_init__(self):
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing
@@ -464,7 +472,7 @@ class NodeConfig(NodeAndTestConfig):
                 )
 
         if (
-            self.contract
+            self.contract.enforced
             and self.materialized == "incremental"
             and self.on_schema_change != "append_new_columns"
         ):

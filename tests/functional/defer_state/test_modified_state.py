@@ -5,9 +5,9 @@ import string
 
 import pytest
 
-from dbt.tests.util import run_dbt, update_config_file, write_file
+from dbt.tests.util import run_dbt, update_config_file, write_file, get_manifest
 
-from dbt.exceptions import CompilationError
+from dbt.exceptions import CompilationError, ModelContractError
 
 from tests.functional.defer_state.fixtures import (
     seed_csv,
@@ -18,6 +18,8 @@ from tests.functional.defer_state.fixtures import (
     exposures_yml,
     macros_sql,
     infinite_macros_sql,
+    contract_schema_yml,
+    modified_contract_schema_yml,
 )
 
 
@@ -261,3 +263,49 @@ class TestChangedExposure(BaseModifiedState):
         results = run_dbt(["run", "--models", "+state:modified", "--state", "./state"])
         assert len(results) == 1
         assert results[0].node.name == "view_model"
+
+
+class TestChangedContract(BaseModifiedState):
+    def test_changed_contract(self, project):
+        self.run_and_save_state()
+
+        # update contract for table_model
+        write_file(contract_schema_yml, "models", "schema.yml")
+
+        # This will find the table_model node modified both through a config change
+        # and by a non-breaking change to contract: true
+        results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+        manifest = get_manifest(project.project_root)
+        model_unique_id = "model.test.table_model"
+        model = manifest.nodes[model_unique_id]
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
+        assert model.unrendered_config == expected_unrendered_config
+
+        # Run it again with "state:modified:contract", still finds modified due to contract: true
+        results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        first_contract_checksum = model.contract.checksum
+        assert first_contract_checksum
+        # save a new state
+        self.copy_state()
+
+        # This should raise because a column name has changed
+        write_file(modified_contract_schema_yml, "models", "schema.yml")
+        results = run_dbt(["run"], expect_pass=False)
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
+        with pytest.raises(ModelContractError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # Go back to schema file without contract. Should raise an error.
+        write_file(schema_yml, "models", "schema.yml")
+        with pytest.raises(ModelContractError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])

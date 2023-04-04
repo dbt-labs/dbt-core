@@ -30,20 +30,22 @@ sp_logger.setLevel(100)
 
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
-
-INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
-PLATFORM_SPEC = "iglu:com.dbt/platform/jsonschema/1-0-0"
-RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-2"
-INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
-PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
-RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
-DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
-LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
-RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
-EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
-PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
-RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
 DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
+
+ADAPTER_INFO_SPEC = "iglu:com.dbt/adapter_info/jsonschema/1-0-1"
+DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
+INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
+INVOCATION_SPEC = "iglu:com.dbt/invocation/jsonschema/1-0-2"
+LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
+PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
+PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
+PLATFORM_SPEC = "iglu:com.dbt/platform/jsonschema/1-0-0"
+PROJECT_ID_SPEC = "iglu:com.dbt/project_id/jsonschema/1-0-1"
+RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
+RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
+RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
+RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-2"
 
 
 class TimeoutEmitter(Emitter):
@@ -208,6 +210,32 @@ def track(user, *args, **kwargs):
             tracker.track_struct_event(*args, **kwargs)
         except Exception:
             fire_event(SendEventFailure())
+
+
+def track_project_id(options):
+    assert active_user is not None, "Cannot track project_id when active user is None"
+    context = [SelfDescribingJson(PROJECT_ID_SPEC, options)]
+
+    track(
+        active_user,
+        category="dbt",
+        action="project_id",
+        label=get_invocation_id(),
+        context=context,
+    )
+
+
+def track_adapter_info(options):
+    assert active_user is not None, "Cannot track adapter_info when active user is None"
+    context = [SelfDescribingJson(ADAPTER_INFO_SPEC, options)]
+
+    track(
+        active_user,
+        category="dbt",
+        action="adapter_info",
+        label=get_invocation_id(),
+        context=context,
+    )
 
 
 def track_invocation_start(invocation_context):

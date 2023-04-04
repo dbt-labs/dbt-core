@@ -1,0 +1,6 @@
+kind: Breaking Changes
+body: Remove exception functions marked as deprecated in 1.4 release
+time: 2023-03-31T13:35:37.5256-05:00
+custom:
+  Author: emmyoop
+  Issue: "6578"

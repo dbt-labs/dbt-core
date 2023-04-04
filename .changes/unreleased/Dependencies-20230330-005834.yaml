@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump black from 22.12.0 to 23.3.0"
+time: 2023-03-30T00:58:34.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 7243
