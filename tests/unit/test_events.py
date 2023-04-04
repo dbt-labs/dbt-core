@@ -178,8 +178,8 @@ sample_values = [
     types.DatabaseErrorRunningHook(hook_type=""),
     types.HooksRunning(num_hooks=0, hook_type=""),
     types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
-    types.ConstraintNotEnforced(constraints=[]),
-    types.ConstraintNotSupported(constraints=[]),
+    types.ConstraintNotEnforced(constraint=""),
+    types.ConstraintNotSupported(constraint=""),
     # I - Project parsing ======================
     types.InputFileDiffError(category="testing", file_id="my_file"),
     types.InvalidValueForField(field_name="test", field_value="test"),
