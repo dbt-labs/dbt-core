@@ -3,6 +3,7 @@ from typing import AbstractSet, Optional
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
+from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
 from dbt.events.types import CompiledNode, Note
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
@@ -70,8 +71,11 @@ class CompileTask(GraphRunnableTask):
             for result in results:
                 if result.node.name in self.selection_arg[0]:
                     matched_results.append(result)
-                if result not in matched_results:
-                    fire_event(Note(msg=f"Excluded node '{result.node.name}' from results"))
+                else:
+                    fire_event(
+                        Note(msg=f"Excluded node '{result.node.name}' from results"),
+                        EventLevel.DEBUG,
+                    )
         # No selector passed, compiling all nodes
         else:
             matched_results = []

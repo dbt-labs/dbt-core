@@ -3,6 +3,7 @@ import threading
 import time
 
 from dbt.contracts.results import RunResult, RunStatus
+from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
 from dbt.events.types import ShowNode, Note
 from dbt.exceptions import DbtRuntimeError
@@ -53,8 +54,11 @@ class ShowTask(CompileTask):
             for result in results:
                 if result.node.name in self.selection_arg[0]:
                     matched_results.append(result)
-                if result not in matched_results:
-                    fire_event(Note(msg=f"Excluded node '{result.node.name}' from results"))
+                else:
+                    fire_event(
+                        Note(msg=f"Excluded node '{result.node.name}' from results"),
+                        EventLevel.DEBUG,
+                    )
 
         for result in matched_results:
             # Allow passing in -1 (or any negative number) to get all rows
