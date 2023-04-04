@@ -1231,10 +1231,11 @@ class WritableManifest(ArtifactMixin):
 
     @classmethod
     def upgrade_schema_version(cls, data):
-        # This is specific to manifests, so call this from ArtifactMixin code
+        """This overrides the "upgrade_schema_version" call in VersionedSchema (via
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
         if get_manifest_schema_version(data) <= 8:
             data = upgrade_manifest_json(data)
-        return cls.from_dict(data)  # type: ignore
+        return cls.from_dict(data)
 
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():

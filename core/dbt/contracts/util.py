@@ -231,6 +231,9 @@ class VersionedSchema(dbtClassMixin):
 
     @classmethod
     def upgrade_schema_version(cls, data):
+        """This will modify the data (dictionary) passed in to match the current
+        artifact schema code, if necessary. This is the default method, which
+        just returns the instantiated object via from_dict."""
         return cls.from_dict(data)
 
 
