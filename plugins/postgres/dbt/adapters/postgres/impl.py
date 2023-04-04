@@ -8,6 +8,7 @@ from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
 from dbt.dataclass_schema import dbtClassMixin, ValidationError
+from dbt.contracts.graph.nodes import ConstraintType
 from dbt.exceptions import (
     CrossDbReferenceProhibitedError,
     IndexConfigNotDictError,
@@ -135,9 +136,9 @@ class PostgresAdapter(SQLAdapter):
     @staticmethod
     def constraint_support() -> Dict:
         return {
-            "not_null": ConstraintSupport.ENFORCED,
-            "primary_key": ConstraintSupport.ENFORCED,
-            "foreign_key": ConstraintSupport.ENFORCED,
-            "unique": ConstraintSupport.ENFORCED,
-            "check": ConstraintSupport.ENFORCED,
+            ConstraintType.check: ConstraintSupport.NOT_SUPPORTED,
+            ConstraintType.not_null: ConstraintSupport.ENFORCED,
+            ConstraintType.unique: ConstraintSupport.ENFORCED,
+            ConstraintType.primary_key: ConstraintSupport.ENFORCED,
+            ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
         }
