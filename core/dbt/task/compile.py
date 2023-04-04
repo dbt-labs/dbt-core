@@ -67,11 +67,11 @@ class CompileTask(GraphRunnableTask):
             matched_results = [result for result in results if result.node.name == "inline_query"]
         elif self.selection_arg:
             matched_results = []
-            for node in results:
-                if node.node.name in self.selection_arg[0]:
-                    matched_results.append(node)
-                if node not in matched_results:
-                    fire_event(Note(msg=f"Excluded node '{node.node.name}' from results"))
+            for result in results:
+                if result.node.name in self.selection_arg[0]:
+                    matched_results.append(result)
+                if result not in matched_results:
+                    fire_event(Note(msg=f"Excluded node '{result.node.name}' from results"))
         # No selector passed, compiling all nodes
         else:
             matched_results = []
