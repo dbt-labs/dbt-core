@@ -10,5 +10,10 @@ from dbt.adapters.base.relation import (  # noqa
     SchemaSearchMap,
 )
 from dbt.adapters.base.column import Column  # noqa
-from dbt.adapters.base.impl import AdapterConfig, BaseAdapter, PythonJobHelper  # noqa
+from dbt.adapters.base.impl import (  # noqa: F401
+    AdapterConfig,
+    BaseAdapter,
+    PythonJobHelper,
+    ConstraintSupport,
+)
 from dbt.adapters.base.plugin import AdapterPlugin  # noqa
