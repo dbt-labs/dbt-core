@@ -62,7 +62,7 @@
   {% endcall %}
 
   {% if need_swap %}
-      {% do adapter.rename_relation(target_relation, backup_relation) %}
+      {% do adapter.rename_relation(existing_relation, backup_relation) %}
       {% do adapter.rename_relation(intermediate_relation, target_relation) %}
       {% do to_drop.append(backup_relation) %}
   {% endif %}
