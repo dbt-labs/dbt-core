@@ -213,6 +213,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     # for use in materializations
     AdapterSpecificConfigs: Type[AdapterConfig] = AdapterConfig
 
+    CONSTRAINT_SUPPORT = {
+        ConstraintType.check: ConstraintSupport.NOT_SUPPORTED,
+        ConstraintType.not_null: ConstraintSupport.ENFORCED,
+        ConstraintType.unique: ConstraintSupport.NOT_ENFORCED,
+        ConstraintType.primary_key: ConstraintSupport.NOT_ENFORCED,
+        ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
+    }
+
     def __init__(self, config):
         self.config = config
         self.cache = RelationsCache()
