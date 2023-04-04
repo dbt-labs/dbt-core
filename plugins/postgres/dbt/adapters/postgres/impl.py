@@ -136,7 +136,7 @@ class PostgresAdapter(SQLAdapter):
     @staticmethod
     def constraint_support() -> Dict:
         return {
-            ConstraintType.check: ConstraintSupport.NOT_SUPPORTED,
+            ConstraintType.check: ConstraintSupport.ENFORCED,
             ConstraintType.not_null: ConstraintSupport.ENFORCED,
             ConstraintType.unique: ConstraintSupport.ENFORCED,
             ConstraintType.primary_key: ConstraintSupport.ENFORCED,
