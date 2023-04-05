@@ -2,27 +2,28 @@ from copy import copy
 from typing import Callable, List, Tuple, Optional
 
 import click
+
 from dbt.cli import requires, params as p
-from dbt.config.project import Project
 from dbt.config.profile import Profile
+from dbt.config.project import Project
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import EventMsg
+from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
 from dbt.task.compile import CompileTask
-from dbt.task.deps import DepsTask
 from dbt.task.debug import DebugTask
-from dbt.task.run import RunTask
-from dbt.task.serve import ServeTask
-from dbt.task.show import ShowTask
-from dbt.task.test import TestTask
-from dbt.task.snapshot import SnapshotTask
-from dbt.task.seed import SeedTask
-from dbt.task.list import ListTask
+from dbt.task.deps import DepsTask
 from dbt.task.freshness import FreshnessTask
-from dbt.task.run_operation import RunOperationTask
-from dbt.task.build import BuildTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
+from dbt.task.list import ListTask
+from dbt.task.run import RunTask
+from dbt.task.run_operation import RunOperationTask
+from dbt.task.seed import SeedTask
+from dbt.task.serve import ServeTask
+from dbt.task.show import ShowTask
+from dbt.task.snapshot import SnapshotTask
+from dbt.task.test import TestTask
 
 
 class dbtUsageException(Exception):
@@ -47,7 +48,7 @@ class dbtRunner:
         self.manifest = manifest
         self.callbacks = callbacks
 
-    def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
+    def invoke(self, args: List[str], **kwargs) -> Tuple[Optional[List], bool]:
         try:
             dbt_ctx = cli.make_context(cli.name, args)
             dbt_ctx.obj = {
@@ -56,6 +57,12 @@ class dbtRunner:
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
             }
+
+            for key, value in kwargs.items():
+                dbt_ctx.params[key] = value
+                # Hack to set parameter source to custom string
+                dbt_ctx.set_parameter_source(key, "kwargs")  # type: ignore
+
             return cli.invoke(dbt_ctx)
         except requires.HandledExit as e:
             return (e.result, e.success)

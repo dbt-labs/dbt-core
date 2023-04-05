@@ -112,7 +112,10 @@ class Flags:
                         # param already set via its deprecated but still respected env var
                         continue
 
-                    if param_name not in EXPECTED_DUPLICATE_PARAMS:
+                    if (
+                        param_name not in EXPECTED_DUPLICATE_PARAMS
+                        and ctx.get_parameter_source(param_name) != "kwargs"
+                    ):
                         raise Exception(
                             f"Duplicate flag names found in click command: {param_name}"
                         )
