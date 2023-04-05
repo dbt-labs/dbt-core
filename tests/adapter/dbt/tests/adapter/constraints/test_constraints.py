@@ -424,7 +424,7 @@ create table {0} (
     primary key (id),
     constraint strange_uniqueness_requirement unique (color, date_day)
 ) ;
-insert into {0} (
+insert into <model_identifier> (
     id ,
     color ,
     date_day
@@ -444,32 +444,16 @@ insert into {0} (
 );
 """
 
-
-class BaseModelConstraintsRuntimeEnforcement:
-    """
-    These model-level constraints pass muster for dbt's preflight checks. Make sure they're
-    passed into the DDL statement. If they don't match up with the underlying data,
-    the data platform should raise an error at runtime.
-    """
-
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model.sql": my_model_sql,
-            "constraints_schema.yml": constrained_model_schema_yml,
-        }
-
-    @pytest.fixture(scope="class")
-    def expected_sql(self, project):
-        relation = relation_from_name(project.adapter, "my_model")
-        tmp_relation = relation.incorporate(path={"identifier": relation.identifier + "__dbt_tmp"})
-        return _expected_model_constraint_sql.format(tmp_relation)
-
     def test__model_constraints_ddl(self, project, expected_sql):
         results = run_dbt(["run", "-s", "my_model"])
         assert len(results) == 1
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
-        assert _normalize_whitespace(expected_sql) == _normalize_whitespace(generated_sql)
+        generated_sql_list = _normalize_whitespace(generated_sql).split(" ")
+        generated_sql_list = [
+            "<model_identifier>" if "my_model" in s else s for s in generated_sql_list
+        ]
+        generated_sql_generic = " ".join(generated_sql_list)
+        assert _normalize_whitespace(expected_sql) == generated_sql_generic
 
 
 class TestModelConstraintsRuntimeEnforcement(BaseModelConstraintsRuntimeEnforcement):
