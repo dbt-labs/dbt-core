@@ -40,11 +40,14 @@ class dbtRunner:
         project: Project = None,
         profile: Profile = None,
         manifest: Manifest = None,
-        callbacks: List[Callable[[EventMsg], None]] = [],
+        callbacks: List[Callable[[EventMsg], None]] = None,
     ):
         self.project = project
         self.profile = profile
         self.manifest = manifest
+
+        if callbacks is None:
+            callbacks = []
         self.callbacks = callbacks
 
     def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
