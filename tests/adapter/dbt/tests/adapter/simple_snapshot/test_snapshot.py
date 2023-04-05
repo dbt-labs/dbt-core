@@ -13,7 +13,7 @@ where id between 1 and 20
 """
 
 
-class SnapshotBase:
+class SimpleSnapshotTestBase:
     @pytest.fixture(scope="class")
     def seeds(self):
         """
@@ -107,7 +107,7 @@ class SnapshotBase:
         assert records == expected_records
 
 
-class TestSnapshot(SnapshotBase):
+class TestSnapshot(SimpleSnapshotTestBase):
     @pytest.fixture(scope="class")
     def snapshots(self):
         return {"snapshot.sql": snapshots.SNAPSHOT_TIMESTAMP_SQL}
@@ -181,7 +181,7 @@ class TestSnapshot(SnapshotBase):
         )
 
 
-class TestSnapshotCheck(SnapshotBase):
+class TestSnapshotCheck(SimpleSnapshotTestBase):
     @pytest.fixture(scope="class")
     def snapshots(self):
         return {"snapshot.sql": snapshots.SNAPSHOT_CHECK_SQL}
