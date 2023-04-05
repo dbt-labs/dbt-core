@@ -179,6 +179,7 @@ def cli(ctx, **kwargs):
 @p.deprecated_favor_state
 @p.full_refresh
 @p.indirect_selection
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -216,6 +217,7 @@ def build(ctx, **kwargs):
 # dbt clean
 @cli.command("clean")
 @click.pass_context
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -250,6 +252,7 @@ def docs(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.deprecated_favor_state
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -285,6 +288,7 @@ def docs_generate(ctx, **kwargs):
 @docs.command("serve")
 @click.pass_context
 @p.browser
+@p.populate_cache
 @p.port
 @p.profile
 @p.profiles_dir
@@ -323,6 +327,7 @@ def docs_serve(ctx, **kwargs):
 @p.indirect_selection
 @p.introspect
 @p.parse_only
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -370,6 +375,7 @@ def compile(ctx, **kwargs):
 @p.indirect_selection
 @p.introspect
 @p.parse_only
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -407,6 +413,7 @@ def show(ctx, **kwargs):
 @cli.command("debug")
 @click.pass_context
 @p.config_dir
+@p.populate_cache
 @p.profile
 @p.profiles_dir_exists_false
 @p.project_dir
@@ -430,6 +437,7 @@ def debug(ctx, **kwargs):
 # dbt deps
 @cli.command("deps")
 @click.pass_context
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -452,6 +460,7 @@ def deps(ctx, **kwargs):
 @click.pass_context
 # for backwards compatibility, accept 'project_name' as an optional positional argument
 @click.argument("project_name", required=False)
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -477,6 +486,7 @@ def init(ctx, **kwargs):
 @p.models
 @p.output
 @p.output_keys
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -516,6 +526,7 @@ cli.add_command(ls, "ls")
 @cli.command("parse")
 @click.pass_context
 @p.compile_parse
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -548,6 +559,7 @@ def parse(ctx, **kwargs):
 @p.exclude
 @p.fail_fast
 @p.full_refresh
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -584,6 +596,7 @@ def run(ctx, **kwargs):
 @click.pass_context
 @click.argument("macro")
 @p.args
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -613,6 +626,7 @@ def run_operation(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.full_refresh
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -652,6 +666,7 @@ def seed(ctx, **kwargs):
 @p.exclude
 @p.favor_state
 @p.deprecated_favor_state
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -693,6 +708,7 @@ def source(ctx, **kwargs):
 @click.pass_context
 @p.exclude
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -738,6 +754,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.favor_state
 @p.deprecated_favor_state
 @p.indirect_selection
+@p.populate_cache
 @p.profile
 @p.profiles_dir
 @p.project_dir
