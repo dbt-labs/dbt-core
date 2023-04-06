@@ -15,6 +15,8 @@ class RuntimeArgs:
     target: str
 
 
+
+# TODO remove when dbt-server no longer pre load a manifest in memory
 def get_dbt_config(project_dir, args=None, single_threaded=False):
     from dbt.config.runtime import RuntimeConfig
     import dbt.adapters.factory
@@ -59,6 +61,8 @@ def get_dbt_config(project_dir, args=None, single_threaded=False):
     return config
 
 
+
+# TODO remove when we return a manifest from compile command
 def parse_to_manifest(config):
     from dbt.parser.manifest import ManifestLoader
 
