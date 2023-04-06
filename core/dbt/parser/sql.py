@@ -1,14 +1,11 @@
 import os
 from dataclasses import dataclass
-from typing import Iterable
 
 from dbt.contracts.graph.manifest import SourceFile
-from dbt.contracts.graph.nodes import SqlNode, Macro
-from dbt.contracts.graph.unparsed import UnparsedMacro
+from dbt.contracts.graph.nodes import SqlNode
 from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
-from dbt.parser.macros import MacroParser
 from dbt.parser.search import FileBlock
 
 
@@ -46,17 +43,3 @@ class SqlBlockParser(SimpleSQLParser[SqlNode]):
         source_file = SourceFile.remote(sql, self.project.project_name, "sql")
         contents = SqlBlock(block_name=name, file=source_file)
         return self.parse_node(contents)
-
-
-class SqlMacroParser(MacroParser):
-    def parse_remote(self, contents) -> Iterable[Macro]:
-        base = UnparsedMacro(
-            path="from remote system",
-            original_file_path="from remote system",
-            package_name=self.project.project_name,
-            raw_code=contents,
-            language="sql",
-            resource_type=NodeType.Macro,
-        )
-        for node in self.parse_unparsed_macros(base):
-            yield node

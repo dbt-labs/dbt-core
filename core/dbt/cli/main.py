@@ -6,6 +6,7 @@ import click
 from dbt.cli import requires, params as p
 from dbt.config.profile import Profile
 from dbt.config.project import Project
+from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
@@ -42,11 +43,13 @@ class dbtRunner:
         profile: Profile = None,
         manifest: Manifest = None,
         callbacks: List[Callable[[EventMsg], None]] = [],
+        runtime_config: RuntimeConfig = None,
     ):
         self.project = project
         self.profile = profile
         self.manifest = manifest
         self.callbacks = callbacks
+        self.runtime_config = runtime_config
 
     def invoke(self, args: List[str], **kwargs) -> Tuple[Optional[List], bool]:
         try:

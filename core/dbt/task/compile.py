@@ -40,6 +40,18 @@ class CompileRunner(BaseRunner):
 
 
 class CompileTask(GraphRunnableTask):
+    # We add a new inline node to the manifest during initialization
+    # it should be removed before the task is complete
+    _inline_node_id = None
+
+    # TODO remove when stu's PR about skip adapter cache is merged
+    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+        if bool(getattr(self.args, "inline", None)):
+            # don't populate adapter cache when doing inline queries
+            pass
+        else:
+            super().before_run(adapter, selected_uids)
+
     def raise_on_first_error(self):
         return True
 
@@ -129,8 +141,16 @@ class CompileTask(GraphRunnableTask):
             )
             sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
             process_node(self.config, self.manifest, sql_node)
+            # keep track of the node added to the manifest
+            self._inline_node_id = sql_node.unique_id
 
         super()._runtime_initialize()
+
+    def after_run(self, adapter, results):
+        # remove inline node from manifest
+        if self._inline_node_id:
+            self.manifest.nodes.pop(self._inline_node_id)
+        super().after_run(adapter, results)
 
     def _handle_result(self, result):
         super()._handle_result(result)
