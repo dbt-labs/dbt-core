@@ -29,7 +29,6 @@ class TestSnapshotsWithCommentAtEnd:
         project.run_sql_file(path)
         # N.B. Snapshot is run twice to ensure snapshot_check_all_get_existing_columns is fully run
         # (it exits early if the table doesn't already exist)
-        breakpoint()
         run_dbt(["snapshot"])
         results = run_dbt(["snapshot"])
         assert len(results) == 1
