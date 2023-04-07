@@ -1310,10 +1310,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             return ""
 
     @available
-    def render_raw_column_constraints(self, columns: Dict[str, Dict]) -> List:
+    def render_raw_column_constraints(self, raw_constraints: Dict[str, Dict]) -> List:
         rendered_column_constraints = []
 
-        for _, v in columns.items():
+        for _, v in raw_constraints.items():
             rendered_column_constraint = [f"{v['name']} {v['data_type']}"]
             for con in v["constraints"]:
                 constraint = self._parse_column_constraint(con)
