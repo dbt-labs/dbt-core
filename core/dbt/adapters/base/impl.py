@@ -1291,7 +1291,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise DbtValidationError(f"Could not parse constraint: {raw_constraint}")
 
     @classmethod
-    def render_column_constraint(cls, constraint: ColumnLevelConstraint) -> str:
+    def render_raw_column_constraint(cls, constraint: ColumnLevelConstraint) -> str:
         """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
         rendering."""
         if constraint.type == ConstraintType.check and constraint.expression:
@@ -1308,6 +1308,33 @@ class BaseAdapter(metaclass=AdapterMeta):
             return constraint.expression
         else:
             return ""
+
+    @available
+    def render_raw_column_constraints(self, columns: Dict[str, Dict]) -> List:
+        rendered_column_constraints = []
+
+        for _, v in columns.items():
+            rendered_column_constraint = [f"{v['name']} {v['data_type']}"]
+            for con in v["constraints"]:
+                constraint = self._parse_column_constraint(con)
+                if (
+                    constraint.warn_unsupported
+                    and self.CONSTRAINT_SUPPORT[constraint.type] == ConstraintSupport.NOT_SUPPORTED
+                ):
+                    warn_or_error(ConstraintNotSupported(constraint=constraint.type.value))
+                if (
+                    constraint.warn_unenforced
+                    and self.CONSTRAINT_SUPPORT[constraint.type] == ConstraintSupport.NOT_ENFORCED
+                ):
+                    warn_or_error(ConstraintNotEnforced(constraint=constraint.type.value))
+                if self.CONSTRAINT_SUPPORT[constraint.type] != ConstraintSupport.NOT_SUPPORTED:
+                    rendered_column_constraint.append(
+                        self.render_raw_column_constraint(constraint)
+                    )
+
+            rendered_column_constraints.append(" ".join(rendered_column_constraint))
+
+        return rendered_column_constraints
 
     @classmethod
     def _parse_model_constraint(cls, raw_constraint: Dict[str, Any]) -> ModelLevelConstraint:
