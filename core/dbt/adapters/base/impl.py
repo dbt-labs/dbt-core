@@ -17,6 +17,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    Union,
 )
 
 from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
@@ -1310,31 +1311,39 @@ class BaseAdapter(metaclass=AdapterMeta):
             return ""
 
     @available
-    def render_raw_column_constraints(self, raw_constraints: Dict[str, Dict]) -> List:
+    @classmethod
+    def render_raw_columns_constraints(cls, raw_columns: Dict[str, Any]) -> List:
         rendered_column_constraints = []
 
-        for _, v in raw_constraints.items():
+        for _, v in raw_columns.items():
             rendered_column_constraint = [f"{v['name']} {v['data_type']}"]
             for con in v["constraints"]:
-                constraint = self._parse_column_constraint(con)
-                if (
-                    constraint.warn_unsupported
-                    and self.CONSTRAINT_SUPPORT[constraint.type] == ConstraintSupport.NOT_SUPPORTED
-                ):
-                    warn_or_error(ConstraintNotSupported(constraint=constraint.type.value))
-                if (
-                    constraint.warn_unenforced
-                    and self.CONSTRAINT_SUPPORT[constraint.type] == ConstraintSupport.NOT_ENFORCED
-                ):
-                    warn_or_error(ConstraintNotEnforced(constraint=constraint.type.value))
-                if self.CONSTRAINT_SUPPORT[constraint.type] != ConstraintSupport.NOT_SUPPORTED:
-                    rendered_column_constraint.append(
-                        self.render_raw_column_constraint(constraint)
-                    )
-
+                constraint = cls._parse_column_constraint(con)
+                c = cls.process_parsed_constraint(constraint, cls.render_raw_column_constraint)
+                if c is not None:
+                    rendered_column_constraint.append(c)
             rendered_column_constraints.append(" ".join(rendered_column_constraint))
 
         return rendered_column_constraints
+
+    @classmethod
+    def process_parsed_constraint(
+        cls, parsed_constraint: Union[ColumnLevelConstraint, ModelLevelConstraint], render_func
+    ) -> Optional[str]:
+        if (
+            parsed_constraint.warn_unsupported
+            and cls.CONSTRAINT_SUPPORT[parsed_constraint.type] == ConstraintSupport.NOT_SUPPORTED
+        ):
+            warn_or_error(ConstraintNotSupported(constraint=parsed_constraint.type.value))
+        if (
+            parsed_constraint.warn_unenforced
+            and cls.CONSTRAINT_SUPPORT[parsed_constraint.type] == ConstraintSupport.NOT_ENFORCED
+        ):
+            warn_or_error(ConstraintNotEnforced(constraint=parsed_constraint.type.value))
+        if cls.CONSTRAINT_SUPPORT[parsed_constraint.type] != ConstraintSupport.NOT_SUPPORTED:
+            return render_func(parsed_constraint)
+
+        return None
 
     @classmethod
     def _parse_model_constraint(cls, raw_constraint: Dict[str, Any]) -> ModelLevelConstraint:
@@ -1353,7 +1362,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @classmethod
     def render_raw_model_constraint(cls, raw_constraint: Dict[str, Any]) -> Optional[str]:
         constraint = cls._parse_model_constraint(raw_constraint)
-        return cls.render_model_constraint(constraint)
+        return cls.process_parsed_constraint(constraint, cls.render_model_constraint)
 
     @classmethod
     def render_model_constraint(cls, constraint: ModelLevelConstraint) -> Optional[str]:

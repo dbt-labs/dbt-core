@@ -8,7 +8,7 @@
 
 {% macro table_columns_and_constraints() %}
   {# loop through user_provided_columns to create DDL with data types and constraints #}
-    {%- set raw_column_constraints = adapter.render_raw_column_constraints(raw_constraints=model['columns']) -%}
+    {%- set raw_column_constraints = adapter.render_raw_columns_constraints(raw_columns=model['columns']) -%}
     {%- set raw_model_constraints = adapter.render_raw_model_constraints(raw_constraints=model['constraints']) -%}
     (
     {% for c in raw_column_constraints -%}
