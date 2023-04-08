@@ -228,10 +228,10 @@ class GenerateTask(CompileTask):
         if self.manifest is None:
             raise DbtInternalError("self.manifest was None in run!")
 
-        catalog_table: agate.Table = agate.Table([])
-        exceptions: List[Exception] = []
-
-        if not self.args.empty_catalog:
+        if self.args.empty_catalog:
+            catalog_table: agate.Table = agate.Table([])
+            exceptions: List[Exception] = []
+        else:
             adapter = get_adapter(self.config)
             with adapter.connection_named("generate_catalog"):
                 fire_event(BuildingCatalog())
