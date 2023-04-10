@@ -98,7 +98,25 @@ class Flags:
         if ctx is None:
             ctx = get_current_context()
 
-        def assign_params(ctx, params_assigned_from_default, deprecated_env_vars):
+        # Ensure that any params sourced from the commandline are not present more than once.
+        # Click handles this exclusivity, but only at a per-subcommand level.
+        def _get_params_by_source(ctx: Context, source_type: ParameterSource):
+            yield from [
+                name for name, source in ctx._parameter_source.items() if source is source_type
+            ]
+            if ctx.parent:
+                yield from _get_params_by_source(ctx.parent, source_type)
+
+        seen_params = []
+        for param in _get_params_by_source(ctx, ParameterSource.COMMANDLINE):
+            if param in seen_params:
+                raise BadOptionUsage(
+                    param.lower(),
+                    f"{param.lower()} was provided both before and after the subcommand, it can only be set either before or after.",
+                )
+            seen_params.append(param)
+
+        def _assign_params(ctx, params_assigned_from_default, deprecated_env_vars):
             """Recursively adds all click params to flag object"""
             for param_name, param_value in ctx.params.items():
                 # TODO: this is to avoid duplicate params being defined in two places (version_check in run and cli)
@@ -173,11 +191,11 @@ class Flags:
                             params_assigned_from_default.add(param_name)
 
             if ctx.parent:
-                assign_params(ctx.parent, params_assigned_from_default, deprecated_env_vars)
+                _assign_params(ctx.parent, params_assigned_from_default, deprecated_env_vars)
 
         params_assigned_from_default = set()  # type: Set[str]
         deprecated_env_vars: Dict[str, Callable] = {}
-        assign_params(ctx, params_assigned_from_default, deprecated_env_vars)
+        _assign_params(ctx, params_assigned_from_default, deprecated_env_vars)
 
         # set deprecated_env_var_warnings to be fired later after events have been init
         object.__setattr__(
@@ -193,7 +211,7 @@ class Flags:
             invoked_subcommand.allow_extra_args = True
             invoked_subcommand.ignore_unknown_options = True
             invoked_subcommand_ctx = invoked_subcommand.make_context(None, sys.argv)
-            assign_params(
+            _assign_params(
                 invoked_subcommand_ctx, params_assigned_from_default, deprecated_env_vars
             )
 
