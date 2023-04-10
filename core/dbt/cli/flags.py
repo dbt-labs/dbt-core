@@ -28,6 +28,13 @@ FLAGS_DEFAULTS = {
     "INTROSPECT": True,
 }
 
+DEPRECATED_PARAMS = {
+    "deprecated_defer": "defer",
+    "deprecated_favor_state": "favor_state",
+    "deprecated_print": "print",
+    "deprecated_state": "state",
+}
+
 
 def convert_config(config_name, config_value):
     """Convert the values from config and original set_from_args to the correct type."""
@@ -57,14 +64,6 @@ def args_to_context(args: List[str]) -> Context:
     sub_command_ctx = sub_command.make_context(sub_command_name, args)
     sub_command_ctx.parent = cli_ctx
     return sub_command_ctx
-
-
-DEPRECATED_PARAMS = {
-    "deprecated_defer": "defer",
-    "deprecated_favor_state": "favor_state",
-    "deprecated_print": "print",
-    "deprecated_state": "state",
-}
 
 
 @dataclass(frozen=True)
@@ -247,13 +246,13 @@ class Flags:
         for param in params:
             object.__setattr__(self, param.lower(), getattr(self, param))
 
+    def __str__(self) -> str:
+        return str(pf(self.__dict__))
+
     def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:
         """If the value of the lead parameter was set explicitly, apply the value to follow, unless follow was also set explicitly."""
         if lead.lower() not in defaulted and follow.lower() in defaulted:
             object.__setattr__(self, follow.upper(), getattr(self, lead.upper(), None))
-
-    def __str__(self) -> str:
-        return str(pf(self.__dict__))
 
     def _assert_mutually_exclusive(
         self, params_assigned_from_default: Set[str], group: List[str]
