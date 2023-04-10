@@ -1771,6 +1771,7 @@ message ShowNode {
     string preview = 2;
     bool is_inline = 3;
     string output_format = 4;
+    string unique_id = 5;
 }
 
 message ShowNodeMsg {
@@ -1784,6 +1785,7 @@ message CompiledNode {
     string compiled = 2;
     bool is_inline = 3;
     string output_format = 4;
+    string unique_id = 5;
 }
 
 message CompiledNodeMsg {
