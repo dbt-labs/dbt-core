@@ -130,7 +130,12 @@ class Flags:
                     # Rename for clarity.
                     dep_name = param_name
                     new_name = DEPRECATED_PARAMS.get(dep_name)
-                    assert isinstance(new_name, str)
+                    try:
+                        assert isinstance(new_name, str)
+                    except AssertionError:
+                        raise Exception(
+                            f"No deprecated param name match in DEPRECATED_PARAMS from {dep_name} to {new_name}"
+                        )
 
                     # Find param objects for their envvar name.
                     try:
@@ -138,7 +143,7 @@ class Flags:
                         new_param = [x for x in ctx.command.params if x.name == new_name][0]
                     except IndexError:
                         raise Exception(
-                            f"No deprecated param name match from {dep_name} to {new_name}"
+                            f"No deprecated param name match in context from {dep_name} to {new_name}"
                         )
 
                     # Remove param from defaulted set since the deprecated
