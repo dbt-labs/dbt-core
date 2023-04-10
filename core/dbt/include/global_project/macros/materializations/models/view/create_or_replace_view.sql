@@ -35,7 +35,7 @@
   {%- endcall %}
 
   {% set should_revoke = should_revoke(exists_as_view, full_refresh_mode=True) %}
-  {% do apply_grants(target_relation, grant_config, should_revoke=True) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {{ run_hooks(post_hooks) }}
 

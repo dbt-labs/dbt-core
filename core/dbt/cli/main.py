@@ -2,26 +2,28 @@ from copy import copy
 from typing import Callable, List, Tuple, Optional
 
 import click
+
 from dbt.cli import requires, params as p
-from dbt.config.project import Project
 from dbt.config.profile import Profile
+from dbt.config.project import Project
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.base_types import EventMsg
+from dbt.task.build import BuildTask
 from dbt.task.clean import CleanTask
 from dbt.task.compile import CompileTask
-from dbt.task.deps import DepsTask
 from dbt.task.debug import DebugTask
-from dbt.task.run import RunTask
-from dbt.task.serve import ServeTask
-from dbt.task.test import TestTask
-from dbt.task.snapshot import SnapshotTask
-from dbt.task.seed import SeedTask
-from dbt.task.list import ListTask
+from dbt.task.deps import DepsTask
 from dbt.task.freshness import FreshnessTask
-from dbt.task.run_operation import RunOperationTask
-from dbt.task.build import BuildTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
+from dbt.task.list import ListTask
+from dbt.task.run import RunTask
+from dbt.task.run_operation import RunOperationTask
+from dbt.task.seed import SeedTask
+from dbt.task.serve import ServeTask
+from dbt.task.show import ShowTask
+from dbt.task.snapshot import SnapshotTask
+from dbt.task.test import TestTask
 
 
 class dbtUsageException(Exception):
@@ -46,7 +48,7 @@ class dbtRunner:
         self.manifest = manifest
         self.callbacks = callbacks
 
-    def invoke(self, args: List[str]) -> Tuple[Optional[List], bool]:
+    def invoke(self, args: List[str], **kwargs) -> Tuple[Optional[List], bool]:
         try:
             dbt_ctx = cli.make_context(cli.name, args)
             dbt_ctx.obj = {
@@ -55,6 +57,12 @@ class dbtRunner:
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
             }
+
+            for key, value in kwargs.items():
+                dbt_ctx.params[key] = value
+                # Hack to set parameter source to custom string
+                dbt_ctx.set_parameter_source(key, "kwargs")  # type: ignore
+
             return cli.invoke(dbt_ctx)
         except requires.HandledExit as e:
             return (e.result, e.success)
@@ -262,6 +270,7 @@ def docs_serve(ctx, **kwargs):
 @p.favor_state
 @p.deprecated_favor_state
 @p.full_refresh
+@p.show_output_format
 @p.indirect_selection
 @p.introspect
 @p.parse_only
@@ -288,6 +297,53 @@ def compile(ctx, **kwargs):
     """Generates executable SQL from source, model, test, and analysis files. Compiled SQL files are written to the
     target/ directory."""
     task = CompileTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# dbt show
+@cli.command("show")
+@click.pass_context
+@p.defer
+@p.deprecated_defer
+@p.exclude
+@p.favor_state
+@p.deprecated_favor_state
+@p.full_refresh
+@p.show_output_format
+@p.show_limit
+@p.indirect_selection
+@p.introspect
+@p.parse_only
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.select
+@p.selector
+@p.inline
+@p.state
+@p.deprecated_state
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+@requires.postflight
+def show(ctx, **kwargs):
+    """Generates executable SQL for a named resource or inline query, runs that SQL, and returns a preview of the
+    results. Does not materialize anything to the warehouse."""
+    task = ShowTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],

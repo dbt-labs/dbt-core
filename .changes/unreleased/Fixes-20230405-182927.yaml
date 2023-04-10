@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure same_contract is called for state:modified
+time: 2023-04-05T18:29:27.369084-04:00
+custom:
+  Author: gshank
+  Issue: "7282"

@@ -1,0 +1,6 @@
+kind: Features
+body: 'New command: dbt show'
+time: 2023-03-24T12:36:21.173419-07:00
+custom:
+  Author: aranke
+  Issue: 7207 7179 6359
