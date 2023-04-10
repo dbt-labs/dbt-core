@@ -156,11 +156,7 @@ class Flags:
 
                 # Set the flag value.
                 is_duplicate = hasattr(self, param_name.upper())
-                is_default = (
-                    True
-                    if ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT
-                    else False
-                )
+                is_default = ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT
                 flag_name = (new_name or param_name).upper()
 
                 if (is_duplicate and not is_default) or not is_duplicate:
