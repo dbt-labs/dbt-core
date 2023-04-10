@@ -18,12 +18,10 @@ if os.name != "nt":
     # https://bugs.python.org/issue41567
     import multiprocessing.popen_spawn_posix  # type: ignore  # noqa: F401
 
-# TODO anything that has a default in params should be removed here?
-# Or maybe only the ones that's in the root click group
 FLAGS_DEFAULTS = {
     "INDIRECT_SELECTION": "eager",
     "TARGET_PATH": None,
-    # cli args without user_config or env var option
+    # Cli args without user_config or env var option.
     "FULL_REFRESH": False,
     "STRICT_MODE": False,
     "STORE_FAILURES": False,
@@ -33,7 +31,7 @@ FLAGS_DEFAULTS = {
 
 def convert_config(config_name, config_value):
     # This function should take care of converting the values from config and original
-    # set_from_args to the correct type
+    # set_from_args to the correct type.
     ret = config_value
     if config_name.lower() == "warn_error_options" and type(config_value) == dict:
         ret = WarnErrorOptions(
@@ -47,12 +45,12 @@ def args_to_context(args: List[str]) -> Context:
     from dbt.cli.main import cli
 
     cli_ctx = cli.make_context(cli.name, args)
-    # args would get converted during make context
+    # Split args if they're a comma seperated string.
     if len(args) == 1 and "," in args[0]:
         args = args[0].split(",")
     sub_command_name, sub_command, args = cli.resolve_command(cli_ctx, args)
 
-    # handle source and docs group
+    # Handle source and docs group.
     if type(sub_command) == Group:
         sub_command_name, sub_command, args = sub_command.resolve_command(cli_ctx, args)
 
