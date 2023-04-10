@@ -502,9 +502,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
 
     def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
         assert isinstance(block.file, SchemaSourceFile)
-        if not dct:
-            dct = yaml_from_file(block.file)
 
+        # If partially parsing, dct should be from pp_dict, otherwise
+        # dict_from_yaml
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)

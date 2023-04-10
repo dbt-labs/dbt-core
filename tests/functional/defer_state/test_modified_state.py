@@ -309,3 +309,62 @@ class TestChangedContract(BaseModifiedState):
         write_file(schema_yml, "models", "schema.yml")
         with pytest.raises(ModelContractError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+my_model_sql = """
+select 1 as id
+"""
+
+modified_my_model_sql = """
+-- a comment
+select 1 as id
+"""
+
+my_model_yml = """
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        data_type: int
+"""
+
+modified_my_model_yml = """
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        data_type: string
+"""
+
+
+class TestModifiedBodyAndContract:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "my_model.yml": my_model_yml,
+        }
+
+    def copy_state(self):
+        if not os.path.exists("state"):
+            os.makedirs("state")
+        shutil.copyfile("target/manifest.json", "state/manifest.json")
+
+    def test_modified_body_and_contract(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        self.copy_state()
+
+        # Change both body and contract
+        write_file(modified_my_model_yml, "models", "my_model.yml")
+        write_file(modified_my_model_sql, "models", "my_model.sql")
+
+        # should raise even without specifying state:modified.contract
+        with pytest.raises(ModelContractError):
+            results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])

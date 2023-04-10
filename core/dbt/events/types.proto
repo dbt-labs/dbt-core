@@ -57,11 +57,6 @@ message ReferenceKeyMsg {
     string identifier = 3;
 }
 
-// ListOfStrings
-message ListOfStrings {
-   repeated string value = 1;
-}
-
 // GenericMessage, used for deserializing only
 message GenericMessage {
     EventInfo info = 1;
@@ -1301,7 +1296,7 @@ message DepsListSubdirectoryMsg {
 
 // M019
 message DepsNotifyUpdatesAvailable {
-    ListOfStrings packages = 1;
+    repeated string packages = 1;
 }
 
 message DepsNotifyUpdatesAvailableMsg {
@@ -1643,17 +1638,6 @@ message ConcurrencyLineMsg {
     ConcurrencyLine data = 2;
 }
 
-// Q028
-message CompiledNode {
-    string node_name = 1;
-    string compiled = 2;
-}
-
-message CompiledNodeMsg {
-    EventInfo info = 1;
-    CompiledNode data = 2;
-}
-
 // Q029
 message WritingInjectedSQLForNode {
     NodeInfo node_info = 1;
@@ -1779,6 +1763,32 @@ message CommandCompleted {
 message CommandCompletedMsg {
     EventInfo info = 1;
     CommandCompleted data = 2;
+}
+
+// Q041
+message ShowNode {
+    string node_name = 1;
+    string preview = 2;
+    bool is_inline = 3;
+    string output_format = 4;
+}
+
+message ShowNodeMsg {
+    EventInfo info = 1;
+    ShowNode data = 2;
+}
+
+// Q042
+message CompiledNode {
+    string node_name = 1;
+    string compiled = 2;
+    bool is_inline = 3;
+    string output_format = 4;
+}
+
+message CompiledNodeMsg {
+    EventInfo info = 1;
+    CompiledNode data = 2;
 }
 
 // W - Node testing

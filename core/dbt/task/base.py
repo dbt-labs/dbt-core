@@ -4,11 +4,14 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
-from typing import Type, Union, Dict, Any, Optional
 from datetime import datetime
+from typing import Type, Union, Dict, Any, Optional
 
+import dbt.exceptions
 from dbt import tracking
-from dbt.flags import get_flags
+from dbt.adapters.factory import get_adapter
+from dbt.config import RuntimeConfig, Project
+from dbt.config.profile import read_profile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,
@@ -17,13 +20,7 @@ from dbt.contracts.results import (
     RunStatus,
     RunningStatus,
 )
-from dbt.exceptions import (
-    NotImplementedError,
-    CompilationError,
-    DbtRuntimeError,
-    DbtInternalError,
-)
-from dbt.logger import log_manager
+from dbt.events.contextvars import get_node_info
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     LogDbtProjectError,
@@ -38,14 +35,16 @@ from dbt.events.types import (
     NodeCompiling,
     NodeExecuting,
 )
-from dbt.events.contextvars import get_node_info
-from .printer import print_run_result_error
-
-from dbt.adapters.factory import get_adapter
-from dbt.config import RuntimeConfig, Project
-from dbt.config.profile import read_profile
-import dbt.exceptions
+from dbt.exceptions import (
+    NotImplementedError,
+    CompilationError,
+    DbtRuntimeError,
+    DbtInternalError,
+)
+from dbt.flags import get_flags
 from dbt.graph import Graph
+from dbt.logger import log_manager
+from .printer import print_run_result_error
 
 
 class NoneConfig:
@@ -76,30 +75,6 @@ class BaseTask(metaclass=ABCMeta):
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
-
-        if dbt.tracking.active_user is not None:
-
-            # N.B. The none checking below is largely due to incomplete projects used in the testing
-            # and to support tasks that don't require a complete project or a complete config (debug, init).
-            project_id = None if self.project is None else self.project.hashed_name()
-            adapter_type = (
-                getattr(self.config.credentials, "type", None)
-                if hasattr(self.config, "credentials")
-                else None
-            )
-            adapter_unique_id = (
-                self.config.credentials.hashed_unique_field()
-                if hasattr(self.config, "credentials")
-                else None
-            )
-
-            dbt.tracking.track_project_id({"project_id": project_id})
-            dbt.tracking.track_adapter_info(
-                {
-                    "adapter_type": adapter_type,
-                    "adapter_unique_id": adapter_unique_id,
-                }
-            )
 
     @classmethod
     def pre_init_hook(cls, args):
@@ -228,6 +203,8 @@ class BaseRunner(metaclass=ABCMeta):
         self.skip = False
         self.skip_cause: Optional[RunResult] = None
 
+        self.run_ephemeral_models = False
+
     @abstractmethod
     def compile(self, manifest: Manifest) -> Any:
         pass
@@ -349,7 +326,7 @@ class BaseRunner(metaclass=ABCMeta):
             ctx.timing.append(timing_info)
 
             # for ephemeral nodes, we only want to compile, not run
-            if not ctx.node.is_ephemeral_model:
+            if not ctx.node.is_ephemeral_model or self.run_ephemeral_models:
                 ctx.node.update_event_status(node_status=RunningStatus.Executing)
                 fire_event(
                     NodeExecuting(

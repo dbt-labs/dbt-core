@@ -1,3 +1,5 @@
+import json
+
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
@@ -8,7 +10,7 @@ from dbt.events.base_types import (
     ErrorLevel,
     EventLevel,
 )
-from dbt.events.format import format_fancy_output_line, pluralize
+from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
 
 from dbt.node_types import NodeType
 
@@ -1230,7 +1232,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
         return "M019"
 
     def message(self) -> str:
-        return f"Updates available for packages: {self.packages.value} \
+        return f"Updates available for packages: {self.packages} \
                 \nUpdate your versions in packages.yml, then run dbt deps"
 
 
@@ -1605,14 +1607,6 @@ class ConcurrencyLine(InfoLevel):
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-class CompiledNode(InfoLevel):
-    def code(self):
-        return "Q028"
-
-    def message(self) -> str:
-        return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
-
-
 class WritingInjectedSQLForNode(DebugLevel):
     def code(self):
         return "Q029"
@@ -1716,7 +1710,44 @@ class CommandCompleted(DebugLevel):
 
     def message(self) -> str:
         status = "succeeded" if self.success else "failed"
-        return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
+        completed_at = timestamp_to_datetime_string(self.completed_at)
+        return f"Command `{self.command}` {status} at {completed_at} after {self.elapsed:0.2f} seconds"
+
+
+class ShowNode(InfoLevel):
+    def code(self):
+        return "Q041"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"show": json.loads(self.preview)}, indent=2)
+            else:
+                return json.dumps(
+                    {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
+                )
+        else:
+            if self.is_inline:
+                return f"Previewing inline node:\n{self.preview}"
+            else:
+                return f"Previewing node '{self.node_name}':\n{self.preview}"
+
+
+class CompiledNode(InfoLevel):
+    def code(self):
+        return "Q042"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"compiled": self.compiled}, indent=2)
+            else:
+                return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
+        else:
+            if self.is_inline:
+                return f"Compiled inline node is:\n{self.compiled}"
+            else:
+                return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
 
 
 # =======================================================
@@ -1856,7 +1887,9 @@ class TimingInfoCollected(DebugLevel):
         return "Z010"
 
     def message(self) -> str:
-        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {self.timing_info.started_at} => {self.timing_info.completed_at}"
+        started_at = timestamp_to_datetime_string(self.timing_info.started_at)
+        completed_at = timestamp_to_datetime_string(self.timing_info.completed_at)
+        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {started_at} => {completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message

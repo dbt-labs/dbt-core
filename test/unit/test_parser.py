@@ -45,10 +45,15 @@ from dbt.parser.schemas import (
     SourceParser,
     AnalysisPatchParser,
     MacroPatchParser,
+    yaml_from_file,
 )
 from dbt.parser.search import FileBlock
 from dbt.parser.sources import SourcePatcher
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode
+from dbt.flags import set_from_args
+from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 def get_abs_os_path(unix_path):
@@ -210,7 +215,6 @@ def assertEqualNodes(node_one, node_two):
 
 
 SINGLE_TABLE_SOURCE = """
-version: 2
 sources:
     - name: my_source
       tables:
@@ -218,7 +222,6 @@ sources:
 """
 
 SINGLE_TABLE_SOURCE_TESTS = """
-version: 2
 sources:
     - name: my_source
       tables:
@@ -234,7 +237,6 @@ sources:
 """
 
 SINGLE_TABLE_MODEL_TESTS = """
-version: 2
 models:
     - name: my_model
       description: A description of my model
@@ -251,7 +253,6 @@ models:
 """
 
 SINGLE_TABLE_SOURCE_PATCH = """
-version: 2
 sources:
   - name: my_source
     overrides: snowplow
@@ -310,7 +311,8 @@ class SchemaParserSourceTest(SchemaParserTest):
 
     def test__parse_basic_source(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE, "test_one.yml")
-        self.parser.parse_file(block)
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, sources=1)
         src = list(self.parser.manifest.sources.values())[0]
         assert isinstance(src, UnpatchedSourceDefinition)
@@ -342,7 +344,8 @@ class SchemaParserSourceTest(SchemaParserTest):
     def test__parse_basic_source_tests(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE_TESTS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        self.parser.parse_file(block)
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
         self.assertEqual(len(self.parser.manifest.nodes), 0)
         self.assertEqual(len(self.parser.manifest.sources), 1)
         src = list(self.parser.manifest.sources.values())[0]
@@ -423,14 +426,16 @@ class SchemaParserModelsTest(SchemaParserTest):
 
     def test__read_basic_model_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS, "test_one.yml")
-        self.parser.parse_file(block)
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
 
     def test__parse_basic_model_tests(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_TESTS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        self.parser.parse_file(block)
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=4)
 
         all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix partial parsing error due to not requiring "version"
+time: 2023-03-29T11:14:51.734378-04:00
+custom:
+  Author: gshank
+  Issue: "7236"
