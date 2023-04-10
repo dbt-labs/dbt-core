@@ -10,6 +10,7 @@ import threading
 import traceback
 from typing import Any, Callable, List, Optional, TextIO
 from uuid import uuid4
+from dbt.events.format import timestamp_to_datetime_string
 
 from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
 
@@ -144,12 +145,10 @@ class _TextLogger(_Logger):
         log_line: str = ""
         # Create a separator if this is the beginning of an invocation
         # TODO: This is an ugly hack, get rid of it if we can
+        ts: str = timestamp_to_datetime_string(msg.info.ts)
         if msg.info.name == "MainReportVersion":
             separator = 30 * "="
-            log_line = (
-                f"\n\n{separator} {msg.info.ts} | {self.event_manager.invocation_id} {separator}\n"
-            )
-        ts: str = msg.info.ts.strftime("%H:%M:%S.%f")
+            log_line = f"\n\n{separator} {ts} | {self.event_manager.invocation_id} {separator}\n"
         scrubbed_msg: str = self.scrubber(msg.info.msg)  # type: ignore
         level = msg.info.level
         log_line += (
@@ -192,7 +191,7 @@ class EventManager:
         if os.environ.get("DBT_TEST_BINARY_SERIALIZATION"):
             print(f"--- {msg.info.name}")
             try:
-                bytes(msg)
+                msg.SerializeToString()
             except Exception as exc:
                 raise Exception(
                     f"{msg.info.name} is not serializable to binary. Originating exception: {exc}, {traceback.format_exc()}"
@@ -213,6 +212,10 @@ class EventManager:
         )
         logger.event_manager = self
         self.loggers.append(logger)
+
+    def add_callbacks(self, callbacks: List[Callable[[EventMsg], None]]):
+        """Helper for adding a sequence of Callbacks to the EventManager"""
+        self.callbacks.extend(callbacks)
 
     def flush(self):
         for logger in self.loggers:

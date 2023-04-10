@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improved failed event serialization handling and associated tests
+time: 2023-03-31T09:54:28.701963-07:00
+custom:
+  Author: QMalcolm
+  Issue: 7113 7108 6568

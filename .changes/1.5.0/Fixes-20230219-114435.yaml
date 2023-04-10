@@ -1,0 +1,6 @@
+kind: Fixes
+body: add timeout for dbt --version command
+time: 2023-02-19T11:44:35.927348786+01:00
+custom:
+  Author: Goodkat
+  Issue: "6992"

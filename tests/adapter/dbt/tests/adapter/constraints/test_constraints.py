@@ -12,13 +12,17 @@ from dbt.tests.util import (
 
 from dbt.tests.adapter.constraints.fixtures import (
     my_model_sql,
+    my_incremental_model_sql,
     my_model_wrong_order_sql,
     my_model_wrong_name_sql,
     my_model_data_type_sql,
     model_data_type_schema_yml,
     my_model_view_wrong_order_sql,
     my_model_view_wrong_name_sql,
+    my_model_incremental_wrong_order_sql,
+    my_model_incremental_wrong_name_sql,
     my_model_with_nulls_sql,
+    my_model_incremental_with_nulls_sql,
     model_schema_yml,
 )
 
@@ -27,14 +31,6 @@ class BaseConstraintsColumnsEqual:
     """
     dbt should catch these mismatches during its "preflight" checks.
     """
-
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "my_model_wrong_order.sql": my_model_wrong_order_sql,
-            "my_model_wrong_name.sql": my_model_wrong_name_sql,
-            "constraints_schema.yml": model_schema_yml,
-        }
 
     @pytest.fixture
     def string_type(self):
@@ -54,7 +50,6 @@ class BaseConstraintsColumnsEqual:
         return [
             ["1", schema_int_type, int_type],
             ["'1'", string_type, string_type],
-            ["cast('2019-01-01' as date)", "date", "DATE"],
             ["true", "bool", "BOOL"],
             ["'2013-11-03 00:00:00-07'::timestamptz", "timestamptz", "DATETIMETZ"],
             ["'2013-11-03 00:00:00-07'::timestamp", "timestamp", "DATETIME"],
@@ -64,31 +59,18 @@ class BaseConstraintsColumnsEqual:
             ["""'{"bar": "baz", "balance": 7.77, "active": false}'::json""", "json", "JSON"],
         ]
 
-    def test__constraints_wrong_column_order(self, project, string_type, int_type):
-        results, log_output = run_dbt_and_capture(
-            ["run", "-s", "my_model_wrong_order"], expect_pass=False
-        )
+    def test__constraints_wrong_column_order(self, project):
+        # This no longer causes an error, since we enforce yaml column order
+        run_dbt(["run", "-s", "my_model_wrong_order"], expect_pass=True)
         manifest = get_manifest(project.project_root)
         model_id = "model.test.my_model_wrong_order"
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config is True
-
-        expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
-        expected_schema_file_columns = (
-            f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
-        )
-        expected_sql_file_columns = (
-            f"SQL File Columns: color {string_type}, id {int_type}, date_day DATE"
-        )
-
-        assert expected_compile_error in log_output
-        assert expected_schema_file_columns in log_output
-        assert expected_sql_file_columns in log_output
+        assert contract_actual_config.enforced is True
 
     def test__constraints_wrong_column_names(self, project, string_type, int_type):
-        results, log_output = run_dbt_and_capture(
+        _, log_output = run_dbt_and_capture(
             ["run", "-s", "my_model_wrong_name"], expect_pass=False
         )
         manifest = get_manifest(project.project_root)
@@ -96,14 +78,14 @@ class BaseConstraintsColumnsEqual:
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
 
-        assert contract_actual_config is True
+        assert contract_actual_config.enforced is True
 
-        expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
+        expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
         expected_schema_file_columns = (
-            f"Schema File Columns: id {int_type}, color {string_type}, date_day DATE"
+            f"Schema File Columns: id {int_type}, color {string_type}, date_day {string_type}"
         )
         expected_sql_file_columns = (
-            f"SQL File Columns: error {int_type}, color {string_type}, date_day DATE"
+            f"SQL File Columns: color {string_type}, error {int_type}, date_day {string_type}"
         )
 
         assert expected_compile_error in log_output
@@ -145,9 +127,9 @@ class BaseConstraintsColumnsEqual:
             my_model_config = manifest.nodes[model_id].config
             contract_actual_config = my_model_config.contract
 
-            assert contract_actual_config is True
+            assert contract_actual_config.enforced is True
 
-            expected_compile_error = "Please ensure the name, data_type, order, and number of columns in your `yml` file match the columns in your SQL file."
+            expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
             expected_sql_file_columns = (
                 f"SQL File Columns: wrong_data_type_column_name {error_data_type}"
             )
@@ -181,31 +163,10 @@ class BaseConstraintsColumnsEqual:
             my_model_config = manifest.nodes[model_id].config
             contract_actual_config = my_model_config.contract
 
-            assert contract_actual_config is True
+            assert contract_actual_config.enforced is True
 
 
-# This is SUPER specific to Postgres, and will need replacing on other adapters
-# TODO: make more generic
-_expected_sql = """
-create table {0} (
-    id integer not null primary key check (id > 0) ,
-    color text ,
-    date_day date
-) ;
-insert into {0} (
-    id ,
-    color ,
-    date_day
-) (
-    select
-        1 as id,
-        'blue' as color,
-        cast('2019-01-01' as date) as date_day
-);
-"""
-
-
-class BaseConstraintsRuntimeEnforcement:
+class BaseConstraintsRuntimeDdlEnforcement:
     """
     These constraints pass muster for dbt's preflight checks. Make sure they're
     passed into the DDL statement. If they don't match up with the underlying data,
@@ -215,15 +176,76 @@ class BaseConstraintsRuntimeEnforcement:
     @pytest.fixture(scope="class")
     def models(self):
         return {
+            "my_model.sql": my_model_wrong_order_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def expected_sql(self):
+        return """
+create table <model_identifier> (
+    id integer not null primary key check (id > 0),
+    color text,
+    date_day text
+) ;
+insert into <model_identifier> (
+    id ,
+    color ,
+    date_day
+)
+(
+    select
+       id,
+       color,
+       date_day
+       from
+    (
+        select
+            'blue' as color,
+            1 as id,
+            '2019-01-01' as date_day
+    ) as model_subq
+);
+"""
+
+    def test__constraints_ddl(self, project, expected_sql):
+        results = run_dbt(["run", "-s", "my_model"])
+        assert len(results) == 1
+
+        # grab the sql and replace the model identifier to make it generic for all adapters
+        # the name is not what we're testing here anyways and varies based on materialization
+        # TODO: consider refactoring this to introspect logs instead
+        generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
+        generated_sql_modified = re.sub(r"\s+", " ", generated_sql).lower().strip()
+        generated_sql_list = generated_sql_modified.split(" ")
+        for idx in [n for n, x in enumerate(generated_sql_list) if "my_model" in x]:
+            generated_sql_list[idx] = "<model_identifier>"
+        generated_sql_generic = " ".join(generated_sql_list)
+
+        expected_sql_check = re.sub(r"\s+", " ", expected_sql).lower().strip()
+
+        assert (
+            expected_sql_check == generated_sql_generic
+        ), f"""
+-- GENERATED SQL
+{generated_sql_generic}
+
+-- EXPECTED SQL
+{expected_sql_check}
+"""
+
+
+class BaseConstraintsRollback:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
             "my_model.sql": my_model_sql,
             "constraints_schema.yml": model_schema_yml,
         }
 
     @pytest.fixture(scope="class")
-    def expected_sql(self, project):
-        relation = relation_from_name(project.adapter, "my_model")
-        tmp_relation = relation.incorporate(path={"identifier": relation.identifier + "__dbt_tmp"})
-        return _expected_sql.format(tmp_relation)
+    def null_model_sql(self):
+        return my_model_with_nulls_sql
 
     @pytest.fixture(scope="class")
     def expected_color(self):
@@ -236,32 +258,14 @@ class BaseConstraintsRuntimeEnforcement:
     def assert_expected_error_messages(self, error_message, expected_error_messages):
         assert all(msg in error_message for msg in expected_error_messages)
 
-    def test__constraints_ddl(self, project, expected_sql):
-        results = run_dbt(["run", "-s", "my_model"])
-        assert len(results) == 1
-        # TODO: consider refactoring this to introspect logs instead
-        generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
-
-        generated_sql_check = re.sub(r"\s+", " ", generated_sql).lower().strip()
-        expected_sql_check = re.sub(r"\s+", " ", expected_sql).lower().strip()
-        assert (
-            expected_sql_check == generated_sql_check
-        ), f"""
--- GENERATED SQL
-{generated_sql}
-
--- EXPECTED SQL
-{expected_sql}
-"""
-
     def test__constraints_enforcement_rollback(
-        self, project, expected_color, expected_error_messages
+        self, project, expected_color, expected_error_messages, null_model_sql
     ):
         results = run_dbt(["run", "-s", "my_model"])
         assert len(results) == 1
 
         # Make a contract-breaking change to the model
-        write_file(my_model_with_nulls_sql, "models", "my_model.sql")
+        write_file(null_model_sql, "models", "my_model.sql")
 
         failing_results = run_dbt(["run", "-s", "my_model"], expect_pass=False)
         assert len(failing_results) == 1
@@ -279,7 +283,7 @@ class BaseConstraintsRuntimeEnforcement:
         model_id = "model.test.my_model"
         my_model_config = manifest.nodes[model_id].config
         contract_actual_config = my_model_config.contract
-        assert contract_actual_config is True
+        assert contract_actual_config.enforced is True
 
         # Its result includes the expected error messages
         self.assert_expected_error_messages(failing_results[0].message, expected_error_messages)
@@ -305,6 +309,38 @@ class BaseViewConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
         }
 
 
+class BaseIncrementalConstraintsColumnsEqual(BaseConstraintsColumnsEqual):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_wrong_order.sql": my_model_incremental_wrong_order_sql,
+            "my_model_wrong_name.sql": my_model_incremental_wrong_name_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+
+class BaseIncrementalConstraintsRuntimeDdlEnforcement(BaseConstraintsRuntimeDdlEnforcement):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_incremental_wrong_order_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+
+class BaseIncrementalConstraintsRollback(BaseConstraintsRollback):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_incremental_model_sql,
+            "constraints_schema.yml": model_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def null_model_sql(self):
+        return my_model_incremental_with_nulls_sql
+
+
 class TestTableConstraintsColumnsEqual(BaseTableConstraintsColumnsEqual):
     pass
 
@@ -313,5 +349,23 @@ class TestViewConstraintsColumnsEqual(BaseViewConstraintsColumnsEqual):
     pass
 
 
-class TestConstraintsRuntimeEnforcement(BaseConstraintsRuntimeEnforcement):
+class TestIncrementalConstraintsColumnsEqual(BaseIncrementalConstraintsColumnsEqual):
+    pass
+
+
+class TestTableConstraintsRuntimeDdlEnforcement(BaseConstraintsRuntimeDdlEnforcement):
+    pass
+
+
+class TestTableConstraintsRollback(BaseConstraintsRollback):
+    pass
+
+
+class TestIncrementalConstraintsRuntimeDdlEnforcement(
+    BaseIncrementalConstraintsRuntimeDdlEnforcement
+):
+    pass
+
+
+class TestIncrementalConstraintsRollback(BaseIncrementalConstraintsRollback):
     pass

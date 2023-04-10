@@ -542,6 +542,7 @@ class StateSelectorMethod(SelectorMethod):
             ),
             "modified.relation": self.check_modified_factory("same_database_representation"),
             "modified.macros": self.check_modified_macros,
+            "modified.contract": self.check_modified_factory("same_contract"),
         }
         if selector in state_checks:
             checker = state_checks[selector]

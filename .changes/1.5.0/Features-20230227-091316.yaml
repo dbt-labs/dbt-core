@@ -1,0 +1,6 @@
+kind: Features
+body: make version configs optional
+time: 2023-02-27T09:13:16.104386-06:00
+custom:
+  Author: dave-connors-3
+  Issue: "7054"

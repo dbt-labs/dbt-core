@@ -6,14 +6,6 @@ from dbt.cli.option_types import YAML, ChoiceTuple, WarnErrorOptionsType
 from dbt.cli.resolvers import default_project_dir, default_profiles_dir
 from dbt.version import get_version_information
 
-# TODO:  Rename this to meet naming conventions (the word "send" is redundant)
-send_anonymous_usage_stats = click.option(
-    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
-    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
-    help="Send anonymous usage stats to dbt Labs.",
-    default=True,
-)
-
 args = click.option(
     "--args",
     envvar=None,
@@ -34,10 +26,17 @@ cache_selected_only = click.option(
     help="Pre cache database objects relevant to selected resource only.",
 )
 
+introspect = click.option(
+    "--introspect/--no-introspect",
+    envvar="DBT_INTROSPECT",
+    help="Whether to scaffold introspective queries as part of compilation",
+    default=True,
+)
+
 compile_docs = click.option(
     "--compile/--no-compile",
     envvar=None,
-    help="Wether or not to run 'dbt compile' as part of docs generation",
+    help="Whether or not to run 'dbt compile' as part of docs generation",
     default=True,
 )
 
@@ -62,14 +61,19 @@ debug = click.option(
     help="Display debug logging during dbt execution. Useful for debugging and making bug reports.",
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `DEFER_MODE` and used an env var called "DBT_DEFER_TO_STATE"
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
+# flag was previously named DEFER_MODE
 defer = click.option(
     "--defer/--no-defer",
     envvar="DBT_DEFER",
     help="If set, defer to the state variable for resolving unselected nodes.",
+)
+
+deprecated_defer = click.option(
+    "--deprecated-defer",
+    envvar="DBT_DEFER_TO_STATE",
+    help="Internal flag for deprecating old env var.",
+    default=False,
+    hidden=True,
 )
 
 enable_legacy_logger = click.option(
@@ -79,7 +83,12 @@ enable_legacy_logger = click.option(
 )
 
 exclude = click.option(
-    "--exclude", envvar=None, type=tuple, cls=MultiOption, help="Specify the nodes to exclude."
+    "--exclude",
+    envvar=None,
+    type=tuple,
+    cls=MultiOption,
+    multiple=True,
+    help="Specify the nodes to exclude.",
 )
 
 fail_fast = click.option(
@@ -95,6 +104,12 @@ favor_state = click.option(
     help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
 )
 
+deprecated_favor_state = click.option(
+    "--deprecated-favor-state",
+    envvar="DBT_FAVOR_STATE_MODE",
+    help="Internal flag for deprecating old env var.",
+)
+
 full_refresh = click.option(
     "--full-refresh",
     "-f",
@@ -107,7 +122,7 @@ indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",
     help="Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.",
-    type=click.Choice(["eager", "cautious", "buildable"], case_sensitive=False),
+    type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
 )
 
@@ -171,6 +186,22 @@ output = click.option(
     default="selector",
 )
 
+show_output_format = click.option(
+    "--output",
+    envvar=None,
+    help="Output format for dbt compile and dbt show",
+    type=click.Choice(["json", "text"], case_sensitive=False),
+    default="text",
+)
+
+show_limit = click.option(
+    "--limit",
+    envvar=None,
+    help="Limit the number of results returned by dbt show",
+    type=click.INT,
+    default=5,
+)
+
 output_keys = click.option(
     "--output-keys",
     envvar=None,
@@ -178,8 +209,9 @@ output_keys = click.option(
         "Space-delimited listing of node properties to include as custom keys for JSON output "
         "(e.g. `--output json --output-keys name resource_type description`)"
     ),
-    type=list,
+    type=tuple,
     cls=MultiOption,
+    multiple=True,
     default=[],
 )
 
@@ -214,15 +246,20 @@ port = click.option(
     type=click.INT,
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `NO_PRINT` and used the env var `DBT_NO_PRINT`.
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
 print = click.option(
     "--print/--no-print",
     envvar="DBT_PRINT",
     help="Output all {{ print() }} macro calls.",
     default=True,
+)
+
+deprecated_print = click.option(
+    "--deprecated-print/--deprecated-no-print",
+    envvar="DBT_NO_PRINT",
+    help="Internal flag for deprecating old env var.",
+    default=True,
+    hidden=True,
+    callback=lambda ctx, param, value: not value,
 )
 
 printer_width = click.option(
@@ -258,7 +295,7 @@ profiles_dir_exists_false = click.option(
 
 project_dir = click.option(
     "--project-dir",
-    envvar=None,
+    envvar="DBT_PROJECT_DIR",
     help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
     default=default_project_dir,
     type=click.Path(exists=True),
@@ -299,6 +336,7 @@ resource_type = click.option(
         case_sensitive=False,
     ),
     cls=MultiOption,
+    multiple=True,
     default=(),
 )
 
@@ -308,8 +346,11 @@ select_attrs = {
     "envvar": None,
     "help": "Specify the nodes to include.",
     "cls": MultiOption,
+    "multiple": True,
     "type": tuple,
 }
+
+inline = click.option("--inline", envvar=None, help="Pass SQL inline to dbt compile and show")
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
@@ -321,6 +362,13 @@ select = click.option(*select_decls, *model_decls, **select_attrs)
 
 selector = click.option(
     "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
+)
+
+send_anonymous_usage_stats = click.option(
+    "--send-anonymous-usage-stats/--no-send-anonymous-usage-stats",
+    envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
+    help="Send anonymous usage stats to dbt Labs.",
+    default=True,
 )
 
 show = click.option(
@@ -344,14 +392,24 @@ skip_profile_setup = click.option(
     "--skip-profile-setup", "-s", envvar=None, help="Skip interactive profile setup.", is_flag=True
 )
 
-# TODO:  The env var and name (reflected in flags) are corrections!
-# The original name was `ARTIFACT_STATE_PATH` and used the env var `DBT_ARTIFACT_STATE_PATH`.
-# Both of which break existing naming conventions.
-# This will need to be fixed before use in the main codebase and communicated as a change to the community!
 state = click.option(
     "--state",
     envvar="DBT_STATE",
     help="If set, use the given directory as the source for json files to compare with this project.",
+    type=click.Path(
+        dir_okay=True,
+        file_okay=False,
+        readable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+)
+
+deprecated_state = click.option(
+    "--deprecated-state",
+    envvar="DBT_ARTIFACT_STATE_PATH",
+    help="Internal flag for deprecating old env var.",
+    hidden=True,
     type=click.Path(
         dir_okay=True,
         file_okay=False,

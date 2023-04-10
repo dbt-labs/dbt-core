@@ -1,5 +1,4 @@
-betterproto[compiler]==1.2.5
-black==22.10.0
+black==23.3.0
 bumpversion
 docutils
 flake8

@@ -74,15 +74,36 @@ class Graph:
         new_graph = self.graph.copy()
         include_nodes = set(selected)
 
-        for node in self:
+        still_removing = True
+        while still_removing:
+            nodes_to_remove = list(
+                node
+                for node in new_graph
+                if node not in include_nodes
+                and (new_graph.in_degree(node) * new_graph.out_degree(node)) == 0
+            )
+            if len(nodes_to_remove) == 0:
+                still_removing = False
+            else:
+                new_graph.remove_nodes_from(nodes_to_remove)
+
+        # sort remaining nodes by degree
+        remaining_nodes = list(new_graph.nodes())
+        remaining_nodes.sort(
+            key=lambda node: new_graph.in_degree(node) * new_graph.out_degree(node)
+        )
+
+        for node in remaining_nodes:
             if node not in include_nodes:
                 source_nodes = [x for x, _ in new_graph.in_edges(node)]
                 target_nodes = [x for _, x in new_graph.out_edges(node)]
 
                 new_edges = product(source_nodes, target_nodes)
                 non_cyclic_new_edges = [
-                    (source, target) for source, target in new_edges if source != target
-                ]  # removes cyclic refs
+                    (source, target)
+                    for source, target in new_edges
+                    if source != target and not new_graph.has_edge(source, target)
+                ]  # removes cyclic refs and edges already existing in new graph
 
                 new_graph.add_edges_from(non_cyclic_new_edges)
                 new_graph.remove_node(node)

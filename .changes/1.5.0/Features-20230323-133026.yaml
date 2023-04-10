@@ -1,0 +1,6 @@
+kind: Features
+body: Detect breaking changes to contracts in state:modified check
+time: 2023-03-23T13:30:26.593717-04:00
+custom:
+  Author: gshank
+  Issue: "6869"

@@ -64,7 +64,6 @@ from dbt.contracts.graph.manifest import (
 from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Macro,
-    ColumnInfo,
     Exposure,
     Metric,
     SeedNode,
@@ -1128,20 +1127,6 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-
-
-def _get_node_column(node, column_name):
-    """Given a ManifestNode, add some fields that might be missing. Return a
-    reference to the dict that refers to the given column, creating it if
-    it doesn't yet exist.
-    """
-    if column_name in node.columns:
-        column = node.columns[column_name]
-    else:
-        node.columns[column_name] = ColumnInfo(name=column_name)
-        node.columns[column_name] = column
-
-    return column
 
 
 DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]

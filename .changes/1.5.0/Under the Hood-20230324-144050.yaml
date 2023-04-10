@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove upper pin for hologram/jsonschema
+time: 2023-03-24T14:40:50.574108-04:00
+custom:
+  Author: gshank
+  Issue: "6775"

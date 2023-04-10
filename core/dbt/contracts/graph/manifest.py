@@ -37,6 +37,7 @@ from dbt.contracts.graph.nodes import (
     BaseNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
+from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
 from dbt.dataclass_schema import dbtClassMixin
@@ -1228,11 +1229,26 @@ class WritableManifest(ArtifactMixin):
             ("manifest", 8),
         ]
 
+    @classmethod
+    def upgrade_schema_version(cls, data):
+        """This overrides the "upgrade_schema_version" call in VersionedSchema (via
+        ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
+        if get_manifest_schema_version(data) <= 8:
+            data = upgrade_manifest_json(data)
+        return cls.from_dict(data)
+
     def __post_serialize__(self, dct):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:
                 del node["config_call_dict"]
         return dct
+
+
+def get_manifest_schema_version(dct: dict) -> int:
+    schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
+    if not schema_version:
+        raise ValueError("Manifest doesn't have schema version")
+    return int(schema_version.split(".")[-2][-1])
 
 
 def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):

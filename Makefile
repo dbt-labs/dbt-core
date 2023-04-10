@@ -37,6 +37,10 @@ dev: dev_req ## Installs dbt-* packages in develop mode along with development d
 	@\
 	pre-commit install
 
+.PHONY: proto_types
+proto_types:  ## generates google protobuf python file from types.proto
+	protoc -I=./core/dbt/events --python_out=./core/dbt/events ./core/dbt/events/types.proto
+
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
 	@\

@@ -18,7 +18,9 @@ from dbt.events.functions import (
     stop_capture_stdout_logs,
     reset_metadata_vars,
 )
-from dbt.events.test_types import IntegrationTestDebug
+from dbt.events.base_types import EventLevel
+from dbt.events.types import Note
+
 
 # =============================================================================
 # Test utilities
@@ -160,6 +162,11 @@ def write_file(contents, *paths):
         fp.write(contents)
 
 
+def file_exists(*paths):
+    """Check if file exists at path"""
+    return os.path.exists(os.path.join(*paths))
+
+
 # Used in test utilities
 def read_file(*paths):
     contents = ""
@@ -269,7 +276,7 @@ def run_sql_with_adapter(adapter, sql, fetch=None):
     sql = sql.format(**kwargs)
 
     msg = f'test connection "__test" executing: {sql}'
-    fire_event(IntegrationTestDebug(msg=msg))
+    fire_event(Note(msg=msg), level=EventLevel.DEBUG)
     with get_connection(adapter) as conn:
         return adapter.run_sql_for_tests(sql, fetch, conn)
 
@@ -315,7 +322,7 @@ def relation_from_name(adapter, name: str):
 
 
 # Ensure that models with different materialiations have the
-# corrent table/view.
+# current table/view.
 # Uses:
 #   adapter.list_relations_without_caching
 def check_relation_types(adapter, relation_to_type):
@@ -385,7 +392,6 @@ def check_relation_has_expected_schema(adapter, relation_name, expected_schema: 
 def check_relations_equal_with_relations(
     adapter: Adapter, relations: List, compare_snapshot_cols=False
 ):
-
     with get_connection(adapter):
         basis, compares = relations[0], relations[1:]
         # Skip columns starting with "dbt_" because we don't want to

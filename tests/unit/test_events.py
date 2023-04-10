@@ -1,8 +1,9 @@
+import pytest
 import re
 from typing import TypeVar
 
 from dbt.contracts.results import TimingInfo
-from dbt.events import AdapterLogger, test_types, types
+from dbt.events import AdapterLogger, types
 from dbt.events.base_types import (
     BaseEvent,
     DebugLevel,
@@ -14,8 +15,11 @@ from dbt.events.base_types import (
     msg_from_base_event,
 )
 from dbt.events.functions import msg_to_dict, msg_to_json
+from dbt.events.helpers import get_json_string_utcnow
 from dbt.flags import set_from_args
 from argparse import Namespace
+
+set_from_args(Namespace(WARN_ERROR=False), None)
 
 
 # takes in a class and finds any subclasses for it
@@ -47,14 +51,14 @@ class TestAdapterLogger:
         logger.debug("hello {}", "world")
 
         # enters lower in the call stack to test that it formats correctly
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="hello {}", args=("world",))
+        event = types.AdapterEventDebug(name="dbt_tests", base_msg="hello {}", args=["world"])
         assert "hello world" in event.message()
 
         # tests that it doesn't throw
-        logger.debug("1 2 {}", 3)
+        logger.debug("1 2 {}", "3")
 
         # enters lower in the call stack to test that it formats correctly
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="1 2 {}", args=(3,))
+        event = types.AdapterEventDebug(name="dbt_tests", base_msg="1 2 {}", args=[3])
         assert "1 2 3" in event.message()
 
         # tests that it doesn't throw
@@ -63,13 +67,13 @@ class TestAdapterLogger:
         # enters lower in the call stack to test that it formats correctly
         # in this case it's that we didn't attempt to replace anything since there
         # were no args passed after the initial message
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=())
+        event = types.AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=[])
         assert "boop{x}boop" in event.message()
 
         # ensure AdapterLogger and subclasses makes all base_msg members
         # of type string; when someone writes logger.debug(a) where a is
         # any non-string object
-        event = types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=(3,))
+        event = types.AdapterEventDebug(name="dbt_tests", base_msg=[1, 2, 3], args=[3])
         assert isinstance(event.base_msg, str)
 
         event = types.JinjaLogDebug(msg=[1, 2, 3])
@@ -126,6 +130,9 @@ sample_values = [
     types.MetricAttributesRenamed(metric_name=""),
     types.ExposureNameDeprecation(exposure=""),
     types.InternalDeprecation(name="", reason="", suggested_action="", version=""),
+    types.EnvironmentVariableRenamed(old_name="", new_name=""),
+    types.ConfigLogPathDeprecation(deprecated_path=""),
+    types.ConfigTargetPathDeprecation(deprecated_path=""),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
@@ -148,14 +155,14 @@ sample_values = [
     types.ColTypeChange(
         orig_type="",
         new_type="",
-        table=types.ReferenceKeyMsg(database="", schema="", identifier=""),
+        table={"database": "", "schema": "", "identifier": ""},
     ),
-    types.SchemaCreation(relation=types.ReferenceKeyMsg(database="", schema="", identifier="")),
-    types.SchemaDrop(relation=types.ReferenceKeyMsg(database="", schema="", identifier="")),
+    types.SchemaCreation(relation={"database": "", "schema": "", "identifier": ""}),
+    types.SchemaDrop(relation={"database": "", "schema": "", "identifier": ""}),
     types.CacheAction(
         action="adding_relation",
-        ref_key=types.ReferenceKeyMsg(database="", schema="", identifier=""),
-        ref_key_2=types.ReferenceKeyMsg(database="", schema="", identifier=""),
+        ref_key={"database": "", "schema": "", "identifier": ""},
+        ref_key_2={"database": "", "schema": "", "identifier": ""},
     ),
     types.CacheDumpGraph(before_after="before", action="rename", dump=dict()),
     types.AdapterImportError(exc=""),
@@ -236,7 +243,7 @@ sample_values = [
     types.DepsUpdateAvailable(version_latest=""),
     types.DepsUpToDate(),
     types.DepsListSubdirectory(subdirectory=""),
-    types.DepsNotifyUpdatesAvailable(packages=types.ListOfStrings()),
+    types.DepsNotifyUpdatesAvailable(packages=["my_pkg", "other_pkg"]),
     types.RetryExternalCall(attempt=0, max=0),
     types.RecordRetryException(exc=""),
     types.RegistryIndexProgressGETRequest(url=""),
@@ -259,7 +266,7 @@ sample_values = [
         execution_time=0,
         num_failures=0,
     ),
-    types.LogStartLine(description="", index=0, total=0, node_info=types.NodeInfo()),
+    types.LogStartLine(description="", index=0, total=0),
     types.LogModelResult(
         description="",
         status="",
@@ -292,13 +299,13 @@ sample_values = [
     ),
     types.LogCancelLine(conn_name=""),
     types.DefaultSelector(name=""),
-    types.NodeStart(node_info=types.NodeInfo()),
-    types.NodeFinished(node_info=types.NodeInfo()),
+    types.NodeStart(),
+    types.NodeFinished(),
     types.QueryCancelationUnsupported(type=""),
     types.ConcurrencyLine(num_threads=0, target_name=""),
-    types.WritingInjectedSQLForNode(node_info=types.NodeInfo()),
-    types.NodeCompiling(node_info=types.NodeInfo()),
-    types.NodeExecuting(node_info=types.NodeInfo()),
+    types.WritingInjectedSQLForNode(),
+    types.NodeCompiling(),
+    types.NodeExecuting(),
     types.LogHookStartLine(
         statement="",
         index=0,
@@ -324,6 +331,11 @@ sample_values = [
     types.NoNodesSelected(),
     types.DepsUnpinned(revision="", git=""),
     types.NoNodesForSelectionCriteria(spec_raw=""),
+    types.CommandCompleted(
+        command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
+    ),
+    types.ShowNode(node_name="", preview="", is_inline=True),
+    types.CompiledNode(node_name="", compiled="", is_inline=True),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),
@@ -336,8 +348,8 @@ sample_values = [
     types.MainStackTrace(stack_trace=""),
     types.SystemCouldNotWrite(path="", reason="", exc=""),
     types.SystemExecutingCmd(cmd=[""]),
-    types.SystemStdOut(bmsg=b""),
-    types.SystemStdErr(bmsg=b""),
+    types.SystemStdOut(bmsg=str(b"")),
+    types.SystemStdErr(bmsg=str(b"")),
     types.SystemReportReturnCode(returncode=0),
     types.TimingInfoCollected(),
     types.LogDebugStackTrace(),
@@ -372,13 +384,6 @@ sample_values = [
     types.DebugCmdResult(),
     types.ListCmdOut(),
     types.Note(msg="This is a note."),
-    # T - tests ======================
-    test_types.IntegrationTestInfo(),
-    test_types.IntegrationTestDebug(),
-    test_types.IntegrationTestWarn(),
-    test_types.IntegrationTestError(),
-    test_types.IntegrationTestException(),
-    test_types.UnitTestInfo(),
 ]
 
 
@@ -388,7 +393,6 @@ class TestEventJSONSerialization:
     # event types that take `Any` are not possible to test in this way since some will serialize
     # just fine and others won't.
     def test_all_serializable(self):
-        set_from_args(Namespace(WARN_ERROR=False), None)
         all_non_abstract_events = set(
             get_all_subclasses(BaseEvent),
         )
@@ -421,7 +425,7 @@ class TestEventJSONSerialization:
                 raise Exception(f"{event} is not serializable to json. Originating exception: {e}")
             # Serialize to binary
             try:
-                bytes(msg)
+                msg.SerializeToString()
             except Exception as e:
                 raise Exception(
                     f"{event} is not serializable to binary protobuf. Originating exception: {e}"
@@ -440,3 +444,21 @@ def test_date_serialization():
     ti_dict = ti.to_dict()
     assert ti_dict["started_at"].endswith("Z")
     assert ti_dict["completed_at"].endswith("Z")
+
+
+def test_bad_serialization():
+    """Tests that bad serialization enters the proper exception handling
+
+    When pytest is in use the exception handling of `BaseEvent` raises an
+    exception. When pytest isn't present, it fires a Note event. Thus to test
+    that bad serializations are properly handled, the best we can do is test
+    that the exception handling path is used.
+    """
+
+    with pytest.raises(Exception) as excinfo:
+        types.Note(param_event_doesnt_have="This should break")
+
+    assert (
+        str(excinfo.value)
+        == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
+    )

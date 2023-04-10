@@ -28,7 +28,6 @@ from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plug
 
 
 class GraphTest(unittest.TestCase):
-
     def tearDown(self):
         self.mock_filesystem_search.stop()
         self.mock_hook_constructor.stop()
@@ -41,65 +40,69 @@ class GraphTest(unittest.TestCase):
         self.graph_result = None
         tracking.do_not_track()
         self.profile = {
-            'outputs': {
-                'test': {
-                    'type': 'postgres',
-                    'threads': 4,
-                    'host': 'thishostshouldnotexist',
-                    'port': 5432,
-                    'user': 'root',
-                    'pass': 'password',
-                    'dbname': 'dbt',
-                    'schema': 'dbt_test'
+            "outputs": {
+                "test": {
+                    "type": "postgres",
+                    "threads": 4,
+                    "host": "thishostshouldnotexist",
+                    "port": 5432,
+                    "user": "root",
+                    "pass": "password",
+                    "dbname": "dbt",
+                    "schema": "dbt_test",
                 }
             },
-            'target': 'test'
+            "target": "test",
         }
         self.macro_manifest = MacroManifest(
-            {n.unique_id: n for n in generate_name_macros('test_models_compile')})
+            {n.unique_id: n for n in generate_name_macros("test_models_compile")}
+        )
         self.mock_models = []  # used by filesystem_searcher
 
         # Create file filesystem searcher
-        self.filesystem_search = patch('dbt.parser.read_files.filesystem_search')
+        self.filesystem_search = patch("dbt.parser.read_files.filesystem_search")
 
         def mock_filesystem_search(project, relative_dirs, extension, ignore_spec):
-            if 'sql' not in extension:
+            if "sql" not in extension:
                 return []
-            if 'models' not in relative_dirs:
+            if "models" not in relative_dirs:
                 return []
             return [model.path for model in self.mock_models]
+
         self.mock_filesystem_search = self.filesystem_search.start()
         self.mock_filesystem_search.side_effect = mock_filesystem_search
 
         # Create HookParser patcher
-        self.hook_patcher = patch.object(
-            dbt.parser.hooks.HookParser, '__new__'
-        )
+        self.hook_patcher = patch.object(dbt.parser.hooks.HookParser, "__new__")
 
         def create_hook_patcher(cls, project, manifest, root_project):
             result = MagicMock(project=project, manifest=manifest, root_project=root_project)
             result.__iter__.side_effect = lambda: iter([])
             return result
+
         self.mock_hook_constructor = self.hook_patcher.start()
         self.mock_hook_constructor.side_effect = create_hook_patcher
 
         # Create the Manifest.state_check patcher
-        @patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
         def _mock_state_check(self):
             all_projects = self.all_projects
             return ManifestStateCheck(
-                project_env_vars_hash=FileHash.from_contents(''),
-                profile_env_vars_hash=FileHash.from_contents(''),
-                vars_hash=FileHash.from_contents('vars'),
+                project_env_vars_hash=FileHash.from_contents(""),
+                profile_env_vars_hash=FileHash.from_contents(""),
+                vars_hash=FileHash.from_contents("vars"),
                 project_hashes={name: FileHash.from_contents(name) for name in all_projects},
-                profile_hash=FileHash.from_contents('profile'),
+                profile_hash=FileHash.from_contents("profile"),
             )
-        self.load_state_check = patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+
+        self.load_state_check = patch(
+            "dbt.parser.manifest.ManifestLoader.build_manifest_state_check"
+        )
         self.mock_state_check = self.load_state_check.start()
         self.mock_state_check.side_effect = _mock_state_check
 
         # Create the source file patcher
-        self.load_source_file_patcher = patch('dbt.parser.read_files.load_source_file')
+        self.load_source_file_patcher = patch("dbt.parser.read_files.load_source_file")
         self.mock_source_file = self.load_source_file_patcher.start()
 
         def mock_load_source_file(path, parse_file_type, project_name, saved_files):
@@ -109,14 +112,15 @@ class GraphTest(unittest.TestCase):
             source_file.project_name = project_name
             source_file.parse_file_type = parse_file_type
             return source_file
+
         self.mock_source_file.side_effect = mock_load_source_file
 
-        @patch('dbt.parser.hooks.HookParser.get_path')
+        @patch("dbt.parser.hooks.HookParser.get_path")
         def _mock_hook_path(self):
             path = FilePath(
-                searched_path='.',
+                searched_path=".",
                 project_root=os.path.normcase(os.getcwd()),
-                relative_path='dbt_project.yml',
+                relative_path="dbt_project.yml",
                 modification_time=0.0,
             )
             return path
@@ -126,11 +130,11 @@ class GraphTest(unittest.TestCase):
             extra_cfg = {}
 
         cfg = {
-            'name': 'test_models_compile',
-            'version': '0.1',
-            'profile': 'test',
-            'project-root': os.path.abspath('.'),
-            'config-version': 2,
+            "name": "test_models_compile",
+            "version": "0.1",
+            "profile": "test",
+            "project-root": os.path.abspath("."),
+            "config-version": 2,
         }
         cfg.update(extra_cfg)
 
@@ -145,13 +149,13 @@ class GraphTest(unittest.TestCase):
     def use_models(self, models):
         for k, v in models.items():
             path = FilePath(
-                searched_path='models',
+                searched_path="models",
                 project_root=os.path.normcase(os.getcwd()),
-                relative_path='{}.sql'.format(k),
+                relative_path="{}.sql".format(k),
                 modification_time=0.0,
             )
             # FileHash can't be empty or 'search_key' will be None
-            source_file = SourceFile(path=path, checksum=FileHash.from_contents('abc'))
+            source_file = SourceFile(path=path, checksum=FileHash.from_contents("abc"))
             source_file.contents = v
             self.mock_models.append(source_file)
 
@@ -164,9 +168,11 @@ class GraphTest(unittest.TestCase):
         return loader.manifest
 
     def test__single_model(self):
-        self.use_models({
-            'model_one': 'select * from events',
-        })
+        self.use_models(
+            {
+                "model_one": "select * from events",
+            }
+        )
 
         config = self.get_config()
         manifest = self.load_manifest(config)
@@ -174,19 +180,17 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
-        self.assertEqual(
-            list(linker.nodes()),
-            ['model.test_models_compile.model_one'])
+        self.assertEqual(list(linker.nodes()), ["model.test_models_compile.model_one"])
 
-        self.assertEqual(
-            list(linker.edges()),
-            [])
+        self.assertEqual(list(linker.edges()), [])
 
     def test__two_models_simple_ref(self):
-        self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
-        })
+        self.use_models(
+            {
+                "model_one": "select * from events",
+                "model_two": "select * from {{ref('model_one')}}",
+            }
+        )
 
         config = self.get_config()
         manifest = self.load_manifest(config)
@@ -196,23 +200,30 @@ class GraphTest(unittest.TestCase):
         self.assertCountEqual(
             linker.nodes(),
             [
-                'model.test_models_compile.model_one',
-                'model.test_models_compile.model_two',
-            ]
+                "model.test_models_compile.model_one",
+                "model.test_models_compile.model_two",
+            ],
         )
 
         self.assertCountEqual(
             linker.edges(),
-            [('model.test_models_compile.model_one', 'model.test_models_compile.model_two',)]
+            [
+                (
+                    "model.test_models_compile.model_one",
+                    "model.test_models_compile.model_two",
+                )
+            ],
         )
 
     def test__model_materializations(self):
-        self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
-            'model_three': "select * from events",
-            'model_four': "select * from events",
-        })
+        self.use_models(
+            {
+                "model_one": "select * from events",
+                "model_two": "select * from {{ref('model_one')}}",
+                "model_three": "select * from events",
+                "model_four": "select * from events",
+            }
+        )
 
         cfg = {
             "models": {
@@ -220,8 +231,8 @@ class GraphTest(unittest.TestCase):
                 "test_models_compile": {
                     "model_one": {"materialized": "table"},
                     "model_two": {"materialized": "view"},
-                    "model_three": {"materialized": "ephemeral"}
-                }
+                    "model_three": {"materialized": "ephemeral"},
+                },
             }
         }
 
@@ -232,26 +243,21 @@ class GraphTest(unittest.TestCase):
             "model_one": "table",
             "model_two": "view",
             "model_three": "ephemeral",
-            "model_four": "table"
+            "model_four": "table",
         }
 
         for model, expected in expected_materialization.items():
-            key = 'model.test_models_compile.{}'.format(model)
+            key = "model.test_models_compile.{}".format(model)
             actual = manifest.nodes[key].config.materialized
             self.assertEqual(actual, expected)
 
     def test__model_incremental(self):
-        self.use_models({
-            'model_one': 'select * from events'
-        })
+        self.use_models({"model_one": "select * from events"})
 
         cfg = {
             "models": {
                 "test_models_compile": {
-                    "model_one": {
-                        "materialized": "incremental",
-                        "unique_key": "id"
-                    },
+                    "model_one": {"materialized": "incremental", "unique_key": "id"},
                 }
             }
         }
@@ -261,48 +267,52 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
-        node = 'model.test_models_compile.model_one'
+        node = "model.test_models_compile.model_one"
 
         self.assertEqual(list(linker.nodes()), [node])
         self.assertEqual(list(linker.edges()), [])
 
-        self.assertEqual(manifest.nodes[node].config.materialized, 'incremental')
+        self.assertEqual(manifest.nodes[node].config.materialized, "incremental")
 
     def test__dependency_list(self):
-        self.use_models({
-            'model_1': 'select * from events',
-            'model_2': 'select * from {{ ref("model_1") }}',
-            'model_3': '''
+        self.use_models(
+            {
+                "model_1": "select * from events",
+                "model_2": 'select * from {{ ref("model_1") }}',
+                "model_3": """
                 select * from {{ ref("model_1") }}
                 union all
                 select * from {{ ref("model_2") }}
-            ''',
-            'model_4': 'select * from {{ ref("model_3") }}'
-        })
+            """,
+                "model_4": 'select * from {{ ref("model_3") }}',
+            }
+        )
 
         config = self.get_config()
         manifest = self.load_manifest(config)
         compiler = self.get_compiler(config)
         graph = compiler.compile(manifest)
 
-        models = ('model_1', 'model_2', 'model_3', 'model_4')
-        model_ids = ['model.test_models_compile.{}'.format(m) for m in models]
+        models = ("model_1", "model_2", "model_3", "model_4")
+        model_ids = ["model.test_models_compile.{}".format(m) for m in models]
 
-        manifest = MagicMock(nodes={
-            n: MagicMock(
-                unique_id=n,
-                name=n.split('.')[-1],
-                package_name='test_models_compile',
-                fqn=['test_models_compile', n],
-                empty=False,
-                config=MagicMock(enabled=True),
-            )
-            for n in model_ids
-        })
+        manifest = MagicMock(
+            nodes={
+                n: MagicMock(
+                    unique_id=n,
+                    name=n.split(".")[-1],
+                    package_name="test_models_compile",
+                    fqn=["test_models_compile", n],
+                    empty=False,
+                    config=MagicMock(enabled=True),
+                )
+                for n in model_ids
+            }
+        )
         manifest.expect.side_effect = lambda n: MagicMock(unique_id=n)
         selector = NodeSelector(graph, manifest)
         # TODO:  The "eager" string below needs to be replaced with programatic access
-        #  to the default value for the indirect selection parameter in 
+        #  to the default value for the indirect selection parameter in
         # dbt.cli.params.indirect_selection
         #
         # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
@@ -328,9 +338,9 @@ class GraphTest(unittest.TestCase):
 
         is_partial_parsable, _ = loader.is_partial_parsable(manifest)
         self.assertTrue(is_partial_parsable)
-        manifest.metadata.dbt_version = '0.0.1a1'
+        manifest.metadata.dbt_version = "0.0.1a1"
         is_partial_parsable, _ = loader.is_partial_parsable(manifest)
         self.assertFalse(is_partial_parsable)
-        manifest.metadata.dbt_version = '99999.99.99'
+        manifest.metadata.dbt_version = "99999.99.99"
         is_partial_parsable, _ = loader.is_partial_parsable(manifest)
         self.assertFalse(is_partial_parsable)

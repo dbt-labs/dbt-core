@@ -184,7 +184,7 @@ BANNED_PROJECT_NAMES = {
 @dataclass
 class Project(HyphenatedDbtClassMixin, Replaceable):
     name: Identifier
-    config_version: int
+    config_version: Optional[int] = 2
     version: Optional[Union[SemverString, float]] = None
     project_root: Optional[str] = None
     source_paths: Optional[List[str]] = None

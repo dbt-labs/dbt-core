@@ -1,24 +1,17 @@
-from dataclasses import dataclass
+import json
+
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import PIN_PACKAGE_URL
 from dbt.events.base_types import (
     DynamicLevel,
-    NoFile,
     DebugLevel,
     InfoLevel,
     WarnLevel,
     ErrorLevel,
-    Cache,
-    AdapterEventStringFunctor,
-    EventStringFunctor,
     EventLevel,
 )
-from dbt.events.format import format_fancy_output_line, pluralize
+from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
 
-# The generated classes quote the included message classes, requiring the following lines
-from dbt.events.proto_types import EventInfo, RunResultMsg, ListOfStrings  # noqa
-from dbt.events.proto_types import NodeInfo, ReferenceKeyMsg, TimingInfoMsg  # noqa
-from dbt.events import proto_types as pt
 from dbt.flags import get_flags
 from dbt.node_types import NodeType
 
@@ -63,8 +56,7 @@ def get_maximum_seed_size_name() -> str:
 # =======================================================
 
 
-@dataclass
-class MainReportVersion(InfoLevel, pt.MainReportVersion):  # noqa
+class MainReportVersion(InfoLevel):
     def code(self):
         return "A001"
 
@@ -72,8 +64,7 @@ class MainReportVersion(InfoLevel, pt.MainReportVersion):  # noqa
         return f"Running with dbt{self.version}"
 
 
-@dataclass
-class MainReportArgs(DebugLevel, pt.MainReportArgs):  # noqa
+class MainReportArgs(DebugLevel):
     def code(self):
         return "A002"
 
@@ -81,8 +72,7 @@ class MainReportArgs(DebugLevel, pt.MainReportArgs):  # noqa
         return f"running dbt with arguments {str(self.args)}"
 
 
-@dataclass
-class MainTrackingUserState(DebugLevel, pt.MainTrackingUserState):
+class MainTrackingUserState(DebugLevel):
     def code(self):
         return "A003"
 
@@ -90,8 +80,7 @@ class MainTrackingUserState(DebugLevel, pt.MainTrackingUserState):
         return f"Tracking: {self.user_state}"
 
 
-@dataclass
-class MergedFromState(DebugLevel, pt.MergedFromState):
+class MergedFromState(DebugLevel):
     def code(self):
         return "A004"
 
@@ -99,8 +88,7 @@ class MergedFromState(DebugLevel, pt.MergedFromState):
         return f"Merged {self.num_merged} items from state (sample: {self.sample})"
 
 
-@dataclass
-class MissingProfileTarget(InfoLevel, pt.MissingProfileTarget):
+class MissingProfileTarget(InfoLevel):
     def code(self):
         return "A005"
 
@@ -111,8 +99,7 @@ class MissingProfileTarget(InfoLevel, pt.MissingProfileTarget):
 # Skipped A006, A007
 
 
-@dataclass
-class InvalidOptionYAML(ErrorLevel, pt.InvalidOptionYAML):
+class InvalidOptionYAML(ErrorLevel):
     def code(self):
         return "A008"
 
@@ -120,8 +107,7 @@ class InvalidOptionYAML(ErrorLevel, pt.InvalidOptionYAML):
         return f"The YAML provided in the --{self.option_name} argument is not valid."
 
 
-@dataclass
-class LogDbtProjectError(ErrorLevel, pt.LogDbtProjectError):
+class LogDbtProjectError(ErrorLevel):
     def code(self):
         return "A009"
 
@@ -135,8 +121,7 @@ class LogDbtProjectError(ErrorLevel, pt.LogDbtProjectError):
 # Skipped A010
 
 
-@dataclass
-class LogDbtProfileError(ErrorLevel, pt.LogDbtProfileError):
+class LogDbtProfileError(ErrorLevel):
     def code(self):
         return "A011"
 
@@ -157,8 +142,7 @@ https://docs.getdbt.com/docs/configure-your-profile
         return msg
 
 
-@dataclass
-class StarterProjectPath(DebugLevel, pt.StarterProjectPath):
+class StarterProjectPath(DebugLevel):
     def code(self):
         return "A017"
 
@@ -166,8 +150,7 @@ class StarterProjectPath(DebugLevel, pt.StarterProjectPath):
         return f"Starter project path: {self.dir}"
 
 
-@dataclass
-class ConfigFolderDirectory(InfoLevel, pt.ConfigFolderDirectory):
+class ConfigFolderDirectory(InfoLevel):
     def code(self):
         return "A018"
 
@@ -175,8 +158,7 @@ class ConfigFolderDirectory(InfoLevel, pt.ConfigFolderDirectory):
         return f"Creating dbt configuration folder at {self.dir}"
 
 
-@dataclass
-class NoSampleProfileFound(InfoLevel, pt.NoSampleProfileFound):
+class NoSampleProfileFound(InfoLevel):
     def code(self):
         return "A019"
 
@@ -184,8 +166,7 @@ class NoSampleProfileFound(InfoLevel, pt.NoSampleProfileFound):
         return f"No sample profile found for {self.adapter}."
 
 
-@dataclass
-class ProfileWrittenWithSample(InfoLevel, pt.ProfileWrittenWithSample):
+class ProfileWrittenWithSample(InfoLevel):
     def code(self):
         return "A020"
 
@@ -197,8 +178,7 @@ class ProfileWrittenWithSample(InfoLevel, pt.ProfileWrittenWithSample):
         )
 
 
-@dataclass
-class ProfileWrittenWithTargetTemplateYAML(InfoLevel, pt.ProfileWrittenWithTargetTemplateYAML):
+class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
     def code(self):
         return "A021"
 
@@ -210,8 +190,7 @@ class ProfileWrittenWithTargetTemplateYAML(InfoLevel, pt.ProfileWrittenWithTarge
         )
 
 
-@dataclass
-class ProfileWrittenWithProjectTemplateYAML(InfoLevel, pt.ProfileWrittenWithProjectTemplateYAML):
+class ProfileWrittenWithProjectTemplateYAML(InfoLevel):
     def code(self):
         return "A022"
 
@@ -223,8 +202,7 @@ class ProfileWrittenWithProjectTemplateYAML(InfoLevel, pt.ProfileWrittenWithProj
         )
 
 
-@dataclass
-class SettingUpProfile(InfoLevel, pt.SettingUpProfile):
+class SettingUpProfile(InfoLevel):
     def code(self):
         return "A023"
 
@@ -232,8 +210,7 @@ class SettingUpProfile(InfoLevel, pt.SettingUpProfile):
         return "Setting up your profile."
 
 
-@dataclass
-class InvalidProfileTemplateYAML(InfoLevel, pt.InvalidProfileTemplateYAML):
+class InvalidProfileTemplateYAML(InfoLevel):
     def code(self):
         return "A024"
 
@@ -241,8 +218,7 @@ class InvalidProfileTemplateYAML(InfoLevel, pt.InvalidProfileTemplateYAML):
         return "Invalid profile_template.yml in project."
 
 
-@dataclass
-class ProjectNameAlreadyExists(InfoLevel, pt.ProjectNameAlreadyExists):
+class ProjectNameAlreadyExists(InfoLevel):
     def code(self):
         return "A025"
 
@@ -250,8 +226,7 @@ class ProjectNameAlreadyExists(InfoLevel, pt.ProjectNameAlreadyExists):
         return f"A project called {self.name} already exists here."
 
 
-@dataclass
-class ProjectCreated(InfoLevel, pt.ProjectCreated):
+class ProjectCreated(InfoLevel):
     def code(self):
         return "A026"
 
@@ -279,8 +254,7 @@ Happy modeling!
 # =======================================================
 
 
-@dataclass
-class PackageRedirectDeprecation(WarnLevel, pt.PackageRedirectDeprecation):  # noqa
+class PackageRedirectDeprecation(WarnLevel):
     def code(self):
         return "D001"
 
@@ -292,8 +266,7 @@ class PackageRedirectDeprecation(WarnLevel, pt.PackageRedirectDeprecation):  # n
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class PackageInstallPathDeprecation(WarnLevel, pt.PackageInstallPathDeprecation):  # noqa
+class PackageInstallPathDeprecation(WarnLevel):
     def code(self):
         return "D002"
 
@@ -306,8 +279,7 @@ class PackageInstallPathDeprecation(WarnLevel, pt.PackageInstallPathDeprecation)
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class ConfigSourcePathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  # noqa
+class ConfigSourcePathDeprecation(WarnLevel):
     def code(self):
         return "D003"
 
@@ -319,8 +291,7 @@ class ConfigSourcePathDeprecation(WarnLevel, pt.ConfigSourcePathDeprecation):  #
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class ConfigDataPathDeprecation(WarnLevel, pt.ConfigDataPathDeprecation):  # noqa
+class ConfigDataPathDeprecation(WarnLevel):
     def code(self):
         return "D004"
 
@@ -332,8 +303,7 @@ class ConfigDataPathDeprecation(WarnLevel, pt.ConfigDataPathDeprecation):  # noq
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class AdapterDeprecationWarning(WarnLevel, pt.AdapterDeprecationWarning):  # noqa
+class AdapterDeprecationWarning(WarnLevel):
     def code(self):
         return "D005"
 
@@ -347,8 +317,7 @@ class AdapterDeprecationWarning(WarnLevel, pt.AdapterDeprecationWarning):  # noq
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class MetricAttributesRenamed(WarnLevel, pt.MetricAttributesRenamed):  # noqa
+class MetricAttributesRenamed(WarnLevel):
     def code(self):
         return "D006"
 
@@ -365,8 +334,7 @@ class MetricAttributesRenamed(WarnLevel, pt.MetricAttributesRenamed):  # noqa
         return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
-@dataclass
-class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
+class ExposureNameDeprecation(WarnLevel):
     def code(self):
         return "D007"
 
@@ -381,8 +349,7 @@ class ExposureNameDeprecation(WarnLevel, pt.ExposureNameDeprecation):  # noqa
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
-@dataclass
-class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
+class InternalDeprecation(WarnLevel):
     def code(self):
         return "D008"
 
@@ -397,13 +364,60 @@ class InternalDeprecation(WarnLevel, pt.InternalDeprecation):
         return warning_tag(msg)
 
 
+class EnvironmentVariableRenamed(WarnLevel):
+    def code(self):
+        return "D009"
+
+    def message(self):
+        description = (
+            f"The environment variable `{self.old_name}` has been renamed as `{self.new_name}`.\n"
+            f"If `{self.old_name}` is currently set, its value will be used instead of `{self.new_name}`.\n"
+            f"Set `{self.new_name}` and unset `{self.old_name}` to avoid this deprecation warning and "
+            "ensure it works properly in a future release."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+class ConfigLogPathDeprecation(WarnLevel):
+    def code(self):
+        return "D010"
+
+    def message(self):
+        output = "logs"
+        cli_flag = "--log-path"
+        env_var = "DBT_LOG_PATH"
+        description = (
+            f"The `{self.deprecated_path}` config in `dbt_project.yml` has been deprecated, "
+            f"and will no longer be supported in a future version of dbt-core. "
+            f"If you wish to write dbt {output} to a custom directory, please use "
+            f"the {cli_flag} CLI flag or {env_var} env var instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+class ConfigTargetPathDeprecation(WarnLevel):
+    def code(self):
+        return "D011"
+
+    def message(self):
+        output = "artifacts"
+        cli_flag = "--target-path"
+        env_var = "DBT_TARGET_PATH"
+        description = (
+            f"The `{self.deprecated_path}` config in `dbt_project.yml` has been deprecated, "
+            f"and will no longer be supported in a future version of dbt-core. "
+            f"If you wish to write dbt {output} to a custom directory, please use "
+            f"the {cli_flag} CLI flag or {env_var} env var instead."
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
 
 
-@dataclass
-class AdapterEventDebug(DebugLevel, AdapterEventStringFunctor, pt.AdapterEventDebug):  # noqa
+class AdapterEventDebug(DebugLevel):
     def code(self):
         return "E001"
 
@@ -411,8 +425,7 @@ class AdapterEventDebug(DebugLevel, AdapterEventStringFunctor, pt.AdapterEventDe
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-@dataclass
-class AdapterEventInfo(InfoLevel, AdapterEventStringFunctor, pt.AdapterEventInfo):  # noqa
+class AdapterEventInfo(InfoLevel):
     def code(self):
         return "E002"
 
@@ -420,8 +433,7 @@ class AdapterEventInfo(InfoLevel, AdapterEventStringFunctor, pt.AdapterEventInfo
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-@dataclass
-class AdapterEventWarning(WarnLevel, AdapterEventStringFunctor, pt.AdapterEventWarning):  # noqa
+class AdapterEventWarning(WarnLevel):
     def code(self):
         return "E003"
 
@@ -429,8 +441,7 @@ class AdapterEventWarning(WarnLevel, AdapterEventStringFunctor, pt.AdapterEventW
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-@dataclass
-class AdapterEventError(ErrorLevel, AdapterEventStringFunctor, pt.AdapterEventError):  # noqa
+class AdapterEventError(ErrorLevel):
     def code(self):
         return "E004"
 
@@ -438,8 +449,7 @@ class AdapterEventError(ErrorLevel, AdapterEventStringFunctor, pt.AdapterEventEr
         return format_adapter_message(self.name, self.base_msg, self.args)
 
 
-@dataclass
-class NewConnection(DebugLevel, pt.NewConnection):
+class NewConnection(DebugLevel):
     def code(self):
         return "E005"
 
@@ -447,8 +457,7 @@ class NewConnection(DebugLevel, pt.NewConnection):
         return f"Acquiring new {self.conn_type} connection '{self.conn_name}'"
 
 
-@dataclass
-class ConnectionReused(DebugLevel, pt.ConnectionReused):
+class ConnectionReused(DebugLevel):
     def code(self):
         return "E006"
 
@@ -456,8 +465,7 @@ class ConnectionReused(DebugLevel, pt.ConnectionReused):
         return f"Re-using an available connection from the pool (formerly {self.orig_conn_name}, now {self.conn_name})"
 
 
-@dataclass
-class ConnectionLeftOpenInCleanup(DebugLevel, pt.ConnectionLeftOpenInCleanup):
+class ConnectionLeftOpenInCleanup(DebugLevel):
     def code(self):
         return "E007"
 
@@ -465,8 +473,7 @@ class ConnectionLeftOpenInCleanup(DebugLevel, pt.ConnectionLeftOpenInCleanup):
         return f"Connection '{self.conn_name}' was left open."
 
 
-@dataclass
-class ConnectionClosedInCleanup(DebugLevel, pt.ConnectionClosedInCleanup):
+class ConnectionClosedInCleanup(DebugLevel):
     def code(self):
         return "E008"
 
@@ -474,8 +481,7 @@ class ConnectionClosedInCleanup(DebugLevel, pt.ConnectionClosedInCleanup):
         return f"Connection '{self.conn_name}' was properly closed."
 
 
-@dataclass
-class RollbackFailed(DebugLevel, pt.RollbackFailed):  # noqa
+class RollbackFailed(DebugLevel):
     def code(self):
         return "E009"
 
@@ -483,9 +489,7 @@ class RollbackFailed(DebugLevel, pt.RollbackFailed):  # noqa
         return f"Failed to rollback '{self.conn_name}'"
 
 
-# TODO: can we combine this with ConnectionClosed?
-@dataclass
-class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
+class ConnectionClosed(DebugLevel):
     def code(self):
         return "E010"
 
@@ -493,9 +497,7 @@ class ConnectionClosed(DebugLevel, pt.ConnectionClosed):
         return f"On {self.conn_name}: Close"
 
 
-# TODO: can we combine this with ConnectionLeftOpen?
-@dataclass
-class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
+class ConnectionLeftOpen(DebugLevel):
     def code(self):
         return "E011"
 
@@ -503,8 +505,7 @@ class ConnectionLeftOpen(DebugLevel, pt.ConnectionLeftOpen):
         return f"On {self.conn_name}: No close available on handle"
 
 
-@dataclass
-class Rollback(DebugLevel, pt.Rollback):
+class Rollback(DebugLevel):
     def code(self):
         return "E012"
 
@@ -512,8 +513,7 @@ class Rollback(DebugLevel, pt.Rollback):
         return f"On {self.conn_name}: ROLLBACK"
 
 
-@dataclass
-class CacheMiss(DebugLevel, pt.CacheMiss):
+class CacheMiss(DebugLevel):
     def code(self):
         return "E013"
 
@@ -524,8 +524,7 @@ class CacheMiss(DebugLevel, pt.CacheMiss):
         )
 
 
-@dataclass
-class ListRelations(DebugLevel, pt.ListRelations):
+class ListRelations(DebugLevel):
     def code(self):
         return "E014"
 
@@ -533,8 +532,7 @@ class ListRelations(DebugLevel, pt.ListRelations):
         return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
 
 
-@dataclass
-class ConnectionUsed(DebugLevel, pt.ConnectionUsed):
+class ConnectionUsed(DebugLevel):
     def code(self):
         return "E015"
 
@@ -542,8 +540,7 @@ class ConnectionUsed(DebugLevel, pt.ConnectionUsed):
         return f'Using {self.conn_type} connection "{self.conn_name}"'
 
 
-@dataclass
-class SQLQuery(DebugLevel, pt.SQLQuery):
+class SQLQuery(DebugLevel):
     def code(self):
         return "E016"
 
@@ -551,8 +548,7 @@ class SQLQuery(DebugLevel, pt.SQLQuery):
         return f"On {self.conn_name}: {self.sql}"
 
 
-@dataclass
-class SQLQueryStatus(DebugLevel, pt.SQLQueryStatus):
+class SQLQueryStatus(DebugLevel):
     def code(self):
         return "E017"
 
@@ -560,8 +556,7 @@ class SQLQueryStatus(DebugLevel, pt.SQLQueryStatus):
         return f"SQL status: {self.status} in {self.elapsed} seconds"
 
 
-@dataclass
-class SQLCommit(DebugLevel, pt.SQLCommit):
+class SQLCommit(DebugLevel):
     def code(self):
         return "E018"
 
@@ -569,8 +564,7 @@ class SQLCommit(DebugLevel, pt.SQLCommit):
         return f"On {self.conn_name}: COMMIT"
 
 
-@dataclass
-class ColTypeChange(DebugLevel, pt.ColTypeChange):
+class ColTypeChange(DebugLevel):
     def code(self):
         return "E019"
 
@@ -578,8 +572,7 @@ class ColTypeChange(DebugLevel, pt.ColTypeChange):
         return f"Changing col type from {self.orig_type} to {self.new_type} in table {self.table}"
 
 
-@dataclass
-class SchemaCreation(DebugLevel, pt.SchemaCreation):
+class SchemaCreation(DebugLevel):
     def code(self):
         return "E020"
 
@@ -587,8 +580,7 @@ class SchemaCreation(DebugLevel, pt.SchemaCreation):
         return f'Creating schema "{self.relation}"'
 
 
-@dataclass
-class SchemaDrop(DebugLevel, pt.SchemaDrop):
+class SchemaDrop(DebugLevel):
     def code(self):
         return "E021"
 
@@ -596,58 +588,64 @@ class SchemaDrop(DebugLevel, pt.SchemaDrop):
         return f'Dropping schema "{self.relation}".'
 
 
-@dataclass
-class CacheAction(DebugLevel, Cache, pt.CacheAction):
+class CacheAction(DebugLevel):
     def code(self):
         return "E022"
 
+    def format_ref_key(self, ref_key):
+        return f"(database={ref_key.database}, schema={ref_key.schema}, identifier={ref_key.identifier})"
+
     def message(self):
+        ref_key = self.format_ref_key(self.ref_key)
+        ref_key_2 = self.format_ref_key(self.ref_key_2)
+        ref_key_3 = self.format_ref_key(self.ref_key_3)
+        ref_list = []
+        for rfk in self.ref_list:
+            ref_list.append(self.format_ref_key(rfk))
         if self.action == "add_link":
-            return f"adding link, {self.ref_key} references {self.ref_key_2}"
+            return f"adding link, {ref_key} references {ref_key_2}"
         elif self.action == "add_relation":
-            return f"adding relation: {str(self.ref_key)}"
+            return f"adding relation: {ref_key}"
         elif self.action == "drop_missing_relation":
-            return f"dropped a nonexistent relationship: {str(self.ref_key)}"
+            return f"dropped a nonexistent relationship: {ref_key}"
         elif self.action == "drop_cascade":
-            return f"drop {self.ref_key} is cascading to {self.ref_list}"
+            return f"drop {ref_key} is cascading to {ref_list}"
         elif self.action == "drop_relation":
-            return f"Dropping relation: {self.ref_key}"
+            return f"Dropping relation: {ref_key}"
         elif self.action == "update_reference":
             return (
-                f"updated reference from {self.ref_key} -> {self.ref_key_3} to "
-                f"{self.ref_key_2} -> {self.ref_key_3}"
+                f"updated reference from {ref_key} -> {ref_key_3} to "
+                f"{ref_key_2} -> {ref_key_3}"
             )
         elif self.action == "temporary_relation":
-            return f"old key {self.ref_key} not found in self.relations, assuming temporary"
+            return f"old key {ref_key} not found in self.relations, assuming temporary"
         elif self.action == "rename_relation":
-            return f"Renaming relation {self.ref_key} to {self.ref_key_2}"
+            return f"Renaming relation {ref_key} to {ref_key_2}"
         elif self.action == "uncached_relation":
             return (
-                f"{self.ref_key_2} references {str(self.ref_key)} "
+                f"{ref_key_2} references {ref_key} "
                 f"but {self.ref_key.database}.{self.ref_key.schema}"
                 "is not in the cache, skipping assumed external relation"
             )
         else:
-            return f"{self.ref_key}"
+            return ref_key
 
 
 # Skipping E023, E024, E025, E026, E027, E028, E029, E030
 
 
-@dataclass
-class CacheDumpGraph(DebugLevel, Cache, pt.CacheDumpGraph):
+class CacheDumpGraph(DebugLevel):
     def code(self):
         return "E031"
 
     def message(self) -> str:
-        return f"{self.before_after} {self.action} : {self.dump}"
+        return f"dump {self.before_after} {self.action} : {self.dump}"
 
 
 # Skipping E032, E033, E034
 
 
-@dataclass
-class AdapterImportError(InfoLevel, pt.AdapterImportError):
+class AdapterImportError(InfoLevel):
     def code(self):
         return "E035"
 
@@ -655,8 +653,7 @@ class AdapterImportError(InfoLevel, pt.AdapterImportError):
         return f"Error importing adapter: {self.exc}"
 
 
-@dataclass
-class PluginLoadError(DebugLevel, pt.PluginLoadError):  # noqa
+class PluginLoadError(DebugLevel):
     def code(self):
         return "E036"
 
@@ -664,8 +661,7 @@ class PluginLoadError(DebugLevel, pt.PluginLoadError):  # noqa
         return f"{self.exc_info}"
 
 
-@dataclass
-class NewConnectionOpening(DebugLevel, pt.NewConnectionOpening):
+class NewConnectionOpening(DebugLevel):
     def code(self):
         return "E037"
 
@@ -673,8 +669,7 @@ class NewConnectionOpening(DebugLevel, pt.NewConnectionOpening):
         return f"Opening a new connection, currently in state {self.connection_state}"
 
 
-@dataclass
-class CodeExecution(DebugLevel, pt.CodeExecution):
+class CodeExecution(DebugLevel):
     def code(self):
         return "E038"
 
@@ -682,8 +677,7 @@ class CodeExecution(DebugLevel, pt.CodeExecution):
         return f"On {self.conn_name}: {self.code_content}"
 
 
-@dataclass
-class CodeExecutionStatus(DebugLevel, pt.CodeExecutionStatus):
+class CodeExecutionStatus(DebugLevel):
     def code(self):
         return "E039"
 
@@ -691,8 +685,7 @@ class CodeExecutionStatus(DebugLevel, pt.CodeExecutionStatus):
         return f"Execution status: {self.status} in {self.elapsed} seconds"
 
 
-@dataclass
-class CatalogGenerationError(WarnLevel, pt.CatalogGenerationError):
+class CatalogGenerationError(WarnLevel):
     def code(self):
         return "E040"
 
@@ -700,8 +693,7 @@ class CatalogGenerationError(WarnLevel, pt.CatalogGenerationError):
         return f"Encountered an error while generating catalog: {self.exc}"
 
 
-@dataclass
-class WriteCatalogFailure(ErrorLevel, pt.WriteCatalogFailure):
+class WriteCatalogFailure(ErrorLevel):
     def code(self):
         return "E041"
 
@@ -712,8 +704,7 @@ class WriteCatalogFailure(ErrorLevel, pt.WriteCatalogFailure):
         )
 
 
-@dataclass
-class CatalogWritten(InfoLevel, pt.CatalogWritten):
+class CatalogWritten(InfoLevel):
     def code(self):
         return "E042"
 
@@ -721,8 +712,7 @@ class CatalogWritten(InfoLevel, pt.CatalogWritten):
         return f"Catalog written to {self.path}"
 
 
-@dataclass
-class CannotGenerateDocs(InfoLevel, pt.CannotGenerateDocs):
+class CannotGenerateDocs(InfoLevel):
     def code(self):
         return "E043"
 
@@ -730,8 +720,7 @@ class CannotGenerateDocs(InfoLevel, pt.CannotGenerateDocs):
         return "compile failed, cannot generate docs"
 
 
-@dataclass
-class BuildingCatalog(InfoLevel, pt.BuildingCatalog):
+class BuildingCatalog(InfoLevel):
     def code(self):
         return "E044"
 
@@ -739,8 +728,7 @@ class BuildingCatalog(InfoLevel, pt.BuildingCatalog):
         return "Building catalog"
 
 
-@dataclass
-class DatabaseErrorRunningHook(InfoLevel, pt.DatabaseErrorRunningHook):
+class DatabaseErrorRunningHook(InfoLevel):
     def code(self):
         return "E045"
 
@@ -748,8 +736,7 @@ class DatabaseErrorRunningHook(InfoLevel, pt.DatabaseErrorRunningHook):
         return f"Database error while running {self.hook_type}"
 
 
-@dataclass
-class HooksRunning(InfoLevel, pt.HooksRunning):
+class HooksRunning(InfoLevel):
     def code(self):
         return "E046"
 
@@ -758,8 +745,7 @@ class HooksRunning(InfoLevel, pt.HooksRunning):
         return f"Running {self.num_hooks} {self.hook_type} {plural}"
 
 
-@dataclass
-class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
+class FinishedRunningStats(InfoLevel):
     def code(self):
         return "E047"
 
@@ -772,8 +758,7 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 # =======================================================
 
 
-@dataclass
-class InputFileDiffError(DebugLevel, pt.InputFileDiffError):
+class InputFileDiffError(DebugLevel):
     def code(self):
         return "I001"
 
@@ -784,8 +769,7 @@ class InputFileDiffError(DebugLevel, pt.InputFileDiffError):
 # Skipping I002, I003, I004, I005, I006, I007
 
 
-@dataclass
-class InvalidValueForField(WarnLevel, pt.InvalidValueForField):
+class InvalidValueForField(WarnLevel):
     def code(self):
         return "I008"
 
@@ -793,8 +777,7 @@ class InvalidValueForField(WarnLevel, pt.InvalidValueForField):
         return f"Invalid value ({self.field_value}) for field {self.field_name}"
 
 
-@dataclass
-class ValidationWarning(WarnLevel, pt.ValidationWarning):
+class ValidationWarning(WarnLevel):
     def code(self):
         return "I009"
 
@@ -802,8 +785,7 @@ class ValidationWarning(WarnLevel, pt.ValidationWarning):
         return f"Field {self.field_name} is not valid for {self.resource_type} ({self.node_name})"
 
 
-@dataclass
-class ParsePerfInfoPath(InfoLevel, pt.ParsePerfInfoPath):
+class ParsePerfInfoPath(InfoLevel):
     def code(self):
         return "I010"
 
@@ -811,8 +793,7 @@ class ParsePerfInfoPath(InfoLevel, pt.ParsePerfInfoPath):
         return f"Performance info: {self.path}"
 
 
-@dataclass
-class GenericTestFileParse(DebugLevel, pt.GenericTestFileParse):
+class GenericTestFileParse(DebugLevel):
     def code(self):
         return "I011"
 
@@ -820,8 +801,7 @@ class GenericTestFileParse(DebugLevel, pt.GenericTestFileParse):
         return f"Parsing {self.path}"
 
 
-@dataclass
-class MacroFileParse(DebugLevel, pt.MacroFileParse):
+class MacroFileParse(DebugLevel):
     def code(self):
         return "I012"
 
@@ -832,8 +812,7 @@ class MacroFileParse(DebugLevel, pt.MacroFileParse):
 # Skipping I013
 
 
-@dataclass
-class PartialParsingErrorProcessingFile(DebugLevel, pt.PartialParsingErrorProcessingFile):
+class PartialParsingErrorProcessingFile(DebugLevel):
     def code(self):
         return "I014"
 
@@ -844,8 +823,7 @@ class PartialParsingErrorProcessingFile(DebugLevel, pt.PartialParsingErrorProces
 # Skipped I015
 
 
-@dataclass
-class PartialParsingError(DebugLevel, pt.PartialParsingError):
+class PartialParsingError(DebugLevel):
     def code(self):
         return "I016"
 
@@ -853,8 +831,7 @@ class PartialParsingError(DebugLevel, pt.PartialParsingError):
         return f"PP exception info: {self.exc_info}"
 
 
-@dataclass
-class PartialParsingSkipParsing(DebugLevel, pt.PartialParsingSkipParsing):
+class PartialParsingSkipParsing(DebugLevel):
     def code(self):
         return "I017"
 
@@ -865,8 +842,7 @@ class PartialParsingSkipParsing(DebugLevel, pt.PartialParsingSkipParsing):
 # Skipped I018, I019, I020, I021, I022, I023
 
 
-@dataclass
-class UnableToPartialParse(InfoLevel, pt.UnableToPartialParse):
+class UnableToPartialParse(InfoLevel):
     def code(self):
         return "I024"
 
@@ -874,8 +850,7 @@ class UnableToPartialParse(InfoLevel, pt.UnableToPartialParse):
         return f"Unable to do partial parsing because {self.reason}"
 
 
-@dataclass
-class StateCheckVarsHash(DebugLevel, pt.StateCheckVarsHash):
+class StateCheckVarsHash(DebugLevel):
     def code(self):
         return "I025"
 
@@ -886,8 +861,7 @@ class StateCheckVarsHash(DebugLevel, pt.StateCheckVarsHash):
 # Skipped I025, I026, I026, I027
 
 
-@dataclass
-class PartialParsingNotEnabled(DebugLevel, pt.PartialParsingNotEnabled):
+class PartialParsingNotEnabled(DebugLevel):
     def code(self):
         return "I028"
 
@@ -895,8 +869,7 @@ class PartialParsingNotEnabled(DebugLevel, pt.PartialParsingNotEnabled):
         return "Partial parsing not enabled"
 
 
-@dataclass
-class ParsedFileLoadFailed(DebugLevel, pt.ParsedFileLoadFailed):  # noqa
+class ParsedFileLoadFailed(DebugLevel):
     def code(self):
         return "I029"
 
@@ -907,8 +880,7 @@ class ParsedFileLoadFailed(DebugLevel, pt.ParsedFileLoadFailed):  # noqa
 # Skipped I030-I039
 
 
-@dataclass
-class PartialParsingEnabled(DebugLevel, pt.PartialParsingEnabled):
+class PartialParsingEnabled(DebugLevel):
     def code(self):
         return "I040"
 
@@ -921,8 +893,7 @@ class PartialParsingEnabled(DebugLevel, pt.PartialParsingEnabled):
         )
 
 
-@dataclass
-class PartialParsingFile(DebugLevel, pt.PartialParsingFile):
+class PartialParsingFile(DebugLevel):
     def code(self):
         return "I041"
 
@@ -933,8 +904,7 @@ class PartialParsingFile(DebugLevel, pt.PartialParsingFile):
 # Skipped I042, I043, I044, I045, I046, I047, I048, I049
 
 
-@dataclass
-class InvalidDisabledTargetInTestNode(DebugLevel, pt.InvalidDisabledTargetInTestNode):
+class InvalidDisabledTargetInTestNode(DebugLevel):
     def code(self):
         return "I050"
 
@@ -953,8 +923,7 @@ class InvalidDisabledTargetInTestNode(DebugLevel, pt.InvalidDisabledTargetInTest
         return warning_tag(msg)
 
 
-@dataclass
-class UnusedResourceConfigPath(WarnLevel, pt.UnusedResourceConfigPath):
+class UnusedResourceConfigPath(WarnLevel):
     def code(self):
         return "I051"
 
@@ -968,8 +937,7 @@ class UnusedResourceConfigPath(WarnLevel, pt.UnusedResourceConfigPath):
         return warning_tag(msg)
 
 
-@dataclass
-class SeedIncreased(WarnLevel, pt.SeedIncreased):
+class SeedIncreased(WarnLevel):
     def code(self):
         return "I052"
 
@@ -982,8 +950,7 @@ class SeedIncreased(WarnLevel, pt.SeedIncreased):
         return msg
 
 
-@dataclass
-class SeedExceedsLimitSamePath(WarnLevel, pt.SeedExceedsLimitSamePath):
+class SeedExceedsLimitSamePath(WarnLevel):
     def code(self):
         return "I053"
 
@@ -996,8 +963,7 @@ class SeedExceedsLimitSamePath(WarnLevel, pt.SeedExceedsLimitSamePath):
         return msg
 
 
-@dataclass
-class SeedExceedsLimitAndPathChanged(WarnLevel, pt.SeedExceedsLimitAndPathChanged):
+class SeedExceedsLimitAndPathChanged(WarnLevel):
     def code(self):
         return "I054"
 
@@ -1010,8 +976,7 @@ class SeedExceedsLimitAndPathChanged(WarnLevel, pt.SeedExceedsLimitAndPathChange
         return msg
 
 
-@dataclass
-class SeedExceedsLimitChecksumChanged(WarnLevel, pt.SeedExceedsLimitChecksumChanged):
+class SeedExceedsLimitChecksumChanged(WarnLevel):
     def code(self):
         return "I055"
 
@@ -1024,8 +989,7 @@ class SeedExceedsLimitChecksumChanged(WarnLevel, pt.SeedExceedsLimitChecksumChan
         return msg
 
 
-@dataclass
-class UnusedTables(WarnLevel, pt.UnusedTables):
+class UnusedTables(WarnLevel):
     def code(self):
         return "I056"
 
@@ -1038,8 +1002,7 @@ class UnusedTables(WarnLevel, pt.UnusedTables):
         return warning_tag("\n".join(msg))
 
 
-@dataclass
-class WrongResourceSchemaFile(WarnLevel, pt.WrongResourceSchemaFile):
+class WrongResourceSchemaFile(WarnLevel):
     def code(self):
         return "I057"
 
@@ -1056,8 +1019,7 @@ class WrongResourceSchemaFile(WarnLevel, pt.WrongResourceSchemaFile):
         return warning_tag(msg)
 
 
-@dataclass
-class NoNodeForYamlKey(WarnLevel, pt.NoNodeForYamlKey):
+class NoNodeForYamlKey(WarnLevel):
     def code(self):
         return "I058"
 
@@ -1070,8 +1032,7 @@ class NoNodeForYamlKey(WarnLevel, pt.NoNodeForYamlKey):
         return warning_tag(msg)
 
 
-@dataclass
-class MacroNotFoundForPatch(WarnLevel, pt.MacroNotFoundForPatch):
+class MacroNotFoundForPatch(WarnLevel):
     def code(self):
         return "I059"
 
@@ -1080,8 +1041,7 @@ class MacroNotFoundForPatch(WarnLevel, pt.MacroNotFoundForPatch):
         return warning_tag(msg)
 
 
-@dataclass
-class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
+class NodeNotFoundOrDisabled(WarnLevel):
     def code(self):
         return "I060"
 
@@ -1110,8 +1070,7 @@ class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
         return warning_tag(msg)
 
 
-@dataclass
-class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
+class JinjaLogWarning(WarnLevel):
     def code(self):
         return "I061"
 
@@ -1119,8 +1078,7 @@ class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
         return self.msg
 
 
-@dataclass
-class JinjaLogInfo(InfoLevel, EventStringFunctor, pt.JinjaLogInfo):
+class JinjaLogInfo(InfoLevel):
     def code(self):
         return "I062"
 
@@ -1129,8 +1087,7 @@ class JinjaLogInfo(InfoLevel, EventStringFunctor, pt.JinjaLogInfo):
         return self.msg
 
 
-@dataclass
-class JinjaLogDebug(DebugLevel, EventStringFunctor, pt.JinjaLogDebug):
+class JinjaLogDebug(DebugLevel):
     def code(self):
         return "I063"
 
@@ -1144,8 +1101,7 @@ class JinjaLogDebug(DebugLevel, EventStringFunctor, pt.JinjaLogDebug):
 # =======================================================
 
 
-@dataclass
-class GitSparseCheckoutSubdirectory(DebugLevel, pt.GitSparseCheckoutSubdirectory):
+class GitSparseCheckoutSubdirectory(DebugLevel):
     def code(self):
         return "M001"
 
@@ -1153,8 +1109,7 @@ class GitSparseCheckoutSubdirectory(DebugLevel, pt.GitSparseCheckoutSubdirectory
         return f"Subdirectory specified: {self.subdir}, using sparse checkout."
 
 
-@dataclass
-class GitProgressCheckoutRevision(DebugLevel, pt.GitProgressCheckoutRevision):
+class GitProgressCheckoutRevision(DebugLevel):
     def code(self):
         return "M002"
 
@@ -1162,8 +1117,7 @@ class GitProgressCheckoutRevision(DebugLevel, pt.GitProgressCheckoutRevision):
         return f"Checking out revision {self.revision}."
 
 
-@dataclass
-class GitProgressUpdatingExistingDependency(DebugLevel, pt.GitProgressUpdatingExistingDependency):
+class GitProgressUpdatingExistingDependency(DebugLevel):
     def code(self):
         return "M003"
 
@@ -1171,8 +1125,7 @@ class GitProgressUpdatingExistingDependency(DebugLevel, pt.GitProgressUpdatingEx
         return f"Updating existing dependency {self.dir}."
 
 
-@dataclass
-class GitProgressPullingNewDependency(DebugLevel, pt.GitProgressPullingNewDependency):
+class GitProgressPullingNewDependency(DebugLevel):
     def code(self):
         return "M004"
 
@@ -1180,8 +1133,7 @@ class GitProgressPullingNewDependency(DebugLevel, pt.GitProgressPullingNewDepend
         return f"Pulling new dependency {self.dir}."
 
 
-@dataclass
-class GitNothingToDo(DebugLevel, pt.GitNothingToDo):
+class GitNothingToDo(DebugLevel):
     def code(self):
         return "M005"
 
@@ -1189,8 +1141,7 @@ class GitNothingToDo(DebugLevel, pt.GitNothingToDo):
         return f"Already at {self.sha}, nothing to do."
 
 
-@dataclass
-class GitProgressUpdatedCheckoutRange(DebugLevel, pt.GitProgressUpdatedCheckoutRange):
+class GitProgressUpdatedCheckoutRange(DebugLevel):
     def code(self):
         return "M006"
 
@@ -1198,8 +1149,7 @@ class GitProgressUpdatedCheckoutRange(DebugLevel, pt.GitProgressUpdatedCheckoutR
         return f"Updated checkout from {self.start_sha} to {self.end_sha}."
 
 
-@dataclass
-class GitProgressCheckedOutAt(DebugLevel, pt.GitProgressCheckedOutAt):
+class GitProgressCheckedOutAt(DebugLevel):
     def code(self):
         return "M007"
 
@@ -1207,8 +1157,7 @@ class GitProgressCheckedOutAt(DebugLevel, pt.GitProgressCheckedOutAt):
         return f"Checked out at {self.end_sha}."
 
 
-@dataclass
-class RegistryProgressGETRequest(DebugLevel, pt.RegistryProgressGETRequest):
+class RegistryProgressGETRequest(DebugLevel):
     def code(self):
         return "M008"
 
@@ -1216,8 +1165,7 @@ class RegistryProgressGETRequest(DebugLevel, pt.RegistryProgressGETRequest):
         return f"Making package registry request: GET {self.url}"
 
 
-@dataclass
-class RegistryProgressGETResponse(DebugLevel, pt.RegistryProgressGETResponse):
+class RegistryProgressGETResponse(DebugLevel):
     def code(self):
         return "M009"
 
@@ -1225,8 +1173,7 @@ class RegistryProgressGETResponse(DebugLevel, pt.RegistryProgressGETResponse):
         return f"Response from registry: GET {self.url} {self.resp_code}"
 
 
-@dataclass
-class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector):
+class SelectorReportInvalidSelector(InfoLevel):
     def code(self):
         return "M010"
 
@@ -1237,8 +1184,7 @@ class SelectorReportInvalidSelector(InfoLevel, pt.SelectorReportInvalidSelector)
         )
 
 
-@dataclass
-class DepsNoPackagesFound(InfoLevel, pt.DepsNoPackagesFound):
+class DepsNoPackagesFound(InfoLevel):
     def code(self):
         return "M013"
 
@@ -1246,8 +1192,7 @@ class DepsNoPackagesFound(InfoLevel, pt.DepsNoPackagesFound):
         return "Warning: No packages were found in packages.yml"
 
 
-@dataclass
-class DepsStartPackageInstall(InfoLevel, pt.DepsStartPackageInstall):
+class DepsStartPackageInstall(InfoLevel):
     def code(self):
         return "M014"
 
@@ -1255,8 +1200,7 @@ class DepsStartPackageInstall(InfoLevel, pt.DepsStartPackageInstall):
         return f"Installing {self.package_name}"
 
 
-@dataclass
-class DepsInstallInfo(InfoLevel, pt.DepsInstallInfo):
+class DepsInstallInfo(InfoLevel):
     def code(self):
         return "M015"
 
@@ -1264,8 +1208,7 @@ class DepsInstallInfo(InfoLevel, pt.DepsInstallInfo):
         return f"Installed from {self.version_name}"
 
 
-@dataclass
-class DepsUpdateAvailable(InfoLevel, pt.DepsUpdateAvailable):
+class DepsUpdateAvailable(InfoLevel):
     def code(self):
         return "M016"
 
@@ -1273,8 +1216,7 @@ class DepsUpdateAvailable(InfoLevel, pt.DepsUpdateAvailable):
         return f"Updated version available: {self.version_latest}"
 
 
-@dataclass
-class DepsUpToDate(InfoLevel, pt.DepsUpToDate):
+class DepsUpToDate(InfoLevel):
     def code(self):
         return "M017"
 
@@ -1282,8 +1224,7 @@ class DepsUpToDate(InfoLevel, pt.DepsUpToDate):
         return "Up to date!"
 
 
-@dataclass
-class DepsListSubdirectory(InfoLevel, pt.DepsListSubdirectory):
+class DepsListSubdirectory(InfoLevel):
     def code(self):
         return "M018"
 
@@ -1291,18 +1232,16 @@ class DepsListSubdirectory(InfoLevel, pt.DepsListSubdirectory):
         return f"and subdirectory {self.subdirectory}"
 
 
-@dataclass
-class DepsNotifyUpdatesAvailable(InfoLevel, pt.DepsNotifyUpdatesAvailable):
+class DepsNotifyUpdatesAvailable(InfoLevel):
     def code(self):
         return "M019"
 
     def message(self) -> str:
-        return f"Updates available for packages: {self.packages.value} \
+        return f"Updates available for packages: {self.packages} \
                 \nUpdate your versions in packages.yml, then run dbt deps"
 
 
-@dataclass
-class RetryExternalCall(DebugLevel, pt.RetryExternalCall):
+class RetryExternalCall(DebugLevel):
     def code(self):
         return "M020"
 
@@ -1310,8 +1249,7 @@ class RetryExternalCall(DebugLevel, pt.RetryExternalCall):
         return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
 
 
-@dataclass
-class RecordRetryException(DebugLevel, pt.RecordRetryException):
+class RecordRetryException(DebugLevel):
     def code(self):
         return "M021"
 
@@ -1319,8 +1257,7 @@ class RecordRetryException(DebugLevel, pt.RecordRetryException):
         return f"External call exception: {self.exc}"
 
 
-@dataclass
-class RegistryIndexProgressGETRequest(DebugLevel, pt.RegistryIndexProgressGETRequest):
+class RegistryIndexProgressGETRequest(DebugLevel):
     def code(self):
         return "M022"
 
@@ -1328,8 +1265,7 @@ class RegistryIndexProgressGETRequest(DebugLevel, pt.RegistryIndexProgressGETReq
         return f"Making package index registry request: GET {self.url}"
 
 
-@dataclass
-class RegistryIndexProgressGETResponse(DebugLevel, pt.RegistryIndexProgressGETResponse):
+class RegistryIndexProgressGETResponse(DebugLevel):
     def code(self):
         return "M023"
 
@@ -1337,8 +1273,7 @@ class RegistryIndexProgressGETResponse(DebugLevel, pt.RegistryIndexProgressGETRe
         return f"Response from registry index: GET {self.url} {self.resp_code}"
 
 
-@dataclass
-class RegistryResponseUnexpectedType(DebugLevel, pt.RegistryResponseUnexpectedType):
+class RegistryResponseUnexpectedType(DebugLevel):
     def code(self):
         return "M024"
 
@@ -1346,8 +1281,7 @@ class RegistryResponseUnexpectedType(DebugLevel, pt.RegistryResponseUnexpectedTy
         return f"Response was None: {self.response}"
 
 
-@dataclass
-class RegistryResponseMissingTopKeys(DebugLevel, pt.RegistryResponseMissingTopKeys):
+class RegistryResponseMissingTopKeys(DebugLevel):
     def code(self):
         return "M025"
 
@@ -1356,8 +1290,7 @@ class RegistryResponseMissingTopKeys(DebugLevel, pt.RegistryResponseMissingTopKe
         return f"Response missing top level keys: {self.response}"
 
 
-@dataclass
-class RegistryResponseMissingNestedKeys(DebugLevel, pt.RegistryResponseMissingNestedKeys):
+class RegistryResponseMissingNestedKeys(DebugLevel):
     def code(self):
         return "M026"
 
@@ -1366,8 +1299,7 @@ class RegistryResponseMissingNestedKeys(DebugLevel, pt.RegistryResponseMissingNe
         return f"Response missing nested keys: {self.response}"
 
 
-@dataclass
-class RegistryResponseExtraNestedKeys(DebugLevel, pt.RegistryResponseExtraNestedKeys):
+class RegistryResponseExtraNestedKeys(DebugLevel):
     def code(self):
         return "M027"
 
@@ -1376,8 +1308,7 @@ class RegistryResponseExtraNestedKeys(DebugLevel, pt.RegistryResponseExtraNested
         return f"Response contained inconsistent keys: {self.response}"
 
 
-@dataclass
-class DepsSetDownloadDirectory(DebugLevel, pt.DepsSetDownloadDirectory):
+class DepsSetDownloadDirectory(DebugLevel):
     def code(self):
         return "M028"
 
@@ -1385,8 +1316,7 @@ class DepsSetDownloadDirectory(DebugLevel, pt.DepsSetDownloadDirectory):
         return f"Set downloads directory='{self.path}'"
 
 
-@dataclass
-class DepsUnpinned(WarnLevel, pt.DepsUnpinned):
+class DepsUnpinned(WarnLevel):
     def code(self):
         return "M029"
 
@@ -1405,8 +1335,7 @@ class DepsUnpinned(WarnLevel, pt.DepsUnpinned):
         return yellow(f"WARNING: {msg}")
 
 
-@dataclass
-class NoNodesForSelectionCriteria(WarnLevel, pt.NoNodesForSelectionCriteria):
+class NoNodesForSelectionCriteria(WarnLevel):
     def code(self):
         return "M030"
 
@@ -1419,8 +1348,7 @@ class NoNodesForSelectionCriteria(WarnLevel, pt.NoNodesForSelectionCriteria):
 # =======================================================
 
 
-@dataclass
-class RunningOperationCaughtError(ErrorLevel, pt.RunningOperationCaughtError):
+class RunningOperationCaughtError(ErrorLevel):
     def code(self):
         return "Q001"
 
@@ -1428,8 +1356,7 @@ class RunningOperationCaughtError(ErrorLevel, pt.RunningOperationCaughtError):
         return f"Encountered an error while running operation: {self.exc}"
 
 
-@dataclass
-class CompileComplete(InfoLevel, pt.CompileComplete):
+class CompileComplete(InfoLevel):
     def code(self):
         return "Q002"
 
@@ -1437,8 +1364,7 @@ class CompileComplete(InfoLevel, pt.CompileComplete):
         return "Done."
 
 
-@dataclass
-class FreshnessCheckComplete(InfoLevel, pt.FreshnessCheckComplete):
+class FreshnessCheckComplete(InfoLevel):
     def code(self):
         return "Q003"
 
@@ -1446,8 +1372,7 @@ class FreshnessCheckComplete(InfoLevel, pt.FreshnessCheckComplete):
         return "Done."
 
 
-@dataclass
-class SeedHeader(InfoLevel, pt.SeedHeader):
+class SeedHeader(InfoLevel):
     def code(self):
         return "Q004"
 
@@ -1455,8 +1380,7 @@ class SeedHeader(InfoLevel, pt.SeedHeader):
         return self.header
 
 
-@dataclass
-class SQLRunnerException(DebugLevel, pt.SQLRunnerException):  # noqa
+class SQLRunnerException(DebugLevel):
     def code(self):
         return "Q006"
 
@@ -1464,8 +1388,7 @@ class SQLRunnerException(DebugLevel, pt.SQLRunnerException):  # noqa
         return f"Got an exception: {self.exc}"
 
 
-@dataclass
-class LogTestResult(DynamicLevel, pt.LogTestResult):
+class LogTestResult(DynamicLevel):
     def code(self):
         return "Q007"
 
@@ -1510,8 +1433,7 @@ class LogTestResult(DynamicLevel, pt.LogTestResult):
 # Skipped Q008, Q009, Q010
 
 
-@dataclass
-class LogStartLine(InfoLevel, pt.LogStartLine):  # noqa
+class LogStartLine(InfoLevel):
     def code(self):
         return "Q011"
 
@@ -1520,8 +1442,7 @@ class LogStartLine(InfoLevel, pt.LogStartLine):  # noqa
         return format_fancy_output_line(msg=msg, status="RUN", index=self.index, total=self.total)
 
 
-@dataclass
-class LogModelResult(DynamicLevel, pt.LogModelResult):
+class LogModelResult(DynamicLevel):
     def code(self):
         return "Q012"
 
@@ -1546,8 +1467,7 @@ class LogModelResult(DynamicLevel, pt.LogModelResult):
 # Skipped Q013, Q014
 
 
-@dataclass
-class LogSnapshotResult(DynamicLevel, pt.LogSnapshotResult):
+class LogSnapshotResult(DynamicLevel):
     def code(self):
         return "Q015"
 
@@ -1569,8 +1489,7 @@ class LogSnapshotResult(DynamicLevel, pt.LogSnapshotResult):
         )
 
 
-@dataclass
-class LogSeedResult(DynamicLevel, pt.LogSeedResult):
+class LogSeedResult(DynamicLevel):
     def code(self):
         return "Q016"
 
@@ -1594,8 +1513,7 @@ class LogSeedResult(DynamicLevel, pt.LogSeedResult):
 # Skipped Q017
 
 
-@dataclass
-class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
+class LogFreshnessResult(DynamicLevel):
     def code(self):
         return "Q018"
 
@@ -1640,8 +1558,7 @@ class LogFreshnessResult(DynamicLevel, pt.LogFreshnessResult):
 # Skipped Q019, Q020, Q021
 
 
-@dataclass
-class LogCancelLine(ErrorLevel, pt.LogCancelLine):
+class LogCancelLine(ErrorLevel):
     def code(self):
         return "Q022"
 
@@ -1650,8 +1567,7 @@ class LogCancelLine(ErrorLevel, pt.LogCancelLine):
         return format_fancy_output_line(msg=msg, status=red("CANCEL"), index=None, total=None)
 
 
-@dataclass
-class DefaultSelector(InfoLevel, pt.DefaultSelector):
+class DefaultSelector(InfoLevel):
     def code(self):
         return "Q023"
 
@@ -1659,8 +1575,7 @@ class DefaultSelector(InfoLevel, pt.DefaultSelector):
         return f"Using default selector {self.name}"
 
 
-@dataclass
-class NodeStart(DebugLevel, pt.NodeStart):
+class NodeStart(DebugLevel):
     def code(self):
         return "Q024"
 
@@ -1668,8 +1583,7 @@ class NodeStart(DebugLevel, pt.NodeStart):
         return f"Began running node {self.node_info.unique_id}"
 
 
-@dataclass
-class NodeFinished(DebugLevel, pt.NodeFinished):
+class NodeFinished(DebugLevel):
     def code(self):
         return "Q025"
 
@@ -1677,8 +1591,7 @@ class NodeFinished(DebugLevel, pt.NodeFinished):
         return f"Finished running node {self.node_info.unique_id}"
 
 
-@dataclass
-class QueryCancelationUnsupported(InfoLevel, pt.QueryCancelationUnsupported):
+class QueryCancelationUnsupported(InfoLevel):
     def code(self):
         return "Q026"
 
@@ -1691,8 +1604,7 @@ class QueryCancelationUnsupported(InfoLevel, pt.QueryCancelationUnsupported):
         return yellow(msg)
 
 
-@dataclass
-class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
+class ConcurrencyLine(InfoLevel):
     def code(self):
         return "Q027"
 
@@ -1700,11 +1612,7 @@ class ConcurrencyLine(InfoLevel, pt.ConcurrencyLine):  # noqa
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-# Skipped Q028
-
-
-@dataclass
-class WritingInjectedSQLForNode(DebugLevel, pt.WritingInjectedSQLForNode):
+class WritingInjectedSQLForNode(DebugLevel):
     def code(self):
         return "Q029"
 
@@ -1712,8 +1620,7 @@ class WritingInjectedSQLForNode(DebugLevel, pt.WritingInjectedSQLForNode):
         return f'Writing injected SQL for node "{self.node_info.unique_id}"'
 
 
-@dataclass
-class NodeCompiling(DebugLevel, pt.NodeCompiling):
+class NodeCompiling(DebugLevel):
     def code(self):
         return "Q030"
 
@@ -1721,8 +1628,7 @@ class NodeCompiling(DebugLevel, pt.NodeCompiling):
         return f"Began compiling node {self.node_info.unique_id}"
 
 
-@dataclass
-class NodeExecuting(DebugLevel, pt.NodeExecuting):
+class NodeExecuting(DebugLevel):
     def code(self):
         return "Q031"
 
@@ -1730,8 +1636,7 @@ class NodeExecuting(DebugLevel, pt.NodeExecuting):
         return f"Began executing node {self.node_info.unique_id}"
 
 
-@dataclass
-class LogHookStartLine(InfoLevel, pt.LogHookStartLine):  # noqa
+class LogHookStartLine(InfoLevel):
     def code(self):
         return "Q032"
 
@@ -1742,8 +1647,7 @@ class LogHookStartLine(InfoLevel, pt.LogHookStartLine):  # noqa
         )
 
 
-@dataclass
-class LogHookEndLine(InfoLevel, pt.LogHookEndLine):  # noqa
+class LogHookEndLine(InfoLevel):
     def code(self):
         return "Q033"
 
@@ -1759,8 +1663,7 @@ class LogHookEndLine(InfoLevel, pt.LogHookEndLine):  # noqa
         )
 
 
-@dataclass
-class SkippingDetails(InfoLevel, pt.SkippingDetails):
+class SkippingDetails(InfoLevel):
     def code(self):
         return "Q034"
 
@@ -1774,8 +1677,7 @@ class SkippingDetails(InfoLevel, pt.SkippingDetails):
         )
 
 
-@dataclass
-class NothingToDo(WarnLevel, pt.NothingToDo):
+class NothingToDo(WarnLevel):
     def code(self):
         return "Q035"
 
@@ -1783,8 +1685,7 @@ class NothingToDo(WarnLevel, pt.NothingToDo):
         return "Nothing to do. Try checking your model configs and model specification args"
 
 
-@dataclass
-class RunningOperationUncaughtError(ErrorLevel, pt.RunningOperationUncaughtError):
+class RunningOperationUncaughtError(ErrorLevel):
     def code(self):
         return "Q036"
 
@@ -1792,8 +1693,7 @@ class RunningOperationUncaughtError(ErrorLevel, pt.RunningOperationUncaughtError
         return f"Encountered an error while running operation: {self.exc}"
 
 
-@dataclass
-class EndRunResult(DebugLevel, pt.EndRunResult):
+class EndRunResult(DebugLevel):
     def code(self):
         return "Q037"
 
@@ -1801,13 +1701,58 @@ class EndRunResult(DebugLevel, pt.EndRunResult):
         return "Command end result"
 
 
-@dataclass
-class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
+class NoNodesSelected(WarnLevel):
     def code(self):
         return "Q038"
 
     def message(self) -> str:
         return "No nodes selected!"
+
+
+class CommandCompleted(DebugLevel):
+    def code(self):
+        return "Q039"
+
+    def message(self) -> str:
+        status = "succeeded" if self.success else "failed"
+        completed_at = timestamp_to_datetime_string(self.completed_at)
+        return f"Command `{self.command}` {status} at {completed_at} after {self.elapsed:0.2f} seconds"
+
+
+class ShowNode(InfoLevel):
+    def code(self):
+        return "Q041"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"show": json.loads(self.preview)}, indent=2)
+            else:
+                return json.dumps(
+                    {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
+                )
+        else:
+            if self.is_inline:
+                return f"Previewing inline node:\n{self.preview}"
+            else:
+                return f"Previewing node '{self.node_name}':\n{self.preview}"
+
+
+class CompiledNode(InfoLevel):
+    def code(self):
+        return "Q042"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"compiled": self.compiled}, indent=2)
+            else:
+                return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
+        else:
+            if self.is_inline:
+                return f"Compiled inline node is:\n{self.compiled}"
+            else:
+                return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
 
 
 # =======================================================
@@ -1817,8 +1762,7 @@ class NoNodesSelected(WarnLevel, pt.NoNodesSelected):
 # Skipped W001
 
 
-@dataclass
-class CatchableExceptionOnRun(DebugLevel, pt.CatchableExceptionOnRun):  # noqa
+class CatchableExceptionOnRun(DebugLevel):
     def code(self):
         return "W002"
 
@@ -1826,8 +1770,7 @@ class CatchableExceptionOnRun(DebugLevel, pt.CatchableExceptionOnRun):  # noqa
         return str(self.exc)
 
 
-@dataclass
-class InternalErrorOnRun(DebugLevel, pt.InternalErrorOnRun):
+class InternalErrorOnRun(DebugLevel):
     def code(self):
         return "W003"
 
@@ -1841,8 +1784,7 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
         return f"{red(prefix)}\n" f"{str(self.exc).strip()}\n\n" f"{internal_error_string}"
 
 
-@dataclass
-class GenericExceptionOnRun(ErrorLevel, pt.GenericExceptionOnRun):
+class GenericExceptionOnRun(ErrorLevel):
     def code(self):
         return "W004"
 
@@ -1854,8 +1796,7 @@ class GenericExceptionOnRun(ErrorLevel, pt.GenericExceptionOnRun):
         return f"{red(prefix)}\n{str(self.exc).strip()}"
 
 
-@dataclass
-class NodeConnectionReleaseError(DebugLevel, pt.NodeConnectionReleaseError):  # noqa
+class NodeConnectionReleaseError(DebugLevel):
     def code(self):
         return "W005"
 
@@ -1863,8 +1804,7 @@ class NodeConnectionReleaseError(DebugLevel, pt.NodeConnectionReleaseError):  # 
         return f"Error releasing connection for node {self.node_name}: {str(self.exc)}"
 
 
-@dataclass
-class FoundStats(InfoLevel, pt.FoundStats):
+class FoundStats(InfoLevel):
     def code(self):
         return "W006"
 
@@ -1877,8 +1817,7 @@ class FoundStats(InfoLevel, pt.FoundStats):
 # =======================================================
 
 
-@dataclass
-class MainKeyboardInterrupt(InfoLevel, pt.MainKeyboardInterrupt):
+class MainKeyboardInterrupt(InfoLevel):
     def code(self):
         return "Z001"
 
@@ -1886,8 +1825,7 @@ class MainKeyboardInterrupt(InfoLevel, pt.MainKeyboardInterrupt):
         return "ctrl-c"
 
 
-@dataclass
-class MainEncounteredError(ErrorLevel, pt.MainEncounteredError):  # noqa
+class MainEncounteredError(ErrorLevel):
     def code(self):
         return "Z002"
 
@@ -1895,8 +1833,7 @@ class MainEncounteredError(ErrorLevel, pt.MainEncounteredError):  # noqa
         return f"Encountered an error:\n{self.exc}"
 
 
-@dataclass
-class MainStackTrace(ErrorLevel, pt.MainStackTrace):
+class MainStackTrace(ErrorLevel):
     def code(self):
         return "Z003"
 
@@ -1907,8 +1844,7 @@ class MainStackTrace(ErrorLevel, pt.MainStackTrace):
 # Skipped Z004
 
 
-@dataclass
-class SystemCouldNotWrite(DebugLevel, pt.SystemCouldNotWrite):
+class SystemCouldNotWrite(DebugLevel):
     def code(self):
         return "Z005"
 
@@ -1919,8 +1855,7 @@ class SystemCouldNotWrite(DebugLevel, pt.SystemCouldNotWrite):
         )
 
 
-@dataclass
-class SystemExecutingCmd(DebugLevel, pt.SystemExecutingCmd):
+class SystemExecutingCmd(DebugLevel):
     def code(self):
         return "Z006"
 
@@ -1928,8 +1863,7 @@ class SystemExecutingCmd(DebugLevel, pt.SystemExecutingCmd):
         return f'Executing "{" ".join(self.cmd)}"'
 
 
-@dataclass
-class SystemStdOut(DebugLevel, pt.SystemStdOut):
+class SystemStdOut(DebugLevel):
     def code(self):
         return "Z007"
 
@@ -1937,8 +1871,7 @@ class SystemStdOut(DebugLevel, pt.SystemStdOut):
         return f'STDOUT: "{str(self.bmsg)}"'
 
 
-@dataclass
-class SystemStdErr(DebugLevel, pt.SystemStdErr):
+class SystemStdErr(DebugLevel):
     def code(self):
         return "Z008"
 
@@ -1946,8 +1879,7 @@ class SystemStdErr(DebugLevel, pt.SystemStdErr):
         return f'STDERR: "{str(self.bmsg)}"'
 
 
-@dataclass
-class SystemReportReturnCode(DebugLevel, pt.SystemReportReturnCode):
+class SystemReportReturnCode(DebugLevel):
     def code(self):
         return "Z009"
 
@@ -1955,19 +1887,21 @@ class SystemReportReturnCode(DebugLevel, pt.SystemReportReturnCode):
         return f"command return code={self.returncode}"
 
 
-@dataclass
-class TimingInfoCollected(DebugLevel, pt.TimingInfoCollected):
+class TimingInfoCollected(DebugLevel):
     def code(self):
         return "Z010"
 
     def message(self) -> str:
-        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {self.timing_info.started_at} => {self.timing_info.completed_at}"
+        started_at = timestamp_to_datetime_string(self.timing_info.started_at)
+        completed_at = timestamp_to_datetime_string(self.timing_info.completed_at)
+        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {started_at} => {completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message
 # at the error level - or whatever other level chosen.  Used in multiple places.
-@dataclass
-class LogDebugStackTrace(DebugLevel, pt.LogDebugStackTrace):  # noqa
+
+
+class LogDebugStackTrace(DebugLevel):
     def code(self):
         return "Z011"
 
@@ -1977,8 +1911,9 @@ class LogDebugStackTrace(DebugLevel, pt.LogDebugStackTrace):  # noqa
 
 # We don't write "clean" events to the log, because the clean command
 # may have removed the log directory.
-@dataclass
-class CheckCleanPath(InfoLevel, NoFile, pt.CheckCleanPath):
+
+
+class CheckCleanPath(InfoLevel):
     def code(self):
         return "Z012"
 
@@ -1986,8 +1921,7 @@ class CheckCleanPath(InfoLevel, NoFile, pt.CheckCleanPath):
         return f"Checking {self.path}/*"
 
 
-@dataclass
-class ConfirmCleanPath(InfoLevel, NoFile, pt.ConfirmCleanPath):
+class ConfirmCleanPath(InfoLevel):
     def code(self):
         return "Z013"
 
@@ -1995,8 +1929,7 @@ class ConfirmCleanPath(InfoLevel, NoFile, pt.ConfirmCleanPath):
         return f"Cleaned {self.path}/*"
 
 
-@dataclass
-class ProtectedCleanPath(InfoLevel, NoFile, pt.ProtectedCleanPath):
+class ProtectedCleanPath(InfoLevel):
     def code(self):
         return "Z014"
 
@@ -2004,8 +1937,7 @@ class ProtectedCleanPath(InfoLevel, NoFile, pt.ProtectedCleanPath):
         return f"ERROR: not cleaning {self.path}/* because it is protected"
 
 
-@dataclass
-class FinishedCleanPaths(InfoLevel, NoFile, pt.FinishedCleanPaths):
+class FinishedCleanPaths(InfoLevel):
     def code(self):
         return "Z015"
 
@@ -2013,8 +1945,7 @@ class FinishedCleanPaths(InfoLevel, NoFile, pt.FinishedCleanPaths):
         return "Finished cleaning all paths."
 
 
-@dataclass
-class OpenCommand(InfoLevel, pt.OpenCommand):
+class OpenCommand(InfoLevel):
     def code(self):
         return "Z016"
 
@@ -2031,8 +1962,9 @@ class OpenCommand(InfoLevel, pt.OpenCommand):
 # the tension between these two goals by allowing empty lines, heading separators, and other
 # formatting to be written to the console, while they can be ignored for other purposes. For
 # general information that isn't simple formatting, the Note event should be used instead.
-@dataclass
-class Formatting(InfoLevel, pt.Formatting):
+
+
+class Formatting(InfoLevel):
     def code(self):
         return "Z017"
 
@@ -2040,8 +1972,7 @@ class Formatting(InfoLevel, pt.Formatting):
         return self.msg
 
 
-@dataclass
-class RunResultWarning(WarnLevel, pt.RunResultWarning):
+class RunResultWarning(WarnLevel):
     def code(self):
         return "Z021"
 
@@ -2050,8 +1981,7 @@ class RunResultWarning(WarnLevel, pt.RunResultWarning):
         return yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
-@dataclass
-class RunResultFailure(ErrorLevel, pt.RunResultFailure):
+class RunResultFailure(ErrorLevel):
     def code(self):
         return "Z022"
 
@@ -2060,8 +1990,7 @@ class RunResultFailure(ErrorLevel, pt.RunResultFailure):
         return red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
-@dataclass
-class StatsLine(InfoLevel, pt.StatsLine):
+class StatsLine(InfoLevel):
     def code(self):
         return "Z023"
 
@@ -2070,8 +1999,7 @@ class StatsLine(InfoLevel, pt.StatsLine):
         return stats_line.format(**self.stats)
 
 
-@dataclass
-class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
+class RunResultError(ErrorLevel):
     def code(self):
         return "Z024"
 
@@ -2080,8 +2008,7 @@ class RunResultError(ErrorLevel, EventStringFunctor, pt.RunResultError):
         return f"  {self.msg}"
 
 
-@dataclass
-class RunResultErrorNoMessage(ErrorLevel, pt.RunResultErrorNoMessage):
+class RunResultErrorNoMessage(ErrorLevel):
     def code(self):
         return "Z025"
 
@@ -2089,8 +2016,7 @@ class RunResultErrorNoMessage(ErrorLevel, pt.RunResultErrorNoMessage):
         return f"  Status: {self.status}"
 
 
-@dataclass
-class SQLCompiledPath(InfoLevel, pt.SQLCompiledPath):
+class SQLCompiledPath(InfoLevel):
     def code(self):
         return "Z026"
 
@@ -2098,8 +2024,7 @@ class SQLCompiledPath(InfoLevel, pt.SQLCompiledPath):
         return f"  compiled Code at {self.path}"
 
 
-@dataclass
-class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
+class CheckNodeTestFailure(InfoLevel):
     def code(self):
         return "Z027"
 
@@ -2112,8 +2037,9 @@ class CheckNodeTestFailure(InfoLevel, pt.CheckNodeTestFailure):
 # FirstRunResultError and AfterFirstRunResultError are just splitting the message from the result
 #  object into multiple log lines
 # TODO: is this reallly needed?  See printer.py
-@dataclass
-class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError):
+
+
+class FirstRunResultError(ErrorLevel):
     def code(self):
         return "Z028"
 
@@ -2121,8 +2047,7 @@ class FirstRunResultError(ErrorLevel, EventStringFunctor, pt.FirstRunResultError
         return yellow(self.msg)
 
 
-@dataclass
-class AfterFirstRunResultError(ErrorLevel, EventStringFunctor, pt.AfterFirstRunResultError):
+class AfterFirstRunResultError(ErrorLevel):
     def code(self):
         return "Z029"
 
@@ -2130,8 +2055,7 @@ class AfterFirstRunResultError(ErrorLevel, EventStringFunctor, pt.AfterFirstRunR
         return self.msg
 
 
-@dataclass
-class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
+class EndOfRunSummary(InfoLevel):
     def code(self):
         return "Z030"
 
@@ -2139,7 +2063,7 @@ class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
         if self.keyboard_interrupt:
-            message = yellow("Exited because of keyboard interrupt.")
+            message = yellow("Exited because of keyboard interrupt")
         elif self.num_errors > 0:
             message = red(f"Completed with {error_plural} and {warn_plural}:")
         elif self.num_warnings > 0:
@@ -2152,8 +2076,7 @@ class EndOfRunSummary(InfoLevel, pt.EndOfRunSummary):
 # Skipped Z031, Z032, Z033
 
 
-@dataclass
-class LogSkipBecauseError(ErrorLevel, pt.LogSkipBecauseError):
+class LogSkipBecauseError(ErrorLevel):
     def code(self):
         return "Z034"
 
@@ -2167,8 +2090,7 @@ class LogSkipBecauseError(ErrorLevel, pt.LogSkipBecauseError):
 # Skipped Z035
 
 
-@dataclass
-class EnsureGitInstalled(ErrorLevel, pt.EnsureGitInstalled):
+class EnsureGitInstalled(ErrorLevel):
     def code(self):
         return "Z036"
 
@@ -2180,8 +2102,7 @@ class EnsureGitInstalled(ErrorLevel, pt.EnsureGitInstalled):
         )
 
 
-@dataclass
-class DepsCreatingLocalSymlink(DebugLevel, pt.DepsCreatingLocalSymlink):
+class DepsCreatingLocalSymlink(DebugLevel):
     def code(self):
         return "Z037"
 
@@ -2189,8 +2110,7 @@ class DepsCreatingLocalSymlink(DebugLevel, pt.DepsCreatingLocalSymlink):
         return "Creating symlink to local dependency."
 
 
-@dataclass
-class DepsSymlinkNotAvailable(DebugLevel, pt.DepsSymlinkNotAvailable):
+class DepsSymlinkNotAvailable(DebugLevel):
     def code(self):
         return "Z038"
 
@@ -2198,8 +2118,7 @@ class DepsSymlinkNotAvailable(DebugLevel, pt.DepsSymlinkNotAvailable):
         return "Symlinks are not available on this OS, copying dependency."
 
 
-@dataclass
-class DisableTracking(DebugLevel, pt.DisableTracking):
+class DisableTracking(DebugLevel):
     def code(self):
         return "Z039"
 
@@ -2211,8 +2130,7 @@ class DisableTracking(DebugLevel, pt.DisableTracking):
         )
 
 
-@dataclass
-class SendingEvent(DebugLevel, pt.SendingEvent):
+class SendingEvent(DebugLevel):
     def code(self):
         return "Z040"
 
@@ -2220,8 +2138,7 @@ class SendingEvent(DebugLevel, pt.SendingEvent):
         return f"Sending event: {self.kwargs}"
 
 
-@dataclass
-class SendEventFailure(DebugLevel, pt.SendEventFailure):
+class SendEventFailure(DebugLevel):
     def code(self):
         return "Z041"
 
@@ -2229,8 +2146,7 @@ class SendEventFailure(DebugLevel, pt.SendEventFailure):
         return "An error was encountered while trying to send an event"
 
 
-@dataclass
-class FlushEvents(DebugLevel, pt.FlushEvents):
+class FlushEvents(DebugLevel):
     def code(self):
         return "Z042"
 
@@ -2238,8 +2154,7 @@ class FlushEvents(DebugLevel, pt.FlushEvents):
         return "Flushing usage events"
 
 
-@dataclass
-class FlushEventsFailure(DebugLevel, pt.FlushEventsFailure):
+class FlushEventsFailure(DebugLevel):
     def code(self):
         return "Z043"
 
@@ -2247,8 +2162,7 @@ class FlushEventsFailure(DebugLevel, pt.FlushEventsFailure):
         return "An error was encountered while trying to flush usage events"
 
 
-@dataclass
-class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # noqa
+class TrackingInitializeFailure(DebugLevel):
     def code(self):
         return "Z044"
 
@@ -2257,8 +2171,9 @@ class TrackingInitializeFailure(DebugLevel, pt.TrackingInitializeFailure):  # no
 
 
 # this is the message from the result object
-@dataclass
-class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarningMessage):
+
+
+class RunResultWarningMessage(WarnLevel):
     def code(self):
         return "Z046"
 
@@ -2267,8 +2182,7 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
         return self.msg
 
 
-@dataclass
-class DebugCmdOut(InfoLevel, pt.DebugCmdOut):
+class DebugCmdOut(InfoLevel):
     def code(self):
         return "Z047"
 
@@ -2276,8 +2190,7 @@ class DebugCmdOut(InfoLevel, pt.DebugCmdOut):
         return self.msg
 
 
-@dataclass
-class DebugCmdResult(InfoLevel, pt.DebugCmdResult):
+class DebugCmdResult(InfoLevel):
     def code(self):
         return "Z048"
 
@@ -2285,8 +2198,7 @@ class DebugCmdResult(InfoLevel, pt.DebugCmdResult):
         return self.msg
 
 
-@dataclass
-class ListCmdOut(InfoLevel, pt.ListCmdOut):
+class ListCmdOut(InfoLevel):
     def code(self):
         return "Z049"
 
@@ -2295,9 +2207,10 @@ class ListCmdOut(InfoLevel, pt.ListCmdOut):
 
 
 # The Note event provides a way to log messages which aren't likely to be useful as more structured events.
-# For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
-@dataclass
-class Note(InfoLevel, pt.Note):
+# For console formatting text like empty lines and separator bars, use the Formatting event instead.
+
+
+class Note(InfoLevel):
     def code(self):
         return "Z050"
 

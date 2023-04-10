@@ -10,6 +10,9 @@
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
     <script src="_static/sphinx_highlight.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -207,6 +210,11 @@
 <h4>full_refresh<a class="headerlink" href="#compile|full_refresh" title="Permalink to this heading">¶</a></h4>
 <p>Type: boolean</p>
 <p>If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.</p>
+</section>
+<section id="compile|introspect">
+<h4>introspect<a class="headerlink" href="#compile|introspect" title="Permalink to this heading">¶</a></h4>
+<p>Type: boolean</p>
+<p>Whether to scaffold introspective queries as part of compilation</p>
 </section>
 <section id="compile|parse_only">
 <h4>parse_only<a class="headerlink" href="#compile|parse_only" title="Permalink to this heading">¶</a></h4>
@@ -949,8 +957,8 @@
       &copy;2022, dbt Labs.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 6.1.3</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.2.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
       <a href="_sources/index.rst.txt"
