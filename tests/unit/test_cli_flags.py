@@ -341,8 +341,8 @@ class TestFlags:
         assert flags.USE_COLORS_FILE is False
 
     def test_duplicate_flags_raises_error(self):
-        parent_context = self.make_dbt_context("parse_parent", ["--version-check"])
-        context = self.make_dbt_context("parse_child", ["--version-check"], parent_context)
+        parent_context = self.make_dbt_context("parent", ["--version-check"])
+        context = self.make_dbt_context("child", ["--version-check"], parent_context)
 
         with pytest.raises(click.BadOptionUsage):
             Flags(context)
