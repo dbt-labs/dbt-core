@@ -1292,7 +1292,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise DbtValidationError(f"Could not parse constraint: {raw_constraint}")
 
     @classmethod
-    def render_raw_column_constraint(cls, constraint: ColumnLevelConstraint) -> str:
+    def render_column_constraint(cls, constraint: ColumnLevelConstraint) -> str:
         """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
         rendering."""
         if constraint.type == ConstraintType.check and constraint.expression:
@@ -1319,7 +1319,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             rendered_column_constraint = [f"{v['name']} {v['data_type']}"]
             for con in v["constraints"]:
                 constraint = cls._parse_column_constraint(con)
-                c = cls.process_parsed_constraint(constraint, cls.render_raw_column_constraint)
+                c = cls.process_parsed_constraint(constraint, cls.render_column_constraint)
                 if c is not None:
                     rendered_column_constraint.append(c)
             rendered_column_constraints.append(" ".join(rendered_column_constraint))
