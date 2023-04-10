@@ -21,9 +21,9 @@ When no exceptions are raised an exit code of `0` is produced.
 ### `dbtRunner`
 `dbtRunner` provides a programmatic interface for our click CLI and wraps the invocation of the click commands to handle any exceptions thrown.
 
-`dbtRunner.invoke` should ideally only ever return an instantiated `DbtRunnerResult` which contains the following fields:
+`dbtRunner.invoke` should ideally only ever return an instantiated `dbtRunnerResult` which contains the following fields:
 - `success`: A boolean representing whether the command invocation was successful
-- `result`: The optional result of the command invoked. This attribute can have many types, please see the definition of `DbtRunnerResult` for more information
+- `result`: The optional result of the command invoked. This attribute can have many types, please see the definition of `dbtRunnerResult` for more information
 - `exception`: If an exception was thrown during command invocation it will be saved here, otherwise it will be `None`. Please note that the exceptions held in this attribute are not the exceptions thrown by `preflight` but instead the exceptions that `ResultExit` and `ExceptionExit` wrap
 
 Programmatic exception handling might look like the following:
