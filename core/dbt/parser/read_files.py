@@ -38,13 +38,10 @@ class FileDiff(dbtClassMixin):
     added: List[InputFile]
 
 
-DEFAULT_MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
-
-
 def get_max_seed_size() -> int:
     """The maximum seed size (MiB) that will be hashed for state comparison."""
     flags = get_flags()
-    return flags.MAXIMUM_SEED_SIZE_MIB * DEFAULT_MAXIMUM_SEED_SIZE
+    return flags.MAXIMUM_SEED_SIZE_MIB * 1024 * 1024
 
 
 # This loads the files contents and creates the SourceFile object
@@ -129,14 +126,6 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
     if match.file_size() > maximum_seed_size and maximum_seed_size != 0:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
-    elif match.file_size() <= DEFAULT_MAXIMUM_SEED_SIZE:
-        # This is here because the original seed calculation used utf8
-        # and the FileHash.from_path does not.  This will leave hashes
-        # unchanged for previous installations.
-        file_contents = load_file_contents(match.absolute_path, strip=True)
-        checksum = FileHash.from_contents(file_contents)
-        source_file = SourceFile(path=match, checksum=checksum)
-        source_file.contents = ""
     else:
         checksum = FileHash.from_path(match.absolute_path)
         source_file = SourceFile(path=match, checksum=checksum)
