@@ -43,7 +43,7 @@ from dbt.task.test import TestTask
 
 
 @dataclass
-class DbtRunnerResult:
+class dbtRunnerResult:
     """Contains the result of an invocation of the dbtRunner"""
 
     success: bool
@@ -73,7 +73,7 @@ class dbtRunner:
         self.manifest = manifest
         self.callbacks = callbacks
 
-    def invoke(self, args: List[str], **kwargs) -> DbtRunnerResult:
+    def invoke(self, args: List[str], **kwargs) -> dbtRunnerResult:
         try:
             dbt_ctx = cli.make_context(cli.name, args)
             dbt_ctx.obj = {
@@ -89,34 +89,34 @@ class dbtRunner:
                 dbt_ctx.set_parameter_source(key, "kwargs")  # type: ignore
 
             result, success = cli.invoke(dbt_ctx)
-            return DbtRunnerResult(
+            return dbtRunnerResult(
                 result=result,
                 success=success,
             )
         except requires.ResultExit as e:
-            return DbtRunnerResult(
+            return dbtRunnerResult(
                 result=e.result,
                 success=False,
             )
         except requires.ExceptionExit as e:
-            return DbtRunnerResult(
+            return dbtRunnerResult(
                 exception=e.exception,
                 success=False,
             )
         except (BadOptionUsage, NoSuchOption, UsageError) as e:
-            return DbtRunnerResult(
+            return dbtRunnerResult(
                 exception=DbtUsageException(e.message),
                 success=False,
             )
         except ClickExit as e:
             if e.exit_code == 0:
-                return DbtRunnerResult(success=True)
-            return DbtRunnerResult(
+                return dbtRunnerResult(success=True)
+            return dbtRunnerResult(
                 exception=DbtInternalException(f"unhandled exit code {e.exit_code}"),
                 success=False,
             )
         except BaseException as e:
-            return DbtRunnerResult(
+            return dbtRunnerResult(
                 exception=e,
                 success=False,
             )
