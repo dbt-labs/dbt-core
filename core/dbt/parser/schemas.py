@@ -1117,6 +1117,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 )
                 versioned_model_node.patch(versioned_model_patch)
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
+                source_file.append_patch(
+                    versioned_model_patch.yaml_key, versioned_model_node.unique_id
+                )
             self.manifest.rebuild_ref_lookup()
 
     def _target_type(self) -> Type[UnparsedModelUpdate]:
