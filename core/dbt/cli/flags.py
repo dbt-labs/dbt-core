@@ -1,4 +1,3 @@
-# TODO  Move this to /core/dbt/flags.py when we're ready to break things
 import os
 import sys
 from dataclasses import dataclass
@@ -7,15 +6,13 @@ from multiprocessing import get_context
 from pprint import pformat as pf
 from typing import Callable, Dict, List, Set, Union
 
-from click import Context, get_current_context, BadOptionUsage
-from click.core import ParameterSource, Command, Group
-
+from click import BadOptionUsage, Context, get_current_context
+from click.core import Command, Group, ParameterSource
+from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
 from dbt.deprecations import renamed_env_var
 from dbt.helper_types import WarnErrorOptions
-from dbt.cli.resolvers import default_project_dir, default_log_path
-
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -77,7 +74,7 @@ DEPRECATED_PARAMS = {
 class Flags:
     def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
 
-        # set the default flags
+        # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
             object.__setattr__(self, key, value)
 
@@ -113,15 +110,15 @@ class Flags:
                 # when using frozen dataclasses.
                 # https://docs.python.org/3/library/dataclasses.html#frozen-instances
 
-                # handle deprecated env vars while still respecting old values
+                # Handle deprecated env vars while still respecting old values
                 # e.g. DBT_NO_PRINT -> DBT_PRINT if DBT_NO_PRINT is set, it is
-                # respected over DBT_PRINT or --print
+                # respected over DBT_PRINT or --print.
                 new_name: Union[str, None] = None
                 if param_name in DEPRECATED_PARAMS:
 
-                    # deprecated env vars can only be set via env var.
-                    # we use the deprecated option in click to serialize the value
-                    # from the env var string
+                    # Deprecated env vars can only be set via env var.
+                    # We use the deprecated option in click to serialize the value
+                    # from the env var string.
                     param_source = ctx.get_parameter_source(param_name)
                     if param_source == ParameterSource.DEFAULT:
                         continue
@@ -131,12 +128,12 @@ class Flags:
                             "Deprecated parameters can only be set via environment variables",
                         )
 
-                    # rename for clarity
+                    # Rename for clarity.
                     dep_name = param_name
                     new_name = DEPRECATED_PARAMS.get(dep_name)
                     assert isinstance(new_name, str)
 
-                    # find param objects for their envvar name
+                    # Find param objects for their envvar name.
                     try:
                         dep_param = [x for x in ctx.command.params if x.name == dep_name][0]
                         new_param = [x for x in ctx.command.params if x.name == new_name][0]
@@ -145,8 +142,8 @@ class Flags:
                             f"No deprecated param name match from {dep_name} to {new_name}"
                         )
 
-                    # remove param from defaulted set since the deprecated
-                    # value is not set from default, but from an env var
+                    # Remove param from defaulted set since the deprecated
+                    # value is not set from default, but from an env var.
                     if new_name in params_assigned_from_default:
                         params_assigned_from_default.remove(new_name)
 
