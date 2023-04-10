@@ -151,7 +151,7 @@ class UnparsedVersion(dbtClassMixin):
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     defined_in: Optional[str] = None
-    tests: List[TestDef] = field(default_factory=list)
+    tests: Optional[List[TestDef]] = None
     columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
@@ -245,7 +245,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
                 f"get_tests_for_version called for version '{version}' not in version map"
             )
         unparsed_version = self._version_map[version]
-        return unparsed_version.tests or self.tests
+        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
 
 
 @dataclass
