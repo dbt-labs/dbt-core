@@ -3,7 +3,7 @@ import pytest
 import click
 from multiprocessing import get_context
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from dbt.cli.main import cli
 from dbt.contracts.project import UserConfig
@@ -12,8 +12,10 @@ from dbt.helper_types import WarnErrorOptions
 
 
 class TestFlags:
-    def make_dbt_context(self, context_name: str, args: List[str]) -> click.Context:
-        ctx = cli.make_context(context_name, args)
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        ctx = cli.make_context(context_name, args, parent)
         return ctx
 
     @pytest.fixture(scope="class")
@@ -337,3 +339,10 @@ class TestFlags:
         assert flags.LOG_LEVEL_FILE == "warn"
         assert flags.USE_COLORS is True
         assert flags.USE_COLORS_FILE is False
+
+    def test_duplicate_flags_raises_error(self):
+        parent_context = self.make_dbt_context("parse_parent", ["--version-check"])
+        context = self.make_dbt_context("parse_child", ["--version-check"], parent_context)
+
+        with pytest.raises(click.BadOptionUsage):
+            Flags(context)
