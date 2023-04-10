@@ -137,7 +137,7 @@ class TestChangedSeedContents(BaseModifiedState):
                     "./state",
                 ]
             )
-        assert ">1MB" in str(exc.value)
+        assert ">1MiB" in str(exc.value)
 
         shutil.rmtree("./state")
         self.copy_state()

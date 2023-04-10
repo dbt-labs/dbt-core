@@ -19,6 +19,7 @@ from dbt.parser.search import filesystem_search
 from typing import Optional, Dict, List, Mapping
 from dbt.events.types import InputFileDiffError
 from dbt.events.functions import fire_event
+from dbt.flags import get_flags
 
 
 @dataclass
@@ -36,7 +37,14 @@ class FileDiff(dbtClassMixin):
     changed: List[InputFile]
     added: List[InputFile]
 
-from dbt.constants import MAXIMUM_SEED_SIZE, DEFAULT_MAXIMUM_SEED_SIZE
+
+DEFAULT_MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
+
+
+def get_max_seed_size() -> int:
+    """The maximum seed size (MiB) that will be hashed for state comparison."""
+    flags = get_flags()
+    return flags.MAXIMUM_SEED_SIZE_MIB * DEFAULT_MAXIMUM_SEED_SIZE
 
 
 # This loads the files contents and creates the SourceFile object
@@ -116,8 +124,9 @@ def validate_yaml(file_path, dct):
 
 # Special processing for big seed files
 def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
-    # MAXIMUM_SEED_SIZE = 0 means no limit
-    if match.file_size() > MAXIMUM_SEED_SIZE and MAXIMUM_SEED_SIZE != 0:
+    maximum_seed_size = get_max_seed_size()
+    # maximum_seed_size = 0 means no limit
+    if match.file_size() > maximum_seed_size and maximum_seed_size != 0:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
     elif match.file_size() <= DEFAULT_MAXIMUM_SEED_SIZE:

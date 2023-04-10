@@ -85,6 +85,7 @@ def get_flag_dict():
         "cache_selected_only",
         "target_path",
         "log_path",
+        "maximum_seed_size_mib",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 

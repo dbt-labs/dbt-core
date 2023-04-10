@@ -262,6 +262,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     static_parser: Optional[bool] = None
     indirect_selection: Optional[str] = None
     cache_selected_only: Optional[bool] = None
+    maximum_seed_size_mib: Optional[int] = None
 
 
 @dataclass
