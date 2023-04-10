@@ -755,10 +755,12 @@ class ConstraintNotEnforced(WarnLevel):
 
     def message(self) -> str:
         msg = (
-            f"We noticed you have `{ self.constraint }` configs, these are NOT enforced "
-            "with this adapter and will be ignored"
+            f"The constraint type {self.constraint} is not enforced by {self.adapter}. "
+            "The constraint will be included in this model's DDL statement, but it will not "
+            "guarantee anything about the underlying data. Set 'warn_unenforced: false' on "
+            "this constraint to ignore this warning."
         )
-        return msg
+        return line_wrap_message(warning_tag(msg))
 
 
 class ConstraintNotSupported(WarnLevel):
@@ -767,10 +769,10 @@ class ConstraintNotSupported(WarnLevel):
 
     def message(self) -> str:
         msg = (
-            f"We noticed you have `{ self.constraint }` configs, these are NOT supported "
-            "with this adapter and will be ignored"
+            f"The constraint type {self.constraint} is not supported by {self.adapter}, and will "
+            "be ignored. Set 'warn_unsupported: false' on this constraint to ignore this warning."
         )
-        return msg
+        return line_wrap_message(warning_tag(msg))
 
 
 # =======================================================

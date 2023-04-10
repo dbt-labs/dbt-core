@@ -1312,7 +1312,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available
     @classmethod
-    def render_raw_columns_constraints(cls, raw_columns: Dict[str, Any]) -> List:
+    def render_raw_columns_constraints(cls, raw_columns: Dict[str, Dict[str, Any]]) -> List:
         rendered_column_constraints = []
 
         for _, v in raw_columns.items():
@@ -1334,12 +1334,16 @@ class BaseAdapter(metaclass=AdapterMeta):
             parsed_constraint.warn_unsupported
             and cls.CONSTRAINT_SUPPORT[parsed_constraint.type] == ConstraintSupport.NOT_SUPPORTED
         ):
-            warn_or_error(ConstraintNotSupported(constraint=parsed_constraint.type.value))
+            warn_or_error(
+                ConstraintNotSupported(constraint=parsed_constraint.type.value, adapter=cls.type())
+            )
         if (
             parsed_constraint.warn_unenforced
             and cls.CONSTRAINT_SUPPORT[parsed_constraint.type] == ConstraintSupport.NOT_ENFORCED
         ):
-            warn_or_error(ConstraintNotEnforced(constraint=parsed_constraint.type.value))
+            warn_or_error(
+                ConstraintNotEnforced(constraint=parsed_constraint.type.value, adapter=cls.type())
+            )
         if cls.CONSTRAINT_SUPPORT[parsed_constraint.type] != ConstraintSupport.NOT_SUPPORTED:
             return render_func(parsed_constraint)
 
