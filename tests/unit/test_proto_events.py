@@ -121,6 +121,10 @@ def test_node_info_events():
         "node_started_at": "some_time",
         "node_finished_at": "another_time",
         "meta": meta_dict,
+        "node_database": "some_database",
+        "node_schema": "some_schema",
+        "node_alias": "some_alias",
+        "node_relation_name": "some.relation.name",
     }
     event = LogStartLine(
         description="some description",

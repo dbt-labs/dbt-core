@@ -37,6 +37,10 @@ message NodeInfo {
     string node_started_at = 7;
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
+    string node_database = 10;
+    string node_schema = 11;
+    string node_alias = 12;
+    string node_relation_name = 13;
 }
 
 // RunResult
