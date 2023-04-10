@@ -1,5 +1,5 @@
 from copy import copy
-from typing import Callable, List, Tuple, Optional
+from typing import Any, Callable, List, Tuple, Optional
 
 import click
 
@@ -48,7 +48,7 @@ class dbtRunner:
         self.manifest = manifest
         self.callbacks = callbacks
 
-    def invoke(self, args: List[str], **kwargs) -> Tuple[Optional[List], bool]:
+    def invoke(self, args: List[str], **kwargs) -> Tuple[Optional[Any], bool]:
         try:
             dbt_ctx = cli.make_context(cli.name, args)
             dbt_ctx.obj = {
