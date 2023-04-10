@@ -485,7 +485,8 @@ cli.add_command(ls, "ls")
 def parse(ctx, **kwargs):
     """Parses the project and provides information on performance"""
     # manifest generation and writing happens in @requires.manifest
-    return None, True
+
+    return ctx.obj["manifest"], True
 
 
 # dbt run
