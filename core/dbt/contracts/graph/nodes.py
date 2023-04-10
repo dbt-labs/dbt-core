@@ -257,10 +257,12 @@ class NodeInfoMixin:
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
             "meta": getattr(self, "meta", {}),
-            "node_database": getattr(self, "database", None),
-            "node_schema": getattr(self, "schema", None),
-            "node_alias": getattr(self, "alias", None),
-            "node_relation_name": getattr(self, "relation_name", None),
+            "node_relation": {
+                "database": getattr(self, "database", None),
+                "schema": getattr(self, "schema", None),
+                "alias": getattr(self, "alias", None),
+                "relation_name": getattr(self, "relation_name", None),
+            },
         }
         return node_info
 
