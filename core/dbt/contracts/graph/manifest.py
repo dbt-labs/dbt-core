@@ -36,7 +36,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
 )
-from dbt.contracts.graph.unparsed import SourcePatch
+from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
 from dbt.dataclass_schema import dbtClassMixin
@@ -145,6 +145,7 @@ class SourceLookup(dbtClassMixin):
 class RefableLookup(dbtClassMixin):
     # model, seed, snapshot
     _lookup_types: ClassVar[set] = set(NodeType.refable())
+    _versioned_types: ClassVar[set] = set(NodeType.versioned())
 
     # refables are actually unique, so the Dict[PackageName, UniqueID] will
     # only ever have exactly one value, but doing 3 dict lookups instead of 1
@@ -153,11 +154,19 @@ class RefableLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName]):
+    def get_unique_id(self, key, package: Optional[PackageName], version: Optional[NodeVersion]):
+        if version:
+            key = f"{key}.v{version}"
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
-        unique_id = self.get_unique_id(key, package)
+    def find(
+        self,
+        key,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion],
+        manifest: "Manifest",
+    ):
+        unique_id = self.get_unique_id(key, package, version)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
@@ -166,7 +175,15 @@ class RefableLookup(dbtClassMixin):
         if node.resource_type in self._lookup_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
-            self.storage[node.name][node.package_name] = node.unique_id
+
+            if node.resource_type in self._versioned_types and node.version:
+                if f"{node.name}.v{node.version}" not in self.storage:
+                    self.storage[f"{node.name}.v{node.version}"] = {}
+                self.storage[f"{node.name}.v{node.version}"][node.package_name] = node.unique_id
+                if node.is_latest_version:
+                    self.storage[node.name][node.package_name] = node.unique_id
+            else:
+                self.storage[node.name][node.package_name] = node.unique_id
 
     def populate(self, manifest):
         for node in manifest.nodes.values():
@@ -251,6 +268,7 @@ class DisabledLookup(dbtClassMixin):
 
 class AnalysisLookup(RefableLookup):
     _lookup_types: ClassVar[set] = set([NodeType.Analysis])
+    _versioned_types: ClassVar[set] = set()
 
 
 def _search_packages(
@@ -899,6 +917,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self,
         target_model_name: str,
         target_model_package: Optional[str],
+        target_model_version: Optional[NodeVersion],
         current_project: str,
         node_package: str,
     ) -> MaybeNonSource:
@@ -908,7 +927,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         candidates = _search_packages(current_project, node_package, target_model_package)
         for pkg in candidates:
-            node = self.ref_lookup.find(target_model_name, pkg, self)
+            node = self.ref_lookup.find(target_model_name, pkg, target_model_version, self)
 
             if node is not None and node.config.enabled:
                 return node

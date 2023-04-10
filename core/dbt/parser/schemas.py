@@ -11,6 +11,7 @@ from dbt.dataclass_schema import ValidationError, dbtClassMixin
 from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.context.providers import RefArgs
 from dbt.parser.schema_renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfig,
@@ -358,12 +359,14 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
         return node
 
     def _lookup_attached_node(
-        self, target: Testable
+        self, target: Testable, version: Optional[NodeVersion]
     ) -> Optional[Union[ManifestNode, GraphMemberNode]]:
         """Look up attached node for Testable target nodes other than sources. Can be None if generic test attached to SQL node with no corresponding .sql file."""
         attached_node = None  # type: Optional[Union[ManifestNode, GraphMemberNode]]
         if not isinstance(target, UnpatchedSourceDefinition):
-            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(target.name, None)
+            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
+                target.name, None, version
+            )
             if attached_node_unique_id:
                 attached_node = self.manifest.nodes[attached_node_unique_id]
             else:
@@ -413,7 +416,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]
                 node.sources.append(sources)
             else:  # all other nodes
-                node.refs.append([builder.target.name])
+                node.refs.append(RefArgs(name=builder.target.name, version=builder.version))
         else:
             try:
                 # make a base context that doesn't have the magic kwargs field
@@ -438,7 +441,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, GenericTestNode]):
 
         # Set attached_node for generic test nodes, if available.
         # Generic test node inherits attached node's group config value.
-        attached_node = self._lookup_attached_node(builder.target)
+        attached_node = self._lookup_attached_node(builder.target, builder.version)
         if attached_node:
             node.attached_node = attached_node.unique_id
             node.group, node.group = attached_node.group, attached_node.group
@@ -913,7 +916,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
         if patch.yaml_key in ["models", "seeds", "snapshots"]:
-            unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
+            unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None, None)
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
@@ -929,7 +932,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     return
 
         elif patch.yaml_key == "analyses":
-            unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
+            unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None, None)
         else:
             raise DbtInternalError(
                 f"Unexpected yaml_key {patch.yaml_key} for patch in "
@@ -1063,19 +1066,20 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         if not versions:
             super().parse_patch(block, refs)
         else:
-            # TODO: WrongResourceSchemaFile, DbtInternalError from  base?
+            # TODO: error handling: WrongResourceSchemaFile, DbtInternalError (from base)
             assert isinstance(self.yaml.file, SchemaSourceFile)
             source_file: SchemaSourceFile = self.yaml.file
-            latest_version = target.latest_version or max(versions)
+            latest_version = target.latest_version or max(versions).v
             for unparsed_version in versions:
                 versioned_model_name = (
-                    unparsed_version.defined_in or f"{block.name}_v{unparsed_version.v}"
+                    unparsed_version.defined_in or f"{block.name}_{unparsed_version.formatted_v}"
                 )
                 # ref lookup without version - version is not set yet
                 versioned_model_unique_id = self.manifest.ref_lookup.get_unique_id(
-                    versioned_model_name, None
+                    versioned_model_name, None, None
                 )
                 if versioned_model_unique_id is None:
+                    # TODO: handle disabled nodes
                     warn_or_error(
                         NoNodeForYamlKey(
                             patch_name=versioned_model_name,
@@ -1086,10 +1090,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     continue
                 versioned_model_node = self.manifest.nodes.pop(versioned_model_unique_id)
                 versioned_model_node.unique_id = (
-                    f"model.{target.package_name}.{target.name}.v{unparsed_version.v}"
+                    f"model.{target.package_name}.{target.name}.{unparsed_version.formatted_v}"
                 )
                 versioned_model_node.fqn[-1] = target.name
-                versioned_model_node.fqn.append(f"v{unparsed_version.v}")
+                versioned_model_node.fqn.append(unparsed_version.formatted_v)
                 self.manifest.add_node_nofile(versioned_model_node)
 
                 # flatten columns based on include/exclude
@@ -1107,13 +1111,13 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     meta={**target.meta, **unparsed_version.meta},
                     docs=unparsed_version.docs or target.docs,
                     config={**target.config, **unparsed_version.config},
-                    access=target.access,  # TODO: confirm that versioned models _not_ be able to define their own access?
+                    access=unparsed_version.access or target.access,
                     version=unparsed_version.v,
                     is_latest_version=latest_version == unparsed_version.v,
                 )
                 versioned_model_node.patch(versioned_model_patch)
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
-            self.manifest.rebuild_ref_lookup()  # TODO: replace with add_node calls
+            self.manifest.rebuild_ref_lookup()
 
     def _target_type(self) -> Type[UnparsedModelUpdate]:
         return UnparsedModelUpdate

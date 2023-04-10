@@ -11,7 +11,7 @@ from dbt.contracts.util import (
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -143,8 +143,9 @@ NodeVersion = Union[str, float]
 
 @dataclass
 class UnparsedVersion(dbtClassMixin):
-    v: NodeVersion = ""
+    v: NodeVersion
     description: str = ""
+    access: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
@@ -173,6 +174,10 @@ class UnparsedVersion(dbtClassMixin):
     @property
     def unparsed_columns(self) -> List:
         return self._unparsed_columns
+
+    @property
+    def formatted_v(self) -> str:
+        return f"v{self.v}"
 
     def __post_init__(self):
         has_include_exclude = False
@@ -219,8 +224,9 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
         if version not in self._version_map:
-            # TODO: internal error
-            raise Exception("version not in version map")
+            raise DbtInternalError(
+                f"get_columns_for_version called for version '{version}' not in version map"
+            )
 
         version_columns = []
         unparsed_version = self._version_map[version]
@@ -235,8 +241,9 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
 
     def get_tests_for_version(self, version: NodeVersion) -> List[TestDef]:
         if version not in self._version_map:
-            # TODO: internal error
-            raise Exception("version not in version map")
+            raise DbtInternalError(
+                f"get_tests_for_version called for version '{version}' not in version map"
+            )
         unparsed_version = self._version_map[version]
         return unparsed_version.tests or self.tests
 

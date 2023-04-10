@@ -1,6 +1,7 @@
 import argparse
 import pytest
 
+from dbt.contracts.graph.nodes import RefArgs
 from dbt.internal_deprecations import deprecated
 import dbt.exceptions
 from dbt.node_types import NodeType
@@ -461,7 +462,7 @@ class TestDeprecatedExceptionFunctions:
         exception = dbt.exceptions.RefBadContextError
         model = argparse.Namespace()
         model.name = ""
-        args = []
+        args = RefArgs(name=model.name)
 
         self.is_deprecated(func)
 

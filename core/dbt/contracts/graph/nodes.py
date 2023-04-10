@@ -141,6 +141,27 @@ class GraphNode(BaseNode):
         return self.fqn == other.fqn
 
 
+@dataclass
+class RefArgs(dbtClassMixin):
+    name: str
+    package: Optional[str] = None
+    version: Optional[NodeVersion] = None
+
+    @property
+    def positional_args(self) -> List[str]:
+        if self.package:
+            return [self.package, self.name]
+        else:
+            return [self.name]
+
+    @property
+    def keyword_args(self) -> Dict[str, Optional[NodeVersion]]:
+        if self.version:
+            return {"version": self.version}
+        else:
+            return {}
+
+
 class ConstraintType(str, Enum):
     check = "check"
     not_null = "not_null"
@@ -461,7 +482,7 @@ class CompiledNode(ParsedNode):
     so all ManifestNodes except SeedNode."""
 
     language: str = "sql"
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -1056,7 +1077,7 @@ class Exposure(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
@@ -1148,7 +1169,7 @@ class Metric(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     group: Optional[str] = None

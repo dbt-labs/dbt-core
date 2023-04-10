@@ -20,6 +20,7 @@ from dbt.contracts.graph.nodes import (
     SnapshotNode,
     AnalysisNode,
     UnpatchedSourceDefinition,
+    RefArgs,
 )
 from dbt.exceptions import CompilationError, ParsingError
 from dbt.node_types import NodeType
@@ -447,7 +448,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests.append(node)
         self.assertEqual(tests[0].config.severity, "ERROR")
         self.assertEqual(tests[0].tags, [])
-        self.assertEqual(tests[0].refs, [["my_model"]])
+        self.assertEqual(tests[0].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[0].column_name, "color")
         self.assertEqual(tests[0].package_name, "snowplow")
         self.assertTrue(tests[0].name.startswith("accepted_values_"))
@@ -470,7 +471,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         # name in the test name
         self.assertEqual(tests[1].config.severity, "ERROR")
         self.assertEqual(tests[1].tags, [])
-        self.assertEqual(tests[1].refs, [["my_model"]])
+        self.assertEqual(tests[1].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[1].column_name, "color")
         self.assertEqual(tests[1].column_name, "color")
         self.assertEqual(tests[1].fqn, ["snowplow", tests[1].name])
@@ -492,7 +493,7 @@ class SchemaParserModelsTest(SchemaParserTest):
 
         self.assertEqual(tests[2].config.severity, "WARN")
         self.assertEqual(tests[2].tags, [])
-        self.assertEqual(tests[2].refs, [["my_model"]])
+        self.assertEqual(tests[2].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[2].column_name, "color")
         self.assertEqual(tests[2].package_name, "snowplow")
         self.assertTrue(tests[2].name.startswith("not_null_"))
@@ -724,15 +725,15 @@ class ModelParserTest(BaseParserTest):
             unrendered_config={"materialized": "table", "packages": python_packages},
             config_call_dict={"materialized": "table", "packages": python_packages},
             refs=[
-                ["a_model"],
-                ["my_sql_model"],
-                ["my_sql_model_1"],
-                ["my_sql_model_2"],
-                ["something"],
-                ["test1"],
-                ["test2"],
-                ["test3"],
-                ["test4"],
+                RefArgs(name="a_model"),
+                RefArgs("my_sql_model"),
+                RefArgs("my_sql_model_1"),
+                RefArgs("my_sql_model_2"),
+                RefArgs("something"),
+                RefArgs("test1"),
+                RefArgs("test2"),
+                RefArgs("test3"),
+                RefArgs("test4"),
             ],
             sources=[["test", "table1"]],
         )
@@ -1320,7 +1321,7 @@ class SingularTestParserTest(BaseParserTest):
             fqn=["snowplow", "test_1"],
             package_name="snowplow",
             original_file_path=normalize("tests/test_1.sql"),
-            refs=[["blah"]],
+            refs=[RefArgs(name="blah")],
             config=TestConfig(severity="ERROR"),
             tags=[],
             path=normalize("test_1.sql"),
