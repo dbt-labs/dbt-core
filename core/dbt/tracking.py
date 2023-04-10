@@ -42,10 +42,10 @@ PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
 PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
 PLATFORM_SPEC = "iglu:com.dbt/platform/jsonschema/1-0-0"
 PROJECT_ID_SPEC = "iglu:com.dbt/project_id/jsonschema/1-0-1"
-RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
+RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-1"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 RUNNABLE_TIMING = "iglu:com.dbt/runnable/jsonschema/1-0-0"
-RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-2"
+RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-3"
 
 
 class TimeoutEmitter(Emitter):
