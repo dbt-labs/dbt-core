@@ -30,8 +30,7 @@ FLAGS_DEFAULTS = {
 
 
 def convert_config(config_name, config_value):
-    # This function should take care of converting the values from config and original
-    # set_from_args to the correct type.
+    """Convert the values from config and original set_from_args to the correct type."""
     ret = config_value
     if config_name.lower() == "warn_error_options" and type(config_value) == dict:
         ret = WarnErrorOptions(
@@ -70,6 +69,8 @@ DEPRECATED_PARAMS = {
 
 @dataclass(frozen=True)
 class Flags:
+    """Primary configuration artifact for running dbt"""
+
     def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
 
         # Set the default flags.
@@ -79,15 +80,16 @@ class Flags:
         if ctx is None:
             ctx = get_current_context()
 
-        # Ensure that any params sourced from the commandline are not present more than once.
-        # Click handles this exclusivity, but only at a per-subcommand level.
         def _get_params_by_source(ctx: Context, source_type: ParameterSource):
+            """Generates all params of a given source type."""
             yield from [
                 name for name, source in ctx._parameter_source.items() if source is source_type
             ]
             if ctx.parent:
                 yield from _get_params_by_source(ctx.parent, source_type)
 
+        # Ensure that any params sourced from the commandline are not present more than once.
+        # Click handles this exclusivity, but only at a per-subcommand level.
         seen_params = []
         for param in _get_params_by_source(ctx, ParameterSource.COMMANDLINE):
             if param in seen_params:
@@ -165,16 +167,9 @@ class Flags:
                 if (is_duplicate and not is_default) or not is_duplicate:
                     object.__setattr__(self, flag_name, param_value)
 
+                # Track default assigned params.
                 if is_default:
                     params_assigned_from_default.add(param_name)
-                    # TODO: Stu - do we need to account for deprecated name here? I don't think so but I want to double check.
-
-                # TODO - Stu - Does this still work without the code below?  I _think_ it does.
-                """
-                    # Param already set via its deprecated but still respected env var.
-                    if param_name in deprecated_env_vars:
-                        continue
-                """
 
             if ctx.parent:
                 _assign_params(ctx.parent, params_assigned_from_default, deprecated_env_vars)
@@ -252,9 +247,8 @@ class Flags:
         for param in params:
             object.__setattr__(self, param.lower(), getattr(self, param))
 
-    # If the value of the lead parameter was set explicitly, apply the value to follow,
-    # unless follow was also set explicitly.
     def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:
+        """If the value of the lead parameter was set explicitly, apply the value to follow, unless follow was also set explicitly."""
         if lead.lower() not in defaulted and follow.lower() in defaulted:
             object.__setattr__(self, follow.upper(), getattr(self, lead.upper(), None))
 
@@ -279,6 +273,7 @@ class Flags:
                 set_flag = flag
 
     def fire_deprecations(self):
+        """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
