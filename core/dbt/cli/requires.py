@@ -9,7 +9,7 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
+from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
 from dbt.events.types import (
     CommandCompleted,
     MainReportVersion,
@@ -48,6 +48,8 @@ def preflight(func):
         # Logging
         # N.B. Legacy logger is not supported
         callabcks = ctx.obj.get("callbacks", [])
+
+        set_invocation_id()
         setup_event_logger(flags=flags, callbacks=callabcks)
 
         # Now that we have our logger, fire away!
