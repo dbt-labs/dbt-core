@@ -345,5 +345,5 @@ class TestFlags:
         parent_context = self.make_dbt_context("parent", ["--version-check"])
         context = self.make_dbt_context("child", ["--version-check"], parent_context)
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
