@@ -344,6 +344,9 @@ models:
     config:
       group: test_group
       materialized: table
+      meta:
+        color: blue
+        size: large
     tests:
       - unique:
           column_name: count
@@ -360,6 +363,8 @@ models:
       - v: 2
         config:
           materialized: view
+          meta:
+            color: red
         tests: []
         columns:
           - include: '*'

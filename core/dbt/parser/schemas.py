@@ -90,7 +90,7 @@ from dbt.parser.generic_test_builders import (
     Testable,
     Versioned,
 )
-from dbt.utils import get_pseudo_test_path, coerce_dict_str, md5
+from dbt.utils import get_pseudo_test_path, coerce_dict_str, md5, deep_merge
 
 
 TestDef = Union[str, Dict[str, Any]]
@@ -1145,9 +1145,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     package_name=target.package_name,
                     description=unparsed_version.description or target.description,
                     columns=version_refs.column_info,
-                    meta={**target.meta, **unparsed_version.meta},
+                    meta=target.meta,
                     docs=unparsed_version.docs or target.docs,
-                    config={**target.config, **unparsed_version.config},
+                    config=deep_merge(target.config, unparsed_version.config),
                     access=unparsed_version.access or target.access,
                     version=unparsed_version.v,
                     is_latest_version=latest_version == unparsed_version.v,

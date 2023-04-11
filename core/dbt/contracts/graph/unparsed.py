@@ -148,7 +148,6 @@ class UnparsedVersion(dbtClassMixin):
     description: str = ""
     access: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
-    meta: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     tests: Optional[List[TestDef]] = None

@@ -651,7 +651,6 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "columns": [],
                     "config": {},
                     "constraints": [],
-                    "meta": {},
                     "docs": {"show": True},
                 }
             ],
@@ -980,7 +979,6 @@ class TestUnparsedVersion(ContractTestCase):
             "defined_in": "test_defined_in",
             "description": "A version",
             "config": {},
-            "meta": {},
             "constraints": [],
             "docs": {"show": False},
             "tests": [],
@@ -993,7 +991,6 @@ class TestUnparsedVersion(ContractTestCase):
             defined_in="test_defined_in",
             description="A version",
             config={},
-            meta={},
             constraints=[],
             docs=Docs(show=False),
             tests=[],

@@ -1475,7 +1475,11 @@ def expected_versions_manifest(project):
                         "constraints": [],
                     },
                 },
-                "config": get_rendered_model_config(materialized="table", group="test_group"),
+                "config": get_rendered_model_config(
+                    materialized="table",
+                    group="test_group",
+                    meta={"size": "large", "color": "blue"},
+                ),
                 "constraints": [],
                 "sources": [],
                 "depends_on": {"macros": [], "nodes": []},
@@ -1500,7 +1504,7 @@ def expected_versions_manifest(project):
                 "schema": my_schema_name,
                 "database": project.database,
                 "tags": [],
-                "meta": {},
+                "meta": {"size": "large", "color": "blue"},
                 "unique_id": "model.test.versioned_model.v1",
                 "compiled": True,
                 "compiled_code": ANY,
@@ -1509,7 +1513,9 @@ def expected_versions_manifest(project):
                 "extra_ctes": [],
                 "checksum": checksum_file(versioned_model_v1_path),
                 "unrendered_config": get_unrendered_model_config(
-                    materialized="table", group="test_group"
+                    materialized="table",
+                    group="test_group",
+                    meta={"size": "large", "color": "blue"},
                 ),
                 "access": "protected",
                 "version": 1,
@@ -1540,7 +1546,9 @@ def expected_versions_manifest(project):
                         "constraints": [],
                     },
                 },
-                "config": get_rendered_model_config(materialized="view", group="test_group"),
+                "config": get_rendered_model_config(
+                    materialized="view", group="test_group", meta={"size": "large", "color": "red"}
+                ),
                 "constraints": [],
                 "contract": {"checksum": None, "enforced": False},
                 "sources": [],
@@ -1566,7 +1574,7 @@ def expected_versions_manifest(project):
                 "schema": my_schema_name,
                 "database": project.database,
                 "tags": [],
-                "meta": {},
+                "meta": {"size": "large", "color": "red"},
                 "unique_id": "model.test.versioned_model.v2",
                 "compiled": True,
                 "compiled_code": ANY,
@@ -1574,7 +1582,7 @@ def expected_versions_manifest(project):
                 "extra_ctes": [],
                 "checksum": checksum_file(versioned_model_v2_path),
                 "unrendered_config": get_unrendered_model_config(
-                    materialized="view", group="test_group"
+                    materialized="view", group="test_group", meta={"size": "large", "color": "red"}
                 ),
                 "access": "protected",
                 "version": 2,
