@@ -250,7 +250,12 @@ class DisabledLookup(dbtClassMixin):
 
     # This should return a list of disabled nodes. It's different from
     # the other Lookup functions in that it returns full nodes, not just unique_ids
-    def find(self, search_name, package: Optional[PackageName]):
+    def find(
+        self, search_name, package: Optional[PackageName], version: Optional[NodeVersion] = None
+    ):
+        if version:
+            search_name = f"{search_name}.v{version}"
+
         if search_name not in self.storage:
             return None
 
@@ -935,7 +940,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(target_model_name, pkg)
+                disabled = self.disabled_lookup.find(target_model_name, pkg, target_model_version)
 
         if disabled:
             return Disabled(disabled[0])

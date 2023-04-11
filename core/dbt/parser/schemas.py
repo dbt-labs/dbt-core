@@ -3,7 +3,7 @@ import os
 import pathlib
 
 from abc import ABCMeta, abstractmethod
-from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
+from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type, Callable
 from dataclasses import dataclass, field
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
@@ -1089,8 +1089,33 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 versioned_model_unique_id = self.manifest.ref_lookup.get_unique_id(
                     versioned_model_name, None, None
                 )
+
+                versioned_model_node = None
+                add_node_nofile_fn: Callable
                 if versioned_model_unique_id is None:
-                    # TODO: handle disabled nodes
+                    # Node might be disabled. Following call returns list of matching disabled nodes
+                    found_nodes = self.manifest.disabled_lookup.find(versioned_model_name, None)
+                    if found_nodes:
+                        if len(found_nodes) > 1 and target.config.get("enabled"):
+                            # There are multiple disabled nodes for this model and the schema file wants to enable one.
+                            # We have no way to know which one to enable.
+                            resource_type = found_nodes[0].unique_id.split(".")[0]
+                            msg = (
+                                f"Found {len(found_nodes)} matching disabled nodes for "
+                                f"{resource_type} '{target.name}'. Multiple nodes for the same "
+                                "unique id cannot be enabled in the schema file. They must be enabled "
+                                "in `dbt_project.yml` or in the sql files."
+                            )
+                            raise ParsingError(msg)
+                        versioned_model_node = self.manifest.disabled.pop(
+                            found_nodes[0].unique_id
+                        )[0]
+                        add_node_nofile_fn = self.manifest.add_disabled_nofile
+                else:
+                    versioned_model_node = self.manifest.nodes.pop(versioned_model_unique_id)
+                    add_node_nofile_fn = self.manifest.add_node_nofile
+
+                if versioned_model_node is None:
                     warn_or_error(
                         NoNodeForYamlKey(
                             patch_name=versioned_model_name,
@@ -1099,13 +1124,13 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                         )
                     )
                     continue
-                versioned_model_node = self.manifest.nodes.pop(versioned_model_unique_id)
+
                 versioned_model_node.unique_id = (
                     f"model.{target.package_name}.{target.name}.{unparsed_version.formatted_v}"
                 )
                 versioned_model_node.fqn[-1] = target.name
                 versioned_model_node.fqn.append(unparsed_version.formatted_v)
-                self.manifest.add_node_nofile(versioned_model_node)
+                add_node_nofile_fn(versioned_model_node)
 
                 # flatten columns based on include/exclude
                 version_refs: ParserRef = ParserRef.from_versioned_target(
@@ -1129,12 +1154,16 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 # Node patched before config because config patching depends on model name,
                 # which may have been updated in the version patch
                 versioned_model_node.patch(versioned_model_patch)
+                self.validate_constraints(versioned_model_node)
+                versioned_model_node.build_contract_checksum()
+
                 # Includes alias recomputation
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id
                 )
             self.manifest.rebuild_ref_lookup()
+            self.manifest.rebuild_disabled_lookup()
 
     def _target_type(self) -> Type[UnparsedModelUpdate]:
         return UnparsedModelUpdate

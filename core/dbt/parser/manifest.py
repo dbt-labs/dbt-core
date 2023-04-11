@@ -1368,7 +1368,6 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 target_kind="node",
                 target_package=target_model_package,
                 target_version=target_model_version,
-                # target_version=target_model.version if isinstance(target_model, Disabled) else target_model_version,
                 disabled=(isinstance(target_model, Disabled)),
                 should_warn_if_disabled=False,
             )
