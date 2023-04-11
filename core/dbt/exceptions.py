@@ -2174,7 +2174,7 @@ class ContractError(CompilationError):
                             sql_col["name"],
                             sql_col["data_type"],
                             yaml_col["data_type"],
-                            "data type",
+                            "data type mismatch",
                         ]
                         mismatches += [dict(zip(column_names, row))]
                         break

@@ -80,17 +80,8 @@ class BaseConstraintsColumnsEqual:
 
         assert contract_actual_config.enforced is True
 
-        expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
-        expected_schema_file_columns = (
-            f"Schema File Columns: id {int_type}, color {string_type}, date_day {string_type}"
-        )
-        expected_sql_file_columns = (
-            f"SQL File Columns: color {string_type}, error {int_type}, date_day {string_type}"
-        )
-
-        assert expected_compile_error in log_output
-        assert expected_schema_file_columns in log_output
-        assert expected_sql_file_columns in log_output
+        expected = ["id", "error", "missing in definition", "missing in contract"]
+        assert all([exp in log_output for exp in expected])
 
     def test__constraints_wrong_column_data_types(
         self, project, string_type, int_type, schema_int_type, data_types
@@ -129,17 +120,13 @@ class BaseConstraintsColumnsEqual:
 
             assert contract_actual_config.enforced is True
 
-            expected_compile_error = "Please ensure the name, data_type, and number of columns in your `yml` file match the columns in your SQL file."
-            expected_sql_file_columns = (
-                f"SQL File Columns: wrong_data_type_column_name {error_data_type}"
-            )
-            expected_schema_file_columns = (
-                f"Schema File Columns: wrong_data_type_column_name {wrong_schema_error_data_type}"
-            )
-
-            assert expected_compile_error in log_output
-            assert expected_schema_file_columns in log_output
-            assert expected_sql_file_columns in log_output
+            expected = [
+                "wrong_data_type_column_name",
+                error_data_type,
+                wrong_schema_error_data_type,
+                "data type mismatch",
+            ]
+            assert all([exp in log_output for exp in expected])
 
     def test__constraints_correct_column_data_types(self, project, data_types):
         for (sql_column_value, schema_data_type, _) in data_types:
