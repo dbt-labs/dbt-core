@@ -728,12 +728,6 @@ class BaseAdapter(metaclass=AdapterMeta):
                 # it's possible that there were no relations in some schemas. We want
                 # to insert the schemas we query into the cache's `.schemas` attribute
                 # so we can check it later
-
-                # Jeremy: what was the intent behind this inner loop?
-                # cache_update: Set[Tuple[Optional[str], Optional[str]]] = set()
-                # for relation in cache_schemas:
-                #     cache_update.add((database, schema))
-
                 self.cache.update_schemas([(database, schema)])
 
         fire_event(
