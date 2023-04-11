@@ -515,8 +515,11 @@ class TestBuilder(Generic[Testable]):
 
     def build_model_str(self):
         targ = self.target
-        if isinstance(self.target, UnparsedModelUpdate) and self.version:
-            target_str = f"ref('{targ.name}', version='{self.version}')"
+        if isinstance(self.target, UnparsedModelUpdate):
+            if self.version:
+                target_str = f"ref('{targ.name}', version='{self.version}')"
+            else:
+                target_str = f"ref('{targ.name}')"
         elif isinstance(self.target, UnparsedNodeUpdate):
             target_str = f"ref('{targ.name}')"
         elif isinstance(self.target, UnpatchedSourceDefinition):
