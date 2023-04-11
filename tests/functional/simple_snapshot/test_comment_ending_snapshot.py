@@ -14,7 +14,7 @@ snapshots_with_comment_at_end__snapshot_sql = """
         )
     }}
     select * from {{target.database}}.{{schema}}.seed
-    -- Test comment to prevent reccurence of https://github.com/dbt-labs/dbt-core/issues/6781
+    -- Test comment to prevent recurrence of https://github.com/dbt-labs/dbt-core/issues/6781
 {% endsnapshot %}
 """
 
