@@ -40,18 +40,11 @@ compile_docs = click.option(
     default=True,
 )
 
-compile_parse = click.option(
-    "--compile/--no-compile",
-    envvar=None,
-    help="TODO: No help text currently available",
-    default=True,
-)
-
 config_dir = click.option(
     "--config-dir",
     envvar=None,
-    help="If specified, DBT will show path information for this project",
-    type=click.STRING,
+    help="Show the configured location for the profiles.yml file and exit",
+    is_flag=True,
 )
 
 debug = click.option(
@@ -65,7 +58,7 @@ debug = click.option(
 defer = click.option(
     "--defer/--no-defer",
     envvar="DBT_DEFER",
-    help="If set, defer to the state variable for resolving unselected nodes.",
+    help="If set, resolve unselected nodes by deferring to the manifest within the --state directory.",
 )
 
 deprecated_defer = click.option(
@@ -121,7 +114,7 @@ full_refresh = click.option(
 indirect_selection = click.option(
     "--indirect-selection",
     envvar="DBT_INDIRECT_SELECTION",
-    help="Select all tests that are adjacent to selected resources, even if they those resources have been explicitly selected.",
+    help="Choose which tests to select that are adjacent to selected resources. Eager is most inclusive, cautious is most exclusive, and buildable is in between. Empty includes no tests at all.",
     type=click.Choice(["eager", "cautious", "buildable", "empty"], case_sensitive=False),
     default="eager",
 )
@@ -135,7 +128,7 @@ log_cache_events = click.option(
 log_format = click.option(
     "--log-format",
     envvar="DBT_LOG_FORMAT",
-    help="Specify the log format, overriding the command's default.",
+    help="Specify the format of logging to the console and the log file. Use --log-format-file to configure the format for the log file differently than the console.",
     type=click.Choice(["text", "debug", "json", "default"], case_sensitive=False),
     default="default",
 )
@@ -143,7 +136,7 @@ log_format = click.option(
 log_format_file = click.option(
     "--log-format-file",
     envvar="DBT_LOG_FORMAT_FILE",
-    help="Specify the file log format, overriding the command's default and the value of --log-format.",
+    help="Specify the format of logging to the log file by overriding the default value and the general --log-format setting.",
     type=click.Choice(["text", "debug", "json", "default"], case_sensitive=False),
     default="debug",
 )
@@ -151,7 +144,7 @@ log_format_file = click.option(
 log_level = click.option(
     "--log-level",
     envvar="DBT_LOG_LEVEL",
-    help="Specify the minimum severity of events that are logged.",
+    help="Specify the minimum severity of events that are logged to the console and the log file. Use --log-level-file to configure the severity for the log file differently than the console.",
     type=click.Choice(["debug", "info", "warn", "error", "none"], case_sensitive=False),
     default="info",
 )
@@ -159,9 +152,23 @@ log_level = click.option(
 log_level_file = click.option(
     "--log-level-file",
     envvar="DBT_LOG_LEVEL_FILE",
-    help="Specify the minimum severity of events that are logged to file, overriding the value of --log-level-file.",
+    help="Specify the minimum severity of events that are logged to the log file by overriding the default value and the general --log-level setting.",
     type=click.Choice(["debug", "info", "warn", "error", "none"], case_sensitive=False),
     default="debug",
+)
+
+use_colors = click.option(
+    "--use-colors/--no-use-colors",
+    envvar="DBT_USE_COLORS",
+    help="Specify whether log output is colorized in the console and the log file. Use --use-colors-file/--no-use-colors-file to colorize the log file differently than the console.",
+    default=True,
+)
+
+use_colors_file = click.option(
+    "--use-colors-file/--no-use-colors-file",
+    envvar="DBT_USE_COLORS_FILE",
+    help="Specify whether log file output is colorized by overriding the default value and the general --use-colors/--no-use-colors setting.",
+    default=True,
 )
 
 log_path = click.option(
@@ -178,10 +185,11 @@ macro_debugging = click.option(
     hidden=True,
 )
 
+# This less standard usage of --output where output_path below is more standard
 output = click.option(
     "--output",
     envvar=None,
-    help="TODO: No current help text",
+    help="Specify the output format: either JSON or a newline-delimited list of selectors, paths, or names",
     type=click.Choice(["json", "name", "path", "selector"], case_sensitive=False),
     default="selector",
 )
@@ -219,21 +227,21 @@ output_path = click.option(
     "--output",
     "-o",
     envvar=None,
-    help="Specify the output path for the json report. By default, outputs to 'target/sources.json'",
+    help="Specify the output path for the JSON report. By default, outputs to 'target/sources.json'",
     type=click.Path(file_okay=True, dir_okay=False, writable=True),
     default=PurePath.joinpath(Path.cwd(), "target/sources.json"),
-)
-
-parse_only = click.option(
-    "--parse-only",
-    envvar=None,
-    help="TODO:  No help text currently available",
-    is_flag=True,
 )
 
 partial_parse = click.option(
     "--partial-parse/--no-partial-parse",
     envvar="DBT_PARTIAL_PARSE",
+    help="Allow for partial parsing by looking for and writing to a pickle file in the target directory. This overrides the user configuration file.",
+    default=True,
+)
+
+populate_cache = click.option(
+    "--populate-cache/--no-populate-cache",
+    envvar="DBT_POPULATE_CACHE",
     help="Allow for partial parsing by looking for and writing to a pickle file in the target directory. This overrides the user configuration file.",
     default=True,
 )
@@ -303,6 +311,7 @@ project_dir = click.option(
 
 quiet = click.option(
     "--quiet/--no-quiet",
+    "-q",
     envvar="DBT_QUIET",
     help="Suppress all non-error logging to stdout. Does not affect {{ print() }} macro calls.",
 )
@@ -319,7 +328,7 @@ resource_type = click.option(
     "--resource-types",
     "--resource-type",
     envvar=None,
-    help="TODO: No current help text",
+    help="Restricts the types of resources that dbt will include",
     type=ChoiceTuple(
         [
             "metric",
@@ -350,7 +359,11 @@ select_attrs = {
     "type": tuple,
 }
 
-inline = click.option("--inline", envvar=None, help="Pass SQL inline to dbt compile and show")
+inline = click.option(
+    "--inline",
+    envvar=None,
+    help="Pass SQL inline to dbt compile and show",
+)
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
@@ -361,7 +374,9 @@ raw_select = click.option(*select_decls, **select_attrs)
 select = click.option(*select_decls, *model_decls, **select_attrs)
 
 selector = click.option(
-    "--selector", envvar=None, help="The selector name to use, as defined in selectors.yml"
+    "--selector",
+    envvar=None,
+    help="The selector name to use, as defined in selectors.yml",
 )
 
 send_anonymous_usage_stats = click.option(
@@ -372,7 +387,10 @@ send_anonymous_usage_stats = click.option(
 )
 
 show = click.option(
-    "--show", envvar=None, help="Show a sample of the loaded data in the terminal", is_flag=True
+    "--show",
+    envvar=None,
+    help="Show a sample of the loaded data in the terminal",
+    is_flag=True,
 )
 
 # TODO:  The env var is a correction!
@@ -389,13 +407,17 @@ single_threaded = click.option(
 )
 
 skip_profile_setup = click.option(
-    "--skip-profile-setup", "-s", envvar=None, help="Skip interactive profile setup.", is_flag=True
+    "--skip-profile-setup",
+    "-s",
+    envvar=None,
+    help="Skip interactive profile setup.",
+    is_flag=True,
 )
 
 state = click.option(
     "--state",
     envvar="DBT_STATE",
-    help="If set, use the given directory as the source for json files to compare with this project.",
+    help="If set, use the given directory as the source for JSON files to compare with this project.",
     type=click.Path(
         dir_okay=True,
         file_okay=False,
@@ -434,7 +456,10 @@ store_failures = click.option(
 )
 
 target = click.option(
-    "--target", "-t", envvar=None, help="Which target to load for the given profile"
+    "--target",
+    "-t",
+    envvar=None,
+    help="Which target to load for the given profile",
 )
 
 target_path = click.option(
@@ -450,20 +475,6 @@ threads = click.option(
     help="Specify number of threads to use while executing models. Overrides settings in profiles.yml.",
     default=None,
     type=click.INT,
-)
-
-use_colors = click.option(
-    "--use-colors/--no-use-colors",
-    envvar="DBT_USE_COLORS",
-    help="Specify whether log output is colorized.",
-    default=True,
-)
-
-use_colors_file = click.option(
-    "--use-colors-file/--no-use-colors-file",
-    envvar="DBT_USE_COLORS_FILE",
-    help="Specify whether log file output is colorized overriding --use-colors/--no-use-colors.",
-    default=True,
 )
 
 use_experimental_parser = click.option(
@@ -492,10 +503,12 @@ def _version_callback(ctx, _param, value):
 
 version = click.option(
     "--version",
+    "-V",
+    "-v",
     callback=_version_callback,
     envvar=None,
     expose_value=False,
-    help="Show version information",
+    help="Show version information and exit",
     is_eager=True,
     is_flag=True,
 )
@@ -503,7 +516,7 @@ version = click.option(
 version_check = click.option(
     "--version-check/--no-version-check",
     envvar="DBT_VERSION_CHECK",
-    help="Ensure dbt's version matches the one specified in the dbt_project.yml file ('require-dbt-version')",
+    help="If set, ensure the installed dbt version matches the require-dbt-version specified in the dbt_project.yml file (if any). Otherwise, allow them to differ.",
     default=True,
 )
 
@@ -527,13 +540,6 @@ warn_error_options = click.option(
 write_json = click.option(
     "--write-json/--no-write-json",
     envvar="DBT_WRITE_JSON",
-    help="Writing the manifest and run_results.json files to disk",
-    default=True,
-)
-
-write_manifest = click.option(
-    "--write-manifest/--no-write-manifest",
-    envvar=None,
-    help="TODO: No help text currently available",
+    help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
 )

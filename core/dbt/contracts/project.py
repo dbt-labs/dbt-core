@@ -243,25 +243,26 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
 
 @dataclass
 class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
-    send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-    use_colors: Optional[bool] = None
-    use_colors_file: Optional[bool] = None
-    partial_parse: Optional[bool] = None
-    printer_width: Optional[int] = None
-    write_json: Optional[bool] = None
-    warn_error: Optional[bool] = None
-    warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
+    cache_selected_only: Optional[bool] = None
+    debug: Optional[bool] = None
+    fail_fast: Optional[bool] = None
+    indirect_selection: Optional[str] = None
     log_format: Optional[str] = None
     log_format_file: Optional[str] = None
     log_level: Optional[str] = None
     log_level_file: Optional[str] = None
-    debug: Optional[bool] = None
-    version_check: Optional[bool] = None
-    fail_fast: Optional[bool] = None
-    use_experimental_parser: Optional[bool] = None
+    partial_parse: Optional[bool] = None
+    populate_cache: Optional[bool] = None
+    printer_width: Optional[int] = None
+    send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
     static_parser: Optional[bool] = None
-    indirect_selection: Optional[str] = None
-    cache_selected_only: Optional[bool] = None
+    use_colors: Optional[bool] = None
+    use_colors_file: Optional[bool] = None
+    use_experimental_parser: Optional[bool] = None
+    version_check: Optional[bool] = None
+    warn_error: Optional[bool] = None
+    warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
+    write_json: Optional[bool] = None
 
 
 @dataclass

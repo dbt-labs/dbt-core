@@ -1,54 +1,36 @@
 import pytest
 
+from dbt.contracts.results import RunResult
 from dbt.tests.util import run_dbt
-from tests.functional.fail_fast.fixtures import models, project_files  # noqa: F401
-from dbt.exceptions import FailFastError
 
 
-def check_audit_table(project, count=1):
-    query = "select * from {schema}.audit".format(schema=project.test_schema)
+models__one_sql = """
+select 1 /failed
+"""
 
-    vals = project.run_sql(query, fetch="all")
-    assert not (len(vals) == count), "Execution was not stopped before run end"
+models__two_sql = """
+select 1 /failed
+"""
 
 
-class TestFastFailingDuringRun:
+class FailFastBase:
     @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "config-version": 2,
-            "on-run-start": "create table if not exists {{ target.schema }}.audit (model text)",
-            "models": {
-                "test": {
-                    "pre-hook": [
-                        {
-                            # we depend on non-deterministic nature of tasks execution
-                            # there is possibility to run next task in-between
-                            # first task failure and adapter connections cancellations
-                            # if you encounter any problems with these tests please report
-                            # the sleep command with random time minimize the risk
-                            "sql": "select pg_sleep(random())",
-                            "transaction": False,
-                        },
-                        {
-                            "sql": "insert into {{ target.schema }}.audit values ('{{ this }}')",
-                            "transaction": False,
-                        },
-                    ],
-                }
-            },
-        }
+    def models(self):
+        return {"one.sql": models__one_sql, "two.sql": models__two_sql}
 
+
+class TestFastFailingDuringRun(FailFastBase):
     def test_fail_fast_run(
         self,
         project,
+        models,  # noqa: F811
     ):
-        with pytest.raises(FailFastError):
-            run_dbt(["run", "--threads", "1", "--fail-fast"])
-            check_audit_table(project)
+        res = run_dbt(["run", "--fail-fast", "--threads", "1"], expect_pass=False)
+        # a RunResult contains only one node so we can be sure only one model was run
+        assert type(res) == RunResult
 
 
-class TestFailFastFromConfig(TestFastFailingDuringRun):
+class TestFailFastFromConfig(FailFastBase):
     @pytest.fixture(scope="class")
     def profiles_config_update(self):
         return {
@@ -61,7 +43,8 @@ class TestFailFastFromConfig(TestFastFailingDuringRun):
     def test_fail_fast_run_user_config(
         self,
         project,
+        models,  # noqa: F811
     ):
-        with pytest.raises(FailFastError):
-            run_dbt(["run", "--threads", "1"])
-            check_audit_table(project)
+        res = run_dbt(["run", "--threads", "1"], expect_pass=False)
+        # a RunResult contains only one node so we can be sure only one model was run
+        assert type(res) == RunResult

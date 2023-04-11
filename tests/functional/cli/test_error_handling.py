@@ -15,3 +15,6 @@ class TestHandledExit:
 
     def test_failed_run_does_not_throw(self, project):
         run_dbt(["run"], expect_pass=False)
+
+    def test_fail_fast_failed_run_does_not_throw(self, project):
+        run_dbt(["--fail-fast", "run"], expect_pass=False)

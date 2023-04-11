@@ -88,6 +88,7 @@ class CompileTask(GraphRunnableTask):
                     compiled=result.node.compiled_code,
                     is_inline=is_inline,
                     output_format=output_format,
+                    unique_id=result.node.unique_id,
                 )
             )
 

@@ -371,6 +371,9 @@ class GraphRunnableTask(ConfiguredTask):
             self._skipped_children[dep_node_id] = cause
 
     def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
+        if not self.args.populate_cache:
+            return
+
         start_populate_cache = time.perf_counter()
         if get_flags().CACHE_SELECTED_ONLY is True:
             adapter.set_relations_cache(self.manifest, required_schemas=required_schemas)

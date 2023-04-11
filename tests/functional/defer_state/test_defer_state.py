@@ -5,8 +5,8 @@ from copy import deepcopy
 
 import pytest
 
+from dbt.cli.exceptions import DbtUsageException
 from dbt.tests.util import run_dbt, write_file, rm_file
-from dbt.cli.main import dbtUsageException
 
 from dbt.exceptions import DbtRuntimeError
 
@@ -99,7 +99,7 @@ class BaseDeferState:
 class TestDeferStateUnsupportedCommands(BaseDeferState):
     def test_unsupported_commands(self, project):
         # make sure these commands don"t work with --defer
-        with pytest.raises(dbtUsageException):
+        with pytest.raises(DbtUsageException):
             run_dbt(["seed", "--defer"])
 
     def test_no_state(self, project):

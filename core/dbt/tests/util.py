@@ -92,13 +92,19 @@ def run_dbt(args: List[str] = None, expect_pass=True):
         args.extend(["--project-dir", project_dir])
     if profiles_dir and "--profiles-dir" not in args:
         args.extend(["--profiles-dir", profiles_dir])
+
     dbt = dbtRunner()
-    res, success = dbt.invoke(args)
+    res = dbt.invoke(args)
+
+    # the exception is immediately raised to be caught in tests
+    # using a pattern like `with pytest.raises(SomeException):`
+    if res.exception is not None:
+        raise res.exception
 
     if expect_pass is not None:
-        assert success == expect_pass, "dbt exit state did not match expected"
+        assert res.success == expect_pass, "dbt exit state did not match expected"
 
-    return res
+    return res.result
 
 
 # Use this if you need to capture the command logs in a test.

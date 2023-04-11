@@ -26,6 +26,14 @@ message TimingInfoMsg {
     google.protobuf.Timestamp completed_at = 3;
 }
 
+// NodeRelation
+message NodeRelation {
+    string database = 10;
+    string schema = 11;
+    string alias = 12;
+    string relation_name = 13;
+}
+
 // NodeInfo
 message NodeInfo {
     string node_path = 1;
@@ -37,6 +45,7 @@ message NodeInfo {
     string node_started_at = 7;
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
+    NodeRelation node_relation = 10;
 }
 
 // RunResult
@@ -785,6 +794,28 @@ message FinishedRunningStats {
 message FinishedRunningStatsMsg {
     EventInfo info = 1;
     FinishedRunningStats data = 2;
+}
+
+// E048
+message ConstraintNotEnforced {
+    string constraint = 1;
+    string adapter = 2;
+}
+
+message ConstraintNotEnforcedMsg {
+    EventInfo info = 1;
+    ConstraintNotEnforced data = 2;
+}
+
+// E049
+message ConstraintNotSupported {
+    string constraint = 1;
+    string adapter = 2;
+}
+
+message ConstraintNotSupportedMsg {
+    EventInfo info = 1;
+    ConstraintNotSupported data = 2;
 }
 
 // I - Project parsing
@@ -1771,6 +1802,7 @@ message ShowNode {
     string preview = 2;
     bool is_inline = 3;
     string output_format = 4;
+    string unique_id = 5;
 }
 
 message ShowNodeMsg {
@@ -1784,6 +1816,7 @@ message CompiledNode {
     string compiled = 2;
     bool is_inline = 3;
     string output_format = 4;
+    string unique_id = 5;
 }
 
 message CompiledNodeMsg {
