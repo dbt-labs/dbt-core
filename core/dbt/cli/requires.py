@@ -41,16 +41,15 @@ def preflight(func):
         ctx.obj["flags"] = flags
         set_flags(flags)
 
-        # Tracking
-        set_invocation_id()
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
-        ctx.with_resource(track_run(run_command=flags.WHICH))
 
         # Logging
-        # N.B. Legacy logger is not supported
-        callabcks = ctx.obj.get("callbacks", [])
+        callbacks = ctx.obj.get("callbacks", [])
+        set_invocation_id()
+        setup_event_logger(flags=flags, callbacks=callbacks)
 
-        setup_event_logger(flags=flags, callbacks=callabcks)
+        # Tracking
+        ctx.with_resource(track_run(run_command=flags.WHICH))
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
