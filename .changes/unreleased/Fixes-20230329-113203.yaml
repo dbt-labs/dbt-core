@@ -1,0 +1,6 @@
+kind: Fixes
+body: Handle internal exceptions
+time: 2023-03-29T11:32:03.259072-05:00
+custom:
+  Author: stu-k
+  Issue: "7118"

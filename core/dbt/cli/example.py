@@ -8,7 +8,7 @@ if __name__ == "__main__":
     # initialize the dbt runner
     dbt = dbtRunner()
     # run the command
-    res, success = dbt.invoke(cli_args)
+    res = dbt.invoke(cli_args)
 
     # preload profile and project
     profile = load_profile(project_dir, {}, "testing-postgres")
@@ -17,4 +17,4 @@ if __name__ == "__main__":
     # initialize the runner with pre-loaded profile and project, you can also pass in a preloaded manifest
     dbt = dbtRunner(profile=profile, project=project)
     # run the command, this will use the pre-loaded profile and project instead of loading
-    res, success = dbt.invoke(cli_args)
+    res = dbt.invoke(cli_args)

@@ -7,11 +7,12 @@ from multiprocessing import get_context
 from pprint import pformat as pf
 from typing import Callable, Dict, List, Set
 
-from click import Context, get_current_context, BadOptionUsage
+from click import Context, get_current_context
 from click.core import ParameterSource, Command, Group
 
 from dbt.config.profile import read_user_config
 from dbt.contracts.project import UserConfig
+from dbt.cli.exceptions import DbtUsageException
 from dbt.deprecations import renamed_env_var
 from dbt.helper_types import WarnErrorOptions
 from dbt.cli.resolvers import default_project_dir, default_log_path
@@ -137,8 +138,7 @@ class Flags:
                         if param_source == ParameterSource.DEFAULT:
                             continue
                         elif param_source != ParameterSource.ENVIRONMENT:
-                            raise BadOptionUsage(
-                                param_name,
+                            raise DbtUsageException(
                                 "Deprecated parameters can only be set via environment variables",
                             )
 
@@ -268,8 +268,8 @@ class Flags:
         for flag in group:
             flag_set_by_user = flag.lower() not in params_assigned_from_default
             if flag_set_by_user and set_flag:
-                raise BadOptionUsage(
-                    flag.lower(), f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
+                raise DbtUsageException(
+                    f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
                 )
             elif flag_set_by_user:
                 set_flag = flag

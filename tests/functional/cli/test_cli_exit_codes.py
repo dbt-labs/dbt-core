@@ -1,7 +1,7 @@
 import pytest
 
+from dbt.cli.exceptions import ResultExit
 from dbt.cli.main import cli
-from dbt.cli.requires import HandledExit
 
 
 good_sql = """
@@ -34,5 +34,5 @@ class TestExitCodeOne(CliRunnerBase):
         return {"model_one.sql": bad_sql}
 
     def test_exc_thrown(self, project):
-        with pytest.raises(HandledExit):
+        with pytest.raises(ResultExit):
             self.run_cli()

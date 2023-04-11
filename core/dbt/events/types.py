@@ -524,7 +524,8 @@ class ListRelations(DebugLevel):
         return "E014"
 
     def message(self) -> str:
-        return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
+        identifiers_str = ", ".join(r.identifier for r in self.relations)
+        return f"While listing relations in database={self.database}, schema={self.schema}, found: {identifiers_str}"
 
 
 class ConnectionUsed(DebugLevel):
