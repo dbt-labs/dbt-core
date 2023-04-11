@@ -5,6 +5,7 @@ from multiprocessing import get_context
 from pathlib import Path
 from typing import List
 
+from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import cli
 from dbt.contracts.project import UserConfig
 from dbt.cli.flags import Flags
@@ -148,7 +149,7 @@ class TestFlags:
             "run", ["--warn-error", "--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -158,7 +159,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -167,7 +168,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include":"all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -177,7 +178,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -187,7 +188,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -198,7 +199,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize(

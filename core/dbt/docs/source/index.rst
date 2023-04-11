@@ -13,7 +13,7 @@ Right now the best way to invoke a command from python runtime is to use the `db
     # initialize the dbt runner
     dbt = dbtRunner()
     # run the command
-    res, success = dbt.invoke(args)
+    res = dbt.invoke(args)
 
 You can also pass in pre constructed object into dbtRunner, and we will use those objects instead of loading up from the disk.
 
@@ -26,7 +26,7 @@ You can also pass in pre constructed object into dbtRunner, and we will use thos
     # initialize the runner with pre-loaded profile and project
     dbt = dbtRunner(profile=profile, project=project)
     # run the command, this will use the pre-loaded profile and project instead of loading
-    res, success = dbt.invoke(cli_args)
+    res = dbt.invoke(cli_args)
 
 
 For the full example code, you can refer to `core/dbt/cli/example.py`

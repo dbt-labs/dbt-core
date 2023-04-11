@@ -1,0 +1,7 @@
+kind: Features
+body: Add relation info (database, schema, alias) to node_info dictionary in structured
+  logging
+time: 2023-04-10T17:48:24.870944+02:00
+custom:
+  Author: jtcohen6
+  Issue: "6724"

@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Improves build times for common selections by improving subgraph calculation
+time: 2023-03-19T17:28:24.321555-07:00
+custom:
+  Author: '@ttusing'
+  Issue: "7195"

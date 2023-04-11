@@ -262,6 +262,12 @@ class NodeInfoMixin:
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
             "meta": getattr(self, "meta", {}),
+            "node_relation": {
+                "database": getattr(self, "database", None),
+                "schema": getattr(self, "schema", None),
+                "alias": getattr(self, "alias", None),
+                "relation_name": getattr(self, "relation_name", None),
+            },
         }
         return node_info
 
@@ -438,13 +444,16 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         if old is None:
             return False
 
+        # Need to ensure that same_contract is called because it
+        # could throw an error
+        same_contract = self.same_contract(old)
         return (
             self.same_body(old)
             and self.same_config(old)
             and self.same_persisted_description(old)
             and self.same_fqn(old)
             and self.same_database_representation(old)
-            and self.same_contract(old)
+            and same_contract
             and True
         )
 

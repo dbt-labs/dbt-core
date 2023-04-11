@@ -1,0 +1,6 @@
+kind: Fixes
+body: Avoid revoking grants for views when `copy_grants=true`
+time: 2023-04-05T20:15:53.317994-06:00
+custom:
+  Author: dbeatty10 jtcohen6
+  Issue: "7280"
