@@ -10,6 +10,7 @@ import threading
 import traceback
 from typing import Any, Callable, List, Optional, TextIO
 from uuid import uuid4
+from dbt.events.format import timestamp_to_datetime_string
 
 from dbt.events.base_types import BaseEvent, EventLevel, msg_from_base_event, EventMsg
 
@@ -219,8 +220,3 @@ class EventManager:
     def flush(self):
         for logger in self.loggers:
             logger.flush()
-
-
-def timestamp_to_datetime_string(ts):
-    timestamp_dt = datetime.fromtimestamp(ts.seconds + ts.nanos / 1e9)
-    return timestamp_dt.strftime("%H:%M:%S.%f")

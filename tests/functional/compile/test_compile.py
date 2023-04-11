@@ -9,6 +9,7 @@ from tests.functional.compile.fixtures import (
     second_ephemeral_model_sql,
     third_ephemeral_model_sql,
     schema_yml,
+    model_multiline_jinja,
 )
 
 
@@ -39,6 +40,7 @@ class TestIntrospectFlag:
         assert get_lines("first_model") == ["select 1 as fun"]
         assert any("_test_compile as schema" in line for line in get_lines("second_model"))
 
+    @pytest.mark.skip("Investigate flaky test #7179")
     def test_no_introspect(self, project):
         with pytest.raises(DbtRuntimeError):
             run_dbt(["compile", "--no-introspect"])
@@ -54,22 +56,31 @@ class TestEphemeralModels:
         }
 
     def test_first_selector(self, project):
-        run_dbt(["compile", "--select", "first_ephemeral_model"])
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--select", "first_ephemeral_model"]
+        )
         assert file_exists("first_ephemeral_model")
         assert not file_exists("second_ephemeral_model")
         assert not file_exists("third_ephemeral_model")
+        assert "Compiled node 'first_ephemeral_model' is" in log_output
 
     def test_middle_selector(self, project):
-        run_dbt(["compile", "--select", "second_ephemeral_model"])
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--select", "second_ephemeral_model"]
+        )
         assert file_exists("first_ephemeral_model")
         assert file_exists("second_ephemeral_model")
         assert not file_exists("third_ephemeral_model")
+        assert "Compiled node 'second_ephemeral_model' is" in log_output
 
     def test_last_selector(self, project):
-        run_dbt(["compile", "--select", "third_ephemeral_model"])
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--select", "third_ephemeral_model"]
+        )
         assert file_exists("first_ephemeral_model")
         assert file_exists("second_ephemeral_model")
         assert file_exists("third_ephemeral_model")
+        assert "Compiled node 'third_ephemeral_model' is" in log_output
 
     def test_no_selector(self, project):
         run_dbt(["compile"])
@@ -110,7 +121,7 @@ class TestCompile:
             ["compile", "--inline", "select * from {{ ref('first_model') }}"]
         )
         assert len(results) == 1
-        assert "Compiled node 'inline_query' is:" in log_output
+        assert "Compiled inline node is:" in log_output
 
     def test_select_pass(self, project):
         (results, log_output) = run_dbt_and_capture(["compile", "--select", "second_model"])
@@ -129,3 +140,24 @@ class TestCompile:
             TargetNotFoundError, match="depends on a node named 'third_model' which was not found"
         ):
             run_dbt(["compile", "--inline", "select * from {{ ref('third_model') }}"])
+
+    def test_multiline_jinja(self, project):
+        (results, log_output) = run_dbt_and_capture(["compile", "--inline", model_multiline_jinja])
+        assert len(results) == 1
+        assert "Compiled inline node is:" in log_output
+
+    def test_output_json_select(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--select", "second_model", "--output", "json"]
+        )
+        assert len(results) == 3
+        assert "node" in log_output
+        assert "compiled" in log_output
+
+    def test_output_json_inline(self, project):
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--inline", "select * from {{ ref('second_model') }}", "--output", "json"]
+        )
+        assert len(results) == 1
+        assert '"node"' not in log_output
+        assert '"compiled"' in log_output

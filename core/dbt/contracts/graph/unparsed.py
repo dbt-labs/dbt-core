@@ -6,8 +6,8 @@ from dbt.contracts.util import (
     AdditionalPropertiesMixin,
     Mergeable,
     Replaceable,
-    rename_metric_attr,
 )
+from dbt.contracts.graph.manifest_upgrade import rename_metric_attr
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
