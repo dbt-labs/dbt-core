@@ -176,16 +176,6 @@ class ModelLevelConstraint(ColumnLevelConstraint):
 
 
 @dataclass
-class ModelLevelConstraint(ColumnLevelConstraint):
-    columns: List[str] = field(default_factory=list)
-
-
-@dataclass
-class ModelLevelConstraint(ColumnLevelConstraint):
-    columns: List[str] = field(default_factory=list)
-
-
-@dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     """Used in all ManifestNodes and SourceDefinition"""
 

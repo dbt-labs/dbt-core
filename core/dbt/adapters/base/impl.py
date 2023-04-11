@@ -1315,9 +1315,9 @@ class BaseAdapter(metaclass=AdapterMeta):
     def render_raw_columns_constraints(cls, raw_columns: Dict[str, Dict[str, Any]]) -> List:
         rendered_column_constraints = []
 
-        for _, v in raw_columns.items():
+        for v in raw_columns.values():
             rendered_column_constraint = [f"{v['name']} {v['data_type']}"]
-            for con in v["constraints"]:
+            for con in v.get("constraints", None):
                 constraint = cls._parse_column_constraint(con)
                 c = cls.process_parsed_constraint(constraint, cls.render_column_constraint)
                 if c is not None:
