@@ -147,8 +147,8 @@ class dbtRunner:
 @p.log_path
 @p.macro_debugging
 @p.partial_parse
-@p.print
 @p.populate_cache
+@p.print
 @p.printer_width
 @p.quiet
 @p.record_timing_info
