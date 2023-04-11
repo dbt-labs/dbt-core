@@ -2,12 +2,13 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Set, List, Any
 from dbt.adapters.base.meta import available
-from dbt.adapters.base.impl import AdapterConfig
+from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres.column import PostgresColumn
 from dbt.adapters.postgres import PostgresRelation
 from dbt.dataclass_schema import dbtClassMixin, ValidationError
+from dbt.contracts.graph.nodes import ConstraintType
 from dbt.exceptions import (
     CrossDbReferenceProhibitedError,
     IndexConfigNotDictError,
@@ -63,6 +64,14 @@ class PostgresAdapter(SQLAdapter):
     Column = PostgresColumn
 
     AdapterSpecificConfigs = PostgresConfig
+
+    CONSTRAINT_SUPPORT = {
+        ConstraintType.check: ConstraintSupport.ENFORCED,
+        ConstraintType.not_null: ConstraintSupport.ENFORCED,
+        ConstraintType.unique: ConstraintSupport.ENFORCED,
+        ConstraintType.primary_key: ConstraintSupport.ENFORCED,
+        ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
+    }
 
     @classmethod
     def date_function(cls):
