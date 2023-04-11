@@ -523,7 +523,6 @@ cli.add_command(ls, "ls")
 @p.threads
 @p.vars
 @p.version_check
-@p.write_manifest
 @requires.postflight
 @requires.preflight
 @requires.profile
