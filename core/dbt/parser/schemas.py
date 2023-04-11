@@ -1125,11 +1125,24 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     )
                     continue
 
+                # update versioned node unique_id
+                versioned_model_node_unique_id_old = versioned_model_node.unique_id
                 versioned_model_node.unique_id = (
                     f"model.{target.package_name}.{target.name}.{unparsed_version.formatted_v}"
                 )
+                # update source file.nodes with new unique_id
+                self.manifest.files[versioned_model_node.file_id].nodes.remove(
+                    versioned_model_node_unique_id_old
+                )
+                self.manifest.files[versioned_model_node.file_id].nodes.append(
+                    versioned_model_node.unique_id
+                )
+
+                # update versioned node fqn
                 versioned_model_node.fqn[-1] = target.name
                 versioned_model_node.fqn.append(unparsed_version.formatted_v)
+
+                # add versioned node back to nodes/disabled
                 add_node_nofile_fn(versioned_model_node)
 
                 # flatten columns based on include/exclude

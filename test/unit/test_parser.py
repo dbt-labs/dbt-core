@@ -564,6 +564,7 @@ class SchemaParserVersionedModelsTest(SchemaParserTest):
             refs=[],
             sources=[],
             patch_path=None,
+            file_id="snowplow://models/arbitrary_file_name.sql",
         )
         my_model_v2_node = MockNode(
             package="root",
@@ -572,13 +573,15 @@ class SchemaParserVersionedModelsTest(SchemaParserTest):
             refs=[],
             sources=[],
             patch_path=None,
+            file_id="snowplow://models/my_model_v2.sql",
         )
         nodes = {
             my_model_v1_node.unique_id: my_model_v1_node,
             my_model_v2_node.unique_id: my_model_v2_node,
         }
         macros = {m.unique_id: m for m in generate_name_macros("root")}
-        self.manifest = Manifest(nodes=nodes, macros=macros)
+        files = {node.file_id: mock.MagicMock(nodes=[node.unique_id]) for node in nodes.values()}
+        self.manifest = Manifest(nodes=nodes, macros=macros, files=files)
         self.manifest.ref_lookup
         self.parser = SchemaParser(
             project=self.snowplow_project_config,

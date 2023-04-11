@@ -317,7 +317,7 @@ class TestVersionedModels:
         model_two_node = manifest.nodes["model.test.model_one.v2"]
         assert model_two_node.is_latest_version
 
-        # update versions block - latest_version from 2 to 1
+        # update versions schema.yml block - latest_version from 2 to 1
         write_file(
             models_versions_updated_schema_yml, project.project_root, "models", "schema.yml"
         )
@@ -329,6 +329,11 @@ class TestVersionedModels:
         assert model_one_node.is_latest_version
         model_two_node = manifest.nodes["model.test.model_one.v2"]
         assert not model_two_node.is_latest_version
+
+        # update versioned model
+        write_file(model_two_sql, project.project_root, "models", "model_one_v2.sql")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 2
 
 
 class TestSources:
