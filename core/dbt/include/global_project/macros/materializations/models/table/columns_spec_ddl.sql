@@ -68,19 +68,13 @@
   {% set formatted_columns = [] %}
   {% for column in columns %}
     {%- set formatted_column = adapter.dispatch('format_column', 'dbt')(column) -%}
-    {%- do formatted_columns.append({'name': column.name, 'data_type': column.dtype, 'formatted': formatted_column}) -%}
+    {%- do formatted_columns.append(formatted_column) -%}
   {% endfor %}
   {{ return(formatted_columns) }}
 {% endmacro %}
 
-{% macro stringify_formatted_columns(formatted_columns) %}
-  {% set column_strings = [] %}
-  {% for column in formatted_columns %}
-     {% do column_strings.append(column['formatted']) %}
-  {% endfor %}
-  {{ return(column_strings|join(', ')) }}
-{% endmacro %}
-
 {% macro default__format_column(column) -%}
-  {{ return(column.column.lower() ~ " " ~ column.dtype) }}
+  {% set data_type = column.dtype %}
+  {% set formatted = column.column.lower() ~ " " ~ data_type %}
+  {{ return({'name': column.name, 'data_type': data_type, 'formatted': formatted}) }}
 {%- endmacro -%}
