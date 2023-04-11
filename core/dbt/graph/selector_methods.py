@@ -312,8 +312,8 @@ class PathSelectorMethod(SelectorMethod):
             ofp = Path(real_node.original_file_path)
             if ofp in paths:
                 yield node
-            if hasattr(real_node, "patch_path") and real_node.patch_path:
-                pfp = real_node.patch_path.split("://")[1]
+            if hasattr(real_node, "patch_path") and real_node.patch_path:  # type: ignore
+                pfp = real_node.patch_path.split("://")[1]  # type: ignore
                 ymlfp = Path(pfp)
                 if ymlfp in paths:
                     yield node

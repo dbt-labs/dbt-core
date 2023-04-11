@@ -71,7 +71,7 @@ exposures:
       email: nope@example.com
 """
 
-patch_path_selection_schema_yml="""
+patch_path_selection_schema_yml = """
 version: 2
 
 models:
