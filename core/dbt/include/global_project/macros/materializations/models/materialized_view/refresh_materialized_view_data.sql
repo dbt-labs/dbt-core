@@ -4,5 +4,5 @@
 
 
 {% macro default__get_refresh_data_in_materialized_view_sql(relation) %}
-    {{ return({'relations': [relation]}) }}
+    select 1;
 {% endmacro %}
