@@ -312,6 +312,11 @@ class PathSelectorMethod(SelectorMethod):
             ofp = Path(real_node.original_file_path)
             if ofp in paths:
                 yield node
+            if real_node.to_dict().get('patch_path', None):
+                pfp = real_node.patch_path.split('://')[1]
+                ymlfp = Path(pfp)    
+                if ymlfp in paths:  
+                    yield node
             elif any(parent in paths for parent in ofp.parents):
                 yield node
 
