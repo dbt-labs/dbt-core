@@ -38,9 +38,7 @@
 
   {#-- create dictionaries with name and formatted data type and strings for exception #}
   {%- set sql_columns = format_columns(sql_file_provided_columns) -%}
-  {%- set string_sql_columns = stringify_formatted_columns(sql_columns) -%}
   {%- set yaml_columns = format_columns(schema_file_provided_columns)  -%}
-  {%- set string_yaml_columns = stringify_formatted_columns(yaml_columns) -%}
 
   {%- if sql_columns|length != yaml_columns|length -%}
     {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
@@ -70,7 +68,7 @@
   {% set formatted_columns = [] %}
   {% for column in columns %}
     {%- set formatted_column = adapter.dispatch('format_column', 'dbt')(column) -%}
-    {%- do formatted_columns.append({'name': column.name, 'formatted': formatted_column}) -%}
+    {%- do formatted_columns.append({'name': column.name, 'data_type': column.dtype, 'formatted': formatted_column}) -%}
   {% endfor %}
   {{ return(formatted_columns) }}
 {% endmacro %}
