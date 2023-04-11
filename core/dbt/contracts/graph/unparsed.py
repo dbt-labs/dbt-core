@@ -144,13 +144,13 @@ NodeVersion = Union[str, float]
 @dataclass
 class UnparsedVersion(dbtClassMixin):
     v: NodeVersion
+    defined_in: Optional[str] = None
     description: str = ""
     access: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
-    defined_in: Optional[str] = None
     tests: Optional[List[TestDef]] = None
     columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
@@ -217,8 +217,16 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             version_values = [version.v for version in self.versions]
             if self.latest_version not in version_values:
                 raise ParsingError(
-                    f"latest_version: {self.latest_version} is not one of versions: {version_values}"
+                    f"latest_version: {self.latest_version} is not one of model '{self.name}' versions: {version_values} "
                 )
+
+        seen_versions: set[str] = set()
+        for version in self.versions:
+            if str(version.v) in seen_versions:
+                raise ParsingError(
+                    f"Found duplicate version: '{version.v}' in versions list of model '{self.name}'"
+                )
+            seen_versions.add(str(version.v))
 
         self._version_map = {version.v: version for version in self.versions}
 

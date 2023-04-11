@@ -34,6 +34,7 @@ from dbt.exceptions import (
     TestNameNotStringError,
     UnexpectedTestNamePatternError,
     UndefinedMacroError,
+    DbtInternalError,
 )
 from dbt.parser.search import FileBlock
 from dbt.utils import md5
@@ -181,14 +182,14 @@ class VersionedTestBlock(TestBlock, Generic[Versioned]):
         if not self.target.versions:
             return super().columns
         else:
-            raise Exception(".columns for VersionedTestBlock with versions")
+            raise DbtInternalError(".columns for VersionedTestBlock with versions")
 
     @property
     def tests(self) -> List[TestDef]:
         if not self.target.versions:
             return super().tests
         else:
-            raise Exception(".tests for VersionedTestBlock with versions")
+            raise DbtInternalError(".tests for VersionedTestBlock with versions")
 
     @classmethod
     def from_yaml_block(cls, src: YamlBlock, target: Versioned) -> "VersionedTestBlock[Versioned]":

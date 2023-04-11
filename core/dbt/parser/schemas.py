@@ -1062,11 +1062,22 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
     def parse_patch(self, block: TargetBlock[UnparsedModelUpdate], refs: ParserRef) -> None:
         target = block.target
+        if NodeType.Model.pluralize() != target.yaml_key:
+            warn_or_error(
+                WrongResourceSchemaFile(
+                    patch_name=target.name,
+                    resource_type=NodeType.Model,
+                    plural_resource_type=NodeType.Model.pluralize(),
+                    yaml_key=target.yaml_key,
+                    file_path=target.original_file_path,
+                )
+            )
+            return
+
         versions = target.versions
         if not versions:
             super().parse_patch(block, refs)
         else:
-            # TODO: error handling: WrongResourceSchemaFile, DbtInternalError (from base)
             assert isinstance(self.yaml.file, SchemaSourceFile)
             source_file: SchemaSourceFile = self.yaml.file
             latest_version = target.latest_version or max(versions).v
@@ -1115,7 +1126,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     version=unparsed_version.v,
                     is_latest_version=latest_version == unparsed_version.v,
                 )
+                # Node patched before config because config patching depends on model name,
+                # which may have been updated in the version patch
                 versioned_model_node.patch(versioned_model_patch)
+                # Includes alias recomputation
                 self.patch_node_config(versioned_model_node, versioned_model_patch)
                 source_file.append_patch(
                     versioned_model_patch.yaml_key, versioned_model_node.unique_id

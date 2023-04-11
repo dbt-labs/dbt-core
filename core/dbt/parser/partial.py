@@ -829,7 +829,6 @@ class PartialParsing:
             elem_name = parts[2]
             if elem_name == elem["name"]:
                 elem_unique_ids.append(unique_id)
-                # TODO - break if not model?
 
         # remove elem node and remove unique_id from node_patches
         for elem_unique_id in elem_unique_ids:

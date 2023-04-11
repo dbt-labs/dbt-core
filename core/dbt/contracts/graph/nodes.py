@@ -427,11 +427,29 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        self.name = patch.name
 
-        # TODO - these are model specific, so is access
+        # TODO: version, is_latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
+        if self.resource_type != NodeType.Model:
+            if patch.version:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="version",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
+            if patch.is_latest_version:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="is_latest_version",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
         self.version = patch.version
         self.is_latest_version = patch.is_latest_version
-        self.name = patch.name
+
         # This might not be the ideal place to validate the "access" field,
         # but at this point we have the information we need to properly
         # validate and we don't before this.
@@ -597,8 +615,15 @@ class HookNode(CompiledNode):
 class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
     access: AccessType = AccessType.Protected
-    version: Optional[str] = None
+    version: Optional[NodeVersion] = None
     is_latest_version: Optional[bool] = None
+
+    @property
+    def search_name(self):
+        if self.version is None:
+            return self.name
+        else:
+            return f"{self.name}.v{self.version}"
 
 
 # TODO: rm?

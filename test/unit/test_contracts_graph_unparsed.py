@@ -24,6 +24,7 @@ from dbt.contracts.graph.unparsed import (
     MetricFilter,
     MetricTime,
     MetricTimePeriod,
+    UnparsedVersion,
 )
 from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
@@ -632,6 +633,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
                 ),
             ],
             docs=Docs(show=False),
+            versions=[UnparsedVersion(v=2)],
         )
         dct = {
             "name": "foo",
@@ -642,7 +644,17 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "tests": ["table_test"],
             "meta": {"key": ["value1", "value2"]},
             "constraints": [],
-            "versions": [],
+            "versions": [
+                {
+                    "v": 2,
+                    "description": "",
+                    "columns": [],
+                    "config": {},
+                    "constraints": [],
+                    "meta": {},
+                    "docs": {"show": True},
+                }
+            ],
             "columns": [
                 {
                     "name": "x",
@@ -957,3 +969,41 @@ class TestUnparsedMetric(ContractTestCase):
         tst = self.get_ok_dict()
         tst["tags"] = [123]
         self.assert_fails_validation(tst)
+
+
+class TestUnparsedVersion(ContractTestCase):
+    ContractType = UnparsedVersion
+
+    def get_ok_dict(self):
+        return {
+            "v": 2,
+            "defined_in": "test_defined_in",
+            "description": "A version",
+            "config": {},
+            "meta": {},
+            "constraints": [],
+            "docs": {"show": False},
+            "tests": [],
+            "columns": [],
+        }
+
+    def test_ok(self):
+        version = self.ContractType(
+            v=2,
+            defined_in="test_defined_in",
+            description="A version",
+            config={},
+            meta={},
+            constraints=[],
+            docs=Docs(show=False),
+            tests=[],
+            columns=[],
+        )
+        dct = self.get_ok_dict()
+        self.assert_symmetric(version, dct)
+        pickle.loads(pickle.dumps(version))
+
+    def test_bad_version_no_v(self):
+        version = self.get_ok_dict()
+        del version["v"]
+        self.assert_fails_validation(version)

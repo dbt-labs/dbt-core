@@ -10,7 +10,6 @@ from dbt.exceptions import (
 )
 from dbt.version import __version__
 
-# from dbt.contracts.graph.nodes import RefArgs
 from dbt.events.functions import get_invocation_id, get_metadata_vars
 from dbt.dataclass_schema import dbtClassMixin
 

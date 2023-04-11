@@ -254,6 +254,42 @@ models:
                 arg: 100
 """
 
+
+MULTIPLE_TABLE_VERSIONED_MODEL_TESTS = """
+models:
+    - name: my_model
+      description: A description of my model
+      config:
+        materialized: table
+        sql_header: test_sql_header
+      tests:
+        - unique:
+            column_name: color
+      columns:
+        - name: color
+          description: The color value
+          tests:
+            - not_null:
+                severity: WARN
+        - name: location_id
+          data_type: int
+      versions:
+        - v: 1
+          defined_in: arbitrary_file_name
+          tests: []
+          columns:
+            - include: '*'
+            - name: extra
+        - v: 2
+          config:
+            materialized: view
+          columns:
+            - include: '*'
+              exclude: ['location_id']
+            - name: extra
+"""
+
+
 SINGLE_TABLE_SOURCE_PATCH = """
 sources:
   - name: my_source
@@ -516,6 +552,132 @@ class SchemaParserModelsTest(SchemaParserTest):
         schema_file_test_ids = self.parser.manifest.files[file_id].get_all_test_ids()
         self.assertEqual(sorted(schema_file_test_ids), [t.unique_id for t in tests])
         self.assertEqual(self.parser.manifest.files[file_id].node_patches, ["model.root.my_model"])
+
+
+class SchemaParserVersionedModelsTest(SchemaParserTest):
+    def setUp(self):
+        super().setUp()
+        my_model_v1_node = MockNode(
+            package="root",
+            name="arbitrary_file_name",
+            config=mock.MagicMock(enabled=True),
+            refs=[],
+            sources=[],
+            patch_path=None,
+        )
+        my_model_v2_node = MockNode(
+            package="root",
+            name="my_model_v2",
+            config=mock.MagicMock(enabled=True),
+            refs=[],
+            sources=[],
+            patch_path=None,
+        )
+        nodes = {
+            my_model_v1_node.unique_id: my_model_v1_node,
+            my_model_v2_node.unique_id: my_model_v2_node,
+        }
+        macros = {m.unique_id: m for m in generate_name_macros("root")}
+        self.manifest = Manifest(nodes=nodes, macros=macros)
+        self.manifest.ref_lookup
+        self.parser = SchemaParser(
+            project=self.snowplow_project_config,
+            manifest=self.manifest,
+            root_project=self.root_project_config,
+        )
+
+    def test__read_versioned_model_tests(self):
+        block = self.yaml_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_TESTS, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assertEqual(len(list(self.parser.manifest.sources)), 0)
+        self.assertEqual(len(list(self.parser.manifest.nodes)), 5)
+
+    def test__parse_versioned_model_tests(self):
+        block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_TESTS, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=5)
+
+        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
+        tests = []
+        for node in all_nodes:
+            if node.resource_type != NodeType.Test:
+                continue
+            tests.append(node)
+
+        # test on color column on my_model v1
+        self.assertEqual(tests[0].config.severity, "WARN")
+        self.assertEqual(tests[0].tags, [])
+        self.assertEqual(tests[0].refs, [RefArgs(name="my_model", version="1")])
+        self.assertEqual(tests[0].column_name, "color")
+        self.assertEqual(tests[0].package_name, "snowplow")
+        self.assertTrue(tests[0].name.startswith("not_null"))
+        self.assertEqual(tests[0].fqn, ["snowplow", tests[0].name])
+        self.assertEqual(
+            tests[0].unique_id.split("."), ["test", "snowplow", tests[0].name, "b704420587"]
+        )
+        self.assertEqual(tests[0].test_metadata.name, "not_null")
+        self.assertIsNone(tests[0].test_metadata.namespace)
+        self.assertEqual(
+            tests[0].test_metadata.kwargs,
+            {
+                "column_name": "color",
+                "model": "{{ get_where_subquery(ref('my_model', version='1')) }}",
+            },
+        )
+
+        # test on color column on my_model v2
+        self.assertEqual(tests[1].config.severity, "WARN")
+        self.assertEqual(tests[1].tags, [])
+        self.assertEqual(tests[1].refs, [RefArgs(name="my_model", version="2")])
+        self.assertEqual(tests[1].column_name, "color")
+        self.assertEqual(tests[1].fqn, ["snowplow", tests[1].name])
+        self.assertTrue(tests[1].name.startswith("not_null"))
+        self.assertEqual(tests[1].package_name, "snowplow")
+        self.assertEqual(
+            tests[1].unique_id.split("."), ["test", "snowplow", tests[1].name, "3375708d04"]
+        )
+        self.assertEqual(tests[1].test_metadata.name, "not_null")
+        self.assertIsNone(tests[0].test_metadata.namespace)
+        self.assertEqual(
+            tests[1].test_metadata.kwargs,
+            {
+                "column_name": "color",
+                "model": "{{ get_where_subquery(ref('my_model', version='2')) }}",
+            },
+        )
+
+        # model uniqueness test on column on my_model v2
+        self.assertEqual(tests[2].config.severity, "ERROR")
+        self.assertEqual(tests[2].tags, [])
+        self.assertEqual(tests[2].refs, [RefArgs(name="my_model", version="2")])
+        self.assertIsNone(tests[2].column_name)
+        self.assertEqual(tests[2].package_name, "snowplow")
+        self.assertTrue(tests[2].name.startswith("unique"))
+        self.assertEqual(tests[2].fqn, ["snowplow", tests[2].name])
+        self.assertEqual(
+            tests[2].unique_id.split("."), ["test", "snowplow", tests[2].name, "29b09359d1"]
+        )
+        self.assertEqual(tests[2].test_metadata.name, "unique")
+        self.assertIsNone(tests[2].test_metadata.namespace)
+        self.assertEqual(
+            tests[2].test_metadata.kwargs,
+            {
+                "column_name": "color",
+                "model": "{{ get_where_subquery(ref('my_model', version='2')) }}",
+            },
+        )
+
+        file_id = "snowplow://" + normalize("models/test_one.yml")
+        self.assertIn(file_id, self.parser.manifest.files)
+        schema_file_test_ids = self.parser.manifest.files[file_id].get_all_test_ids()
+        self.assertEqual(sorted(schema_file_test_ids), [t.unique_id for t in tests])
+        self.assertEqual(
+            self.parser.manifest.files[file_id].node_patches,
+            ["model.snowplow.my_model.v1", "model.snowplow.my_model.v2"],
+        )
 
 
 sql_model = """
