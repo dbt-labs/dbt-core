@@ -53,7 +53,8 @@ class dbtRunnerResult:
         bool,  # debug
         CatalogArtifact,  # docs generate
         List[str],  # list/ls
-        None,  # clean, deps, init, parse, source
+        Manifest,  # parse
+        None,  # clean, deps, init, source
         RunExecutionResult,  # build, compile, run, seed, snapshot, test
         RunOperationResultsArtifact,  # run-operation
     ] = None
