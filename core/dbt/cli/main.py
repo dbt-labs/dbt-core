@@ -148,11 +148,7 @@ class dbtRunner:
 @p.macro_debugging
 @p.partial_parse
 @p.print
-<<<<<<< HEAD
-=======
-@p.deprecated_print
 @p.populate_cache
->>>>>>> 362012793 (Move populate cache option to cli group)
 @p.printer_width
 @p.quiet
 @p.record_timing_info
