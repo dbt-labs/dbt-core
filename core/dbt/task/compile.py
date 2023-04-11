@@ -44,14 +44,6 @@ class CompileTask(GraphRunnableTask):
     # it should be removed before the task is complete
     _inline_node_id = None
 
-    # TODO remove when stu's PR about skip adapter cache is merged
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        if bool(getattr(self.args, "inline", None)):
-            # don't populate adapter cache when doing inline queries
-            pass
-        else:
-            super().before_run(adapter, selected_uids)
-
     def raise_on_first_error(self):
         return True
 
