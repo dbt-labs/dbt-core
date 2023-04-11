@@ -769,7 +769,7 @@ class FinishedRunningStats(InfoLevel, pt.FinishedRunningStats):
 
 
 @dataclass
-class ParseCmdOut(InfoLevel, pt.ParseCmdOut):
+class ParseCmdOut(InfoLevel, EventStringFunctor, pt.ParseCmdOut):
     def code(self):
         return "I001"
 
@@ -1163,7 +1163,7 @@ class NodeNotFoundOrDisabled(WarnLevel, pt.NodeNotFoundOrDisabled):
 
 
 @dataclass
-class JinjaLogWarning(WarnLevel, pt.JinjaLogWarning):
+class JinjaLogWarning(WarnLevel, EventStringFunctor, pt.JinjaLogWarning):
     def code(self):
         return "I061"
 
@@ -2359,7 +2359,7 @@ class RunResultWarningMessage(WarnLevel, EventStringFunctor, pt.RunResultWarning
 # The Note event provides a way to log messages which aren't likely to be useful as more structured events.
 # For conslole formatting text like empty lines and separator bars, use the Formatting event instead.
 @dataclass
-class Note(InfoLevel, pt.Note):
+class Note(InfoLevel, EventStringFunctor, pt.Note):
     def code(self):
         return "Z050"
 
