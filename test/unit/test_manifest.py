@@ -91,6 +91,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "access",
         "version",
         "is_latest_version",
+        "constraints",
     }
 )
 

@@ -238,6 +238,13 @@ partial_parse = click.option(
     default=True,
 )
 
+populate_cache = click.option(
+    "--populate-cache/--no-populate-cache",
+    envvar="DBT_POPULATE_CACHE",
+    help="Allow for partial parsing by looking for and writing to a pickle file in the target directory. This overrides the user configuration file.",
+    default=True,
+)
+
 port = click.option(
     "--port",
     envvar=None,

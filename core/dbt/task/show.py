@@ -81,6 +81,7 @@ class ShowTask(CompileTask):
                     preview=output.getvalue(),
                     is_inline=is_inline,
                     output_format=self.args.output,
+                    unique_id=result.node.unique_id,
                 )
             )
 

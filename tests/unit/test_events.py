@@ -178,6 +178,8 @@ sample_values = [
     types.DatabaseErrorRunningHook(hook_type=""),
     types.HooksRunning(num_hooks=0, hook_type=""),
     types.FinishedRunningStats(stat_line="", execution="", execution_time=0),
+    types.ConstraintNotEnforced(constraint="", adapter=""),
+    types.ConstraintNotSupported(constraint="", adapter=""),
     # I - Project parsing ======================
     types.InputFileDiffError(category="testing", file_id="my_file"),
     types.InvalidValueForField(field_name="test", field_value="test"),
@@ -334,8 +336,8 @@ sample_values = [
     types.CommandCompleted(
         command="", success=True, elapsed=0.1, completed_at=get_json_string_utcnow()
     ),
-    types.ShowNode(node_name="", preview="", is_inline=True),
-    types.CompiledNode(node_name="", compiled="", is_inline=True),
+    types.ShowNode(node_name="", preview="", is_inline=True, unique_id="model.test.my_model"),
+    types.CompiledNode(node_name="", compiled="", is_inline=True, unique_id="model.test.my_model"),
     # W - Node testing ======================
     types.CatchableExceptionOnRun(exc=""),
     types.InternalErrorOnRun(build_path="", exc=""),

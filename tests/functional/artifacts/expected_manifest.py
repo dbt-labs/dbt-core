@@ -323,6 +323,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     },
                 },
                 "contract": {"checksum": None, "enforced": False},
+                "constraints": [],
                 "patch_path": "test://" + model_schema_yml_path,
                 "docs": {"node_color": None, "show": False},
                 "compiled": True,
@@ -414,6 +415,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     },
                 },
                 "contract": {"checksum": None, "enforced": False},
+                "constraints": [],
                 "patch_path": "test://" + model_schema_yml_path,
                 "docs": {"node_color": None, "show": False},
                 "compiled": True,
@@ -943,6 +945,7 @@ def expected_references_manifest(project):
                 "access": "protected",
                 "version": None,
                 "is_latest_version": None,
+                "constraints": [],
             },
             "model.test.ephemeral_summary": {
                 "alias": "ephemeral_summary",
@@ -1007,6 +1010,7 @@ def expected_references_manifest(project):
                 "access": "protected",
                 "version": None,
                 "is_latest_version": None,
+                "constraints": [],
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1067,6 +1071,7 @@ def expected_references_manifest(project):
                 "access": "protected",
                 "version": None,
                 "is_latest_version": None,
+                "constraints": [],
             },
             "seed.test.seed": {
                 "alias": "seed",
@@ -1471,6 +1476,7 @@ def expected_versions_manifest(project):
                     },
                 },
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
+                "constraints": [],
                 "sources": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "deferred": False,
@@ -1535,6 +1541,7 @@ def expected_versions_manifest(project):
                     },
                 },
                 "config": get_rendered_model_config(materialized="view", group="test_group"),
+                "constraints": [],
                 "contract": {"checksum": None, "enforced": False},
                 "sources": [],
                 "depends_on": {"macros": [], "nodes": []},
@@ -1580,6 +1587,7 @@ def expected_versions_manifest(project):
                 "created_at": ANY,
                 "columns": {},
                 "config": get_rendered_model_config(),
+                "constraints": [],
                 "contract": {"checksum": None, "enforced": False},
                 "database": project.database,
                 "depends_on": {

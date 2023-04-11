@@ -41,6 +41,8 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     GraphMemberNode,
     ConstraintType,
+    ModelNode,
+    ModelLevelConstraint,
 )
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -134,7 +136,7 @@ class ParserRef:
         if any(
             c
             for c in column.constraints
-            if not c["type"] or not ConstraintType.is_valid(c["type"])
+            if "type" not in c or not ConstraintType.is_valid(c["type"])
         ):
             raise ParsingError(f"Invalid constraint type on column {column.name}")
 
@@ -956,7 +958,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     raise ParsingError(msg)
 
                 # all nodes in the disabled dict have the same unique_id so just grab the first one
-                # to append with the uniqe id
+                # to append with the unique id
                 source_file.append_patch(patch.yaml_key, found_nodes[0].unique_id)
                 for node in found_nodes:
                     node.patch_path = source_file.file_id
@@ -990,61 +992,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                 self.patch_node_config(node, patch)
 
             node.patch(patch)
-            self.validate_constraints(node)
             node.build_contract_checksum()
-
-    def validate_constraints(self, patched_node):
-        error_messages = []
-        contract_config = patched_node.config.get("contract")
-        if patched_node.resource_type == "model" and contract_config.enforced is True:
-            validators = [
-                self.constraints_schema_validator(patched_node),
-                self.constraints_materialization_validator(patched_node),
-                self.constraints_language_validator(patched_node),
-            ]
-            error_messages = [validator for validator in validators if validator != "None"]
-
-        if error_messages:
-            original_file_path = patched_node.original_file_path
-            raise ParsingError(
-                f"Original File Path: ({original_file_path})\nConstraints must be defined in a `yml` schema configuration file like `schema.yml`.\n`data_type` values must be defined for all columns and NOT be null or blank.{self.convert_errors_to_string(error_messages)}"
-            )
-
-    def convert_errors_to_string(self, error_messages: List[str]):
-        n = len(error_messages)
-        if not n:
-            return ""
-        if n == 1:
-            return error_messages[0]
-        error_messages_string = "".join(error_messages[:-1]) + f"{error_messages[-1]}"
-        return error_messages_string
-
-    def constraints_schema_validator(self, patched_node):
-        schema_error = False
-        if patched_node.columns == {}:
-            schema_error = True
-        schema_error_msg = "\n    Schema Error: `yml` configuration does NOT exist"
-        schema_error_msg_payload = f"{schema_error_msg if schema_error else None}"
-        return schema_error_msg_payload
-
-    def constraints_materialization_validator(self, patched_node):
-        materialization_error = {}
-        if patched_node.config.materialized not in ["table", "view", "incremental"]:
-            materialization_error = {"materialization": patched_node.config.materialized}
-        materialization_error_msg = f"\n    Materialization Error: {materialization_error}"
-        materialization_error_msg_payload = (
-            f"{materialization_error_msg if materialization_error else None}"
-        )
-        return materialization_error_msg_payload
-
-    def constraints_language_validator(self, patched_node):
-        language_error = {}
-        language = str(patched_node.language)
-        if language != "sql":
-            language_error = {"language": language}
-        language_error_msg = f"\n    Language Error: {language_error}"
-        language_error_msg_payload = f"{language_error_msg if language_error else None}"
-        return language_error_msg_payload
 
 
 # TestablePatchParser = seeds, snapshots
@@ -1167,7 +1115,12 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 # Node patched before config because config patching depends on model name,
                 # which may have been updated in the version patch
                 versioned_model_node.patch(versioned_model_patch)
-                self.validate_constraints(versioned_model_node)
+                # TODO: We want to do all the actual patching either in the above node.patch() call
+                # or here, but it will require some thought to the details. For now the patching is
+                # awkwardly split.
+                self.patch_constraints(
+                    versioned_model_node, unparsed_version.constraints or target.constraints
+                )
                 versioned_model_node.build_contract_checksum()
 
                 # Includes alias recomputation
@@ -1177,6 +1130,43 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 )
             self.manifest.rebuild_ref_lookup()
             self.manifest.rebuild_disabled_lookup()
+
+    def patch_constraints(self, node, constraints):
+        contract_config = node.config.get("contract")
+        assert isinstance(node, ModelNode)
+        if contract_config.enforced is True:
+            self._validate_constraint_prerequisites(node)
+
+            if any(
+                c for c in constraints if "type" not in c or not ConstraintType.is_valid(c["type"])
+            ):
+                raise ParsingError(
+                    f"Invalid constraint type on model {node.name}: "
+                    f"Type must be one of {[ct.value for ct in ConstraintType]}"
+                )
+
+            node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
+
+    def _validate_constraint_prerequisites(self, model_node: ModelNode):
+        errors = []
+        if not model_node.columns:
+            errors.append(
+                "Constraints must be defined in a `yml` schema configuration file like `schema.yml`."
+            )
+
+        if model_node.config.materialized not in ["table", "view", "incremental"]:
+            errors.append(
+                f"Only table, view, and incremental materializations are supported for constraints, but found '{model_node.config.materialized}'"
+            )
+
+        if str(model_node.language) != "sql":
+            errors.append(f"Language Error: Expected 'sql' but found '{model_node.language}'")
+
+        if errors:
+            raise ParsingError(
+                f"Constraint validation failed for: ({model_node.original_file_path})\n"
+                + "\n".join(errors)
+            )
 
     def _target_type(self) -> Type[UnparsedModelUpdate]:
         return UnparsedModelUpdate
