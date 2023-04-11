@@ -2165,7 +2165,7 @@ class ContractError(CompilationError):
                 # if name matches
                 if sql_col["name"] == yaml_col["name"]:
                     # if type matches
-                    if sql_col["formatted"] == yaml_col["formatted"]:
+                    if sql_col["data_type"] == yaml_col["data_type"]:
                         # its a perfect match! don't include in mismatch table
                         break
                     else:
