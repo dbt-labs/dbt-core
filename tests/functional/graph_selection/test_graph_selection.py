@@ -125,6 +125,10 @@ class TestGraphSelection(SelectionFixtures):
         check_result_nodes_by_name(results, ["nested_users", "subdir"])
         assert_correct_schemas(project)
 
+        results = run_dbt(["build", "--select", "models/patch_path_selection_schema.yml"])
+        check_result_nodes_by_name(results, ["subdir"])
+        assert_correct_schemas(project)
+
     def test_locally_qualified_name_model_with_dots(self, project):
         results = run_dbt(["run", "--select", "alternative.users"], expect_pass=False)
         check_result_nodes_by_name(results, ["alternative.users"])

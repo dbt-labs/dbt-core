@@ -71,6 +71,15 @@ exposures:
       email: nope@example.com
 """
 
+patch_path_selection_schema_yml = """
+version: 2
+
+models:
+  - name: subdir
+    description: submarine sandwich directory
+
+"""
+
 base_users_sql = """
 
 {{
@@ -182,6 +191,7 @@ class SelectionFixtures:
     def models(self):
         return {
             "schema.yml": schema_yml,
+            "patch_path_selection_schema.yml": patch_path_selection_schema_yml,
             "base_users.sql": base_users_sql,
             "users.sql": users_sql,
             "users_rollup.sql": users_rollup_sql,

@@ -48,12 +48,10 @@
 
   {#-- create dictionaries with name and formatted data type and strings for exception #}
   {%- set sql_columns = format_columns(sql_file_provided_columns) -%}
-  {%- set string_sql_columns = stringify_formatted_columns(sql_columns) -%}
   {%- set yaml_columns = format_columns(schema_file_provided_columns)  -%}
-  {%- set string_yaml_columns = stringify_formatted_columns(yaml_columns) -%}
 
   {%- if sql_columns|length != yaml_columns|length -%}
-    {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+    {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
   {%- endif -%}
 
   {%- for sql_col in sql_columns -%}
@@ -66,11 +64,11 @@
     {%- endfor -%}
     {%- if not yaml_col -%}
       {#-- Column with name not found in yaml #}
-      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
     {%- endif -%}
     {%- if sql_col['formatted'] != yaml_col[0]['formatted'] -%}
       {#-- Column data types don't match #}
-      {%- do exceptions.raise_contract_error(string_yaml_columns, string_sql_columns) -%}
+      {%- do exceptions.raise_contract_error(yaml_columns, sql_columns) -%}
     {%- endif -%}
   {%- endfor -%}
 
@@ -80,19 +78,13 @@
   {% set formatted_columns = [] %}
   {% for column in columns %}
     {%- set formatted_column = adapter.dispatch('format_column', 'dbt')(column) -%}
-    {%- do formatted_columns.append({'name': column.name, 'formatted': formatted_column}) -%}
+    {%- do formatted_columns.append(formatted_column) -%}
   {% endfor %}
   {{ return(formatted_columns) }}
 {% endmacro %}
 
-{% macro stringify_formatted_columns(formatted_columns) %}
-  {% set column_strings = [] %}
-  {% for column in formatted_columns %}
-     {% do column_strings.append(column['formatted']) %}
-  {% endfor %}
-  {{ return(column_strings|join(', ')) }}
-{% endmacro %}
-
 {% macro default__format_column(column) -%}
-  {{ return(column.column.lower() ~ " " ~ column.dtype) }}
+  {% set data_type = column.dtype %}
+  {% set formatted = column.column.lower() ~ " " ~ data_type %}
+  {{ return({'name': column.name, 'data_type': data_type, 'formatted': formatted}) }}
 {%- endmacro -%}
