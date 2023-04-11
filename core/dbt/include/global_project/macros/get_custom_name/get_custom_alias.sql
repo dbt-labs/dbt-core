@@ -25,7 +25,7 @@
 
     {%- elif node.version -%}
 
-        {{ return(node.name ~ "_v" ~ node.version) }}
+        {{ return(node.name ~ "_v" ~ (node.version | replace(".", "_"))) }}
 
     {%- else -%}
 
