@@ -2,7 +2,7 @@
   {{ adapter.dispatch('materialized_view__get_create_view_as_sql', 'dbt')(relation, sql) }}
 {%- endmacro %}
 
-{% macro default__get_create_view_as_sql(relation, sql) -%}
+{% macro default__materialized_viewget_create_view_as_sql(relation, sql) -%}
   {{ return(materialized_view__create_view_as(relation, sql)) }}
 {% endmacro %}
 
