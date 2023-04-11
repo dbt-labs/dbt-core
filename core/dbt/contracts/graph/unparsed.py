@@ -181,7 +181,7 @@ class UnparsedVersion(dbtClassMixin):
 
     def __post_init__(self):
         has_include_exclude = False
-        self._include_exclude = dbt.helper_types.IncludeExclude(include=[])
+        self._include_exclude = dbt.helper_types.IncludeExclude(include="*")
         self._unparsed_columns = []
         for column in self.columns:
             if isinstance(column, dbt.helper_types.IncludeExclude):

@@ -357,8 +357,6 @@ models:
     versions:
       - v: 1
         defined_in: arbitrary_file_name
-        columns:
-          - include: '*'
       - v: 2
         config:
           materialized: view
