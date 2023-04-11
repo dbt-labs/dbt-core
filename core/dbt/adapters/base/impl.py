@@ -734,7 +734,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 # for relation in cache_schemas:
                 #     cache_update.add((database, schema))
 
-                self.cache.update_schemas(set((database, schema)))
+                self.cache.update_schemas([(database, schema)])
 
         fire_event(
             ListRelations(
