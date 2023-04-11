@@ -323,6 +323,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     },
                 },
                 "contract": {"checksum": None, "enforced": False},
+                "constraints": [],
                 "patch_path": "test://" + model_schema_yml_path,
                 "docs": {"node_color": None, "show": False},
                 "compiled": True,
@@ -412,6 +413,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     },
                 },
                 "contract": {"checksum": None, "enforced": False},
+                "constraints": [],
                 "patch_path": "test://" + model_schema_yml_path,
                 "docs": {"node_color": None, "show": False},
                 "compiled": True,
@@ -934,6 +936,7 @@ def expected_references_manifest(project):
                 "checksum": checksum_file(ephemeral_copy_path),
                 "unrendered_config": get_unrendered_model_config(materialized="ephemeral"),
                 "access": "protected",
+                "constraints": [],
             },
             "model.test.ephemeral_summary": {
                 "alias": "ephemeral_summary",
@@ -996,6 +999,7 @@ def expected_references_manifest(project):
                     materialized="table", group="test_group"
                 ),
                 "access": "protected",
+                "constraints": [],
             },
             "model.test.view_summary": {
                 "alias": "view_summary",
@@ -1054,6 +1058,7 @@ def expected_references_manifest(project):
                 "checksum": checksum_file(view_summary_path),
                 "unrendered_config": get_unrendered_model_config(materialized="view"),
                 "access": "protected",
+                "constraints": [],
             },
             "seed.test.seed": {
                 "alias": "seed",
