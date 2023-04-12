@@ -546,42 +546,36 @@ class CompiledNode(ParsedNode):
             # A change, but not a breaking change
             return False
 
-        breaking_change_reasons = []
+        contract_enforced_disabled: bool = False
+        columns_removed: List[str] = []
+        column_type_changes: List[Tuple[str, str, str]] = []
         if old.contract.enforced is True and self.contract.enforced is False:
             # Breaking change: throw an error
             # Note: we don't have contract.checksum for current node, so build
             self.build_contract_checksum()
-            breaking_change_reasons.append("The contract has been disabled.")
+            contract_enforced_disabled = True
 
         if self.contract.checksum != old.contract.checksum:
-            columns_removed = []
-            column_type_changes = []
             for key, value in sorted(old.columns.items()):
                 # Has this column been removed?
                 if key not in self.columns.keys():
-                    columns_removed.append(key)
+                    columns_removed.append(value.name)
                 # Has this column's data type changed?
                 elif value.data_type != self.columns[key].data_type:
                     column_type_changes.append(
-                        f"{key} ({value.data_type} -> {self.columns[key].data_type})"
+                        (str(value.name), str(value.data_type), str(self.columns[key].data_type))
                     )
                 # Otherwise, this was an additive change -- not breaking
                 else:
                     continue
 
-            if columns_removed:
-                columns_removed_str = "\n  - ".join(columns_removed)
-                breaking_change_reasons.append(f"Columns were removed: \n - {columns_removed_str}")
-            if column_type_changes:
-                column_type_changes_str = "\n  - ".join(column_type_changes)
-                breaking_change_reasons.append(
-                    f"Columns with data_type changes: \n - {column_type_changes_str}"
-                )
-
-        if breaking_change_reasons:
+        if contract_enforced_disabled or columns_removed or column_type_changes:
             raise (
                 ContractBreakingChangeError(
-                    reasons="\n\n".join(breaking_change_reasons), node=self
+                    contract_enforced_disabled=contract_enforced_disabled,
+                    columns_removed=columns_removed,
+                    column_type_changes=column_type_changes,
+                    node=self,
                 )
             )
         else:
