@@ -39,7 +39,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, InvalidAccessTypeError, ModelContractError
+from dbt.exceptions import ParsingError, InvalidAccessTypeError, ContractBreakingChangeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -551,14 +551,39 @@ class CompiledNode(ParsedNode):
             # Breaking change: throw an error
             # Note: we don't have contract.checksum for current node, so build
             self.build_contract_checksum()
-            breaking_change_reasons.append("contract has been disabled")
+            breaking_change_reasons.append("The contract has been disabled.")
 
         if self.contract.checksum != old.contract.checksum:
-            # Breaking change, throw error
-            breaking_change_reasons.append("column definitions have changed")
+            columns_removed = []
+            column_type_changes = []
+            for key, value in sorted(old.columns.items()):
+                # Has this column been removed?
+                if key not in self.columns.keys():
+                    columns_removed.append(key)
+                # Has this column's data type changed?
+                elif value.data_type != self.columns[key].data_type:
+                    column_type_changes.append(
+                        f"{key} ({value.data_type} -> {self.columns[key].data_type})"
+                    )
+                # Otherwise, this was an additive change -- not breaking
+                else:
+                    continue
+
+            if columns_removed:
+                columns_removed_str = "\n  - ".join(columns_removed)
+                breaking_change_reasons.append(f"Columns were removed: \n - {columns_removed_str}")
+            if column_type_changes:
+                column_type_changes_str = "\n  - ".join(column_type_changes)
+                breaking_change_reasons.append(
+                    f"Columns with data_type changes: \n - {column_type_changes_str}"
+                )
 
         if breaking_change_reasons:
-            raise (ModelContractError(reasons=" and ".join(breaking_change_reasons), node=self))
+            raise (
+                ContractBreakingChangeError(
+                    reasons="\n\n".join(breaking_change_reasons), node=self
+                )
+            )
         else:
             # no breaking changes
             return True

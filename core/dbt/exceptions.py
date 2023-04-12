@@ -207,9 +207,9 @@ class CompilationError(DbtRuntimeError):
             )
 
 
-class ModelContractError(DbtRuntimeError):
+class ContractBreakingChangeError(DbtRuntimeError):
     CODE = 10016
-    MESSAGE = "Contract Error"
+    MESSAGE = "Breaking Change to Contract"
 
     def __init__(self, reasons, node=None):
         self.reasons = reasons
@@ -217,12 +217,14 @@ class ModelContractError(DbtRuntimeError):
 
     @property
     def type(self):
-        return "Contract"
+        return "Breaking Change to Contract"
 
     def message(self):
         return (
-            f"There is a breaking change in the model contract because {self.reasons}; "
-            "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+            "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
+            f"\n\n{self.reasons}\n\n"
+            "Consider making an additive (non-breaking) change instead, if possible.\n"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
         )
 
 
