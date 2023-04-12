@@ -28,7 +28,7 @@
   {% set contract_config = config.get('contract') %}
   {% if contract_config.enforced %}
     {{ get_assert_columns_equivalent(sql) }}
-    {{ get_columns_spec_ddl() }}
+    {{ get_table_columns_and_constraints() }}
     {%- set sql = get_select_subquery(sql) %}
   {% endif %}
   as (

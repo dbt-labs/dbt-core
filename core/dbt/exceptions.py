@@ -1,6 +1,8 @@
 import builtins
 import json
 import re
+import io
+import agate
 from typing import Any, Dict, List, Mapping, Optional, Union
 
 from dbt.dataclass_schema import ValidationError
@@ -2145,14 +2147,65 @@ class ContractError(CompilationError):
         self.sql_columns = sql_columns
         super().__init__(msg=self.get_message())
 
+    def get_mismatches(self) -> agate.Table:
+        # avoid a circular import
+        from dbt.clients.agate_helper import table_from_data_flat
+
+        column_names = ["column_name", "definition_type", "contract_type", "mismatch_reason"]
+        # list of mismatches
+        mismatches: List[Dict[str, str]] = []
+        # track sql cols so we don't need another for loop later
+        sql_col_set = set()
+        # for each sql col list
+        for sql_col in self.sql_columns:
+            # add sql col to set
+            sql_col_set.add(sql_col["name"])
+            # for each yaml col list
+            for i, yaml_col in enumerate(self.yaml_columns):
+                # if name matches
+                if sql_col["name"] == yaml_col["name"]:
+                    # if type matches
+                    if sql_col["data_type"] == yaml_col["data_type"]:
+                        # its a perfect match! don't include in mismatch table
+                        break
+                    else:
+                        # same name, diff type
+                        row = [
+                            sql_col["name"],
+                            sql_col["data_type"],
+                            yaml_col["data_type"],
+                            "data type mismatch",
+                        ]
+                        mismatches += [dict(zip(column_names, row))]
+                        break
+                # if last loop, then no name match
+                if i == len(self.yaml_columns) - 1:
+                    row = [sql_col["name"], sql_col["data_type"], "", "missing in contract"]
+                    mismatches += [dict(zip(column_names, row))]
+
+        # now add all yaml cols without a match
+        for yaml_col in self.yaml_columns:
+            if yaml_col["name"] not in sql_col_set:
+                row = [yaml_col["name"], "", yaml_col["data_type"], "missing in definition"]
+                mismatches += [dict(zip(column_names, row))]
+
+        mismatches_sorted = sorted(mismatches, key=lambda d: d["column_name"])
+        return table_from_data_flat(mismatches_sorted, column_names)
+
     def get_message(self) -> str:
+        table: agate.Table = self.get_mismatches()
+        # Hack to get Agate table output as string
+        output = io.StringIO()
+        table.print_table(output=output, max_rows=None, max_column_width=50)  # type: ignore
+        mismatches = output.getvalue()
+
         msg = (
-            "Contracts are enabled for this model. "
-            "Please ensure the name, data_type, and number of columns in your `yml` file "
-            "match the columns in your SQL file.\n"
-            f"Schema File Columns: {self.yaml_columns}\n"
-            f"SQL File Columns: {self.sql_columns}"
+            "This model has an enforced contract that failed.\n"
+            "Please ensure the name, data_type, and number of columns in your contract "
+            "match the columns in your model's definition.\n\n"
+            f"{mismatches}"
         )
+
         return msg
 
 

@@ -186,6 +186,7 @@ def base_parsed_model_dict():
         "unrendered_config": {},
         "config_call_dict": {},
         "access": AccessType.Protected.value,
+        "constraints": [],
     }
 
 
@@ -304,6 +305,7 @@ def complex_parsed_model_dict():
         },
         "config_call_dict": {},
         "access": AccessType.Protected.value,
+        "constraints": [],
     }
 
 

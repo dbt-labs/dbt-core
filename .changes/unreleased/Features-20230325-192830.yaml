@@ -1,0 +1,6 @@
+kind: Features
+body: Added prettier printing to ContractError class
+time: 2023-03-25T19:28:30.171461-07:00
+custom:
+  Author: kentkr
+  Issue: "7209"

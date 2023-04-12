@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix handling of artifacts in read_and_check_versions
+time: 2023-03-31T17:04:17.068698-04:00
+custom:
+  Author: gshank
+  Issue: "7252"

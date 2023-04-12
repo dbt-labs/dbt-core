@@ -222,6 +222,7 @@ def basic_compiled_dict():
         "unrendered_config": {},
         "config_call_dict": {},
         "access": "protected",
+        "constraints": [],
     }
 
 

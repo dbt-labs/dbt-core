@@ -3,8 +3,9 @@ import pytest
 import click
 from multiprocessing import get_context
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
+from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import cli
 from dbt.contracts.project import UserConfig
 from dbt.cli.flags import Flags
@@ -12,8 +13,10 @@ from dbt.helper_types import WarnErrorOptions
 
 
 class TestFlags:
-    def make_dbt_context(self, context_name: str, args: List[str]) -> click.Context:
-        ctx = cli.make_context(context_name, args)
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        ctx = cli.make_context(context_name, args, parent)
         return ctx
 
     @pytest.fixture(scope="class")
@@ -148,7 +151,7 @@ class TestFlags:
             "run", ["--warn-error", "--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -158,7 +161,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -167,7 +170,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include":"all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", [True, False])
@@ -177,7 +180,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -187,7 +190,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context)
 
     @pytest.mark.parametrize("warn_error", ["True", "False"])
@@ -198,7 +201,7 @@ class TestFlags:
         monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
         context = self.make_dbt_context("run", ["run"])
 
-        with pytest.raises(click.BadOptionUsage):
+        with pytest.raises(DbtUsageException):
             Flags(context, user_config)
 
     @pytest.mark.parametrize(
@@ -337,3 +340,10 @@ class TestFlags:
         assert flags.LOG_LEVEL_FILE == "warn"
         assert flags.USE_COLORS is True
         assert flags.USE_COLORS_FILE is False
+
+    def test_duplicate_flags_raises_error(self):
+        parent_context = self.make_dbt_context("parent", ["--version-check"])
+        context = self.make_dbt_context("child", ["--version-check"], parent_context)
+
+        with pytest.raises(DbtUsageException):
+            Flags(context)

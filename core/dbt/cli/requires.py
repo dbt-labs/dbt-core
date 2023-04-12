@@ -2,6 +2,10 @@ import dbt.tracking
 from dbt.version import installed as installed_version
 from dbt.adapters.factory import adapter_management, register_adapter
 from dbt.flags import set_flags, get_flag_dict
+from dbt.cli.exceptions import (
+    ExceptionExit,
+    ResultExit,
+)
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
@@ -13,38 +17,17 @@ from dbt.events.types import (
     MainTrackingUserState,
 )
 from dbt.events.helpers import get_json_string_utcnow
-from dbt.exceptions import DbtProjectError
+from dbt.events.types import MainEncounteredError, MainStackTrace
+from dbt.exceptions import Exception as DbtException, DbtProjectError, FailFastError
 from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
-from dbt.utils import cast_dict_to_dict_of_strings, ExitCodes
+from dbt.utils import cast_dict_to_dict_of_strings
 
 from click import Context
-from click.exceptions import ClickException
 from functools import update_wrapper
 import time
 import traceback
-
-
-class HandledExit(ClickException):
-    def __init__(self, result, success, exit_code: ExitCodes) -> None:
-        self.result = result
-        self.success = success
-        self.exit_code = exit_code
-
-    def show(self):
-        pass
-
-
-class UnhandledExit(ClickException):
-    exit_code = ExitCodes.UnhandledError.value
-
-    def __init__(self, exception: Exception, message: str) -> None:
-        self.exception = exception
-        self.message = message
-
-    def format_message(self) -> str:
-        return self.message
 
 
 def preflight(func):
@@ -91,6 +74,9 @@ def preflight(func):
 
 
 def postflight(func):
+    """The decorator that handles all exception handling for the click commands.
+    This decorator must be used before any other decorators that may throw an exception."""
+
     def wrapper(*args, **kwargs):
         ctx = args[0]
         start_func = time.perf_counter()
@@ -98,8 +84,16 @@ def postflight(func):
 
         try:
             result, success = func(*args, **kwargs)
-        except Exception as e:
-            raise UnhandledExit(e, message=traceback.format_exc())
+        except FailFastError as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            raise ResultExit(e.result)
+        except DbtException as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            raise ExceptionExit(e)
+        except BaseException as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
+            raise ExceptionExit(e)
         finally:
             fire_event(
                 CommandCompleted(
@@ -111,11 +105,7 @@ def postflight(func):
             )
 
         if not success:
-            raise HandledExit(
-                result=result,
-                success=success,
-                exit_code=ExitCodes.ModelError.value,
-            )
+            raise ResultExit(result)
 
         return (result, success)
 
@@ -234,8 +224,8 @@ def runtime_config(func):
 
 def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
-    given a profile, project, and runtime config. This also registers the adaper
-    from the runtime config and conditionally writes the manifest to disc.
+    given a profile, project, and runtime config. This also registers the adapter
+    from the runtime config and conditionally writes the manifest to disk.
     """
 
     def outer_wrapper(func):
