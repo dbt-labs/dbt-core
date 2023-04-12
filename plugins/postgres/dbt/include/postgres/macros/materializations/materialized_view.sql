@@ -18,3 +18,12 @@
     alter view {{ intermediate_relation }} rename to {{ relation.include(database=False, schema=False) }};
 
 {% endmacro %}
+
+
+{% macro redshift__get_alter_materialized_view_sql(relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
+    {% if 'index' in updates.keys() %}
+        select 1;
+    {% else %}
+        {{ postgres__get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation) }}
+    {% endif %}
+{% endmacro %}
