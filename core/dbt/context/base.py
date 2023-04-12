@@ -441,6 +441,10 @@ class BaseContext(metaclass=ContextMeta):
               {{ log("Running some_macro: " ~ arg1 ~ ", " ~ arg2) }}
             {% endmacro %}"
         """
+
+        if not isinstance(msg, str):
+            msg = str(msg)
+
         if info:
             fire_event(MacroEventInfo(msg=msg))
         else:
