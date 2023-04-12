@@ -28,6 +28,7 @@
 
     -- grab current tables grants config for comparison later on
     {% set grant_config = config.get('grants') %}
+    {% set on_configuration_change = config.get('on_configuration_change') %}
 
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -47,7 +48,7 @@
     {% elif relation.updates() %}
         {% set build_sql = get_alter_materialized_view_as_sql(target_relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% else %}
-        {% set build_sql = get_refresh_data_in_materialized_view_sql(target_relation) %}
+        {% set build_sql = refresh_materialized_view(target_relation) %}
     {% endif %}
 
     -- build model
