@@ -49,7 +49,7 @@ class OnConfigurationChangeOption(str, Enum):
 
     @classmethod
     def get_default(self):
-        return self.A
+        return self.apply
 
     @classmethod
     def is_valid(cls, item):
@@ -464,7 +464,7 @@ class NodeConfig(NodeAndTestConfig):
     unique_key: Union[str, List[str], None] = None
     on_schema_change: Optional[str] = "ignore"
     on_configuration_change: Optional[OnConfigurationChangeOption] = field(
-        default_factory=OnConfigurationChangeOption
+        default_factory=OnConfigurationChangeOption.get_default
     )
     grants: Dict[str, Any] = field(
         default_factory=dict, metadata=MergeBehavior.DictKeyAppend.meta()
