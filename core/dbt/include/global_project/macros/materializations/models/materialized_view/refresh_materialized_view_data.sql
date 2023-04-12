@@ -4,5 +4,5 @@
 
 
 {% macro default__get_refresh_data_in_materialized_view_sql(relation) %}
-    select 1;
+    refresh materialized view {{ relation }};
 {% endmacro %}

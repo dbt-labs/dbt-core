@@ -1,8 +1,15 @@
-{% macro get_create_materialized_view_as_sql(relation, sql) -%}
+{% macro get_create_materialized_view_as_sql(relation, sql) %}
     {{ adapter.dispatch('get_create_materialized_view_as_sql', 'dbt')(relation, sql) }}
-{%- endmacro %}
+{% endmacro %}
 
 
-{% macro default__get_create_materialized_view_as_sql(relation, sql) -%}
-    {{ return(get_create_view_as_sql(relation, sql)) }}
+{% macro default__get_create_materialized_view_as_sql(relation, sql) %}
+
+    create materialized view {{ relation }}
+    as (
+        {{ sql }}
+    );
+
+    {{ create_indexes(relation) }}
+
 {% endmacro %}

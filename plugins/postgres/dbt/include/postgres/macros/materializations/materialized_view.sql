@@ -1,29 +1,20 @@
-{% macro postgres__get_create_materialized_view_as_sql(relation, sql) %}
-    {{ return(get_create_view_as_sql(relation, sql)) }}
-{% endmacro %}
+{#
+    These macros use the default:
+        postgres__get_create_materialized_view_as_sql
+        postgres__get_refresh_data_in_materialized_view_sql
+        postgres__get_replace_materialized_view_as_sql
+#}
 
 
-{% macro postgres__get_refresh_data_in_materialized_view_sql(relation) %}
-    select 1;
-{% endmacro %}
-
-
-{% macro postgres__get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {{ get_create_view_as_sql(intermediate_relation, sql) }}
-
-    {% if existing_relation is not none %}
-        alter view {{ existing_relation }} rename to {{ backup_relation.include(database=False, schema=False) }};
-    {% endif %}
-
-    alter view {{ intermediate_relation }} rename to {{ relation.include(database=False, schema=False) }};
-
-{% endmacro %}
-
-
-{% macro redshift__get_alter_materialized_view_sql(relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {% if 'index' in updates.keys() %}
-        select 1;
+{% macro postgres__get_alter_materialized_view_sql(relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
+    {% if 'indexes' in updates.keys() %}
+        {% for index in updates.get('indexes') %}
+            {{ postgres__get_drop_index_sql(relation, index.get('definition')) }}
+            {% if not index.get('action') == 'drop' %}
+                {{ get_create_index_sql(relation, index.get('definition')) }}
+            {% endif %}
+        {% endfor %}
     {% else %}
-        {{ postgres__get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation) }}
+        {{ get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation) }}
     {% endif %}
 {% endmacro %}

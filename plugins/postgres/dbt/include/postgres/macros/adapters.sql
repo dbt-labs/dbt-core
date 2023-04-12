@@ -209,3 +209,12 @@
 {% macro postgres__copy_grants() %}
     {{ return(False) }}
 {% endmacro %}
+
+
+{% macro postgres__get_drop_index_sql(relation, index_dict) %}
+    {% set index_config = adapter.parse_index(index_dict) %}
+    {% set index_name = index_config.render(relation) %}
+
+    drop index if exists {{ index_name }};
+
+{% endmacro %}
