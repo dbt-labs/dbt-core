@@ -51,7 +51,6 @@
     {% elif full_refresh_mode or existing_relation.type != existing_relation.View %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% elif config_updates and on_configuration_change == 'apply' %}
-        {{ debug() }}
         {% set build_sql = get_alter_materialized_view_as_sql(target_relation, config_updates, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% elif config_updates and on_configuration_change == 'skip' %}
         {% set build_sql = "select 1" %}{# no-op #}
