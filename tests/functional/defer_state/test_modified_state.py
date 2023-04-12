@@ -385,11 +385,15 @@ class TestModifiedBodyAndContract:
 
         # Should raise even without specifying state:modified.contract
         with pytest.raises(ContractBreakingChangeError):
-            results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+            results = run_dbt(["run", "-s", "state:modified", "--state", "./state"])
 
         # Change both body and contract in a *non-breaking* way (= adding a new column)
         write_file(modified_my_model_non_breaking_yml, "models", "my_model.yml")
         write_file(modified_my_model_non_breaking_sql, "models", "my_model.sql")
 
         # Should pass
-        run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        run_dbt(["run", "-s", "state:modified", "--state", "./state"])
+
+        # The model's contract has changed, even if non-breaking, so it should be selected by 'state:modified.contract'
+        results = run_dbt(["list", "-s", "state:modified.contract", "--state", "./state"])
+        assert results == ["test.my_model"]

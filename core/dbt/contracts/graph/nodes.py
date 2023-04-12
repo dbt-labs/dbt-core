@@ -539,6 +539,7 @@ class CompiledNode(ParsedNode):
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
     def same_contract(self, old) -> bool:
+        # If the contract wasn't previously enforced
         if old.contract.enforced is False and self.contract.enforced is False:
             # Not a change
             return True
@@ -546,29 +547,40 @@ class CompiledNode(ParsedNode):
             # A change, but not a breaking change
             return False
 
+        # Otherwise: the contract was previously enforced
+        self.build_contract_checksum()
+
+        # If the checksums match up, the contract has not changed, so same_contract: True
+        if self.contract.checksum == old.contract.checksum:
+            return True
+
+        # The checksums don't match up, so there has been a change.
+        # We need to determine if it's a **breaking** change.
+        # These are the categories of breaking changes:
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Tuple[str, str, str]] = []
+
         if old.contract.enforced is True and self.contract.enforced is False:
-            # Breaking change: throw an error
-            # Note: we don't have contract.checksum for current node, so build
+            # Breaking change: the contract was previously enforced, and it no longer is
+            # Note: we don't have contract.checksum for current node, so build it now
             self.build_contract_checksum()
             contract_enforced_disabled = True
 
-        if self.contract.checksum != old.contract.checksum:
-            for key, value in sorted(old.columns.items()):
-                # Has this column been removed?
-                if key not in self.columns.keys():
-                    columns_removed.append(value.name)
-                # Has this column's data type changed?
-                elif value.data_type != self.columns[key].data_type:
-                    column_type_changes.append(
-                        (str(value.name), str(value.data_type), str(self.columns[key].data_type))
-                    )
-                # Otherwise, this was an additive change -- not breaking
-                else:
-                    continue
+        for key, value in sorted(old.columns.items()):
+            # Has this column been removed?
+            if key not in self.columns.keys():
+                columns_removed.append(value.name)
+            # Has this column's data type changed?
+            elif value.data_type != self.columns[key].data_type:
+                column_type_changes.append(
+                    (str(value.name), str(value.data_type), str(self.columns[key].data_type))
+                )
+            # Otherwise, this was an additive change -- not breaking
+            else:
+                continue
 
+        # Did we find any changes that we consider breaking? If so, throw an error
         if contract_enforced_disabled or columns_removed or column_type_changes:
             raise (
                 ContractBreakingChangeError(
@@ -578,9 +590,10 @@ class CompiledNode(ParsedNode):
                     node=self,
                 )
             )
+
+        # Otherwise, the contract has still changed, so same_contract: False
         else:
-            # no breaking changes
-            return True
+            return False
 
 
 # ====================================
