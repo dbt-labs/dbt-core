@@ -44,7 +44,7 @@ def _set_meta_value(obj: M, key: str, existing: Optional[Dict[str, Any]] = None)
 
 class OnConfigurationChangeOption(str, Enum):
     apply = "apply"
-    ignore = "ignore"
+    skip = "skip"
     fail = "fail"
 
     @classmethod
