@@ -349,6 +349,10 @@ class BaseRelation(FakeAPIObject, Hashable):
         return str(RelationType.External)
 
     @classproperty
+    def MaterializedView(cls) -> str:
+        return str(RelationType.MaterializedView)
+
+    @classproperty
     def get_relation_type(cls) -> Type[RelationType]:
         return RelationType
 

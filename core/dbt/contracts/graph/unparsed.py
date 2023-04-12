@@ -11,7 +11,7 @@ from dbt.contracts.graph.manifest_upgrade import rename_metric_attr
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -103,11 +103,7 @@ TestDef = Union[Dict[str, Any], str]
 
 @dataclass
 class HasColumnAndTestProps(HasColumnProps):
-    tests: Optional[List[TestDef]] = None
-
-    def __post_init__(self):
-        if self.tests is None:
-            self.tests = []
+    tests: List[TestDef] = field(default_factory=list)
 
 
 @dataclass
@@ -142,6 +138,61 @@ class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
 
 
+NodeVersion = Union[str, float]
+
+
+@dataclass
+class UnparsedVersion(dbtClassMixin):
+    v: NodeVersion
+    defined_in: Optional[str] = None
+    description: str = ""
+    access: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+    constraints: List[Dict[str, Any]] = field(default_factory=list)
+    docs: Docs = field(default_factory=Docs)
+    tests: Optional[List[TestDef]] = None
+    columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
+        default_factory=list
+    )
+
+    def __lt__(self, other):
+        try:
+            v = type(other.v)(self.v)
+            return v < other.v
+        except ValueError:
+            try:
+                other_v = type(self.v)(other.v)
+                return self.v < other_v
+            except ValueError:
+                return str(self.v) < str(other.v)
+
+    @property
+    def include_exclude(self) -> dbt.helper_types.IncludeExclude:
+        return self._include_exclude
+
+    @property
+    def unparsed_columns(self) -> List:
+        return self._unparsed_columns
+
+    @property
+    def formatted_v(self) -> str:
+        return f"v{self.v}"
+
+    def __post_init__(self):
+        has_include_exclude = False
+        self._include_exclude = dbt.helper_types.IncludeExclude(include="*")
+        self._unparsed_columns = []
+        for column in self.columns:
+            if isinstance(column, dbt.helper_types.IncludeExclude):
+                if not has_include_exclude:
+                    self._include_exclude = column
+                    has_include_exclude = True
+                else:
+                    raise ParsingError("version can have at most one include/exclude element")
+            else:
+                self._unparsed_columns.append(column)
+
+
 @dataclass
 class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMetadata):
     access: Optional[str] = None
@@ -151,6 +202,57 @@ class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMe
 class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYamlMetadata):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
+
+
+@dataclass
+class UnparsedModelUpdate(UnparsedNodeUpdate):
+    quote_columns: Optional[bool] = None
+    access: Optional[str] = None
+    latest_version: Optional[NodeVersion] = None
+    versions: Sequence[UnparsedVersion] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.latest_version:
+            version_values = [version.v for version in self.versions]
+            if self.latest_version not in version_values:
+                raise ParsingError(
+                    f"latest_version: {self.latest_version} is not one of model '{self.name}' versions: {version_values} "
+                )
+
+        seen_versions: set[str] = set()
+        for version in self.versions:
+            if str(version.v) in seen_versions:
+                raise ParsingError(
+                    f"Found duplicate version: '{version.v}' in versions list of model '{self.name}'"
+                )
+            seen_versions.add(str(version.v))
+
+        self._version_map = {version.v: version for version in self.versions}
+
+    def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
+        if version not in self._version_map:
+            raise DbtInternalError(
+                f"get_columns_for_version called for version '{version}' not in version map"
+            )
+
+        version_columns = []
+        unparsed_version = self._version_map[version]
+        for base_column in self.columns:
+            if unparsed_version.include_exclude.includes(base_column.name):
+                version_columns.append(base_column)
+
+        for column in unparsed_version.unparsed_columns:
+            version_columns.append(column)
+
+        return version_columns
+
+    def get_tests_for_version(self, version: NodeVersion) -> List[TestDef]:
+        if version not in self._version_map:
+            raise DbtInternalError(
+                f"get_tests_for_version called for version '{version}' not in version map"
+            )
+        unparsed_version = self._version_map[version]
+        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
 
 
 @dataclass

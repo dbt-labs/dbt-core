@@ -874,6 +874,29 @@ models:
 
 """
 
+models_versions_schema_yml = """
+
+models:
+    - name: model_one
+      description: "The first model"
+      versions:
+        - v: 1
+          defined_in: model_one
+        - v: 2
+"""
+
+models_versions_updated_schema_yml = """
+
+models:
+    - name: model_one
+      latest_version: 1
+      description: "The first model"
+      versions:
+        - v: 1
+          defined_in: model_one
+        - v: 2
+"""
+
 my_macro_sql = """
 {% macro do_something(foo2, bar2) %}
 

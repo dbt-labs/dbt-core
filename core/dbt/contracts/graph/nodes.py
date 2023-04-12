@@ -33,6 +33,7 @@ from dbt.contracts.graph.unparsed import (
     Owner,
     Quoting,
     TestDef,
+    NodeVersion,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedColumn,
@@ -138,6 +139,27 @@ class GraphNode(BaseNode):
 
     def same_fqn(self, other) -> bool:
         return self.fqn == other.fqn
+
+
+@dataclass
+class RefArgs(dbtClassMixin):
+    name: str
+    package: Optional[str] = None
+    version: Optional[NodeVersion] = None
+
+    @property
+    def positional_args(self) -> List[str]:
+        if self.package:
+            return [self.package, self.name]
+        else:
+            return [self.name]
+
+    @property
+    def keyword_args(self) -> Dict[str, Optional[NodeVersion]]:
+        if self.version:
+            return {"version": self.version}
+        else:
+            return {}
 
 
 class ConstraintType(str, Enum):
@@ -419,6 +441,29 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        self.name = patch.name
+
+        # TODO: version, latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
+        if self.resource_type != NodeType.Model:
+            if patch.version:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="version",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
+            if patch.latest_version:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="latest_version",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
+        self.version = patch.version
+        self.latest_version = patch.latest_version
+
         # This might not be the ideal place to validate the "access" field,
         # but at this point we have the information we need to properly
         # validate and we don't before this.
@@ -472,7 +517,7 @@ class CompiledNode(ParsedNode):
     so all ManifestNodes except SeedNode."""
 
     language: str = "sql"
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -585,6 +630,19 @@ class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
     access: AccessType = AccessType.Protected
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
+    version: Optional[NodeVersion] = None
+    latest_version: Optional[NodeVersion] = None
+
+    @property
+    def is_latest_version(self):
+        return self.version and self.version == self.latest_version
+
+    @property
+    def search_name(self):
+        if self.version is None:
+            return self.name
+        else:
+            return f"{self.name}.v{self.version}"
 
 
 # TODO: rm?
@@ -1066,7 +1124,7 @@ class Exposure(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
@@ -1158,7 +1216,7 @@ class Metric(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     group: Optional[str] = None
@@ -1262,6 +1320,8 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
 class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
     access: Optional[str]
+    version: Optional[NodeVersion]
+    latest_version: Optional[NodeVersion]
 
 
 @dataclass

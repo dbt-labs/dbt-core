@@ -1,6 +1,6 @@
 from copy import deepcopy
 from dbt.context.context_config import ContextConfig
-from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.graph.nodes import ModelNode, RefArgs
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
 from dbt.events.functions import fire_event
@@ -487,7 +487,16 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         node.unrendered_config.update(dict(statically_parsed["configs"]))
 
         # set refs and sources on the node object
-        node.refs += statically_parsed["refs"]
+        refs: List[RefArgs] = []
+        for ref in statically_parsed["refs"]:
+            if len(ref) == 1:
+                package, name = None, ref[0]
+            else:
+                package, name = ref[0], refs[1]
+
+            refs.append(RefArgs(package=package, name=name))
+
+        node.refs += refs
         node.sources += statically_parsed["sources"]
 
         # configs don't need to be merged into the node because they

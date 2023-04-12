@@ -256,6 +256,7 @@ class SourcePatcher:
             tags=tags,
             column_name=column_name,
             schema_file_id=target.file_id,
+            version=None,
         )
         return node
 

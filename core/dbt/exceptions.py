@@ -892,7 +892,8 @@ class MetricArgsError(CompilationError):
 class RefBadContextError(CompilationError):
     def __init__(self, node, args):
         self.node = node
-        self.args = args
+        self.args = args.positional_args  # type: ignore
+        self.kwargs = args.keyword_args  # type: ignore
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
@@ -906,7 +907,15 @@ class RefBadContextError(CompilationError):
             model_name = self.node.name
 
         ref_args = ", ".join("'{}'".format(a) for a in self.args)
-        ref_string = f"{{{{ ref({ref_args}) }}}}"
+
+        keyword_args = ""
+        if self.kwargs:
+            keyword_args = ", ".join(
+                "{}='{}'".format(k, v) for k, v in self.kwargs.items()  # type: ignore
+            )
+            keyword_args = "," + keyword_args
+
+        ref_string = f"{{{{ ref({ref_args}{keyword_args}) }}}}"
 
         msg = f"""dbt was unable to infer all dependencies for the model "{model_name}".
 This typically happens when ref() is placed within a conditional block.
@@ -1289,12 +1298,14 @@ class TargetNotFoundError(CompilationError):
         target_name: str,
         target_kind: str,
         target_package: Optional[str] = None,
+        target_version: Optional[Union[str, float]] = None,
         disabled: Optional[bool] = None,
     ):
         self.node = node
         self.target_name = target_name
         self.target_kind = target_kind
         self.target_package = target_package
+        self.target_version = target_version
         self.disabled = disabled
         super().__init__(msg=self.get_message())
 
@@ -1310,13 +1321,17 @@ class TargetNotFoundError(CompilationError):
         else:
             reason = "was not found"
 
+        target_version_string = ""
+        if self.target_version is not None:
+            target_version_string = f"with version '{self.target_version}' "
+
         target_package_string = ""
         if self.target_package is not None:
             target_package_string = f"in package '{self.target_package}' "
 
         msg = (
             f"{resource_type_title} '{unique_id}' ({original_file_path}) depends on a "
-            f"{self.target_kind} named '{self.target_name}' {target_package_string}which {reason}"
+            f"{self.target_kind} named '{self.target_name}' {target_version_string}{target_package_string}which {reason}"
         )
         return msg
 
