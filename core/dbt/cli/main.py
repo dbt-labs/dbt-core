@@ -202,7 +202,7 @@ def cli(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
-    """Run all Seeds, Models, Snapshots, and tests in DAG order"""
+    """Run all seeds, models, snapshots, and tests in DAG order"""
     task = BuildTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
@@ -323,7 +323,6 @@ def docs_serve(ctx, **kwargs):
 @p.show_output_format
 @p.indirect_selection
 @p.introspect
-@p.parse_only
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -370,7 +369,6 @@ def compile(ctx, **kwargs):
 @p.show_limit
 @p.indirect_selection
 @p.introspect
-@p.parse_only
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -417,7 +415,8 @@ def show(ctx, **kwargs):
 @requires.postflight
 @requires.preflight
 def debug(ctx, **kwargs):
-    """Show some helpful information about dbt for debugging. Not to be confused with the --debug option which increases verbosity."""
+    """Test the database connection and show information for debugging purposes. Not to be confused with the --debug option which increases verbosity."""
+
     task = DebugTask(
         ctx.obj["flags"],
         None,
@@ -516,7 +515,6 @@ cli.add_command(ls, "ls")
 # dbt parse
 @cli.command("parse")
 @click.pass_context
-@p.compile_parse
 @p.profile
 @p.profiles_dir
 @p.project_dir
@@ -525,7 +523,6 @@ cli.add_command(ls, "ls")
 @p.threads
 @p.vars
 @p.version_check
-@p.write_manifest
 @requires.postflight
 @requires.preflight
 @requires.profile

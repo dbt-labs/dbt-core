@@ -28,7 +28,7 @@ nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
 def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
-    EVENT_MANAGER.add_callbacks(callbacks=callbacks)
+    EVENT_MANAGER.callbacks = callbacks.copy()
 
     if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(
