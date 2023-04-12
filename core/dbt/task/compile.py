@@ -143,6 +143,7 @@ class CompileTask(GraphRunnableTask):
         # remove inline node from manifest
         if self._inline_node_id:
             self.manifest.nodes.pop(self._inline_node_id)
+            self._inline_node_id = None
         super().after_run(adapter, results)
 
     def _handle_result(self, result):
