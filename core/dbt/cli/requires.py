@@ -119,9 +119,8 @@ def unset_profile(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("profile") is None:
-            profile = UnsetProfile()
-            ctx.obj["profile"] = profile
+        profile = UnsetProfile()
+        ctx.obj["profile"] = profile
 
         return func(*args, **kwargs)
 
@@ -133,15 +132,12 @@ def profile(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("profile") is None:
-            flags = ctx.obj["flags"]
-            # TODO: Generalize safe access to flags.THREADS:
-            # https://github.com/dbt-labs/dbt-core/issues/6259
-            threads = getattr(flags, "THREADS", None)
-            profile = load_profile(
-                flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads
-            )
-            ctx.obj["profile"] = profile
+        flags = ctx.obj["flags"]
+        # TODO: Generalize safe access to flags.THREADS:
+        # https://github.com/dbt-labs/dbt-core/issues/6259
+        threads = getattr(flags, "THREADS", None)
+        profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
+        ctx.obj["profile"] = profile
 
         return func(*args, **kwargs)
 
@@ -153,22 +149,21 @@ def project(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("project") is None:
-            # TODO: Decouple target from profile, and remove the need for profile here:
-            # https://github.com/dbt-labs/dbt-core/issues/6257
-            if not ctx.obj.get("profile"):
-                raise DbtProjectError("profile required for project")
+        # TODO: Decouple target from profile, and remove the need for profile here:
+        # https://github.com/dbt-labs/dbt-core/issues/6257
+        if not ctx.obj.get("profile"):
+            raise DbtProjectError("profile required for project")
 
-            flags = ctx.obj["flags"]
-            project = load_project(
-                flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
-            )
-            ctx.obj["project"] = project
+        flags = ctx.obj["flags"]
+        project = load_project(
+            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
+        )
+        ctx.obj["project"] = project
 
-            if dbt.tracking.active_user is not None:
-                project_id = None if project is None else project.hashed_name()
+        if dbt.tracking.active_user is not None:
+            project_id = None if project is None else project.hashed_name()
 
-                dbt.tracking.track_project_id({"project_id": project_id})
+            dbt.tracking.track_project_id({"project_id": project_id})
 
         return func(*args, **kwargs)
 
