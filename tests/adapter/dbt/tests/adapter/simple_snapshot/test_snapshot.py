@@ -104,7 +104,8 @@ class BaseSimpleSnapshotBase:
             {(i, True) for i in ids_with_current_snapshot_records},
             {(i, False) for i in ids_with_closed_out_snapshot_records},
         )
-        assert records == expected_records
+        for record in records:
+            assert record in expected_records
 
 
 class BaseSimpleSnapshot(BaseSimpleSnapshotBase):

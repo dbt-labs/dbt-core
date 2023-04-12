@@ -3,7 +3,7 @@ import os
 import re
 import yaml
 
-from dbt.cli.main import dbtUsageException
+from dbt.cli.exceptions import DbtUsageException
 from dbt.tests.util import run_dbt
 
 MODELS__MODEL_SQL = """
@@ -88,7 +88,7 @@ class TestDebugInvalidProjectPostgres(BaseDebug):
         self.check_project(splitout)
 
     def test_not_found_project(self, project):
-        with pytest.raises(dbtUsageException):
+        with pytest.raises(DbtUsageException):
             run_dbt(["debug", "--project-dir", "nopass"])
 
     def test_invalid_project_outside_current_dir(self, project):

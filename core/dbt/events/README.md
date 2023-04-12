@@ -50,8 +50,6 @@ logger = AdapterLogger("<database name>")
 
 ## Compiling types.proto
 
-After adding a new message in types.proto, execute Makefile target:
-
-make proto_types in the repository root directory, or
-`protoc -I=. --python_out=. types.proto`
-in the core/dbt/events directory
+After adding a new message in `types.proto`, either:
+- In the repository root directory: `make proto_types`
+- In the `core/dbt/events` directory: `protoc -I=. --python_out=. types.proto`

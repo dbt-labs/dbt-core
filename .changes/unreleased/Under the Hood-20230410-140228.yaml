@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add unique_id to ShowNode and CompiledNode logging events
+time: 2023-04-10T14:02:28.86602-04:00
+custom:
+  Author: gshank
+  Issue: "7305"

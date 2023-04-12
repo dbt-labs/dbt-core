@@ -121,6 +121,12 @@ def test_node_info_events():
         "node_started_at": "some_time",
         "node_finished_at": "another_time",
         "meta": meta_dict,
+        "node_relation": {
+            "database": "some_database",
+            "schema": "some_schema",
+            "alias": "some_alias",
+            "relation_name": "some.relation.name",
+        },
     }
     event = LogStartLine(
         description="some description",
@@ -131,6 +137,17 @@ def test_node_info_events():
     assert event
     assert event.node_info.node_path == "some_path"
     assert event.to_dict()["node_info"]["meta"] == meta_dict
+
+    node_info["node_relation"]["database"] = None
+    node_info["node_relation"]["relation_name"] = "some_schema.some_alias"
+    event = LogStartLine(
+        description="some description",
+        index=123,
+        total=111,
+        node_info=node_info,
+    )
+    assert event.node_info.node_relation.database == ""
+    assert event.node_info.node_relation.relation_name == "some_schema.some_alias"
 
 
 def test_extra_dict_on_event(monkeypatch):
