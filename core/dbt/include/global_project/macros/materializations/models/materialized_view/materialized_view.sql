@@ -44,6 +44,8 @@
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
     {% elif full_refresh_mode or existing_relation.type != 'view' %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
+    {% elif relation.updates() %}
+        {% set build_sql = get_alter_materialized_view_as_sql(target_relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% else %}
         {% set build_sql = get_refresh_data_in_materialized_view_sql(target_relation) %}
     {% endif %}

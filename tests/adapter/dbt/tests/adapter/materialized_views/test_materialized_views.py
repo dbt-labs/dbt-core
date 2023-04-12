@@ -65,6 +65,11 @@ class MaterializedViewTestsBase:
         run_dbt(["run", "--models", self.materialized_view, "--full-refresh"])
         self.assert_relation_is_materialized_view(project, self.materialized_view)
 
+    def test_relation_is_materialized_view_on_update(self, project):
+        # TODO: add updates to the materialized view relation, i.e. backup setting
+        run_dbt(["run", "--models", self.materialized_view])
+        self.assert_relation_is_materialized_view(project, self.materialized_view)
+
     def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
         self.insert_test_records(project)
         assert self.get_records(project, self.materialized_view) == self.starting_records
