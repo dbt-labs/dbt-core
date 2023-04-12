@@ -1,5 +1,6 @@
 import pytest
 
+from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
 from dbt.tests.util import run_dbt, run_dbt_and_capture
 from tests.functional.compile.fixtures import (
@@ -161,3 +162,15 @@ class TestCompile:
         assert len(results) == 1
         assert '"node"' not in log_output
         assert '"compiled"' in log_output
+
+    def test_compile_inline_not_add_node(self, project):
+        dbt = dbtRunner()
+        parse_result = dbt.invoke(["parse"])
+        manifest = parse_result.result
+        assert len(manifest.nodes) == 4
+        dbt = dbtRunner(manifest=manifest)
+        dbt.invoke(
+            ["compile", "--inline", "select * from {{ ref('second_model') }}"],
+            populate_cache=False,
+        )
+        assert len(manifest.nodes) == 4
