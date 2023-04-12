@@ -43,10 +43,15 @@
     -- move the existing view out of the way
     {% if existing_relation is none %}
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
-    {% elif full_refresh_mode or existing_relation.type != 'view' %}
+    {% elif full_refresh_mode or existing_relation.type != relation.View %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {% elif relation.updates() %}
+    {% elif relation.updates() and on_configuration_change == 'apply' %}
         {% set build_sql = get_alter_materialized_view_as_sql(target_relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
+    {% elif relation.updates() and on_configuration_change == 'ignore' %}
+        {% set build_sql = "select 1" %}{# no-op #}
+        {{ exceptions.warn("Updates were identified and `on_configuration_change` was set to `ignore`: `" ~ target_relation ~ "` was skipped") }}
+    {% elif relation.updates() and on_configuration_change == 'fail' %}
+        {{ exceptions.raise_compiler_error("Updates were identified and `on_configuration_change` was set to `fail`") }}
     {% else %}
         {% set build_sql = refresh_materialized_view(target_relation) %}
     {% endif %}
