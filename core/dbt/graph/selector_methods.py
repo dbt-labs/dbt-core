@@ -17,7 +17,9 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     ResultNode,
     ManifestNode,
+    ModelNode,
 )
+from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     DbtInternalError,
@@ -48,6 +50,7 @@ class MethodName(StrEnum):
     Result = "result"
     SourceStatus = "source_status"
     Wildcard = "wildcard"
+    Version = "version"
 
 
 def is_selected_node(
@@ -639,6 +642,38 @@ class SourceStatusSelectorMethod(SelectorMethod):
                 yield node
 
 
+class VersionSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if isinstance(real_node, ModelNode):
+                if selector == "latest":
+                    if real_node.is_latest_version:
+                        yield node
+                elif selector == "prerelease":
+                    if (
+                        real_node.version
+                        and real_node.latest_version
+                        and UnparsedVersion(v=real_node.version)
+                        > UnparsedVersion(v=real_node.latest_version)
+                    ):
+                        yield node
+                elif selector == "old":
+                    if (
+                        real_node.version
+                        and real_node.latest_version
+                        and UnparsedVersion(v=real_node.version)
+                        < UnparsedVersion(v=real_node.latest_version)
+                    ):
+                        yield node
+                elif selector == "none":
+                    if real_node.version is None:
+                        yield node
+                else:
+                    raise DbtRuntimeError(
+                        f'Invalid version type selector {selector}: expected one of: "latest", "prerelease", "old", or "none"'
+                    )
+
+
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
@@ -657,6 +692,7 @@ class MethodManager:
         MethodName.Metric: MetricSelectorMethod,
         MethodName.Result: ResultSelectorMethod,
         MethodName.SourceStatus: SourceStatusSelectorMethod,
+        MethodName.Version: VersionSelectorMethod,
     }
 
     def __init__(

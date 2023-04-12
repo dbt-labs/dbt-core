@@ -245,6 +245,7 @@ class TestGraphSelection(SelectionFixtures):
             "test.unique_users_rollup_gender",
             "test.users",
             "test.users_rollup",
+            "test.versioned.v3",
         ]
         results = run_dbt(["run", "-m", "+exposure:user_exposure"], expect_pass=False)
         check_result_nodes_by_name(

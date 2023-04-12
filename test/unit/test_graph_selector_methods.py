@@ -42,6 +42,7 @@ from dbt.graph.selector_methods import (
     StateSelectorMethod,
     ExposureSelectorMethod,
     MetricSelectorMethod,
+    VersionSelectorMethod,
 )
 import dbt.exceptions
 import dbt.contracts.graph.nodes
@@ -608,7 +609,7 @@ def versioned_model_v1(seed):
         sources=[],
         path="subdirectory/versioned_model_v1.sql",
         version=1,
-        latest_version=1,
+        latest_version=2,
     )
 
 
@@ -623,7 +624,22 @@ def versioned_model_v2(seed):
         sources=[],
         path="subdirectory/versioned_model_v2.sql",
         version=2,
-        latest_version=1,
+        latest_version=2,
+    )
+
+
+@pytest.fixture
+def versioned_model_v3(seed):
+    return make_model(
+        "pkg",
+        "versioned_model",
+        'select * from {{ ref("seed") }}',
+        config_kwargs={"materialized": "table"},
+        refs=[seed],
+        sources=[],
+        path="subdirectory/versioned_model_v3.sql",
+        version="3",
+        latest_version=2,
     )
 
 
@@ -703,6 +719,7 @@ def manifest(
     union_model,
     versioned_model_v1,
     versioned_model_v2,
+    versioned_model_v3,
     ext_source_2,
     ext_source_other,
     ext_source_other_2,
@@ -729,6 +746,7 @@ def manifest(
         union_model,
         versioned_model_v1,
         versioned_model_v2,
+        versioned_model_v3,
         ext_model,
         table_id_unique,
         table_id_not_null,
@@ -789,6 +807,7 @@ def test_select_fqn(manifest):
         "union_model",
         "versioned_model.v1",
         "versioned_model.v2",
+        "versioned_model.v3",
         "table_model",
         "table_model_py",
         "table_model_csv",
@@ -804,6 +823,7 @@ def test_select_fqn(manifest):
     assert search_manifest_using_method(manifest, method, "versioned_model") == {
         "versioned_model.v1",
         "versioned_model.v2",
+        "versioned_model.v3",
     }
     assert search_manifest_using_method(manifest, method, "versioned_model.v1") == {
         "versioned_model.v1"
@@ -980,6 +1000,7 @@ def test_select_package(manifest):
         "union_model",
         "versioned_model.v1",
         "versioned_model.v2",
+        "versioned_model.v3",
         "table_model",
         "table_model_py",
         "table_model_csv",
@@ -1030,6 +1051,7 @@ def test_select_config_materialized(manifest):
         "union_model",
         "versioned_model.v1",
         "versioned_model.v2",
+        "versioned_model.v3",
         "mynamespace.union_model",
     }
 
@@ -1104,6 +1126,27 @@ def test_select_test_type(manifest):
         "unique_ext_raw_ext_source_id",
     }
     assert search_manifest_using_method(manifest, method, "data") == {"view_test_nothing"}
+
+
+def test_select_version(manifest):
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("version", [])
+    assert isinstance(method, VersionSelectorMethod)
+    assert method.arguments == []
+    assert search_manifest_using_method(manifest, method, "latest") == {"versioned_model.v2"}
+    assert search_manifest_using_method(manifest, method, "old") == {"versioned_model.v1"}
+    assert search_manifest_using_method(manifest, method, "prerelease") == {"versioned_model.v3"}
+    assert search_manifest_using_method(manifest, method, "none") == {
+        "table_model_py",
+        "union_model",
+        "view_model",
+        "mynamespace.ephemeral_model",
+        "table_model_csv",
+        "ephemeral_model",
+        "mynamespace.union_model",
+        "table_model",
+        "ext_model",
+    }
 
 
 def test_select_exposure(manifest):
