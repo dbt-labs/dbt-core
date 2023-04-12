@@ -334,7 +334,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unrendered_config": unrendered_model_config,
                 "access": "protected",
                 "version": None,
-                "is_latest_version": None,
+                "latest_version": None,
             },
             "model.test.second_model": {
                 "compiled_path": os.path.join(compiled_model_path, "second_model.sql"),
@@ -426,7 +426,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "unrendered_config": unrendered_second_config,
                 "access": "protected",
                 "version": None,
-                "is_latest_version": None,
+                "latest_version": None,
             },
             "seed.test.seed": {
                 "build_path": None,
@@ -944,7 +944,7 @@ def expected_references_manifest(project):
                 "unrendered_config": get_unrendered_model_config(materialized="ephemeral"),
                 "access": "protected",
                 "version": None,
-                "is_latest_version": None,
+                "latest_version": None,
                 "constraints": [],
             },
             "model.test.ephemeral_summary": {
@@ -1009,7 +1009,7 @@ def expected_references_manifest(project):
                 ),
                 "access": "protected",
                 "version": None,
-                "is_latest_version": None,
+                "latest_version": None,
                 "constraints": [],
             },
             "model.test.view_summary": {
@@ -1070,7 +1070,7 @@ def expected_references_manifest(project):
                 "unrendered_config": get_unrendered_model_config(materialized="view"),
                 "access": "protected",
                 "version": None,
-                "is_latest_version": None,
+                "latest_version": None,
                 "constraints": [],
             },
             "seed.test.seed": {
@@ -1519,7 +1519,7 @@ def expected_versions_manifest(project):
                 ),
                 "access": "protected",
                 "version": 1,
-                "is_latest_version": False,
+                "latest_version": 2,
             },
             "model.test.versioned_model.v2": {
                 "alias": "versioned_model_v2",
@@ -1586,7 +1586,7 @@ def expected_versions_manifest(project):
                 ),
                 "access": "protected",
                 "version": 2,
-                "is_latest_version": True,
+                "latest_version": 2,
             },
             "model.test.ref_versioned_model": {
                 "alias": "ref_versioned_model",
@@ -1645,7 +1645,7 @@ def expected_versions_manifest(project):
                 "unrendered_config": get_unrendered_model_config(),
                 "access": "protected",
                 "version": None,
-                "is_latest_version": None,
+                "latest_version": None,
             },
             "test.test.unique_versioned_model_v1_first_name.6138195dec": {
                 "alias": "unique_versioned_model_v1_first_name",

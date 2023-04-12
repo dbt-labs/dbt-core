@@ -443,7 +443,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.columns = patch.columns
         self.name = patch.name
 
-        # TODO: version, is_latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
+        # TODO: version, latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
         if self.resource_type != NodeType.Model:
             if patch.version:
                 warn_or_error(
@@ -453,16 +453,16 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
                         node_name=patch.name,
                     )
                 )
-            if patch.is_latest_version:
+            if patch.latest_version:
                 warn_or_error(
                     ValidationWarning(
-                        field_name="is_latest_version",
+                        field_name="latest_version",
                         resource_type=self.resource_type.value,
                         node_name=patch.name,
                     )
                 )
         self.version = patch.version
-        self.is_latest_version = patch.is_latest_version
+        self.latest_version = patch.latest_version
 
         # This might not be the ideal place to validate the "access" field,
         # but at this point we have the information we need to properly
@@ -631,7 +631,11 @@ class ModelNode(CompiledNode):
     access: AccessType = AccessType.Protected
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
-    is_latest_version: Optional[bool] = None
+    latest_version: Optional[NodeVersion] = None
+
+    @property
+    def is_latest_version(self):
+        return self.version and self.version == self.latest_version
 
     @property
     def search_name(self):
@@ -1317,7 +1321,7 @@ class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
     access: Optional[str]
     version: Optional[NodeVersion]
-    is_latest_version: Optional[bool]
+    latest_version: Optional[NodeVersion]
 
 
 @dataclass

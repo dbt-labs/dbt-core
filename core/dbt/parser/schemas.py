@@ -913,7 +913,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
             config=block.target.config,
             access=block.target.access,
             version=None,
-            is_latest_version=None,
+            latest_version=None,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -1150,7 +1150,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     config=deep_merge(target.config, unparsed_version.config),
                     access=unparsed_version.access or target.access,
                     version=unparsed_version.v,
-                    is_latest_version=latest_version == unparsed_version.v,
+                    latest_version=latest_version,
                 )
                 # Node patched before config because config patching depends on model name,
                 # which may have been updated in the version patch

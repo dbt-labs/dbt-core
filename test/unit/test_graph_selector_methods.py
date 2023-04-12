@@ -61,7 +61,7 @@ def make_model(
     fqn_extras=None,
     depends_on_macros=None,
     version=None,
-    is_latest_version=None,
+    latest_version=None,
 ):
     if refs is None:
         refs = []
@@ -118,7 +118,7 @@ def make_model(
         resource_type=NodeType.Model,
         checksum=FileHash.from_contents(""),
         version=version,
-        is_latest_version=is_latest_version,
+        latest_version=latest_version,
     )
 
 
@@ -608,7 +608,7 @@ def versioned_model_v1(seed):
         sources=[],
         path="subdirectory/versioned_model_v1.sql",
         version=1,
-        is_latest_version=True,
+        latest_version=1,
     )
 
 
@@ -623,7 +623,7 @@ def versioned_model_v2(seed):
         sources=[],
         path="subdirectory/versioned_model_v2.sql",
         version=2,
-        is_latest_version=False,
+        latest_version=1,
     )
 
 

@@ -90,7 +90,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "contract",
         "access",
         "version",
-        "is_latest_version",
+        "latest_version",
         "constraints",
     }
 )

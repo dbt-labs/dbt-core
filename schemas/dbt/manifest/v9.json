@@ -221,7 +221,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-04-11T19:52:19.583214Z"
+          "default": "2023-04-12T03:35:01.188035Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -232,7 +232,7 @@
               "type": "null"
             }
           ],
-          "default": "c7e00436-b3f5-482c-b5e7-4ffa51478509"
+          "default": "8aa1596d-f52f-40bc-ad4b-f5e48fc7e6c2"
         },
         "env": {
           "type": "object",
@@ -451,7 +451,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.584841
+          "default": 1681270501.189703
         },
         "config_call_dict": {
           "type": "object",
@@ -1155,7 +1155,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.586099
+          "default": 1681270501.19095
         },
         "config_call_dict": {
           "type": "object",
@@ -1542,7 +1542,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.586685
+          "default": 1681270501.191555
         },
         "config_call_dict": {
           "type": "object",
@@ -1817,7 +1817,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.587269
+          "default": 1681270501.192162
         },
         "config_call_dict": {
           "type": "object",
@@ -1946,10 +1946,13 @@
             }
           ]
         },
-        "is_latest_version": {
+        "latest_version": {
           "oneOf": [
             {
-              "type": "boolean"
+              "type": "string"
+            },
+            {
+              "type": "number"
             },
             {
               "type": "null"
@@ -1958,7 +1961,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "ModelNode(database: Optional[str], schema: str, name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, fqn: List[str], alias: str, checksum: dbt.contracts.files.FileHash, config: dbt.contracts.graph.model_config.NodeConfig = <factory>, _event_status: Dict[str, Any] = <factory>, tags: List[str] = <factory>, description: str = '', columns: Dict[str, dbt.contracts.graph.nodes.ColumnInfo] = <factory>, meta: Dict[str, Any] = <factory>, group: Optional[str] = None, docs: dbt.contracts.graph.unparsed.Docs = <factory>, patch_path: Optional[str] = None, build_path: Optional[str] = None, deferred: bool = False, unrendered_config: Dict[str, Any] = <factory>, created_at: float = <factory>, config_call_dict: Dict[str, Any] = <factory>, relation_name: Optional[str] = None, raw_code: str = '', language: str = 'sql', refs: List[dbt.contracts.graph.nodes.RefArgs] = <factory>, sources: List[List[str]] = <factory>, metrics: List[List[str]] = <factory>, depends_on: dbt.contracts.graph.nodes.DependsOn = <factory>, compiled_path: Optional[str] = None, compiled: bool = False, compiled_code: Optional[str] = None, extra_ctes_injected: bool = False, extra_ctes: List[dbt.contracts.graph.nodes.InjectedCTE] = <factory>, _pre_injected_sql: Optional[str] = None, contract: dbt.contracts.graph.nodes.Contract = <factory>, access: dbt.node_types.AccessType = <AccessType.Protected: 'protected'>, constraints: List[dbt.contracts.graph.nodes.ModelLevelConstraint] = <factory>, version: Union[str, float, NoneType] = None, is_latest_version: Optional[bool] = None)"
+      "description": "ModelNode(database: Optional[str], schema: str, name: str, resource_type: dbt.node_types.NodeType, package_name: str, path: str, original_file_path: str, unique_id: str, fqn: List[str], alias: str, checksum: dbt.contracts.files.FileHash, config: dbt.contracts.graph.model_config.NodeConfig = <factory>, _event_status: Dict[str, Any] = <factory>, tags: List[str] = <factory>, description: str = '', columns: Dict[str, dbt.contracts.graph.nodes.ColumnInfo] = <factory>, meta: Dict[str, Any] = <factory>, group: Optional[str] = None, docs: dbt.contracts.graph.unparsed.Docs = <factory>, patch_path: Optional[str] = None, build_path: Optional[str] = None, deferred: bool = False, unrendered_config: Dict[str, Any] = <factory>, created_at: float = <factory>, config_call_dict: Dict[str, Any] = <factory>, relation_name: Optional[str] = None, raw_code: str = '', language: str = 'sql', refs: List[dbt.contracts.graph.nodes.RefArgs] = <factory>, sources: List[List[str]] = <factory>, metrics: List[List[str]] = <factory>, depends_on: dbt.contracts.graph.nodes.DependsOn = <factory>, compiled_path: Optional[str] = None, compiled: bool = False, compiled_code: Optional[str] = None, extra_ctes_injected: bool = False, extra_ctes: List[dbt.contracts.graph.nodes.InjectedCTE] = <factory>, _pre_injected_sql: Optional[str] = None, contract: dbt.contracts.graph.nodes.Contract = <factory>, access: dbt.node_types.AccessType = <AccessType.Protected: 'protected'>, constraints: List[dbt.contracts.graph.nodes.ModelLevelConstraint] = <factory>, version: Union[str, float, NoneType] = None, latest_version: Union[str, float, NoneType] = None)"
     },
     "ModelLevelConstraint": {
       "type": "object",
@@ -2177,7 +2180,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.58805
+          "default": 1681270501.192949
         },
         "config_call_dict": {
           "type": "object",
@@ -2442,7 +2445,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.588607
+          "default": 1681270501.1935291
         },
         "config_call_dict": {
           "type": "object",
@@ -2700,7 +2703,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.5892649
+          "default": 1681270501.19419
         },
         "config_call_dict": {
           "type": "object",
@@ -2995,7 +2998,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.590366
+          "default": 1681270501.1952698
         },
         "config_call_dict": {
           "type": "object",
@@ -3482,7 +3485,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.591352
+          "default": 1681270501.1968079
         },
         "config_call_dict": {
           "type": "object",
@@ -3884,7 +3887,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.59236
+          "default": 1681270501.197819
         }
       },
       "additionalProperties": false,
@@ -3999,7 +4002,7 @@
         "generated_at": {
           "type": "string",
           "format": "date-time",
-          "default": "2023-04-11T19:52:19.581122Z"
+          "default": "2023-04-12T03:35:01.185979Z"
         },
         "invocation_id": {
           "oneOf": [
@@ -4010,7 +4013,7 @@
               "type": "null"
             }
           ],
-          "default": "c7e00436-b3f5-482c-b5e7-4ffa51478509"
+          "default": "8aa1596d-f52f-40bc-ad4b-f5e48fc7e6c2"
         },
         "env": {
           "type": "object",
@@ -4363,7 +4366,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.5926442
+          "default": 1681270501.198105
         },
         "supported_languages": {
           "oneOf": [
@@ -4603,7 +4606,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.593288
+          "default": 1681270501.198782
         }
       },
       "additionalProperties": false,
@@ -4823,7 +4826,7 @@
         },
         "created_at": {
           "type": "number",
-          "default": 1681242739.5939379
+          "default": 1681270501.199492
         },
         "group": {
           "oneOf": [

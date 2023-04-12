@@ -784,7 +784,7 @@ def basic_parsed_model_patch_dict():
         "config": {},
         "access": "public",
         "version": "1",
-        "is_latest_version": True,
+        "latest_version": "1",
     }
 
 
@@ -802,7 +802,7 @@ def basic_parsed_model_patch_object():
         config={},
         access="public",
         version="1",
-        is_latest_version=True,
+        latest_version="1",
     )
 
 
@@ -836,7 +836,7 @@ def patched_model_object():
         unrendered_config={},
         access=AccessType.Public,
         version="1",
-        is_latest_version=True,
+        latest_version="1",
     )
 
 
@@ -1920,7 +1920,7 @@ def populated_parsed_node_patch_dict():
         "config": {},
         "access": "public",
         "version": "1",
-        "is_latest_version": True,
+        "latest_version": "1",
     }
 
 
@@ -1938,7 +1938,7 @@ def populated_parsed_node_patch_object():
         config={},
         access="public",
         version="1",
-        is_latest_version=True,
+        latest_version="1",
     )
 
 
