@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump mashumaro[msgpack] from 3.3.1 to 3.6
+time: 2023-04-12T19:13:33.577730692+02:00
+custom:
+  Author: benallard
+  PR: "7294"
