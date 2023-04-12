@@ -459,7 +459,7 @@ class NodeConfig(NodeAndTestConfig):
     # sometimes getting the Union order wrong, causing serialization failures.
     unique_key: Union[str, List[str], None] = None
     on_schema_change: Optional[str] = "ignore"
-    on_configuration_change: OnConfigurationChangeOption = field(
+    on_configuration_change: Optional[OnConfigurationChangeOption] = field(
         default_factory=OnConfigurationChangeOption
     )
     grants: Dict[str, Any] = field(
