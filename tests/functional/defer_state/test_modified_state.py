@@ -20,6 +20,7 @@ from tests.functional.defer_state.fixtures import (
     infinite_macros_sql,
     contract_schema_yml,
     modified_contract_schema_yml,
+    disabled_contract_schema_yml,
 )
 
 
@@ -307,6 +308,11 @@ class TestChangedContract(BaseModifiedState):
 
         # Go back to schema file without contract. Should raise an error.
         write_file(schema_yml, "models", "schema.yml")
+        with pytest.raises(ContractBreakingChangeError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # Now disable the contract. Should raise an error.
+        write_file(disabled_contract_schema_yml, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 

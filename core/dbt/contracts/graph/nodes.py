@@ -539,23 +539,22 @@ class CompiledNode(ParsedNode):
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
     def same_contract(self, old) -> bool:
-        # If the contract wasn't previously enforced
+        # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
-            # Not a change
+            # No change -- same_contract: True
             return True
         if old.contract.enforced is False and self.contract.enforced is True:
-            # A change, but not a breaking change
+            # Now it's enforced. This is a change, but not a breaking change -- same_contract: False
             return False
 
-        # Otherwise: the contract was previously enforced
-        self.build_contract_checksum()
-
-        # If the checksums match up, the contract has not changed, so same_contract: True
-        if self.contract.checksum == old.contract.checksum:
+        # Otherwise: The contract was previously enforced, and we need to check for changes.
+        # Happy path: The contract is still being enforced, and the checksums are identical.
+        if self.contract.enforced is True and self.contract.checksum == old.contract.checksum:
+            # No change -- same_contract: True
             return True
 
-        # The checksums don't match up, so there has been a change.
-        # We need to determine if it's a **breaking** change.
+        # Otherwise: There has been a change.
+        # We need to determine if it is a **breaking** change.
         # These are the categories of breaking changes:
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
@@ -563,10 +562,9 @@ class CompiledNode(ParsedNode):
 
         if old.contract.enforced is True and self.contract.enforced is False:
             # Breaking change: the contract was previously enforced, and it no longer is
-            # Note: we don't have contract.checksum for current node, so build it now
-            self.build_contract_checksum()
             contract_enforced_disabled = True
 
+        # Next, compare each column from the previous contract (old.columns)
         for key, value in sorted(old.columns.items()):
             # Has this column been removed?
             if key not in self.columns.keys():
@@ -576,11 +574,11 @@ class CompiledNode(ParsedNode):
                 column_type_changes.append(
                     (str(value.name), str(value.data_type), str(self.columns[key].data_type))
                 )
-            # Otherwise, this was an additive change -- not breaking
-            else:
-                continue
 
-        # Did we find any changes that we consider breaking? If so, throw an error
+        # If a column has been added, it will be missing in the old.columns, and present in self.columns
+        # That's a change (caught by the different checksums), but not a breaking change
+
+        # Did we find any changes that we consider breaking? If so, that's an error
         if contract_enforced_disabled or columns_removed or column_type_changes:
             raise (
                 ContractBreakingChangeError(
@@ -591,7 +589,7 @@ class CompiledNode(ParsedNode):
                 )
             )
 
-        # Otherwise, the contract has still changed, so same_contract: False
+        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
         else:
             return False
 
