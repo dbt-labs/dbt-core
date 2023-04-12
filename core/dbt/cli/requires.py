@@ -9,7 +9,7 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
+from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
 from dbt.events.types import (
     CommandCompleted,
     MainReportVersion,
@@ -41,14 +41,14 @@ def preflight(func):
         ctx.obj["flags"] = flags
         set_flags(flags)
 
+        # Logging
+        callbacks = ctx.obj.get("callbacks", [])
+        set_invocation_id()
+        setup_event_logger(flags=flags, callbacks=callbacks)
+
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
-
-        # Logging
-        # N.B. Legacy logger is not supported
-        callabcks = ctx.obj.get("callbacks", [])
-        setup_event_logger(flags=flags, callbacks=callabcks)
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
@@ -224,8 +224,8 @@ def runtime_config(func):
 
 def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
-    given a profile, project, and runtime config. This also registers the adaper
-    from the runtime config and conditionally writes the manifest to disc.
+    given a profile, project, and runtime config. This also registers the adapter
+    from the runtime config and conditionally writes the manifest to disk.
     """
 
     def outer_wrapper(func):

@@ -17,7 +17,11 @@ def model(dbt, _):
         materialized='table',
     )
     df =  dbt.ref("my_sql_model")
-    df2 = dbt.source('test_source', 'test_table')
+    df2 = dbt.ref("my_versioned_sql_model", v=1)
+    df3 = dbt.ref("my_versioned_sql_model", version=1)
+    df4 = dbt.ref("test", "my_versioned_sql_model", v=1)
+    df5 = dbt.ref("test", "my_versioned_sql_model", version=1)
+    df6 = dbt.source("test_source", "test_table")
     df = df.limit(2)
     return df
 """
@@ -26,6 +30,11 @@ second_sql = """
 select * from {{ref('my_python_model')}}
 """
 schema_yml = """version: 2
+models:
+  - name: my_versioned_sql_model
+    versions:
+      - v: 1
+
 sources:
   - name: test_source
     loader: custom
@@ -63,6 +72,7 @@ class BasePythonModelTests:
         return {
             "schema.yml": schema_yml,
             "my_sql_model.sql": basic_sql,
+            "my_versioned_sql_model_v1.sql": basic_sql,
             "my_python_model.py": basic_python,
             "second_sql_model.sql": second_sql,
         }
@@ -75,7 +85,7 @@ class BasePythonModelTests:
 
         run_dbt(["seed", "--vars", yaml.safe_dump(vars_dict)])
         results = run_dbt(["run", "--vars", yaml.safe_dump(vars_dict)])
-        assert len(results) == 3
+        assert len(results) == 4
 
 
 m_1 = """

@@ -60,6 +60,8 @@ def make_model(
     config_kwargs=None,
     fqn_extras=None,
     depends_on_macros=None,
+    version=None,
+    latest_version=None,
 ):
     if refs is None:
         refs = []
@@ -80,6 +82,8 @@ def make_model(
         fqn_extras = []
 
     fqn = [pkg] + fqn_extras + [name]
+    if version:
+        fqn.append(f"v{version}")
 
     depends_on_nodes = []
     source_values = []
@@ -99,7 +103,7 @@ def make_model(
         alias=alias,
         name=name,
         fqn=fqn,
-        unique_id=f"model.{pkg}.{name}",
+        unique_id=f"model.{pkg}.{name}" if not version else f"model.{pkg}.{name}.v{version}",
         package_name=pkg,
         path=path,
         original_file_path=f"models/{path}",
@@ -113,6 +117,8 @@ def make_model(
         ),
         resource_type=NodeType.Model,
         checksum=FileHash.from_contents(""),
+        version=version,
+        latest_version=latest_version,
     )
 
 
@@ -592,6 +598,36 @@ def union_model(seed, ext_source):
 
 
 @pytest.fixture
+def versioned_model_v1(seed):
+    return make_model(
+        "pkg",
+        "versioned_model",
+        'select * from {{ ref("seed") }}',
+        config_kwargs={"materialized": "table"},
+        refs=[seed],
+        sources=[],
+        path="subdirectory/versioned_model_v1.sql",
+        version=1,
+        latest_version=1,
+    )
+
+
+@pytest.fixture
+def versioned_model_v2(seed):
+    return make_model(
+        "pkg",
+        "versioned_model",
+        'select * from {{ ref("seed") }}',
+        config_kwargs={"materialized": "table"},
+        refs=[seed],
+        sources=[],
+        path="subdirectory/versioned_model_v2.sql",
+        version=2,
+        latest_version=1,
+    )
+
+
+@pytest.fixture
 def table_id_unique(table_model):
     return make_unique_test("pkg", table_model, "id")
 
@@ -665,6 +701,8 @@ def manifest(
     ext_source,
     ext_model,
     union_model,
+    versioned_model_v1,
+    versioned_model_v2,
     ext_source_2,
     ext_source_other,
     ext_source_other_2,
@@ -689,6 +727,8 @@ def manifest(
         table_model_py,
         table_model_csv,
         union_model,
+        versioned_model_v1,
+        versioned_model_v2,
         ext_model,
         table_id_unique,
         table_id_not_null,
@@ -747,6 +787,8 @@ def test_select_fqn(manifest):
     # sources don't show up, because selection pretends they have no FQN. Should it?
     assert search_manifest_using_method(manifest, method, "pkg") == {
         "union_model",
+        "versioned_model.v1",
+        "versioned_model.v2",
         "table_model",
         "table_model_py",
         "table_model_csv",
@@ -758,6 +800,14 @@ def test_select_fqn(manifest):
         "mynamespace.seed",
     }
     assert search_manifest_using_method(manifest, method, "ext") == {"ext_model"}
+    # versions
+    assert search_manifest_using_method(manifest, method, "versioned_model") == {
+        "versioned_model.v1",
+        "versioned_model.v2",
+    }
+    assert search_manifest_using_method(manifest, method, "versioned_model.v1") == {
+        "versioned_model.v1"
+    }
     # wildcards
     assert search_manifest_using_method(manifest, method, "*.*.*_model") == {
         "mynamespace.union_model",
@@ -928,6 +978,8 @@ def test_select_package(manifest):
 
     assert search_manifest_using_method(manifest, method, "pkg") == {
         "union_model",
+        "versioned_model.v1",
+        "versioned_model.v2",
         "table_model",
         "table_model_py",
         "table_model_csv",
@@ -976,6 +1028,8 @@ def test_select_config_materialized(manifest):
         "table_model_py",
         "table_model_csv",
         "union_model",
+        "versioned_model.v1",
+        "versioned_model.v2",
         "mynamespace.union_model",
     }
 

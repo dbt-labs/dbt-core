@@ -70,6 +70,7 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     ResultNode,
 )
+from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
 from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError
 from dbt.parser.base import Parser
@@ -1048,6 +1049,7 @@ def invalid_target_fail_unless_test(
     target_name: str,
     target_kind: str,
     target_package: Optional[str] = None,
+    target_version: Optional[NodeVersion] = None,
     disabled: Optional[bool] = None,
     should_warn_if_disabled: bool = True,
 ):
@@ -1081,6 +1083,7 @@ def invalid_target_fail_unless_test(
             target_name=target_name,
             target_kind=target_kind,
             target_package=target_package,
+            target_version=target_version,
             disabled=disabled,
         )
 
@@ -1103,7 +1106,7 @@ def _check_resource_uniqueness(
         full_node_name = str(relation)
 
         existing_node = names_resources.get(name)
-        if existing_node is not None:
+        if existing_node is not None and existing_node.version is None:
             raise dbt.exceptions.DuplicateResourceNameError(existing_node, node)
 
         existing_alias = alias_resources.get(full_node_name)
@@ -1180,21 +1183,19 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
     """Given a manifest and exposure in that manifest, process its refs"""
     for ref in exposure.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
-        target_model_name: str
-        target_model_package: Optional[str] = None
+        target_model_name: str = ref.name
+        target_model_package: Optional[str] = ref.package
+        target_model_version: Optional[NodeVersion] = ref.version
 
-        if len(ref) == 1:
-            target_model_name = ref[0]
-        elif len(ref) == 2:
-            target_model_package, target_model_name = ref
-        else:
+        if len(ref.positional_args) < 1 or len(ref.positional_args) > 2:
             raise dbt.exceptions.DbtInternalError(
-                f"Refs should always be 1 or 2 arguments - got {len(ref)}"
+                f"Refs should always be 1 or 2 arguments - got {len(ref.positional_args)}"
             )
 
         target_model = manifest.resolve_ref(
             target_model_name,
             target_model_package,
+            target_model_version,
             current_project,
             exposure.package_name,
         )
@@ -1208,6 +1209,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
+                target_version=target_model_version,
                 disabled=(isinstance(target_model, Disabled)),
                 should_warn_if_disabled=False,
             )
@@ -1234,21 +1236,19 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
     """Given a manifest and a metric in that manifest, process its refs"""
     for ref in metric.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
-        target_model_name: str
-        target_model_package: Optional[str] = None
+        target_model_name: str = ref.name
+        target_model_package: Optional[str] = ref.package
+        target_model_version: Optional[NodeVersion] = ref.version
 
-        if len(ref) == 1:
-            target_model_name = ref[0]
-        elif len(ref) == 2:
-            target_model_package, target_model_name = ref
-        else:
+        if len(ref.positional_args) < 1 or len(ref.positional_args) > 2:
             raise dbt.exceptions.DbtInternalError(
-                f"Refs should always be 1 or 2 arguments - got {len(ref)}"
+                f"Refs should always be 1 or 2 arguments - got {len(ref.positional_args)}"
             )
 
         target_model = manifest.resolve_ref(
             target_model_name,
             target_model_package,
+            target_model_version,
             current_project,
             metric.package_name,
         )
@@ -1262,6 +1262,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
+                target_version=target_model_version,
                 disabled=(isinstance(target_model, Disabled)),
                 should_warn_if_disabled=False,
             )
@@ -1340,21 +1341,19 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
 
     for ref in node.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
-        target_model_name: str
-        target_model_package: Optional[str] = None
+        target_model_name: str = ref.name
+        target_model_package: Optional[str] = ref.package
+        target_model_version: Optional[NodeVersion] = ref.version
 
-        if len(ref) == 1:
-            target_model_name = ref[0]
-        elif len(ref) == 2:
-            target_model_package, target_model_name = ref
-        else:
+        if len(ref.positional_args) < 1 or len(ref.positional_args) > 2:
             raise dbt.exceptions.DbtInternalError(
-                f"Refs should always be 1 or 2 arguments - got {len(ref)}"
+                f"Refs should always be 1 or 2 arguments - got {len(ref.positional_args)}"
             )
 
         target_model = manifest.resolve_ref(
             target_model_name,
             target_model_package,
+            target_model_version,
             current_project,
             node.package_name,
         )
@@ -1368,6 +1367,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
                 target_name=target_model_name,
                 target_kind="node",
                 target_package=target_model_package,
+                target_version=target_model_version,
                 disabled=(isinstance(target_model, Disabled)),
                 should_warn_if_disabled=False,
             )

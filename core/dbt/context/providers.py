@@ -37,8 +37,10 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Resource,
     ManifestNode,
+    RefArgs,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
+from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.events.functions import get_metadata_vars
 from dbt.exceptions import (
     CompilationError,
@@ -212,16 +214,17 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
 class BaseRefResolver(BaseResolver):
     @abc.abstractmethod
-    def resolve(self, name: str, package: Optional[str] = None) -> RelationProxy:
+    def resolve(
+        self, name: str, package: Optional[str] = None, version: Optional[NodeVersion] = None
+    ) -> RelationProxy:
         ...
 
-    def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
-        if package is None:
-            return [name]
-        else:
-            return [package, name]
+    def _repack_args(
+        self, name: str, package: Optional[str], version: Optional[NodeVersion]
+    ) -> RefArgs:
+        return RefArgs(package=package, name=name, version=version)
 
-    def validate_args(self, name: str, package: Optional[str]):
+    def validate_args(self, name: str, package: Optional[str], version: Optional[NodeVersion]):
         if not isinstance(name, str):
             raise CompilationError(
                 f"The name argument to ref() must be a string, got {type(name)}"
@@ -232,9 +235,15 @@ class BaseRefResolver(BaseResolver):
                 f"The package argument to ref() must be a string or None, got {type(package)}"
             )
 
-    def __call__(self, *args: str) -> RelationProxy:
+        if version is not None and not isinstance(version, (str, int, float)):
+            raise CompilationError(
+                f"The version argument to ref() must be a string, int, float, or None - got {type(version)}"
+            )
+
+    def __call__(self, *args: str, **kwargs) -> RelationProxy:
         name: str
         package: Optional[str] = None
+        version: Optional[NodeVersion] = None
 
         if len(args) == 1:
             name = args[0]
@@ -242,8 +251,10 @@ class BaseRefResolver(BaseResolver):
             package, name = args
         else:
             raise RefArgsError(node=self.model, args=args)
-        self.validate_args(name, package)
-        return self.resolve(name, package)
+
+        version = kwargs.get("version") or kwargs.get("v")
+        self.validate_args(name, package, version)
+        return self.resolve(name, package, version)
 
 
 class BaseSourceResolver(BaseResolver):
@@ -448,8 +459,10 @@ class RuntimeDatabaseWrapper(BaseDatabaseWrapper):
 
 # `ref` implementations
 class ParseRefResolver(BaseRefResolver):
-    def resolve(self, name: str, package: Optional[str] = None) -> RelationProxy:
-        self.model.refs.append(self._repack_args(name, package))
+    def resolve(
+        self, name: str, package: Optional[str] = None, version: Optional[NodeVersion] = None
+    ) -> RelationProxy:
+        self.model.refs.append(self._repack_args(name, package, version))
 
         return self.Relation.create_from(self.config, self.model)
 
@@ -458,10 +471,16 @@ ResolveRef = Union[Disabled, ManifestNode]
 
 
 class RuntimeRefResolver(BaseRefResolver):
-    def resolve(self, target_name: str, target_package: Optional[str] = None) -> RelationProxy:
+    def resolve(
+        self,
+        target_name: str,
+        target_package: Optional[str] = None,
+        target_version: Optional[NodeVersion] = None,
+    ) -> RelationProxy:
         target_model = self.manifest.resolve_ref(
             target_name,
             target_package,
+            target_version,
             self.current_project,
             self.model.package_name,
         )
@@ -472,12 +491,13 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_name=target_name,
                 target_kind="node",
                 target_package=target_package,
+                target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
-        self.validate(target_model, target_name, target_package)
-        return self.create_relation(target_model, target_name)
+        self.validate(target_model, target_name, target_package, target_version)
+        return self.create_relation(target_model)
 
-    def create_relation(self, target_model: ManifestNode, name: str) -> RelationProxy:
+    def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from_node(self.config, target_model)
@@ -485,10 +505,14 @@ class RuntimeRefResolver(BaseRefResolver):
             return self.Relation.create_from(self.config, target_model)
 
     def validate(
-        self, resolved: ManifestNode, target_name: str, target_package: Optional[str]
+        self,
+        resolved: ManifestNode,
+        target_name: str,
+        target_package: Optional[str],
+        target_version: Optional[NodeVersion],
     ) -> None:
         if resolved.unique_id not in self.model.depends_on.nodes:
-            args = self._repack_args(target_name, target_package)
+            args = self._repack_args(target_name, target_package, target_version)
             raise RefBadContextError(node=self.model, args=args)
 
 
@@ -498,16 +522,17 @@ class OperationRefResolver(RuntimeRefResolver):
         resolved: ManifestNode,
         target_name: str,
         target_package: Optional[str],
+        target_version: Optional[NodeVersion],
     ) -> None:
         pass
 
-    def create_relation(self, target_model: ManifestNode, name: str) -> RelationProxy:
+    def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             # In operations, we can't ref() ephemeral nodes, because
             # Macros do not support set_cte
             raise OperationsCannotRefEphemeralNodesError(target_model.name, node=self.model)
         else:
-            return super().create_relation(target_model, name)
+            return super().create_relation(target_model)
 
 
 # `source` implementations
@@ -1408,10 +1433,18 @@ def generate_runtime_macro_context(
 
 
 class ExposureRefResolver(BaseResolver):
-    def __call__(self, *args) -> str:
-        if len(args) not in (1, 2):
+    def __call__(self, *args, **kwargs) -> str:
+        package = None
+        if len(args) == 1:
+            name = args[0]
+        elif len(args) == 2:
+            package, name = args
+        else:
             raise RefArgsError(node=self.model, args=args)
-        self.model.refs.append(list(args))
+
+        version = kwargs.get("version") or kwargs.get("v")
+
+        self.model.refs.append(RefArgs(package=package, name=name, version=version))
         return ""
 
 
@@ -1461,7 +1494,7 @@ def generate_parse_exposure(
 
 
 class MetricRefResolver(BaseResolver):
-    def __call__(self, *args) -> str:
+    def __call__(self, *args, **kwargs) -> str:
         package = None
         if len(args) == 1:
             name = args[0]
@@ -1469,11 +1502,14 @@ class MetricRefResolver(BaseResolver):
             package, name = args
         else:
             raise RefArgsError(node=self.model, args=args)
-        self.validate_args(name, package)
-        self.model.refs.append(list(args))
+
+        version = kwargs.get("version") or kwargs.get("v")
+        self.validate_args(name, package, version)
+
+        self.model.refs.append(RefArgs(package=package, name=name, version=version))
         return ""
 
-    def validate_args(self, name, package):
+    def validate_args(self, name, package, version):
         if not isinstance(name, str):
             raise ParsingError(
                 f"In a metrics section in {self.model.original_file_path} "
