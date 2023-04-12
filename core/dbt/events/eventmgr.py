@@ -213,10 +213,6 @@ class EventManager:
         logger.event_manager = self
         self.loggers.append(logger)
 
-    def add_callbacks(self, callbacks: List[Callable[[EventMsg], None]]):
-        """Helper for adding a sequence of Callbacks to the EventManager"""
-        self.callbacks.extend(callbacks)
-
     def flush(self):
         for logger in self.loggers:
             logger.flush()

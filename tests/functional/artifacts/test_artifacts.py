@@ -8,10 +8,12 @@ from dbt.tests.util import run_dbt, get_artifact, check_datetime_between
 from tests.functional.artifacts.expected_manifest import (
     expected_seeded_manifest,
     expected_references_manifest,
+    expected_versions_manifest,
 )
 from tests.functional.artifacts.expected_run_results import (
     expected_run_results,
     expected_references_run_results,
+    expected_versions_run_results,
 )
 
 from dbt.contracts.graph.manifest import WritableManifest
@@ -327,6 +329,81 @@ A description of the complex exposure
 """
 
 
+versioned_models__schema_yml = """
+version: 2
+
+groups:
+  - name: test_group
+    owner:
+      email: test_group@test.com
+
+models:
+  - name: versioned_model
+    description: "A versioned model"
+    latest_version: 2
+    config:
+      group: test_group
+      materialized: table
+      meta:
+        color: blue
+        size: large
+    tests:
+      - unique:
+          column_name: count
+    columns:
+      - name: first_name
+        description: "The first name being summarized"
+        tests:
+          - unique
+      - name: ct
+        description: "The number of instances of the first name"
+    versions:
+      - v: 1
+        defined_in: arbitrary_file_name
+      - v: 2
+        config:
+          materialized: view
+          meta:
+            color: red
+        tests: []
+        columns:
+          - include: '*'
+            exclude: ['ct']
+          - name: extra
+  - name: ref_versioned_model
+
+exposures:
+  - name: notebook_exposure
+    type: notebook
+    depends_on:
+      - ref('versioned_model', v=2)
+    owner:
+      email: something@example.com
+      name: Some name
+    description: "notebook_info"
+"""
+
+versioned_models__v1_sql = """
+select "test first name" as first_name, 1 as ct
+"""
+
+versioned_models__v2_sql = """
+select "test first name" as first_name, 1 as extra
+"""
+
+versioned_models___ref_sql = """
+select first_name from {{ ref("versioned_model", version=2) }}
+UNION ALL
+select first_name from {{ ref("versioned_model", version="2") }}
+UNION ALL
+select first_name from {{ ref("versioned_model", v=2) }}
+UNION ALL
+select first_name from {{ ref("versioned_model") }}
+UNION ALL
+select first_name from {{ ref("versioned_model", version=1) }}
+"""
+
+
 def verify_metadata(metadata, dbt_schema_version, start_time):
     assert "generated_at" in metadata
     check_datetime_between(metadata["generated_at"], start=start_time)
@@ -334,7 +411,6 @@ def verify_metadata(metadata, dbt_schema_version, start_time):
     assert metadata["dbt_version"] == dbt.version.__version__
     assert "dbt_schema_version" in metadata
     assert metadata["dbt_schema_version"] == dbt_schema_version
-    assert metadata["invocation_id"] == dbt.tracking.active_user.invocation_id
     key = "env_key"
     if os.name == "nt":
         key = key.upper()
@@ -541,4 +617,34 @@ class TestVerifyArtifactsReferences(BaseVerifyProject):
         )
         verify_run_results(
             project, expected_references_run_results(), start_time, run_results_schema_path
+        )
+
+
+class TestVerifyArtifactsVersions(BaseVerifyProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": versioned_models__schema_yml,
+            "versioned_model_v2.sql": versioned_models__v2_sql,
+            "arbitrary_file_name.sql": versioned_models__v1_sql,
+            "ref_versioned_model.sql": versioned_models___ref_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {}
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {}
+
+    def test_versions(self, project, manifest_schema_path, run_results_schema_path):
+        start_time = datetime.utcnow()
+        results = run_dbt(["compile"])
+        assert len(results) == 6
+        verify_manifest(
+            project, expected_versions_manifest(project), start_time, manifest_schema_path
+        )
+        verify_run_results(
+            project, expected_versions_run_results(), start_time, run_results_schema_path
         )

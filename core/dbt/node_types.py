@@ -57,6 +57,12 @@ class NodeType(StrEnum):
         ]
 
     @classmethod
+    def versioned(cls) -> List["NodeType"]:
+        return [
+            cls.Model,
+        ]
+
+    @classmethod
     def documentable(cls) -> List["NodeType"]:
         return [
             cls.Model,
