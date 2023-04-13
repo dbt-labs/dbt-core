@@ -1,4 +1,5 @@
 import argparse
+import json
 import networkx as nx  # type: ignore
 import os
 import pickle
@@ -160,6 +161,23 @@ class Linker:
             out_graph.add_node(node_id, **data)
         with open(outfile, "wb") as outfh:
             pickle.dump(out_graph, outfh, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def write_graph_summary(self, outfile: str, manifest: Manifest) -> None:
+        """Write a shorter summary of the graph, suitable for basic diagnostics
+        and performance tuning. The summary includes only the edge structure,
+        node types, and node names."""
+        graph_nodes = dict()
+        for node_id in self.graph:
+            data = manifest.expect(node_id).to_dict(omit_none=True)
+            graph_nodes[node_id] = {
+                "type": data["resource_type"],
+                "succ": list(self.graph.successors(node_id)),
+            }
+
+        graph_json: str = json.dumps(graph_nodes)
+        f = open(outfile, "w")
+        f.write(graph_json)
+        f.close()
 
 
 class Compiler:
@@ -392,6 +410,10 @@ class Compiler:
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
 
+    def write_graph_summary(self, filename: str, linker: Linker, manifest: Manifest):
+        graph_path = os.path.join(self.config.target_path, filename)
+        linker.write_graph_summary(graph_path, manifest)
+
     def link_node(self, linker: Linker, node: GraphMemberNode, manifest: Manifest):
         linker.add_node(node.unique_id)
 
@@ -405,7 +427,7 @@ class Compiler:
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
-    def link_graph(self, linker: Linker, manifest: Manifest, add_test_edges: bool = False):
+    def link_graph(self, linker: Linker, manifest: Manifest):
         for source in manifest.sources.values():
             linker.add_node(source.unique_id)
         for node in manifest.nodes.values():
@@ -419,10 +441,6 @@ class Compiler:
 
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
-
-        if add_test_edges:
-            manifest.build_parent_and_child_maps()
-            self.add_test_edges(linker, manifest)
 
     def add_test_edges(self, linker: Linker, manifest: Manifest) -> None:
         """This method adds additional edges to the DAG. For a given non-test
@@ -480,7 +498,19 @@ class Compiler:
         self.initialize()
         linker = Linker()
 
-        self.link_graph(linker, manifest, add_test_edges)
+        self.link_graph(linker, manifest)
+
+        # Create a file containing basic information about graph structure,
+        # supporting diagnostics and performance analysis.
+        self.write_graph_summary("graph.json", linker, manifest)
+
+        if add_test_edges:
+            manifest.build_parent_and_child_maps()
+            self.add_test_edges(linker, manifest)
+
+            # Create another diagnostic summary, just as above, but this time
+            # including the test edges.
+            self.write_graph_summary("graph_with_test_edges.json", linker, manifest)
 
         stats = _generate_stats(manifest)
 
