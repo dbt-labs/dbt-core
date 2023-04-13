@@ -20,7 +20,7 @@
         exist, then there is nothing to move out of the way and subsequently drop. In that case,
         this relation will be effectively unused.
     */
-    {% set backup_relation_type = 'view' if existing_relation is none else existing_relation.type %}
+    {% set backup_relation_type = target_relation.View if existing_relation is none else existing_relation.type %}
     {% set backup_relation = make_backup_relation(target_relation, backup_relation_type) %}
 
     -- as above, the backup_relation should not already exist
@@ -48,7 +48,7 @@
     -- move the existing view out of the way
     {% if existing_relation is none %}
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
-    {% elif full_refresh_mode or existing_relation.type != existing_relation.View %}
+    {% elif full_refresh_mode or not existing_relation.is_view %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% elif config_updates and on_configuration_change == 'apply' %}
         {% set build_sql = get_alter_materialized_view_as_sql(target_relation, config_updates, sql, existing_relation, backup_relation, intermediate_relation) %}
