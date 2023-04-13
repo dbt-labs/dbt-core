@@ -6,6 +6,7 @@
     backup_relation,
     intermediate_relation
 ) %}
+    {{ log('Applying ALTER to: ' ~ relation) }}
     {{ adapter.dispatch('get_alter_materialized_view_as_sql', 'dbt')(
         relation,
         config_updates,

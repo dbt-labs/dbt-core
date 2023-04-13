@@ -44,8 +44,7 @@
     -- `BEGIN` happens here:
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-    -- cleanup
-    -- move the existing view out of the way
+    -- determine the scenario we're in: create, full_refresh, alter, refresh data
     {% if existing_relation is none %}
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
     {% elif full_refresh_mode or not existing_relation.is_view %}
@@ -53,7 +52,7 @@
     {% elif config_updates and on_configuration_change == 'apply' %}
         {% set build_sql = get_alter_materialized_view_as_sql(target_relation, config_updates, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% elif config_updates and on_configuration_change == 'skip' %}
-        {% set build_sql = "select 1" %}{# no-op #}
+        {% set build_sql = 'select 1 as skip_configuration_changes where 0 = 1;' %}
         {{ exceptions.warn("Updates were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
     {% elif config_updates and on_configuration_change == 'fail' %}
         {{ exceptions.raise_compiler_error("Updates were identified and `on_configuration_change` was set to `fail`") }}
