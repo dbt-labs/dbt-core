@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Replaced the EmptyLine event with a more general Formatting event, and added
-  a Note event.
-time: 2023-01-20T17:22:54.45828-05:00
-custom:
-  Author: peterallenwebb
-  Issue: "6481"
