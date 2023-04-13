@@ -1,8 +1,8 @@
 {% materialization materialized_view, default %}
     {% set full_refresh_mode = should_full_refresh() %}
     {% set existing_relation = load_cached_relation(this) %}
-    {% set target_relation = this.incorporate(type='view') %}
-    {% set intermediate_relation =  make_intermediate_relation(target_relation) %}
+    {% set target_relation = this.incorporate(type=this.View) %}
+    {% set intermediate_relation = make_intermediate_relation(target_relation) %}
 
     -- the intermediate_relation should not already exist in the database; get_relation
     -- will return None in that case. Otherwise, we get a relation that we can drop
