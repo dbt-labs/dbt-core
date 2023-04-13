@@ -118,11 +118,11 @@ class TestGraphSelection(SelectionFixtures):
 
     def test_locally_qualified_name(self, project):
         results = run_dbt(["run", "--select", "test.subdir"])
-        check_result_nodes_by_name(results, ["nested_users", "subdir"])
+        check_result_nodes_by_name(results, ["nested_users", "subdir", "versioned"])
         assert_correct_schemas(project)
 
         results = run_dbt(["run", "--select", "models/test/subdir*"])
-        check_result_nodes_by_name(results, ["nested_users", "subdir"])
+        check_result_nodes_by_name(results, ["nested_users", "subdir", "versioned"])
         assert_correct_schemas(project)
 
         results = run_dbt(["build", "--select", "models/patch_path_selection_schema.yml"])

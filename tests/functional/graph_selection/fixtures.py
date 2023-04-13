@@ -214,7 +214,11 @@ class SelectionFixtures:
             "never_selected.sql": never_selected_sql,
             "test": {
                 "subdir.sql": subdir_sql,
-                "subdir": {"nested_users.sql": nested_users_sql},
+                "versioned_v2.sql": subdir_sql,
+                "subdir": {
+                    "nested_users.sql": nested_users_sql,
+                    "versioned_v1.sql": nested_users_sql,
+                },
             },
         }
 
