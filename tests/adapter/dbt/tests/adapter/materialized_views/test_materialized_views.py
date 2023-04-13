@@ -80,7 +80,3 @@ class MaterializedViewTestsBase:
             self.get_records(project, self.materialized_view)
             == self.starting_records + self.inserted_records
         )
-
-
-class TestMaterializedViewTestsBase(MaterializedViewTestsBase):
-    pass
