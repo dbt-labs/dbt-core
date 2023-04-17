@@ -116,7 +116,6 @@ class MaterializedViewTestsFailConfigChangeBase(MaterializedViewTestsBase):
             ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"],
             expect_pass=False,
         )
-        # breakpoint()
         results.results[0].node.config.on_configuration_change == "fail"
         assert results.results[0].status == RunStatus.Error
 
