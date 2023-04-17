@@ -1950,6 +1950,19 @@ class AmbiguousAliasError(CompilationError):
         return msg
 
 
+class AmbiguousResourceNameError(CompilationError):
+    def __init__(self, duped_name, unique_ids):
+        self.duped_name = duped_name
+        self.unique_ids = unique_ids
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+
+        # TODO: figure out where to call this to give an actionable error that includes node that made ambiguous ref call
+        msg = f'dbt found multiple potential nodes when referencing "{self.duped_name}" - {self.unique_ids}.'
+        return msg
+
+
 class AmbiguousCatalogMatchError(CompilationError):
     def __init__(self, unique_id: str, match_1, match_2):
         self.unique_id = unique_id

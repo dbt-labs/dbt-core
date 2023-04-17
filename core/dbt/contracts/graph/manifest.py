@@ -46,6 +46,7 @@ from dbt.exceptions import (
     DuplicateResourceNameError,
     DuplicateMacroInPackageError,
     DuplicateMaterializationNameError,
+    AmbiguousResourceNameError,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
@@ -72,7 +73,10 @@ def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
         if not pkg_dct:
             return None
         else:
-            return next(iter(pkg_dct.values()))
+            if len(pkg_dct) > 1:
+                raise AmbiguousResourceNameError(key, list(pkg_dct.values()))
+            else:
+                return next(iter(pkg_dct.values()))
     elif package in pkg_dct:
         return pkg_dct[package]
     else:

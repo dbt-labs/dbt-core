@@ -1092,22 +1092,16 @@ def _check_resource_uniqueness(
     manifest: Manifest,
     config: RuntimeConfig,
 ) -> None:
-    names_resources: Dict[str, ManifestNode] = {}
     alias_resources: Dict[str, ManifestNode] = {}
 
     for resource, node in manifest.nodes.items():
         if not node.is_relational:
             continue
 
-        name = node.name
         # the full node name is really defined by the adapter's relation
         relation_cls = get_relation_class_by_name(config.credentials.type)
         relation = relation_cls.create_from(config=config, node=node)
         full_node_name = str(relation)
-
-        existing_node = names_resources.get(name)
-        if existing_node is not None and existing_node.version is None:
-            raise dbt.exceptions.DuplicateResourceNameError(existing_node, node)
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
@@ -1115,7 +1109,6 @@ def _check_resource_uniqueness(
                 node_1=existing_alias, node_2=node, duped_name=full_node_name
             )
 
-        names_resources[name] = node
         alias_resources[full_node_name] = node
 
 
