@@ -737,7 +737,7 @@ class ProviderContext(ManifestContext):
 
     @contextmember
     def load_result(self, name: str) -> Optional[AttrDict]:
-        return self.sql_results.get(name)
+        return self.sql_results.pop(name, None)
 
     @contextmember
     def store_result(
