@@ -42,6 +42,7 @@ def _get_manifest(graph):
             resource_type=NodeType.Model,
             empty=False,
             config=mock.MagicMock(enabled=True),
+            is_versioned=False,
         )
         nodes[unique_id] = node
 

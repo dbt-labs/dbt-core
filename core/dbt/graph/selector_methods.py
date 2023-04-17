@@ -210,8 +210,7 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         """
         parsed_nodes = list(self.parsed_nodes(included_nodes))
         for node, real_node in parsed_nodes:
-            is_versioned = isinstance(real_node, ModelNode) and real_node.version is not None
-            if self.node_is_match(selector, real_node.fqn, is_versioned):
+            if self.node_is_match(selector, real_node.fqn, real_node.is_versioned):
                 yield node
 
 
