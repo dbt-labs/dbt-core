@@ -1,1 +1,1 @@
-from .main import cli as dbt_cli  # noqa
+from dbt.cli.main import cli as dbt_cli  # noqa
