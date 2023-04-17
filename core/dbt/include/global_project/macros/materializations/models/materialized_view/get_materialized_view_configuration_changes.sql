@@ -5,5 +5,5 @@
 
 
 {% macro default__get_materialized_view_configuration_changes(existing_relation, new_config) %}
-    {% do return([{"indexes": ["id"]}]) %}
+    {% do return([]) %}
 {% endmacro %}
