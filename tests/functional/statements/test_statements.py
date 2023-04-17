@@ -46,7 +46,7 @@ class TestStatements:
 
     def test_duplicated_load_statements(self, project):
         run_dbt(["seed"])
-        results = run_dbt(["--warn-error", "run", "-m", "statement_duplicated_load"], False)
+        results = run_dbt(["run", "-m", "statement_duplicated_load"], False)
         assert len(results) == 1
         assert results.results[0].status == "error"
         assert (
