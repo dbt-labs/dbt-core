@@ -76,8 +76,8 @@ setup(
         # ----
         # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
         "dbt-extractor~=0.4.1",
-        "hologram>=0.0.14,<=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
-        "minimal-snowplow-tracker==0.0.2",
+        "hologram~=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
+        "minimal-snowplow-tracker~=0.0.2",
         # DSI is under active development, so we're pinning to specific dev versions for now.
         # TODO: Before RC/final release, update to use ~= pinning.
         "dbt-semantic-interfaces==0.1.0.dev7",
