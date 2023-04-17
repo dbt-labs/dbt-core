@@ -54,6 +54,7 @@ from dbt.exceptions import (
     LoadAgateTableNotSeedError,
     LoadAgateTableValueError,
     MacroDispatchArgError,
+    MacroResultAlreadyLoadedError,
     MacrosSourcesUnWriteableError,
     MetricArgsError,
     MissingConfigError,
@@ -704,7 +705,7 @@ class ProviderContext(ManifestContext):
         self.config: RuntimeConfig
         self.model: Union[Macro, ManifestNode] = model
         super().__init__(config, manifest, model.package_name)
-        self.sql_results: Dict[str, AttrDict] = {}
+        self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
@@ -732,12 +733,20 @@ class ProviderContext(ManifestContext):
         return args_to_dict(self.config.args)
 
     @contextproperty
-    def _sql_results(self) -> Dict[str, AttrDict]:
+    def _sql_results(self) -> Dict[str, Optional[AttrDict]]:
         return self.sql_results
 
     @contextmember
     def load_result(self, name: str) -> Optional[AttrDict]:
-        return self.sql_results.pop(name, None)
+        if name in self.sql_results:
+            if self.sql_results[name] is None:
+                raise MacroResultAlreadyLoadedError(name)
+            else:
+                ret_val = self.sql_results[name]
+                self.sql_results[name] = None
+                return ret_val
+        else:
+            return None
 
     @contextmember
     def store_result(
