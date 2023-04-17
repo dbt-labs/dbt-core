@@ -46,31 +46,55 @@ setup(
         "console_scripts": ["dbt = dbt.cli.main:cli"],
     },
     install_requires=[
-        "Jinja2==3.1.2",
+        # ----
+        # dbt-core uses these packages deeply, throughout the codebase, and there have been breaking changes in past patch releases (even though these are major-version-one).
+        # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
         "agate>=1.6,<1.7.1",
-        "click>=7.0,<9",
-        "colorama>=0.3.9,<0.4.7",
-        "hologram>=0.0.14,<=0.0.16",
-        "isodate>=0.6,<0.7",
-        "logbook>=1.5,<1.6",
+        "Jinja2==3.1.2",
         "mashumaro[msgpack]==3.6",
-        "minimal-snowplow-tracker==0.0.2",
-        "networkx>=2.3,<3",
-        "packaging>20.9",
-        "sqlparse>=0.2.3,<0.4.4",
-        "dbt-extractor~=0.4.1",
-        "typing-extensions>=3.7.4",
-        "werkzeug>=1,<3",
+        # ----
+        # Legacy: This package has not been updated since 2019, and it is unused in dbt's logging system (since v1.0)
+        # The dependency here will be removed along with the removal of 'legacy logging', in a future release of dbt-core
+        "logbook>=1.5,<1.6",
+        # ----
+        # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
+        # with major versions in each new minor version of dbt-core.
+        "click>=7.0,<9",
+        # TODO: Remove conditional <3.8 requirement, as part of removing py37 support (https://github.com/dbt-labs/dbt-core/issues/7082)
+        "networkx>=2.3,<2.8.1;python_version<'3.8'",
+        "networkx>=2.3,<3;python_version>='3.8'",
+        # ----
+        # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
+        # and check compatibility / bump in each new minor version of dbt-core.
+        "colorama>=0.3.9,<0.5",
         "pathspec>=0.9,<0.12",
-        "protobuf>=4.0.0",
-        "pytz>=2015.7",
-        # the following are all to match snowflake-connector-python
-        "requests<3.0.0",
-        "idna>=2.5,<4",
-        "cffi>=1.9,<2.0.0",
-        "pyyaml>=5.3",
-        "urllib3~=1.0",
+        "isodate>=0.6,<0.7",
+        # ----
+        # There is a difficult-to-reproduce bug in sqlparse==0.4.4 for ephemeral model compilation
+        # For context: dbt-core#7396 + dbt-core#7515
+        "sqlparse>=0.2.3,<0.4.4",
+        # ----
+        # These are major-version-0 packages also maintained by dbt-labs. Accept patches.
+        "dbt-extractor~=0.4.1",
+        "hologram>=0.0.14,<=0.0.16",  # includes transitive dependencies on python-dateutil and jsonschema
+        "minimal-snowplow-tracker==0.0.2",
+        # DSI is under active development, so we're pinning to specific dev versions for now.
+        # TODO: Before RC/final release, update to use ~= pinning.
         "dbt-semantic-interfaces==0.1.0.dev7",
+        # ----
+        # Expect compatibility with all new versions of these packages, so lower bounds only.
+        "packaging>20.9",
+        "protobuf>=3.18.3",
+        "pytz>=2015.7",
+        "pyyaml>=6.0",
+        "typing-extensions>=3.7.4",
+        # ----
+        # Match snowflake-connector-python, to ensure compatibility in dbt-snowflake
+        "cffi>=1.9,<2.0.0",
+        "idna>=2.5,<4",
+        "requests<3.0.0",
+        "urllib3~=1.0",
+        # ----
     ],
     zip_safe=False,
     classifiers=[
