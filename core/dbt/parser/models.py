@@ -492,7 +492,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
             if len(ref) == 1:
                 package, name = None, ref[0]
             else:
-                package, name = ref[0], ref[1]
+                package, name = ref
 
             refs.append(RefArgs(package=package, name=name))
 
