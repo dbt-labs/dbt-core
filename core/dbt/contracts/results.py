@@ -57,7 +57,7 @@ class TimingInfo(dbtClassMixin):
 
 # This is a context manager
 class collect_timing_info:
-    def __init__(self, name: str, callback: Callable[[TimingInfo], None] = None):
+    def __init__(self, name: str, callback: Callable[[TimingInfo], None]):
         self.timing_info = TimingInfo(name=name)
         self.callback = callback
 
@@ -66,8 +66,7 @@ class collect_timing_info:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
-        if self.callback is not None:
-            self.callback(self.timing_info)
+        self.callback(self.timing_info)
         # Note: when legacy logger is removed, we can remove the following line
         with TimingProcessor(self.timing_info):
             fire_event(
