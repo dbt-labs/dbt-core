@@ -30,7 +30,8 @@ CI_FLAGS =\
 .PHONY: dev_req
 dev_req: ## Installs dbt-* packages in develop mode along with only development dependencies.
 	@\
-	pip install -r dev-requirements.txt -r editable-requirements.txt
+	pip install -r dev-requirements.txt
+	pip install -r editable-requirements.txt
 
 .PHONY: dev
 dev: dev_req ## Installs dbt-* packages in develop mode along with development dependencies and pre-commit.
