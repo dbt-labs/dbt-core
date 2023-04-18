@@ -1,6 +1,7 @@
 [tool.mypy]
 # TODO: widen range of files as we fix issues
 files = 'core/dbt'
+exclude = 'types_pb2.py'
 mypy_path = "third-party-stubs/"
 namespace_packages = true
 
