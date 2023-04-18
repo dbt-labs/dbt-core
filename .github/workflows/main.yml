@@ -53,7 +53,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          make dev_req
+          pip install -r dev-requirements.txt -r editable-requirements.txt
           pre-commit install
           mypy --version
           dbt --version
