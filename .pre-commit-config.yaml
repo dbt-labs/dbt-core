@@ -57,6 +57,6 @@ repos:
   - id: mypy
     alias: mypy-check
     stages: [manual]
-    args: [--show-error-codes, --pretty]
+    args: [--show-error-codes, --pretty, --config-file, pyproject.toml]
     files: ^core/dbt/
     language: system
