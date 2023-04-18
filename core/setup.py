@@ -61,7 +61,7 @@ setup(
         "networkx>=2.3,<2.8.1;python_version<'3.8'",
         "networkx>=2.3,<3;python_version>='3.8'",
         "packaging>=20.9,<22.0",
-        "sqlparse>=0.2.3,<0.5",
+        "sqlparse>=0.2.3,<0.4.4",
         "dbt-extractor~=0.4.1",
         "typing-extensions>=3.7.4",
         "werkzeug>=1,<3",
