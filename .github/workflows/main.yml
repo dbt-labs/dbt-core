@@ -54,7 +54,7 @@ jobs:
           python -m pip install --user --upgrade pip
           python -m pip --version
           make dev_req
-          make dev
+          pre-commit install
           mypy --version
           dbt --version
 
