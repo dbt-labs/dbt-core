@@ -59,4 +59,5 @@ repos:
     stages: [manual]
     args: [--show-error-codes, --pretty, --config-file, pyproject.toml]
     files: ^core/dbt/
+    exclude: ^(core/dbt/events/types_pb2.py)
     language: system
