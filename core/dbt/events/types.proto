@@ -866,26 +866,6 @@ message ParsePerfInfoPathMsg {
     ParsePerfInfoPath data = 2;
 }
 
-// I011
-message GenericTestFileParse {
-    string path = 1;
-}
-
-message GenericTestFileParseMsg {
-    EventInfo info = 1;
-    GenericTestFileParse data = 2;
-}
-
-// I012
-message MacroFileParse {
-    string path = 1;
-}
-
-message MacroFileParseMsg {
-    EventInfo info = 1;
-    MacroFileParse data = 2;
-}
-
 // Skipping I013
 
 // I014

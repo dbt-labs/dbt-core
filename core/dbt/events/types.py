@@ -815,20 +815,10 @@ class ParsePerfInfoPath(InfoLevel):
         return f"Performance info: {self.path}"
 
 
-class GenericTestFileParse(DebugLevel):
-    def code(self):
-        return "I011"
-
-    def message(self) -> str:
-        return f"Parsing {self.path}"
+# Removed I011: GenericTestFileParse
 
 
-class MacroFileParse(DebugLevel):
-    def code(self):
-        return "I012"
-
-    def message(self) -> str:
-        return f"Parsing {self.path}"
+# Removed I012: MacroFileParse
 
 
 # Skipping I013

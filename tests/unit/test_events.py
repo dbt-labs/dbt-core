@@ -185,8 +185,6 @@ sample_values = [
     types.InvalidValueForField(field_name="test", field_value="test"),
     types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
-    types.GenericTestFileParse(path=""),
-    types.MacroFileParse(path=""),
     types.PartialParsingErrorProcessingFile(file=""),
     types.PartialParsingFile(file_id=""),
     types.PartialParsingError(exc_info={}),
