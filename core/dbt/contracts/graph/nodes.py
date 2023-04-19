@@ -40,7 +40,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, InvalidAccessTypeError, ModelContractError
+from dbt.exceptions import ParsingError, InvalidAccessTypeError, ContractBreakingChangeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -118,6 +118,10 @@ class BaseNode(dbtClassMixin, Replaceable):
     @property
     def is_relational(self):
         return self.resource_type in NodeType.refable()
+
+    @property
+    def is_versioned(self):
+        return self.resource_type in NodeType.versioned() and self.version is not None
 
     @property
     def is_ephemeral(self):
@@ -584,29 +588,59 @@ class CompiledNode(ParsedNode):
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
     def same_contract(self, old) -> bool:
+        # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
-            # Not a change
+            # No change -- same_contract: True
             return True
         if old.contract.enforced is False and self.contract.enforced is True:
-            # A change, but not a breaking change
+            # Now it's enforced. This is a change, but not a breaking change -- same_contract: False
             return False
 
-        breaking_change_reasons = []
-        if old.contract.enforced is True and self.contract.enforced is False:
-            # Breaking change: throw an error
-            # Note: we don't have contract.checksum for current node, so build
-            self.build_contract_checksum()
-            breaking_change_reasons.append("contract has been disabled")
-
-        if self.contract.checksum != old.contract.checksum:
-            # Breaking change, throw error
-            breaking_change_reasons.append("column definitions have changed")
-
-        if breaking_change_reasons:
-            raise (ModelContractError(reasons=" and ".join(breaking_change_reasons), node=self))
-        else:
-            # no breaking changes
+        # Otherwise: The contract was previously enforced, and we need to check for changes.
+        # Happy path: The contract is still being enforced, and the checksums are identical.
+        if self.contract.enforced is True and self.contract.checksum == old.contract.checksum:
+            # No change -- same_contract: True
             return True
+
+        # Otherwise: There has been a change.
+        # We need to determine if it is a **breaking** change.
+        # These are the categories of breaking changes:
+        contract_enforced_disabled: bool = False
+        columns_removed: List[str] = []
+        column_type_changes: List[Tuple[str, str, str]] = []
+
+        if old.contract.enforced is True and self.contract.enforced is False:
+            # Breaking change: the contract was previously enforced, and it no longer is
+            contract_enforced_disabled = True
+
+        # Next, compare each column from the previous contract (old.columns)
+        for key, value in sorted(old.columns.items()):
+            # Has this column been removed?
+            if key not in self.columns.keys():
+                columns_removed.append(value.name)
+            # Has this column's data type changed?
+            elif value.data_type != self.columns[key].data_type:
+                column_type_changes.append(
+                    (str(value.name), str(value.data_type), str(self.columns[key].data_type))
+                )
+
+        # If a column has been added, it will be missing in the old.columns, and present in self.columns
+        # That's a change (caught by the different checksums), but not a breaking change
+
+        # Did we find any changes that we consider breaking? If so, that's an error
+        if contract_enforced_disabled or columns_removed or column_type_changes:
+            raise (
+                ContractBreakingChangeError(
+                    contract_enforced_disabled=contract_enforced_disabled,
+                    columns_removed=columns_removed,
+                    column_type_changes=column_type_changes,
+                    node=self,
+                )
+            )
+
+        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
+        else:
+            return False
 
 
 # ====================================

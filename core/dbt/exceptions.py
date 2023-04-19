@@ -207,22 +207,44 @@ class CompilationError(DbtRuntimeError):
             )
 
 
-class ModelContractError(DbtRuntimeError):
+class ContractBreakingChangeError(DbtRuntimeError):
     CODE = 10016
-    MESSAGE = "Contract Error"
+    MESSAGE = "Breaking Change to Contract"
 
-    def __init__(self, reasons, node=None):
-        self.reasons = reasons
+    def __init__(
+        self, contract_enforced_disabled, columns_removed, column_type_changes, node=None
+    ):
+        self.contract_enforced_disabled = contract_enforced_disabled
+        self.columns_removed = columns_removed
+        self.column_type_changes = column_type_changes
         super().__init__(self.message(), node)
 
     @property
     def type(self):
-        return "Contract"
+        return "Breaking Change to Contract"
 
     def message(self):
+        breaking_changes = []
+        if self.contract_enforced_disabled:
+            breaking_changes.append("The contract's enforcement has been disabled.")
+        if self.columns_removed:
+            columns_removed_str = "\n  - ".join(self.columns_removed)
+            breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
+        if self.column_type_changes:
+            column_type_changes_str = "\n  - ".join(
+                [f"{c[0]} ({c[1]} -> {c[2]})" for c in self.column_type_changes]
+            )
+            breaking_changes.append(
+                f"Columns with data_type changes: \n - {column_type_changes_str}"
+            )
+
+        reasons = "\n\n".join(breaking_changes)
+
         return (
-            f"There is a breaking change in the model contract because {self.reasons}; "
-            "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+            "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
+            f"\n\n{reasons}\n\n"
+            "Consider making an additive (non-breaking) change instead, if possible.\n"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
 
 

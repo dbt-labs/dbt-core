@@ -1,6 +1,0 @@
-kind: Fixes
-body: '[Regression] exposure_content referenced incorrectly'
-time: 2023-01-25T19:17:39.942081-05:00
-custom:
-  Author: Mathyoub
-  Issue: "6738"
