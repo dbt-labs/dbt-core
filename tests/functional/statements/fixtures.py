@@ -155,7 +155,7 @@ models__statement_duplicated_load = """
 select 1
 """
 
-models__statement_load_main = """
+models__statement_load_main_twice = """
 -- {{ ref('seed') }}
 
 {%- call statement('main', fetch_result=True) -%}
