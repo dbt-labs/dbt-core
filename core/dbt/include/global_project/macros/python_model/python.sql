@@ -10,13 +10,21 @@
 
     {%- set ref_dict = {} -%}
     {%- for _ref in model.refs -%}
-        {%- set resolved = ref(*_ref) -%}
-        {%- do ref_dict.update({_ref | join('.'): resolve_model_name(resolved)}) -%}
+        {% set _ref_args = [_ref.get('package'), _ref['name']] if _ref.get('package') else [_ref['name'],] %}
+        {%- set resolved = ref(*_ref_args, v=_ref.get('version')) -%}
+        {%- if _ref.get('version') -%}
+            {% do _ref_args.extend(["v" ~ _ref['version']]) %}
+        {%- endif -%}
+       {%- do ref_dict.update({_ref_args | join('.'): resolve_model_name(resolved)}) -%}
     {%- endfor -%}
 
-def ref(*args,dbt_load_df_function):
+def ref(*args, **kwargs):
     refs = {{ ref_dict | tojson }}
     key = '.'.join(args)
+    version = kwargs.get("v") or kwargs.get("version")
+    if version:
+        key += f".v{version}"
+    dbt_load_df_function = kwargs.get("dbt_load_df_function")
     return dbt_load_df_function(refs[key])
 
 {% endmacro %}
@@ -81,7 +89,7 @@ class this:
 class dbtObj:
     def __init__(self, load_df_function) -> None:
         self.source = lambda *args: source(*args, dbt_load_df_function=load_df_function)
-        self.ref = lambda *args: ref(*args, dbt_load_df_function=load_df_function)
+        self.ref = lambda *args, **kwargs: ref(*args, **kwargs, dbt_load_df_function=load_df_function)
         self.config = config
         self.this = this()
         self.is_incremental = {{ is_incremental() }}

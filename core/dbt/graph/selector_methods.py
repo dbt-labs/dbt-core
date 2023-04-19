@@ -17,7 +17,9 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     ResultNode,
     ManifestNode,
+    ModelNode,
 )
+from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     DbtInternalError,
@@ -48,15 +50,21 @@ class MethodName(StrEnum):
     Result = "result"
     SourceStatus = "source_status"
     Wildcard = "wildcard"
+    Version = "version"
 
 
-def is_selected_node(
-    fqn: List[str],
-    node_selector: str,
-) -> bool:
+def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
     # If qualified_name exactly matches model name (fqn's leaf), return True
-    if fqn[-1] == node_selector:
-        return True
+    if is_versioned:
+        flat_node_selector = node_selector.split(".")
+        if fqn[-2] == node_selector:
+            return True
+        # If this is a versioned model, then the last two segments should be allowed to exactly match
+        elif fqn[-2:] == flat_node_selector[-2:]:
+            return True
+    else:
+        if fqn[-1] == node_selector:
+            return True
     # Flatten node parts. Dots in model names act as namespace separators
     flat_fqn = [item for segment in fqn for item in segment.split(".")]
     # Selector components cannot be more than fqn's
@@ -178,7 +186,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 
 
 class QualifiedNameSelectorMethod(SelectorMethod):
-    def node_is_match(self, qualified_name: str, fqn: List[str]) -> bool:
+    def node_is_match(self, qualified_name: str, fqn: List[str], is_versioned: bool) -> bool:
         """Determine if a qualified name matches an fqn for all package
         names in the graph.
 
@@ -187,10 +195,10 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         """
         unscoped_fqn = fqn[1:]
 
-        if is_selected_node(fqn, qualified_name):
+        if is_selected_node(fqn, qualified_name, is_versioned):
             return True
         # Match nodes across different packages
-        elif is_selected_node(unscoped_fqn, qualified_name):
+        elif is_selected_node(unscoped_fqn, qualified_name, is_versioned):
             return True
 
         return False
@@ -202,7 +210,7 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         """
         parsed_nodes = list(self.parsed_nodes(included_nodes))
         for node, real_node in parsed_nodes:
-            if self.node_is_match(selector, real_node.fqn):
+            if self.node_is_match(selector, real_node.fqn, real_node.is_versioned):
                 yield node
 
 
@@ -317,7 +325,7 @@ class PathSelectorMethod(SelectorMethod):
                 ymlfp = Path(pfp)
                 if ymlfp in paths:
                     yield node
-            elif any(parent in paths for parent in ofp.parents):
+            if any(parent in paths for parent in ofp.parents):
                 yield node
 
 
@@ -639,6 +647,38 @@ class SourceStatusSelectorMethod(SelectorMethod):
                 yield node
 
 
+class VersionSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if isinstance(real_node, ModelNode):
+                if selector == "latest":
+                    if real_node.is_latest_version:
+                        yield node
+                elif selector == "prerelease":
+                    if (
+                        real_node.version
+                        and real_node.latest_version
+                        and UnparsedVersion(v=real_node.version)
+                        > UnparsedVersion(v=real_node.latest_version)
+                    ):
+                        yield node
+                elif selector == "old":
+                    if (
+                        real_node.version
+                        and real_node.latest_version
+                        and UnparsedVersion(v=real_node.version)
+                        < UnparsedVersion(v=real_node.latest_version)
+                    ):
+                        yield node
+                elif selector == "none":
+                    if real_node.version is None:
+                        yield node
+                else:
+                    raise DbtRuntimeError(
+                        f'Invalid version type selector {selector}: expected one of: "latest", "prerelease", "old", or "none"'
+                    )
+
+
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
@@ -657,6 +697,7 @@ class MethodManager:
         MethodName.Metric: MetricSelectorMethod,
         MethodName.Result: ResultSelectorMethod,
         MethodName.SourceStatus: SourceStatusSelectorMethod,
+        MethodName.Version: VersionSelectorMethod,
     }
 
     def __init__(

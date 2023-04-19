@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Fix use of ConnectionReused logging event
-time: 2023-01-13T13:25:13.023168-05:00
-custom:
-  Author: gshank
-  Issue: "6168"

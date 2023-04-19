@@ -3,6 +3,7 @@ import pytest
 from dbt.tests.util import run_dbt, run_dbt_and_capture
 
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import RefArgs
 import os
 
 
@@ -153,7 +154,7 @@ class TestBasicExperimentalParser(BasicExperimentalParser):
         run_dbt(["--use-experimental-parser", "parse"])
         manifest = get_manifest()
         node = manifest.nodes["model.test.model_a"]
-        assert node.refs == [["model_a"]]
+        assert node.refs == [RefArgs(name="model_a")]
         assert node.sources == [["my_src", "my_tbl"]]
         assert node.config._extra == {"x": True}
         assert node.config.tags == ["hello", "world"]
@@ -178,7 +179,7 @@ class TestBasicStaticParser(BasicExperimentalParser):
 
         manifest = get_manifest()
         node = manifest.nodes["model.test.model_a"]
-        assert node.refs == [["model_a"]]
+        assert node.refs == [RefArgs(name="model_a")]
         assert node.sources == [["my_src", "my_tbl"]]
         assert node.config._extra == {"x": True}
         assert node.config.tags == ["hello", "world"]

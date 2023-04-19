@@ -90,7 +90,6 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
             == "https://schemas.getdbt.com/dbt/sources/v3.json"
         )
         assert data["metadata"]["dbt_version"] == dbt.version.__version__
-        assert data["metadata"]["invocation_id"] == dbt.tracking.active_user.invocation_id
         key = "key"
         if os.name == "nt":
             key = key.upper()

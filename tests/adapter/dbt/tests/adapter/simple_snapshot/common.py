@@ -135,6 +135,9 @@ def add_column(project: TestProjInfo, table: str, column: str, definition: str):
         column: the name of the new column
         definition: the definition of the new column, e.g. 'varchar(20) default null'
     """
+    # BigQuery doesn't like 'varchar' in the definition
+    if project.adapter.type() == "bigquery" and "varchar" in definition.lower():
+        definition = "string"
     table_name = relation_from_name(project.adapter, table)
     sql = f"""
         alter table {table_name}

@@ -8,6 +8,8 @@ from tests.functional.partial_parsing.fixtures import (
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
+    models_versions_schema_yml,
+    models_versions_updated_schema_yml,
     model_three_sql,
     model_three_modified_sql,
     model_four1_sql,
@@ -294,6 +296,44 @@ class TestModels:
         model_id = "model.test.model_three"
         assert model_id in manifest.nodes
         assert model_id not in manifest.disabled
+
+
+class TestVersionedModels:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_one.sql": model_one_sql,
+            "model_one_v2.sql": model_one_sql,
+            "schema.yml": models_versions_schema_yml,
+        }
+
+    def test_pp_versioned_models(self, project):
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        manifest = get_manifest(project.project_root)
+        model_one_node = manifest.nodes["model.test.model_one.v1"]
+        assert not model_one_node.is_latest_version
+        model_two_node = manifest.nodes["model.test.model_one.v2"]
+        assert model_two_node.is_latest_version
+
+        # update versions schema.yml block - latest_version from 2 to 1
+        write_file(
+            models_versions_updated_schema_yml, project.project_root, "models", "schema.yml"
+        )
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 2
+
+        manifest = get_manifest(project.project_root)
+        model_one_node = manifest.nodes["model.test.model_one.v1"]
+        assert model_one_node.is_latest_version
+        model_two_node = manifest.nodes["model.test.model_one.v2"]
+        assert not model_two_node.is_latest_version
+
+        # update versioned model
+        write_file(model_two_sql, project.project_root, "models", "model_one_v2.sql")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 2
 
 
 class TestSources:
