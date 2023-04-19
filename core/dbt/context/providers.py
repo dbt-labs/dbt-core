@@ -740,6 +740,7 @@ class ProviderContext(ManifestContext):
     def load_result(self, name: str) -> Optional[AttrDict]:
         if name in self.sql_results:
             # handle the special case of "main" macro
+            # See: https://github.com/dbt-labs/dbt-core/blob/ada8860e48b32ac712d92e8b0977b2c3c9749981/core/dbt/task/run.py#L228
             if name == "main":
                 return self.sql_results["main"]
 
