@@ -4,6 +4,7 @@ import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.contracts.relation import RelationType
+from dbt.contracts.results import RunStatus
 
 
 class MaterializedViewTestsBase:
@@ -65,6 +66,12 @@ class MaterializedViewTestsBase:
         run_dbt(["run", "--models", self.materialized_view, "--full-refresh"])
         self.assert_relation_is_materialized_view(project, self.materialized_view)
 
+    def test_relation_is_materialized_view_on_update(self, project):
+        run_dbt(
+            ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"]
+        )
+        self.assert_relation_is_materialized_view(project, self.materialized_view)
+
     def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
         self.insert_test_records(project)
         assert self.get_records(project, self.materialized_view) == self.starting_records
@@ -74,3 +81,49 @@ class MaterializedViewTestsBase:
             self.get_records(project, self.materialized_view)
             == self.starting_records + self.inserted_records
         )
+
+
+class MaterializedViewTestsSkipConfigChangeBase(MaterializedViewTestsBase):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"on_configuration_change": "skip"}}
+
+    def test_on_configuration_change_skips_with_update(self, project):
+        results = run_dbt(
+            ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"]
+        )
+        assert results.results[0].adapter_response["rows_affected"] == 0
+        results.results[0].node.config.on_configuration_change == "skip"
+        assert results.results[0].status == RunStatus.Success
+
+
+class TestMaterializedViewSkipTestsBase(MaterializedViewTestsSkipConfigChangeBase):
+    @pytest.mark.skip("This currently fails since we're mocking with a traditional view")
+    def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
+        pass
+
+    def test_on_configuration_change_skips_with_update(self, project):
+        super().test_on_configuration_change_skips_with_update(self)
+
+
+class MaterializedViewTestsFailConfigChangeBase(MaterializedViewTestsBase):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"on_configuration_change": "fail"}}
+
+    def test_on_configuration_change_fails_with_update(self, project):
+        results = run_dbt(
+            ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"],
+            expect_pass=False,
+        )
+        results.results[0].node.config.on_configuration_change == "fail"
+        assert results.results[0].status == RunStatus.Error
+
+
+class TestMaterializedViewFailTestsBase(MaterializedViewTestsFailConfigChangeBase):
+    @pytest.mark.skip("This currently fails since we're mocking with a traditional view")
+    def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
+        pass
+
+    def test_on_configuration_change_fails_with_update(self, project):
+        super().test_on_configuration_change_fails_with_update(self)
