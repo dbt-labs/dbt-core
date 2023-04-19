@@ -1,4 +1,4 @@
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import click
 from dbt.cli.options import MultiOption
@@ -229,7 +229,7 @@ output_path = click.option(
     envvar=None,
     help="Specify the output path for the JSON report. By default, outputs to 'target/sources.json'",
     type=click.Path(file_okay=True, dir_okay=False, writable=True),
-    default=PurePath.joinpath(Path.cwd(), "target/sources.json"),
+    default=None,
 )
 
 partial_parse = click.option(
