@@ -102,6 +102,29 @@ models:
         data_type: text
 """
 
+disabled_contract_schema_yml = """
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+  - name: table_model
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
 exposures_yml = """
 version: 2
 exposures:

@@ -33,13 +33,14 @@ from dbt.contracts.graph.unparsed import (
     Owner,
     Quoting,
     TestDef,
+    NodeVersion,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedColumn,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, InvalidAccessTypeError, ModelContractError
+from dbt.exceptions import ParsingError, InvalidAccessTypeError, ContractBreakingChangeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
@@ -119,6 +120,10 @@ class BaseNode(dbtClassMixin, Replaceable):
         return self.resource_type in NodeType.refable()
 
     @property
+    def is_versioned(self):
+        return self.resource_type in NodeType.versioned() and self.version is not None
+
+    @property
     def is_ephemeral(self):
         return self.config.materialized == "ephemeral"
 
@@ -138,6 +143,27 @@ class GraphNode(BaseNode):
 
     def same_fqn(self, other) -> bool:
         return self.fqn == other.fqn
+
+
+@dataclass
+class RefArgs(dbtClassMixin):
+    name: str
+    package: Optional[str] = None
+    version: Optional[NodeVersion] = None
+
+    @property
+    def positional_args(self) -> List[str]:
+        if self.package:
+            return [self.package, self.name]
+        else:
+            return [self.name]
+
+    @property
+    def keyword_args(self) -> Dict[str, Optional[NodeVersion]]:
+        if self.version:
+            return {"version": self.version}
+        else:
+            return {}
 
 
 class ConstraintType(str, Enum):
@@ -419,6 +445,29 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
+        self.name = patch.name
+
+        # TODO: version, latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
+        if self.resource_type != NodeType.Model:
+            if patch.version:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="version",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
+            if patch.latest_version:
+                warn_or_error(
+                    ValidationWarning(
+                        field_name="latest_version",
+                        resource_type=self.resource_type.value,
+                        node_name=patch.name,
+                    )
+                )
+        self.version = patch.version
+        self.latest_version = patch.latest_version
+
         # This might not be the ideal place to validate the "access" field,
         # but at this point we have the information we need to properly
         # validate and we don't before this.
@@ -472,7 +521,7 @@ class CompiledNode(ParsedNode):
     so all ManifestNodes except SeedNode."""
 
     language: str = "sql"
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
@@ -539,29 +588,59 @@ class CompiledNode(ParsedNode):
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
     def same_contract(self, old) -> bool:
+        # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
-            # Not a change
+            # No change -- same_contract: True
             return True
         if old.contract.enforced is False and self.contract.enforced is True:
-            # A change, but not a breaking change
+            # Now it's enforced. This is a change, but not a breaking change -- same_contract: False
             return False
 
-        breaking_change_reasons = []
-        if old.contract.enforced is True and self.contract.enforced is False:
-            # Breaking change: throw an error
-            # Note: we don't have contract.checksum for current node, so build
-            self.build_contract_checksum()
-            breaking_change_reasons.append("contract has been disabled")
-
-        if self.contract.checksum != old.contract.checksum:
-            # Breaking change, throw error
-            breaking_change_reasons.append("column definitions have changed")
-
-        if breaking_change_reasons:
-            raise (ModelContractError(reasons=" and ".join(breaking_change_reasons), node=self))
-        else:
-            # no breaking changes
+        # Otherwise: The contract was previously enforced, and we need to check for changes.
+        # Happy path: The contract is still being enforced, and the checksums are identical.
+        if self.contract.enforced is True and self.contract.checksum == old.contract.checksum:
+            # No change -- same_contract: True
             return True
+
+        # Otherwise: There has been a change.
+        # We need to determine if it is a **breaking** change.
+        # These are the categories of breaking changes:
+        contract_enforced_disabled: bool = False
+        columns_removed: List[str] = []
+        column_type_changes: List[Tuple[str, str, str]] = []
+
+        if old.contract.enforced is True and self.contract.enforced is False:
+            # Breaking change: the contract was previously enforced, and it no longer is
+            contract_enforced_disabled = True
+
+        # Next, compare each column from the previous contract (old.columns)
+        for key, value in sorted(old.columns.items()):
+            # Has this column been removed?
+            if key not in self.columns.keys():
+                columns_removed.append(value.name)
+            # Has this column's data type changed?
+            elif value.data_type != self.columns[key].data_type:
+                column_type_changes.append(
+                    (str(value.name), str(value.data_type), str(self.columns[key].data_type))
+                )
+
+        # If a column has been added, it will be missing in the old.columns, and present in self.columns
+        # That's a change (caught by the different checksums), but not a breaking change
+
+        # Did we find any changes that we consider breaking? If so, that's an error
+        if contract_enforced_disabled or columns_removed or column_type_changes:
+            raise (
+                ContractBreakingChangeError(
+                    contract_enforced_disabled=contract_enforced_disabled,
+                    columns_removed=columns_removed,
+                    column_type_changes=column_type_changes,
+                    node=self,
+                )
+            )
+
+        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
+        else:
+            return False
 
 
 # ====================================
@@ -585,6 +664,19 @@ class ModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
     access: AccessType = AccessType.Protected
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
+    version: Optional[NodeVersion] = None
+    latest_version: Optional[NodeVersion] = None
+
+    @property
+    def is_latest_version(self):
+        return self.version and self.version == self.latest_version
+
+    @property
+    def search_name(self):
+        if self.version is None:
+            return self.name
+        else:
+            return f"{self.name}.v{self.version}"
 
 
 # TODO: rm?
@@ -1066,7 +1158,7 @@ class Exposure(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
@@ -1158,7 +1250,7 @@ class Metric(GraphNode):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
-    refs: List[List[str]] = field(default_factory=list)
+    refs: List[RefArgs] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     group: Optional[str] = None
@@ -1262,6 +1354,8 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
 class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
     access: Optional[str]
+    version: Optional[NodeVersion]
+    latest_version: Optional[NodeVersion]
 
 
 @dataclass

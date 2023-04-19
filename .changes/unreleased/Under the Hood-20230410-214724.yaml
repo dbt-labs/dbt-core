@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Prettify message for ListRelations event
-time: 2023-04-10T21:47:24.052122+02:00
-custom:
-  Author: jtcohen6
-  Issue: "7310"

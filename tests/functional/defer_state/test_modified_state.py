@@ -7,7 +7,7 @@ import pytest
 
 from dbt.tests.util import run_dbt, update_config_file, write_file, get_manifest
 
-from dbt.exceptions import CompilationError, ModelContractError
+from dbt.exceptions import CompilationError, ContractBreakingChangeError
 
 from tests.functional.defer_state.fixtures import (
     seed_csv,
@@ -20,6 +20,7 @@ from tests.functional.defer_state.fixtures import (
     infinite_macros_sql,
     contract_schema_yml,
     modified_contract_schema_yml,
+    disabled_contract_schema_yml,
 )
 
 
@@ -302,12 +303,17 @@ class TestChangedContract(BaseModifiedState):
         second_contract_checksum = model.contract.checksum
         # double check different contract_checksums
         assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ModelContractError):
+        with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
         # Go back to schema file without contract. Should raise an error.
         write_file(schema_yml, "models", "schema.yml")
-        with pytest.raises(ModelContractError):
+        with pytest.raises(ContractBreakingChangeError):
+            results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # Now disable the contract. Should raise an error.
+        write_file(disabled_contract_schema_yml, "models", "schema.yml")
+        with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
 
@@ -318,6 +324,11 @@ select 1 as id
 modified_my_model_sql = """
 -- a comment
 select 1 as id
+"""
+
+modified_my_model_non_breaking_sql = """
+-- a comment
+select 1 as id, 'blue' as color
 """
 
 my_model_yml = """
@@ -339,7 +350,20 @@ models:
         enforced: true
     columns:
       - name: id
-        data_type: string
+        data_type: text
+"""
+
+modified_my_model_non_breaking_yml = """
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        data_type: int
+      - name: color
+        data_type: text
 """
 
 
@@ -361,10 +385,21 @@ class TestModifiedBodyAndContract:
         assert len(results) == 1
         self.copy_state()
 
-        # Change both body and contract
+        # Change both body and contract in a *breaking* way (= changing data_type of existing column)
         write_file(modified_my_model_yml, "models", "my_model.yml")
         write_file(modified_my_model_sql, "models", "my_model.sql")
 
-        # should raise even without specifying state:modified.contract
-        with pytest.raises(ModelContractError):
-            results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        # Should raise even without specifying state:modified.contract
+        with pytest.raises(ContractBreakingChangeError):
+            results = run_dbt(["run", "-s", "state:modified", "--state", "./state"])
+
+        # Change both body and contract in a *non-breaking* way (= adding a new column)
+        write_file(modified_my_model_non_breaking_yml, "models", "my_model.yml")
+        write_file(modified_my_model_non_breaking_sql, "models", "my_model.sql")
+
+        # Should pass
+        run_dbt(["run", "-s", "state:modified", "--state", "./state"])
+
+        # The model's contract has changed, even if non-breaking, so it should be selected by 'state:modified.contract'
+        results = run_dbt(["list", "-s", "state:modified.contract", "--state", "./state"])
+        assert results == ["test.my_model"]

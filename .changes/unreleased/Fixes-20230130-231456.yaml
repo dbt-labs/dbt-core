@@ -1,6 +1,0 @@
-kind: Fixes
-body: 'Snapshot strategies: add a newline for subquery'
-time: 2023-01-30T23:14:56.131767823+01:00
-custom:
-  Author: RobbertDM
-  Issue: "6781"

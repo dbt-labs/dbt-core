@@ -1,6 +1,0 @@
-kind: Features
-body: select resources by patch path
-time: 2023-04-11T08:46:45.641682-05:00
-custom:
-  Author: dave-connors-3
-  Issue: "7315"
