@@ -215,6 +215,37 @@ class GraphTest(unittest.TestCase):
             ],
         )
 
+    def test__two_models_package_ref(self):
+        self.use_models(
+            {
+                "model_one": "select * from events",
+                "model_two": "select * from {{ref('test_models_compile', 'model_one')}}",
+            }
+        )
+
+        config = self.get_config()
+        manifest = self.load_manifest(config)
+        compiler = self.get_compiler(config)
+        linker = compiler.compile(manifest)
+
+        self.assertCountEqual(
+            linker.nodes(),
+            [
+                "model.test_models_compile.model_one",
+                "model.test_models_compile.model_two",
+            ],
+        )
+
+        self.assertCountEqual(
+            linker.edges(),
+            [
+                (
+                    "model.test_models_compile.model_one",
+                    "model.test_models_compile.model_two",
+                )
+            ],
+        )
+
     def test__model_materializations(self):
         self.use_models(
             {
