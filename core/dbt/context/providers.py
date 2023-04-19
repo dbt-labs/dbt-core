@@ -739,13 +739,21 @@ class ProviderContext(ManifestContext):
     @contextmember
     def load_result(self, name: str) -> Optional[AttrDict]:
         if name in self.sql_results:
-            if self.sql_results[name] is None:
+            # handle the special case of "main" macro
+            if name == "main":
+                return self.sql_results["main"]
+
+            # handle a None, which indicates this name was populated but has since been loaded
+            elif self.sql_results[name] is None:
                 raise MacroResultAlreadyLoadedError(name)
+
+            # Handle the regular use case
             else:
                 ret_val = self.sql_results[name]
                 self.sql_results[name] = None
                 return ret_val
         else:
+            # Handle trying to load a result that was never stored
             return None
 
     @contextmember

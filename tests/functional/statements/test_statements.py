@@ -5,6 +5,7 @@ from dbt.tests.util import run_dbt, check_relations_equal, write_file
 from tests.functional.statements.fixtures import (
     models__statement_actual,
     models__statement_duplicated_load,
+    models__statement_load_main,
     seeds__statement_actual,
     seeds__statement_expected,
 )
@@ -25,6 +26,7 @@ class TestStatements:
         return {
             "statement_actual.sql": models__statement_actual,
             "statement_duplicated_load.sql": models__statement_duplicated_load,
+            "statement_load_main.sql": models__statement_load_main,
         }
 
     @pytest.fixture(scope="class")
@@ -53,3 +55,9 @@ class TestStatements:
             'The result "test_statement" has already been loaded into a variable'
             in results.results[0].message
         )
+
+    def test_load_statement_on_main(self, project):
+        run_dbt(["seed"])
+        results = run_dbt(["run", "-m", "statement_load_main"])
+        assert len(results) == 1
+        check_relations_equal(project.adapter, ["statement_actual", "statement_expected"])
