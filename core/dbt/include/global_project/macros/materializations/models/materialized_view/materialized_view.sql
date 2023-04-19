@@ -52,7 +52,7 @@
     {% elif config_updates and on_configuration_change == 'apply' %}
         {% set build_sql = get_alter_materialized_view_as_sql(target_relation, config_updates, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% elif config_updates and on_configuration_change == 'skip' %}
-        {% set build_sql = 'select 1 as skip_configuration_changes where 0 = 1;' %}
+        {% set build_sql = '' %}
         {{ exceptions.warn("Updates were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
     {% elif config_updates and on_configuration_change == 'fail' %}
         {{ exceptions.raise_compiler_error("Updates were identified and `on_configuration_change` was set to `fail`") }}
@@ -61,9 +61,11 @@
     {% endif %}
 
     -- build model
-    {% call statement("main") %}
-        {{ build_sql }}
-    {% endcall %}
+    {% if build_sql != '' %}
+        {% call statement("main") %}
+            {{ build_sql }}
+        {% endcall %}
+    {% endif %}
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
@@ -72,7 +74,10 @@
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-    {{ adapter.commit() }}
+    {# TODO: we do not account for pre-hooks and post-hooks #}
+    {% if build_sql != '' %}
+        {{ adapter.commit() }}
+    {% endif %}
 
     {{ drop_relation_if_exists(backup_relation) }}
     {{ drop_relation_if_exists(intermediate_relation) }}

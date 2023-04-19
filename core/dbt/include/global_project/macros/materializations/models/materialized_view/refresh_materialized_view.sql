@@ -5,5 +5,5 @@
 
 
 {% macro default__refresh_materialized_view(relation) %}
-    {{ "" }}
+    {{- '' -}}
 {% endmacro %}
