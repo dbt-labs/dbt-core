@@ -58,7 +58,7 @@ class MaterializedViewTestsBase:
     def test_relation_is_materialized_view_on_initial_creation(self, project):
         self.assert_relation_is_materialized_view(project, self.materialized_view)
 
-    def test_relation_is_materialized_view_when_rerun(self, project, adapter):
+    def test_relation_is_materialized_view_when_rerun(self, project):
         run_dbt(["run", "--models", self.materialized_view])
         self.assert_relation_is_materialized_view(project, self.materialized_view)
 
@@ -92,9 +92,11 @@ class MaterializedViewTestsSkipConfigChangeBase(MaterializedViewTestsBase):
         results = run_dbt(
             ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"]
         )
-        assert results.results[0].adapter_response["rows_affected"] == 0
-        results.results[0].node.config.on_configuration_change == "skip"
-        assert results.results[0].status == RunStatus.Success
+        assert len(results.results) == 1
+        result = results.results[0]
+        assert result.node.config.on_configuration_change == "skip"
+        assert result.status == RunStatus.Success
+        assert result.adapter_response["rows_affected"] == -1
 
 
 class TestMaterializedViewSkipTestsBase(MaterializedViewTestsSkipConfigChangeBase):
@@ -103,7 +105,10 @@ class TestMaterializedViewSkipTestsBase(MaterializedViewTestsSkipConfigChangeBas
         pass
 
     def test_on_configuration_change_skips_with_update(self, project):
-        super().test_on_configuration_change_skips_with_update(self)
+        super().test_on_configuration_change_skips_with_update(project)
+
+    def test_relation_is_materialized_view_when_rerun(self, project):
+        super().test_relation_is_materialized_view_when_rerun(project)
 
 
 class MaterializedViewTestsFailConfigChangeBase(MaterializedViewTestsBase):

@@ -62,9 +62,16 @@
 
     -- build model
     {% if build_sql != '' %}
-        {% call statement("main") %}
+        {% call statement(name="main") %}
             {{ build_sql }}
         {% endcall %}
+    {% else %}
+        {% do store_raw_result(
+            name="main",
+            message="skip " ~ target_relation,
+            code="skip",
+            rows_affected="-1"
+        ) %}
     {% endif %}
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
@@ -74,7 +81,6 @@
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-    {# TODO: we do not account for pre-hooks and post-hooks #}
     {% if build_sql != '' %}
         {{ adapter.commit() }}
     {% endif %}
