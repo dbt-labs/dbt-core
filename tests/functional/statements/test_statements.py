@@ -52,7 +52,7 @@ class TestStatements:
         assert len(results) == 1
         assert results.results[0].status == "error"
         assert (
-            'The result "test_statement" has already been loaded into a variable'
+            "The 'statement' result named 'test_statement' has already been loaded into a variable"
             in results.results[0].message
         )
 
