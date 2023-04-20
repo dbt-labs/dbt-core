@@ -244,7 +244,7 @@ class ContractBreakingChangeError(DbtRuntimeError):
             "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
             f"\n\n{reasons}\n\n"
             "Consider making an additive (non-breaking) change instead, if possible.\n"
-            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
 
 

@@ -120,6 +120,10 @@ class BaseNode(dbtClassMixin, Replaceable):
         return self.resource_type in NodeType.refable()
 
     @property
+    def is_versioned(self):
+        return self.resource_type in NodeType.versioned() and self.version is not None
+
+    @property
     def is_ephemeral(self):
         return self.config.materialized == "ephemeral"
 
