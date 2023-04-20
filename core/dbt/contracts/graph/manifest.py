@@ -177,7 +177,7 @@ class RefableLookup(dbtClassMixin):
             if node.name not in self.storage:
                 self.storage[node.name] = {}
 
-            if node.resource_type in self._versioned_types and node.version:
+            if node.is_versioned:
                 if node.search_name not in self.storage:
                     self.storage[node.search_name] = {}
                 self.storage[node.search_name][node.package_name] = node.unique_id
