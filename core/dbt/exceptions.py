@@ -1025,7 +1025,7 @@ class MacroResultAlreadyLoadedError(CompilationError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        msg = f'The result "{self.result_name}" has already been loaded into a variable'
+        msg = f"The 'statement' result named '{self.result_name}' has already been loaded into a variable"
 
         return msg
 
