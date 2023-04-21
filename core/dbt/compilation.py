@@ -474,7 +474,7 @@ class Compiler:
                     # is a subset of all upstream nodes of the current node,
                     # add an edge from the upstream test to the current node.
                     if test_depends_on.issubset(upstream_nodes):
-                        linker.graph.add_edge(upstream_test, node_id)
+                        linker.graph.add_edge(upstream_test, node_id, edge_type="parent_test")
 
     def compile(self, manifest: Manifest, write=True, add_test_edges=False) -> Graph:
         self.initialize()
