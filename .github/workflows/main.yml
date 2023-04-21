@@ -56,9 +56,9 @@ jobs:
           pre-commit --version
           pip install mypy==0.961
           mypy --version
+          pip install -r dev-requirements.txt
           pip install -r editable-requirements.txt
           dbt --version
-          mypy --install-types
 
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
