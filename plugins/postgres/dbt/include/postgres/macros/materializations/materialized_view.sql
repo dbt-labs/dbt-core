@@ -20,9 +20,10 @@
 {% endmacro %}
 
 
-{% macro redshift__get_alter_materialized_view_sql(relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
+{% macro postgres__get_alter_materialized_view_sql(relation, updates, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% if 'index' in updates.keys() %}
-        select 1;
+    --  should this be placed lower into the chain somehow to be below call to main? othe
+        {% do create_indexes(target_relation) %}
     {% else %}
         {{ postgres__get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation) }}
     {% endif %}
