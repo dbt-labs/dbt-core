@@ -33,11 +33,18 @@ class Graph:
             for _, child in nx.bfs_edges(self.graph, node, reverse=True, depth_limit=max_depth)
         }
 
-    def descendants(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
+    def descendants(
+        self, node: UniqueId, max_depth: Optional[int] = None, include_tests_children: bool = False
+    ) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
             raise DbtInternalError(f"Node {node} not found in the graph!")
-        return {child for _, child in nx.bfs_edges(self.graph, node, depth_limit=max_depth)}
+        return {
+            child
+            for parent, child in nx.bfs_edges(self.graph, node, depth_limit=max_depth)
+            if include_tests_children
+            or self.graph[parent][child].get("edge_type") != "parent_test"
+        }
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
