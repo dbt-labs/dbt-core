@@ -39,12 +39,17 @@ class Graph:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
             raise DbtInternalError(f"Node {node} not found in the graph!")
-        return {
-            child
-            for parent, child in nx.bfs_edges(self.graph, node, depth_limit=max_depth)
-            if include_tests_children
-            or self.graph[parent][child].get("edge_type") != "parent_test"
-        }
+        filtered_graph = nx.restricted_view(
+            self.graph,
+            nodes=[],
+            edges=(
+                (a, b)
+                for a, b in self.graph.edges
+                if not include_tests_children
+                and self.graph[a][b].get("edge_type") == "parent_test"
+            ),
+        )
+        return {child for _, child in nx.bfs_edges(filtered_graph, node, depth_limit=max_depth)}
 
     def select_childrens_parents(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         ancestors_for = self.select_children(selected) | selected
