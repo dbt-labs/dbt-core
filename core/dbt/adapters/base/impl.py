@@ -728,7 +728,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
 
     @available
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
         raise NotImplementedException("`quote` is not implemented for this adapter!")

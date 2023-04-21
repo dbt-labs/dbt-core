@@ -37,7 +37,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         return NodeType.Model
 
     @classmethod
-    def get_compiled_path(cls, block: FileBlock):
+    def get_compiled_path(cls, block: FileBlock):  # type: ignore
         return block.path.relative_path
 
     def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:

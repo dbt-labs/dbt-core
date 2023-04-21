@@ -100,7 +100,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
             package_not_found(self.package)
 
     @classmethod
-    def from_contract(cls, contract: RegistryPackage) -> "RegistryUnpinnedPackage":
+    def from_contract(cls, contract: RegistryPackage) -> "RegistryUnpinnedPackage":  # type: ignore
         raw_version = contract.get_versions()
 
         versions = [semver.VersionSpecifier.from_version_string(v) for v in raw_version]

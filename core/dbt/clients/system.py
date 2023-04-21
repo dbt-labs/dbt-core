@@ -446,7 +446,7 @@ def download_with_retries(
 def download(url: str, path: str, timeout: Optional[Union[float, tuple]] = None) -> None:
     path = convert_path(path)
     connection_timeout = timeout or float(os.getenv("DBT_HTTP_TIMEOUT", 10))
-    response = requests.get(url, timeout=connection_timeout)
+    response = requests.get(url, timeout=connection_timeout)  # type: ignore
     with open(path, "wb") as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)

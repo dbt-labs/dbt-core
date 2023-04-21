@@ -128,7 +128,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         self.subdirectory = subdirectory
 
     @classmethod
-    def from_contract(cls, contract: GitPackage) -> "GitUnpinnedPackage":
+    def from_contract(cls, contract: GitPackage) -> "GitUnpinnedPackage":  # type: ignore
         revisions = contract.get_revisions()
 
         # we want to map None -> True

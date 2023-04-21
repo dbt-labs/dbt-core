@@ -87,7 +87,7 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         return ParsedHookNode.from_dict(dct)
 
     @classmethod
-    def get_compiled_path(cls, block: HookBlock):
+    def get_compiled_path(cls, block: HookBlock):  # type: ignore
         return get_pseudo_hook_path(block.name)
 
     def _create_parsetime_node(

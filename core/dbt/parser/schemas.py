@@ -190,7 +190,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         )
 
     @classmethod
-    def get_compiled_path(cls, block: FileBlock) -> str:
+    def get_compiled_path(cls, block: FileBlock) -> str:  # type: ignore
         # should this raise an error?
         return block.path.relative_path
 

@@ -88,10 +88,10 @@ class AdapterProtocol(  # type: ignore[misc]
         Compiler_T,
     ],
 ):
-    AdapterSpecificConfigs: ClassVar[Type[AdapterConfig_T]]
-    Column: ClassVar[Type[Column_T]]
-    Relation: ClassVar[Type[Relation_T]]
-    ConnectionManager: ClassVar[Type[ConnectionManager_T]]
+    AdapterSpecificConfigs: ClassVar[Type[AdapterConfig_T]]  # type: ignore
+    Column: ClassVar[Type[Column_T]]  # type: ignore
+    Relation: ClassVar[Type[Relation_T]]  # type: ignore
+    ConnectionManager: ClassVar[Type[ConnectionManager_T]]  # type: ignore
     connections: ConnectionManager_T
 
     def __init__(self, config: AdapterRequiredConfig):

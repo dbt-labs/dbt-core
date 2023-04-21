@@ -568,7 +568,7 @@ class SourceStatusSelectorMethod(SelectorMethod):
             for unique_id in current_state_sources:
                 if unique_id not in previous_state_sources:
                     matches.add(unique_id)
-                elif current_state_sources[unique_id] > previous_state_sources[unique_id]:
+                elif current_state_sources[unique_id] > previous_state_sources[unique_id]:  # type: ignore
                     matches.add(unique_id)
 
             for unique_id in matches:

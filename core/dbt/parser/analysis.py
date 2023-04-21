@@ -17,5 +17,5 @@ class AnalysisParser(SimpleSQLParser[ParsedAnalysisNode]):
         return NodeType.Analysis
 
     @classmethod
-    def get_compiled_path(cls, block: FileBlock):
+    def get_compiled_path(cls, block: FileBlock):  # type: ignore
         return os.path.join("analysis", block.path.relative_path)

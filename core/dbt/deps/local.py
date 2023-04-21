@@ -66,7 +66,7 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
 
 class LocalUnpinnedPackage(LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]):
     @classmethod
-    def from_contract(cls, contract: LocalPackage) -> "LocalUnpinnedPackage":
+    def from_contract(cls, contract: LocalPackage) -> "LocalUnpinnedPackage":  # type: ignore
         return cls(local=contract.local)
 
     def incorporate(self, other: "LocalUnpinnedPackage") -> "LocalUnpinnedPackage":

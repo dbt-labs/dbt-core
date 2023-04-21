@@ -1,4 +1,4 @@
-import jinja2
+import jinja2  # type: ignore
 from dbt.clients.jinja import get_environment
 from dbt.exceptions import raise_compiler_error
 

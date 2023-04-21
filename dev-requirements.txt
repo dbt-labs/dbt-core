@@ -4,7 +4,7 @@ flake8
 flaky
 freezegun==0.3.12
 ipdb
-mypy==0.782
+mypy==0.961
 pip-tools
 pre-commit
 pytest
@@ -16,4 +16,8 @@ pytest-mock
 pytest-xdist
 tox>=3.13
 twine
+types-python-dateutil
+types-pytz
+types-PyYAML
+types-requests
 wheel

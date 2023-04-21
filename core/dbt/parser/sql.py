@@ -32,7 +32,7 @@ class SqlBlockParser(SimpleSQLParser[ParsedSqlNode]):
         return NodeType.SqlOperation
 
     @staticmethod
-    def get_compiled_path(block: FileBlock):
+    def get_compiled_path(block: FileBlock):  # type: ignore
         # we do it this way to make mypy happy
         if not isinstance(block, SqlBlock):
             raise InternalException(

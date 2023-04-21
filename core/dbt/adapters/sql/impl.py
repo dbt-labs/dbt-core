@@ -66,33 +66,33 @@ class SQLAdapter(BaseAdapter):
         return self.connections.add_query(sql, auto_begin, bindings, abridge_sql_log)
 
     @classmethod
-    def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:  # type: ignore
         return "text"
 
     @classmethod
-    def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:  # type: ignore
         # TODO CT-211
         decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))  # type: ignore[attr-defined]
         return "float8" if decimals else "integer"
 
     @classmethod
-    def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:  # type: ignore
         return "boolean"
 
     @classmethod
-    def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:  # type: ignore
         return "timestamp without time zone"
 
     @classmethod
-    def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:  # type: ignore
         return "date"
 
     @classmethod
-    def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:  # type: ignore
         return "time"
 
     @classmethod
-    def is_cancelable(cls) -> bool:
+    def is_cancelable(cls) -> bool:  # type: ignore
         return True
 
     def expand_column_types(self, goal, current):

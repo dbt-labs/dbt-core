@@ -1,6 +1,6 @@
 from typing import Iterable, List
 
-import jinja2
+import jinja2  # type: ignore
 
 from dbt.exceptions import ParsingException
 from dbt.clients import jinja

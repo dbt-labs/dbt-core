@@ -16,5 +16,5 @@ class SingularTestParser(SimpleSQLParser[ParsedSingularTestNode]):
         return NodeType.Test
 
     @classmethod
-    def get_compiled_path(cls, block: FileBlock):
+    def get_compiled_path(cls, block: FileBlock):  # type: ignore
         return get_pseudo_test_path(block.name, block.path.relative_path)
