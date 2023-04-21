@@ -333,12 +333,20 @@ def MockNode(package, name, resource_type=None, **kwargs):
         cls = SeedNode
     else:
         raise ValueError(f"I do not know how to handle {resource_type}")
+
+    version = kwargs.get("version")
+    search_name = name if version is None else f"{name}.v{version}"
+    unique_id = (
+        f"{str(resource_type)}.{package}.{name}"
+        if version is None
+        else f"{str(resource_type)}.{package}.{name}.v{version}"
+    )
     node = mock.MagicMock(
         __class__=cls,
         resource_type=resource_type,
         package_name=package,
-        unique_id=f"{str(resource_type)}.{package}.{name}",
-        search_name=name,
+        unique_id=unique_id,
+        search_name=search_name,
         **kwargs,
     )
     node.name = name

@@ -82,6 +82,7 @@ def populated_node_config_dict():
         "tags": [],
         "extra": "even more",
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "grants": {},
         "packages": [],
@@ -166,6 +167,7 @@ def base_parsed_model_dict():
             "quoting": {},
             "tags": [],
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -274,6 +276,7 @@ def complex_parsed_model_dict():
             "quoting": {},
             "tags": [],
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -353,6 +356,7 @@ def complex_parsed_model_object():
     "quoting": {},
     "column_types": {"a": "text"},
     "on_schema_change": "ignore",
+    "on_configuration_change": "apply",
     "grants": {},
     "packages": [],
     "docs": {"show": True},
@@ -371,6 +375,7 @@ def complex_parsed_model_object():
     "quoting": {},
     "tags": [],
     "on_schema_change": "ignore",
+    "on_configuration_change": "apply",
     "meta": {},
     "grants": {},
     "docs": {"show": True},
@@ -521,6 +526,7 @@ def basic_parsed_seed_dict():
             "quoting": {},
             "tags": [],
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -612,6 +618,7 @@ def complex_parsed_seed_dict():
             "tags": [],
             "quote_columns": True,
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -783,6 +790,8 @@ def basic_parsed_model_patch_dict():
         },
         "config": {},
         "access": "public",
+        "version": "1",
+        "latest_version": "1",
     }
 
 
@@ -799,6 +808,8 @@ def basic_parsed_model_patch_object():
         meta={},
         config={},
         access="public",
+        version="1",
+        latest_version="1",
     )
 
 
@@ -831,6 +842,8 @@ def patched_model_object():
         checksum=FileHash.from_contents(""),
         unrendered_config={},
         access=AccessType.Public,
+        version="1",
+        latest_version="1",
     )
 
 
@@ -899,6 +912,7 @@ def base_parsed_hook_dict():
             "quoting": {},
             "tags": [],
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -981,6 +995,7 @@ def complex_parsed_hook_dict():
             "quoting": {},
             "tags": [],
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -1337,6 +1352,7 @@ def basic_timestamp_snapshot_config_dict():
         "target_database": "some_snapshot_db",
         "target_schema": "some_snapshot_schema",
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "grants": {},
         "packages": [],
@@ -1374,6 +1390,7 @@ def complex_timestamp_snapshot_config_dict():
         "strategy": "timestamp",
         "updated_at": "last_update",
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "grants": {},
         "packages": [],
@@ -1439,6 +1456,7 @@ def basic_check_snapshot_config_dict():
         "strategy": "check",
         "check_cols": "all",
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "grants": {},
         "packages": [],
@@ -1476,6 +1494,7 @@ def complex_set_snapshot_config_dict():
         "strategy": "check",
         "check_cols": ["a", "b"],
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "grants": {},
         "packages": [],
@@ -1592,6 +1611,7 @@ def basic_timestamp_snapshot_dict():
             "strategy": "timestamp",
             "updated_at": "last_update",
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -1739,6 +1759,7 @@ def basic_check_snapshot_dict():
             "strategy": "check",
             "check_cols": "all",
             "on_schema_change": "ignore",
+            "on_configuration_change": "apply",
             "meta": {},
             "grants": {},
             "docs": {"show": True},
@@ -1913,6 +1934,8 @@ def populated_parsed_node_patch_dict():
         "package_name": "test",
         "config": {},
         "access": "public",
+        "version": "1",
+        "latest_version": "1",
     }
 
 
@@ -1929,6 +1952,8 @@ def populated_parsed_node_patch_object():
         docs=Docs(show=False),
         config={},
         access="public",
+        version="1",
+        latest_version="1",
     )
 
 

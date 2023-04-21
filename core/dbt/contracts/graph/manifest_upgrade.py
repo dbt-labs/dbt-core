@@ -46,8 +46,24 @@ def rename_sql_attr(node_content: dict) -> dict:
     return node_content
 
 
+def upgrade_ref_content(node_content: dict) -> dict:
+    # In v1.5 we switched Node.refs from List[List[str]] to List[Dict[str, Union[NodeVersion, str]]]
+    # Previous versions did not have a version keyword argument for ref
+    if "refs" in node_content:
+        upgraded_refs = []
+        for ref in node_content["refs"]:
+            if isinstance(ref, list):
+                if len(ref) == 1:
+                    upgraded_refs.append({"package": None, "name": ref[0], "version": None})
+                else:
+                    upgraded_refs.append({"package": ref[0], "name": ref[1], "version": None})
+        node_content["refs"] = upgraded_refs
+    return node_content
+
+
 def upgrade_node_content(node_content):
     rename_sql_attr(node_content)
+    upgrade_ref_content(node_content)
     if node_content["resource_type"] != "seed" and "root_path" in node_content:
         del node_content["root_path"]
 
@@ -92,9 +108,11 @@ def upgrade_manifest_json(manifest: dict) -> dict:
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = rename_metric_attr(metric_content)
+        metric_content = upgrade_ref_content(metric_content)
         if "root_path" in metric_content:
             del metric_content["root_path"]
     for exposure_content in manifest.get("exposures", {}).values():
+        exposure_content = upgrade_ref_content(exposure_content)
         if "root_path" in exposure_content:
             del exposure_content["root_path"]
     for source_content in manifest.get("sources", {}).values():

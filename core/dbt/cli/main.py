@@ -15,8 +15,6 @@ from dbt.cli.exceptions import (
     DbtInternalException,
     DbtUsageException,
 )
-from dbt.config.profile import Profile
-from dbt.config.project import Project
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     CatalogArtifact,
@@ -64,13 +62,9 @@ class dbtRunnerResult:
 class dbtRunner:
     def __init__(
         self,
-        project: Project = None,
-        profile: Profile = None,
         manifest: Manifest = None,
         callbacks: List[Callable[[EventMsg], None]] = None,
     ):
-        self.project = project
-        self.profile = profile
         self.manifest = manifest
 
         if callbacks is None:
@@ -81,8 +75,6 @@ class dbtRunner:
         try:
             dbt_ctx = cli.make_context(cli.name, args)
             dbt_ctx.obj = {
-                "project": self.project,
-                "profile": self.profile,
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
             }

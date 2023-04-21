@@ -42,6 +42,10 @@ class BaseConstraintsColumnsEqual:
         return "INT"
 
     @pytest.fixture
+    def schema_string_type(self, string_type):
+        return string_type
+
+    @pytest.fixture
     def schema_int_type(self, int_type):
         return int_type
 
@@ -85,7 +89,7 @@ class BaseConstraintsColumnsEqual:
         assert all([(exp in log_output or exp.upper() in log_output) for exp in expected])
 
     def test__constraints_wrong_column_data_types(
-        self, project, string_type, int_type, schema_int_type, data_types
+        self, project, string_type, int_type, schema_string_type, schema_int_type, data_types
     ):
         for (sql_column_value, schema_data_type, error_data_type) in data_types:
             # Write parametrized data_type to sql file
@@ -100,7 +104,7 @@ class BaseConstraintsColumnsEqual:
             wrong_schema_data_type = (
                 schema_int_type
                 if schema_data_type.upper() != schema_int_type.upper()
-                else string_type
+                else schema_string_type
             )
             wrong_schema_error_data_type = (
                 int_type if schema_data_type.upper() != schema_int_type.upper() else string_type

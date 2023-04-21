@@ -1,5 +1,6 @@
 import pytest
 
+from dbt.contracts.graph.nodes import RefArgs
 from dbt.tests.util import run_dbt, write_file, get_manifest
 from tests.functional.partial_parsing.fixtures import (
     people_sql,
@@ -38,8 +39,8 @@ class TestMetrics:
         metric_tenure = manifest.metrics[metric_tenure_id]
         expected_meta = {"my_meta": "testing"}
         assert metric_people.meta == expected_meta
-        assert metric_people.refs == [["people"]]
-        assert metric_tenure.refs == [["people"]]
+        assert metric_people.refs == [RefArgs(name="people")]
+        assert metric_tenure.refs == [RefArgs(name="people")]
         expected_depends_on_nodes = ["model.test.people"]
         assert metric_people.depends_on.nodes == expected_depends_on_nodes
 
