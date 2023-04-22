@@ -49,7 +49,7 @@ from dbt.exceptions import (
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState
+from dbt.events.types import MergedFromState, Note
 from dbt.node_types import NodeType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
@@ -169,7 +169,29 @@ class RefableLookup(dbtClassMixin):
     ):
         unique_id = self.get_unique_id(key, package, version)
         if unique_id is not None:
-            return self.perform_lookup(unique_id, manifest)
+            node = self.perform_lookup(unique_id, manifest)
+            if version is None and node.is_versioned:
+                # This was an 'unpinned' reference, resolved to latest_version.
+                # Check to see if newer versions are available, and log about it.
+                max_version = max(
+                    [
+                        v.version
+                        for k, v in manifest.nodes.items()
+                        if k.startswith(f"{node.unique_id[:-len(str(node.version))]}")
+                    ]
+                )
+                if max_version > node.latest_version:
+                    msg = (
+                        f"FYI!\n"
+                        f"Found an unpinned reference to versioned model '{node.name}' in '{node.package_name}'.\n"
+                        f"Resolving to latest version: {node.search_name}\n"
+                        f"A prerelease version {max_version} is available. It has not yet been marked 'latest' by its maintainer.\n"
+                        f"When that happens, this reference will resolve to {node.name}.v{max_version} instead.\n\n"
+                        f"  Try out v{max_version}: {{{{ ref({package}, {key}, v={max_version}) }}}}\n"
+                        f"  Pin to v{node.version}:  {{{{ ref({package}, {key}, v={node.version}) }}}}\n"
+                    )
+                    fire_event(Note(msg=msg))
+            return node
         return None
 
     def add_node(self, node: ManifestNode):
