@@ -1082,6 +1082,13 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 versioned_model_node = None
                 add_node_nofile_fn: Callable
+
+                # If this is the latest version, it's allowed to define itself in a model file name that doesn't have a suffix
+                if versioned_model_unique_id is None and unparsed_version.v == latest_version:
+                    versioned_model_unique_id = self.manifest.ref_lookup.get_unique_id(
+                        block.name, None, None
+                    )
+
                 if versioned_model_unique_id is None:
                     # Node might be disabled. Following call returns list of matching disabled nodes
                     found_nodes = self.manifest.disabled_lookup.find(versioned_model_name, None)
