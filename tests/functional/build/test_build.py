@@ -196,3 +196,18 @@ class TestInterdependentModelsFail:
         actual = [str(r.status) for r in results]
         expected = ["error"] * 4 + ["skipped"] * 7 + ["pass"] * 2 + ["success"] * 3
         assert sorted(actual) == sorted(expected)
+
+
+class TestDownstreamSelection:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_a.sql": models_simple_blocking__model_a_sql,
+            "model_b.sql": models_simple_blocking__model_b_sql,
+            "test.yml": models_simple_blocking__test_yml,
+        }
+
+    def test_downstream_selection(self, project):
+        """Ensure that selecting test+ does not select model_a's other children"""
+        results = run_dbt(["build", "--select", "model_a not_null_model_a_id+"], expect_pass=True)
+        assert len(results) == 2
