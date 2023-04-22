@@ -851,6 +851,8 @@ class PartialParsing:
                     if self.saved_files[file_id]:
                         source_file = self.saved_files[file_id]
                         self.add_to_pp_files(source_file)
+                    if node.is_versioned:
+                        self.schedule_referencing_nodes_for_parsing(elem_unique_id)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)
 
