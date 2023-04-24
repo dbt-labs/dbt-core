@@ -1068,7 +1068,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         else:
             assert isinstance(self.yaml.file, SchemaSourceFile)
             source_file: SchemaSourceFile = self.yaml.file
-            latest_version = target.latest_version or max(versions).v
+            latest_version = (
+                target.latest_version if target.latest_version is not None else max(versions).v
+            )
             for unparsed_version in versions:
                 versioned_model_name = (
                     unparsed_version.defined_in or f"{block.name}_{unparsed_version.formatted_v}"

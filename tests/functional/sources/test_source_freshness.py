@@ -187,8 +187,15 @@ class TestSourceSnapshotFreshness(SuccessfulSourceFreshnessTest):
 
 
 class TestSourceFreshnessSelection(SuccessfulSourceFreshnessTest):
-    def test_source_freshness_selection_select(self, project):
+    @pytest.fixture(scope="class")
+    def project_config_update(self, logs_dir):
+        return {
+            "target-path": logs_dir,
+        }
+
+    def test_source_freshness_selection_select(self, project, logs_dir):
         """Tests node selection using the --select argument."""
+        """Also validate that specify a target-path works as expected."""
         self._set_updated_at_to(project, timedelta(hours=-2))
         # select source directly
         results = self.run_dbt_with_vars(
@@ -198,13 +205,11 @@ class TestSourceFreshnessSelection(SuccessfulSourceFreshnessTest):
                 "freshness",
                 "--select",
                 "source:test_source.test_table",
-                "-o",
-                "target/pass_source.json",
             ],
         )
         assert len(results) == 1
         assert results[0].status == "pass"
-        self._assert_freshness_results("target/pass_source.json", "pass")
+        self._assert_freshness_results(f"{logs_dir}/sources.json", "pass")
 
 
 class TestSourceFreshnessExclude(SuccessfulSourceFreshnessTest):

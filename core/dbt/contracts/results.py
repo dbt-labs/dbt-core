@@ -21,13 +21,14 @@ import agate
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
-    Union,
+    Any,
+    Callable,
     Dict,
     List,
-    Optional,
-    Any,
     NamedTuple,
+    Optional,
     Sequence,
+    Union,
 )
 
 from dbt.clients.system import write_json
@@ -56,15 +57,16 @@ class TimingInfo(dbtClassMixin):
 
 # This is a context manager
 class collect_timing_info:
-    def __init__(self, name: str):
+    def __init__(self, name: str, callback: Callable[[TimingInfo], None]):
         self.timing_info = TimingInfo(name=name)
+        self.callback = callback
 
     def __enter__(self):
         self.timing_info.begin()
-        return self.timing_info
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
+        self.callback(self.timing_info)
         # Note: when legacy logger is removed, we can remove the following line
         with TimingProcessor(self.timing_info):
             fire_event(
