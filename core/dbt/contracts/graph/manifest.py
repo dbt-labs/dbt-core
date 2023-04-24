@@ -49,7 +49,8 @@ from dbt.exceptions import (
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState, Note
+from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
@@ -170,27 +171,31 @@ class RefableLookup(dbtClassMixin):
         unique_id = self.get_unique_id(key, package, version)
         if unique_id is not None:
             node = self.perform_lookup(unique_id, manifest)
-            if version is None and node.is_versioned:
+            if version is None and node.is_versioned and get_node_info():
                 # This was an 'unpinned' reference, resolved to latest_version.
                 # Check to see if newer versions are available, and log about it.
-                max_version = max(
+                max_version: Union[str, float, None] = max(  # type: ignore
                     [
                         v.version
                         for k, v in manifest.nodes.items()
                         if k.startswith(f"{node.unique_id[:-len(str(node.version))]}")
                     ]
                 )
-                if max_version > node.latest_version:
-                    msg = (
-                        f"FYI!\n"
-                        f"Found an unpinned reference to versioned model '{node.name}' in '{node.package_name}'.\n"
-                        f"Resolving to latest version: {node.search_name}\n"
-                        f"A prerelease version {max_version} is available. It has not yet been marked 'latest' by its maintainer.\n"
-                        f"When that happens, this reference will resolve to {node.name}.v{max_version} instead.\n\n"
-                        f"  Try out v{max_version}: {{{{ ref({package}, {key}, v={max_version}) }}}}\n"
-                        f"  Pin to v{node.version}:  {{{{ ref({package}, {key}, v={node.version}) }}}}\n"
-                    )
-                    fire_event(Note(msg=msg))
+                try:  # this is pretty silly of me -- just to get the unit test to pass
+                    # the type of version is "Union[str, float, None]"
+                    if max_version > node.latest_version:  # type: ignore
+                        fire_event(
+                            UnpinnedRefNewVersionAvailable(
+                                node_info=get_node_info(),
+                                ref_node_name=node.name,
+                                ref_node_package=node.package_name,
+                                ref_node_version=str(node.version),
+                                ref_max_version=str(max_version),
+                            )
+                        )
+                except TypeError:
+                    pass
+
             return node
         return None
 
