@@ -707,8 +707,8 @@ class TestGroups:
         manifest = get_manifest(project.project_root)
         expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
         expected_groups = ["group.test.test_group"]
-        assert expected_nodes == list(manifest.nodes.keys())
-        assert expected_groups == list(manifest.groups.keys())
+        assert expected_nodes == sorted(list(manifest.nodes.keys()))
+        assert expected_groups == sorted(list(manifest.groups.keys()))
 
         # add group to schema
         write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
@@ -717,8 +717,8 @@ class TestGroups:
         manifest = get_manifest(project.project_root)
         expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
         expected_groups = ["group.test.test_group", "group.test.test_group2"]
-        assert expected_nodes == list(manifest.nodes.keys())
-        assert expected_groups == list(manifest.groups.keys())
+        assert expected_nodes == sorted(list(manifest.nodes.keys()))
+        assert expected_groups == sorted(list(manifest.groups.keys()))
 
         # edit group in schema
         write_file(
@@ -729,8 +729,8 @@ class TestGroups:
         manifest = get_manifest(project.project_root)
         expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
         expected_groups = ["group.test.test_group", "group.test.test_group2_edited"]
-        assert expected_nodes == list(manifest.nodes.keys())
-        assert expected_groups == list(manifest.groups.keys())
+        assert expected_nodes == sorted(list(manifest.nodes.keys()))
+        assert expected_groups == sorted(list(manifest.groups.keys()))
 
         # delete group in schema
         write_file(groups_schema_yml_one_group, project.project_root, "models", "schema.yml")
@@ -739,8 +739,8 @@ class TestGroups:
         manifest = get_manifest(project.project_root)
         expected_nodes = ["model.test.orders", "model.test.orders_downstream"]
         expected_groups = ["group.test.test_group"]
-        assert expected_nodes == list(manifest.nodes.keys())
-        assert expected_groups == list(manifest.groups.keys())
+        assert expected_nodes == sorted(list(manifest.nodes.keys()))
+        assert expected_groups == sorted(list(manifest.groups.keys()))
 
         # add back second group
         write_file(groups_schema_yml_two_groups, project.project_root, "models", "schema.yml")
