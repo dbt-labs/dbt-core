@@ -9,6 +9,7 @@ from tests.functional.partial_parsing.fixtures import (
     models_schema2_yml,
     models_schema2b_yml,
     models_versions_schema_yml,
+    models_versions_defined_in_schema_yml,
     models_versions_updated_schema_yml,
     model_three_sql,
     model_three_modified_sql,
@@ -305,8 +306,8 @@ class TestVersionedModels:
     @pytest.fixture(scope="class")
     def models(self):
         return {
+            "model_one_v1.sql": model_one_sql,
             "model_one.sql": model_one_sql,
-            "model_one_v2.sql": model_one_sql,
             "model_one_downstream.sql": model_four2_sql,
             "schema.yml": models_versions_schema_yml,
         }
@@ -323,6 +324,15 @@ class TestVersionedModels:
         # assert unpinned ref points to latest version
         model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
         assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v2"]
+
+        # update schema.yml block - model_one is now 'defined_in: model_one_different'
+        rm_file(project.project_root, "models", "model_one.sql")
+        write_file(model_one_sql, project.project_root, "models", "model_one_different.sql")
+        write_file(
+            models_versions_defined_in_schema_yml, project.project_root, "models", "schema.yml"
+        )
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 3
 
         # update versions schema.yml block - latest_version from 2 to 1
         write_file(
@@ -341,7 +351,7 @@ class TestVersionedModels:
         assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v1"]
 
         # update versioned model
-        write_file(model_two_sql, project.project_root, "models", "model_one_v2.sql")
+        write_file(model_two_sql, project.project_root, "models", "model_one_different.sql")
         results = run_dbt(["--partial-parse", "run"])
         assert len(results) == 3
 
