@@ -6,7 +6,7 @@ from unittest import mock
 import dbt.deps
 import dbt.exceptions
 from dbt.deps.git import GitUnpinnedPackage
-from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage, LocalPinnedPackage
 from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.clients.registry import is_compatible_version
@@ -91,6 +91,21 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(a_pinned.get_version(), "0.0.1")
         self.assertEqual(a_pinned.source_type(), "git")
         self.assertIs(a_pinned.warn_unpinned, True)
+
+    @mock.patch("shutil.copytree")
+    @mock.patch("dbt.deps.local.system.make_symlink")
+    @mock.patch("dbt.deps.local.LocalPinnedPackage.get_installation_path")
+    @mock.patch("dbt.deps.local.LocalPinnedPackage.resolve_path")
+    def test_deps_install(
+        self, mock_resolve_path, mock_get_installation_path, mock_symlink, mock_shutil
+    ):
+        mock_resolve_path.return_value = "/tmp/source"
+        mock_get_installation_path.return_value = "/tmp/dest"
+        mock_symlink.side_effect = OSError("Install deps symlink error")
+
+        LocalPinnedPackage("local").install("dummy", "dummy")
+        self.assertEqual(mock_shutil.call_count, 1)
+        mock_shutil.assert_called_once_with("/tmp/source", "/tmp/dest")
 
     def test_invalid(self):
         with self.assertRaises(ValidationError):
