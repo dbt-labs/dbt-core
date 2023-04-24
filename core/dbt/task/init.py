@@ -11,6 +11,7 @@ import click
 
 import dbt.config
 import dbt.clients.system
+from dbt.config.profile import read_profile
 from dbt.flags import get_flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
@@ -256,6 +257,14 @@ class InitTask(BaseTask):
             in_project = False
 
         if in_project:
+            # If --profile was specified, it means use an existing profile, which is not
+            # applicable to this case
+            if getattr(get_flags(), "PROFILE", None):
+                print(
+                    "Can not init existing project with specified profile, edit dbt_project.yml instead"
+                )
+                sys.exit(1)
+
             # When dbt init is run inside an existing project,
             # just setup the user's profile.
             fire_event(SettingUpProfile())
@@ -289,16 +298,30 @@ class InitTask(BaseTask):
             fire_event(ProjectNameAlreadyExists(name=project_name))
             return
 
+        # If the user specified an existing profile to use, use it instead of generating a new one
+        user_profile_name = getattr(get_flags(), "PROFILE", None)
+        if user_profile_name:
+            # Verify it exists. Can't use the regular profile validation routine because it assumes
+            # the project file exists
+            raw_profiles = read_profile(profiles_dir)
+            if user_profile_name not in raw_profiles:
+                print("Could not find profile named '{}'".format(user_profile_name))
+                sys.exit(1)
+
         self.copy_starter_repo(project_name)
         os.chdir(project_name)
         with open("dbt_project.yml", "r+") as f:
-            content = f"{f.read()}".format(project_name=project_name, profile_name=project_name)
+            content = f"{f.read()}".format(
+                project_name=project_name,
+                profile_name=user_profile_name if user_profile_name else project_name,
+            )
             f.seek(0)
             f.write(content)
             f.truncate()
 
+        # If an existing profile to use was not provided, generate a profile
         # Ask for adapter only if skip_profile_setup flag is not provided.
-        if not self.args.skip_profile_setup:
+        if not user_profile_name and not self.args.skip_profile_setup:
             if not self.check_if_can_write_profile(profile_name=project_name):
                 return
             adapter = self.ask_for_adapter_choice()
