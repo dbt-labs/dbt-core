@@ -23,7 +23,7 @@
 
         {{ custom_alias_name | trim }}
 
-    {%- elif node.version and not node.is_latest_version -%}
+    {%- elif node.version -%}
 
         {{ return(node.name ~ "_v" ~ (node.version | replace(".", "_"))) }}
 
