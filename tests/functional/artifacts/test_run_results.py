@@ -17,7 +17,8 @@ class TestRunResultsTimingSuccess:
 
     def test_timing_exists(self, project):
         results = run_dbt(["run"])
-        assert results.results[0].timing
+        assert len(results.results) == 1
+        assert len(results.results[0].timing) > 0
 
 
 class TestRunResultsTimingFailure:
@@ -27,4 +28,5 @@ class TestRunResultsTimingFailure:
 
     def test_timing_exists(self, project):
         results = run_dbt(["run"], expect_pass=False)
-        assert results.results[0].timing
+        assert len(results.results) == 1
+        assert len(results.results[0].timing) > 0
