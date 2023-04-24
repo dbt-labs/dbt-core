@@ -36,7 +36,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
 )
-from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion
+from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
@@ -171,30 +171,29 @@ class RefableLookup(dbtClassMixin):
         unique_id = self.get_unique_id(key, package, version)
         if unique_id is not None:
             node = self.perform_lookup(unique_id, manifest)
+            # If this is an unpinned ref (no 'version' arg was passed),
+            # AND this is a versioned node,
+            # AND this ref is being resolved at runtime -- get_node_info != {}
             if version is None and node.is_versioned and get_node_info():
-                # This was an 'unpinned' reference, resolved to latest_version.
-                # Check to see if newer versions are available, and log about it.
-                max_version: Union[str, float, None] = max(  # type: ignore
+                # Check to see if newer versions are available, and log an "FYI" if so
+                max_version: UnparsedVersion = max(
                     [
-                        v.version
-                        for k, v in manifest.nodes.items()
-                        if k.startswith(f"{node.unique_id[:-len(str(node.version))]}")
+                        UnparsedVersion(v.version)
+                        for v in manifest.nodes.values()
+                        if v.name == node.name and v.version is not None
                     ]
                 )
-                try:  # this is pretty silly of me -- just to get the unit test to pass
-                    # the type of version is "Union[str, float, None]"
-                    if max_version > node.latest_version:  # type: ignore
-                        fire_event(
-                            UnpinnedRefNewVersionAvailable(
-                                node_info=get_node_info(),
-                                ref_node_name=node.name,
-                                ref_node_package=node.package_name,
-                                ref_node_version=str(node.version),
-                                ref_max_version=str(max_version),
-                            )
+                assert node.latest_version  # for mypy, whenever i may find it
+                if max_version > UnparsedVersion(node.latest_version):
+                    fire_event(
+                        UnpinnedRefNewVersionAvailable(
+                            node_info=get_node_info(),
+                            ref_node_name=node.name,
+                            ref_node_package=node.package_name,
+                            ref_node_version=str(node.version),
+                            ref_max_version=str(max_version.v),
                         )
-                except TypeError:
-                    pass
+                    )
 
             return node
         return None

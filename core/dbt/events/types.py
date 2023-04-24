@@ -1124,15 +1124,14 @@ class UnpinnedRefNewVersionAvailable(InfoLevel):
 
     def message(self) -> str:
         msg = (
-            f"Found an unpinned reference to versioned model '{self.ref_node_name}' in '{self.ref_node_package}'.\n"
+            f"While compiling '{self.node_info.node_name}':\n"
+            f"Found an unpinned reference to versioned model '{self.ref_node_name}' in project '{self.ref_node_package}'.\n"
             f"Resolving to latest version: {self.ref_node_name}.v{self.ref_node_version}\n"
             f"A prerelease version {self.ref_max_version} is available. It has not yet been marked 'latest' by its maintainer.\n"
             f"When that happens, this reference will resolve to {self.ref_node_name}.v{self.ref_max_version} instead.\n\n"
             f"  Try out v{self.ref_max_version}: {{{{ ref('{self.ref_node_package}', '{self.ref_node_name}', v='{self.ref_max_version}') }}}}\n"
-            f"  Pin to v{self.ref_node_version}:  {{{{ ref('{self.ref_node_package}', '{self.ref_node_name}', v='{self.ref_max_version}') }}}}\n"
+            f"  Pin to  v{self.ref_node_version}: {{{{ ref('{self.ref_node_package}', '{self.ref_node_name}', v='{self.ref_node_version}') }}}}\n"
         )
-        if self.node_info:
-            msg = f"While compiling '{self.node_info.node_name}':\n" + msg
         return msg
 
 

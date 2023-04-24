@@ -346,6 +346,7 @@ def MockNode(package, name, resource_type=None, **kwargs):
         **kwargs,
     )
     node.name = name
+    node.is_versioned = resource_type is NodeType.Model and version is not None
     return node
 
 
