@@ -192,14 +192,6 @@ class RefableLookup(dbtClassMixin):
                     )
                     fire_event(Note(msg=msg))
             return node
-        # If you reference a model with a version, and the model actually isn't versioned
-        if version is not None:
-            unique_id = self.get_unique_id(key, package, version=None)
-            node = self.perform_lookup(unique_id, manifest)
-            if node and not node.is_versioned:
-                # TODO: Can't raise an exception here, because we loop through this method twice, once for current package and once for global lookups (all installed packages)
-                msg = f"Tried to reference '{key}' in '{package}' at version {version}, but '{key}' does not have any versions defined"
-                fire_event(Note(msg=msg))
         return None
 
     def add_node(self, node: ManifestNode):
