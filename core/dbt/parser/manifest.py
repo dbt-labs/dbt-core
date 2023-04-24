@@ -1228,7 +1228,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
 
         target_model_id = target_model.unique_id
 
-        exposure.depends_on.nodes.append(target_model_id)
+        exposure.depends_on.add_node(target_model_id)
 
 
 def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: Metric):
@@ -1407,7 +1407,7 @@ def _process_sources_for_exposure(manifest: Manifest, current_project: str, expo
             )
             continue
         target_source_id = target_source.unique_id
-        exposure.depends_on.nodes.append(target_source_id)
+        exposure.depends_on.add_node(target_source_id)
 
 
 def _process_sources_for_metric(manifest: Manifest, current_project: str, metric: Metric):
@@ -1429,7 +1429,7 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
             )
             continue
         target_source_id = target_source.unique_id
-        metric.depends_on.nodes.append(target_source_id)
+        metric.depends_on.add_node(target_source_id)
 
 
 def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
@@ -1457,7 +1457,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             )
             continue
         target_source_id = target_source.unique_id
-        node.depends_on.nodes.append(target_source_id)
+        node.depends_on.add_node(target_source_id)
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
