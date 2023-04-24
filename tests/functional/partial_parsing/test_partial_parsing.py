@@ -338,7 +338,9 @@ class TestVersionedModels:
         write_file(
             models_versions_updated_schema_yml, project.project_root, "models", "schema.yml"
         )
-        results = run_dbt(["--partial-parse", "run"])
+        results, log_output = run_dbt_and_capture(
+            ["--partial-parse", "--log-format", "json", "run"]
+        )
         assert len(results) == 3
 
         manifest = get_manifest(project.project_root)
@@ -349,6 +351,8 @@ class TestVersionedModels:
         # assert unpinned ref points to latest version
         model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
         assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v1"]
+        # assert unpinned ref to latest-not-max version yields an "FYI" info-level log
+        assert "UnpinnedRefNewVersionAvailable" in log_output
 
         # update versioned model
         write_file(model_two_sql, project.project_root, "models", "model_one_different.sql")
