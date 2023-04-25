@@ -1,5 +1,7 @@
 import argparse
 import json
+from io import TextIOBase
+
 import networkx as nx  # type: ignore
 import os
 import pickle
@@ -162,7 +164,9 @@ class Linker:
         with open(outfile, "wb") as outfh:
             pickle.dump(out_graph, outfh, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def write_graph_summary(self, outfile: str, manifest: Manifest) -> None:
+    def write_graph_summary(
+        self, summary_type: str, out_stream: TextIOBase, manifest: Manifest
+    ) -> None:
         """Write a shorter summary of the graph, suitable for basic diagnostics
         and performance tuning. The summary includes only the edge structure,
         node types, and node names. Each of the n nodes is assigned an integer
@@ -180,9 +184,8 @@ class Linker:
                 node["succ"] = [index_dict[n] for n in self.graph.successors(node["name"])]
 
         graph_json: str = json.dumps(graph_nodes)
-        f = open(outfile, "w")
-        f.write(graph_json)
-        f.close()
+        out_stream.write(summary_type + "\n")
+        out_stream.write(graph_json + "\n")
 
 
 class Compiler:
@@ -415,10 +418,6 @@ class Compiler:
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
 
-    def write_graph_summary(self, filename: str, linker: Linker, manifest: Manifest):
-        graph_path = os.path.join(self.config.target_path, filename)
-        linker.write_graph_summary(graph_path, manifest)
-
     def link_node(self, linker: Linker, node: GraphMemberNode, manifest: Manifest):
         linker.add_node(node.unique_id)
 
@@ -505,17 +504,18 @@ class Compiler:
 
         self.link_graph(linker, manifest)
 
-        # Create a file containing basic information about graph structure,
-        # supporting diagnostics and performance analysis.
-        self.write_graph_summary("graph_summary_linked.json", linker, manifest)
+        with open(os.path.join(self.config.target_path, "graph_summary.json"), "w") as out_stream:
+            # Create a file containing basic information about graph structure,
+            # supporting diagnostics and performance analysis.
+            linker.write_graph_summary("linked", out_stream, manifest)
 
-        if add_test_edges:
-            manifest.build_parent_and_child_maps()
-            self.add_test_edges(linker, manifest)
+            if add_test_edges:
+                manifest.build_parent_and_child_maps()
+                self.add_test_edges(linker, manifest)
 
-            # Create another diagnostic summary, just as above, but this time
-            # including the test edges.
-            self.write_graph_summary("graph_summary_test_edges.json", linker, manifest)
+                # Create another diagnostic summary, just as above, but this time
+                # including the test edges.
+                linker.write_graph_summary("with_test_edges", out_stream, manifest)
 
         stats = _generate_stats(manifest)
 
