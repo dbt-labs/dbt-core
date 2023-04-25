@@ -59,10 +59,7 @@
 {% macro postgres__get_columns_in_relation(relation) -%}
   {% call statement('get_columns_in_relation', fetch_result=True) %}
       select
-          case
-            when (data_type = 'USER-DEFINED') then udt_name
-            else column_name
-          end as column_name,
+          column_name,
           case
             when (data_type = 'USER-DEFINED') then concat(udt_schema || '.' || udt_name)
             else data_type
