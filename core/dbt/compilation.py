@@ -4,6 +4,7 @@ import networkx as nx  # type: ignore
 import os
 import pickle
 import sqlparse
+import time
 
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
@@ -165,14 +166,19 @@ class Linker:
     def write_graph_summary(self, outfile: str, manifest: Manifest) -> None:
         """Write a shorter summary of the graph, suitable for basic diagnostics
         and performance tuning. The summary includes only the edge structure,
-        node types, and node names."""
+        node types, and node names. Each of the n nodes is assigned an integer
+        index 0, 1, 2,..., n-1 for compactness"""
         graph_nodes = dict()
-        for node_id in self.graph:
-            data = manifest.expect(node_id).to_dict(omit_none=True)
-            graph_nodes[node_id] = {
-                "type": data["resource_type"],
-                "succ": list(self.graph.successors(node_id)),
-            }
+        index_dict = dict()
+        for node_index, node_name in enumerate(self.graph):
+            index_dict[node_name] = node_index
+            data = manifest.expect(node_name).to_dict(omit_none=True)
+            graph_nodes[node_index] = {"name": node_name, "type": data["resource_type"]}
+
+        for node_index, node in graph_nodes.items():
+            successors = [index_dict[n] for n in self.graph.successors(node["name"])]
+            if successors:
+                node["succ"] = [index_dict[n] for n in self.graph.successors(node["name"])]
 
         graph_json: str = json.dumps(graph_nodes)
         f = open(outfile, "w")
@@ -502,15 +508,22 @@ class Compiler:
 
         # Create a file containing basic information about graph structure,
         # supporting diagnostics and performance analysis.
-        self.write_graph_summary("graph.json", linker, manifest)
 
-        if add_test_edges:
+        start = time.perf_counter()
+        self.write_graph_summary("graph_summary_linked.json", linker, manifest)
+        end = time.perf_counter()
+        print("A:" + str(end - start))
+
+        if add_test_edges or True:
             manifest.build_parent_and_child_maps()
             self.add_test_edges(linker, manifest)
 
             # Create another diagnostic summary, just as above, but this time
             # including the test edges.
-            self.write_graph_summary("graph_with_test_edges.json", linker, manifest)
+            start = time.perf_counter()
+            self.write_graph_summary("graph_summary_test_edges.json", linker, manifest)
+            end = time.perf_counter()
+            print("B:" + str(end - start))
 
         stats = _generate_stats(manifest)
 
