@@ -1,0 +1,7 @@
+kind: Fixes
+body: '[CT-2343] [Bug] snapshot with custom datatypes breaks when source table is
+  regenerated'
+time: 2023-04-25T15:54:45.1782743+01:00
+custom:
+  Author: benorourke
+  Issue: "7248"
