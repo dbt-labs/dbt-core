@@ -79,6 +79,8 @@
 
     {% do persist_docs(target_relation, model) %}
 
+    {% do create_indexes(target_relation) %}
+
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 
     {% if build_sql != '' %}
