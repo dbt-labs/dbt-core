@@ -336,11 +336,7 @@ def MockNode(package, name, resource_type=None, **kwargs):
 
     version = kwargs.get("version")
     search_name = name if version is None else f"{name}.v{version}"
-    unique_id = (
-        f"{str(resource_type)}.{package}.{name}"
-        # if version is None
-        # else f"{str(resource_type)}.{package}.{name}.v{version}"
-    )
+    unique_id = f"{str(resource_type)}.{package}.{name}"
     node = mock.MagicMock(
         __class__=cls,
         resource_type=resource_type,

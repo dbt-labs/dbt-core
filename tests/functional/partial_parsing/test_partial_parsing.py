@@ -304,36 +304,43 @@ class TestVersionedModels:
         return {
             "model_one.sql": model_one_sql,
             "model_one_v2.sql": model_one_sql,
+            "model_one_downstream.sql": model_four2_sql,
             "schema.yml": models_versions_schema_yml,
         }
 
     def test_pp_versioned_models(self, project):
         results = run_dbt(["run"])
-        assert len(results) == 2
+        assert len(results) == 3
 
         manifest = get_manifest(project.project_root)
         model_one_node = manifest.nodes["model.test.model_one.v1"]
         assert not model_one_node.is_latest_version
         model_two_node = manifest.nodes["model.test.model_one.v2"]
         assert model_two_node.is_latest_version
+        # assert unpinned ref points to latest version
+        model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
+        assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v2"]
 
         # update versions schema.yml block - latest_version from 2 to 1
         write_file(
             models_versions_updated_schema_yml, project.project_root, "models", "schema.yml"
         )
         results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
+        assert len(results) == 3
 
         manifest = get_manifest(project.project_root)
         model_one_node = manifest.nodes["model.test.model_one.v1"]
         assert model_one_node.is_latest_version
         model_two_node = manifest.nodes["model.test.model_one.v2"]
         assert not model_two_node.is_latest_version
+        # assert unpinned ref points to latest version
+        model_one_downstream_node = manifest.nodes["model.test.model_one_downstream"]
+        assert model_one_downstream_node.depends_on.nodes == ["model.test.model_one.v1"]
 
         # update versioned model
         write_file(model_two_sql, project.project_root, "models", "model_one_v2.sql")
         results = run_dbt(["--partial-parse", "run"])
-        assert len(results) == 2
+        assert len(results) == 3
 
 
 class TestSources:
