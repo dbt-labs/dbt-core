@@ -4,7 +4,6 @@ import networkx as nx  # type: ignore
 import os
 import pickle
 import sqlparse
-import time
 
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Optional
@@ -508,22 +507,15 @@ class Compiler:
 
         # Create a file containing basic information about graph structure,
         # supporting diagnostics and performance analysis.
-
-        start = time.perf_counter()
         self.write_graph_summary("graph_summary_linked.json", linker, manifest)
-        end = time.perf_counter()
-        print("A:" + str(end - start))
 
-        if add_test_edges or True:
+        if add_test_edges:
             manifest.build_parent_and_child_maps()
             self.add_test_edges(linker, manifest)
 
             # Create another diagnostic summary, just as above, but this time
             # including the test edges.
-            start = time.perf_counter()
             self.write_graph_summary("graph_summary_test_edges.json", linker, manifest)
-            end = time.perf_counter()
-            print("B:" + str(end - start))
 
         stats = _generate_stats(manifest)
 
