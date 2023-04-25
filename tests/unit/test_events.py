@@ -228,6 +228,9 @@ sample_values = [
     types.JinjaLogWarning(),
     types.JinjaLogInfo(msg=""),
     types.JinjaLogDebug(msg=""),
+    types.UnpinnedRefNewVersionAvailable(
+        ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
+    ),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

@@ -248,6 +248,7 @@ def docs(ctx, **kwargs):
 @p.project_dir
 @p.select
 @p.selector
+@p.empty_catalog
 @p.state
 @p.deprecated_state
 @p.target
@@ -650,6 +651,7 @@ def seed(ctx, **kwargs):
 @p.state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.threads
 @p.vars
 @requires.postflight
