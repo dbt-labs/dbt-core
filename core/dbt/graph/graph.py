@@ -34,9 +34,7 @@ class Graph:
             for _, child in nx.bfs_edges(filtered_graph, node, reverse=True, depth_limit=max_depth)
         }
 
-    def descendants(
-        self, node: UniqueId, max_depth: Optional[int] = None, include_tests_children: bool = False
-    ) -> Set[UniqueId]:
+    def descendants(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
             raise DbtInternalError(f"Node {node} not found in the graph!")
