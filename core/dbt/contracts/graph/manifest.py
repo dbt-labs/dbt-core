@@ -36,7 +36,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
 )
-from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion
+from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
@@ -49,7 +49,8 @@ from dbt.exceptions import (
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState
+from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
@@ -169,7 +170,32 @@ class RefableLookup(dbtClassMixin):
     ):
         unique_id = self.get_unique_id(key, package, version)
         if unique_id is not None:
-            return self.perform_lookup(unique_id, manifest)
+            node = self.perform_lookup(unique_id, manifest)
+            # If this is an unpinned ref (no 'version' arg was passed),
+            # AND this is a versioned node,
+            # AND this ref is being resolved at runtime -- get_node_info != {}
+            if version is None and node.is_versioned and get_node_info():
+                # Check to see if newer versions are available, and log an "FYI" if so
+                max_version: UnparsedVersion = max(
+                    [
+                        UnparsedVersion(v.version)
+                        for v in manifest.nodes.values()
+                        if v.name == node.name and v.version is not None
+                    ]
+                )
+                assert node.latest_version  # for mypy, whenever i may find it
+                if max_version > UnparsedVersion(node.latest_version):
+                    fire_event(
+                        UnpinnedRefNewVersionAvailable(
+                            node_info=get_node_info(),
+                            ref_node_name=node.name,
+                            ref_node_package=node.package_name,
+                            ref_node_version=str(node.version),
+                            ref_max_version=str(max_version.v),
+                        )
+                    )
+
+            return node
         return None
 
     def add_node(self, node: ManifestNode):

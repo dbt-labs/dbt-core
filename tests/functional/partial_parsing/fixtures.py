@@ -881,8 +881,18 @@ models:
       description: "The first model"
       versions:
         - v: 1
-          defined_in: model_one
         - v: 2
+"""
+
+models_versions_defined_in_schema_yml = """
+
+models:
+    - name: model_one
+      description: "The first model"
+      versions:
+        - v: 1
+        - v: 2
+          defined_in: model_one_different
 """
 
 models_versions_updated_schema_yml = """
@@ -893,8 +903,8 @@ models:
       description: "The first model"
       versions:
         - v: 1
-          defined_in: model_one
         - v: 2
+          defined_in: model_one_different
 """
 
 my_macro_sql = """
