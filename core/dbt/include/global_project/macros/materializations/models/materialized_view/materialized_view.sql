@@ -32,7 +32,7 @@
     -- get config options
     {% set on_configuration_change = config.get('on_configuration_change') %}
     {% if existing_relation %}
-        {% set config_updates = get_materialized_view_configuration_changes(existing_relation, config) %}
+        {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
     {% endif %}
 
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
@@ -49,13 +49,13 @@
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
     {% elif full_refresh_mode or not existing_relation.is_view %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {% elif config_updates and on_configuration_change == 'apply' %}
-        {% set build_sql = get_alter_materialized_view_as_sql(target_relation, config_updates, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {% elif config_updates and on_configuration_change == 'skip' %}
+    {% elif configuration_changes and on_configuration_change == 'apply' %}
+        {% set build_sql = get_alter_materialized_view_as_sql(target_relation, configuration_changes, sql, existing_relation, backup_relation, intermediate_relation) %}
+    {% elif configuration_changes and on_configuration_change == 'skip' %}
         {% set build_sql = '' %}
-        {{ exceptions.warn("Updates were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
-    {% elif config_updates and on_configuration_change == 'fail' %}
-        {{ exceptions.raise_compiler_error("Updates were identified and `on_configuration_change` was set to `fail`") }}
+        {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
+    {% elif configuration_changes and on_configuration_change == 'fail' %}
+        {{ exceptions.raise_compiler_error("Configuration changes were identified and `on_configuration_change` was set to `fail`") }}
     {% else %}
         {% set build_sql = refresh_materialized_view(target_relation) %}
     {% endif %}
