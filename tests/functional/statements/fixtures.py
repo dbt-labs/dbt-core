@@ -136,3 +136,47 @@ select 'matrix' as source, {{ matrix_value }} as value
 union all
 select 'table' as source, {{ table_value }} as value
 """
+
+models__statement_duplicated_load = """
+-- {{ ref('seed') }}
+
+{%- call statement('test_statement', fetch_result=True) -%}
+
+  select
+    count(*) as "num_records"
+
+  from {{ ref('seed') }}
+
+{%- endcall -%}
+
+{% set result = load_result('test_statement') %}
+{% set result = load_result('test_statement') %}
+
+select 1
+"""
+
+models__statement_load_main_twice = """
+-- {{ ref('seed') }}
+
+{%- call statement('main', fetch_result=True) -%}
+
+  select
+    count(*) as "num_records"
+
+  from {{ ref('seed') }}
+
+{%- endcall -%}
+
+{% set result = load_result('main') %}
+{% set result = load_result('main') %}
+
+{% set res_table = result['table'] %}
+{% set res_matrix = result['data'] %}
+
+{% set matrix_value = res_matrix[0][0] %}
+{% set table_value = res_table[0]['num_records'] %}
+
+select 'matrix' as source, {{ matrix_value }} as value
+union all
+select 'table' as source, {{ table_value }} as value
+"""
