@@ -25,6 +25,7 @@ def _mock_manifest(nodes):
                 empty=False,
                 config=config,
                 fqn=["pkg", n],
+                is_versioned=False,
             )
             for n in nodes
         }

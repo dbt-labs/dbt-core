@@ -318,12 +318,11 @@ class BaseRunner(metaclass=ABCMeta):
                     node_info=ctx.node.node_info,
                 )
             )
-            with collect_timing_info("compile") as timing_info:
+            with collect_timing_info("compile", ctx.timing.append):
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
                 # model
                 ctx.node = self.compile(manifest)
-            ctx.timing.append(timing_info)
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model or self.run_ephemeral_models:
@@ -333,11 +332,9 @@ class BaseRunner(metaclass=ABCMeta):
                         node_info=ctx.node.node_info,
                     )
                 )
-                with collect_timing_info("execute") as timing_info:
+                with collect_timing_info("execute", ctx.timing.append):
                     result = self.run(ctx.node, manifest)
                     ctx.node = result.node
-
-                ctx.timing.append(timing_info)
 
         return result
 
@@ -402,8 +399,7 @@ class BaseRunner(metaclass=ABCMeta):
                 error = exc_str
 
         if error is not None:
-            # we could include compile time for runtime errors here
-            result = self.error_result(ctx.node, error, started, [])
+            result = self.error_result(ctx.node, error, started, ctx.timing)
         elif result is not None:
             result = self.from_run_result(result, started, ctx.timing)
         else:
