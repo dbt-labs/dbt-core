@@ -498,25 +498,6 @@ MaybeNonSource = Optional[Union[ManifestNode, Disabled[ManifestNode]]]
 T = TypeVar("T", bound=GraphMemberNode)
 
 
-def _update_into(dest: MutableMapping[str, T], new_item: T):
-    """Update dest to overwrite whatever is at dest[new_item.unique_id] with
-    new_itme. There must be an existing value to overwrite, and the two nodes
-    must have the same original file path.
-    """
-    unique_id = new_item.unique_id
-    if unique_id not in dest:
-        raise dbt.exceptions.DbtRuntimeError(
-            f"got an update_{new_item.resource_type} call with an "
-            f"unrecognized {new_item.resource_type}: {new_item.unique_id}"
-        )
-    existing = dest[unique_id]
-    if new_item.original_file_path != existing.original_file_path:
-        raise dbt.exceptions.DbtRuntimeError(
-            f"cannot update a {new_item.resource_type} to have a new file path!"
-        )
-    dest[unique_id] = new_item
-
-
 # This contains macro methods that are in both the Manifest
 # and the MacroManifest
 class MacroMethods:
@@ -671,18 +652,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def __post_deserialize__(cls, obj):
         obj._lock = MP_CONTEXT.Lock()
         return obj
-
-    def update_exposure(self, new_exposure: Exposure):
-        _update_into(self.exposures, new_exposure)
-
-    def update_metric(self, new_metric: Metric):
-        _update_into(self.metrics, new_metric)
-
-    def update_node(self, new_node: ManifestNode):
-        _update_into(self.nodes, new_node)
-
-    def update_source(self, new_source: SourceDefinition):
-        _update_into(self.sources, new_source)
 
     def build_flat_graph(self):
         """This attribute is used in context.common by each node, so we want to
