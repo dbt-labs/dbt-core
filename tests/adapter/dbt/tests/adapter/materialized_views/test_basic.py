@@ -1,6 +1,6 @@
 from dbt.tests.util import run_dbt
 
-from base import Base
+from dbt.tests.adapter.materialized_views.base import Base
 
 
 class BasicTestsBase(Base):

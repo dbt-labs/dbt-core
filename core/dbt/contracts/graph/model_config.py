@@ -48,8 +48,8 @@ class OnConfigurationChangeOption(str, Enum):
     fail = "fail"
 
     @classmethod
-    def get_default(self):
-        return self.apply
+    def get_default(cls):
+        return cls.apply
 
     @classmethod
     def is_valid(cls, item):
