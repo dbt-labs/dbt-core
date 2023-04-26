@@ -24,6 +24,10 @@ class TestOnConfigurationChangeSkip(
             ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"]
         )
 
+    @pytest.mark.skip("This fails because we are mocking with a traditional view")
+    def test_model_is_skipped_with_configuration_changes(self, project):
+        super().test_model_is_skipped_with_configuration_changes(project)
+
 
 class TestOnConfigurationChangeFail(
     test_on_configuration_change.OnConfigurationChangeFailTestsBase
@@ -32,3 +36,7 @@ class TestOnConfigurationChangeFail(
         return run_dbt_and_capture(
             ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"]
         )
+
+    @pytest.mark.skip("This fails because we are mocking with a traditional view")
+    def test_run_fails_with_configuration_changes(self, project):
+        super().test_run_fails_with_configuration_changes(project)

@@ -2,9 +2,11 @@ from typing import Tuple, Any
 
 import pytest
 
+from dbt.contracts.graph.model_config import OnConfigurationChangeOption
+from dbt.contracts.results import RunStatus
 from dbt.tests.util import run_dbt_and_capture
 
-from base import Base, RunStatus, OnConfigurationChangeOption
+from base import Base
 
 
 class OnConfigurationChangeBase(Base):
