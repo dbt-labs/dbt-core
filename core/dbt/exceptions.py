@@ -3,7 +3,7 @@ import json
 import re
 import io
 import agate
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
@@ -212,7 +212,11 @@ class ContractBreakingChangeError(DbtRuntimeError):
     MESSAGE = "Breaking Change to Contract"
 
     def __init__(
-        self, contract_enforced_disabled, columns_removed, column_type_changes, node=None
+        self,
+        contract_enforced_disabled: bool,
+        columns_removed: List[str],
+        column_type_changes: List[Tuple[str, str, str]],
+        node=None,
     ):
         self.contract_enforced_disabled = contract_enforced_disabled
         self.columns_removed = columns_removed
@@ -242,6 +246,44 @@ class ContractBreakingChangeError(DbtRuntimeError):
 
         return (
             "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
+            f"\n\n{reasons}\n\n"
+            "Consider making an additive (non-breaking) change instead, if possible.\n"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
+        )
+
+
+class ConstraintBreakingChangeError(DbtRuntimeError):
+    CODE = 10016
+    MESSAGE = "Breaking Change to Constraint"
+
+    def __init__(
+        self, columns_removed: List[str], materialization_changed: Tuple[str, str], node=None
+    ):
+        self.columns_removed = columns_removed
+        self.materialization_changed = materialization_changed
+        super().__init__(self.message(), node)
+
+    @property
+    def type(self):
+        return "Breaking Change to Constraint"
+
+    def message(self):
+        breaking_changes = []
+        if self.columns_removed:
+            columns_removed_str = "\n  - ".join(self.columns_removed)
+            breaking_changes.append(
+                f"Columns with enforced constraints were removed: \n - {columns_removed_str}"
+            )
+        if self.materialization_changed:
+            column_type_changes_str = "\n  - ".join(
+                f"{self.column_type_changes[0]} -> {self.column_type_changes[1]}"
+            )
+            breaking_changes.append(f"Materialization Changed: \n - {column_type_changes_str}")
+
+        reasons = "\n\n".join(breaking_changes)
+
+        return (
+            "While comparing to previous project state, dbt detected a breaking change to an enforced contract with constraints."
             f"\n\n{reasons}\n\n"
             "Consider making an additive (non-breaking) change instead, if possible.\n"
             "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
