@@ -73,3 +73,7 @@
 # framework changes (excluded by not setting an owner next to it- no owner)
 /performance @nathaniel-may
 /performance/projects
+
+### ARTIFACTS
+
+/schemas/dbt                    @dbt-labs/cloud-artifacts

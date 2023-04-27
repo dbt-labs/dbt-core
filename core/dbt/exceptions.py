@@ -1019,6 +1019,17 @@ class DuplicateMacroNameError(CompilationError):
         return msg
 
 
+class MacroResultAlreadyLoadedError(CompilationError):
+    def __init__(self, result_name):
+        self.result_name = result_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"The 'statement' result named '{self.result_name}' has already been loaded into a variable"
+
+        return msg
+
+
 # parser level exceptions
 class DictParseError(ParsingError):
     def __init__(self, exc: ValidationError, node):

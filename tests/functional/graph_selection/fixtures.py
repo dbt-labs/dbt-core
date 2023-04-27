@@ -51,6 +51,7 @@ models:
   - name: versioned
     latest_version: 2
     versions:
+      - v: 0
       - v: 1
       - v: 2
       - v: 3
