@@ -68,8 +68,14 @@ class Base:
         assert len(self.get_records(project, relation_identifier)) >= 0
 
     @staticmethod
-    def stringify_logs(logs: str) -> str:
+    def assert_message_in_logs(logs: str, message: str, expected_fail: bool = False):
+        # if the logs are json strings, then 'jsonify' the message to do things like escape quotes
         try:
-            return json.loads(logs)
+            json.loads(logs)
+            message = json.dumps(message)
         except ValueError:
-            return logs
+            pass
+        if expected_fail:
+            assert message not in logs
+        else:
+            assert message in logs

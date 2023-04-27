@@ -1,3 +1,5 @@
+from typing import List
+
 import pytest
 
 from dbt.contracts.graph.model_config import OnConfigurationChangeOption
@@ -20,7 +22,8 @@ class OnConfigurationChangeBase(Base):
         results,
         logs,
         status: RunStatus,
-        log_message: str,
+        messages_in_logs: List[str],
+        messages_not_in_logs: List[str],
         rows_affected: int,
     ):
         assert len(results.results) == 1
@@ -29,7 +32,10 @@ class OnConfigurationChangeBase(Base):
         assert result.node.config.on_configuration_change == self.on_configuration_change
         assert result.status == status
         assert result.adapter_response["rows_affected"] == rows_affected
-        assert log_message in self.stringify_logs(logs)
+        for message in messages_in_logs:
+            self.assert_message_in_logs(logs, message)
+        for message in messages_not_in_logs:
+            self.assert_message_in_logs(logs, message, expected_fail=True)
 
     def apply_configuration_change_triggering_apply(self, project):
         raise NotImplementedError(
@@ -53,36 +59,37 @@ class OnConfigurationChangeBase(Base):
         results, logs = run_dbt_and_capture(
             ["--debug", "run", "--models", self.materialized_view, "--full-refresh"]
         )
-        log_message = (
-            f"Applying REPLACE to: {relation_from_name(project.adapter, self.materialized_view)}"
-        )
+
+        messages_in_logs = [
+            f"Applying REPLACE to: {relation_from_name(project.adapter, self.materialized_view)}",
+        ]
+        messages_not_in_logs = [
+            f"Determining configuration changes on: {project.adapter, self.materialized_view}",
+        ]
         self.assert_proper_scenario(
             results,
             logs,
             RunStatus.Success,
-            log_message,
+            messages_in_logs,
+            messages_not_in_logs,
             -1,
-        )
-        assert (
-            f"Determining configuration changes on: {project.adapter, self.materialized_view}"
-            not in self.stringify_logs(logs)
         )
 
     def test_model_is_refreshed_with_no_configuration_changes(self, project):
         results, logs = run_dbt_and_capture(["--debug", "run", "--models", self.materialized_view])
-        log_message = (
-            f"Applying REFRESH to: {relation_from_name(project.adapter, self.materialized_view)}"
-        )
+
+        messages_in_logs = [
+            f"Determining configuration changes on: {relation_from_name(project.adapter, self.materialized_view)}",
+            f"Applying REFRESH to: {relation_from_name(project.adapter, self.materialized_view)}",
+        ]
+        messages_not_in_logs = []
         self.assert_proper_scenario(
             results,
             logs,
             RunStatus.Success,
-            log_message,
+            messages_in_logs,
+            messages_not_in_logs,
             -1,
-        )
-        assert (
-            f"Determining configuration changes on: {relation_from_name(project.adapter, self.materialized_view)}"
-            in self.stringify_logs(logs)
         )
 
 
@@ -96,32 +103,36 @@ class OnConfigurationChangeApplyTestsBase(OnConfigurationChangeBase):
         self.apply_configuration_change_triggering_apply(project)
         self.apply_configuration_change_triggering_full_refresh(project)
         results, logs = run_dbt_and_capture(["--debug", "run", "--models", self.materialized_view])
-        log_message = (
-            f"Applying REPLACE to: {relation_from_name(project.adapter, self.materialized_view)}"
-        )
+
+        messages_in_logs = [
+            f"Applying REPLACE to: {relation_from_name(project.adapter, self.materialized_view)}",
+        ]
+        messages_not_in_logs = [
+            f"Applying ALTER to: {relation_from_name(project.adapter, self.materialized_view)}",
+        ]
         self.assert_proper_scenario(
             results,
             logs,
             RunStatus.Success,
-            log_message,
+            messages_in_logs,
+            messages_not_in_logs,
             -1,
-        )
-        assert (
-            f"Applying ALTER to: {relation_from_name(project.adapter, self.materialized_view)}"
-            not in self.stringify_logs(logs)
         )
 
     def test_model_applies_changes_with_configuration_changes(self, project):
         self.apply_configuration_change_triggering_apply(project)
         results, logs = run_dbt_and_capture(["--debug", "run", "--models", self.materialized_view])
-        log_message = (
+
+        messages_in_logs = [
             f"Applying ALTER to: {relation_from_name(project.adapter, self.materialized_view)}"
-        )
+        ]
+        messages_not_in_logs = []
         self.assert_proper_scenario(
             results,
             logs,
             RunStatus.Success,
-            log_message,
+            messages_in_logs,
+            messages_not_in_logs,
             -1,
         )
 
@@ -133,11 +144,15 @@ class OnConfigurationChangeSkipTestsBase(OnConfigurationChangeBase):
     def test_model_is_skipped_with_configuration_changes(self, project):
         self.apply_configuration_change_triggering_apply(project)
         results, logs = run_dbt_and_capture(["--debug", "run", "--models", self.materialized_view])
-        log_message = (
+
+        messages_in_logs = [
             f"Configuration changes were identified and `on_configuration_change` "
-            f"was set to `skip` for `{self.materialized_view}`"
+            f"was set to `skip` for `{self.materialized_view}`",
+        ]
+        messages_not_in_logs = []
+        self.assert_proper_scenario(
+            results, logs, RunStatus.Success, messages_in_logs, messages_not_in_logs, -1
         )
-        self.assert_proper_scenario(results, logs, RunStatus.Success, log_message, -1)
 
 
 class OnConfigurationChangeFailTestsBase(OnConfigurationChangeBase):
@@ -147,8 +162,12 @@ class OnConfigurationChangeFailTestsBase(OnConfigurationChangeBase):
     def test_run_fails_with_configuration_changes(self, project):
         self.apply_configuration_change_triggering_apply(project)
         results, logs = run_dbt_and_capture(["--debug", "run", "--models", self.materialized_view])
-        log_message = (
+
+        messages_in_logs = [
             f"Configuration changes were identified and `on_configuration_change` "
-            f"was set to `fail` for `{self.materialized_view}`"
+            f"was set to `fail` for `{self.materialized_view}`",
+        ]
+        messages_not_in_logs = []
+        self.assert_proper_scenario(
+            results, logs, RunStatus.Error, messages_in_logs, messages_not_in_logs, -1
         )
-        self.assert_proper_scenario(results, logs, RunStatus.Error, log_message, -1)
