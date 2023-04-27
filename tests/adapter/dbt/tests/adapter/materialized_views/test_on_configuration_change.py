@@ -29,7 +29,7 @@ class OnConfigurationChangeBase(Base):
         assert result.node.config.on_configuration_change == self.on_configuration_change
         assert result.status == status
         assert result.adapter_response["rows_affected"] == rows_affected
-        assert log_message in logs
+        assert log_message in self.stringify_logs(logs)
 
     def apply_configuration_change_triggering_apply(self, project):
         raise NotImplementedError(
@@ -65,7 +65,7 @@ class OnConfigurationChangeBase(Base):
         )
         assert (
             f"Determining configuration changes on: {project.adapter, self.materialized_view}"
-            not in logs
+            not in self.stringify_logs(logs)
         )
 
     def test_model_is_refreshed_with_no_configuration_changes(self, project):
@@ -82,7 +82,7 @@ class OnConfigurationChangeBase(Base):
         )
         assert (
             f"Determining configuration changes on: {relation_from_name(project.adapter, self.materialized_view)}"
-            in logs
+            in self.stringify_logs(logs)
         )
 
 
@@ -108,7 +108,7 @@ class OnConfigurationChangeApplyTestsBase(OnConfigurationChangeBase):
         )
         assert (
             f"Applying ALTER to: {relation_from_name(project.adapter, self.materialized_view)}"
-            not in logs
+            not in self.stringify_logs(logs)
         )
 
     def test_model_applies_changes_with_configuration_changes(self, project):

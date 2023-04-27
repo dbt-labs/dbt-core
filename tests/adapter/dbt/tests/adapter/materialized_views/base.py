@@ -1,4 +1,5 @@
 from typing import List
+import json
 
 import pytest
 
@@ -65,3 +66,10 @@ class Base:
         model = manifest.nodes[f"model.test.{relation_identifier}"]
         assert model.config.materialized == RelationType.MaterializedView
         assert len(self.get_records(project, relation_identifier)) >= 0
+
+    @staticmethod
+    def stringify_logs(logs: str) -> str:
+        try:
+            return json.loads(logs)
+        except ValueError:
+            return logs
