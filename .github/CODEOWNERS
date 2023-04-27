@@ -29,6 +29,7 @@ pyproject.toml                  @dbt-labs/guild-oss-tooling
 requirements.txt                @dbt-labs/guild-oss-tooling
 dev_requirements.txt            @dbt-labs/guild-oss-tooling
 /core/setup.py                  @dbt-labs/guild-oss-tooling
+/core/MANIFEST.in               @dbt-labs/guild-oss-tooling
 
 ### LANGUAGE
 
@@ -74,6 +75,7 @@ dev_requirements.txt            @dbt-labs/guild-oss-tooling
 
 # Postgres plugin
 /plugins/                       @dbt-labs/core-adapters
+/plugins/postgres/setup.py      @dbt-labs/core-adapters @dbt-labs/guild-oss-tooling
 
 # Functional tests for adapter plugins
 /tests/adapter                  @dbt-labs/core-adapters
