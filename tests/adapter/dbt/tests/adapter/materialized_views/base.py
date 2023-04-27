@@ -1,5 +1,5 @@
 from typing import List
-import json
+import os
 
 import pytest
 
@@ -69,12 +69,10 @@ class Base:
 
     @staticmethod
     def assert_message_in_logs(logs: str, message: str, expected_fail: bool = False):
-        # if the logs are json strings, then 'jsonify' the message to do things like escape quotes
-        try:
-            json.dumps(logs)
-            message = json.loads(message)
-        except ValueError:
-            pass
+        # if the logs are json strings, then 'jsonify' the message because of things like escape quotes
+        if os.environ.get("DBT_LOG_FORMAT", "") == "json":
+            message = message.replace(r'"', r"\"")
+
         if expected_fail:
             assert message not in logs
         else:
