@@ -71,8 +71,8 @@ class Base:
     def assert_message_in_logs(logs: str, message: str, expected_fail: bool = False):
         # if the logs are json strings, then 'jsonify' the message to do things like escape quotes
         try:
-            json.loads(logs)
-            message = json.dumps(message)
+            json.dumps(logs)
+            message = json.loads(message)
         except ValueError:
             pass
         if expected_fail:
