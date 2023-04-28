@@ -29,12 +29,6 @@
     -- grab current tables grants config for comparison later on
     {% set grant_config = config.get('grants') %}
 
-    -- get config options
-    {% set on_configuration_change = config.get('on_configuration_change') %}
-    {% if existing_relation %}
-        {% set config_updates = get_materialized_view_configuration_changes(existing_relation, config) %}
-    {% endif %}
-
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
     -- drop the temp relations if they exist already in the database
@@ -49,13 +43,6 @@
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
     {% elif full_refresh_mode or not existing_relation.is_view %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {% elif config_updates and on_configuration_change == 'apply' %}
-        {% set build_sql = get_alter_materialized_view_as_sql(target_relation, config_updates, sql, existing_relation, backup_relation, intermediate_relation) %}
-    {% elif config_updates and on_configuration_change == 'skip' %}
-        {% set build_sql = '' %}
-        {{ exceptions.warn("Updates were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
-    {% elif config_updates and on_configuration_change == 'fail' %}
-        {{ exceptions.raise_compiler_error("Updates were identified and `on_configuration_change` was set to `fail`") }}
     {% else %}
 
         -- get config options
@@ -102,8 +89,6 @@
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
     {% do persist_docs(target_relation, model) %}
-
-    {% do create_indexes(target_relation) %}
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 
