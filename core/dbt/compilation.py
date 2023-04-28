@@ -29,7 +29,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.graph import Graph
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import FoundStats, Note, WritingInjectedSQLForNode
 from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType, ModelLanguage
@@ -501,7 +501,8 @@ class Compiler:
 
         # Create a file containing basic information about graph structure,
         # supporting diagnostics and performance analysis.
-        summaries = dict()
+        summaries: Dict = dict()
+        summaries["_invocation_id"] = get_invocation_id()
         summaries["linked"] = linker.get_graph_summary(manifest)
 
         if add_test_edges:
