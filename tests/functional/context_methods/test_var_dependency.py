@@ -1,7 +1,10 @@
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal
 
-from tests.functional.context_methods.first_dependency import FirstDependencyProject
+from tests.functional.context_methods.first_dependency import (
+    FirstDependencyProject,
+    FirstDependencyConfigProject,
+)
 
 dependency_seeds__root_model_expected_csv = """first_dep_global,from_root
 dep_never_overridden,root_root_value
@@ -51,4 +54,28 @@ class TestVarDependencyInheritance(FirstDependencyProject):
         assert len(run_dbt(["seed"])) == 2
         assert len(run_dbt(["run"])) == 2
         check_relations_equal(project.adapter, ["root_model_expected", "model"])
+        check_relations_equal(project.adapter, ["first_dep_expected", "first_dep_model"])
+
+
+class TestVarConfigDependencyInheritance(FirstDependencyConfigProject):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {"local": "first_dependency"},
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "vars": {
+                "test_config_root_override": "configured_from_root",
+            },
+        }
+
+    def test_root_var_overrides_package_var(self, project, first_dependency):
+        run_dbt(["deps"])
+        run_dbt(["seed"])
+        assert len(run_dbt(["run"])) == 1
         check_relations_equal(project.adapter, ["first_dep_expected", "first_dep_model"])
