@@ -57,7 +57,31 @@
     {% elif config_updates and on_configuration_change == 'fail' %}
         {{ exceptions.raise_compiler_error("Updates were identified and `on_configuration_change` was set to `fail`") }}
     {% else %}
-        {% set build_sql = refresh_materialized_view(target_relation) %}
+
+        -- get config options
+        {% set on_configuration_change = config.get('on_configuration_change') %}
+        {% if existing_relation %}
+            {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
+        {% else %}
+            {% set configuration_change = [] %}
+        {% endif %}
+
+        {% if configuration_changes == [] %}
+            {% set build_sql = refresh_materialized_view(target_relation) %}
+
+        {% elif on_configuration_change == 'apply' %}
+            {% set build_sql = get_alter_materialized_view_as_sql(target_relation, configuration_changes, sql, existing_relation, backup_relation, intermediate_relation) %}
+        {% elif on_configuration_change == 'skip' %}
+            {% set build_sql = '' %}
+            {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
+        {% elif on_configuration_change == 'fail' %}
+            {{ exceptions.raise_compiler_error("Configuration changes were identified and `on_configuration_change` was set to `fail` for `" ~ target_relation ~ "`") }}
+
+        {% else %}
+            {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
+
+        {% endif %}
+
     {% endif %}
 
     -- build model

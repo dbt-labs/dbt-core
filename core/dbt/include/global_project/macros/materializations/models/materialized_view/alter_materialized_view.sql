@@ -1,6 +1,6 @@
 {% macro get_alter_materialized_view_as_sql(
     relation,
-    config_updates,
+    configuration_changes,
     sql,
     existing_relation,
     backup_relation,
@@ -9,7 +9,7 @@
     {{- log('Applying ALTER to: ' ~ relation) -}}
     {{- adapter.dispatch('get_alter_materialized_view_as_sql', 'dbt')(
         relation,
-        config_updates,
+        configuration_changes,
         sql,
         existing_relation,
         backup_relation,
@@ -20,11 +20,11 @@
 
 {% macro default__get_alter_materialized_view_as_sql(
     relation,
-    config_updates,
+    configuration_changes,
     sql,
     existing_relation,
     backup_relation,
     intermediate_relation
 ) %}
-    {{- return(get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation)) -}}
+    {{ exceptions.raise_compiler_error("Materialized views have not been implemented for this adapter.") }}
 {% endmacro %}
