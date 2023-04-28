@@ -5,5 +5,5 @@
 
 
 {% macro default__get_materialized_view_configuration_changes(existing_relation, new_config) %}
-    {%- do return([]) -%}
+    {{ exceptions.raise_compiler_error("Materialized views have not been implemented for this adapter.") }}
 {% endmacro %}
