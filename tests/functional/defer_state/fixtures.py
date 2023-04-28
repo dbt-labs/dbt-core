@@ -189,7 +189,7 @@ models:
           - unique:
               severity: error
           - not_null
-      - name: user_name
+      - name: name
         data_type: text
 """
 

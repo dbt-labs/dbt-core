@@ -532,6 +532,7 @@ class CompiledNode(ParsedNode):
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
     contract: Contract = field(default_factory=Contract)
+    constraints: List[ModelLevelConstraint] = field(default_factory=list)
 
     @property
     def empty(self):
@@ -577,13 +578,15 @@ class CompiledNode(ParsedNode):
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
         if self.contract.enforced is True:
-            contract_state = ""
+            contract_state = self.config.materialized
+            contract_state += str(self.constraints)  # TODO: only add enforced constraints
             # We need to sort the columns so that order doesn't matter
             # columns is a str: ColumnInfo dictionary
             sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
             for column in sorted_columns:
                 contract_state += f"|{column.name}"
                 contract_state += str(column.data_type)
+                contract_state += str(column.constraints)  # TODO: only add enforced constraints
             data = contract_state.encode("utf-8")
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
@@ -608,6 +611,11 @@ class CompiledNode(ParsedNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Tuple[str, str, str]] = []
+        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
+        enforced_model_constraint_removed: List[
+            Tuple[str, List[str]]
+        ] = []  # constraint_type, columns
+        materialization_changed: Tuple[str, str] = ("", "")
 
         if old.contract.enforced is True and self.contract.enforced is False:
             # Breaking change: the contract was previously enforced, and it no longer is
@@ -624,16 +632,45 @@ class CompiledNode(ParsedNode):
                     (str(value.name), str(value.data_type), str(self.columns[key].data_type))
                 )
 
+            # Have enforced columns level constraints changes?
+            if key in self.columns.keys() and value.constraints != self.columns[key].constraints:
+                for constraint in value.constraints:
+                    if constraint not in self.columns[key].constraints:
+                        enforced_column_constraint_removed.append((key, str(constraint.type)))
+
+        # Now compare the model level constraints
+        if old.constraints != self.constraints:
+            for constraint in old.constraints:
+                if constraint not in self.constraints:
+                    enforced_model_constraint_removed.append(
+                        (str(constraint.type), constraint.columns)
+                    )
+
+        # Check for materialization changes
+        if old.config.materialized != self.config.materialized:
+            # TODO: do we only care about specific materializations?
+            materialization_changed = (old.config.materialized, self.config.materialized)
+
         # If a column has been added, it will be missing in the old.columns, and present in self.columns
         # That's a change (caught by the different checksums), but not a breaking change
 
         # Did we find any changes that we consider breaking? If so, that's an error
-        if contract_enforced_disabled or columns_removed or column_type_changes:
+        if (
+            contract_enforced_disabled
+            or columns_removed
+            or column_type_changes
+            or enforced_model_constraint_removed
+            or enforced_column_constraint_removed
+            or materialization_changed
+        ):
             raise (
                 ContractBreakingChangeError(
                     contract_enforced_disabled=contract_enforced_disabled,
                     columns_removed=columns_removed,
                     column_type_changes=column_type_changes,
+                    enforced_column_constraint_removed=enforced_column_constraint_removed,
+                    enforced_model_constraint_removed=enforced_model_constraint_removed,
+                    materialization_changed=materialization_changed,
                     node=self,
                 )
             )
