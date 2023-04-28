@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     Resource,
     ManifestNode,
     RefArgs,
+    AccessType,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
@@ -54,6 +55,7 @@ from dbt.exceptions import (
     LoadAgateTableNotSeedError,
     LoadAgateTableValueError,
     MacroDispatchArgError,
+    MacroResultAlreadyLoadedError,
     MacrosSourcesUnWriteableError,
     MetricArgsError,
     MissingConfigError,
@@ -65,11 +67,12 @@ from dbt.exceptions import (
     DbtRuntimeError,
     TargetNotFoundError,
     DbtValidationError,
+    DbtReferenceError,
 )
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
-from dbt.utils import merge, AttrDict, MultiDict, args_to_dict
+from dbt.utils import merge, AttrDict, MultiDict, args_to_dict, cast_to_str
 
 from dbt import selected_resources
 
@@ -494,6 +497,17 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not self.model.group or self.model.group != target_model.group:
+                raise DbtReferenceError(
+                    unique_id=self.model.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=cast_to_str(target_model.group),
+                )
+
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
 
@@ -704,7 +718,7 @@ class ProviderContext(ManifestContext):
         self.config: RuntimeConfig
         self.model: Union[Macro, ManifestNode] = model
         super().__init__(config, manifest, model.package_name)
-        self.sql_results: Dict[str, AttrDict] = {}
+        self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
@@ -732,12 +746,29 @@ class ProviderContext(ManifestContext):
         return args_to_dict(self.config.args)
 
     @contextproperty
-    def _sql_results(self) -> Dict[str, AttrDict]:
+    def _sql_results(self) -> Dict[str, Optional[AttrDict]]:
         return self.sql_results
 
     @contextmember
     def load_result(self, name: str) -> Optional[AttrDict]:
-        return self.sql_results.get(name)
+        if name in self.sql_results:
+            # handle the special case of "main" macro
+            # See: https://github.com/dbt-labs/dbt-core/blob/ada8860e48b32ac712d92e8b0977b2c3c9749981/core/dbt/task/run.py#L228
+            if name == "main":
+                return self.sql_results["main"]
+
+            # handle a None, which indicates this name was populated but has since been loaded
+            elif self.sql_results[name] is None:
+                raise MacroResultAlreadyLoadedError(name)
+
+            # Handle the regular use case
+            else:
+                ret_val = self.sql_results[name]
+                self.sql_results[name] = None
+                return ret_val
+        else:
+            # Handle trying to load a result that was never stored
+            return None
 
     @contextmember
     def store_result(
