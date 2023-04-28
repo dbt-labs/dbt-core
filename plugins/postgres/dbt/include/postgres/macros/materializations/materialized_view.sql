@@ -18,7 +18,7 @@
     {%- else -%}
 
         -- there is only one change that can be applied via alter, so just return it
-        {{- return(postgres__update_indexes_on_materialized_view(relation, indexes) -}}
+        {{- return(postgres__update_indexes_on_materialized_view(relation, indexes)) -}}
 
     {%- endif -%}
 
@@ -47,10 +47,10 @@
 
     {%- set configuration_changes = {} -%}
 
-    {%- set new_indexes == new_config.get("indexes", []) -%}
-    {%- set old_indexes == [] -%}
+    {%- set new_indexes = new_config.get("indexes", []) -%}
+    {%- set old_indexes = [] -%}
     {%- if new_indexes != old_indexes -%}
-        {{ set _dummy = configuration_changes.update({"indexes": new_indexes}) -}}
+        {% set _dummy = configuration_changes.update({"indexes": new_indexes}) %}
     {%- endif -%}
 
     {{- return(configuration_changes) -}}
