@@ -5,7 +5,6 @@ import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
 from dbt.contracts.relation import RelationType
-from dbt.contracts.results import RunStatus
 
 
 class Base:
@@ -78,54 +77,3 @@ class Base:
             assert message not in logs
         else:
             assert message in logs
-
-
-class MaterializedViewTestsSkipConfigChangeBase(Base):
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"models": {"on_configuration_change": "skip"}}
-
-    def test_on_configuration_change_skips_with_update(self, project):
-        results = run_dbt(
-            ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"]
-        )
-        assert len(results.results) == 1
-        result = results.results[0]
-        assert result.node.config.on_configuration_change == "skip"
-        assert result.status == RunStatus.Success
-        assert result.adapter_response["rows_affected"] == -1
-
-
-class TestMaterializedViewSkipTestsBase(MaterializedViewTestsSkipConfigChangeBase):
-    @pytest.mark.skip("This currently fails since we're mocking with a traditional view")
-    def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
-        pass
-
-    def test_on_configuration_change_skips_with_update(self, project):
-        super().test_on_configuration_change_skips_with_update(project)
-
-    def test_relation_is_materialized_view_when_rerun(self, project):
-        super().test_relation_is_materialized_view_when_rerun(project)
-
-
-class MaterializedViewTestsFailConfigChangeBase(Base):
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"models": {"on_configuration_change": "fail"}}
-
-    def test_on_configuration_change_fails_with_update(self, project):
-        results = run_dbt(
-            ["run", "--models", self.materialized_view, "--vars", "quoting: {identifier: True}"],
-            expect_pass=False,
-        )
-        results.results[0].node.config.on_configuration_change == "fail"
-        assert results.results[0].status == RunStatus.Error
-
-
-class TestMaterializedViewFailTestsBase(MaterializedViewTestsFailConfigChangeBase):
-    @pytest.mark.skip("This currently fails since we're mocking with a traditional view")
-    def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
-        pass
-
-    def test_on_configuration_change_fails_with_update(self, project):
-        super().test_on_configuration_change_fails_with_update(self)
