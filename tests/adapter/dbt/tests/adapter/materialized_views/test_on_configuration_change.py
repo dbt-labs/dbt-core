@@ -55,7 +55,6 @@ class OnConfigurationChangeBase(Base):
 
     def test_full_refresh_takes_precedence_over_any_configuration_changes(self, project):
         self.apply_configuration_change_triggering_apply(project)
-        self.apply_configuration_change_triggering_full_refresh(project)
         results, logs = run_dbt_and_capture(
             ["--debug", "run", "--models", self.materialized_view, "--full-refresh"]
         )
