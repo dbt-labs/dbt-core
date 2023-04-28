@@ -628,6 +628,11 @@ select 1 as id, 101 as user_id, 'pending' as status
 
 """
 
+orders_downstream_sql = """
+select * from {{ ref('orders') }}
+
+"""
+
 model_a_sql = """
 select 1 as fun
 
@@ -881,8 +886,18 @@ models:
       description: "The first model"
       versions:
         - v: 1
-          defined_in: model_one
         - v: 2
+"""
+
+models_versions_defined_in_schema_yml = """
+
+models:
+    - name: model_one
+      description: "The first model"
+      versions:
+        - v: 1
+        - v: 2
+          defined_in: model_one_different
 """
 
 models_versions_updated_schema_yml = """
@@ -893,8 +908,8 @@ models:
       description: "The first model"
       versions:
         - v: 1
-          defined_in: model_one
         - v: 2
+          defined_in: model_one_different
 """
 
 my_macro_sql = """
@@ -1037,6 +1052,47 @@ groups:
 
 models:
   - name: orders
+    description: "Some order data"
+"""
+
+
+groups_schema_yml_two_groups_private_orders_valid_access = """
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    group: test_group
+    access: private
+    description: "Some order data"
+  - name: orders_downstream
+    group: test_group
+    description: "Some order data"
+"""
+
+groups_schema_yml_two_groups_private_orders_invalid_access = """
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    group: test_group2
+    access: private
+    description: "Some order data"
+  - name: orders_downstream
+    group: test_group
     description: "Some order data"
 """
 

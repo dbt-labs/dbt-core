@@ -36,7 +36,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
 )
-from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion
+from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
@@ -49,7 +49,8 @@ from dbt.exceptions import (
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState
+from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
@@ -169,7 +170,32 @@ class RefableLookup(dbtClassMixin):
     ):
         unique_id = self.get_unique_id(key, package, version)
         if unique_id is not None:
-            return self.perform_lookup(unique_id, manifest)
+            node = self.perform_lookup(unique_id, manifest)
+            # If this is an unpinned ref (no 'version' arg was passed),
+            # AND this is a versioned node,
+            # AND this ref is being resolved at runtime -- get_node_info != {}
+            if version is None and node.is_versioned and get_node_info():
+                # Check to see if newer versions are available, and log an "FYI" if so
+                max_version: UnparsedVersion = max(
+                    [
+                        UnparsedVersion(v.version)
+                        for v in manifest.nodes.values()
+                        if v.name == node.name and v.version is not None
+                    ]
+                )
+                assert node.latest_version  # for mypy, whenever i may find it
+                if max_version > UnparsedVersion(node.latest_version):
+                    fire_event(
+                        UnpinnedRefNewVersionAvailable(
+                            node_info=get_node_info(),
+                            ref_node_name=node.name,
+                            ref_node_package=node.package_name,
+                            ref_node_version=str(node.version),
+                            ref_max_version=str(max_version.v),
+                        )
+                    )
+
+            return node
         return None
 
     def add_node(self, node: ManifestNode):
@@ -177,7 +203,7 @@ class RefableLookup(dbtClassMixin):
             if node.name not in self.storage:
                 self.storage[node.name] = {}
 
-            if node.resource_type in self._versioned_types and node.version:
+            if node.is_versioned:
                 if node.search_name not in self.storage:
                     self.storage[node.search_name] = {}
                 self.storage[node.search_name][node.package_name] = node.unique_id
@@ -498,25 +524,6 @@ MaybeNonSource = Optional[Union[ManifestNode, Disabled[ManifestNode]]]
 T = TypeVar("T", bound=GraphMemberNode)
 
 
-def _update_into(dest: MutableMapping[str, T], new_item: T):
-    """Update dest to overwrite whatever is at dest[new_item.unique_id] with
-    new_itme. There must be an existing value to overwrite, and the two nodes
-    must have the same original file path.
-    """
-    unique_id = new_item.unique_id
-    if unique_id not in dest:
-        raise dbt.exceptions.DbtRuntimeError(
-            f"got an update_{new_item.resource_type} call with an "
-            f"unrecognized {new_item.resource_type}: {new_item.unique_id}"
-        )
-    existing = dest[unique_id]
-    if new_item.original_file_path != existing.original_file_path:
-        raise dbt.exceptions.DbtRuntimeError(
-            f"cannot update a {new_item.resource_type} to have a new file path!"
-        )
-    dest[unique_id] = new_item
-
-
 # This contains macro methods that are in both the Manifest
 # and the MacroManifest
 class MacroMethods:
@@ -671,18 +678,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def __post_deserialize__(cls, obj):
         obj._lock = MP_CONTEXT.Lock()
         return obj
-
-    def update_exposure(self, new_exposure: Exposure):
-        _update_into(self.exposures, new_exposure)
-
-    def update_metric(self, new_metric: Metric):
-        _update_into(self.metrics, new_metric)
-
-    def update_node(self, new_node: ManifestNode):
-        _update_into(self.nodes, new_node)
-
-    def update_source(self, new_source: SourceDefinition):
-        _update_into(self.sources, new_source)
 
     def build_flat_graph(self):
         """This attribute is used in context.common by each node, so we want to

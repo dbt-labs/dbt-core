@@ -1605,9 +1605,6 @@ def expected_versions_manifest(project):
                     "macros": [],
                     "nodes": [
                         "model.test.versioned_model.v2",
-                        "model.test.versioned_model.v2",
-                        "model.test.versioned_model.v2",
-                        "model.test.versioned_model.v2",
                         "model.test.versioned_model.v1",
                     ],
                 },
@@ -1865,9 +1862,6 @@ def expected_versions_manifest(project):
             "model.test.versioned_model.v2": [
                 "exposure.test.notebook_exposure",
                 "model.test.ref_versioned_model",
-                "model.test.ref_versioned_model",
-                "model.test.ref_versioned_model",
-                "model.test.ref_versioned_model",
                 "test.test.unique_versioned_model_v2_first_name.998430d28e",
             ],
             "model.test.ref_versioned_model": [],
@@ -1881,9 +1875,6 @@ def expected_versions_manifest(project):
             "model.test.versioned_model.v2": [],
             "model.test.ref_versioned_model": [
                 "model.test.versioned_model.v1",
-                "model.test.versioned_model.v2",
-                "model.test.versioned_model.v2",
-                "model.test.versioned_model.v2",
                 "model.test.versioned_model.v2",
             ],
             "exposure.test.notebook_exposure": ["model.test.versioned_model.v2"],

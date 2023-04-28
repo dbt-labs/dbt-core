@@ -1,4 +1,4 @@
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import click
 from dbt.cli.options import MultiOption
@@ -229,7 +229,7 @@ output_path = click.option(
     envvar=None,
     help="Specify the output path for the JSON report. By default, outputs to 'target/sources.json'",
     type=click.Path(file_okay=True, dir_okay=False, writable=True),
-    default=PurePath.joinpath(Path.cwd(), "target/sources.json"),
+    default=None,
 )
 
 partial_parse = click.option(
@@ -411,6 +411,13 @@ skip_profile_setup = click.option(
     "-s",
     envvar=None,
     help="Skip interactive profile setup.",
+    is_flag=True,
+)
+
+empty_catalog = click.option(
+    "--empty-catalog",
+    help="If specified, generate empty catalog.json file during the `dbt docs generate` command.",
+    default=False,
     is_flag=True,
 )
 
