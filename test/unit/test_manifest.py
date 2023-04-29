@@ -1474,8 +1474,42 @@ def _refable_parameter_sets():
                 version=None,
                 expected=("project_a", "my_model"),
             ),
+            # duplicate node name across package: resolved by version
+            FindNodeSpec(
+                nodes=[
+                    MockNode("project_a", "my_model", version="1"),
+                    MockNode("project_b", "my_model", version="2"),
+                ],
+                sources=[],
+                package=None,
+                version="1",
+                expected=("project_a", "my_model", "1"),
+            ),
         ]
     )
+    return sets
+
+
+def _ambiguous_ref_parameter_sets():
+    sets = [
+        FindNodeSpec(
+            nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+        FindNodeSpec(
+            nodes=[
+                MockNode("project_a", "my_model", version="2", is_latest_version=True),
+                MockNode("project_b", "my_model", version="1", is_latest_version=True),
+            ],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+    ]
     return sets
 
 
@@ -1517,16 +1551,24 @@ def test_resolve_ref(nodes, sources, package, version, expected):
         assert result.package_name == expected_package
 
 
-def test_resolve_ref_ambiguous_resource_name_across_packages():
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _ambiguous_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_ambiguous_resource_name_across_packages(
+    nodes, sources, package, version, expected
+):
     manifest = make_manifest(
-        nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")]
+        nodes=nodes,
+        sources=sources,
     )
     with pytest.raises(AmbiguousResourceNameRefError):
         manifest.resolve_ref(
             source_node=None,
             target_model_name="my_model",
             target_model_package=None,
-            target_model_version=None,
+            target_model_version=version,
             current_project="root",
             node_package="root",
         )
