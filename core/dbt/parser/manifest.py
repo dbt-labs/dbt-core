@@ -1186,6 +1186,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
         target_model = manifest.resolve_ref(
+            exposure,
             target_model_name,
             target_model_package,
             target_model_version,
@@ -1238,6 +1239,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
             )
 
         target_model = manifest.resolve_ref(
+            metric,
             target_model_name,
             target_model_package,
             target_model_version,
@@ -1342,6 +1344,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             )
 
         target_model = manifest.resolve_ref(
+            node,
             target_model_name,
             target_model_package,
             target_model_version,

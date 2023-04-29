@@ -1961,16 +1961,18 @@ class AmbiguousAliasError(CompilationError):
         return msg
 
 
-class AmbiguousResourceNameError(CompilationError):
-    def __init__(self, duped_name, unique_ids):
+class AmbiguousResourceNameRefError(CompilationError):
+    def __init__(self, duped_name, unique_ids, node=None):
         self.duped_name = duped_name
         self.unique_ids = unique_ids
-        super().__init__(msg=self.get_message())
+        self.packages = [unique_id.split(".")[1] for unique_id in unique_ids]
+        super().__init__(msg=self.get_message(), node=node)
 
     def get_message(self) -> str:
-
-        # TODO: figure out where to call this to give an actionable error that includes node that made ambiguous ref call
-        msg = f'dbt found multiple potential nodes when referencing "{self.duped_name}" - {self.unique_ids}.'
+        msg = (
+            f'dbt found multiple potential nodes when referencing "{self.duped_name}" - {self.unique_ids}.'
+            f"\nTo fix this, specify which package to use in 'ref' (one of: {self.packages})."
+        )
         return msg
 
 

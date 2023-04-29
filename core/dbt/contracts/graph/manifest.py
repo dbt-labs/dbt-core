@@ -46,7 +46,7 @@ from dbt.exceptions import (
     DuplicateResourceNameError,
     DuplicateMacroInPackageError,
     DuplicateMaterializationNameError,
-    AmbiguousResourceNameError,
+    AmbiguousResourceNameRefError,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
@@ -74,10 +74,7 @@ def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
         if not pkg_dct:
             return None
         else:
-            if len(pkg_dct) > 1:
-                raise AmbiguousResourceNameError(key, list(pkg_dct.values()))
-            else:
-                return next(iter(pkg_dct.values()))
+            return next(iter(pkg_dct.values()))
     elif package in pkg_dct:
         return pkg_dct[package]
     else:
@@ -153,26 +150,35 @@ class RefableLookup(dbtClassMixin):
     _lookup_types: ClassVar[set] = set(NodeType.refable())
     _versioned_types: ClassVar[set] = set(NodeType.versioned())
 
-    # refables are actually unique, so the Dict[PackageName, UniqueID] will
-    # only ever have exactly one value, but doing 3 dict lookups instead of 1
-    # is not a big deal at all and retains consistency
     def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName], version: Optional[NodeVersion]):
+    def get_unique_id(
+        self,
+        key: str,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion],
+        node: Optional[GraphMemberNode] = None,
+    ):
         if version:
             key = f"{key}.v{version}"
-        return find_unique_id_for_package(self.storage, key, package)
+
+        unique_ids = self._find_unique_ids_for_package(key, package)
+        if len(unique_ids) > 1:
+            raise AmbiguousResourceNameRefError(key, unique_ids, node)
+        else:
+            return unique_ids[0] if unique_ids else None
 
     def find(
         self,
-        key,
+        key: str,
         package: Optional[PackageName],
         version: Optional[NodeVersion],
         manifest: "Manifest",
+        source_node: Optional[GraphMemberNode] = None,
     ):
-        unique_id = self.get_unique_id(key, package, version)
+        unique_id = self.get_unique_id(key, package, version, source_node)
         if unique_id is not None:
             node = self.perform_lookup(unique_id, manifest)
             # If this is an unpinned ref (no 'version' arg was passed),
@@ -226,6 +232,22 @@ class RefableLookup(dbtClassMixin):
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return manifest.nodes[unique_id]
+
+    def _find_unique_ids_for_package(self, key, package: Optional[PackageName]) -> List[str]:
+        if key not in self.storage:
+            return []
+
+        pkg_dct: Mapping[PackageName, UniqueID] = self.storage[key]
+
+        if package is None:
+            if not pkg_dct:
+                return []
+            else:
+                return list(pkg_dct.values())
+        elif package in pkg_dct:
+            return [pkg_dct[package]]
+        else:
+            return []
 
 
 class MetricLookup(dbtClassMixin):
@@ -920,6 +942,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
         self,
+        source_node: GraphMemberNode,
         target_model_name: str,
         target_model_package: Optional[str],
         target_model_version: Optional[NodeVersion],
@@ -932,7 +955,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         candidates = _search_packages(current_project, node_package, target_model_package)
         for pkg in candidates:
-            node = self.ref_lookup.find(target_model_name, pkg, target_model_version, self)
+            node = self.ref_lookup.find(
+                target_model_name, pkg, target_model_version, self, source_node
+            )
 
             if node is not None and node.config.enabled:
                 return node

@@ -1464,6 +1464,7 @@ def id_nodes(arg):
 def test_resolve_ref(nodes, sources, package, version, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_ref(
+        source_node=None,
         target_model_name="my_model",
         target_model_package=package,
         target_model_version=version,
