@@ -185,8 +185,6 @@ sample_values = [
     types.InvalidValueForField(field_name="test", field_value="test"),
     types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
-    types.GenericTestFileParse(path=""),
-    types.MacroFileParse(path=""),
     types.PartialParsingErrorProcessingFile(file=""),
     types.PartialParsingFile(file_id=""),
     types.PartialParsingError(exc_info={}),
@@ -228,6 +226,9 @@ sample_values = [
     types.JinjaLogWarning(),
     types.JinjaLogInfo(msg=""),
     types.JinjaLogDebug(msg=""),
+    types.UnpinnedRefNewVersionAvailable(
+        ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
+    ),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

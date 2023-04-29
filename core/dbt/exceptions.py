@@ -244,7 +244,7 @@ class ContractBreakingChangeError(DbtRuntimeError):
             "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
             f"\n\n{reasons}\n\n"
             "Consider making an additive (non-breaking) change instead, if possible.\n"
-            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
 
 
@@ -1015,6 +1015,17 @@ class DuplicateMacroNameError(CompilationError):
             f"change the name of one of these macros:\n- {self.node_1.unique_id} "
             f"({self.node_1.original_file_path})\n- {self.node_2.unique_id} ({self.node_2.original_file_path})"
         )
+
+        return msg
+
+
+class MacroResultAlreadyLoadedError(CompilationError):
+    def __init__(self, result_name):
+        self.result_name = result_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"The 'statement' result named '{self.result_name}' has already been loaded into a variable"
 
         return msg
 

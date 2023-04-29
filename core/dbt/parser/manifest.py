@@ -1221,8 +1221,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
 
         target_model_id = target_model.unique_id
 
-        exposure.depends_on.nodes.append(target_model_id)
-        manifest.update_exposure(exposure)
+        exposure.depends_on.add_node(target_model_id)
 
 
 def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: Metric):
@@ -1273,8 +1272,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
 
         target_model_id = target_model.unique_id
 
-        metric.depends_on.nodes.append(target_model_id)
-        manifest.update_metric(metric)
+        metric.depends_on.add_node(target_model_id)
 
 
 def _process_metrics_for_node(
@@ -1323,7 +1321,7 @@ def _process_metrics_for_node(
 
         target_metric_id = target_metric.unique_id
 
-        node.depends_on.nodes.append(target_metric_id)
+        node.depends_on.add_node(target_metric_id)
 
 
 def _process_refs_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
@@ -1380,12 +1378,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
 
         target_model_id = target_model.unique_id
 
-        node.depends_on.nodes.append(target_model_id)
-        # TODO: I think this is extraneous, node should already be the same
-        # as manifest.nodes[node.unique_id] (we're mutating node here, not
-        # making a new one)
-        # Q: could we stop doing this?
-        manifest.update_node(node)
+        node.depends_on.add_node(target_model_id)
 
 
 def _process_sources_for_exposure(manifest: Manifest, current_project: str, exposure: Exposure):
@@ -1407,8 +1400,7 @@ def _process_sources_for_exposure(manifest: Manifest, current_project: str, expo
             )
             continue
         target_source_id = target_source.unique_id
-        exposure.depends_on.nodes.append(target_source_id)
-        manifest.update_exposure(exposure)
+        exposure.depends_on.add_node(target_source_id)
 
 
 def _process_sources_for_metric(manifest: Manifest, current_project: str, metric: Metric):
@@ -1430,8 +1422,7 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
             )
             continue
         target_source_id = target_source.unique_id
-        metric.depends_on.nodes.append(target_source_id)
-        manifest.update_metric(metric)
+        metric.depends_on.add_node(target_source_id)
 
 
 def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
@@ -1459,8 +1450,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             )
             continue
         target_source_id = target_source.unique_id
-        node.depends_on.nodes.append(target_source_id)
-        manifest.update_node(node)
+        node.depends_on.add_node(target_source_id)
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is

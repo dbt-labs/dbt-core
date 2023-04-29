@@ -1068,7 +1068,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         else:
             assert isinstance(self.yaml.file, SchemaSourceFile)
             source_file: SchemaSourceFile = self.yaml.file
-            latest_version = target.latest_version or max(versions).v
+            latest_version = (
+                target.latest_version if target.latest_version is not None else max(versions).v
+            )
             for unparsed_version in versions:
                 versioned_model_name = (
                     unparsed_version.defined_in or f"{block.name}_{unparsed_version.formatted_v}"
@@ -1080,6 +1082,13 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 versioned_model_node = None
                 add_node_nofile_fn: Callable
+
+                # If this is the latest version, it's allowed to define itself in a model file name that doesn't have a suffix
+                if versioned_model_unique_id is None and unparsed_version.v == latest_version:
+                    versioned_model_unique_id = self.manifest.ref_lookup.get_unique_id(
+                        block.name, None, None
+                    )
+
                 if versioned_model_unique_id is None:
                     # Node might be disabled. Following call returns list of matching disabled nodes
                     found_nodes = self.manifest.disabled_lookup.find(versioned_model_name, None)
