@@ -1971,7 +1971,7 @@ class AmbiguousResourceNameRefError(CompilationError):
     def get_message(self) -> str:
         msg = (
             f'dbt found multiple potential nodes when referencing "{self.duped_name}" - {self.unique_ids}.'
-            f"\nTo fix this, specify which package to use in 'ref' (one of: {self.packages})."
+            f"\nTo fix this, specify which package to use as the first argument to 'ref' (one of: {self.packages})."
         )
         return msg
 
