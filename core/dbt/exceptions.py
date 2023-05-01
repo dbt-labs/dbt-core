@@ -216,9 +216,9 @@ class ContractBreakingChangeError(DbtRuntimeError):
         contract_enforced_disabled: bool,
         columns_removed: List[str],
         column_type_changes: List[Tuple[str, str, str]],
-        enforced_column_constraint_removed: List[Tuple[str, str]],
+        enforced_column_constraint_removed: List[List[str]],
         enforced_model_constraint_removed: List[Tuple[str, List[str]]],
-        materialization_changed: Tuple[str, str],
+        materialization_changed: List[str],
         node=None,
     ):
         self.contract_enforced_disabled = contract_enforced_disabled

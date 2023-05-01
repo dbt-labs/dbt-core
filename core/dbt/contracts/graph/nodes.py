@@ -532,7 +532,6 @@ class CompiledNode(ParsedNode):
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
     contract: Contract = field(default_factory=Contract)
-    constraints: List[ModelLevelConstraint] = field(default_factory=list)
 
     @property
     def empty(self):
@@ -573,6 +572,42 @@ class CompiledNode(ParsedNode):
     def depends_on_macros(self):
         return self.depends_on.macros
 
+
+# ====================================
+# CompiledNode subclasses
+# ====================================
+
+
+@dataclass
+class AnalysisNode(CompiledNode):
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
+
+
+@dataclass
+class HookNode(CompiledNode):
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
+    index: Optional[int] = None
+
+
+@dataclass
+class ModelNode(CompiledNode):
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
+    access: AccessType = AccessType.Protected
+    constraints: List[ModelLevelConstraint] = field(default_factory=list)
+    version: Optional[NodeVersion] = None
+    latest_version: Optional[NodeVersion] = None
+
+    @property
+    def is_latest_version(self) -> bool:
+        return self.version is not None and self.version == self.latest_version
+
+    @property
+    def search_name(self):
+        if self.version is None:
+            return self.name
+        else:
+            return f"{self.name}.v{self.version}"
+
     def build_contract_checksum(self):
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.
@@ -611,11 +646,11 @@ class CompiledNode(ParsedNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Tuple[str, str, str]] = []
-        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
+        enforced_column_constraint_removed: List[List[str]] = []  # column, constraint_type
         enforced_model_constraint_removed: List[
             Tuple[str, List[str]]
         ] = []  # constraint_type, columns
-        materialization_changed: Tuple[str, str] = ("", "")
+        materialization_changed: List[str] = []
 
         if old.contract.enforced is True and self.contract.enforced is False:
             # Breaking change: the contract was previously enforced, and it no longer is
@@ -636,7 +671,7 @@ class CompiledNode(ParsedNode):
             if key in self.columns.keys() and value.constraints != self.columns[key].constraints:
                 for constraint in value.constraints:
                     if constraint not in self.columns[key].constraints:
-                        enforced_column_constraint_removed.append((key, str(constraint.type)))
+                        enforced_column_constraint_removed.append([key, str(constraint.type)])
 
         # Now compare the model level constraints
         if old.constraints != self.constraints:
@@ -649,7 +684,7 @@ class CompiledNode(ParsedNode):
         # Check for materialization changes
         if old.config.materialized != self.config.materialized:
             # TODO: do we only care about specific materializations?
-            materialization_changed = (old.config.materialized, self.config.materialized)
+            materialization_changed = [old.config.materialized, self.config.materialized]
 
         # If a column has been added, it will be missing in the old.columns, and present in self.columns
         # That's a change (caught by the different checksums), but not a breaking change
@@ -678,42 +713,6 @@ class CompiledNode(ParsedNode):
         # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
         else:
             return False
-
-
-# ====================================
-# CompiledNode subclasses
-# ====================================
-
-
-@dataclass
-class AnalysisNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
-
-
-@dataclass
-class HookNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
-    index: Optional[int] = None
-
-
-@dataclass
-class ModelNode(CompiledNode):
-    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
-    access: AccessType = AccessType.Protected
-    constraints: List[ModelLevelConstraint] = field(default_factory=list)
-    version: Optional[NodeVersion] = None
-    latest_version: Optional[NodeVersion] = None
-
-    @property
-    def is_latest_version(self) -> bool:
-        return self.version is not None and self.version == self.latest_version
-
-    @property
-    def search_name(self):
-        if self.version is None:
-            return self.name
-        else:
-            return f"{self.name}.v{self.version}"
 
 
 # TODO: rm?
