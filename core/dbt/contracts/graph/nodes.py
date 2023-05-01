@@ -18,6 +18,9 @@ from typing import (
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
+# causes circular imports... also BaseAdapter isn't right
+# from dbt.adapters.base import BaseAdapter, ConstraintSupport
+
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
@@ -180,6 +183,14 @@ class ConstraintType(str, Enum):
             cls(item)
         except ValueError:
             return False
+        return True
+
+    @classmethod
+    def is_enforced(cls, item):
+        # TODO: where can I get this from?
+        # if BaseAdapter.CONSTRAINT_SUPPORT[item] == ConstraintSupport.ENFORCED:
+        #     return True
+        # return False
         return True
 
 
@@ -614,14 +625,14 @@ class ModelNode(CompiledNode):
         # This needs to be executed after contract config is set
         if self.contract.enforced is True:
             contract_state = self.config.materialized
-            contract_state += str(self.constraints)  # TODO: only add enforced constraints
+            contract_state += str(self.constraints)
             # We need to sort the columns so that order doesn't matter
             # columns is a str: ColumnInfo dictionary
             sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
             for column in sorted_columns:
                 contract_state += f"|{column.name}"
                 contract_state += str(column.data_type)
-                contract_state += str(column.constraints)  # TODO: only add enforced constraints
+                contract_state += str(column.constraints)
             data = contract_state.encode("utf-8")
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
@@ -657,28 +668,41 @@ class ModelNode(CompiledNode):
             contract_enforced_disabled = True
 
         # Next, compare each column from the previous contract (old.columns)
-        for key, value in sorted(old.columns.items()):
+        for old_key, old_value in sorted(old.columns.items()):
             # Has this column been removed?
-            if key not in self.columns.keys():
-                columns_removed.append(value.name)
+            if old_key not in self.columns.keys():
+                columns_removed.append(old_value.name)
             # Has this column's data type changed?
-            elif value.data_type != self.columns[key].data_type:
+            elif old_value.data_type != self.columns[old_key].data_type:
                 column_type_changes.append(
-                    (str(value.name), str(value.data_type), str(self.columns[key].data_type))
+                    (
+                        str(old_value.name),
+                        str(old_value.data_type),
+                        str(self.columns[old_key].data_type),
+                    )
                 )
 
-            # Have enforced columns level constraints changes?
-            if key in self.columns.keys() and value.constraints != self.columns[key].constraints:
-                for constraint in value.constraints:
-                    if constraint not in self.columns[key].constraints:
-                        enforced_column_constraint_removed.append([key, str(constraint.type)])
+            # Have enforced columns level constraints changed?
+            if (
+                old_key in self.columns.keys()
+                and old_value.constraints != self.columns[old_key].constraints
+            ):
+                for old_constraint in old_value.constraints:
+                    if old_constraint not in self.columns[
+                        old_key
+                    ].constraints and ConstraintType.is_enforced(old_constraint):
+                        enforced_column_constraint_removed.append(
+                            [old_key, str(old_constraint.type)]
+                        )
 
         # Now compare the model level constraints
         if old.constraints != self.constraints:
-            for constraint in old.constraints:
-                if constraint not in self.constraints:
+            for old_constraint in old.constraints:
+                if old_constraint not in self.constraints and ConstraintType.is_enforced(
+                    old_constraint
+                ):
                     enforced_model_constraint_removed.append(
-                        (str(constraint.type), constraint.columns)
+                        (str(old_constraint.type), old_constraint.columns)
                     )
 
         # Check for materialization changes
