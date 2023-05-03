@@ -678,9 +678,12 @@ class ModelNode(CompiledNode):
                 )
 
             # Have enforced columns level constraints changed?
+            # Constraints are only enforced for table and incremental materializations.
+            # We only really care if the old node was one of those materializations for breaking changes
             if (
                 old_key in self.columns.keys()
                 and old_value.constraints != self.columns[old_key].constraints
+                and old.config.materialized in ["table", "incremental"]
             ):
 
                 for old_constraint in old_value.constraints:
@@ -693,7 +696,10 @@ class ModelNode(CompiledNode):
                         )
 
         # Now compare the model level constraints
-        if old.constraints != self.constraints:
+        if old.constraints != self.constraints and old.config.materialized in [
+            "table",
+            "incremental",
+        ]:
             for old_constraint in old.constraints:
                 if (
                     old_constraint not in self.constraints
@@ -703,9 +709,11 @@ class ModelNode(CompiledNode):
                         (str(old_constraint.type), old_constraint.columns)
                     )
 
-        # Check for materialization changes
-        if old.config.materialized != self.config.materialized:
-            # TODO: do we only care about specific materializations?
+        # Check for materialization changes.
+        if (
+            old.config.materialized in ["table", "incremental"]
+            and old.config.materialized != self.config.materialized
+        ):
             materialization_changed = [old.config.materialized, self.config.materialized]
 
         # If a column has been added, it will be missing in the old.columns, and present in self.columns
