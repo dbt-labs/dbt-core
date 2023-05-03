@@ -484,13 +484,13 @@ changed_nodes = [
 @pytest.mark.parametrize("func", unchanged_nodes)
 def test_compare_unchanged_parsed_model(func, basic_parsed_model_object):
     node, compare = func(basic_parsed_model_object)
-    assert node.same_contents(compare)
+    assert node.same_contents(compare, "postgres")
 
 
 @pytest.mark.parametrize("func", changed_nodes)
 def test_compare_changed_model(func, basic_parsed_model_object):
     node, compare = func(basic_parsed_model_object)
-    assert not node.same_contents(compare)
+    assert not node.same_contents(compare, "postgres")
 
 
 @pytest.fixture
@@ -753,13 +753,13 @@ changed_seeds = [
 @pytest.mark.parametrize("func", unchanged_seeds)
 def test_compare_unchanged_parsed_seed(func, basic_parsed_seed_object):
     node, compare = func(basic_parsed_seed_object)
-    assert node.same_contents(compare)
+    assert node.same_contents(compare, "postgres")
 
 
 @pytest.mark.parametrize("func", changed_seeds)
 def test_compare_changed_seed(func, basic_parsed_seed_object):
     node, compare = func(basic_parsed_seed_object)
-    assert not node.same_contents(compare)
+    assert not node.same_contents(compare, "postgres")
 
 
 @pytest.fixture

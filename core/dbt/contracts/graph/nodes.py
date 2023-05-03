@@ -18,9 +18,6 @@ from typing import (
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
-# causes circular imports... also BaseAdapter isn't right
-# from dbt.adapters.base import BaseAdapter, ConstraintSupport
-
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
@@ -183,14 +180,6 @@ class ConstraintType(str, Enum):
             cls(item)
         except ValueError:
             return False
-        return True
-
-    @classmethod
-    def is_enforced(cls, item):
-        # TODO: where can I get this from?
-        # if BaseAdapter.CONSTRAINT_SUPPORT[item] == ConstraintSupport.ENFORCED:
-        #     return True
-        # return False
         return True
 
 
@@ -439,7 +428,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     def build_contract_checksum(self):
         pass
 
-    def same_contract(self, old) -> bool:
+    def same_contract(self, old, adapter_type=None) -> bool:
         # This would only apply to seeds
         return True
 
@@ -500,13 +489,13 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
                     )
                 )
 
-    def same_contents(self, old) -> bool:
+    def same_contents(self, old, adapter_type) -> bool:
         if old is None:
             return False
 
         # Need to ensure that same_contract is called because it
         # could throw an error
-        same_contract = self.same_contract(old)
+        same_contract = self.same_contract(old, adapter_type)
         return (
             self.same_body(old)
             and self.same_config(old)
@@ -636,7 +625,7 @@ class ModelNode(CompiledNode):
             data = contract_state.encode("utf-8")
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
-    def same_contract(self, old) -> bool:
+    def same_contract(self, old, adapter_type=None) -> bool:
         # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
             # No change -- same_contract: True
@@ -667,6 +656,12 @@ class ModelNode(CompiledNode):
             # Breaking change: the contract was previously enforced, and it no longer is
             contract_enforced_disabled = True
 
+        # TODO: this avoid the circular imports but isn't ideal
+        from dbt.adapters.factory import get_adapter_constraint_support
+        from dbt.adapters.base import ConstraintSupport
+
+        constraint_support = get_adapter_constraint_support(adapter_type)
+
         # Next, compare each column from the previous contract (old.columns)
         for old_key, old_value in sorted(old.columns.items()):
             # Has this column been removed?
@@ -687,10 +682,12 @@ class ModelNode(CompiledNode):
                 old_key in self.columns.keys()
                 and old_value.constraints != self.columns[old_key].constraints
             ):
+
                 for old_constraint in old_value.constraints:
-                    if old_constraint not in self.columns[
-                        old_key
-                    ].constraints and ConstraintType.is_enforced(old_constraint):
+                    if (
+                        old_constraint not in self.columns[old_key].constraints
+                        and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                    ):
                         enforced_column_constraint_removed.append(
                             [old_key, str(old_constraint.type)]
                         )
@@ -698,8 +695,9 @@ class ModelNode(CompiledNode):
         # Now compare the model level constraints
         if old.constraints != self.constraints:
             for old_constraint in old.constraints:
-                if old_constraint not in self.constraints and ConstraintType.is_enforced(
-                    old_constraint
+                if (
+                    old_constraint not in self.constraints
+                    and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                 ):
                     enforced_model_constraint_removed.append(
                         (str(old_constraint.type), old_constraint.columns)
@@ -924,7 +922,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
     attached_node: Optional[str] = None
 
-    def same_contents(self, other) -> bool:
+    def same_contents(self, other, adapter_type: Optional[str]) -> bool:
         if other is None:
             return False
 
