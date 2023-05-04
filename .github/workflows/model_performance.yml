@@ -57,7 +57,7 @@ jobs:
         uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ github.event.inputs.release_id || github.event.release.tag_name }}
-          
+
       # collect all the variables that need to be used in subsequent jobs
       - name: Set variables
         id: variables
