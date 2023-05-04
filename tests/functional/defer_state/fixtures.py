@@ -19,12 +19,28 @@ select * from {{ ref('ephemeral_model') }}
 -- depends on: {{ my_macro() }}
 """
 
+table_model_now_incremental_sql = """
+{{ config(materialized='incremental', on_schema_change='append_new_columns') }}
+select * from {{ ref('ephemeral_model') }}
+
+-- establish a macro dependency to trigger state:modified.macros
+-- depends on: {{ my_macro() }}
+"""
+
 changed_table_model_sql = """
 {{ config(materialized='table') }}
 select 1 as fun
 """
 
 view_model_sql = """
+select * from {{ ref('seed') }}
+
+-- establish a macro dependency that trips infinite recursion if not handled
+-- depends on: {{ my_infinitely_recursive_macro() }}
+"""
+
+view_model_now_table_sql = """
+{{ config(materialized='table') }}
 select * from {{ ref('seed') }}
 
 -- establish a macro dependency that trips infinite recursion if not handled

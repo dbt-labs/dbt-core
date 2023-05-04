@@ -613,8 +613,7 @@ class ModelNode(CompiledNode):
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
         if self.contract.enforced is True:
-            contract_state = self.config.materialized
-            contract_state += str(self.constraints)
+            contract_state = ""
             # We need to sort the columns so that order doesn't matter
             # columns is a str: ColumnInfo dictionary
             sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
@@ -622,6 +621,9 @@ class ModelNode(CompiledNode):
                 contract_state += f"|{column.name}"
                 contract_state += str(column.data_type)
                 contract_state += str(column.constraints)
+            if self.config.materialized in ["table", "incremental"]:
+                contract_state += self.config.materialized
+                contract_state += str(self.constraints)
             data = contract_state.encode("utf-8")
             self.contract.checksum = hashlib.new("sha256", data).hexdigest()
 
