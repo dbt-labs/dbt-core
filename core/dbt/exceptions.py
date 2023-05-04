@@ -1983,9 +1983,11 @@ class AmbiguousResourceNameRefError(CompilationError):
         super().__init__(msg=self.get_message(), node=node)
 
     def get_message(self) -> str:
+        formatted_unique_ids = "'{0}'".format("', '".join(self.unique_ids))
+        formatted_packages = "'{0}'".format("' or '".join(self.packages))
         msg = (
-            f'dbt found multiple potential nodes when referencing "{self.duped_name}" - {self.unique_ids}.'
-            f"\nTo fix this, specify which package to use as the first argument to 'ref' (one of: {self.packages})."
+            f"When referencing '{self.duped_name}', dbt found nodes in multiple packages: {formatted_unique_ids}"
+            f"\nTo fix this, use two-argument 'ref', with the package name first: {formatted_packages}"
         )
         return msg
 
