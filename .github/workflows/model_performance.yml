@@ -10,7 +10,7 @@
 # some performance regressions at development time before they reach users.
 #
 # **when?**
-# This is only run once directly after each release (for non-prereleases). If for some 
+# This is only run once directly after each release (for non-prereleases). If for some
 # reason the results of a run are not satisfactory, it can also be triggered manually.
 
 name: Model Performance Characteristics
