@@ -788,7 +788,15 @@ class InputFileDiffError(DebugLevel):
         return f"Error processing file diff: {self.category}, {self.file_id}"
 
 
-# Skipping I002, I003, I004, I005, I006, I007
+class PublicationArtifactChanged(DebugLevel):
+    def code(self):
+        return "I002"
+
+    def message(self) -> str:
+        return f"The publication artifact for {self.project_name} has been {self.action}."
+
+
+# Skipping I003, I004, I005, I006, I007
 
 
 class InvalidValueForField(WarnLevel):

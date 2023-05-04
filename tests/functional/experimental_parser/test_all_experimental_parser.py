@@ -38,10 +38,14 @@ basic__model_a_sql = """
 {{ config(tags='hello', x=False) }}
 {{ config(tags='world', x=True) }}
 
-select * from {{ ref('model_a') }}
+select * from {{ ref('model_b') }}
 cross join {{ source('my_src', 'my_tbl') }}
 where false as boop
 
+"""
+
+basic__model_b_sql = """
+select 1 as fun
 """
 
 
@@ -93,6 +97,7 @@ class BasicExperimentalParser:
     def models(self):
         return {
             "model_a.sql": basic__model_a_sql,
+            "model_b.sql": basic__model_b_sql,
             "schema.yml": basic__schema_yml,
         }
 
@@ -154,7 +159,7 @@ class TestBasicExperimentalParser(BasicExperimentalParser):
         run_dbt(["--use-experimental-parser", "parse"])
         manifest = get_manifest()
         node = manifest.nodes["model.test.model_a"]
-        assert node.refs == [RefArgs(name="model_a")]
+        assert node.refs == [RefArgs(name="model_b")]
         assert node.sources == [["my_src", "my_tbl"]]
         assert node.config._extra == {"x": True}
         assert node.config.tags == ["hello", "world"]
@@ -179,7 +184,7 @@ class TestBasicStaticParser(BasicExperimentalParser):
 
         manifest = get_manifest()
         node = manifest.nodes["model.test.model_a"]
-        assert node.refs == [RefArgs(name="model_a")]
+        assert node.refs == [RefArgs(name="model_b")]
         assert node.sources == [["my_src", "my_tbl"]]
         assert node.config._extra == {"x": True}
         assert node.config.tags == ["hello", "world"]

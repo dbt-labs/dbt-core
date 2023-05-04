@@ -831,6 +831,18 @@ message InputFileDiffErrorMsg {
     InputFileDiffError data = 2;
 }
 
+// I002
+message PublicationArtifactChanged {
+    string project_name = 1;
+    string action = 2;
+    google.protobuf.Timestamp generated_at = 3;
+}
+
+message PublicationArtifactChangedMsg {
+    EventInfo info = 1;
+    PublicationArtifactChanged data = 2;
+}
+
 // Skipping I002, I003, I004, I005, I006, I007
 
 // I008
