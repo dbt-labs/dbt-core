@@ -871,6 +871,19 @@ class SecretEnvVarLocationError(ParsingError):
         return msg
 
 
+class ProjectDependencyCycleError(ParsingError):
+    def __init__(self, pub_project_name, project_name):
+        self.pub_project_name = pub_project_name
+        self.project_name = project_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        return (
+            f"A project dependency cycle has been detected. The current project {self.project_name} "
+            f"depends on {self.pub_project_name} which also depends on the current project."
+        )
+
+
 class MacroArgTypeError(CompilationError):
     def __init__(self, method_name: str, arg_name: str, got_value: Any, expected_type):
         self.method_name = method_name

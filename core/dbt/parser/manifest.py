@@ -103,7 +103,12 @@ from dbt.contracts.publication import (
     PublicModel,
     ProjectDependencies,
 )
-from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError, PublicationConfigNotFound
+from dbt.exceptions import (
+    TargetNotFoundError,
+    AmbiguousAliasError,
+    PublicationConfigNotFound,
+    ProjectDependencyCycleError,
+)
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -1712,6 +1717,10 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     # Get dependencies from publication dependencies
     for pub_project in manifest.publications.values():
         for project_name in pub_project.dependencies:
+            if project_name == root_project.project_name:
+                raise ProjectDependencyCycleError(
+                    pub_project_name=pub_project.project_name, project_name=project_name
+                )
             if project_name not in dependencies:
                 dependencies.append(project_name)
 
