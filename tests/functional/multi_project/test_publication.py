@@ -142,8 +142,8 @@ class TestPublicationArtifacts:
         publication = PublicationArtifact.from_dict(publication_dict)
         assert publication.dependencies == ["marketing"]
 
-        # target_model_name, target_model_package, target_model_version, current_project, node_package
-        resolved_node = manifest.resolve_ref("fct_one", "marketing", None, "test", "test")
+        # source_node, target_model_name, target_model_package, target_model_version, current_project, node_package
+        resolved_node = manifest.resolve_ref(None, "fct_one", "marketing", None, "test", "test")
         assert resolved_node
         assert isinstance(resolved_node, PublicModel)
         assert resolved_node.unique_id == "model.marketing.fct_one"
