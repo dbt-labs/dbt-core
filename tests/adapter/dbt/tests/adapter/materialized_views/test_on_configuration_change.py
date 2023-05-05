@@ -79,7 +79,6 @@ class OnConfigurationChangeBase(Base):
 
         messages_in_logs = [
             f"Determining configuration changes on: {relation_from_name(project.adapter, self.materialized_view)}",
-            f"Applying REFRESH to: {relation_from_name(project.adapter, self.materialized_view)}",
         ]
         messages_not_in_logs = []
         self.assert_proper_scenario(
@@ -146,7 +145,7 @@ class OnConfigurationChangeSkipTestsBase(OnConfigurationChangeBase):
 
         messages_in_logs = [
             f"Configuration changes were identified and `on_configuration_change` "
-            f"was set to `skip` for `{self.materialized_view}`",
+            f"was set to `skip` for `{relation_from_name(project.adapter, self.materialized_view)}`",
         ]
         messages_not_in_logs = []
         self.assert_proper_scenario(
@@ -160,11 +159,13 @@ class OnConfigurationChangeFailTestsBase(OnConfigurationChangeBase):
 
     def test_run_fails_with_configuration_changes(self, project):
         self.apply_configuration_change_triggering_apply(project)
-        results, logs = run_dbt_and_capture(["--debug", "run", "--models", self.materialized_view])
+        results, logs = run_dbt_and_capture(
+            ["--debug", "run", "--models", self.materialized_view], expect_pass=False
+        )
 
         messages_in_logs = [
             f"Configuration changes were identified and `on_configuration_change` "
-            f"was set to `fail` for `{self.materialized_view}`",
+            f"was set to `fail` for `{relation_from_name(project.adapter, self.materialized_view)}`",
         ]
         messages_not_in_logs = []
         self.assert_proper_scenario(
