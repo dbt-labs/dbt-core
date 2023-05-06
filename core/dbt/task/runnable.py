@@ -302,6 +302,13 @@ class GraphRunnableTask(ConfiguredTask):
                 cause = None
             self._mark_dependent_errors(node.unique_id, result, cause)
 
+        interim_run_result = self.get_result(
+            results=self.node_results,
+            elapsed_time=time.time() - self.started,
+            generated_at=datetime.utcnow(),
+        )
+        interim_run_result.write(self.result_path())
+
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
         runners gentle terminates.
@@ -393,23 +400,20 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
-        started = time.time()
+        self.started = time.time()
         try:
             self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
             self.after_run(adapter, res)
         finally:
             adapter.cleanup_connections()
-            elapsed = time.time() - started
+            elapsed = time.time() - self.started
             self.print_results_line(self.node_results, elapsed)
             result = self.get_result(
                 results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
             )
 
         return result
-
-    def write_result(self, result):
-        result.write(self.result_path())
 
     def run(self):
         """
@@ -449,7 +453,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         if get_flags().WRITE_JSON:
             write_manifest(self.manifest, self.config.target_path)
-            self.write_result(result)
+            result.write(self.result_path())
 
         self.task_end_messages(result.results)
         return result
