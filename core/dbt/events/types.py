@@ -407,6 +407,19 @@ class ConfigTargetPathDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class CollectFreshnessReturnSignature(WarnLevel):
+    def code(self):
+        return "D012"
+
+    def message(self):
+        description = (
+            "The 'collect_freshness' macro signature has changed to return the full "
+            "query result, rather than just a table of values. See the v1.5 migration guide "
+            "for details on how to update your custom macro: https://docs.getdbt.com/guides/migration/versions/upgrading-to-v1.5"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================

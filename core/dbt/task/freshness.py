@@ -117,6 +117,10 @@ class FreshnessRunner(BaseRunner):
 
         status = compiled_node.freshness.status(freshness["age"])
 
+        # adapter_response was not returned in previous versions, so this will be {}
+        if adapter_response:
+            adapter_response = adapter_response.to_dict(omit_none=True)
+
         return SourceFreshnessResult(
             node=compiled_node,
             status=status,
@@ -124,7 +128,7 @@ class FreshnessRunner(BaseRunner):
             timing=[],
             execution_time=0,
             message=None,
-            adapter_response=adapter_response.to_dict(omit_none=True),
+            adapter_response=adapter_response,
             failures=None,
             **freshness,
         )

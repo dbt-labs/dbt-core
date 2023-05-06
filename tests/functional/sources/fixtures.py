@@ -439,3 +439,20 @@ sources:
             enabled: True and False
       - name: other_test_table
 """
+
+
+collect_freshness_macro_override_previous_return_signature = """
+{% macro collect_freshness(source, loaded_at_field, filter) %}
+  {{ log("This one is mine", info = true) }}
+  {% call statement('collect_freshness', fetch_result=True, auto_begin=False) -%}
+    select
+      max({{ loaded_at_field }}) as max_loaded_at,
+      {{ current_timestamp() }} as snapshotted_at
+    from {{ source }}
+    {% if filter %}
+    where {{ filter }}
+    {% endif %}
+  {% endcall %}
+  {{ return(load_result('collect_freshness').table) }}
+{% endmacro %}
+"""

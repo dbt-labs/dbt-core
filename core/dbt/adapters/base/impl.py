@@ -71,7 +71,7 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
-
+from dbt import deprecations
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
 FRESHNESS_MACRO_NAME = "collect_freshness"
@@ -1114,7 +1114,15 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         # run the macro
         result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
-        adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
+        # in older versions of dbt-core, the 'collect_freshness' macro returned the table of results directly
+        # starting in v1.5, by default, we return both the table and the adapter response (metadata about the query)
+        adapter_response = {}
+        table = None
+        if isinstance(result, agate.Table):
+            table = result
+            deprecations.warn("collect-freshness-return-signature")
+        else:
+            adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
