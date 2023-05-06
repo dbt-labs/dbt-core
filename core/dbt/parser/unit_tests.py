@@ -1,3 +1,4 @@
+from copy import copy
 from dbt.contracts.graph.unparsed import UnparsedUnitTestSuite
 from dbt.contracts.graph.nodes import NodeConfig
 from dbt_extractor import py_extract_from_source  # type: ignore
@@ -130,6 +131,10 @@ class UnitTestParser(YamlReader):
             # so add original input node ids to depends on explicitly to preserve lineage
             for original_input_node in original_input_nodes:
                 # TODO: consider nulling out the original_input_node.raw_code for perf
+                original_input_node = copy(original_input_node)
+                # we only need orginal input nodes to be here as place holder
+                original_input_node.refs = []
+                original_input_node.depends_on.nodes = []
                 self.unit_test_manifest.nodes[original_input_node.unique_id] = original_input_node
                 unit_test_node.depends_on.nodes.append(original_input_node.unique_id)
 
