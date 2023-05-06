@@ -308,7 +308,9 @@ class GraphRunnableTask(ConfiguredTask):
             elapsed_time=time.time() - self.started,
             generated_at=datetime.utcnow(),
         )
-        interim_run_result.write(self.result_path())
+
+        if get_flags().WRITE_JSON and hasattr(interim_run_result, "write"):
+            interim_run_result.write(self.result_path())
 
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
@@ -454,7 +456,8 @@ class GraphRunnableTask(ConfiguredTask):
 
         if get_flags().WRITE_JSON:
             write_manifest(self.manifest, self.config.target_path)
-            result.write(self.result_path())
+            if hasattr(result, "write"):
+                result.write(self.result_path())
 
         self.task_end_messages(result.results)
         return result

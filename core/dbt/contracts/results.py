@@ -393,6 +393,9 @@ class FreshnessResult(ExecutionResult):
         meta = FreshnessMetadata(generated_at=generated_at)
         return cls(metadata=meta, results=results, elapsed_time=elapsed_time)
 
+    def write(self, path):
+        FreshnessExecutionResultArtifact.from_result(self).write(path)
+
 
 @dataclass
 @schema_version("sources", 3)
