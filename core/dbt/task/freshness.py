@@ -128,7 +128,7 @@ class FreshnessRunner(BaseRunner):
             timing=[],
             execution_time=0,
             message=None,
-            adapter_response=adapter_response,
+            adapter_response=adapter_response or {},
             failures=None,
             **freshness,
         )
