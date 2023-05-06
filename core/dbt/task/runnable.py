@@ -65,15 +65,16 @@ class GraphRunnableTask(ConfiguredTask):
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config, manifest)
-        self.job_queue: Optional[GraphQueue] = None
         self._flattened_nodes: Optional[List[ResultNode]] = None
-
-        self.run_count: int = 0
-        self.num_nodes: int = 0
-        self.node_results = []
-        self._skipped_children = {}
         self._raise_next_tick = None
+        self._skipped_children = {}
+        self.job_queue: Optional[GraphQueue] = None
+        self.node_results = []
+        self.num_nodes: int = 0
         self.previous_state: Optional[PreviousState] = None
+        self.run_count: int = 0
+        self.started: float = 0
+
         self.set_previous_state()
 
     def set_previous_state(self):
