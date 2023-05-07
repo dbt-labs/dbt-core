@@ -117,7 +117,8 @@ class FreshnessRunner(BaseRunner):
 
         status = compiled_node.freshness.status(freshness["age"])
 
-        # adapter_response was not returned in previous versions, so this will be {}
+        # adapter_response was not returned in previous versions, so this will be None
+        # we cannot call to_dict() on NoneType
         if adapter_response:
             adapter_response = adapter_response.to_dict(omit_none=True)
 

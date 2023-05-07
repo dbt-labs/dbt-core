@@ -1116,7 +1116,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         # in older versions of dbt-core, the 'collect_freshness' macro returned the table of results directly
         # starting in v1.5, by default, we return both the table and the adapter response (metadata about the query)
         result: Union[
-            AttrDict, agate.Table  # current: contains AdapterResponse + agate.Table  # previous
+            AttrDict,  # current: contains AdapterResponse + agate.Table
+            agate.Table,  # previous: just table
         ]
         result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
         if isinstance(result, agate.Table):
