@@ -2,12 +2,14 @@ import io
 import threading
 import time
 
+from dbt.contracts.graph.nodes import SeedNode
 from dbt.contracts.results import RunResult, RunStatus
 from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
 from dbt.events.types import ShowNode, Note
 from dbt.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
+from dbt.task.seed import SeedRunner
 
 
 class ShowRunner(CompileRunner):
@@ -42,7 +44,10 @@ class ShowTask(CompileTask):
         super()._runtime_initialize()
 
     def get_runner_type(self, _):
-        return ShowRunner
+        if isinstance(_, SeedNode):
+            return SeedRunner
+        else:
+            return ShowRunner
 
     def task_end_messages(self, results):
         is_inline = bool(getattr(self.args, "inline", None))
