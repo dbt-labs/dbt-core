@@ -289,13 +289,11 @@ def docs_generate(ctx, **kwargs):
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
     task = ServeTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
     )
 
     results = task.run()
