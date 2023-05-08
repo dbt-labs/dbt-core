@@ -47,9 +47,12 @@ class TestRunResultsWritesFileOnSignal:
 
     def test_run_results_are_written_on_signal(self, project):
 
-        # N.B. This test is... no great.
+        # N.B. This test is... not great.
         # Due to the way that multiprocessing handles termination this test
         # will always take the entire amount of time designated in pg_sleep.
+        # See:
+        # https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Process.terminate
+        #
         # Additionally playing these timing games is probably quite fragile.
 
         external_process_dbt = multiprocessing.Process(
