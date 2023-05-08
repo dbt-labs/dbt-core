@@ -17,8 +17,12 @@ class ShowRunner(CompileRunner):
 
     def execute(self, compiled_node, manifest):
         start_time = time.time()
+
+        # Allow passing in -1 (or any negative number) to get all rows
+        limit = None if self.config.args.limit < 0 else self.config.args.limit
+
         adapter_response, execute_result = self.adapter.execute(
-            compiled_node.compiled_code, fetch=True
+            compiled_node.compiled_code, fetch=True, limit=limit
         )
         end_time = time.time()
 
@@ -61,12 +65,7 @@ class ShowTask(CompileTask):
                     )
 
         for result in matched_results:
-            # Allow passing in -1 (or any negative number) to get all rows
             table = result.agate_table
-
-            if self.args.limit >= 0:
-                table = table.limit(self.args.limit)
-                result.agate_table = table
 
             # Hack to get Agate table output as string
             output = io.StringIO()

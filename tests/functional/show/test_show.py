@@ -85,3 +85,24 @@ class TestShow:
             ["show", "--inline", models__second_ephemeral_model]
         )
         assert "col_hundo" in log_output
+
+    def test_limit_default(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--inline", models__second_ephemeral_model]
+        )
+        assert len(results.results[0].agate_table) == 5
+
+    def test_limit_positive_number(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--inline", models__second_ephemeral_model, "--limit", 3]
+        )
+        assert len(results.results[0].agate_table) == 3
+
+    def test_limit_negative_number(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(
+            ["show", "--inline", models__second_ephemeral_model, "--limit", -1]
+        )
+        assert len(results.results[0].agate_table) == 7
