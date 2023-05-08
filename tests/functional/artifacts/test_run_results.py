@@ -41,9 +41,7 @@ class TestRunResultsTimingFailure:
         assert len(results.results[0].timing) > 0
 
 
-@pytest.mark.skipif(
-    platform.system() != "Darwin", reason="Fails on linux in github actions, reason unknown"
-)
+@pytest.mark.skipif(platform.system() != "Darwin", reason="Fails on linux in github actions")
 class TestRunResultsWritesFileOnSignal:
     @pytest.fixture(scope="class")
     def models(self):
