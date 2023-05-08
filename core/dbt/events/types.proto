@@ -385,6 +385,15 @@ message ConfigTargetPathDeprecationMsg {
     ConfigTargetPathDeprecation data = 2;
 }
 
+// D012
+message CollectFreshnessReturnSignature {
+}
+
+message CollectFreshnessReturnSignatureMsg {
+    EventInfo info = 1;
+    CollectFreshnessReturnSignature data = 2;
+}
+
 // E - DB Adapter
 
 // E001

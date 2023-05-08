@@ -2,12 +2,14 @@ import io
 import threading
 import time
 
+from dbt.contracts.graph.nodes import SeedNode
 from dbt.contracts.results import RunResult, RunStatus
 from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
 from dbt.events.types import ShowNode, Note
 from dbt.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
+from dbt.task.seed import SeedRunner
 
 
 class ShowRunner(CompileRunner):
@@ -45,8 +47,11 @@ class ShowTask(CompileTask):
             raise DbtRuntimeError("Either --select or --inline must be passed to show")
         super()._runtime_initialize()
 
-    def get_runner_type(self, _):
-        return ShowRunner
+    def get_runner_type(self, node):
+        if isinstance(node, SeedNode):
+            return SeedRunner
+        else:
+            return ShowRunner
 
     def task_end_messages(self, results):
         is_inline = bool(getattr(self.args, "inline", None))
@@ -74,9 +79,14 @@ class ShowTask(CompileTask):
             else:
                 table.print_table(output=output, max_rows=None)
 
+            node_name = result.node.name
+
+            if hasattr(result.node, "version") and result.node.version:
+                node_name += f".v{result.node.version}"
+
             fire_event(
                 ShowNode(
-                    node_name=result.node.name,
+                    node_name=node_name,
                     preview=output.getvalue(),
                     is_inline=is_inline,
                     output_format=self.args.output,

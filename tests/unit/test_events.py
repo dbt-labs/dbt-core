@@ -133,6 +133,7 @@ sample_values = [
     types.EnvironmentVariableRenamed(old_name="", new_name=""),
     types.ConfigLogPathDeprecation(deprecated_path=""),
     types.ConfigTargetPathDeprecation(deprecated_path=""),
+    types.CollectFreshnessReturnSignature(),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),

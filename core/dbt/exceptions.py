@@ -1975,6 +1975,23 @@ class AmbiguousAliasError(CompilationError):
         return msg
 
 
+class AmbiguousResourceNameRefError(CompilationError):
+    def __init__(self, duped_name, unique_ids, node=None):
+        self.duped_name = duped_name
+        self.unique_ids = unique_ids
+        self.packages = [unique_id.split(".")[1] for unique_id in unique_ids]
+        super().__init__(msg=self.get_message(), node=node)
+
+    def get_message(self) -> str:
+        formatted_unique_ids = "'{0}'".format("', '".join(self.unique_ids))
+        formatted_packages = "'{0}'".format("' or '".join(self.packages))
+        msg = (
+            f"When referencing '{self.duped_name}', dbt found nodes in multiple packages: {formatted_unique_ids}"
+            f"\nTo fix this, use two-argument 'ref', with the package name first: {formatted_packages}"
+        )
+        return msg
+
+
 class AmbiguousCatalogMatchError(CompilationError):
     def __init__(self, unique_id: str, match_1, match_2):
         self.unique_id = unique_id
