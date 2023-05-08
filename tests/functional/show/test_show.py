@@ -86,23 +86,16 @@ class TestShow:
         )
         assert "col_hundo" in log_output
 
-    def test_limit_default(self, project):
+    @pytest.mark.parametrize(
+        "args,expected",
+        [
+            ([], 5),  # default limit
+            (["--limit", 3], 3),  # fetch 3 rows
+            (["--limit", -1], 7),  # fetch all rows
+        ],
+    )
+    def test_limit(self, project, args, expected):
         run_dbt(["build"])
-        (results, log_output) = run_dbt_and_capture(
-            ["show", "--inline", models__second_ephemeral_model]
-        )
-        assert len(results.results[0].agate_table) == 5
-
-    def test_limit_positive_number(self, project):
-        run_dbt(["build"])
-        (results, log_output) = run_dbt_and_capture(
-            ["show", "--inline", models__second_ephemeral_model, "--limit", 3]
-        )
-        assert len(results.results[0].agate_table) == 3
-
-    def test_limit_negative_number(self, project):
-        run_dbt(["build"])
-        (results, log_output) = run_dbt_and_capture(
-            ["show", "--inline", models__second_ephemeral_model, "--limit", -1]
-        )
-        assert len(results.results[0].agate_table) == 7
+        dbt_args = ["show", "--inline", models__second_ephemeral_model, *args]
+        results, log_output = run_dbt_and_capture(dbt_args)
+        assert len(results.results[0].agate_table) == expected
