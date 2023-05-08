@@ -43,8 +43,8 @@ class ShowTask(CompileTask):
             raise DbtRuntimeError("Either --select or --inline must be passed to show")
         super()._runtime_initialize()
 
-    def get_runner_type(self, _):
-        if isinstance(_, SeedNode):
+    def get_runner_type(self, node):
+        if isinstance(node, SeedNode):
             return SeedRunner
         else:
             return ShowRunner
