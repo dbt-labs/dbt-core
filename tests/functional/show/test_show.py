@@ -8,6 +8,7 @@ from tests.functional.show.fixtures import (
     models__sample_model,
     models__second_model,
     models__ephemeral_model,
+    schema_yml,
 )
 
 
@@ -85,3 +86,29 @@ class TestShow:
             ["show", "--inline", models__second_ephemeral_model]
         )
         assert "col_hundo" in log_output
+
+
+class TestShowModelVersions:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_yml,
+            "sample_model.sql": models__sample_model,
+            "sample_model_v2.sql": models__second_model,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"sample_seed.csv": seeds__sample_seed}
+
+    def test_version_unspecified(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_model"])
+        assert "Previewing node 'sample_model.v1'" in log_output
+        assert "Previewing node 'sample_model.v2'" in log_output
+
+    def test_none(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_model.v2"])
+        assert "Previewing node 'sample_model.v1'" not in log_output
+        assert "Previewing node 'sample_model.v2'" in log_output

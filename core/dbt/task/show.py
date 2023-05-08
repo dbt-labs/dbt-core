@@ -75,9 +75,14 @@ class ShowTask(CompileTask):
             else:
                 table.print_table(output=output, max_rows=None)
 
+            node_name = result.node.name
+
+            if hasattr(result.node, "version") and result.node.version:
+                node_name += f".v{result.node.version}"
+
             fire_event(
                 ShowNode(
-                    node_name=result.node.name,
+                    node_name=node_name,
                     preview=output.getvalue(),
                     is_inline=is_inline,
                     output_format=self.args.output,
