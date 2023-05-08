@@ -1,6 +1,6 @@
-import multiprocessing
+from multiprocessing import Process
 from pathlib import Path
-from time import sleep
+import json
 import pytest
 from dbt.tests.util import run_dbt
 
@@ -46,26 +46,22 @@ class TestRunResultsWritesFileOnSignal:
         return {"good_model.sql": good_model_sql, "slow_model.sql": slow_model_sql}
 
     def test_run_results_are_written_on_signal(self, project):
-
-        # N.B. This test is... not great.
-        # Due to the way that multiprocessing handles termination this test
-        # will always take the entire amount of time designated in pg_sleep.
-        # See:
-        # https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Process.terminate
-        #
-        # Additionally playing these timing games is probably quite fragile.
-
-        external_process_dbt = multiprocessing.Process(
+        # Start the runner in a seperate process.
+        external_process_dbt = Process(
             target=run_dbt, args=([["run"]]), kwargs={"expect_pass": False}
         )
         external_process_dbt.start()
         assert external_process_dbt.is_alive()
-        # More than enough time for the first model to complete
-        # but not enough for the second to complete.
-        # A bit janky, I know.
-        sleep(2)
+
+        # Wait until the first file write, then kill the process.
+        run_results_file = Path(project.project_root) / "target/run_results.json"
+        while run_results_file.is_file() is False:
+            pass
         external_process_dbt.terminate()
+
+        # Wait until the process is dead, then check the file that there is only one result.
         while external_process_dbt.is_alive() is True:
             pass
-        run_results_file = Path(project.project_root) / "target/run_results.json"
-        assert run_results_file.is_file()
+        with run_results_file.open() as run_results_str:
+            run_results = json.loads(run_results_str.read())
+            assert len(run_results["results"]) == 1
