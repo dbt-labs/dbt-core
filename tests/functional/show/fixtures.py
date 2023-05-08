@@ -10,6 +10,35 @@ select
 from {{ ref('sample_model') }}
 """
 
+schema_yml = """
+models:
+  - name: sample_model
+    latest_version: 1
+
+    # declare the versions, and fully specify them
+    versions:
+      - v: 2
+        config:
+          materialized: table
+        columns:
+          - name: sample_num
+            data_type: int
+          - name: sample_bool
+            data_type: bool
+          - name: answer
+            data_type: int
+
+      - v: 1
+        config:
+          materialized: table
+          contract: {enforced: true}
+        columns:
+          - name: sample_num
+            data_type: int
+          - name: sample_bool
+            data_type: bool
+"""
+
 models__ephemeral_model = """
 {{ config(materialized = 'ephemeral') }}
 select

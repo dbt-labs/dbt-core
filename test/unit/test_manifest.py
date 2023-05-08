@@ -37,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
 )
 
 from dbt.events.functions import reset_metadata_vars
+from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 
 from dbt.node_types import NodeType
@@ -1449,8 +1450,72 @@ def _refable_parameter_sets():
                 version=None,
                 expected=None,
             ),
+            # duplicate node name across package
+            FindNodeSpec(
+                nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+                sources=[],
+                package="project_a",
+                version=None,
+                expected=("project_a", "my_model"),
+            ),
+            # duplicate node name across package: root node preferred to package node
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package=None,
+                version=None,
+                expected=("root", "my_model"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package="root",
+                version=None,
+                expected=("root", "my_model"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package="project_a",
+                version=None,
+                expected=("project_a", "my_model"),
+            ),
+            # duplicate node name across package: resolved by version
+            FindNodeSpec(
+                nodes=[
+                    MockNode("project_a", "my_model", version="1"),
+                    MockNode("project_b", "my_model", version="2"),
+                ],
+                sources=[],
+                package=None,
+                version="1",
+                expected=("project_a", "my_model", "1"),
+            ),
         ]
     )
+    return sets
+
+
+def _ambiguous_ref_parameter_sets():
+    sets = [
+        FindNodeSpec(
+            nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+        FindNodeSpec(
+            nodes=[
+                MockNode("project_a", "my_model", version="2", is_latest_version=True),
+                MockNode("project_b", "my_model", version="1", is_latest_version=True),
+            ],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+    ]
     return sets
 
 
@@ -1470,6 +1535,7 @@ def id_nodes(arg):
 def test_resolve_ref(nodes, sources, package, version, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_ref(
+        source_node=None,
         target_model_name="my_model",
         target_model_package=package,
         target_model_version=version,
@@ -1489,6 +1555,29 @@ def test_resolve_ref(nodes, sources, package, version, expected):
             assert result.version == expected_version
         assert result.name == expected_name
         assert result.package_name == expected_package
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _ambiguous_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_ambiguous_resource_name_across_packages(
+    nodes, sources, package, version, expected
+):
+    manifest = make_manifest(
+        nodes=nodes,
+        sources=sources,
+    )
+    with pytest.raises(AmbiguousResourceNameRefError):
+        manifest.resolve_ref(
+            source_node=None,
+            target_model_name="my_model",
+            target_model_package=None,
+            target_model_version=version,
+            current_project="root",
+            node_package="root",
+        )
 
 
 def _source_parameter_sets():

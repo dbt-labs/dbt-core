@@ -482,6 +482,7 @@ class RuntimeRefResolver(BaseRefResolver):
         target_version: Optional[NodeVersion] = None,
     ) -> RelationProxy:
         target_model = self.manifest.resolve_ref(
+            self.model,
             target_name,
             target_package,
             target_version,
