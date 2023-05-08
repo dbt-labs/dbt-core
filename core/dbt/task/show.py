@@ -77,7 +77,7 @@ class ShowTask(CompileTask):
 
             node_name = result.node.name
 
-            if hasattr(result.node, "version"):
+            if hasattr(result.node, "version") and result.node.version:
                 node_name += f".v{result.node.version}"
 
             fire_event(
