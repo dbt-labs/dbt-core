@@ -43,18 +43,9 @@
 
 
 {% macro postgres__get_materialized_view_configuration_changes(existing_relation, new_config) %}
-    -- TODO: move this from jinja into python, it is not a template and does not need to be overwritten
-
-    {%- set configuration_changes = {} -%}
-
-    {%- set new_indexes = new_config.get("indexes", []) -%}
-    {%- set old_indexes = [] -%}
-    {%- if new_indexes != old_indexes -%}
-        {% set _dummy = configuration_changes.update({"indexes": new_indexes}) %}
-    {%- endif -%}
-
-    {{- return(configuration_changes) -}}
-
+    {% set existing_indexes = run_query(get_show_indexes_sql(existing_relation)) %}
+    {% set index_updates = relation.get_index_updates(existing_indexes, new_config) %}
+    {% do return({"indexes": index_updates}) %}
 {% endmacro %}
 
 
