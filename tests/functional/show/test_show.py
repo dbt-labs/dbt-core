@@ -9,6 +9,7 @@ from tests.functional.show.fixtures import (
     models__second_model,
     models__ephemeral_model,
     schema_yml,
+    models__sql_header,
 )
 
 
@@ -19,6 +20,7 @@ class TestShow:
             "sample_model.sql": models__sample_model,
             "second_model.sql": models__second_model,
             "ephemeral_model.sql": models__ephemeral_model,
+            "sql_header.sql": models__sql_header,
         }
 
     @pytest.fixture(scope="class")
@@ -104,6 +106,11 @@ class TestShow:
     def test_seed(self, project):
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_seed"])
         assert "Previewing node 'sample_seed'" in log_output
+
+    def test_sql_header(self, project):
+        run_dbt(["build"])
+        (results, log_output) = run_dbt_and_capture(["show", "--select", "sql_header"])
+        assert "Asia/Kolkata" in log_output
 
 
 class TestShowModelVersions:

@@ -23,6 +23,11 @@ class ShowRunner(CompileRunner):
         # Allow passing in -1 (or any negative number) to get all rows
         limit = None if self.config.args.limit < 0 else self.config.args.limit
 
+        if "sql_header" in compiled_node.unrendered_config:
+            compiled_node.compiled_code = (
+                compiled_node.unrendered_config["sql_header"] + compiled_node.compiled_code
+            )
+
         adapter_response, execute_result = self.adapter.execute(
             compiled_node.compiled_code, fetch=True, limit=limit
         )
