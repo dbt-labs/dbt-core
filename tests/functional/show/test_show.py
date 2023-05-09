@@ -100,7 +100,7 @@ class TestShow:
         dbt_args = ["show", "--inline", models__second_ephemeral_model, *args]
         results, log_output = run_dbt_and_capture(dbt_args)
         assert len(results.results[0].agate_table) == expected
-    
+
     def test_seed(self, project):
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_seed"])
         assert "Previewing node 'sample_seed'" in log_output
