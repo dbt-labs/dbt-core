@@ -10,8 +10,10 @@ from tests.functional.sources.fixtures import (
     error_models_model_sql,
     filtered_models_schema_yml,
     override_freshness_models_schema_yml,
+    collect_freshness_macro_override_previous_return_signature,
 )
 from dbt.tests.util import AnyStringWith, AnyFloat
+from dbt import deprecations
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):
@@ -187,8 +189,15 @@ class TestSourceSnapshotFreshness(SuccessfulSourceFreshnessTest):
 
 
 class TestSourceFreshnessSelection(SuccessfulSourceFreshnessTest):
-    def test_source_freshness_selection_select(self, project):
+    @pytest.fixture(scope="class")
+    def project_config_update(self, logs_dir):
+        return {
+            "target-path": logs_dir,
+        }
+
+    def test_source_freshness_selection_select(self, project, logs_dir):
         """Tests node selection using the --select argument."""
+        """Also validate that specify a target-path works as expected."""
         self._set_updated_at_to(project, timedelta(hours=-2))
         # select source directly
         results = self.run_dbt_with_vars(
@@ -198,13 +207,11 @@ class TestSourceFreshnessSelection(SuccessfulSourceFreshnessTest):
                 "freshness",
                 "--select",
                 "source:test_source.test_table",
-                "-o",
-                "target/pass_source.json",
             ],
         )
         assert len(results) == 1
         assert results[0].status == "pass"
-        self._assert_freshness_results("target/pass_source.json", "pass")
+        self._assert_freshness_results(f"{logs_dir}/sources.json", "pass")
 
 
 class TestSourceFreshnessExclude(SuccessfulSourceFreshnessTest):
@@ -348,3 +355,23 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
             "filter": None,
         }
         assert result_source_d["criteria"] == expected
+
+
+class TestSourceFreshnessMacroOverride(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "collect_freshness.sql": collect_freshness_macro_override_previous_return_signature
+        }
+
+    def test_source_freshness(self, project):
+        # ensure that the deprecation warning is raised
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        self.run_dbt_with_vars(
+            project,
+            ["source", "freshness"],
+            expect_pass=False,
+        )
+        expected = {"collect-freshness-return-signature"}
+        assert expected == deprecations.active_deprecations

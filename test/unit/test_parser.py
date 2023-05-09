@@ -259,9 +259,6 @@ MULTIPLE_TABLE_VERSIONED_MODEL_TESTS = """
 models:
     - name: my_model
       description: A description of my model
-      config:
-        materialized: table
-        sql_header: test_sql_header
       tests:
         - unique:
             column_name: color
@@ -281,12 +278,57 @@ models:
             - include: '*'
             - name: extra
         - v: 2
+          columns:
+            - include: '*'
+              exclude: ['location_id']
+            - name: extra
+"""
+
+MULTIPLE_TABLE_VERSIONED_MODEL = """
+models:
+    - name: my_model
+      description: A description of my model
+      config:
+        materialized: table
+        sql_header: test_sql_header
+      columns:
+        - name: color
+          description: The color value
+        - name: location_id
+          data_type: int
+      versions:
+        - v: 1
+          defined_in: arbitrary_file_name
+          columns:
+            - include: '*'
+            - name: extra
+        - v: 2
           config:
             materialized: view
           columns:
             - include: '*'
               exclude: ['location_id']
             - name: extra
+"""
+
+MULTIPLE_TABLE_VERSIONED_MODEL_V0 = """
+models:
+    - name: my_model
+      versions:
+        - v: 0
+          defined_in: arbitrary_file_name
+        - v: 2
+"""
+
+
+MULTIPLE_TABLE_VERSIONED_MODEL_V0_LATEST_VERSION = """
+models:
+    - name: my_model
+      latest_version: 0
+      versions:
+        - v: 0
+          defined_in: arbitrary_file_name
+        - v: 2
 """
 
 
@@ -554,7 +596,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(self.parser.manifest.files[file_id].node_patches, ["model.root.my_model"])
 
 
-class SchemaParserVersionedModelsTest(SchemaParserTest):
+class SchemaParserVersionedModels(SchemaParserTest):
     def setUp(self):
         super().setUp()
         my_model_v1_node = MockNode(
@@ -604,11 +646,7 @@ class SchemaParserVersionedModelsTest(SchemaParserTest):
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=5)
 
         all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
-        tests = []
-        for node in all_nodes:
-            if node.resource_type != NodeType.Test:
-                continue
-            tests.append(node)
+        tests = [node for node in all_nodes if node.resource_type == NodeType.Test]
 
         # test on color column on my_model v1
         self.assertEqual(tests[0].config.severity, "WARN")
@@ -681,6 +719,84 @@ class SchemaParserVersionedModelsTest(SchemaParserTest):
             self.parser.manifest.files[file_id].node_patches,
             ["model.snowplow.my_model.v1", "model.snowplow.my_model.v2"],
         )
+
+    def test__parsed_versioned_models(self):
+        block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
+
+        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
+        models = [node for node in all_nodes if node.resource_type == NodeType.Model]
+
+        # test v1 model
+        parsed_node_patch_v1 = models[0].patch.call_args_list[0][0][0]
+        self.assertEqual(models[0].unique_id, "model.snowplow.my_model.v1")
+        self.assertEqual(parsed_node_patch_v1.version, 1)
+        self.assertEqual(parsed_node_patch_v1.latest_version, 2)
+        self.assertEqual(
+            list(parsed_node_patch_v1.columns.keys()), ["color", "location_id", "extra"]
+        )
+        self.assertEqual(
+            parsed_node_patch_v1.config, {"materialized": "table", "sql_header": "test_sql_header"}
+        )
+
+        # test v2 model
+        parsed_node_patch_v2 = models[1].patch.call_args_list[0][0][0]
+        self.assertEqual(models[1].unique_id, "model.snowplow.my_model.v2")
+        self.assertEqual(parsed_node_patch_v2.version, 2)
+        self.assertEqual(parsed_node_patch_v2.latest_version, 2)
+        self.assertEqual(list(parsed_node_patch_v2.columns.keys()), ["color", "extra"])
+        self.assertEqual(
+            parsed_node_patch_v2.config, {"materialized": "view", "sql_header": "test_sql_header"}
+        )
+
+    def test__parsed_versioned_models_v0(self):
+        block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_V0, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
+
+        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
+        models = [node for node in all_nodes if node.resource_type == NodeType.Model]
+
+        # test v0 model
+        parsed_node_patch_v1 = models[0].patch.call_args_list[0][0][0]
+        self.assertEqual(models[0].unique_id, "model.snowplow.my_model.v0")
+        self.assertEqual(parsed_node_patch_v1.version, 0)
+        self.assertEqual(parsed_node_patch_v1.latest_version, 2)
+
+        # test v2 model
+        parsed_node_patch_v2 = models[1].patch.call_args_list[0][0][0]
+        self.assertEqual(models[1].unique_id, "model.snowplow.my_model.v2")
+        self.assertEqual(parsed_node_patch_v2.version, 2)
+        self.assertEqual(parsed_node_patch_v2.latest_version, 2)
+
+    def test__parsed_versioned_models_v0_latest_version(self):
+        block = self.file_block_for(
+            MULTIPLE_TABLE_VERSIONED_MODEL_V0_LATEST_VERSION, "test_one.yml"
+        )
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
+
+        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
+        models = [node for node in all_nodes if node.resource_type == NodeType.Model]
+
+        # test v0 model
+        parsed_node_patch_v1 = models[0].patch.call_args_list[0][0][0]
+        self.assertEqual(models[0].unique_id, "model.snowplow.my_model.v0")
+        self.assertEqual(parsed_node_patch_v1.version, 0)
+        self.assertEqual(parsed_node_patch_v1.latest_version, 0)
+
+        # test v2 model
+        parsed_node_patch_v2 = models[1].patch.call_args_list[0][0][0]
+        self.assertEqual(models[1].unique_id, "model.snowplow.my_model.v2")
+        self.assertEqual(parsed_node_patch_v2.version, 2)
+        self.assertEqual(parsed_node_patch_v2.latest_version, 0)
 
 
 sql_model = """

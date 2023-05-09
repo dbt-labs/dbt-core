@@ -652,7 +652,7 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
 
-        if not get_flags().PRINT:
+        if get_flags().PRINT:
             print(msg)
         return ""
 

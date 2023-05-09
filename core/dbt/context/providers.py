@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     Resource,
     ManifestNode,
     RefArgs,
+    AccessType,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
@@ -65,11 +66,12 @@ from dbt.exceptions import (
     DbtRuntimeError,
     TargetNotFoundError,
     DbtValidationError,
+    DbtReferenceError,
 )
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType, ModelLanguage
 
-from dbt.utils import merge, AttrDict, MultiDict, args_to_dict
+from dbt.utils import merge, AttrDict, MultiDict, args_to_dict, cast_to_str
 
 from dbt import selected_resources
 
@@ -494,6 +496,17 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
+        elif (
+            target_model.resource_type == NodeType.Model
+            and target_model.access == AccessType.Private
+        ):
+            if not self.model.group or self.model.group != target_model.group:
+                raise DbtReferenceError(
+                    unique_id=self.model.unique_id,
+                    ref_unique_id=target_model.unique_id,
+                    group=cast_to_str(target_model.group),
+                )
+
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)
 

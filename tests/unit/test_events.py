@@ -133,6 +133,7 @@ sample_values = [
     types.EnvironmentVariableRenamed(old_name="", new_name=""),
     types.ConfigLogPathDeprecation(deprecated_path=""),
     types.ConfigTargetPathDeprecation(deprecated_path=""),
+    types.CollectFreshnessReturnSignature(),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
@@ -228,6 +229,9 @@ sample_values = [
     types.JinjaLogWarning(),
     types.JinjaLogInfo(msg=""),
     types.JinjaLogDebug(msg=""),
+    types.UnpinnedRefNewVersionAvailable(
+        ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
+    ),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

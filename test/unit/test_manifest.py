@@ -1399,6 +1399,20 @@ def _refable_parameter_sets():
                 version=None,
                 expected=None,
             ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="0", is_latest_version=False)],
+                sources=[],
+                package="root",
+                version=None,
+                expected=None,
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="0", is_latest_version=True)],
+                sources=[],
+                package="root",
+                version=None,
+                expected=("root", "my_model", "0"),
+            ),
             # a source with that name exists, but not a refable
             FindNodeSpec(
                 nodes=[],

@@ -1,6 +1,0 @@
-kind: Fixes
-body: avoid dbtRunner default callbacks being shared across instances
-time: 2023-04-05T12:43:15.418016-04:00
-custom:
-  Author: chamini2
-  Issue: "7278"
