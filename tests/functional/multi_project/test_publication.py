@@ -4,7 +4,11 @@ import os
 
 from dbt.tests.util import run_dbt, get_artifact, write_file, copy_file
 from dbt.contracts.publication import PublicationArtifact, PublicModel
-from dbt.exceptions import PublicationConfigNotFound, TargetNotFoundError
+from dbt.exceptions import (
+    PublicationConfigNotFound,
+    TargetNotFoundError,
+    ProjectDependencyCycleError,
+)
 
 
 model_one_sql = """
@@ -257,3 +261,21 @@ class TestMultiProjects:
         write_file(dependencies_alt_yml, project.project_root, "dependencies.yml")
         results = run_dbt(["run", "--project-dir", str(project.project_root)])
         assert len(results) == 4
+
+
+class TestProjectCycles:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_one.sql": model_one_sql,
+        }
+
+    def test_project_cycles(self, project):
+        write_file(dependencies_yml, "dependencies.yml")
+        # Create a project dependency that's the same as the current project
+        m_pub_json = marketing_pub_json.replace('"dependencies": []', '"dependencies": ["test"]')
+        (pathlib.Path(project.project_root) / "publications").mkdir(parents=True, exist_ok=True)
+        write_file(m_pub_json, project.project_root, "publications", "marketing_publication.json")
+
+        with pytest.raises(ProjectDependencyCycleError):
+            run_dbt(["parse"])
