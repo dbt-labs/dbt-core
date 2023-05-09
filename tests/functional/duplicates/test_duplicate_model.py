@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.exceptions import CompilationError, DuplicateResourceNameError
+from dbt.exceptions import CompilationError, AmbiguousAliasError
 from dbt.tests.fixtures.project import write_project_files
 from dbt.tests.util import run_dbt, get_manifest
 
@@ -88,7 +88,7 @@ class TestDuplicateModelDisabled:
         assert len(results) == 1
 
 
-class TestDuplicateModelEnabledAcrossPackages:
+class TestDuplicateModelAliasEnabledAcrossPackages:
     @pytest.fixture(scope="class")
     def models(self):
         return {"table_model.sql": enabled_model_sql}
@@ -105,10 +105,10 @@ class TestDuplicateModelEnabledAcrossPackages:
     def packages(self):
         return {"packages": [{"local": "local_dependency"}]}
 
-    def test_duplicate_model_enabled_across_packages(self, project):
+    def test_duplicate_model_alias_enabled_across_packages(self, project):
         run_dbt(["deps"])
-        message = "dbt found two models with the name"
-        with pytest.raises(DuplicateResourceNameError) as exc:
+        message = "dbt found two resources with the database representation"
+        with pytest.raises(AmbiguousAliasError) as exc:
             run_dbt(["run"])
         assert message in str(exc.value)
 

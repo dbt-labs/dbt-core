@@ -207,22 +207,44 @@ class CompilationError(DbtRuntimeError):
             )
 
 
-class ModelContractError(DbtRuntimeError):
+class ContractBreakingChangeError(DbtRuntimeError):
     CODE = 10016
-    MESSAGE = "Contract Error"
+    MESSAGE = "Breaking Change to Contract"
 
-    def __init__(self, reasons, node=None):
-        self.reasons = reasons
+    def __init__(
+        self, contract_enforced_disabled, columns_removed, column_type_changes, node=None
+    ):
+        self.contract_enforced_disabled = contract_enforced_disabled
+        self.columns_removed = columns_removed
+        self.column_type_changes = column_type_changes
         super().__init__(self.message(), node)
 
     @property
     def type(self):
-        return "Contract"
+        return "Breaking Change to Contract"
 
     def message(self):
+        breaking_changes = []
+        if self.contract_enforced_disabled:
+            breaking_changes.append("The contract's enforcement has been disabled.")
+        if self.columns_removed:
+            columns_removed_str = "\n  - ".join(self.columns_removed)
+            breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
+        if self.column_type_changes:
+            column_type_changes_str = "\n  - ".join(
+                [f"{c[0]} ({c[1]} -> {c[2]})" for c in self.column_type_changes]
+            )
+            breaking_changes.append(
+                f"Columns with data_type changes: \n - {column_type_changes_str}"
+            )
+
+        reasons = "\n\n".join(breaking_changes)
+
         return (
-            f"There is a breaking change in the model contract because {self.reasons}; "
-            "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+            "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
+            f"\n\n{reasons}\n\n"
+            "Consider making an additive (non-breaking) change instead, if possible.\n"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
 
 
@@ -350,6 +372,20 @@ class DbtSelectorsError(DbtConfigError):
 
 class DbtProfileError(DbtConfigError):
     pass
+
+
+class PublicationConfigNotFound(DbtConfigError):
+    def __init__(self, project=None, file_name=None):
+        self.project = project
+        self.file_name = file_name
+        msg = self.message()
+        super().__init__(msg, project=project)
+
+    def message(self):
+        return (
+            f"A dependency on project {self.project} was specified, "
+            f"but file {self.file_name} was not found."
+        )
 
 
 class SemverError(Exception):
@@ -892,7 +928,8 @@ class MetricArgsError(CompilationError):
 class RefBadContextError(CompilationError):
     def __init__(self, node, args):
         self.node = node
-        self.args = args
+        self.args = args.positional_args  # type: ignore
+        self.kwargs = args.keyword_args  # type: ignore
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
@@ -906,7 +943,15 @@ class RefBadContextError(CompilationError):
             model_name = self.node.name
 
         ref_args = ", ".join("'{}'".format(a) for a in self.args)
-        ref_string = f"{{{{ ref({ref_args}) }}}}"
+
+        keyword_args = ""
+        if self.kwargs:
+            keyword_args = ", ".join(
+                "{}='{}'".format(k, v) for k, v in self.kwargs.items()  # type: ignore
+            )
+            keyword_args = "," + keyword_args
+
+        ref_string = f"{{{{ ref({ref_args}{keyword_args}) }}}}"
 
         msg = f"""dbt was unable to infer all dependencies for the model "{model_name}".
 This typically happens when ref() is placed within a conditional block.
@@ -984,6 +1029,17 @@ class DuplicateMacroNameError(CompilationError):
             f"change the name of one of these macros:\n- {self.node_1.unique_id} "
             f"({self.node_1.original_file_path})\n- {self.node_2.unique_id} ({self.node_2.original_file_path})"
         )
+
+        return msg
+
+
+class MacroResultAlreadyLoadedError(CompilationError):
+    def __init__(self, result_name):
+        self.result_name = result_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"The 'statement' result named '{self.result_name}' has already been loaded into a variable"
 
         return msg
 
@@ -1289,12 +1345,14 @@ class TargetNotFoundError(CompilationError):
         target_name: str,
         target_kind: str,
         target_package: Optional[str] = None,
+        target_version: Optional[Union[str, float]] = None,
         disabled: Optional[bool] = None,
     ):
         self.node = node
         self.target_name = target_name
         self.target_kind = target_kind
         self.target_package = target_package
+        self.target_version = target_version
         self.disabled = disabled
         super().__init__(msg=self.get_message())
 
@@ -1310,13 +1368,17 @@ class TargetNotFoundError(CompilationError):
         else:
             reason = "was not found"
 
+        target_version_string = ""
+        if self.target_version is not None:
+            target_version_string = f"with version '{self.target_version}' "
+
         target_package_string = ""
         if self.target_package is not None:
-            target_package_string = f"in package '{self.target_package}' "
+            target_package_string = f"in package or project '{self.target_package}' "
 
         msg = (
             f"{resource_type_title} '{unique_id}' ({original_file_path}) depends on a "
-            f"{self.target_kind} named '{self.target_name}' {target_package_string}which {reason}"
+            f"{self.target_kind} named '{self.target_name}' {target_version_string}{target_package_string}which {reason}"
         )
         return msg
 
@@ -1909,6 +1971,23 @@ class AmbiguousAliasError(CompilationError):
             "cannot create two resources with identical database representations. "
             "To fix this,\nchange the configuration of one of these resources:"
             f"\n- {self.node_1.unique_id} ({self.node_1.original_file_path})\n- {self.node_2.unique_id} ({self.node_2.original_file_path})"
+        )
+        return msg
+
+
+class AmbiguousResourceNameRefError(CompilationError):
+    def __init__(self, duped_name, unique_ids, node=None):
+        self.duped_name = duped_name
+        self.unique_ids = unique_ids
+        self.packages = [unique_id.split(".")[1] for unique_id in unique_ids]
+        super().__init__(msg=self.get_message(), node=node)
+
+    def get_message(self) -> str:
+        formatted_unique_ids = "'{0}'".format("', '".join(self.unique_ids))
+        formatted_packages = "'{0}'".format("' or '".join(self.packages))
+        msg = (
+            f"When referencing '{self.duped_name}', dbt found nodes in multiple packages: {formatted_unique_ids}"
+            f"\nTo fix this, use two-argument 'ref', with the package name first: {formatted_packages}"
         )
         return msg
 

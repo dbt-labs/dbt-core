@@ -227,7 +227,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from_node(
         cls: Type[Self],
         config: HasQuoting,
-        node: ManifestNode,
+        node,
         quote_policy: Optional[Dict[str, bool]] = None,
         **kwargs: Any,
     ) -> Self:
@@ -347,6 +347,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     @classproperty
     def External(cls) -> str:
         return str(RelationType.External)
+
+    @classproperty
+    def MaterializedView(cls) -> str:
+        return str(RelationType.MaterializedView)
 
     @classproperty
     def get_relation_type(cls) -> Type[RelationType]:

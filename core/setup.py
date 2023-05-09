@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.5.0b5"
+package_version = "1.6.0a1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -53,12 +53,12 @@ setup(
         "hologram>=0.0.14,<=0.0.16",
         "isodate>=0.6,<0.7",
         "logbook>=1.5,<1.6",
-        "mashumaro[msgpack]==3.3.1",
+        "mashumaro[msgpack]==3.6",
         "minimal-snowplow-tracker==0.0.2",
         "networkx>=2.3,<2.8.1;python_version<'3.8'",
         "networkx>=2.3,<3;python_version>='3.8'",
         "packaging>20.9",
-        "sqlparse>=0.2.3,<0.5",
+        "sqlparse>=0.2.3,<0.4.4",
         "dbt-extractor~=0.4.1",
         "typing-extensions>=3.7.4",
         "werkzeug>=1,<3",

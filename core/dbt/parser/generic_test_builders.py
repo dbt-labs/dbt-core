@@ -15,10 +15,12 @@ from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
     TestDef,
+    NodeVersion,
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
     UnparsedNodeUpdate,
     UnparsedExposure,
+    UnparsedModelUpdate,
 )
 from dbt.exceptions import (
     CustomMacroPopulatingConfigValueError,
@@ -32,6 +34,7 @@ from dbt.exceptions import (
     TestNameNotStringError,
     UnexpectedTestNamePatternError,
     UndefinedMacroError,
+    DbtInternalError,
 )
 from dbt.parser.search import FileBlock
 from dbt.utils import md5
@@ -92,10 +95,13 @@ class YamlBlock(FileBlock):
         )
 
 
-Testable = TypeVar("Testable", UnparsedNodeUpdate, UnpatchedSourceDefinition)
+Versioned = TypeVar("Versioned", bound=UnparsedModelUpdate)
+
+Testable = TypeVar("Testable", UnparsedNodeUpdate, UnpatchedSourceDefinition, UnparsedModelUpdate)
 
 ColumnTarget = TypeVar(
     "ColumnTarget",
+    UnparsedModelUpdate,
     UnparsedNodeUpdate,
     UnparsedAnalysisUpdate,
     UnpatchedSourceDefinition,
@@ -108,6 +114,7 @@ Target = TypeVar(
     UnparsedAnalysisUpdate,
     UnpatchedSourceDefinition,
     UnparsedExposure,
+    UnparsedModelUpdate,
 )
 
 
@@ -169,10 +176,36 @@ class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
 
 
 @dataclass
+class VersionedTestBlock(TestBlock, Generic[Versioned]):
+    @property
+    def columns(self):
+        if not self.target.versions:
+            return super().columns
+        else:
+            raise DbtInternalError(".columns for VersionedTestBlock with versions")
+
+    @property
+    def tests(self) -> List[TestDef]:
+        if not self.target.versions:
+            return super().tests
+        else:
+            raise DbtInternalError(".tests for VersionedTestBlock with versions")
+
+    @classmethod
+    def from_yaml_block(cls, src: YamlBlock, target: Versioned) -> "VersionedTestBlock[Versioned]":
+        return cls(
+            file=src.file,
+            data=src.data,
+            target=target,
+        )
+
+
+@dataclass
 class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
     test: Dict[str, Any]
     column_name: Optional[str]
     tags: List[str]
+    version: Optional[NodeVersion]
 
     @classmethod
     def from_test_block(
@@ -181,6 +214,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
         test: Dict[str, Any],
         column_name: Optional[str],
         tags: List[str],
+        version: Optional[NodeVersion],
     ) -> "GenericTestBlock":
         return cls(
             file=src.file,
@@ -189,6 +223,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
             test=test,
             column_name=column_name,
             tags=tags,
+            version=version,
         )
 
 
@@ -230,6 +265,7 @@ class TestBuilder(Generic[Testable]):
         package_name: str,
         render_ctx: Dict[str, Any],
         column_name: str = None,
+        version: Optional[NodeVersion] = None,
     ) -> None:
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args: Dict[str, Any] = test_args
@@ -237,6 +273,7 @@ class TestBuilder(Generic[Testable]):
             raise TestArgIncludesModelError()
         self.package_name: str = package_name
         self.target: Testable = target
+        self.version: Optional[NodeVersion] = version
 
         self.args["model"] = self.build_model_str()
 
@@ -435,7 +472,12 @@ class TestBuilder(Generic[Testable]):
 
     def get_synthetic_test_names(self) -> Tuple[str, str]:
         # Returns two names: shorter (for the compiled file), full (for the unique_id + FQN)
-        if isinstance(self.target, UnparsedNodeUpdate):
+        target_name = self.target.name
+        if isinstance(self.target, UnparsedModelUpdate):
+            name = self.name
+            if self.version:
+                target_name = f"{self.target.name}_v{self.version}"
+        elif isinstance(self.target, UnparsedNodeUpdate):
             name = self.name
         elif isinstance(self.target, UnpatchedSourceDefinition):
             name = "source_" + self.name
@@ -443,7 +485,7 @@ class TestBuilder(Generic[Testable]):
             raise self._bad_type()
         if self.namespace is not None:
             name = "{}_{}".format(self.namespace, name)
-        return synthesize_generic_test_names(name, self.target.name, self.args)
+        return synthesize_generic_test_names(name, target_name, self.args)
 
     def construct_config(self) -> str:
         configs = ",".join(
@@ -473,7 +515,12 @@ class TestBuilder(Generic[Testable]):
 
     def build_model_str(self):
         targ = self.target
-        if isinstance(self.target, UnparsedNodeUpdate):
+        if isinstance(self.target, UnparsedModelUpdate):
+            if self.version:
+                target_str = f"ref('{targ.name}', version='{self.version}')"
+            else:
+                target_str = f"ref('{targ.name}')"
+        elif isinstance(self.target, UnparsedNodeUpdate):
             target_str = f"ref('{targ.name}')"
         elif isinstance(self.target, UnpatchedSourceDefinition):
             target_str = f"source('{targ.source.name}', '{targ.table.name}')"

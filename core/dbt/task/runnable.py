@@ -37,7 +37,7 @@ from dbt.events.types import (
     NothingToDo,
 )
 from dbt.events.contextvars import log_contextvars
-from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
@@ -294,11 +294,6 @@ class GraphRunnableTask(ConfiguredTask):
 
         if self.manifest is None:
             raise DbtInternalError("manifest was None in _handle_result")
-
-        if isinstance(node, SourceDefinition):
-            self.manifest.update_source(node)
-        else:
-            self.manifest.update_node(node)
 
         if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
             if is_ephemeral:

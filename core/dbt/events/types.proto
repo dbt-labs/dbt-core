@@ -385,6 +385,15 @@ message ConfigTargetPathDeprecationMsg {
     ConfigTargetPathDeprecation data = 2;
 }
 
+// D012
+message CollectFreshnessReturnSignature {
+}
+
+message CollectFreshnessReturnSignatureMsg {
+    EventInfo info = 1;
+    CollectFreshnessReturnSignature data = 2;
+}
+
 // E - DB Adapter
 
 // E001
@@ -831,6 +840,18 @@ message InputFileDiffErrorMsg {
     InputFileDiffError data = 2;
 }
 
+// I002
+message PublicationArtifactChanged {
+    string project_name = 1;
+    string action = 2;
+    google.protobuf.Timestamp generated_at = 3;
+}
+
+message PublicationArtifactChangedMsg {
+    EventInfo info = 1;
+    PublicationArtifactChanged data = 2;
+}
+
 // Skipping I002, I003, I004, I005, I006, I007
 
 // I008
@@ -864,26 +885,6 @@ message ParsePerfInfoPath {
 message ParsePerfInfoPathMsg {
     EventInfo info = 1;
     ParsePerfInfoPath data = 2;
-}
-
-// I011
-message GenericTestFileParse {
-    string path = 1;
-}
-
-message GenericTestFileParseMsg {
-    EventInfo info = 1;
-    GenericTestFileParse data = 2;
-}
-
-// I012
-message MacroFileParse {
-    string path = 1;
-}
-
-message MacroFileParseMsg {
-    EventInfo info = 1;
-    MacroFileParse data = 2;
 }
 
 // Skipping I013
@@ -1145,7 +1146,7 @@ message JinjaLogInfo {
 
 message  JinjaLogInfoMsg {
     EventInfo info = 1;
-     JinjaLogInfo data = 2;
+    JinjaLogInfo data = 2;
 }
 
 // I063
@@ -1157,6 +1158,20 @@ message JinjaLogDebug {
 message JinjaLogDebugMsg {
     EventInfo info = 1;
     JinjaLogDebug data = 2;
+}
+
+// I064
+message UnpinnedRefNewVersionAvailable {
+    NodeInfo node_info = 1;
+    string ref_node_name  = 2;
+    string ref_node_package = 3;
+    string ref_node_version = 4;
+    string ref_max_version = 5;
+}
+
+message UnpinnedRefNewVersionAvailableMsg {
+    EventInfo info = 1;
+    UnpinnedRefNewVersionAvailable data = 2;
 }
 
 // M - Deps generation

@@ -206,6 +206,27 @@ models:
           - not_null
 """
 
+models_triple_blocking__test_yml = """
+version: 2
+
+models:
+  - name: model_a
+    columns:
+      - name: id
+        tests:
+          - not_null
+  - name: model_b
+    columns:
+      - name: id
+        tests:
+          - not_null
+  - name: model_c
+    columns:
+      - name: id
+        tests:
+          - not_null
+"""
+
 models_interdependent__model_a_sql = """
 select 1 as id
 """

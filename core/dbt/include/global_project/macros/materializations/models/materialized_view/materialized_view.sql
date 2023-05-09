@@ -1,8 +1,8 @@
 {% materialization materialized_view, default %}
     {% set full_refresh_mode = should_full_refresh() %}
     {% set existing_relation = load_cached_relation(this) %}
-    {% set target_relation = this.incorporate(type='view') %}
-    {% set intermediate_relation =  make_intermediate_relation(target_relation) %}
+    {% set target_relation = this.incorporate(type=this.View) %}
+    {% set intermediate_relation = make_intermediate_relation(target_relation) %}
 
     -- the intermediate_relation should not already exist in the database; get_relation
     -- will return None in that case. Otherwise, we get a relation that we can drop
@@ -20,7 +20,7 @@
         exist, then there is nothing to move out of the way and subsequently drop. In that case,
         this relation will be effectively unused.
     */
-    {% set backup_relation_type = 'view' if existing_relation is none else existing_relation.type %}
+    {% set backup_relation_type = target_relation.View if existing_relation is none else existing_relation.type %}
     {% set backup_relation = make_backup_relation(target_relation, backup_relation_type) %}
 
     -- as above, the backup_relation should not already exist
@@ -38,20 +38,52 @@
     -- `BEGIN` happens here:
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-    -- cleanup
-    -- move the existing view out of the way
+    -- determine the scenario we're in: create, full_refresh, alter, refresh data
     {% if existing_relation is none %}
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
-    {% elif full_refresh_mode or existing_relation.type != 'view' %}
+    {% elif full_refresh_mode or not existing_relation.is_view %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% else %}
-        {% set build_sql = get_refresh_data_in_materialized_view_sql(target_relation) %}
+
+        -- get config options
+        {% set on_configuration_change = config.get('on_configuration_change') %}
+        {% if existing_relation %}
+            {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
+        {% else %}
+            {% set configuration_change = [] %}
+        {% endif %}
+
+        {% if configuration_changes == [] %}
+            {% set build_sql = refresh_materialized_view(target_relation) %}
+
+        {% elif on_configuration_change == 'apply' %}
+            {% set build_sql = get_alter_materialized_view_as_sql(target_relation, configuration_changes, sql, existing_relation, backup_relation, intermediate_relation) %}
+        {% elif on_configuration_change == 'skip' %}
+            {% set build_sql = '' %}
+            {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `skip` for `" ~ target_relation ~ "`") }}
+        {% elif on_configuration_change == 'fail' %}
+            {{ exceptions.raise_compiler_error("Configuration changes were identified and `on_configuration_change` was set to `fail` for `" ~ target_relation ~ "`") }}
+
+        {% else %}
+            {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
+
+        {% endif %}
+
     {% endif %}
 
     -- build model
-    {% call statement("main") %}
-        {{ build_sql }}
-    {% endcall %}
+    {% if build_sql != '' %}
+        {% call statement(name="main") %}
+            {{ build_sql }}
+        {% endcall %}
+    {% else %}
+        {% do store_raw_result(
+            name="main",
+            message="skip " ~ target_relation,
+            code="skip",
+            rows_affected="-1"
+        ) %}
+    {% endif %}
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
@@ -60,7 +92,9 @@
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-    {{ adapter.commit() }}
+    {% if build_sql != '' %}
+        {{ adapter.commit() }}
+    {% endif %}
 
     {{ drop_relation_if_exists(backup_relation) }}
     {{ drop_relation_if_exists(intermediate_relation) }}

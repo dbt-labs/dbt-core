@@ -1,4 +1,4 @@
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import click
 from dbt.cli.options import MultiOption
@@ -23,7 +23,7 @@ browser = click.option(
 cache_selected_only = click.option(
     "--cache-selected-only/--no-cache-selected-only",
     envvar="DBT_CACHE_SELECTED_ONLY",
-    help="Pre cache database objects relevant to selected resource only.",
+    help="At start of run, populate relational cache only for schemas containing selected nodes, or for all schemas of interest.",
 )
 
 introspect = click.option(
@@ -121,7 +121,7 @@ indirect_selection = click.option(
 
 log_cache_events = click.option(
     "--log-cache-events/--no-log-cache-events",
-    help="Enable verbose adapter cache logging.",
+    help="Enable verbose logging for relational cache events to help when debugging.",
     envvar="DBT_LOG_CACHE_EVENTS",
 )
 
@@ -229,7 +229,7 @@ output_path = click.option(
     envvar=None,
     help="Specify the output path for the JSON report. By default, outputs to 'target/sources.json'",
     type=click.Path(file_okay=True, dir_okay=False, writable=True),
-    default=PurePath.joinpath(Path.cwd(), "target/sources.json"),
+    default=None,
 )
 
 partial_parse = click.option(
@@ -242,7 +242,7 @@ partial_parse = click.option(
 populate_cache = click.option(
     "--populate-cache/--no-populate-cache",
     envvar="DBT_POPULATE_CACHE",
-    help="Allow for partial parsing by looking for and writing to a pickle file in the target directory. This overrides the user configuration file.",
+    help="At start of run, use `show` or `information_schema` queries to populate a relational cache, which can speed up subsequent materializations.",
     default=True,
 )
 
@@ -411,6 +411,13 @@ skip_profile_setup = click.option(
     "-s",
     envvar=None,
     help="Skip interactive profile setup.",
+    is_flag=True,
+)
+
+empty_catalog = click.option(
+    "--empty-catalog",
+    help="If specified, generate empty catalog.json file during the `dbt docs generate` command.",
+    default=False,
     is_flag=True,
 )
 

@@ -22,6 +22,8 @@ from typing import (
 from typing_extensions import Protocol
 from uuid import UUID
 
+from dbt.contracts.publication import ProjectDependencies, PublicationConfig, PublicModel
+
 from dbt.contracts.graph.nodes import (
     Macro,
     Documentation,
@@ -35,8 +37,9 @@ from dbt.contracts.graph.nodes import (
     GraphMemberNode,
     ResultNode,
     BaseNode,
+    ManifestOrPublicNode,
 )
-from dbt.contracts.graph.unparsed import SourcePatch
+from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
@@ -46,10 +49,12 @@ from dbt.exceptions import (
     DuplicateResourceNameError,
     DuplicateMacroInPackageError,
     DuplicateMaterializationNameError,
+    AmbiguousResourceNameRefError,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
-from dbt.events.types import MergedFromState
+from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
+from dbt.events.contextvars import get_node_info
 from dbt.node_types import NodeType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
@@ -146,39 +151,115 @@ class SourceLookup(dbtClassMixin):
 class RefableLookup(dbtClassMixin):
     # model, seed, snapshot
     _lookup_types: ClassVar[set] = set(NodeType.refable())
+    _versioned_types: ClassVar[set] = set(NodeType.versioned())
 
-    # refables are actually unique, so the Dict[PackageName, UniqueID] will
-    # only ever have exactly one value, but doing 3 dict lookups instead of 1
-    # is not a big deal at all and retains consistency
     def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
+        self.populate_public_nodes(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName]):
-        return find_unique_id_for_package(self.storage, key, package)
+    def get_unique_id(
+        self,
+        key: str,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion],
+        node: Optional[GraphMemberNode] = None,
+    ):
+        if version:
+            key = f"{key}.v{version}"
 
-    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
-        unique_id = self.get_unique_id(key, package)
+        unique_ids = self._find_unique_ids_for_package(key, package)
+        if len(unique_ids) > 1:
+            raise AmbiguousResourceNameRefError(key, unique_ids, node)
+        else:
+            return unique_ids[0] if unique_ids else None
+
+    def find(
+        self,
+        key: str,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion],
+        manifest: "Manifest",
+        source_node: Optional[GraphMemberNode] = None,
+    ):
+        unique_id = self.get_unique_id(key, package, version, source_node)
         if unique_id is not None:
-            return self.perform_lookup(unique_id, manifest)
+            node = self.perform_lookup(unique_id, manifest)
+            # If this is an unpinned ref (no 'version' arg was passed),
+            # AND this is a versioned node,
+            # AND this ref is being resolved at runtime -- get_node_info != {}
+            if version is None and node.is_versioned and get_node_info():
+                # Check to see if newer versions are available, and log an "FYI" if so
+                max_version: UnparsedVersion = max(
+                    [
+                        UnparsedVersion(v.version)
+                        for v in manifest.nodes.values()
+                        if v.name == node.name and v.version is not None
+                    ]
+                )
+                assert node.latest_version  # for mypy, whenever i may find it
+                if max_version > UnparsedVersion(node.latest_version):
+                    fire_event(
+                        UnpinnedRefNewVersionAvailable(
+                            node_info=get_node_info(),
+                            ref_node_name=node.name,
+                            ref_node_package=node.package_name,
+                            ref_node_version=str(node.version),
+                            ref_max_version=str(max_version.v),
+                        )
+                    )
+
+            return node
         return None
 
-    def add_node(self, node: ManifestNode):
+    def add_node(self, node: ManifestOrPublicNode):
         if node.resource_type in self._lookup_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
-            self.storage[node.name][node.package_name] = node.unique_id
+
+            if node.is_versioned:
+                if node.search_name not in self.storage:
+                    self.storage[node.search_name] = {}
+                self.storage[node.search_name][node.package_name] = node.unique_id
+                if node.is_latest_version:  # type: ignore
+                    self.storage[node.name][node.package_name] = node.unique_id
+            else:
+                self.storage[node.name][node.package_name] = node.unique_id
 
     def populate(self, manifest):
         for node in manifest.nodes.values():
             self.add_node(node)
 
-    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
-        if unique_id not in manifest.nodes:
+    def populate_public_nodes(self, manifest):
+        for node in manifest.public_nodes.values():
+            self.add_node(node)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestOrPublicNode:
+        if unique_id in manifest.nodes:
+            node = manifest.nodes[unique_id]
+        elif unique_id in manifest.public_nodes:
+            node = manifest.public_nodes[unique_id]
+        else:
             raise dbt.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
             )
-        return manifest.nodes[unique_id]
+        return node
+
+    def _find_unique_ids_for_package(self, key, package: Optional[PackageName]) -> List[str]:
+        if key not in self.storage:
+            return []
+
+        pkg_dct: Mapping[PackageName, UniqueID] = self.storage[key]
+
+        if package is None:
+            if not pkg_dct:
+                return []
+            else:
+                return list(pkg_dct.values())
+        elif package in pkg_dct:
+            return [pkg_dct[package]]
+        else:
+            return []
 
 
 class MetricLookup(dbtClassMixin):
@@ -233,7 +314,12 @@ class DisabledLookup(dbtClassMixin):
 
     # This should return a list of disabled nodes. It's different from
     # the other Lookup functions in that it returns full nodes, not just unique_ids
-    def find(self, search_name, package: Optional[PackageName]):
+    def find(
+        self, search_name, package: Optional[PackageName], version: Optional[NodeVersion] = None
+    ):
+        if version:
+            search_name = f"{search_name}.v{version}"
+
         if search_name not in self.storage:
             return None
 
@@ -252,9 +338,10 @@ class DisabledLookup(dbtClassMixin):
 
 class AnalysisLookup(RefableLookup):
     _lookup_types: ClassVar[set] = set([NodeType.Analysis])
+    _versioned_types: ClassVar[set] = set()
 
 
-def _search_packages(
+def _packages_to_search(
     current_project: str,
     node_package: str,
     target_package: Optional[str] = None,
@@ -331,7 +418,8 @@ def build_node_edges(nodes: List[ManifestNode]):
     forward_edges: Dict[str, List[str]] = {n.unique_id: [] for n in nodes}
     for node in nodes:
         backward_edges[node.unique_id] = node.depends_on_nodes[:]
-        for unique_id in node.depends_on_nodes:
+        backward_edges[node.unique_id].extend(node.depends_on_public_nodes[:])
+        for unique_id in backward_edges[node.unique_id]:
             if unique_id in forward_edges.keys():
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges), _sort_values(backward_edges)
@@ -475,25 +563,6 @@ MaybeNonSource = Optional[Union[ManifestNode, Disabled[ManifestNode]]]
 T = TypeVar("T", bound=GraphMemberNode)
 
 
-def _update_into(dest: MutableMapping[str, T], new_item: T):
-    """Update dest to overwrite whatever is at dest[new_item.unique_id] with
-    new_itme. There must be an existing value to overwrite, and the two nodes
-    must have the same original file path.
-    """
-    unique_id = new_item.unique_id
-    if unique_id not in dest:
-        raise dbt.exceptions.DbtRuntimeError(
-            f"got an update_{new_item.resource_type} call with an "
-            f"unrecognized {new_item.resource_type}: {new_item.unique_id}"
-        )
-    existing = dest[unique_id]
-    if new_item.original_file_path != existing.original_file_path:
-        raise dbt.exceptions.DbtRuntimeError(
-            f"cannot update a {new_item.resource_type} to have a new file path!"
-        )
-    dest[unique_id] = new_item
-
-
 # This contains macro methods that are in both the Manifest
 # and the MacroManifest
 class MacroMethods:
@@ -610,6 +679,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
+    public_nodes: MutableMapping[str, PublicModel] = field(default_factory=dict)
+    project_dependencies: Optional[ProjectDependencies] = None
+    publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -649,18 +721,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         obj._lock = MP_CONTEXT.Lock()
         return obj
 
-    def update_exposure(self, new_exposure: Exposure):
-        _update_into(self.exposures, new_exposure)
-
-    def update_metric(self, new_metric: Metric):
-        _update_into(self.metrics, new_metric)
-
-    def update_node(self, new_node: ManifestNode):
-        _update_into(self.nodes, new_node)
-
-    def update_source(self, new_source: SourceDefinition):
-        _update_into(self.sources, new_source)
-
     def build_flat_graph(self):
         """This attribute is used in context.common by each node, so we want to
         only build it once and avoid any concurrency issues around it.
@@ -673,6 +733,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
             "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
             "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
+            "public_nodes": {k: v.to_dict(omit_none=False) for k, v in self.public_nodes.items()},
         }
 
     def build_disabled_by_file_id(self):
@@ -765,6 +826,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
             metadata=self.metadata,
             disabled={k: _deepcopy(v) for k, v in self.disabled.items()},
+            public_nodes={k: _deepcopy(v) for k, v in self.public_nodes.items()},
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
         )
@@ -778,6 +840,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.sources.values(),
                 self.exposures.values(),
                 self.metrics.values(),
+                self.public_nodes.values(),
             )
         )
         forward_edges, backward_edges = build_node_edges(edge_members)
@@ -821,6 +884,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,
+            public_nodes=self.public_nodes,
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
@@ -894,12 +958,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
 
-    # Called by dbt.parser.manifest._resolve_refs_for_exposure
+    # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
         self,
+        source_node: GraphMemberNode,
         target_model_name: str,
         target_model_package: Optional[str],
+        target_model_version: Optional[NodeVersion],
         current_project: str,
         node_package: str,
     ) -> MaybeNonSource:
@@ -907,16 +973,20 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         node: Optional[ManifestNode] = None
         disabled: Optional[List[ManifestNode]] = None
 
-        candidates = _search_packages(current_project, node_package, target_model_package)
+        candidates = _packages_to_search(current_project, node_package, target_model_package)
         for pkg in candidates:
-            node = self.ref_lookup.find(target_model_name, pkg, self)
+            node = self.ref_lookup.find(
+                target_model_name, pkg, target_model_version, self, source_node
+            )
 
-            if node is not None and node.config.enabled:
+            if node is not None and (
+                (hasattr(node, "config") and node.config.enabled) or node.is_public_node
+            ):
                 return node
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(target_model_name, pkg)
+                disabled = self.disabled_lookup.find(target_model_name, pkg, target_model_version)
 
         if disabled:
             return Disabled(disabled[0])
@@ -932,7 +1002,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         node_package: str,
     ) -> MaybeParsedSource:
         search_name = f"{target_source_name}.{target_table_name}"
-        candidates = _search_packages(current_project, node_package)
+        candidates = _packages_to_search(current_project, node_package)
 
         source: Optional[SourceDefinition] = None
         disabled: Optional[List[SourceDefinition]] = None
@@ -962,7 +1032,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metric: Optional[Metric] = None
         disabled: Optional[List[Metric]] = None
 
-        candidates = _search_packages(current_project, node_package, target_metric_package)
+        candidates = _packages_to_search(current_project, node_package, target_metric_package)
         for pkg in candidates:
             metric = self.metric_lookup.find(target_metric_name, pkg, self)
 
@@ -988,7 +1058,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         resolve_ref except the is_enabled checks are unnecessary as docs are
         always enabled.
         """
-        candidates = _search_packages(current_project, node_package, package)
+        candidates = _packages_to_search(current_project, node_package, package)
 
         for pkg in candidates:
             result = self.doc_lookup.find(name, pkg, self)
@@ -1144,6 +1214,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.source_patches,
             self.disabled,
             self.env_vars,
+            self.public_nodes,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1167,7 +1238,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version("manifest", 9)
+@schema_version("manifest", 10)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
@@ -1213,6 +1284,9 @@ class WritableManifest(ArtifactMixin):
             description="A mapping from group names to their nodes",
         )
     )
+    public_nodes: Mapping[UniqueID, PublicModel] = field(
+        metadata=dict(description=("The public models used in the dbt project"))
+    )
     metadata: ManifestMetadata = field(
         metadata=dict(
             description="Metadata about the manifest",
@@ -1227,13 +1301,14 @@ class WritableManifest(ArtifactMixin):
             ("manifest", 6),
             ("manifest", 7),
             ("manifest", 8),
+            ("manifest", 9),
         ]
 
     @classmethod
     def upgrade_schema_version(cls, data):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
-        if get_manifest_schema_version(data) <= 8:
+        if get_manifest_schema_version(data) <= 9:
             data = upgrade_manifest_json(data)
         return cls.from_dict(data)
 

@@ -9,7 +9,7 @@ from dbt.cli.exceptions import (
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
 from dbt.config.runtime import load_project, load_profile, UnsetProfile
-from dbt.events.functions import setup_event_logger, fire_event, LOG_VERSION
+from dbt.events.functions import fire_event, LOG_VERSION, set_invocation_id, setup_event_logger
 from dbt.events.types import (
     CommandCompleted,
     MainReportVersion,
@@ -41,14 +41,14 @@ def preflight(func):
         ctx.obj["flags"] = flags
         set_flags(flags)
 
+        # Logging
+        callbacks = ctx.obj.get("callbacks", [])
+        set_invocation_id()
+        setup_event_logger(flags=flags, callbacks=callbacks)
+
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
         ctx.with_resource(track_run(run_command=flags.WHICH))
-
-        # Logging
-        # N.B. Legacy logger is not supported
-        callabcks = ctx.obj.get("callbacks", [])
-        setup_event_logger(flags=flags, callbacks=callabcks)
 
         # Now that we have our logger, fire away!
         fire_event(MainReportVersion(version=str(installed_version), log_version=LOG_VERSION))
@@ -119,9 +119,8 @@ def unset_profile(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("profile") is None:
-            profile = UnsetProfile()
-            ctx.obj["profile"] = profile
+        profile = UnsetProfile()
+        ctx.obj["profile"] = profile
 
         return func(*args, **kwargs)
 
@@ -133,15 +132,12 @@ def profile(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("profile") is None:
-            flags = ctx.obj["flags"]
-            # TODO: Generalize safe access to flags.THREADS:
-            # https://github.com/dbt-labs/dbt-core/issues/6259
-            threads = getattr(flags, "THREADS", None)
-            profile = load_profile(
-                flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads
-            )
-            ctx.obj["profile"] = profile
+        flags = ctx.obj["flags"]
+        # TODO: Generalize safe access to flags.THREADS:
+        # https://github.com/dbt-labs/dbt-core/issues/6259
+        threads = getattr(flags, "THREADS", None)
+        profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
+        ctx.obj["profile"] = profile
 
         return func(*args, **kwargs)
 
@@ -153,22 +149,21 @@ def project(func):
         ctx = args[0]
         assert isinstance(ctx, Context)
 
-        if ctx.obj.get("project") is None:
-            # TODO: Decouple target from profile, and remove the need for profile here:
-            # https://github.com/dbt-labs/dbt-core/issues/6257
-            if not ctx.obj.get("profile"):
-                raise DbtProjectError("profile required for project")
+        # TODO: Decouple target from profile, and remove the need for profile here:
+        # https://github.com/dbt-labs/dbt-core/issues/6257
+        if not ctx.obj.get("profile"):
+            raise DbtProjectError("profile required for project")
 
-            flags = ctx.obj["flags"]
-            project = load_project(
-                flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
-            )
-            ctx.obj["project"] = project
+        flags = ctx.obj["flags"]
+        project = load_project(
+            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
+        )
+        ctx.obj["project"] = project
 
-            if dbt.tracking.active_user is not None:
-                project_id = None if project is None else project.hashed_name()
+        if dbt.tracking.active_user is not None:
+            project_id = None if project is None else project.hashed_name()
 
-                dbt.tracking.track_project_id({"project_id": project_id})
+            dbt.tracking.track_project_id({"project_id": project_id})
 
         return func(*args, **kwargs)
 

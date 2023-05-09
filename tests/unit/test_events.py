@@ -133,6 +133,7 @@ sample_values = [
     types.EnvironmentVariableRenamed(old_name="", new_name=""),
     types.ConfigLogPathDeprecation(deprecated_path=""),
     types.ConfigTargetPathDeprecation(deprecated_path=""),
+    types.CollectFreshnessReturnSignature(),
     # E - DB Adapter ======================
     types.AdapterEventDebug(),
     types.AdapterEventInfo(),
@@ -182,11 +183,12 @@ sample_values = [
     types.ConstraintNotSupported(constraint="", adapter=""),
     # I - Project parsing ======================
     types.InputFileDiffError(category="testing", file_id="my_file"),
+    types.PublicationArtifactChanged(
+        action="updated", project_name="test", generated_at=get_json_string_utcnow()
+    ),
     types.InvalidValueForField(field_name="test", field_value="test"),
     types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
-    types.GenericTestFileParse(path=""),
-    types.MacroFileParse(path=""),
     types.PartialParsingErrorProcessingFile(file=""),
     types.PartialParsingFile(file_id=""),
     types.PartialParsingError(exc_info={}),
@@ -228,6 +230,9 @@ sample_values = [
     types.JinjaLogWarning(),
     types.JinjaLogInfo(msg=""),
     types.JinjaLogDebug(msg=""),
+    types.UnpinnedRefNewVersionAvailable(
+        ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
+    ),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

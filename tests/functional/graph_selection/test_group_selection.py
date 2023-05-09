@@ -41,6 +41,7 @@ class TestGroupSelection:
             "base_users.sql": base_users_sql,
             "users.sql": users_sql,
             "users_rollup.sql": users_rollup_sql,
+            "versioned_v3.sql": base_users_sql,
             "users_rollup_dependency.sql": users_rollup_dependency_sql,
             "emails.sql": emails_sql,
             "emails_alt.sql": emails_alt_sql,
@@ -112,6 +113,7 @@ class TestGroupSelection:
             "test.users",
             "test.users_rollup",
             "test.users_rollup_dependency",
+            "test.versioned.v3",
         ]
         results = run_dbt(["ls", "--selector", "users_grouped_childrens_parents"])
         assert sorted(results) == expected

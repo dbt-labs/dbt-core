@@ -14,6 +14,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedDocumentationFile,
     UnparsedColumn,
     UnparsedNodeUpdate,
+    UnparsedModelUpdate,
     Docs,
     UnparsedExposure,
     MaturityType,
@@ -23,6 +24,7 @@ from dbt.contracts.graph.unparsed import (
     MetricFilter,
     MetricTime,
     MetricTimePeriod,
+    UnparsedVersion,
 )
 from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
@@ -574,6 +576,202 @@ class TestUnparsedNodeUpdate(ContractTestCase):
         self.assert_fails_validation(dct)
 
 
+class TestUnparsedModelUpdate(ContractTestCase):
+    ContractType = UnparsedModelUpdate
+
+    def test_defaults(self):
+        minimum = self.ContractType(
+            name="foo",
+            yaml_key="models",
+            original_file_path="/some/fake/path",
+            package_name="test",
+        )
+        from_dict = {
+            "name": "foo",
+            "yaml_key": "models",
+            "original_file_path": "/some/fake/path",
+            "package_name": "test",
+        }
+        to_dict = {
+            "name": "foo",
+            "yaml_key": "models",
+            "original_file_path": "/some/fake/path",
+            "package_name": "test",
+            "columns": [],
+            "description": "",
+            "docs": {"show": True},
+            "tests": [],
+            "meta": {},
+            "config": {},
+            "constraints": [],
+            "versions": [],
+        }
+        self.assert_from_dict(minimum, from_dict)
+        self.assert_to_dict(minimum, to_dict)
+
+    def test_contents(self):
+        update = self.ContractType(
+            name="foo",
+            yaml_key="models",
+            original_file_path="/some/fake/path",
+            package_name="test",
+            description="a description",
+            tests=["table_test"],
+            meta={"key": ["value1", "value2"]},
+            columns=[
+                UnparsedColumn(
+                    name="x",
+                    description="x description",
+                    meta={"key2": "value3"},
+                ),
+                UnparsedColumn(
+                    name="y",
+                    description="y description",
+                    tests=["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    meta={},
+                    tags=["a", "b"],
+                ),
+            ],
+            docs=Docs(show=False),
+            versions=[UnparsedVersion(v=2)],
+        )
+        dct = {
+            "name": "foo",
+            "yaml_key": "models",
+            "original_file_path": "/some/fake/path",
+            "package_name": "test",
+            "description": "a description",
+            "tests": ["table_test"],
+            "meta": {"key": ["value1", "value2"]},
+            "constraints": [],
+            "versions": [
+                {
+                    "v": 2,
+                    "description": "",
+                    "columns": [],
+                    "config": {},
+                    "constraints": [],
+                    "docs": {"show": True},
+                }
+            ],
+            "columns": [
+                {
+                    "name": "x",
+                    "description": "x description",
+                    "docs": {"show": True},
+                    "tests": [],
+                    "meta": {"key2": "value3"},
+                    "tags": [],
+                    "constraints": [],
+                },
+                {
+                    "name": "y",
+                    "description": "y description",
+                    "docs": {"show": True},
+                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "meta": {},
+                    "tags": ["a", "b"],
+                    "constraints": [],
+                },
+            ],
+            "docs": {"show": False},
+            "config": {},
+        }
+        self.assert_symmetric(update, dct)
+        pickle.loads(pickle.dumps(update))
+
+    def test_bad_test_type(self):
+        dct = {
+            "name": "foo",
+            "yaml_key": "models",
+            "original_file_path": "/some/fake/path",
+            "package_name": "test",
+            "description": "a description",
+            "tests": ["table_test"],
+            "meta": {"key": ["value1", "value2"]},
+            "columns": [
+                {
+                    "name": "x",
+                    "description": "x description",
+                    "docs": {"show": True},
+                    "tests": [],
+                    "meta": {"key2": "value3"},
+                },
+                {
+                    "name": "y",
+                    "description": "y description",
+                    "docs": {"show": True},
+                    "tests": [100, {"accepted_values": {"values": ["blue", "green"]}}],
+                    "meta": {},
+                    "yaml_key": "models",
+                    "original_file_path": "/some/fake/path",
+                },
+            ],
+            "docs": {"show": True},
+        }
+        self.assert_fails_validation(dct)
+
+        dct = {
+            "name": "foo",
+            "yaml_key": "models",
+            "original_file_path": "/some/fake/path",
+            "package_name": "test",
+            "description": "a description",
+            "tests": ["table_test"],
+            "meta": {"key": ["value1", "value2"]},
+            "columns": [
+                # column missing a name
+                {
+                    "description": "x description",
+                    "docs": {"show": True},
+                    "tests": [],
+                    "meta": {"key2": "value3"},
+                },
+                {
+                    "name": "y",
+                    "description": "y description",
+                    "docs": {"show": True},
+                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "meta": {},
+                    "yaml_key": "models",
+                    "original_file_path": "/some/fake/path",
+                },
+            ],
+            "docs": {"show": True},
+        }
+        self.assert_fails_validation(dct)
+
+        # missing a name
+        dct = {
+            "yaml_key": "models",
+            "original_file_path": "/some/fake/path",
+            "package_name": "test",
+            "description": "a description",
+            "tests": ["table_test"],
+            "meta": {"key": ["value1", "value2"]},
+            "columns": [
+                {
+                    "name": "x",
+                    "description": "x description",
+                    "docs": {"show": True},
+                    "tests": [],
+                    "meta": {"key2": "value3"},
+                },
+                {
+                    "name": "y",
+                    "description": "y description",
+                    "docs": {"show": True},
+                    "tests": ["unique", {"accepted_values": {"values": ["blue", "green"]}}],
+                    "meta": {},
+                    "yaml_key": "models",
+                    "original_file_path": "/some/fake/path",
+                },
+            ],
+            "docs": {"show": True},
+        }
+        self.assert_fails_validation(dct)
+
+
 class TestUnparsedExposure(ContractTestCase):
     ContractType = UnparsedExposure
 
@@ -770,3 +968,39 @@ class TestUnparsedMetric(ContractTestCase):
         tst = self.get_ok_dict()
         tst["tags"] = [123]
         self.assert_fails_validation(tst)
+
+
+class TestUnparsedVersion(ContractTestCase):
+    ContractType = UnparsedVersion
+
+    def get_ok_dict(self):
+        return {
+            "v": 2,
+            "defined_in": "test_defined_in",
+            "description": "A version",
+            "config": {},
+            "constraints": [],
+            "docs": {"show": False},
+            "tests": [],
+            "columns": [],
+        }
+
+    def test_ok(self):
+        version = self.ContractType(
+            v=2,
+            defined_in="test_defined_in",
+            description="A version",
+            config={},
+            constraints=[],
+            docs=Docs(show=False),
+            tests=[],
+            columns=[],
+        )
+        dct = self.get_ok_dict()
+        self.assert_symmetric(version, dct)
+        pickle.loads(pickle.dumps(version))
+
+    def test_bad_version_no_v(self):
+        version = self.get_ok_dict()
+        del version["v"]
+        self.assert_fails_validation(version)

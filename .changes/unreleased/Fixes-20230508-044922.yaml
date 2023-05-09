@@ -1,0 +1,6 @@
+kind: Fixes
+body: enable dbt show for seeds
+time: 2023-05-08T04:49:22.82093-07:00
+custom:
+  Author: aranke
+  Issue: "7273"
