@@ -8,7 +8,7 @@ ipdb
 mypy==0.981
 pip-tools
 pre-commit
-protobuf
+protobuf>=4.0.0
 pytest
 pytest-cov
 pytest-csv
