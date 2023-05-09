@@ -1262,10 +1262,17 @@ def _check_resource_uniqueness(
     config: RuntimeConfig,
 ) -> None:
     alias_resources: Dict[str, ManifestNode] = {}
+    versioned_resources: Dict[str, ManifestNode] = {}
+    unversioned_resources: Dict[str, ManifestNode] = {}
 
     for resource, node in manifest.nodes.items():
         if not node.is_relational:
             continue
+
+        if node.is_versioned:
+            versioned_resources[node.name] = node
+        else:
+            unversioned_resources[node.name] = node
 
         # the full node name is really defined by the adapter's relation
         relation_cls = get_relation_class_by_name(config.credentials.type)
@@ -1279,6 +1286,15 @@ def _check_resource_uniqueness(
             )
 
         alias_resources[full_node_name] = node
+
+    intersection_versioned = set(versioned_resources.keys()).intersection(
+        set(unversioned_resources.keys())
+    )
+    if intersection_versioned:
+        for name in intersection_versioned:
+            versioned_node = versioned_resources[name]
+            unversioned_node = unversioned_resources[name]
+            raise dbt.exceptions.DuplicateResourceNameError(versioned_node, unversioned_node)
 
 
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
