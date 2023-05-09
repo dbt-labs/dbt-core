@@ -309,7 +309,7 @@ class GraphRunnableTask(ConfiguredTask):
             generated_at=datetime.utcnow(),
         )
 
-        if self.args.WRITE_JSON and hasattr(interim_run_result, "write"):
+        if self.args.write_json and hasattr(interim_run_result, "write"):
             interim_run_result.write(self.result_path())
 
     def _cancel_connections(self, pool):
@@ -454,7 +454,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
             )
 
-        if self.args.WRITE_JSON:
+        if self.args.write_json:
             write_manifest(self.manifest, self.config.target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
