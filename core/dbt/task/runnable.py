@@ -73,7 +73,7 @@ class GraphRunnableTask(ConfiguredTask):
         self.num_nodes: int = 0
         self.previous_state: Optional[PreviousState] = None
         self.run_count: int = 0
-        self.started: float = 0
+        self.started_at: float = 0
 
         self.set_previous_state()
 
@@ -305,11 +305,11 @@ class GraphRunnableTask(ConfiguredTask):
 
         interim_run_result = self.get_result(
             results=self.node_results,
-            elapsed_time=time.time() - self.started,
+            elapsed_time=time.time() - self.started_at,
             generated_at=datetime.utcnow(),
         )
 
-        if get_flags().WRITE_JSON and hasattr(interim_run_result, "write"):
+        if self.args.WRITE_JSON and hasattr(interim_run_result, "write"):
             interim_run_result.write(self.result_path())
 
     def _cancel_connections(self, pool):
@@ -403,14 +403,14 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
-        self.started = time.time()
+        self.started_at = time.time()
         try:
             self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
             self.after_run(adapter, res)
         finally:
             adapter.cleanup_connections()
-            elapsed = time.time() - self.started
+            elapsed = time.time() - self.started_at
             self.print_results_line(self.node_results, elapsed)
             result = self.get_result(
                 results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
@@ -454,7 +454,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
             )
 
-        if get_flags().WRITE_JSON:
+        if self.args.WRITE_JSON:
             write_manifest(self.manifest, self.config.target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
