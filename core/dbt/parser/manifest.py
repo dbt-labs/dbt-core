@@ -1294,7 +1294,9 @@ def _check_resource_uniqueness(
         for name in intersection_versioned:
             versioned_node = versioned_resources[name]
             unversioned_node = unversioned_resources[name]
-            raise dbt.exceptions.DuplicateResourceNameError(versioned_node, unversioned_node)
+            raise dbt.exceptions.DuplicateVersionedUnversionedError(
+                versioned_node, unversioned_node
+            )
 
 
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
