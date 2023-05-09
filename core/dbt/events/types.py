@@ -407,6 +407,19 @@ class ConfigTargetPathDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class CollectFreshnessReturnSignature(WarnLevel):
+    def code(self):
+        return "D012"
+
+    def message(self):
+        description = (
+            "The 'collect_freshness' macro signature has changed to return the full "
+            "query result, rather than just a table of values. See the v1.5 migration guide "
+            "for details on how to update your custom macro: https://docs.getdbt.com/guides/migration/versions/upgrading-to-v1.5"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -788,7 +801,15 @@ class InputFileDiffError(DebugLevel):
         return f"Error processing file diff: {self.category}, {self.file_id}"
 
 
-# Skipping I002, I003, I004, I005, I006, I007
+class PublicationArtifactChanged(DebugLevel):
+    def code(self):
+        return "I002"
+
+    def message(self) -> str:
+        return f"The publication artifact for {self.project_name} has been {self.action}."
+
+
+# Skipping I003, I004, I005, I006, I007
 
 
 class InvalidValueForField(WarnLevel):

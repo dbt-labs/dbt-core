@@ -374,6 +374,20 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
+class PublicationConfigNotFound(DbtConfigError):
+    def __init__(self, project=None, file_name=None):
+        self.project = project
+        self.file_name = file_name
+        msg = self.message()
+        super().__init__(msg, project=project)
+
+    def message(self):
+        return (
+            f"A dependency on project {self.project} was specified, "
+            f"but file {self.file_name} was not found."
+        )
+
+
 class SemverError(Exception):
     def __init__(self, msg: str = None):
         self.msg = msg
@@ -1360,7 +1374,7 @@ class TargetNotFoundError(CompilationError):
 
         target_package_string = ""
         if self.target_package is not None:
-            target_package_string = f"in package '{self.target_package}' "
+            target_package_string = f"in package or project '{self.target_package}' "
 
         msg = (
             f"{resource_type_title} '{unique_id}' ({original_file_path}) depends on a "
@@ -1957,6 +1971,23 @@ class AmbiguousAliasError(CompilationError):
             "cannot create two resources with identical database representations. "
             "To fix this,\nchange the configuration of one of these resources:"
             f"\n- {self.node_1.unique_id} ({self.node_1.original_file_path})\n- {self.node_2.unique_id} ({self.node_2.original_file_path})"
+        )
+        return msg
+
+
+class AmbiguousResourceNameRefError(CompilationError):
+    def __init__(self, duped_name, unique_ids, node=None):
+        self.duped_name = duped_name
+        self.unique_ids = unique_ids
+        self.packages = [unique_id.split(".")[1] for unique_id in unique_ids]
+        super().__init__(msg=self.get_message(), node=node)
+
+    def get_message(self) -> str:
+        formatted_unique_ids = "'{0}'".format("', '".join(self.unique_ids))
+        formatted_packages = "'{0}'".format("' or '".join(self.packages))
+        msg = (
+            f"When referencing '{self.duped_name}', dbt found nodes in multiple packages: {formatted_unique_ids}"
+            f"\nTo fix this, use two-argument 'ref', with the package name first: {formatted_packages}"
         )
         return msg
 

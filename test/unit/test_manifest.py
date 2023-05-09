@@ -37,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
 )
 
 from dbt.events.functions import reset_metadata_vars
+from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 
 from dbt.node_types import NodeType
@@ -392,13 +393,14 @@ class ManifestTest(unittest.TestCase):
                 "group_map": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v10.json",
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
                 },
                 "docs": {},
                 "disabled": {},
+                "public_nodes": {},
             },
         )
 
@@ -415,6 +417,7 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
+            public_nodes={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
@@ -483,7 +486,8 @@ class ManifestTest(unittest.TestCase):
         flat_nodes = flat_graph["nodes"]
         flat_sources = flat_graph["sources"]
         self.assertEqual(
-            set(flat_graph), set(["exposures", "groups", "nodes", "sources", "metrics"])
+            set(flat_graph),
+            set(["exposures", "groups", "nodes", "sources", "metrics", "public_nodes"]),
         )
         self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_groups), set(self.groups))
@@ -554,7 +558,7 @@ class ManifestTest(unittest.TestCase):
                 "docs": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v10.json",
                     "dbt_version": dbt.version.__version__,
                     "project_id": "098f6bcd4621d373cade4e832627b4f6",
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
@@ -564,6 +568,7 @@ class ManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "disabled": {},
+                "public_nodes": {},
             },
         )
 
@@ -892,13 +897,14 @@ class MixedManifestTest(unittest.TestCase):
                 "group_map": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v10.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "docs": {},
                 "disabled": {},
+                "public_nodes": {},
             },
         )
 
@@ -971,7 +977,8 @@ class MixedManifestTest(unittest.TestCase):
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph["nodes"]
         self.assertEqual(
-            set(flat_graph), set(["exposures", "groups", "metrics", "nodes", "sources"])
+            set(flat_graph),
+            set(["exposures", "groups", "metrics", "nodes", "sources", "public_nodes"]),
         )
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
@@ -1443,8 +1450,72 @@ def _refable_parameter_sets():
                 version=None,
                 expected=None,
             ),
+            # duplicate node name across package
+            FindNodeSpec(
+                nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+                sources=[],
+                package="project_a",
+                version=None,
+                expected=("project_a", "my_model"),
+            ),
+            # duplicate node name across package: root node preferred to package node
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package=None,
+                version=None,
+                expected=("root", "my_model"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package="root",
+                version=None,
+                expected=("root", "my_model"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package="project_a",
+                version=None,
+                expected=("project_a", "my_model"),
+            ),
+            # duplicate node name across package: resolved by version
+            FindNodeSpec(
+                nodes=[
+                    MockNode("project_a", "my_model", version="1"),
+                    MockNode("project_b", "my_model", version="2"),
+                ],
+                sources=[],
+                package=None,
+                version="1",
+                expected=("project_a", "my_model", "1"),
+            ),
         ]
     )
+    return sets
+
+
+def _ambiguous_ref_parameter_sets():
+    sets = [
+        FindNodeSpec(
+            nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+        FindNodeSpec(
+            nodes=[
+                MockNode("project_a", "my_model", version="2", is_latest_version=True),
+                MockNode("project_b", "my_model", version="1", is_latest_version=True),
+            ],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+    ]
     return sets
 
 
@@ -1464,6 +1535,7 @@ def id_nodes(arg):
 def test_resolve_ref(nodes, sources, package, version, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_ref(
+        source_node=None,
         target_model_name="my_model",
         target_model_package=package,
         target_model_version=version,
@@ -1483,6 +1555,29 @@ def test_resolve_ref(nodes, sources, package, version, expected):
             assert result.version == expected_version
         assert result.name == expected_name
         assert result.package_name == expected_package
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _ambiguous_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_ambiguous_resource_name_across_packages(
+    nodes, sources, package, version, expected
+):
+    manifest = make_manifest(
+        nodes=nodes,
+        sources=sources,
+    )
+    with pytest.raises(AmbiguousResourceNameRefError):
+        manifest.resolve_ref(
+            source_node=None,
+            target_model_name="my_model",
+            target_model_package=None,
+            target_model_version=version,
+            current_project="root",
+            node_package="root",
+        )
 
 
 def _source_parameter_sets():

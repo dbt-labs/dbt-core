@@ -115,6 +115,7 @@ def make_model(
         depends_on=DependsOn(
             nodes=depends_on_nodes,
             macros=depends_on_macros,
+            public_nodes=[],
         ),
         resource_type=NodeType.Model,
         checksum=FileHash.from_contents(""),

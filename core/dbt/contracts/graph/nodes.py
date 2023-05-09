@@ -62,6 +62,12 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
 )
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import Protocol
+else:
+    from typing_extensions import Protocol
 
 
 # =====================================================================
@@ -253,10 +259,15 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 @dataclass
 class DependsOn(MacroDependsOn):
     nodes: List[str] = field(default_factory=list)
+    public_nodes: List[str] = field(default_factory=list)
 
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
+
+    def add_public_node(self, value: str):
+        if value not in self.public_nodes:
+            self.public_nodes.append(value)
 
 
 @dataclass
@@ -506,6 +517,10 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
             and True
         )
 
+    @property
+    def is_public_node(self):
+        return False
+
 
 @dataclass
 class InjectedCTE(dbtClassMixin, Replaceable):
@@ -567,6 +582,10 @@ class CompiledNode(ParsedNode):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
+
+    @property
+    def depends_on_public_nodes(self):
+        return self.depends_on.public_nodes
 
     @property
     def depends_on_macros(self):
@@ -782,6 +801,10 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
 
     @property
     def depends_on_nodes(self):
+        return []
+
+    @property
+    def depends_on_public_nodes(self):
         return []
 
     @property
@@ -1119,6 +1142,10 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         return []
 
     @property
+    def depends_on_public_nodes(self):
+        return []
+
+    @property
     def depends_on(self):
         return DependsOn(macros=[], nodes=[])
 
@@ -1166,6 +1193,10 @@ class Exposure(GraphNode):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
+
+    @property
+    def depends_on_public_nodes(self):
+        return self.depends_on.public_nodes
 
     @property
     def search_name(self):
@@ -1258,6 +1289,10 @@ class Metric(GraphNode):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
+
+    @property
+    def depends_on_public_nodes(self):
+        return self.depends_on.public_nodes
 
     @property
     def search_name(self):
@@ -1366,6 +1401,46 @@ class ParsedMacroPatch(ParsedPatch):
 # ====================================
 # Node unions/categories
 # ====================================
+
+
+class ManifestOrPublicNode(Protocol):
+    name: str
+    package_name: str
+    unique_id: str
+    version: Optional[NodeVersion]
+    latest_version: Optional[NodeVersion]
+    relation_name: str
+    database: Optional[str]
+    schema: Optional[str]
+    identifier: Optional[str]
+
+    @property
+    def is_latest_version(self):
+        pass
+
+    @property
+    def resource_type(self):
+        pass
+
+    @property
+    def access(self):
+        pass
+
+    @property
+    def search_name(self):
+        pass
+
+    @property
+    def is_public_node(self):
+        pass
+
+    @property
+    def is_versioned(self):
+        pass
+
+    @property
+    def alias(self):
+        pass
 
 
 # ManifestNode without SeedNode, which doesn't have the

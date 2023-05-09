@@ -1,3 +1,5 @@
+import json
+import pathlib
 import pytest
 
 from dbt.cli.main import dbtRunner
@@ -174,3 +176,14 @@ class TestCompile:
             populate_cache=False,
         )
         assert len(manifest.nodes) == 4
+
+    def test_graph_summary_output(self, project):
+        """Ensure that the compile command generates a file named graph_summary.json
+        in the target directory, that the file contains valid json, and that the
+        json has the high level structure it should."""
+        dbtRunner().invoke(["compile"])
+        summary_path = pathlib.Path(project.project_root, "target/graph_summary.json")
+        with open(summary_path, "r") as summary_file:
+            summary = json.load(summary_file)
+            assert "_invocation_id" in summary
+            assert "linked" in summary

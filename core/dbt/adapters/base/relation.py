@@ -227,7 +227,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from_node(
         cls: Type[Self],
         config: HasQuoting,
-        node: ManifestNode,
+        node,
         quote_policy: Optional[Dict[str, bool]] = None,
         **kwargs: Any,
     ) -> Self:

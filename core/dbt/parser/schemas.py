@@ -918,7 +918,10 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
         if patch.yaml_key in ["models", "seeds", "snapshots"]:
-            unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None, None)
+            unique_id = self.manifest.ref_lookup.get_unique_id(
+                patch.name, self.project.project_name, None
+            ) or self.manifest.ref_lookup.get_unique_id(patch.name, None, None)
+
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:

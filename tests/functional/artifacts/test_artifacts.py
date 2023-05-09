@@ -446,6 +446,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "disabled",
         "exposures",
         "selectors",
+        "public_nodes",
     }
 
     assert set(manifest.keys()) == manifest_keys
