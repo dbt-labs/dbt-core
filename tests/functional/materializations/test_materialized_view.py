@@ -3,7 +3,7 @@ import yaml
 
 from dbt.tests.util import read_file, write_file
 
-from dbt.tests.adapter.materialized_views.base import Base
+from dbt.tests.adapter.materialized_views.base import Model
 from dbt.tests.adapter.materialized_views.test_basic import BasicTestsBase
 from dbt.tests.adapter.materialized_views.test_on_configuration_change import (
     OnConfigurationChangeApplyTestsBase,
@@ -12,19 +12,44 @@ from dbt.tests.adapter.materialized_views.test_on_configuration_change import (
 )
 
 
-@pytest.fixture(scope="function")
-def update_indexes(project):
-    current_yaml = read_file(project.project_root, "dbt_project.yml")
-    config = yaml.safe_load(current_yaml)
+_BASE_TABLE = """
+{{ config(
+    materialized='table',
+    indexes=[{'columns': ['id'], 'type': 'hash'}]
+) }}
+select
+    1 as id,
+    100 as value
+where 0 = 1
+"""
 
-    config["models"].update({"indexes": [{"columns": Base.base_table_columns, "type": "hash"}]})
 
-    new_yaml = yaml.safe_dump(config)
-    write_file(new_yaml, project.project_root, "dbt_project.yml")
+class PostgresMixin:
 
-    yield
+    base_table = Model(name="base_table", definition=_BASE_TABLE, columns=["id", "value"])
 
-    write_file(current_yaml, project.project_root, "dbt_project.yml")
+    starting_records = [(1, 100)]
+    inserted_records = [(2, 200)]
+
+    @pytest.fixture(scope="function")
+    def configuration_changes_apply(self, project):
+        current_yaml = read_file(project.project_root, "dbt_project.yml")
+        config = yaml.safe_load(current_yaml)
+
+        # change the index from `id` to `value`
+        config["models"].update({"indexes": [{"columns": ["value"], "type": "hash"}]})
+
+        new_yaml = yaml.safe_dump(config)
+        write_file(new_yaml, project.project_root, "dbt_project.yml")
+
+        yield
+
+        write_file(current_yaml, project.project_root, "dbt_project.yml")
+
+    @pytest.fixture(scope="function")
+    def configuration_changes_refresh(self, project):
+        """There are no monitored changes that trigger a full refresh"""
+        pass
 
 
 class TestBasic(BasicTestsBase):
@@ -33,16 +58,7 @@ class TestBasic(BasicTestsBase):
         pass
 
 
-class TestOnConfigurationChangeApply(OnConfigurationChangeApplyTestsBase):
-    @pytest.fixture(scope="function")
-    def configuration_changes_apply(self, project, update_indexes):
-        pass
-
-    @pytest.fixture(scope="function")
-    def configuration_changes_refresh(self, project):
-        """There are no monitored changes that trigger a full refresh"""
-        pass
-
+class TestOnConfigurationChangeApply(PostgresMixin, OnConfigurationChangeApplyTestsBase):
     @pytest.mark.skip(
         "This fails because there are no monitored changes that trigger a full refresh"
     )
@@ -52,23 +68,9 @@ class TestOnConfigurationChangeApply(OnConfigurationChangeApplyTestsBase):
         pass
 
 
-class TestOnConfigurationChangeSkip(OnConfigurationChangeSkipTestsBase):
-    @pytest.fixture(scope="function")
-    def configuration_changes_apply(self, project, update_indexes):
-        pass
-
-    @pytest.fixture(scope="function")
-    def configuration_changes_full_refresh(self, project):
-        """There are no monitored changes that trigger a full refresh"""
-        pass
+class TestOnConfigurationChangeSkip(PostgresMixin, OnConfigurationChangeSkipTestsBase):
+    pass
 
 
-class TestOnConfigurationChangeFail(OnConfigurationChangeFailTestsBase):
-    @pytest.fixture(scope="function")
-    def configuration_changes_apply(self, project, update_indexes):
-        pass
-
-    @pytest.fixture(scope="function")
-    def configuration_changes_full_refresh(self, project):
-        """There are no monitored changes that trigger a full refresh"""
-        pass
+class TestOnConfigurationChangeFail(PostgresMixin, OnConfigurationChangeFailTestsBase):
+    pass
