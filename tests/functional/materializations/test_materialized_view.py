@@ -1,5 +1,9 @@
 import pytest
+import yaml
 
+from dbt.tests.util import read_file, write_file
+
+from dbt.tests.adapter.materialized_views.base import Base
 from dbt.tests.adapter.materialized_views.test_basic import BasicTestsBase
 from dbt.tests.adapter.materialized_views.test_on_configuration_change import (
     OnConfigurationChangeApplyTestsBase,
@@ -8,9 +12,19 @@ from dbt.tests.adapter.materialized_views.test_on_configuration_change import (
 )
 
 
-def update_indexes(project, relation):
-    """TODO: get the model config file and update it to change the index"""
-    pass
+@pytest.fixture(scope="function")
+def update_indexes(project):
+    current_yaml = read_file(project.project_root, "dbt_project.yml")
+    config = yaml.safe_load(current_yaml)
+
+    config["models"].update({"indexes": [{"columns": Base.base_table_columns, "type": "hash"}]})
+
+    new_yaml = yaml.safe_dump(config)
+    write_file(new_yaml, project.project_root, "dbt_project.yml")
+
+    yield
+
+    write_file(current_yaml, project.project_root, "dbt_project.yml")
 
 
 class TestBasic(BasicTestsBase):
@@ -20,10 +34,12 @@ class TestBasic(BasicTestsBase):
 
 
 class TestOnConfigurationChangeApply(OnConfigurationChangeApplyTestsBase):
-    def apply_configuration_change_triggering_apply(self, project):
-        update_indexes(project, self.materialized_view)
+    @pytest.fixture(scope="function")
+    def configuration_changes_apply(self, project, update_indexes):
+        pass
 
-    def apply_configuration_change_triggering_full_refresh(self, project):
+    @pytest.fixture(scope="function")
+    def configuration_changes_refresh(self, project):
         """There are no monitored changes that trigger a full refresh"""
         pass
 
@@ -31,24 +47,28 @@ class TestOnConfigurationChangeApply(OnConfigurationChangeApplyTestsBase):
         "This fails because there are no monitored changes that trigger a full refresh"
     )
     def test_full_refresh_configuration_changes_will_not_attempt_apply_configuration_changes(
-        self, project
+        self, project, configuration_changes_apply, configuration_changes_full_refresh
     ):
         pass
 
 
 class TestOnConfigurationChangeSkip(OnConfigurationChangeSkipTestsBase):
-    def apply_configuration_change_triggering_apply(self, project):
-        update_indexes(project, self.materialized_view)
+    @pytest.fixture(scope="function")
+    def configuration_changes_apply(self, project, update_indexes):
+        pass
 
-    def apply_configuration_change_triggering_full_refresh(self, project):
+    @pytest.fixture(scope="function")
+    def configuration_changes_full_refresh(self, project):
         """There are no monitored changes that trigger a full refresh"""
         pass
 
 
 class TestOnConfigurationChangeFail(OnConfigurationChangeFailTestsBase):
-    def apply_configuration_change_triggering_apply(self, project):
-        update_indexes(project, self.materialized_view)
+    @pytest.fixture(scope="function")
+    def configuration_changes_apply(self, project, update_indexes):
+        pass
 
-    def apply_configuration_change_triggering_full_refresh(self, project):
+    @pytest.fixture(scope="function")
+    def configuration_changes_full_refresh(self, project):
         """There are no monitored changes that trigger a full refresh"""
         pass
