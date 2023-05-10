@@ -11,6 +11,7 @@ from dbt.contracts.results import (
     RunResultsArtifact,
     FreshnessExecutionResultArtifact,
 )
+from dbt.contracts.publication import PublicationArtifact
 from dbt.contracts.util import VersionedSchema
 from dbt.clients.system import write_file
 
@@ -59,6 +60,7 @@ def collect_artifact_schema(args: Arguments):
         RunResultsArtifact,
         CatalogArtifact,
         WritableManifest,
+        PublicationArtifact,
     ]
     artifact_infos = []
     for artifact_cls in artifacts:
