@@ -2201,7 +2201,8 @@ Since these resources have the same name, dbt will be unable to find the correct
 when looking for ref({self.versioned_node.name}).
 
 To fix this, change the name of the unversioned resource:
-- {self.unversioned_node.unique_id} ({self.unversioned_node.original_file_path})
+{self.unversioned_node.unique_id} ({self.unversioned_node.original_file_path})
+or add the unversioned model to the versions in {self.versioned_node.patch_path}
     """.strip()
         return msg
 
