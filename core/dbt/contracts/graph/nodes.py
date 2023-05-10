@@ -608,6 +608,12 @@ class ModelNode(CompiledNode):
         else:
             return f"{self.name}.v{self.version}"
 
+    @property
+    def materialization_enforces_constraints(self):
+        if self.config.materialized in ["table", "incremental"]:
+            return True
+        return False
+
     def build_contract_checksum(self):
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.
@@ -621,7 +627,7 @@ class ModelNode(CompiledNode):
                 contract_state += f"|{column.name}"
                 contract_state += str(column.data_type)
                 contract_state += str(column.constraints)
-            if self.config.materialized in ["table", "incremental"]:
+            if self.materialization_enforces_constraints:
                 contract_state += self.config.materialized
                 contract_state += str(self.constraints)
             data = contract_state.encode("utf-8")
@@ -663,6 +669,7 @@ class ModelNode(CompiledNode):
         from dbt.adapters.base import ConstraintSupport
 
         constraint_support = get_adapter_constraint_support(adapter_type)
+        column_constraints_exist = False
 
         # Next, compare each column from the previous contract (old.columns)
         for old_key, old_value in sorted(old.columns.items()):
@@ -679,13 +686,17 @@ class ModelNode(CompiledNode):
                     )
                 )
 
+            # track if there are any column level constraints for the materialization check late
+            if old_value.constraints:
+                column_constraints_exist = True
+
             # Have enforced columns level constraints changed?
             # Constraints are only enforced for table and incremental materializations.
             # We only really care if the old node was one of those materializations for breaking changes
             if (
                 old_key in self.columns.keys()
                 and old_value.constraints != self.columns[old_key].constraints
-                and old.config.materialized in ["table", "incremental"]
+                and old.materialization_enforces_constraints
             ):
 
                 for old_constraint in old_value.constraints:
@@ -698,10 +709,7 @@ class ModelNode(CompiledNode):
                         )
 
         # Now compare the model level constraints
-        if old.constraints != self.constraints and old.config.materialized in [
-            "table",
-            "incremental",
-        ]:
+        if old.constraints != self.constraints and old.materialization_enforces_constraints:
             for old_constraint in old.constraints:
                 if (
                     old_constraint not in self.constraints
@@ -711,10 +719,11 @@ class ModelNode(CompiledNode):
                         (str(old_constraint.type), old_constraint.columns)
                     )
 
-        # Check for materialization changes.
+        # Check for relevant materialization changes.
         if (
-            old.config.materialized in ["table", "incremental"]
-            and old.config.materialized != self.config.materialized
+            old.materialization_enforces_constraints
+            and not self.materialization_enforces_constraints
+            and (old.constraints or column_constraints_exist)
         ):
             materialization_changed = [old.config.materialized, self.config.materialized]
 

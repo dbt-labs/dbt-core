@@ -419,18 +419,11 @@ class TestChangedMaterializationConstraint(BaseModifiedState):
         with pytest.raises(ContractBreakingChangeError):
             run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
-        # This should raise because materialization changed from table to incremental
+        # This should not raise because materialization changed from table to incremental, both enforce constraints
         write_file(table_model_now_incremental_sql, "models", "table_model.sql")
         # we don't have a way to know this failed unless we have a previous state to refer to, so the run succeeds
         results = run_dbt(["run"])
         assert len(results) == 2
-        manifest = get_manifest(project.project_root)
-        model = manifest.nodes[model_unique_id]
-        second_contract_checksum = model.contract.checksum
-        # double check different contract_checksums
-        assert first_contract_checksum != second_contract_checksum
-        with pytest.raises(ContractBreakingChangeError):
-            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
         # This should pass because materialization changed from view to table which is the same as just adding new constraint, not breaking
         write_file(view_model_now_table_sql, "models", "view_model.sql")
