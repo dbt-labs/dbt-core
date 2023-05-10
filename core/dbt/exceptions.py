@@ -2145,6 +2145,26 @@ To fix this, change the name of one of these resources:
         return msg
 
 
+class DuplicateVersionedUnversionedError(ParsingError):
+    def __init__(self, versioned_node, unversioned_node):
+        self.versioned_node = versioned_node
+        self.unversioned_node = unversioned_node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"""
+dbt found versioned and unversioned models with the name "{self.versioned_node.name}".
+
+Since these resources have the same name, dbt will be unable to find the correct resource
+when looking for ref('{self.versioned_node.name}').
+
+To fix this, change the name of the unversioned resource
+{self.unversioned_node.unique_id} ({self.unversioned_node.original_file_path})
+or add the unversioned model to the versions in {self.versioned_node.patch_path}
+    """.strip()
+        return msg
+
+
 class PropertyYMLError(CompilationError):
     def __init__(self, path: str, issue: str):
         self.path = path
