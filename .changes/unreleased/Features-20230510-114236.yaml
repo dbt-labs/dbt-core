@@ -1,0 +1,6 @@
+kind: Features
+body: Adds reuse_connections to BaseConnectionManager and PostgresCredentials
+time: 2023-05-10T11:42:36.914466-04:00
+custom:
+  Author: ckdake
+  Issue: "7520"
