@@ -652,7 +652,7 @@ class ModelNode(CompiledNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Tuple[str, str, str]] = []
-        enforced_column_constraint_removed: List[List[str]] = []  # column, constraint_type
+        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
         enforced_model_constraint_removed: List[
             Tuple[str, List[str]]
         ] = []  # constraint_type, columns
@@ -703,7 +703,7 @@ class ModelNode(CompiledNode):
                         and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
                     ):
                         enforced_column_constraint_removed.append(
-                            [old_key, str(old_constraint.type)]
+                            (old_key, str(old_constraint.type))
                         )
 
         # Now compare the model level constraints
