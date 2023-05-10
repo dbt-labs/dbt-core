@@ -180,6 +180,49 @@ class TestPostgresAdapter(unittest.TestCase):
         )
 
     @mock.patch("dbt.adapters.postgres.connections.psycopg2")
+    def test_default_reuse_connections_false(self, psycopg2):
+        assert not self.config.credentials.reuse_connections
+        connection = self.adapter.acquire_connection("dummy")
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname="postgres",
+            user="root",
+            host="thishostshouldnotexist",
+            password="password",
+            port=5432,
+            connect_timeout=10,
+            application_name="dbt",
+        )
+
+        self.adapter.release_connection()
+        connection.handle
+        psycopg2.close.assert_called_once()
+
+    @mock.patch("dbt.adapters.postgres.connections.psycopg2")
+    def test_reuse_connections_true(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(reuse_connections=True)
+        assert self.config.credentials.reuse_connections
+        connection = self.adapter.acquire_connection("dummy")
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname="postgres",
+            user="root",
+            host="thishostshouldnotexist",
+            password="password",
+            port=5432,
+            connect_timeout=10,
+            application_name="dbt",
+        )
+
+        self.adapter.release_connection()
+        connection.handle
+        psycopg2.close.assert_not_called()
+
+    @mock.patch("dbt.adapters.postgres.connections.psycopg2")
     def test_default_application_name(self, psycopg2):
         connection = self.adapter.acquire_connection("dummy")
 

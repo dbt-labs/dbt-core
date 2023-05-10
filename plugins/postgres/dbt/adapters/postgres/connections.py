@@ -33,6 +33,7 @@ class PostgresCredentials(Credentials):
     sslrootcert: Optional[str] = None
     application_name: Optional[str] = "dbt"
     retries: int = 1
+    reuse_connections: Optional[bool] = False
 
     _ALIASES = {"dbname": "database", "pass": "password"}
 
