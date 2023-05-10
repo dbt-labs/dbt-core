@@ -44,8 +44,15 @@
 
 {% macro postgres__get_materialized_view_configuration_changes(existing_relation, new_config) %}
     {% set existing_indexes = run_query(get_show_indexes_sql(existing_relation)) %}
-    {% set index_updates = relation.get_index_updates(existing_indexes, new_config) %}
-    {% do return({"indexes": index_updates}) %}
+    {% set index_updates = existing_relation.get_index_updates(existing_indexes, new_config) %}
+
+    {% set _configuration_changes = {} %}
+
+    {% if index_updates %}
+        {% set _dummy = _configuration_changes.update({"indexes": index_updates}) %}
+    {% endif %}
+
+    {% do return(_configuration_changes) %}
 {% endmacro %}
 
 

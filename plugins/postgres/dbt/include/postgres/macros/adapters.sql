@@ -214,6 +214,6 @@
 {% macro postgres__get_show_indexes_sql(relation) %}
     select indexname, indexdef
     from pg_indexes
-    where schemaname = {{ relation.schema }}
-      and tablename = {{ relation.identifier }}
+    where schemaname = '{{ relation.schema }}'
+      and tablename = '{{ relation.identifier }}'
 {% endmacro %}
