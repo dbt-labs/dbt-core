@@ -197,7 +197,7 @@ class SQLAdapter(BaseAdapter):
             )
         return relations
 
-    def quote(self, identifier):
+    def quote(self, identifier: str) -> str:
         return '"{}"'.format(identifier)
 
     def list_schemas(self, database: str) -> List[str]:
