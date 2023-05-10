@@ -609,10 +609,8 @@ class ModelNode(CompiledNode):
             return f"{self.name}.v{self.version}"
 
     @property
-    def materialization_enforces_constraints(self):
-        if self.config.materialized in ["table", "incremental"]:
-            return True
-        return False
+    def materialization_enforces_constraints(self) -> bool:
+        return self.config.materialized in ["table", "incremental"]
 
     def build_contract_checksum(self):
         # We don't need to construct the checksum if the model does not

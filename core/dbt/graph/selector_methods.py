@@ -591,24 +591,22 @@ class StateSelectorMethod(SelectorMethod):
         manifest: WritableManifest = self.previous_state.manifest
 
         for node, real_node in self.all_nodes(included_nodes):
-            keyword_args = {
-                "old": None,
-                "new": real_node,
-            }
+            previous_node: Optional[SelectorTarget] = None
 
+            if node in manifest.nodes:
+                previous_node = manifest.nodes[node]
+            elif node in manifest.sources:
+                previous_node = manifest.sources[node]
+            elif node in manifest.exposures:
+                previous_node = manifest.exposures[node]
+            elif node in manifest.metrics:
+                previous_node = manifest.metrics[node]
+
+            keyword_args = {}
             if checker.__name__ in ["same_contract", "check_modified_content"]:
                 keyword_args["adapter_type"] = adapter_type  # type: ignore
 
-            if node in manifest.nodes:
-                keyword_args["old"] = manifest.nodes[node]
-            elif node in manifest.sources:
-                keyword_args["old"] = manifest.sources[node]
-            elif node in manifest.exposures:
-                keyword_args["old"] = manifest.exposures[node]
-            elif node in manifest.metrics:
-                keyword_args["old"] = manifest.metrics[node]
-
-            if checker(**keyword_args):  # type: ignore
+            if checker(previous_node, real_node, **keyword_args):  # type: ignore
                 yield node
 
 
