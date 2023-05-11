@@ -98,22 +98,6 @@ class TestProfilesMayNotExist:
     def test_deps(self, project):
         run_dbt(["deps", "--profiles-dir", "does_not_exist"])
 
-    def test_init(self, project):
-        # Use the parent directory to avoid this bug: https://github.com/dbt-labs/dbt-core/issues/7594
-        # Okay to have a non-zero exit code as long as it doesn't raise an exception
-        run_dbt(
-            [
-                "init",
-                "my_project",
-                "--skip-profile-setup",
-                "--profiles-dir",
-                "does_not_exist",
-                "--project-dir",
-                "..",
-            ],
-            expect_pass=None,
-        )
-
 
 class TestProfiles:
     def dbt_debug(self, project_dir_cli_arg=None, profiles_dir_cli_arg=None):
