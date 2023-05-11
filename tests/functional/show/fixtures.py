@@ -10,6 +10,14 @@ select
 from {{ ref('sample_model') }}
 """
 
+models__sql_header = """
+{% call set_sql_header(config) %}
+set session time zone 'Asia/Kolkata';
+{%- endcall %}
+select current_setting('timezone') as timezone
+"""
+
+
 schema_yml = """
 models:
   - name: sample_model

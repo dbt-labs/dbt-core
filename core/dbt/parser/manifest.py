@@ -1157,7 +1157,6 @@ def _check_resource_uniqueness(
             )
 
 
-
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
     disabled_fqns: PathSet = frozenset(
