@@ -10,15 +10,14 @@
     -- parse out all changes that can be applied via alter
     {%- set indexes = configuration_changes.pop("indexes", []) -%}
 
-    -- if there are still changes left, a full refresh is needed
-    {%- if configuration_changes != [] -%}
-        {{- return(get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation)) -}}
+    -- if there are no remaining changes, then all changes can be implemented via alter
+    {%- if configuration_changes == [] -%}
 
-    -- otherwise, build the sql statements to apply via alter
-    {%- else -%}
-
-        -- there is only one change that can be applied via alter, so just return it
         {{- return(postgres__update_indexes_on_materialized_view(relation, indexes)) -}}
+
+    -- otherwise, a full refresh is needed
+    {%- else -%}
+        {{- return(get_replace_materialized_view_as_sql(relation, sql, existing_relation, backup_relation, intermediate_relation)) -}}
 
     {%- endif -%}
 
