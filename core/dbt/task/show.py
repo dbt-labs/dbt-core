@@ -19,6 +19,12 @@ class ShowRunner(CompileRunner):
 
     def execute(self, compiled_node, manifest):
         start_time = time.time()
+
+        if "sql_header" in compiled_node.unrendered_config:
+            compiled_node.compiled_code = (
+                compiled_node.unrendered_config["sql_header"] + compiled_node.compiled_code
+            )
+
         adapter_response, execute_result = self.adapter.execute(
             compiled_node.compiled_code, fetch=True
         )
