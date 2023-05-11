@@ -3,40 +3,54 @@
     {% set existing_relation = load_cached_relation(this) %}
     {% set target_relation = this.incorporate(type=this.MaterializedView) %}
     {% set intermediate_relation = make_intermediate_relation(target_relation) %}
-
-    -- the intermediate_relation should not already exist in the database; get_relation
-    -- will return None in that case. Otherwise, we get a relation that we can drop
-    -- later, before we try to use this name for the current operation
-    {% set preexisting_intermediate_relation = load_cached_relation(intermediate_relation) %}
-    /*
-        This relation (probably) doesn't exist yet. If it does exist, it's a leftover from
-        a previous run, and we're going to try to drop it immediately. At the end of this
-        materialization, we're going to rename the "existing_relation" to this identifier,
-        and then we're going to drop it. In order to make sure we run the correct one of:
-          - drop view ...
-          - drop table ...
-        We need to set the type of this relation to be the type of the existing_relation, if it exists,
-        or else "view" as a sane default if it does not. Note that if the existing_relation does not
-        exist, then there is nothing to move out of the way and subsequently drop. In that case,
-        this relation will be effectively unused.
-    */
     {% set backup_relation_type = target_relation.MaterializedView if existing_relation is none else existing_relation.type %}
     {% set backup_relation = make_backup_relation(target_relation, backup_relation_type) %}
 
-    -- as above, the backup_relation should not already exist
-    {% set preexisting_backup_relation = load_cached_relation(backup_relation) %}
+    {{ _setup(backup_relation, intermediate_relation, pre_hooks) }}
 
-    -- grab current tables grants config for comparison later on
-    {% set grant_config = config.get('grants') %}
+        {% set build_sql = _get_build_sql(existing_relation, target_relation, backup_relation, intermediate_relation) %}
+
+        {% if build_sql == '' %}
+            {{ _execute_no_op(target_relation) }}
+        {% else %}
+            {{ _execute_build_sql(build_sql, existing_relation, target_relation, grant_config, post_hooks) }}
+        {% endif %}
+
+    {{ _teardown(backup_relation, intermediate_relation, post_hooks) }}
+
+    {{ return({'relations': [target_relation]}) }}
+
+{% endmaterialization %}
+
+
+{% macro _setup(backup_relation, intermediate_relation, pre_hooks) %}
+
+    -- backup_relation and intermediate_relation should not already exist in the database
+    -- it's possible these exist because of a previous run that exited unexpectedly
+    {% set preexisting_backup_relation = load_cached_relation(backup_relation) %}
+    {% set preexisting_intermediate_relation = load_cached_relation(intermediate_relation) %}
+
+    -- drop the temp relations if they exist already in the database
+    {{ drop_relation_if_exists(preexisting_backup_relation) }}
+    {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
 
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
-    -- drop the temp relations if they exist already in the database
-    {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
-    {{ drop_relation_if_exists(preexisting_backup_relation) }}
+{% endmacro %}
 
-    -- `BEGIN` happens here:
-    {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
+{% macro _teardown(backup_relation, intermediate_relation, post_hooks) %}
+
+    -- drop the temp relations if they exist to leave the database clean for the next run
+    {{ drop_relation_if_exists(backup_relation) }}
+    {{ drop_relation_if_exists(intermediate_relation) }}
+
+    {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+{% endmacro %}
+
+
+{% macro _get_build_sql(existing_relation, target_relation, backup_relation, intermediate_relation) %}
 
     -- determine the scenario we're in: create, full_refresh, alter, refresh data
     {% if existing_relation is none %}
@@ -47,11 +61,7 @@
 
         -- get config options
         {% set on_configuration_change = config.get('on_configuration_change') %}
-        {% if existing_relation %}
-            {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
-        {% else %}
-            {% set configuration_change = [] %}
-        {% endif %}
+        {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
 
         {% if configuration_changes == {} %}
             {% set build_sql = refresh_materialized_view(target_relation) %}
@@ -65,25 +75,38 @@
             {{ exceptions.raise_compiler_error("Configuration changes were identified and `on_configuration_change` was set to `fail` for `" ~ target_relation ~ "`") }}
 
         {% else %}
+            -- this only happens if the user provides a value other than `apply`, 'skip', 'fail'
             {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
 
         {% endif %}
 
     {% endif %}
 
-    -- build model
-    {% if build_sql != '' %}
-        {% call statement(name="main") %}
-            {{ build_sql }}
-        {% endcall %}
-    {% else %}
-        {% do store_raw_result(
-            name="main",
-            message="skip " ~ target_relation,
-            code="skip",
-            rows_affected="-1"
-        ) %}
-    {% endif %}
+    {% do return(build_sql) %}
+
+{% endmacro %}
+
+
+{% macro _execute_no_op(target_relation) %}
+    {% do store_raw_result(
+        name="main",
+        message="skip " ~ target_relation,
+        code="skip",
+        rows_affected="-1"
+    ) %}
+{% endmacro %}
+
+
+{% macro _execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) %}
+
+    -- `BEGIN` happens here:
+    {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
+    {% set grant_config = config.get('grants') %}
+
+    {% call statement(name="main") %}
+        {{ build_sql }}
+    {% endcall %}
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
@@ -92,15 +115,6 @@
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-    {% if build_sql != '' %}
-        {{ adapter.commit() }}
-    {% endif %}
+    {{ adapter.commit() }}
 
-    {{ drop_relation_if_exists(backup_relation) }}
-    {{ drop_relation_if_exists(intermediate_relation) }}
-
-    {{ run_hooks(post_hooks, inside_transaction=False) }}
-
-    {{ return({'relations': [target_relation]}) }}
-
-{% endmaterialization %}
+{% endmacro %}
