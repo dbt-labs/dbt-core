@@ -2,14 +2,12 @@ import io
 import threading
 import time
 
-from dbt.contracts.graph.nodes import SeedNode
 from dbt.contracts.results import RunResult, RunStatus
 from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
 from dbt.events.types import ShowNode, Note
 from dbt.exceptions import DbtRuntimeError
 from dbt.task.compile import CompileTask, CompileRunner
-from dbt.task.seed import SeedRunner
 
 
 class ShowRunner(CompileRunner):
@@ -19,17 +17,8 @@ class ShowRunner(CompileRunner):
 
     def execute(self, compiled_node, manifest):
         start_time = time.time()
-
-        # Allow passing in -1 (or any negative number) to get all rows
-        limit = None if self.config.args.limit < 0 else self.config.args.limit
-
-        if "sql_header" in compiled_node.unrendered_config:
-            compiled_node.compiled_code = (
-                compiled_node.unrendered_config["sql_header"] + compiled_node.compiled_code
-            )
-
         adapter_response, execute_result = self.adapter.execute(
-            compiled_node.compiled_code, fetch=True, limit=limit
+            compiled_node.compiled_code, fetch=True
         )
         end_time = time.time()
 
@@ -52,11 +41,8 @@ class ShowTask(CompileTask):
             raise DbtRuntimeError("Either --select or --inline must be passed to show")
         super()._runtime_initialize()
 
-    def get_runner_type(self, node):
-        if isinstance(node, SeedNode):
-            return SeedRunner
-        else:
-            return ShowRunner
+    def get_runner_type(self, _):
+        return ShowRunner
 
     def task_end_messages(self, results):
         is_inline = bool(getattr(self.args, "inline", None))
@@ -75,7 +61,12 @@ class ShowTask(CompileTask):
                     )
 
         for result in matched_results:
+            # Allow passing in -1 (or any negative number) to get all rows
             table = result.agate_table
+
+            if self.args.limit >= 0:
+                table = table.limit(self.args.limit)
+                result.agate_table = table
 
             # Hack to get Agate table output as string
             output = io.StringIO()
