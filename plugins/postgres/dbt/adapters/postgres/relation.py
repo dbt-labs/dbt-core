@@ -9,7 +9,7 @@ from dbt.exceptions import DbtRuntimeError
 
 
 Column = str
-IndexDef = List[Column]
+IndexDef = Dict[str, Union[List[Column], str, bool]]
 IndexName = str
 
 
@@ -36,7 +36,7 @@ class PostgresRelation(BaseRelation):
 
     def get_index_updates(
         self, indexes: agate.Table, config: NodeConfig
-    ) -> List[Optional[Dict[str, Union[str, IndexDef]]]]:
+    ) -> List[Optional[Dict[str, Union[str, IndexName, IndexDef]]]]:
         """
         Get the indexes that are changing as a result of the new run. There are four scenarios:
 
@@ -46,38 +46,33 @@ class PostgresRelation(BaseRelation):
         4. Indexes are not equal > return both
 
         Returns: a dictionary of indexes in the form:
-        {
-            "<index_name>": {
-                "old": ["<column_1_name>", "<column_2_name>", ...]
-                "new": ["<column_1_name>", "<column_3_name>", ...]
-        }  # scenario 4
+        [
+            {"action": "create", "context": {"columns": ["column_1", "column_3"], "type": "hash", "unique": True}},
+        ]  # scenario 2
         OR
-        {
-            "<index_name>": {
-                "old": None
-                "new": ["<column_1_name>", "<column_3_name>", ...]
-        }  # scenario 2
+        [
+            {"action": "drop", "context": "index_abc"},
+        ]  # scenario 3
         OR
-        {
-            "<index_name>": {
-                "old": ["<column_1_name>", "<column_2_name>", ...]
-                "new": None
-        }  # scenario 3
+        [
+            {"action": "drop", "context": "index_abc"},
+            {"action": "create", "context": {"columns": ["column_1", "column_2"], "type": "hash", "unique": True}},
+        ]  # scenario 4
         """
         existing_indexes = {
             index.indexname: self.get_index_config_from_create_statement(index.indexdef)
             for index in indexes
         }
-        default_index = {
-            "columns": [],
-            "type": self.index_default_type,
-            "unique": self.index_default_unique,
-        }
+
         new_indexes = []
         for index in config.get("indexes", []):
-            index_stub = default_index.copy()
-            index_stub.update(index)
-            new_indexes.append(index_stub)
+            new_index = {
+                "columns": index.pop("columns").sort(key=lambda x: x.upper()),
+                "type": index.pop("type", self.index_default_type),
+                "unique": index.pop("unique", self.index_default_unique),
+            }
+            new_index.update(index)
+            new_indexes.append(new_index)
 
         updates = [
             {"action": "drop", "context": index_name}
@@ -93,9 +88,7 @@ class PostgresRelation(BaseRelation):
         )
         return updates
 
-    def get_index_config_from_create_statement(
-        self, create_statement: str
-    ) -> Dict[str, Union[list, str, bool]]:
+    def get_index_config_from_create_statement(self, create_statement: str) -> IndexDef:
         """
         Converts the create statement found in `pg_indexes` into the corresponding config provided by the user.
 
@@ -114,7 +107,11 @@ class PostgresRelation(BaseRelation):
         columns = [column.strip() for column in columns.split(",")]
         unique = keywords[1] == "unique"
         if "using" in keywords:
-            type = keywords[keywords.index("using") + 1]
+            index_type = keywords[keywords.index("using") + 1]
         else:
-            type = self.index_default_type
-        return {"column": columns, "type": type, "unique": unique}
+            index_type = self.index_default_type
+        return {
+            "column": sorted(columns, key=lambda x: x.upper()),
+            "type": index_type,
+            "unique": unique,
+        }
