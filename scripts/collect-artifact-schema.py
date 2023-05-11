@@ -59,8 +59,11 @@ def collect_artifact_schema(args: Arguments):
         FreshnessExecutionResultArtifact,
         RunResultsArtifact,
         CatalogArtifact,
-        WritableManifest,
         PublicationArtifact,
+        # WritableManifest introduces new definitions in hologram which are likely
+        # getting persisted across invocations of json_schema and making their
+        # way to other written artifacts - so write it last as a short-term fix.
+        WritableManifest,
     ]
     artifact_infos = []
     for artifact_cls in artifacts:
