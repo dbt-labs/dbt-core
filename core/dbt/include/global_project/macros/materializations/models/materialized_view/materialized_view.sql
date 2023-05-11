@@ -1,7 +1,7 @@
 {% materialization materialized_view, default %}
     {% set full_refresh_mode = should_full_refresh() %}
     {% set existing_relation = load_cached_relation(this) %}
-    {% set target_relation = this.incorporate(type=this.View) %}
+    {% set target_relation = this.incorporate(type=this.MaterializedView) %}
     {% set intermediate_relation = make_intermediate_relation(target_relation) %}
 
     -- the intermediate_relation should not already exist in the database; get_relation
@@ -20,7 +20,7 @@
         exist, then there is nothing to move out of the way and subsequently drop. In that case,
         this relation will be effectively unused.
     */
-    {% set backup_relation_type = target_relation.View if existing_relation is none else existing_relation.type %}
+    {% set backup_relation_type = target_relation.MaterializedView if existing_relation is none else existing_relation.type %}
     {% set backup_relation = make_backup_relation(target_relation, backup_relation_type) %}
 
     -- as above, the backup_relation should not already exist
@@ -41,7 +41,7 @@
     -- determine the scenario we're in: create, full_refresh, alter, refresh data
     {% if existing_relation is none %}
         {% set build_sql = get_create_materialized_view_as_sql(target_relation, sql) %}
-    {% elif full_refresh_mode or not existing_relation.is_view %}
+    {% elif full_refresh_mode or not existing_relation.is_materialized_view %}
         {% set build_sql = get_replace_materialized_view_as_sql(target_relation, sql, existing_relation, backup_relation, intermediate_relation) %}
     {% else %}
 
