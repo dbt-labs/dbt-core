@@ -1,7 +1,7 @@
 import pytest
 import yaml
 
-from dbt.tests.util import read_file, write_file
+from dbt.tests.util import read_file, write_file, relation_from_name
 
 from dbt.tests.adapter.materialized_views.base import Model
 from dbt.tests.adapter.materialized_views.test_basic import BasicTestsBase
@@ -57,6 +57,14 @@ class TestBasic(BasicTestsBase):
 
 
 class TestOnConfigurationChangeApply(PostgresMixin, OnConfigurationChangeApplyTestsBase):
+    def test_model_applies_changes_with_configuration_changes(
+        self, project, configuration_changes_apply
+    ):
+        # check that indexes are applied in particular
+        _, logs = super().test_model_applies_changes_with_configuration_changes(self, project)
+        message = f"Applying UPDATE INDEXES to: {relation_from_name(project.adapter, self.base_materialized_view.name)}"
+        self.assert_message_in_logs(logs, message)
+
     @pytest.mark.skip(
         "This fails because there are no monitored changes that trigger a full refresh"
     )
