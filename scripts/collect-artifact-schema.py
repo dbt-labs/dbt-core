@@ -38,6 +38,7 @@ class ArtifactInfo:
 
 @dataclass
 class Arguments:
+    artifact: str
     path: Path
 
     @classmethod
@@ -49,8 +50,14 @@ class Arguments:
             help="The dir to write artifact schema",
         )
 
+        parser.add_argument(
+            "--artifact",
+            type=str,
+            help="The name of the artifact to update - one of: manifest, publication, sources, run-results, catalog",
+        )
+
         parsed = parser.parse_args()
-        return cls(path=parsed.path)
+        return cls(artifact=parsed.artifact, path=parsed.path)
 
 
 def collect_artifact_schema(args: Arguments):
@@ -60,8 +67,11 @@ def collect_artifact_schema(args: Arguments):
         CatalogArtifact,
         WritableManifest,
     ]
+    filtered_artifacts = filter(
+        lambda a: a.dbt_schema_version.name == args.artifact or args.artifact is None, artifacts
+    )
     artifact_infos = []
-    for artifact_cls in artifacts:
+    for artifact_cls in filtered_artifacts:
         artifact_infos.append(ArtifactInfo.from_artifact_cls(artifact_cls))
 
     if args and args.path is not None:
