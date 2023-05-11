@@ -439,7 +439,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     def build_contract_checksum(self):
         pass
 
-    def same_contract(self, old) -> bool:
+    def same_contract(self, old, adapter_type=None) -> bool:
         # This would only apply to seeds
         return True
 
@@ -500,13 +500,13 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
                     )
                 )
 
-    def same_contents(self, old) -> bool:
+    def same_contents(self, old, adapter_type) -> bool:
         if old is None:
             return False
 
         # Need to ensure that same_contract is called because it
         # could throw an error
-        same_contract = self.same_contract(old)
+        same_contract = self.same_contract(old, adapter_type)
         return (
             self.same_body(old)
             and self.same_config(old)
@@ -591,76 +591,6 @@ class CompiledNode(ParsedNode):
     def depends_on_macros(self):
         return self.depends_on.macros
 
-    def build_contract_checksum(self):
-        # We don't need to construct the checksum if the model does not
-        # have contract enforced, because it won't be used.
-        # This needs to be executed after contract config is set
-        if self.contract.enforced is True:
-            contract_state = ""
-            # We need to sort the columns so that order doesn't matter
-            # columns is a str: ColumnInfo dictionary
-            sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
-            for column in sorted_columns:
-                contract_state += f"|{column.name}"
-                contract_state += str(column.data_type)
-            data = contract_state.encode("utf-8")
-            self.contract.checksum = hashlib.new("sha256", data).hexdigest()
-
-    def same_contract(self, old) -> bool:
-        # If the contract wasn't previously enforced:
-        if old.contract.enforced is False and self.contract.enforced is False:
-            # No change -- same_contract: True
-            return True
-        if old.contract.enforced is False and self.contract.enforced is True:
-            # Now it's enforced. This is a change, but not a breaking change -- same_contract: False
-            return False
-
-        # Otherwise: The contract was previously enforced, and we need to check for changes.
-        # Happy path: The contract is still being enforced, and the checksums are identical.
-        if self.contract.enforced is True and self.contract.checksum == old.contract.checksum:
-            # No change -- same_contract: True
-            return True
-
-        # Otherwise: There has been a change.
-        # We need to determine if it is a **breaking** change.
-        # These are the categories of breaking changes:
-        contract_enforced_disabled: bool = False
-        columns_removed: List[str] = []
-        column_type_changes: List[Tuple[str, str, str]] = []
-
-        if old.contract.enforced is True and self.contract.enforced is False:
-            # Breaking change: the contract was previously enforced, and it no longer is
-            contract_enforced_disabled = True
-
-        # Next, compare each column from the previous contract (old.columns)
-        for key, value in sorted(old.columns.items()):
-            # Has this column been removed?
-            if key not in self.columns.keys():
-                columns_removed.append(value.name)
-            # Has this column's data type changed?
-            elif value.data_type != self.columns[key].data_type:
-                column_type_changes.append(
-                    (str(value.name), str(value.data_type), str(self.columns[key].data_type))
-                )
-
-        # If a column has been added, it will be missing in the old.columns, and present in self.columns
-        # That's a change (caught by the different checksums), but not a breaking change
-
-        # Did we find any changes that we consider breaking? If so, that's an error
-        if contract_enforced_disabled or columns_removed or column_type_changes:
-            raise (
-                ContractBreakingChangeError(
-                    contract_enforced_disabled=contract_enforced_disabled,
-                    columns_removed=columns_removed,
-                    column_type_changes=column_type_changes,
-                    node=self,
-                )
-            )
-
-        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
-        else:
-            return False
-
 
 # ====================================
 # CompiledNode subclasses
@@ -696,6 +626,151 @@ class ModelNode(CompiledNode):
             return self.name
         else:
             return f"{self.name}.v{self.version}"
+
+    @property
+    def materialization_enforces_constraints(self) -> bool:
+        return self.config.materialized in ["table", "incremental"]
+
+    def build_contract_checksum(self):
+        # We don't need to construct the checksum if the model does not
+        # have contract enforced, because it won't be used.
+        # This needs to be executed after contract config is set
+        if self.contract.enforced is True:
+            contract_state = ""
+            # We need to sort the columns so that order doesn't matter
+            # columns is a str: ColumnInfo dictionary
+            sorted_columns = sorted(self.columns.values(), key=lambda col: col.name)
+            for column in sorted_columns:
+                contract_state += f"|{column.name}"
+                contract_state += str(column.data_type)
+                contract_state += str(column.constraints)
+            if self.materialization_enforces_constraints:
+                contract_state += self.config.materialized
+                contract_state += str(self.constraints)
+            data = contract_state.encode("utf-8")
+            self.contract.checksum = hashlib.new("sha256", data).hexdigest()
+
+    def same_contract(self, old, adapter_type=None) -> bool:
+        # If the contract wasn't previously enforced:
+        if old.contract.enforced is False and self.contract.enforced is False:
+            # No change -- same_contract: True
+            return True
+        if old.contract.enforced is False and self.contract.enforced is True:
+            # Now it's enforced. This is a change, but not a breaking change -- same_contract: False
+            return False
+
+        # Otherwise: The contract was previously enforced, and we need to check for changes.
+        # Happy path: The contract is still being enforced, and the checksums are identical.
+        if self.contract.enforced is True and self.contract.checksum == old.contract.checksum:
+            # No change -- same_contract: True
+            return True
+
+        # Otherwise: There has been a change.
+        # We need to determine if it is a **breaking** change.
+        # These are the categories of breaking changes:
+        contract_enforced_disabled: bool = False
+        columns_removed: List[str] = []
+        column_type_changes: List[Tuple[str, str, str]] = []
+        enforced_column_constraint_removed: List[Tuple[str, str]] = []  # column, constraint_type
+        enforced_model_constraint_removed: List[
+            Tuple[str, List[str]]
+        ] = []  # constraint_type, columns
+        materialization_changed: List[str] = []
+
+        if old.contract.enforced is True and self.contract.enforced is False:
+            # Breaking change: the contract was previously enforced, and it no longer is
+            contract_enforced_disabled = True
+
+        # TODO: this avoid the circular imports but isn't ideal
+        from dbt.adapters.factory import get_adapter_constraint_support
+        from dbt.adapters.base import ConstraintSupport
+
+        constraint_support = get_adapter_constraint_support(adapter_type)
+        column_constraints_exist = False
+
+        # Next, compare each column from the previous contract (old.columns)
+        for old_key, old_value in sorted(old.columns.items()):
+            # Has this column been removed?
+            if old_key not in self.columns.keys():
+                columns_removed.append(old_value.name)
+            # Has this column's data type changed?
+            elif old_value.data_type != self.columns[old_key].data_type:
+                column_type_changes.append(
+                    (
+                        str(old_value.name),
+                        str(old_value.data_type),
+                        str(self.columns[old_key].data_type),
+                    )
+                )
+
+            # track if there are any column level constraints for the materialization check late
+            if old_value.constraints:
+                column_constraints_exist = True
+
+            # Have enforced columns level constraints changed?
+            # Constraints are only enforced for table and incremental materializations.
+            # We only really care if the old node was one of those materializations for breaking changes
+            if (
+                old_key in self.columns.keys()
+                and old_value.constraints != self.columns[old_key].constraints
+                and old.materialization_enforces_constraints
+            ):
+
+                for old_constraint in old_value.constraints:
+                    if (
+                        old_constraint not in self.columns[old_key].constraints
+                        and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                    ):
+                        enforced_column_constraint_removed.append(
+                            (old_key, str(old_constraint.type))
+                        )
+
+        # Now compare the model level constraints
+        if old.constraints != self.constraints and old.materialization_enforces_constraints:
+            for old_constraint in old.constraints:
+                if (
+                    old_constraint not in self.constraints
+                    and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                ):
+                    enforced_model_constraint_removed.append(
+                        (str(old_constraint.type), old_constraint.columns)
+                    )
+
+        # Check for relevant materialization changes.
+        if (
+            old.materialization_enforces_constraints
+            and not self.materialization_enforces_constraints
+            and (old.constraints or column_constraints_exist)
+        ):
+            materialization_changed = [old.config.materialized, self.config.materialized]
+
+        # If a column has been added, it will be missing in the old.columns, and present in self.columns
+        # That's a change (caught by the different checksums), but not a breaking change
+
+        # Did we find any changes that we consider breaking? If so, that's an error
+        if (
+            contract_enforced_disabled
+            or columns_removed
+            or column_type_changes
+            or enforced_model_constraint_removed
+            or enforced_column_constraint_removed
+            or materialization_changed
+        ):
+            raise (
+                ContractBreakingChangeError(
+                    contract_enforced_disabled=contract_enforced_disabled,
+                    columns_removed=columns_removed,
+                    column_type_changes=column_type_changes,
+                    enforced_column_constraint_removed=enforced_column_constraint_removed,
+                    enforced_model_constraint_removed=enforced_model_constraint_removed,
+                    materialization_changed=materialization_changed,
+                    node=self,
+                )
+            )
+
+        # Otherwise, though we didn't find any *breaking* changes, the contract has still changed -- same_contract: False
+        else:
+            return False
 
 
 # TODO: rm?
@@ -887,7 +962,7 @@ class GenericTestNode(TestShouldStoreFailures, CompiledNode, HasTestMetadata):
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
     attached_node: Optional[str] = None
 
-    def same_contents(self, other) -> bool:
+    def same_contents(self, other, adapter_type: Optional[str]) -> bool:
         if other is None:
             return False
 

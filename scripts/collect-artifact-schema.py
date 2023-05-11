@@ -11,6 +11,7 @@ from dbt.contracts.results import (
     RunResultsArtifact,
     FreshnessExecutionResultArtifact,
 )
+from dbt.contracts.publication import PublicationArtifact
 from dbt.contracts.util import VersionedSchema
 from dbt.clients.system import write_file
 
@@ -58,6 +59,10 @@ def collect_artifact_schema(args: Arguments):
         FreshnessExecutionResultArtifact,
         RunResultsArtifact,
         CatalogArtifact,
+        PublicationArtifact,
+        # WritableManifest introduces new definitions in hologram which are likely
+        # getting persisted across invocations of json_schema and making their
+        # way to other written artifacts - so write it last as a short-term fix.
         WritableManifest,
     ]
     artifact_infos = []

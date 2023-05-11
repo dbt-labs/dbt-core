@@ -211,6 +211,14 @@
 {% endmacro %}
 
 
+{% macro postgres__get_show_indexes_sql(relation) %}
+    select indexname, indexdef
+    from pg_indexes
+    where schemaname = '{{ relation.schema }}'
+      and tablename = '{{ relation.identifier }}'
+{% endmacro %}
+
+
 {% macro postgres__get_drop_index_sql(relation, index_dict) %}
     {% set index_config = adapter.parse_index(index_dict) %}
     {% set index_name = index_config.render(relation) %}
