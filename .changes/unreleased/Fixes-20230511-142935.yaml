@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix incremental merge to use an `is null` check to allow for handling of nullable
+  fields in the unique_key
+time: 2023-05-11T14:29:35.400734+01:00
+custom:
+  Author: amardatar
+  Issue: "7597"
