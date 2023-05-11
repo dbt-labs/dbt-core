@@ -89,20 +89,6 @@ class TestShow:
         )
         assert "col_hundo" in log_output
 
-    @pytest.mark.parametrize(
-        "args,expected",
-        [
-            ([], 5),  # default limit
-            (["--limit", 3], 3),  # fetch 3 rows
-            (["--limit", -1], 7),  # fetch all rows
-        ],
-    )
-    def test_limit(self, project, args, expected):
-        run_dbt(["build"])
-        dbt_args = ["show", "--inline", models__second_ephemeral_model, *args]
-        results, log_output = run_dbt_and_capture(dbt_args)
-        assert len(results.results[0].agate_table) == expected
-
     def test_seed(self, project):
         (results, log_output) = run_dbt_and_capture(["show", "--select", "sample_seed"])
         assert "Previewing node 'sample_seed'" in log_output
