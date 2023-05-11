@@ -53,7 +53,8 @@ class Arguments:
         parser.add_argument(
             "--artifact",
             type=str,
-            help="The name of the artifact to update - one of: manifest, publication, sources, run-results, catalog",
+            choices=["manifest", "publication", "sources", "run-results", "catalog"],
+            help="The name of the artifact to update",
         )
 
         parsed = parser.parse_args()
