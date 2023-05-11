@@ -71,6 +71,7 @@ def collect_artifact_schema(args: Arguments):
         # WritableManifest introduces new definitions in hologram which are likely
         # getting persisted across invocations of json_schema and making their
         # way to other written artifacts - so write it last as a short-term fix.
+        # https://github.com/dbt-labs/dbt-core/issues/7604
         WritableManifest,
     ]
     filtered_artifacts = filter(
