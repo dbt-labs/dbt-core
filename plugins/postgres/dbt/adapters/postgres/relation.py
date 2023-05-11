@@ -102,16 +102,34 @@ class PostgresRelation(BaseRelation):
         Returns:
             the corresponding config
         """
-        keywords, columns = create_statement.replace(")", "").split("(")
-        keywords = keywords.split(" ")
-        columns = [column.strip() for column in columns.split(",")]
-        unique = keywords[1] == "unique"
+        try:
+            column_clause = create_statement[
+                create_statement.index("(") + 1 : create_statement.index(")")
+            ]
+        except IndexError:
+            raise DbtRuntimeError(
+                f"Malformed index create statement. Columns not contained within '()': '{create_statement}'"
+            )
+
+        columns = [column.strip() for column in column_clause.split(",")]
+        sorted_columns = sorted(columns, key=lambda x: x.upper())
+
+        keywords = create_statement[: create_statement.index("(")]
+        keywords = keywords.strip().split(" ")
+
+        if "unique" in keywords:
+            unique = True
+        else:
+            unique = False
+
         if "using" in keywords:
-            index_type = keywords[keywords.index("using") + 1]
+            try:
+                index_type = keywords[keywords.index("using") + 1]
+            except IndexError:
+                raise DbtRuntimeError(
+                    f"Malformed index create statement. USING clause with no type: '{create_statement}'"
+                )
         else:
             index_type = self.index_default_type
-        return {
-            "column": sorted(columns, key=lambda x: x.upper()),
-            "type": index_type,
-            "unique": unique,
-        }
+
+        return {"column": sorted_columns, "type": index_type, "unique": unique}
