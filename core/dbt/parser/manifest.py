@@ -1097,6 +1097,7 @@ def _check_resource_uniqueness(
     versioned_resources: Dict[str, ManifestNode] = {}
     unversioned_resources: Dict[str, ManifestNode] = {}
     duplicate_resources: Dict[str, list] = {}
+    duplicate_aliases: Dict[str, list] = {}
 
     for resource, node in manifest.nodes.items():
         if not node.is_relational:
@@ -1119,9 +1120,7 @@ def _check_resource_uniqueness(
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
-            raise AmbiguousAliasError(
-                node_1=existing_alias, node_2=node, duped_name=full_node_name
-            )
+            duplicate_aliases[full_node_name] = [existing_alias, node]
 
         names_resources[name] = node
         alias_resources[full_node_name] = node
@@ -1137,13 +1136,26 @@ def _check_resource_uniqueness(
                 versioned_node, unversioned_node
             )
 
-        # Handle base case of multiple unversioned models with same name
+        # Handle base case of multiple unversioned models with same name.
+        # This is for same name in multiple packages. Same name in the same
+        # package will be caught by _check_duplicates called by add_node.
+        # Version 1.6 will remove the restriction of having the same name in
+        # multiple packages.
         intersection_unversioned = set(duplicate_resources.keys()) - set(
             versioned_resources.keys()
         )
         for name in intersection_unversioned:
             existing_node, node = duplicate_resources[name]
             raise dbt.exceptions.DuplicateResourceNameError(existing_node, node)
+
+        # Handle ambiguous alias error. We've deferred this because we prefer to
+        # issue the DuplicateResourceName error
+        for full_node_name, node_list in duplicate_aliases.items():
+            existing_alias, node = node_list
+            raise AmbiguousAliasError(
+                node_1=existing_alias, node_2=node, duped_name=full_node_name
+            )
+
 
 
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
