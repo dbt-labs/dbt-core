@@ -47,7 +47,7 @@ class PostgresMixin:
         write_file(current_yaml, project.project_root, "dbt_project.yml")
 
     @pytest.fixture(scope="function")
-    def configuration_changes_refresh(self, project):
+    def configuration_changes_full_refresh(self, project):
         """There are no monitored changes that trigger a full refresh"""
         pass
 
