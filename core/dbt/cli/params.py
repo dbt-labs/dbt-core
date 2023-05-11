@@ -293,6 +293,8 @@ profiles_dir = click.option(
 )
 
 # `dbt debug` uses this because it implements custom behaviour for non-existent profiles.yml directories
+# `dbt deps` does not load a profile at all
+# `dbt init` will write profiles.yml if it doesn't yet exist
 profiles_dir_exists_false = click.option(
     "--profiles-dir",
     envvar="DBT_PROFILES_DIR",

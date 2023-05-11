@@ -3,7 +3,7 @@ import json
 import re
 import io
 import agate
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
@@ -212,11 +212,21 @@ class ContractBreakingChangeError(DbtRuntimeError):
     MESSAGE = "Breaking Change to Contract"
 
     def __init__(
-        self, contract_enforced_disabled, columns_removed, column_type_changes, node=None
+        self,
+        contract_enforced_disabled: bool,
+        columns_removed: List[str],
+        column_type_changes: List[Tuple[str, str, str]],
+        enforced_column_constraint_removed: List[Tuple[str, str]],
+        enforced_model_constraint_removed: List[Tuple[str, List[str]]],
+        materialization_changed: List[str],
+        node=None,
     ):
         self.contract_enforced_disabled = contract_enforced_disabled
         self.columns_removed = columns_removed
         self.column_type_changes = column_type_changes
+        self.enforced_column_constraint_removed = enforced_column_constraint_removed
+        self.enforced_model_constraint_removed = enforced_model_constraint_removed
+        self.materialization_changed = materialization_changed
         super().__init__(self.message(), node)
 
     @property
@@ -236,6 +246,27 @@ class ContractBreakingChangeError(DbtRuntimeError):
             )
             breaking_changes.append(
                 f"Columns with data_type changes: \n - {column_type_changes_str}"
+            )
+        if self.enforced_column_constraint_removed:
+            column_constraint_changes_str = "\n  - ".join(
+                [f"{c[0]} ({c[1]})" for c in self.enforced_column_constraint_removed]
+            )
+            breaking_changes.append(
+                f"Enforced column level constraints were removed: \n - {column_constraint_changes_str}"
+            )
+        if self.enforced_model_constraint_removed:
+            model_constraint_changes_str = "\n  - ".join(
+                [f"{c[0]} -> {c[1]}" for c in self.enforced_model_constraint_removed]
+            )
+            breaking_changes.append(
+                f"Enforced model level constraints were removed: \n - {model_constraint_changes_str}"
+            )
+        if self.materialization_changed:
+            materialization_changes_str = "\n  - ".join(
+                f"{self.materialization_changed[0]} -> {self.materialization_changed[1]}"
+            )
+            breaking_changes.append(
+                f"Materialization changed with enforced constraints: \n - {materialization_changes_str}"
             )
 
         reasons = "\n\n".join(breaking_changes)
@@ -869,6 +900,19 @@ class SecretEnvVarLocationError(ParsingError):
             f"Found '{self.env_var_name}' referenced elsewhere."
         )
         return msg
+
+
+class ProjectDependencyCycleError(ParsingError):
+    def __init__(self, pub_project_name, project_name):
+        self.pub_project_name = pub_project_name
+        self.project_name = project_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        return (
+            f"A project dependency cycle has been detected. The current project {self.project_name} "
+            f"depends on {self.pub_project_name} which also depends on the current project."
+        )
 
 
 class MacroArgTypeError(CompilationError):
@@ -2183,6 +2227,26 @@ when {action} {formatted_name}.
 To fix this, change the name of one of these resources:
 - {self.node_1.unique_id} ({self.node_1.original_file_path})
 - {self.node_2.unique_id} ({self.node_2.original_file_path})
+    """.strip()
+        return msg
+
+
+class DuplicateVersionedUnversionedError(ParsingError):
+    def __init__(self, versioned_node, unversioned_node):
+        self.versioned_node = versioned_node
+        self.unversioned_node = unversioned_node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"""
+dbt found versioned and unversioned models with the name "{self.versioned_node.name}".
+
+Since these resources have the same name, dbt will be unable to find the correct resource
+when looking for ref('{self.versioned_node.name}').
+
+To fix this, change the name of the unversioned resource
+{self.unversioned_node.unique_id} ({self.unversioned_node.original_file_path})
+or add the unversioned model to the versions in {self.versioned_node.patch_path}
     """.strip()
         return msg
 

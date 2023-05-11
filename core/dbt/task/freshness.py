@@ -9,7 +9,6 @@ from .printer import (
 from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
-    FreshnessExecutionResultArtifact,
     FreshnessResult,
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
@@ -177,10 +176,6 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_runner_type(self, _):
         return FreshnessRunner
-
-    def write_result(self, result):
-        artifact = FreshnessExecutionResultArtifact.from_result(result)
-        artifact.write(self.result_path())
 
     def get_result(self, results, elapsed_time, generated_at):
         return FreshnessResult.from_node_results(

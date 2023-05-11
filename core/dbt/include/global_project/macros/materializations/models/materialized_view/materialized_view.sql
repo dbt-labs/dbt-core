@@ -53,7 +53,7 @@
             {% set configuration_change = [] %}
         {% endif %}
 
-        {% if configuration_changes == [] %}
+        {% if configuration_changes == {} %}
             {% set build_sql = refresh_materialized_view(target_relation) %}
 
         {% elif on_configuration_change == 'apply' %}

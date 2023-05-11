@@ -11,12 +11,36 @@ select * from {{ ref('ephemeral_model') }}
 -- depends on: {{ my_macro() }}
 """
 
+table_model_now_view_sql = """
+{{ config(materialized='view') }}
+select * from {{ ref('ephemeral_model') }}
+
+-- establish a macro dependency to trigger state:modified.macros
+-- depends on: {{ my_macro() }}
+"""
+
+table_model_now_incremental_sql = """
+{{ config(materialized='incremental', on_schema_change='append_new_columns') }}
+select * from {{ ref('ephemeral_model') }}
+
+-- establish a macro dependency to trigger state:modified.macros
+-- depends on: {{ my_macro() }}
+"""
+
 changed_table_model_sql = """
 {{ config(materialized='table') }}
 select 1 as fun
 """
 
 view_model_sql = """
+select * from {{ ref('seed') }}
+
+-- establish a macro dependency that trips infinite recursion if not handled
+-- depends on: {{ my_infinitely_recursive_macro() }}
+"""
+
+view_model_now_table_sql = """
+{{ config(materialized='table') }}
 select * from {{ ref('seed') }}
 
 -- establish a macro dependency that trips infinite recursion if not handled
@@ -116,6 +140,94 @@ models:
   - name: table_model
     columns:
       - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+constraint_schema_yml = """
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    constraints:
+      - type: primary_key
+        columns: [id]
+    columns:
+      - name: id
+        constraints:
+          - type: not_null
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+modified_column_constraint_schema_yml = """
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    constraints:
+      - type: primary_key
+        columns: [id]
+    columns:
+      - name: id
+        data_type: integer
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+modified_model_constraint_schema_yml = """
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+  - name: table_model
+    config:
+      contract:
+        enforced: True
+    columns:
+      - name: id
+        constraints:
+          - type: not_null
         data_type: integer
         tests:
           - unique:

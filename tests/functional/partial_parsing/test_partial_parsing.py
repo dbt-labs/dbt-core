@@ -71,7 +71,7 @@ from tests.functional.partial_parsing.fixtures import (
     groups_schema_yml_two_groups_private_orders_invalid_access,
 )
 
-from dbt.exceptions import CompilationError, ParsingError
+from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
 import re
@@ -358,6 +358,14 @@ class TestVersionedModels:
         write_file(model_two_sql, project.project_root, "models", "model_one_different.sql")
         results = run_dbt(["--partial-parse", "run"])
         assert len(results) == 3
+        manifest = get_manifest(project.project_root)
+        assert len(manifest.nodes) == 3
+        print(f"--- nodes: {manifest.nodes.keys()}")
+
+        # create a new model_one in model_one.sql and re-parse
+        write_file(model_one_sql, project.project_root, "models", "model_one.sql")
+        with pytest.raises(DuplicateVersionedUnversionedError):
+            run_dbt(["parse"])
 
 
 class TestSources:

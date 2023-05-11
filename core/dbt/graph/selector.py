@@ -36,7 +36,7 @@ def can_select_indirectly(node):
 
 
 class NodeSelector(MethodManager):
-    """The node selector is aware of the graph and manifest,"""
+    """The node selector is aware of the graph and manifest"""
 
     def __init__(
         self,

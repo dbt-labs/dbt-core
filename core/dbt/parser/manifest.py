@@ -103,7 +103,12 @@ from dbt.contracts.publication import (
     PublicModel,
     ProjectDependencies,
 )
-from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError, PublicationConfigNotFound
+from dbt.exceptions import (
+    TargetNotFoundError,
+    AmbiguousAliasError,
+    PublicationConfigNotFound,
+    ProjectDependencyCycleError,
+)
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -1262,10 +1267,18 @@ def _check_resource_uniqueness(
     config: RuntimeConfig,
 ) -> None:
     alias_resources: Dict[str, ManifestNode] = {}
+    name_resources: Dict[str, Dict] = {}
 
     for resource, node in manifest.nodes.items():
         if not node.is_relational:
             continue
+
+        if node.package_name not in name_resources:
+            name_resources[node.package_name] = {"ver": {}, "unver": {}}
+        if node.is_versioned:
+            name_resources[node.package_name]["ver"][node.name] = node
+        else:
+            name_resources[node.package_name]["unver"][node.name] = node
 
         # the full node name is really defined by the adapter's relation
         relation_cls = get_relation_class_by_name(config.credentials.type)
@@ -1279,6 +1292,18 @@ def _check_resource_uniqueness(
             )
 
         alias_resources[full_node_name] = node
+
+    for ver_unver_dict in name_resources.values():
+        versioned_names = ver_unver_dict["ver"].keys()
+        unversioned_names = ver_unver_dict["unver"].keys()
+        intersection_versioned = set(versioned_names).intersection(set(unversioned_names))
+        if intersection_versioned:
+            for name in intersection_versioned:
+                versioned_node = ver_unver_dict["ver"][name]
+                unversioned_node = ver_unver_dict["unver"][name]
+                raise dbt.exceptions.DuplicateVersionedUnversionedError(
+                    versioned_node, unversioned_node
+                )
 
 
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
@@ -1712,6 +1737,10 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     # Get dependencies from publication dependencies
     for pub_project in manifest.publications.values():
         for project_name in pub_project.dependencies:
+            if project_name == root_project.project_name:
+                raise ProjectDependencyCycleError(
+                    pub_project_name=pub_project.project_name, project_name=project_name
+                )
             if project_name not in dependencies:
                 dependencies.append(project_name)
 

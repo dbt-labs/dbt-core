@@ -356,13 +356,13 @@ changed_compiled_models = [
 @pytest.mark.parametrize("func", unchanged_compiled_models)
 def test_compare_unchanged_model(func, basic_uncompiled_model):
     node, compare = func(basic_uncompiled_model)
-    assert node.same_contents(compare)
+    assert node.same_contents(compare, "postgres")
 
 
 @pytest.mark.parametrize("func", changed_compiled_models)
 def test_compare_changed_model(func, basic_uncompiled_model):
     node, compare = func(basic_uncompiled_model)
-    assert not node.same_contents(compare)
+    assert not node.same_contents(compare, "postgres")
 
 
 @pytest.fixture
@@ -652,22 +652,22 @@ changed_schema_tests = [
 @pytest.mark.parametrize("func", unchanged_schema_tests)
 def test_compare_unchanged_schema_test(func, basic_uncompiled_schema_test_node):
     value = func(basic_uncompiled_schema_test_node)
-    assert basic_uncompiled_schema_test_node.same_contents(value)
+    assert basic_uncompiled_schema_test_node.same_contents(value, "postgres")
 
 
 @pytest.mark.parametrize("func", changed_schema_tests)
 def test_compare_changed_schema_test(func, basic_uncompiled_schema_test_node):
     value = func(basic_uncompiled_schema_test_node)
-    assert not basic_uncompiled_schema_test_node.same_contents(value)
+    assert not basic_uncompiled_schema_test_node.same_contents(value, "postgres")
 
 
 def test_compare_to_compiled(basic_uncompiled_schema_test_node, basic_compiled_schema_test_node):
     # if you fix the severity, they should be the "same".
     uncompiled = basic_uncompiled_schema_test_node
     compiled = basic_compiled_schema_test_node
-    assert not uncompiled.same_contents(compiled)
+    assert not uncompiled.same_contents(compiled, "postgres")
     fixed_config = compiled.config.replace(severity=uncompiled.config.severity)
     fixed_compiled = compiled.replace(
         config=fixed_config, unrendered_config=uncompiled.unrendered_config
     )
-    assert uncompiled.same_contents(fixed_compiled)
+    assert uncompiled.same_contents(fixed_compiled, "postgres")
