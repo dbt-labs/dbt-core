@@ -53,9 +53,7 @@ class PostgresMixin:
 
 
 class TestBasic(BasicTestsBase):
-    @pytest.mark.skip("This fails because we are mocking with a traditional view")
-    def test_updated_base_table_data_only_shows_in_materialized_view_after_rerun(self, project):
-        pass
+    pass
 
 
 class TestOnConfigurationChangeApply(PostgresMixin, OnConfigurationChangeApplyTestsBase):
