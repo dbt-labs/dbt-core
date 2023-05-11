@@ -69,8 +69,6 @@ class TestOnConfigurationChangeApply(PostgresMixin, OnConfigurationChangeApplyTe
 
 
 class TestOnConfigurationChangeSkip(PostgresMixin, OnConfigurationChangeSkipTestsBase):
-    """There are no monitored changes that trigger a full refresh"""
-
     pass
 
 
