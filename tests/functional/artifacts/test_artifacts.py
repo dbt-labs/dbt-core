@@ -427,7 +427,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
 
     # Verify that stored manifest jsonschema works.
     # If this fails, schemas need to be updated with:
-    #   scripts/collect-artifact-schema.py --path schemas
+    #   scripts/collect-artifact-schema.py --path schemas --artifact manifest
     stored_manifest_schema = get_artifact(manifest_schema_path)
     validate(stored_manifest_schema, manifest)
 
@@ -495,7 +495,7 @@ def verify_run_results(project, expected_run_results, start_time, run_results_sc
 
     # Verify that stored run_results jsonschema works.
     # If this fails, schemas need to be updated with:
-    #   scripts/collect-artifact-schema.py --path schemas
+    #   scripts/collect-artifact-schema.py --path schemas --artifact run-results
     stored_run_results_schema = get_artifact(run_results_schema_path)
     validate(stored_run_results_schema, run_results)
 
