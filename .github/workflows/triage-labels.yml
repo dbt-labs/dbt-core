@@ -26,6 +26,7 @@ jobs:
     if: contains(github.event.issue.labels.*.name, 'awaiting_response')
     runs-on: ubuntu-latest
     steps:
+      # TODO: this action has been abandoned and we need to replace the functionality
       - name: initial labeling
         uses: andymckay/labeler@master
         with:
