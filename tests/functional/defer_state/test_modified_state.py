@@ -364,7 +364,7 @@ class TestChangedConstraint(BaseModifiedState):
         with pytest.raises(ContractBreakingChangeError):
             run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
 
-        # This should raise because a model level constraint was removed
+        # This should raise because a model level constraint was removed (primary_key on id)
         write_file(modified_model_constraint_schema_yml, "models", "schema.yml")
         # we don't have a way to know this failed unless we have a previous state to refer to, so the run succeeds
         results = run_dbt(["run"])

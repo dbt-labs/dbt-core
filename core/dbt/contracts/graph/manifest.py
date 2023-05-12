@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
     ManifestOrPublicNode,
+    ModelNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -188,7 +189,13 @@ class RefableLookup(dbtClassMixin):
             # If this is an unpinned ref (no 'version' arg was passed),
             # AND this is a versioned node,
             # AND this ref is being resolved at runtime -- get_node_info != {}
-            if version is None and node.is_versioned and get_node_info():
+            # Only ModelNodes can be versioned.
+            if (
+                isinstance(node, ModelNode)
+                and version is None
+                and node.is_versioned
+                and get_node_info()
+            ):
                 # Check to see if newer versions are available, and log an "FYI" if so
                 max_version: UnparsedVersion = max(
                     [

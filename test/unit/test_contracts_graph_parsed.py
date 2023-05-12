@@ -20,7 +20,6 @@ from dbt.contracts.graph.nodes import (
     GenericTestNode,
     SnapshotNode,
     IntermediateSnapshotNode,
-    ParsedNodePatch,
     Macro,
     Exposure,
     Metric,
@@ -760,94 +759,6 @@ def test_compare_unchanged_parsed_seed(func, basic_parsed_seed_object):
 def test_compare_changed_seed(func, basic_parsed_seed_object):
     node, compare = func(basic_parsed_seed_object)
     assert not node.same_contents(compare, "postgres")
-
-
-@pytest.fixture
-def basic_parsed_model_patch_dict():
-    return {
-        "name": "foo",
-        "description": "The foo model",
-        "original_file_path": "path/to/schema.yml",
-        "docs": {"show": True},
-        "meta": {},
-        "yaml_key": "models",
-        "package_name": "test",
-        "columns": {
-            "a": {
-                "name": "a",
-                "description": "a text field",
-                "meta": {},
-                "tags": [],
-                "constraints": [],
-            },
-        },
-        "config": {},
-        "access": "public",
-        "version": "1",
-        "latest_version": "1",
-    }
-
-
-@pytest.fixture
-def basic_parsed_model_patch_object():
-    return ParsedNodePatch(
-        name="foo",
-        yaml_key="models",
-        package_name="test",
-        description="The foo model",
-        original_file_path="path/to/schema.yml",
-        columns={"a": ColumnInfo(name="a", description="a text field", meta={})},
-        docs=Docs(),
-        meta={},
-        config={},
-        access="public",
-        version="1",
-        latest_version="1",
-    )
-
-
-@pytest.fixture
-def patched_model_object():
-    return ModelNode(
-        package_name="test",
-        path="/root/x/path.sql",
-        original_file_path="/root/path.sql",
-        language="sql",
-        raw_code="select * from wherever",
-        name="foo",
-        resource_type=NodeType.Model,
-        unique_id="model.test.foo",
-        fqn=["test", "models", "foo"],
-        refs=[],
-        sources=[],
-        metrics=[],
-        depends_on=DependsOn(),
-        description="The foo model",
-        database="test_db",
-        schema="test_schema",
-        alias="bar",
-        tags=[],
-        meta={},
-        config=NodeConfig(),
-        patch_path="test://path/to/schema.yml",
-        columns={"a": ColumnInfo(name="a", description="a text field", meta={})},
-        docs=Docs(),
-        checksum=FileHash.from_contents(""),
-        unrendered_config={},
-        access=AccessType.Public,
-        version="1",
-        latest_version="1",
-    )
-
-
-def test_patch_parsed_model(
-    basic_parsed_model_object, basic_parsed_model_patch_object, patched_model_object
-):
-    pre_patch = basic_parsed_model_object
-    pre_patch.patch(basic_parsed_model_patch_object)
-    pre_patch.created_at = 1.0
-    patched_model_object.created_at = 1.0
-    assert patched_model_object == pre_patch
 
 
 @pytest.fixture
@@ -1892,60 +1803,6 @@ def test_invalid_snapshot_bad_resource_type(basic_timestamp_snapshot_dict):
     bad_resource_type = basic_timestamp_snapshot_dict
     bad_resource_type["resource_type"] = str(NodeType.Model)
     assert_fails_validation(bad_resource_type, SnapshotNode)
-
-
-def test_basic_parsed_node_patch(basic_parsed_model_patch_object, basic_parsed_model_patch_dict):
-    assert_symmetric(basic_parsed_model_patch_object, basic_parsed_model_patch_dict)
-
-
-@pytest.fixture
-def populated_parsed_node_patch_dict():
-    return {
-        "name": "foo",
-        "description": "The foo model",
-        "original_file_path": "path/to/schema.yml",
-        "columns": {
-            "a": {
-                "name": "a",
-                "description": "a text field",
-                "meta": {},
-                "tags": [],
-                "constraints": [],
-            },
-        },
-        "docs": {"show": False},
-        "meta": {"key": ["value"]},
-        "yaml_key": "models",
-        "package_name": "test",
-        "config": {},
-        "access": "public",
-        "version": "1",
-        "latest_version": "1",
-    }
-
-
-@pytest.fixture
-def populated_parsed_node_patch_object():
-    return ParsedNodePatch(
-        name="foo",
-        description="The foo model",
-        original_file_path="path/to/schema.yml",
-        columns={"a": ColumnInfo(name="a", description="a text field", meta={})},
-        meta={"key": ["value"]},
-        yaml_key="models",
-        package_name="test",
-        docs=Docs(show=False),
-        config={},
-        access="public",
-        version="1",
-        latest_version="1",
-    )
-
-
-def test_populated_parsed_node_patch(
-    populated_parsed_node_patch_dict, populated_parsed_node_patch_object
-):
-    assert_symmetric(populated_parsed_node_patch_object, populated_parsed_node_patch_dict)
 
 
 class TestParsedMacro(ContractTestCase):

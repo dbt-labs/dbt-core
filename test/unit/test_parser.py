@@ -33,7 +33,7 @@ from dbt.parser import (
     SnapshotParser,
     AnalysisParser,
 )
-from dbt.parser.generic_test_builders import YamlBlock
+from dbt.parser.common import YamlBlock
 from dbt.parser.models import (
     _get_config_call_dict,
     _shift_sources,
@@ -727,52 +727,12 @@ class SchemaParserVersionedModels(SchemaParserTest):
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
 
-        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
-        models = [node for node in all_nodes if node.resource_type == NodeType.Model]
-
-        # test v1 model
-        parsed_node_patch_v1 = models[0].patch.call_args_list[0][0][0]
-        self.assertEqual(models[0].unique_id, "model.snowplow.my_model.v1")
-        self.assertEqual(parsed_node_patch_v1.version, 1)
-        self.assertEqual(parsed_node_patch_v1.latest_version, 2)
-        self.assertEqual(
-            list(parsed_node_patch_v1.columns.keys()), ["color", "location_id", "extra"]
-        )
-        self.assertEqual(
-            parsed_node_patch_v1.config, {"materialized": "table", "sql_header": "test_sql_header"}
-        )
-
-        # test v2 model
-        parsed_node_patch_v2 = models[1].patch.call_args_list[0][0][0]
-        self.assertEqual(models[1].unique_id, "model.snowplow.my_model.v2")
-        self.assertEqual(parsed_node_patch_v2.version, 2)
-        self.assertEqual(parsed_node_patch_v2.latest_version, 2)
-        self.assertEqual(list(parsed_node_patch_v2.columns.keys()), ["color", "extra"])
-        self.assertEqual(
-            parsed_node_patch_v2.config, {"materialized": "view", "sql_header": "test_sql_header"}
-        )
-
     def test__parsed_versioned_models_v0(self):
         block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_V0, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
-
-        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
-        models = [node for node in all_nodes if node.resource_type == NodeType.Model]
-
-        # test v0 model
-        parsed_node_patch_v1 = models[0].patch.call_args_list[0][0][0]
-        self.assertEqual(models[0].unique_id, "model.snowplow.my_model.v0")
-        self.assertEqual(parsed_node_patch_v1.version, 0)
-        self.assertEqual(parsed_node_patch_v1.latest_version, 2)
-
-        # test v2 model
-        parsed_node_patch_v2 = models[1].patch.call_args_list[0][0][0]
-        self.assertEqual(models[1].unique_id, "model.snowplow.my_model.v2")
-        self.assertEqual(parsed_node_patch_v2.version, 2)
-        self.assertEqual(parsed_node_patch_v2.latest_version, 2)
 
     def test__parsed_versioned_models_v0_latest_version(self):
         block = self.file_block_for(
@@ -782,21 +742,6 @@ class SchemaParserVersionedModels(SchemaParserTest):
         dct = yaml_from_file(block.file)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
-
-        all_nodes = sorted(self.parser.manifest.nodes.values(), key=lambda n: n.unique_id)
-        models = [node for node in all_nodes if node.resource_type == NodeType.Model]
-
-        # test v0 model
-        parsed_node_patch_v1 = models[0].patch.call_args_list[0][0][0]
-        self.assertEqual(models[0].unique_id, "model.snowplow.my_model.v0")
-        self.assertEqual(parsed_node_patch_v1.version, 0)
-        self.assertEqual(parsed_node_patch_v1.latest_version, 0)
-
-        # test v2 model
-        parsed_node_patch_v2 = models[1].patch.call_args_list[0][0][0]
-        self.assertEqual(models[1].unique_id, "model.snowplow.my_model.v2")
-        self.assertEqual(parsed_node_patch_v2.version, 2)
-        self.assertEqual(parsed_node_patch_v2.latest_version, 0)
 
 
 sql_model = """
@@ -1540,7 +1485,6 @@ class MacroParserTest(BaseParserTest):
             "{% macro foo(a, b) %}a ~ b{% endmacro %}\n{% macro bar(c, d) %}c + d{% endmacro %}"
         )
         block = self.file_block_for(raw_code, "macro.sql")
-        print(f"--- test_multiple_blocks block: {block}")
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         self.assertEqual(len(self.parser.manifest.macros), 2)

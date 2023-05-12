@@ -40,13 +40,12 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, InvalidAccessTypeError, ContractBreakingChangeError
+from dbt.exceptions import ParsingError, ContractBreakingChangeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
-    ValidationWarning,
 )
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
@@ -442,63 +441,6 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     def same_contract(self, old, adapter_type=None) -> bool:
         # This would only apply to seeds
         return True
-
-    def patch(self, patch: "ParsedNodePatch"):
-        """Given a ParsedNodePatch, add the new information to the node."""
-        # NOTE: Constraint patching is awkwardly done in the parse_patch function
-        # which calls this one. We need to combine the logic.
-
-        # explicitly pick out the parts to update so we don't inadvertently
-        # step on the model name or anything
-        # Note: config should already be updated
-        self.patch_path: Optional[str] = patch.file_id
-        # update created_at so process_docs will run in partial parsing
-        self.created_at = time.time()
-        self.description = patch.description
-        self.columns = patch.columns
-        self.name = patch.name
-
-        # TODO: version, latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
-        if self.resource_type != NodeType.Model:
-            if patch.version:
-                warn_or_error(
-                    ValidationWarning(
-                        field_name="version",
-                        resource_type=self.resource_type.value,
-                        node_name=patch.name,
-                    )
-                )
-            if patch.latest_version:
-                warn_or_error(
-                    ValidationWarning(
-                        field_name="latest_version",
-                        resource_type=self.resource_type.value,
-                        node_name=patch.name,
-                    )
-                )
-        self.version = patch.version
-        self.latest_version = patch.latest_version
-
-        # This might not be the ideal place to validate the "access" field,
-        # but at this point we have the information we need to properly
-        # validate and we don't before this.
-        if patch.access:
-            if self.resource_type == NodeType.Model:
-                if AccessType.is_valid(patch.access):
-                    self.access = AccessType(patch.access)
-                else:
-                    raise InvalidAccessTypeError(
-                        unique_id=self.unique_id,
-                        field_value=patch.access,
-                    )
-            else:
-                warn_or_error(
-                    ValidationWarning(
-                        field_name="access",
-                        resource_type=self.resource_type.value,
-                        node_name=patch.name,
-                    )
-                )
 
     def same_contents(self, old, adapter_type) -> bool:
         if old is None:
@@ -1015,14 +957,6 @@ class Macro(BaseNode):
     created_at: float = field(default_factory=lambda: time.time())
     supported_languages: Optional[List[ModelLanguage]] = None
 
-    def patch(self, patch: "ParsedMacroPatch"):
-        self.patch_path: Optional[str] = patch.file_id
-        self.description = patch.description
-        self.created_at = time.time()
-        self.meta = patch.meta
-        self.docs = patch.docs
-        self.arguments = patch.arguments
-
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
             return False
@@ -1466,6 +1400,7 @@ class ParsedNodePatch(ParsedPatch):
     access: Optional[str]
     version: Optional[NodeVersion]
     latest_version: Optional[NodeVersion]
+    constraints: List[Dict[str, Any]]
 
 
 @dataclass

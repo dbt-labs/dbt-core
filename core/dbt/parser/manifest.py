@@ -93,6 +93,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     ManifestNode,
     ResultNode,
+    ModelNode,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
@@ -1403,10 +1404,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             # Exposures do not have a group and so can never reference private models
             raise dbt.exceptions.DbtReferenceError(
                 unique_id=exposure.unique_id,
@@ -1455,10 +1453,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 should_warn_if_disabled=False,
             )
             continue
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             if not metric.group or metric.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=metric.unique_id,
@@ -1562,10 +1557,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             continue
 
         # Handle references to models that are private
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             if not node.group or node.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=node.unique_id,
@@ -1698,7 +1690,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     public_node_ids = {
         node.unique_id
         for node in manifest.nodes.values()
-        if node.resource_type == NodeType.Model and node.access == AccessType.Public
+        if isinstance(node, ModelNode) and node.access == AccessType.Public
     }
 
     # Get the Graph object from the Linker
@@ -1710,6 +1702,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     public_models = {}
     for unique_id in public_node_ids:
         model = manifest.nodes[unique_id]
+        assert isinstance(model, ModelNode)
         # public_node_dependencies is the intersection of all parent nodes plus public nodes
         parents: Set[UniqueId] = graph.select_parents({UniqueId(unique_id)})
         public_node_dependencies: Set[UniqueId] = parents.intersection(public_node_ids)
