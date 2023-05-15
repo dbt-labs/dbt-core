@@ -63,12 +63,12 @@ permissions:
   contents: read
   pull-requests: write
 ```
-    
+
 ### Secrets
 - When to use a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) vs the [GITHUB_TOKEN](https://docs.github.com/en/actions/security-guides/automatic-token-authentication) generated for the action?
 
     The `GITHUB_TOKEN` is used by default.  In most cases it is sufficient for what you need.
-    
+
     If you expect the workflow to result in a commit to that should retrigger workflows, you will need to use a Personal Access Token for the bot to commit the file. When using the GITHUB_TOKEN, the resulting commit will not trigger another GitHub Actions Workflow run. This is due to limitations set by GitHub. See [the docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow) for a more detailed explanation.
 
     For example, we must use a PAT in our workflow to commit a new changelog yaml file for bot PRs.  Once the file has been committed to the branch, it should retrigger the check to validate that a changelog exists on the PR.  Otherwise, it would stay in a failed state since the check would never retrigger.
@@ -105,7 +105,7 @@ Some triggers of note that we use:
 
   ```
   # **what?**
-  # Describe what the action does.  
+  # Describe what the action does.
 
   # **why?**
   # Why does this action exist?
@@ -138,7 +138,7 @@ Some triggers of note that we use:
         id: fp
         run: |
           FILEPATH=.changes/unreleased/Dependencies-${{ steps.filename_time.outputs.time }}.yaml
-          echo "::set-output name=FILEPATH::$FILEPATH"
+          echo "FILEPATH=$FILEPATH" >> $GITHUB_OUTPUT
   ```
 
 - Print out all variables you will reference as the first step of a job.  This allows for easier debugging.  The first job should log all inputs.  Subsequent jobs should reference outputs of other jobs, if present.
@@ -158,14 +158,14 @@ Some triggers of note that we use:
         echo "The build_script_path:              ${{ inputs.build_script_path }}"
         echo "The s3_bucket_name:                 ${{ inputs.s3_bucket_name }}"
         echo "The package_test_command:           ${{ inputs.package_test_command }}"
-      
+
     # collect all the variables that need to be used in subsequent jobs
     - name: Set Variables
       id: variables
       run: |
-        echo "::set-output name=important_path::'performance/runner/Cargo.toml'"
-        echo "::set-output name=release_id::${{github.event.inputs.release_id}}"
-        echo "::set-output name=open_prs::${{github.event.inputs.open_prs}}"
+        echo "important_path='performance/runner/Cargo.toml'" >> $GITHUB_OUTPUT
+        echo "release_id=${{github.event.inputs.release_id}}" >> $GITHUB_OUTPUT
+        echo "open_prs=${{github.event.inputs.open_prs}}" >> $GITHUB_OUTPUT
 
   job2:
     needs: [job1]
@@ -190,7 +190,7 @@ ___
 ### Actions from the Marketplace
 - Don’t use external actions for things that can easily be accomplished manually.
 - Always read through what an external action does before using it!  Often an action in the GitHub Actions Marketplace can be replaced with a few lines in bash.  This is much more maintainable (and won’t change under us) and clear as to what’s actually happening.  It also prevents any
-- Pin actions _we don't control_ to tags. 
+- Pin actions _we don't control_ to tags.
 
 ### Connecting to AWS
 - Authenticate with the aws managed workflow
@@ -208,7 +208,7 @@ ___
 
   ```yaml
   - name: Copy Artifacts from S3 via CLI
-    run: aws s3 cp ${{ env.s3_bucket }} . --recursive 
+    run: aws s3 cp ${{ env.s3_bucket }} . --recursive
   ```
 
 ### Testing
