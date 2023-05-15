@@ -323,6 +323,7 @@ def get_args_for_cmd_from_dict(cmd: CliCommand, d: Dict[str, Any]) -> List[str]:
         # e.g. ["--print", "run"] vs ["run", "--print"]
         add_fn = res.append
         if k in parent_args:
+
             def add_fn(x):
                 res.insert(0, x)
 

@@ -11,6 +11,7 @@ from dbt.cli.main import cli
 from dbt.cli.types import Command
 from dbt.contracts.project import UserConfig
 from dbt.helper_types import WarnErrorOptions
+from dbt.tests.util import write_file
 
 
 class TestFlags:
@@ -350,6 +351,7 @@ class TestFlags:
             Flags(context)
 
     def _create_flags_from_dict(self, cmd, d):
+        write_file("", "profiles.yml")
         result = Flags.from_dict(cmd, d)
         assert result.which is cmd.value
         return result
