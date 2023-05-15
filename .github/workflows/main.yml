@@ -99,7 +99,9 @@ jobs:
       - name: Get current date
         if: always()
         id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colons allowed for artifacts
+        run: |
+          CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
+          echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v2
         if: always()
@@ -165,7 +167,9 @@ jobs:
       - name: Get current date
         if: always()
         id: date
-        run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M_%S')" #no colons allowed for artifacts
+        run: |
+          CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
+          echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v2
         if: always()
