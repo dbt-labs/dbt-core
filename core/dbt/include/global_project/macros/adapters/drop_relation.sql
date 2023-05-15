@@ -19,26 +19,26 @@
 
 {% macro drop_table(relation) -%}
   {{ return(adapter.dispatch('drop_table', 'dbt')(relation)) }}
-{% endmacro %}
+{%- endmacro %}
 
 {% macro default__drop_table(relation) -%}
     drop table if exists {{ relation }} cascade
-{% endmacro %}
+{%- endmacro %}
 
 
 {% macro drop_view(relation) -%}
   {{ return(adapter.dispatch('drop_view', 'dbt')(relation)) }}
-{% endmacro %}
+{%- endmacro %}
 
 {% macro default__drop_view(relation) -%}
     drop view if exists {{ relation }} cascade
-{% endmacro %}
+{%- endmacro %}
 
 
 {% macro drop_materialized_view(relation) -%}
   {{ return(adapter.dispatch('drop_materialized_view', 'dbt')(relation)) }}
-{% endmacro %}
+{%- endmacro %}
 
 {% macro default__drop_materialized_view(relation) -%}
     drop materialized view if exists {{ relation }} cascade
-{% endmacro %}
+{%- endmacro %}
