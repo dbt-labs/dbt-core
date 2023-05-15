@@ -33,9 +33,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  PYTHON_TARGET_VERSION: '3.8'
-
 jobs:
   code-quality:
     name: code-quality
@@ -48,9 +45,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4.3.0
         with:
-          python-version: "${{ env.PYTHON_TARGET_VERSION }}"
+          python-version: '3.8'
 
       - name: Install python dependencies
         run: |
@@ -83,7 +80,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -122,9 +119,9 @@ jobs:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-20.04]
         include:
-          - python-version: "${{ env.PYTHON_TARGET_VERSION }}"
+          - python-version: 3.8
             os: windows-latest
-          - python-version: "${{ env.PYTHON_TARGET_VERSION }}"
+          - python-version: 3.8
             os: macos-latest
 
     env:
@@ -140,7 +137,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -195,9 +192,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4.3.0
         with:
-          python-version: "${{ env.PYTHON_TARGET_VERSION }}"
+          python-version: '3.8'
 
       - name: Install python dependencies
         run: |
