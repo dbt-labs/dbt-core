@@ -7,7 +7,7 @@
         {%- if relation.is_table -%}
             {{- drop_table(relation) -}}
         {%- elif relation.is_view -%}
-            {{- drop_table(relation) -}}
+            {{- drop_view(relation) -}}
         {%- elif relation.is_materialized_view -%}
             {{- drop_materialized_view(relation) -}}
         {%- else -%}
