@@ -13,7 +13,7 @@
         {% if build_sql == '' %}
             {{ _execute_no_op(target_relation) }}
         {% else %}
-            {{ _execute_build_sql(build_sql, existing_relation, target_relation, grant_config, post_hooks) }}
+            {{ _execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) }}
         {% endif %}
 
     {{ _teardown(backup_relation, intermediate_relation, post_hooks) }}
