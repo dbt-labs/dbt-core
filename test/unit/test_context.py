@@ -230,7 +230,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "submit_python_job",
     "dbt_metadata_envs",
 }
-REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code"}
+REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {"this", "compiled_code", "state_relation"}
 MAYBE_KEYS = frozenset({"debug"})
 
 
