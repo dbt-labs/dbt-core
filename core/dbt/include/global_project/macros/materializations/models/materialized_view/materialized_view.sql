@@ -1,5 +1,4 @@
 {% materialization materialized_view, default %}
-    {% set full_refresh_mode = should_full_refresh() %}
     {% set existing_relation = load_cached_relation(this) %}
     {% set target_relation = this.incorporate(type=this.MaterializedView) %}
     {% set intermediate_relation = make_intermediate_relation(target_relation) %}
@@ -51,6 +50,8 @@
 
 
 {% macro _get_build_sql(existing_relation, target_relation, backup_relation, intermediate_relation) %}
+
+    {% set full_refresh_mode = should_full_refresh() %}
 
     -- determine the scenario we're in: create, full_refresh, alter, refresh data
     {% if existing_relation is none %}

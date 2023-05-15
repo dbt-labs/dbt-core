@@ -61,7 +61,9 @@ class TestOnConfigurationChangeApply(PostgresMixin, OnConfigurationChangeApplyTe
         self, project, configuration_changes_apply
     ):
         # check that indexes are applied in particular
-        _, logs = super().test_model_applies_changes_with_configuration_changes(self, project)
+        _, logs = super().test_model_applies_changes_with_configuration_changes(
+            project, configuration_changes_apply
+        )
         message = f"Applying UPDATE INDEXES to: {relation_from_name(project.adapter, self.base_materialized_view.name)}"
         self.assert_message_in_logs(logs, message)
 
