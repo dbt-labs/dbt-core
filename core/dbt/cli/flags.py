@@ -39,6 +39,9 @@ DEPRECATED_PARAMS = {
 }
 
 
+WHICH_KEY = "which"
+
+
 def convert_config(config_name, config_value):
     """Convert the values from config and original set_from_args to the correct type."""
     ret = config_value
@@ -60,10 +63,10 @@ def args_to_context(args: List[str]) -> Context:
     sub_command_name, sub_command, args = cli.resolve_command(cli_ctx, args)
 
     # Handle source and docs group.
-    if type(sub_command) == Group:
+    if isinstance(sub_command, Group):
         sub_command_name, sub_command, args = sub_command.resolve_command(cli_ctx, args)
 
-    assert type(sub_command) == ClickCommand
+    assert isinstance(sub_command, ClickCommand)
     sub_command_ctx = sub_command.make_context(sub_command_name, args)
     sub_command_ctx.parent = cli_ctx
     return sub_command_ctx
@@ -300,9 +303,9 @@ def get_args_for_cmd_from_dict(cmd: CliCommand, d: Dict[str, Any]) -> List[str]:
     to produce a click context to instantiate Flags with.
     """
 
-    cmd_args = get_args_for_cmd(cmd)
-    parent_args = get_parent_args()
-    default_args = [x.lower() for x in FLAGS_DEFAULTS.keys()]
+    cmd_args = set(get_args_for_cmd(cmd))
+    parent_args = set(get_parent_args())
+    default_args = set([x.lower() for x in FLAGS_DEFAULTS.keys()])
 
     res = cmd.to_list()
 
@@ -310,13 +313,13 @@ def get_args_for_cmd_from_dict(cmd: CliCommand, d: Dict[str, Any]) -> List[str]:
         k = k.lower()
 
         # if a "which" value exists in the args dict, it should match the cmd arg
-        if k == "which":
+        if k == WHICH_KEY:
             if v != cmd.value:
                 raise DbtInternalError(f"cmd '{cmd.value}' does not match value of which: '{v}'")
             continue
 
         # param was assigned from defaults and should not be included
-        if k not in cmd_args + parent_args and k in default_args:
+        if k not in (cmd_args | parent_args) - default_args:
             continue
 
         # if the param is in parent args, it should come before the arg name
