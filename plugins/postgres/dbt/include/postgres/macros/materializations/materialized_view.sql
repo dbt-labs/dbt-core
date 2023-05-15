@@ -11,7 +11,7 @@
     {%- set indexes = configuration_changes.pop("indexes", []) -%}
 
     -- if there are no remaining changes, then all changes can be implemented via alter
-    {%- if configuration_changes == [] -%}
+    {%- if configuration_changes == {} -%}
 
         {{- return(postgres__update_indexes_on_materialized_view(relation, indexes)) -}}
 

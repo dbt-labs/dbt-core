@@ -67,7 +67,7 @@ class PostgresRelation(BaseRelation):
         new_indexes = []
         for index in config.get("indexes", []):
             new_index = {
-                "columns": index.pop("columns").sort(key=lambda x: x.upper()),
+                "columns": sorted(index.pop("columns"), key=lambda x: x.upper()),
                 "type": index.pop("type", self.index_default_type),
                 "unique": index.pop("unique", self.index_default_unique),
             }
