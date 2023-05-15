@@ -50,7 +50,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_TARGET_VERSION }}
+          python-version: "${{ env.PYTHON_TARGET_VERSION }}"
 
       - name: Install python dependencies
         run: |
@@ -122,9 +122,9 @@ jobs:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-20.04]
         include:
-          - python-version: ${{ env.PYTHON_TARGET_VERSION }}
+          - python-version: "${{ env.PYTHON_TARGET_VERSION }}"
             os: windows-latest
-          - python-version: ${{ env.PYTHON_TARGET_VERSION }}
+          - python-version: "${{ env.PYTHON_TARGET_VERSION }}"
             os: macos-latest
 
     env:
@@ -197,7 +197,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_TARGET_VERSION }}
+          python-version: "${{ env.PYTHON_TARGET_VERSION }}"
 
       - name: Install python dependencies
         run: |
