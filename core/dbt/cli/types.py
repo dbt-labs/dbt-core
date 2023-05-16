@@ -28,7 +28,7 @@ class Command(Enum):
         try:
             return cls(s)
         except ValueError:
-            raise DbtInternalError(f"No value '{s}' exists in Commands enum")
+            raise DbtInternalError(f"No value '{s}' exists in Command enum")
 
     def to_list(self) -> List[str]:
         return {
