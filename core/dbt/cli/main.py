@@ -213,6 +213,7 @@ def build(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -284,6 +285,7 @@ def docs_generate(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -477,6 +479,7 @@ def init(ctx, **kwargs):
 @p.state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -577,6 +580,7 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -691,6 +695,7 @@ def source(ctx, **kwargs):
 @p.state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.threads
 @p.vars
 @requires.postflight
