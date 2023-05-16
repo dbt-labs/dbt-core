@@ -284,17 +284,20 @@ class Flags:
         object.__delattr__(self, "deprecated_env_var_warnings")
 
     @classmethod
-    def from_dict(cls, cmd: CliCommand, d: Dict[str, Any]) -> "Flags":
-        arg_list = get_args_for_cmd_from_dict(cmd, d)
-        ctx = args_to_context(arg_list)
+    def from_dict(cls, command: CliCommand, args_dict: Dict[str, Any]) -> "Flags":
+        command_arg_list = command_params(command, args_dict)
+        ctx = args_to_context(command_arg_list)
         flags = cls(ctx=ctx)
         flags.fire_deprecations()
         return flags
 
 
-def get_args_for_cmd_from_dict(cmd: CliCommand, d: Dict[str, Any]) -> List[str]:
-    """Given a command name and a dict, returns a list of strings representing
-    the CLI arguments that for a command. The order of this list is consistent with
+CommandParams = List[str]
+
+
+def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandParams:
+    """Given a command and a dict, returns a list of strings representing
+    the CLI params for that command. The order of this list is consistent with
     which flags are expected at the parent level vs the command level.
 
     e.g. fn("run", {"defer": True, "print": False}) -> ["--no-print", "run", "--defer"]
@@ -303,29 +306,31 @@ def get_args_for_cmd_from_dict(cmd: CliCommand, d: Dict[str, Any]) -> List[str]:
     to produce a click context to instantiate Flags with.
     """
 
-    cmd_args = set(get_args_for_cmd(cmd))
-    parent_args = set(get_parent_args())
+    cmd_args = set(command_args(command))
+    prnt_args = set(parent_args())
     default_args = set([x.lower() for x in FLAGS_DEFAULTS.keys()])
 
-    res = cmd.to_list()
+    res = command.to_list()
 
-    for k, v in d.items():
+    for k, v in args_dict.items():
         k = k.lower()
 
-        # if a "which" value exists in the args dict, it should match the cmd arg
+        # if a "which" value exists in the args dict, it should match the command provided
         if k == WHICH_KEY:
-            if v != cmd.value:
-                raise DbtInternalError(f"cmd '{cmd.value}' does not match value of which: '{v}'")
+            if v != command.value:
+                raise DbtInternalError(
+                    f"Command '{command.value}' does not match value of which: '{v}'"
+                )
             continue
 
         # param was assigned from defaults and should not be included
-        if k not in (cmd_args | parent_args) - default_args:
+        if k not in (cmd_args | prnt_args) - default_args:
             continue
 
         # if the param is in parent args, it should come before the arg name
         # e.g. ["--print", "run"] vs ["run", "--print"]
         add_fn = res.append
-        if k in parent_args:
+        if k in prnt_args:
 
             def add_fn(x):
                 res.insert(0, x)
@@ -342,14 +347,17 @@ def get_args_for_cmd_from_dict(cmd: CliCommand, d: Dict[str, Any]) -> List[str]:
     return res
 
 
-def get_parent_args() -> List[str]:
+ArgsList = List[str]
+
+
+def parent_args() -> ArgsList:
     """Return a list representing the params the base click command takes."""
     from dbt.cli.main import cli
 
-    return format_cmd_params(cli.params)
+    return format_params(cli.params)
 
 
-def get_args_for_cmd(cmd: CliCommand) -> List[str]:
+def command_args(command: CliCommand) -> ArgsList:
     """Given a command, return a list of strings representing the params
     that command takes. This function only returns params assigned to a
     specific command, not those of its parent command.
@@ -377,11 +385,11 @@ def get_args_for_cmd(cmd: CliCommand) -> List[str]:
         CliCommand.SOURCE_FRESHNESS: cli.freshness,
         CliCommand.TEST: cli.test,
     }
-    click_cmd: Optional[ClickCommand] = CMD_DICT.get(cmd, None)
+    click_cmd: Optional[ClickCommand] = CMD_DICT.get(command, None)
     if click_cmd is None:
-        raise DbtInternalError(f"No command found for name '{cmd.name}'")
-    return format_cmd_params(click_cmd.params)
+        raise DbtInternalError(f"No command found for name '{command.name}'")
+    return format_params(click_cmd.params)
 
 
-def format_cmd_params(params: List[Parameter]) -> List[str]:
+def format_params(params: List[Parameter]) -> ArgsList:
     return [str(x.name) for x in params if not str(x.name).lower().startswith("deprecated_")]
