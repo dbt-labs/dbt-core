@@ -8,10 +8,10 @@ from dbt.cli.types import Command
 class TestCLI:
     def _all_commands(self, group=cli, result=set()):
         for command in group.commands.values():
+            result.add(command)
             if isinstance(command, click.Group):
                 self._all_commands(command, result)
                 continue
-            result.add(command)
         return result
 
     def test_commands_have_docstrings(self):
@@ -48,5 +48,7 @@ class TestCLI:
 
     def test_commands_in_enum_and_dict(self):
         for command in self._all_commands(cli):
+            if isinstance(command, click.Group):
+                continue
             cmd = Command.from_str(command.name)
             command_args(cmd)
