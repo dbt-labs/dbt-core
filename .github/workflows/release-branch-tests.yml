@@ -72,14 +72,14 @@ jobs:
     steps:
     - name: Call CI workflow for ${{ matrix.branch }} branch
       id: trigger-step
-      uses: aurelien-baudet/workflow-dispatch@v2.1.1
+      uses: aurelien-baudet/workflow-dispatch@v2
       with:
         workflow: main.yml
         ref: ${{ matrix.branch }}
         token: ${{ secrets.FISHTOWN_BOT_PAT }}
 
     - name: Post failure to Slack
-      uses: ravsamhq/notify-slack-action@v1
+      uses: ravsamhq/notify-slack-action@v2
       if: ${{ always() && !contains(steps.trigger-step.outputs.workflow-conclusion,'success') }}
       with:
         status: ${{ job.status }}

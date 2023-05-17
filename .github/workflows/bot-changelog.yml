@@ -50,7 +50,7 @@ jobs:
     - name: Create and commit changelog on bot PR
       if: ${{ contains(github.event.pull_request.labels.*.name, matrix.label) }}
       id: bot_changelog
-      uses: emmyoop/changie_bot@v1.0.1
+      uses: emmyoop/changie_bot@v1
       with:
         GITHUB_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
         commit_author_name: "Github Build Bot"

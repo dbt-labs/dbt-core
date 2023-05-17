@@ -124,13 +124,13 @@ Some triggers of note that we use:
       steps:
       - name: Get File Name Timestamp
         id: filename_time
-        uses: nanzm/get-time-action@v1.1
+        uses: nanzm/get-time-action@v1
         with:
           format: 'YYYYMMDD-HHmmss'
 
       - name: Get File Content Timestamp
         id: file_content_time
-        uses: nanzm/get-time-action@v1.1
+        uses: nanzm/get-time-action@v1
         with:
           format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
 
@@ -197,7 +197,7 @@ ___
 
   ```yaml
   - name: Configure AWS credentials from Test account
-    uses: aws-actions/configure-aws-credentials@v1
+    uses: aws-actions/configure-aws-credentials@v2
     with:
       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
