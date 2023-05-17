@@ -287,6 +287,10 @@ class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
 
+    @property
+    def identifier(self):
+        return self.alias
+
 
 # This needs to be in all ManifestNodes and also in SourceDefinition,
 # because of "source freshness"
