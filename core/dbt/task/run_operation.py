@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 import traceback
 
@@ -14,6 +15,8 @@ from dbt.events.types import (
     RunningOperationUncaughtError,
     LogDebugStackTrace,
 )
+
+RESULT_FILE_NAME = "run_results.json"
 
 
 class RunOperationTask(ConfiguredTask):
@@ -40,6 +43,9 @@ class RunOperationTask(ConfiguredTask):
 
         return res
 
+    def result_path(self):
+        return os.path.join(self.config.target_path, RESULT_FILE_NAME)
+
     def run(self) -> RunOperationResultsArtifact:
         start = datetime.utcnow()
         self.compile_manifest()
@@ -56,11 +62,18 @@ class RunOperationTask(ConfiguredTask):
         else:
             success = True
         end = datetime.utcnow()
-        return RunOperationResultsArtifact.from_success(
+        result = RunOperationResultsArtifact.from_success(
             generated_at=end,
             elapsed_time=(end - start).total_seconds(),
             success=success,
+            args={
+                k: v
+                for k, v in self.args.__dict__.items()
+                if k.islower() and type(v) in (str, int, float, bool, list, dict)
+            },
         )
+        result.write(self.result_path())
+        return result
 
     def interpret_results(self, results):
         return results.success

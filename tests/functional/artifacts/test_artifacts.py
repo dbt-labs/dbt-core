@@ -4,7 +4,7 @@ from datetime import datetime
 import dbt
 import jsonschema
 
-from dbt.tests.util import run_dbt, get_artifact, check_datetime_between
+from dbt.tests.util import run_dbt, get_artifact, check_datetime_between, run_dbt_and_capture
 from tests.functional.artifacts.expected_manifest import (
     expected_seeded_manifest,
     expected_references_manifest,
@@ -184,6 +184,17 @@ select 0
 {% endtest %}
 """
 
+macros__alter_timezone = """
+{% macro alter_timezone(timezone='America/Los_Angeles') %}
+{% set sql %}
+    SET TimeZone='{{ timezone }}';
+{% endset %}
+
+{% do run_query(sql) %}
+{% do log("Timezone set", info=True) %}
+{% endmacro %}
+"""
+
 snapshot__snapshot_seed_sql = """
 {% snapshot snapshot_seed %}
 {{
@@ -327,7 +338,6 @@ A description of the complex exposure
 {% enddocs %}
 
 """
-
 
 versioned_models__schema_yml = """
 version: 2
@@ -531,6 +541,7 @@ class BaseVerifyProject:
             "schema.yml": macros__schema_yml,
             "macro.md": macros__macro_md,
             "dummy_test.sql": macros__dummy_test_sql,
+            "alter_timezone.sql": macros__alter_timezone,
         }
 
     @pytest.fixture(scope="class")
@@ -648,4 +659,13 @@ class TestVerifyArtifactsVersions(BaseVerifyProject):
         )
         verify_run_results(
             project, expected_versions_run_results(), start_time, run_results_schema_path
+        )
+
+
+class TestVerifyRunOperation(BaseVerifyProject):
+    def test_run_operation(self, project, manifest_schema_path, run_results_schema_path):
+        start_time = datetime.utcnow()
+        results, log_output = run_dbt_and_capture(["run-operation", "alter_timezone"])
+        verify_run_results(
+            project, expected_references_run_results(), start_time, run_results_schema_path
         )

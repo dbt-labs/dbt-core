@@ -1,23 +1,3 @@
-from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
-from dbt.contracts.util import (
-    BaseArtifactMetadata,
-    ArtifactMixin,
-    VersionedSchema,
-    Replaceable,
-    schema_version,
-)
-from dbt.exceptions import DbtInternalError
-from dbt.events.functions import fire_event
-from dbt.events.types import TimingInfoCollected
-from dbt.events.contextvars import get_node_info
-from dbt.events.helpers import datetime_to_json_string
-from dbt.logger import TimingProcessor
-from dbt.utils import lowercase, cast_to_str, cast_to_int
-from dbt.dataclass_schema import dbtClassMixin, StrEnum
-
-import agate
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
@@ -31,7 +11,26 @@ from typing import (
     Union,
 )
 
+import agate
+
 from dbt.clients.system import write_json
+from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
+from dbt.contracts.graph.unparsed import FreshnessThreshold
+from dbt.contracts.util import (
+    BaseArtifactMetadata,
+    ArtifactMixin,
+    VersionedSchema,
+    Replaceable,
+    schema_version,
+)
+from dbt.dataclass_schema import dbtClassMixin, StrEnum
+from dbt.events.contextvars import get_node_info
+from dbt.events.functions import fire_event
+from dbt.events.helpers import datetime_to_json_string
+from dbt.events.types import TimingInfoCollected
+from dbt.exceptions import DbtInternalError
+from dbt.logger import TimingProcessor
+from dbt.utils import lowercase, cast_to_str, cast_to_int
 
 
 @dataclass
@@ -221,7 +220,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version("run-results", 4)
+@schema_version("run-results", 5)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -250,6 +249,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
 @dataclass
 class RunOperationResult(ExecutionResult):
     success: bool
+    args: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -260,7 +260,7 @@ class RunOperationResultMetadata(BaseArtifactMetadata):
 
 
 @dataclass
-@schema_version("run-operation-result", 1)
+@schema_version("run-results", 5)
 class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
     @classmethod
     def from_success(
@@ -268,6 +268,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
         success: bool,
         elapsed_time: float,
         generated_at: datetime,
+        args: Dict,
     ):
         meta = RunOperationResultMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
@@ -278,7 +279,11 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
             results=[],
             elapsed_time=elapsed_time,
             success=success,
+            args=args,
         )
+
+    def write(self, path: str):
+        write_json(path, self.to_dict(omit_none=False))
 
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass
