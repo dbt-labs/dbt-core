@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from dbt.exceptions import DbtInternalError, ParsingError
 
 
-def _trimmed(inp: str) -> str:
+def trimmed(inp: str) -> str:
     if len(inp) < 50:
         return inp
     return inp[:44] + "..." + inp[-3:]

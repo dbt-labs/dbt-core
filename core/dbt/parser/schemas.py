@@ -59,7 +59,7 @@ from dbt.parser.common import (
     TestBlock,
     VersionedTestBlock,
     ParserRef,
-    _trimmed,
+    trimmed,
 )
 from dbt.utils import coerce_dict_str, deep_merge
 
@@ -275,7 +275,7 @@ class YamlReader(metaclass=ABCMeta):
         if not isinstance(data, list):
             raise ParsingError(
                 "{} must be a list, got {} instead: ({})".format(
-                    self.key, type(data), _trimmed(str(data))
+                    self.key, type(data), trimmed(str(data))
                 )
             )
         path = self.yaml.path.original_file_path

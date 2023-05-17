@@ -13,7 +13,7 @@ from dbt.parser.common import (
     TestDef,
     GenericTestBlock,
     VersionedTestBlock,
-    _trimmed,
+    trimmed,
 )
 from dbt.contracts.graph.unparsed import UnparsedNodeUpdate, NodeVersion, UnparsedColumn
 from dbt.contracts.graph.nodes import (
@@ -168,14 +168,14 @@ class SchemaGenericTestParser(SimpleParser):
                 self.schema_yaml_vars.env_vars = {}
 
         except ParsingError as exc:
-            context = _trimmed(str(target))
+            context = trimmed(str(target))
             msg = "Invalid test config given in {}:\n\t{}\n\t@: {}".format(
                 target.original_file_path, exc.msg, context
             )
             raise ParsingError(msg) from exc
 
         except CompilationError as exc:
-            context = _trimmed(str(target))
+            context = trimmed(str(target))
             msg = (
                 "Invalid generic test configuration given in "
                 f"{target.original_file_path}: \n{exc.msg}\n\t@: {context}"
