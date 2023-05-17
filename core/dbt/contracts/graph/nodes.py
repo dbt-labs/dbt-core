@@ -271,8 +271,10 @@ class DependsOn(MacroDependsOn):
 
 
 @dataclass
-class RelationalNode(HasRelationMetadata):
+class StateRelation(dbtClassMixin):
     alias: str
+    database: Optional[str]
+    schema: str
 
     @property
     def identifier(self):
@@ -280,7 +282,8 @@ class RelationalNode(HasRelationMetadata):
 
 
 @dataclass
-class ParsedNodeMandatory(GraphNode, RelationalNode, Replaceable):
+class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
+    alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
 
@@ -619,7 +622,7 @@ class ModelNode(CompiledNode):
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
-    state_relation: Optional[RelationalNode] = None
+    state_relation: Optional[StateRelation] = None
 
     @property
     def is_latest_version(self) -> bool:
@@ -802,7 +805,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    state_relation: Optional[RelationalNode] = None
+    state_relation: Optional[StateRelation] = None
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -1001,7 +1004,7 @@ class IntermediateSnapshotNode(CompiledNode):
 class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
-    state_relation: Optional[RelationalNode] = None
+    state_relation: Optional[StateRelation] = None
 
 
 # ====================================
