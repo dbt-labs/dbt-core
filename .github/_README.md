@@ -124,13 +124,13 @@ Some triggers of note that we use:
       steps:
       - name: Get File Name Timestamp
         id: filename_time
-        uses: nanzm/get-time-action@v1
+        uses: nanzm/get-time-action@v1.1
         with:
           format: 'YYYYMMDD-HHmmss'
 
       - name: Get File Content Timestamp
         id: file_content_time
-        uses: nanzm/get-time-action@v1
+        uses: nanzm/get-time-action@v1.1
         with:
           format: 'YYYY-MM-DDTHH:mm:ss.000000-05:00'
 
