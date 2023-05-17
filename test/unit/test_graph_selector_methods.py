@@ -23,7 +23,7 @@ from dbt.contracts.graph.nodes import (
     TestMetadata,
     ColumnInfo,
 )
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.unparsed import ExposureType, Owner, MetricFilter, MetricTime
 from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
@@ -794,6 +794,7 @@ def manifest(
         disabled=[],
         selectors={},
         groups={},
+        metadata=ManifestMetadata(adapter_type="postgres"),
     )
     return manifest
 

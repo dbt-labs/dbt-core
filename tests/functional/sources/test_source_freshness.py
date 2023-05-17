@@ -10,8 +10,10 @@ from tests.functional.sources.fixtures import (
     error_models_model_sql,
     filtered_models_schema_yml,
     override_freshness_models_schema_yml,
+    collect_freshness_macro_override_previous_return_signature,
 )
 from dbt.tests.util import AnyStringWith, AnyFloat
+from dbt import deprecations
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):
@@ -353,3 +355,23 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
             "filter": None,
         }
         assert result_source_d["criteria"] == expected
+
+
+class TestSourceFreshnessMacroOverride(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "collect_freshness.sql": collect_freshness_macro_override_previous_return_signature
+        }
+
+    def test_source_freshness(self, project):
+        # ensure that the deprecation warning is raised
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        self.run_dbt_with_vars(
+            project,
+            ["source", "freshness"],
+            expect_pass=False,
+        )
+        expected = {"collect-freshness-return-signature"}
+        assert expected == deprecations.active_deprecations

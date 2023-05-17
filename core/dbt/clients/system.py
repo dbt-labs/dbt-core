@@ -211,7 +211,7 @@ def _windows_rmdir_readonly(func: Callable[[str], Any], path: str, exc: Tuple[An
 
 def resolve_path_from_base(path_to_resolve: str, base_path: str) -> str:
     """
-    If path-to_resolve is a relative path, create an absolute path
+    If path_to_resolve is a relative path, create an absolute path
     with base_path as the base.
 
     If path_to_resolve is an absolute path or a user path (~), just

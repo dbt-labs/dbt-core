@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
     ManifestOrPublicNode,
+    ModelNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -49,6 +50,7 @@ from dbt.exceptions import (
     DuplicateResourceNameError,
     DuplicateMacroInPackageError,
     DuplicateMaterializationNameError,
+    AmbiguousResourceNameRefError,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event
@@ -152,33 +154,48 @@ class RefableLookup(dbtClassMixin):
     _lookup_types: ClassVar[set] = set(NodeType.refable())
     _versioned_types: ClassVar[set] = set(NodeType.versioned())
 
-    # refables are actually unique, so the Dict[PackageName, UniqueID] will
-    # only ever have exactly one value, but doing 3 dict lookups instead of 1
-    # is not a big deal at all and retains consistency
     def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
         self.populate_public_nodes(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName], version: Optional[NodeVersion]):
+    def get_unique_id(
+        self,
+        key: str,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion],
+        node: Optional[GraphMemberNode] = None,
+    ):
         if version:
             key = f"{key}.v{version}"
-        return find_unique_id_for_package(self.storage, key, package)
+
+        unique_ids = self._find_unique_ids_for_package(key, package)
+        if len(unique_ids) > 1:
+            raise AmbiguousResourceNameRefError(key, unique_ids, node)
+        else:
+            return unique_ids[0] if unique_ids else None
 
     def find(
         self,
-        key,
+        key: str,
         package: Optional[PackageName],
         version: Optional[NodeVersion],
         manifest: "Manifest",
+        source_node: Optional[GraphMemberNode] = None,
     ):
-        unique_id = self.get_unique_id(key, package, version)
+        unique_id = self.get_unique_id(key, package, version, source_node)
         if unique_id is not None:
             node = self.perform_lookup(unique_id, manifest)
             # If this is an unpinned ref (no 'version' arg was passed),
             # AND this is a versioned node,
             # AND this ref is being resolved at runtime -- get_node_info != {}
-            if version is None and node.is_versioned and get_node_info():
+            # Only ModelNodes can be versioned.
+            if (
+                isinstance(node, ModelNode)
+                and version is None
+                and node.is_versioned
+                and get_node_info()
+            ):
                 # Check to see if newer versions are available, and log an "FYI" if so
                 max_version: UnparsedVersion = max(
                     [
@@ -234,6 +251,22 @@ class RefableLookup(dbtClassMixin):
                 f"Node {unique_id} found in cache but not found in manifest"
             )
         return node
+
+    def _find_unique_ids_for_package(self, key, package: Optional[PackageName]) -> List[str]:
+        if key not in self.storage:
+            return []
+
+        pkg_dct: Mapping[PackageName, UniqueID] = self.storage[key]
+
+        if package is None:
+            if not pkg_dct:
+                return []
+            else:
+                return list(pkg_dct.values())
+        elif package in pkg_dct:
+            return [pkg_dct[package]]
+        else:
+            return []
 
 
 class MetricLookup(dbtClassMixin):
@@ -936,6 +969,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
         self,
+        source_node: GraphMemberNode,
         target_model_name: str,
         target_model_package: Optional[str],
         target_model_version: Optional[NodeVersion],
@@ -948,7 +982,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         candidates = _packages_to_search(current_project, node_package, target_model_package)
         for pkg in candidates:
-            node = self.ref_lookup.find(target_model_name, pkg, target_model_version, self)
+            node = self.ref_lookup.find(
+                target_model_name, pkg, target_model_version, self, source_node
+            )
 
             if node is not None and (
                 (hasattr(node, "config") and node.config.enabled) or node.is_public_node
@@ -1287,6 +1323,8 @@ class WritableManifest(ArtifactMixin):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:
                 del node["config_call_dict"]
+            if "state_relation" in node:
+                del node["state_relation"]
         return dct
 
 

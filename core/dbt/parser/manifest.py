@@ -93,6 +93,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     ManifestNode,
     ResultNode,
+    ModelNode,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
@@ -103,7 +104,12 @@ from dbt.contracts.publication import (
     PublicModel,
     ProjectDependencies,
 )
-from dbt.exceptions import TargetNotFoundError, AmbiguousAliasError, PublicationConfigNotFound
+from dbt.exceptions import (
+    TargetNotFoundError,
+    AmbiguousAliasError,
+    PublicationConfigNotFound,
+    ProjectDependencyCycleError,
+)
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.generic_test import GenericTestParser
@@ -1261,22 +1267,24 @@ def _check_resource_uniqueness(
     manifest: Manifest,
     config: RuntimeConfig,
 ) -> None:
-    names_resources: Dict[str, ManifestNode] = {}
     alias_resources: Dict[str, ManifestNode] = {}
+    name_resources: Dict[str, Dict] = {}
 
     for resource, node in manifest.nodes.items():
         if not node.is_relational:
             continue
 
-        name = node.name
+        if node.package_name not in name_resources:
+            name_resources[node.package_name] = {"ver": {}, "unver": {}}
+        if node.is_versioned:
+            name_resources[node.package_name]["ver"][node.name] = node
+        else:
+            name_resources[node.package_name]["unver"][node.name] = node
+
         # the full node name is really defined by the adapter's relation
         relation_cls = get_relation_class_by_name(config.credentials.type)
         relation = relation_cls.create_from(config=config, node=node)
         full_node_name = str(relation)
-
-        existing_node = names_resources.get(name)
-        if existing_node is not None and not existing_node.is_versioned:
-            raise dbt.exceptions.DuplicateResourceNameError(existing_node, node)
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
@@ -1284,8 +1292,19 @@ def _check_resource_uniqueness(
                 node_1=existing_alias, node_2=node, duped_name=full_node_name
             )
 
-        names_resources[name] = node
         alias_resources[full_node_name] = node
+
+    for ver_unver_dict in name_resources.values():
+        versioned_names = ver_unver_dict["ver"].keys()
+        unversioned_names = ver_unver_dict["unver"].keys()
+        intersection_versioned = set(versioned_names).intersection(set(unversioned_names))
+        if intersection_versioned:
+            for name in intersection_versioned:
+                versioned_node = ver_unver_dict["ver"][name]
+                unversioned_node = ver_unver_dict["unver"][name]
+                raise dbt.exceptions.DuplicateVersionedUnversionedError(
+                    versioned_node, unversioned_node
+                )
 
 
 def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
@@ -1362,6 +1381,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
         target_model = manifest.resolve_ref(
+            exposure,
             target_model_name,
             target_model_package,
             target_model_version,
@@ -1384,10 +1404,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             # Exposures do not have a group and so can never reference private models
             raise dbt.exceptions.DbtReferenceError(
                 unique_id=exposure.unique_id,
@@ -1414,6 +1431,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
             )
 
         target_model = manifest.resolve_ref(
+            metric,
             target_model_name,
             target_model_package,
             target_model_version,
@@ -1435,10 +1453,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 should_warn_if_disabled=False,
             )
             continue
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             if not metric.group or metric.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=metric.unique_id,
@@ -1518,6 +1533,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             )
 
         target_model = manifest.resolve_ref(
+            node,
             target_model_name,
             target_model_package,
             target_model_version,
@@ -1541,10 +1557,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             continue
 
         # Handle references to models that are private
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             if not node.group or node.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=node.unique_id,
@@ -1677,7 +1690,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     public_node_ids = {
         node.unique_id
         for node in manifest.nodes.values()
-        if node.resource_type == NodeType.Model and node.access == AccessType.Public
+        if isinstance(node, ModelNode) and node.access == AccessType.Public
     }
 
     # Get the Graph object from the Linker
@@ -1689,6 +1702,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     public_models = {}
     for unique_id in public_node_ids:
         model = manifest.nodes[unique_id]
+        assert isinstance(model, ModelNode)
         # public_node_dependencies is the intersection of all parent nodes plus public nodes
         parents: Set[UniqueId] = graph.select_parents({UniqueId(unique_id)})
         public_node_dependencies: Set[UniqueId] = parents.intersection(public_node_ids)
@@ -1716,6 +1730,10 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     # Get dependencies from publication dependencies
     for pub_project in manifest.publications.values():
         for project_name in pub_project.dependencies:
+            if project_name == root_project.project_name:
+                raise ProjectDependencyCycleError(
+                    pub_project_name=pub_project.project_name, project_name=project_name
+                )
             if project_name not in dependencies:
                 dependencies.append(project_name)
 

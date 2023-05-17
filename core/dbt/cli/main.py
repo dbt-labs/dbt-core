@@ -213,6 +213,7 @@ def build(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -284,19 +285,18 @@ def docs_generate(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
     task = ServeTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
     )
 
     results = task.run()
@@ -424,7 +424,7 @@ def debug(ctx, **kwargs):
 @cli.command("deps")
 @click.pass_context
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.target
 @p.vars
@@ -446,7 +446,7 @@ def deps(ctx, **kwargs):
 # for backwards compatibility, accept 'project_name' as an optional positional argument
 @click.argument("project_name", required=False)
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
 @p.target
@@ -479,6 +479,7 @@ def init(ctx, **kwargs):
 @p.state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -579,6 +580,7 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -693,6 +695,7 @@ def source(ctx, **kwargs):
 @p.state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.threads
 @p.vars
 @requires.postflight
