@@ -242,7 +242,7 @@ def manifest(*args0, write=True, write_perf_info=False):
                 manifest = ManifestLoader.get_full_manifest(
                     runtime_config,
                     write_perf_info=write_perf_info,
-                    publications=ctx.obj["_publications"],
+                    publications=ctx.obj.get("_publications"),
                 )
 
                 ctx.obj["manifest"] = manifest
