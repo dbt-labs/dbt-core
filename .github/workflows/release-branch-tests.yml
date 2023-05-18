@@ -70,12 +70,15 @@ jobs:
           - branch: 'main'
 
     steps:
-    - name: Call CI workflow for ${{ matrix.branch }} branch
-      id: trigger-step
-      run: |
-        gh workflow run main.yml --ref ${{ matrix.branch }}
-      env:
-        GH_TOKEN: ${{ github.token }}
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Call CI workflow for ${{ matrix.branch }} branch
+        id: trigger-step
+        run: |
+          gh workflow run main.yml --ref ${{ matrix.branch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
 
     # - name: Post failure to Slack
     #   uses: ravsamhq/notify-slack-action@v2
