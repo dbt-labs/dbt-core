@@ -70,8 +70,10 @@ jobs:
           - branch: 'main'
 
     steps:
-      - name: Check out the repository
+      - name: Check out ${{ matrix.branch }}
         uses: actions/checkout@v3
+        with:
+          ref: ${{ matrix.branch }}
 
       - name: Call CI workflow for ${{ matrix.branch }} branch
         id: trigger-step
