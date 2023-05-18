@@ -28,4 +28,5 @@ jobs:
     with:
       add_label: "triage"
       remove_label: "awaiting_response"
-    secrets: inherit # this is only acceptable because we own the action we're calling
+    secrets:
+      GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
