@@ -21,6 +21,7 @@ on:
       - "releases/*"
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions: read-all
 

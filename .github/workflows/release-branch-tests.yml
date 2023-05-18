@@ -72,11 +72,7 @@ jobs:
     steps:
     - name: Call CI workflow for ${{ matrix.branch }} branch
       id: trigger-step
-      uses: aurelien-baudet/workflow-dispatch@v2
-      with:
-        workflow: main.yml
-        ref: ${{ matrix.branch }}
-        token: ${{ secrets.FISHTOWN_BOT_PAT }}
+      uses: dbt-labs/dbt-core/.github/workflows/main.yml@${{ matrix.branch }}
 
     - name: Post failure to Slack
       uses: ravsamhq/notify-slack-action@v2
