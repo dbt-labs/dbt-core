@@ -388,11 +388,12 @@ class LogManager(logbook.NestedSetup):
         self.objects.append(handler)
 
     def set_path(self, _):
-        """No-op that allows dbt-rpc to not break due to GH #7661"""
+        """No-op that allows dbt-rpc to not break. See GH #7661"""
         pass
 
     @property
     def initialized(self):
+        """Dummy return value for dbt-rpc. See GH#7661"""
         return True
 
     # this is used by `dbt ls` to allow piping stdout to jq, etc
