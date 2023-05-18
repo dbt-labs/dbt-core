@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
-      # must run CI 1 branch at a time b/c the workflow-dispatch Action polls for
+      # must run CI 1 branch at a time b/c the workflow-dispatch polls for
       # latest run for results and it gets confused when we kick off multiple runs
       # at once. There is a race condition so we will just run in sequential order.
       max-parallel: 1
@@ -79,6 +79,31 @@ jobs:
         id: trigger-step
         run: |
           gh workflow run main.yml --ref ${{ matrix.branch }}
+        env:
+          GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
+
+      - name: Get workflow run ID
+        id: workflow-id
+        run: |
+           table=$(gh run list --workflow=main.yml)
+           echo $table
+           id=$(echo "$table" | awk 'NR==1' | jq -Rr 'split("\t")[6]')
+           echo $id
+           echo "id=$id" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
+
+      - name: Wait for run to complete
+        id: monitor-run
+        run: |
+          gh run watch ${{ steps.workflow-id.outputs.id }}  && notify-send "Run for ${{ matrix.branch }} has completed"
+        env:
+          GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
+
+      - name: Check if run was successful
+        id: status-check
+        run: |
+          gh run view ${{ steps.workflow-id.outputs.id }} --exit-status
         env:
           GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
 
