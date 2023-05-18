@@ -385,6 +385,10 @@ class LogManager(logbook.NestedSetup):
         """add an handler to the log manager that runs before the file handler."""
         self.objects.append(handler)
 
+    def set_path(self):
+        """No-op that allows dbt-rpc to not break due to GH #7661"""
+        pass
+
     # this is used by `dbt ls` to allow piping stdout to jq, etc
     def stderr_console(self):
         """Output to stderr at WARNING level instead of stdout"""
