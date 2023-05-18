@@ -65,7 +65,7 @@ jobs:
         include:
           - branch: 'main'
 
-    uses: dbt-labs/dbt-core/.github/workflows/main.yml@${{ matrix.branch }}
+    uses: dbt-labs/dbt-core/.github/workflows/main.yml@${{matrix.branch}}
 
   slack-notification:
     name: Slack Notification
