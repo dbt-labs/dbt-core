@@ -323,6 +323,8 @@ CACHE_LOGGER.disable()
 
 warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed.*<socket.socket.*>")
 
+initialized = False
+
 
 def make_log_dir_if_missing(log_dir):
     import dbt.clients.system
@@ -385,9 +387,13 @@ class LogManager(logbook.NestedSetup):
         """add an handler to the log manager that runs before the file handler."""
         self.objects.append(handler)
 
-    def set_path(self):
+    def set_path(self, _):
         """No-op that allows dbt-rpc to not break due to GH #7661"""
         pass
+
+    @property
+    def initialized(self):
+        return True
 
     # this is used by `dbt ls` to allow piping stdout to jq, etc
     def stderr_console(self):
