@@ -59,25 +59,29 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      # must run CI 1 branch at a time b/c the workflow-dispatch Action polls for
+      # latest run for results and it gets confused when we kick off multiple runs
+      # at once. There is a race condition so we will just run in sequential order.
+      max-parallel: 1
       fail-fast: false
       matrix:
         branch: ${{ fromJSON(needs.fetch-latest-branches.outputs.latest-branches) }}
         include:
           - branch: 'main'
 
-    uses: dbt-labs/dbt-core/.github/workflows/main.yml@${{matrix.branch}}
+    steps:
+    - name: Call CI workflow for ${{ matrix.branch }} branch
+      id: trigger-step
+      run: |
+        gh workflow run main.yml --ref ${{ matrix.branch }}
 
-  slack-notification:
-    name: Slack Notification
-    if: ${{ failure() && github.event_name == 'schedule' }}
-
-    needs:
-      [kick-off-ci]
-
-    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
-    with:
-      status: "failure"
-      notification_title: "Scheduled Release Branch Tests Status"
-
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
+    - name: Post failure to Slack
+      uses: ravsamhq/notify-slack-action@v2
+      if: ${{ always() && !contains(steps.trigger-step.outputs.workflow-conclusion,'success') }}
+      with:
+        status: ${{ job.status }}
+        notification_title: 'dbt-core scheduled run of "${{ matrix.branch }}" branch not successful'
+        message_format: ':x: CI on branch "${{ matrix.branch }}" ${{ steps.trigger-step.outputs.workflow-conclusion }}'
+        footer: 'Linked failed CI run ${{ steps.trigger-step.outputs.workflow-url }}'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
