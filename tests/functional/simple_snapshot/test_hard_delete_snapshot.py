@@ -1,9 +1,5 @@
 import os
 from datetime import datetime
-from datetime import timedelta
-from datetime import timezone
-import time
-
 import pytz
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal
@@ -17,14 +13,6 @@ from tests.functional.simple_snapshot.fixtures import (
 
 # These tests uses the same seed data, containing 20 records of which we hard delete the last 10.
 # These deleted records set the dbt_valid_to to time the snapshot was ran.
-
-# Using replace on a timestamp won't account for hour differences unless given the local timezone.
-# We can force python as utc but not postgres fields which need to be handled as local timestamps.
-def currenttz():
-    if time.daylight:
-        return timezone(timedelta(seconds=-time.altzone), time.tzname[1])
-    else:
-        return timezone(timedelta(seconds=-time.timezone), time.tzname[0])
 
 
 def datetime_snapshot():
@@ -94,7 +82,7 @@ def test_snapshot_hard_delete(project):
     for result in snapshotted[10:]:
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[-1], datetime)
-        assert result[-1].replace(tzinfo=currenttz()) >= invalidated_snapshot_datetime
+        assert result[-1].replace(tzinfo=pytz.UTC) >= invalidated_snapshot_datetime
 
     # revive records
     # Timestamp must have microseconds for tests below to be meaningful
@@ -133,7 +121,7 @@ def test_snapshot_hard_delete(project):
     for result in invalidated_records:
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[1], datetime)
-        assert result[1].replace(tzinfo=currenttz()) >= invalidated_snapshot_datetime
+        assert result[1].replace(tzinfo=pytz.UTC) >= invalidated_snapshot_datetime
 
     # records which were revived (id = 10, 11)
     # dbt_valid_to is null
