@@ -274,7 +274,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
+        self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
     ) -> Tuple[AdapterResponse, agate.Table]:
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
@@ -283,10 +283,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
+        :param Optional[int] limit: If set, only fetch n number of rows
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
+        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch, limit=limit)
 
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:

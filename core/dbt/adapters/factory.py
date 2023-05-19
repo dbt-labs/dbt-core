@@ -158,6 +158,9 @@ class AdapterContainer:
     def get_adapter_type_names(self, name: Optional[str]) -> List[str]:
         return [p.adapter.type() for p in self.get_adapter_plugins(name)]
 
+    def get_adapter_constraint_support(self, name: Optional[str]) -> List[str]:
+        return self.lookup_adapter(name).CONSTRAINT_SUPPORT  # type: ignore
+
 
 FACTORY: AdapterContainer = AdapterContainer()
 
@@ -212,6 +215,10 @@ def get_adapter_package_names(name: Optional[str]) -> List[str]:
 
 def get_adapter_type_names(name: Optional[str]) -> List[str]:
     return FACTORY.get_adapter_type_names(name)
+
+
+def get_adapter_constraint_support(name: Optional[str]) -> List[str]:
+    return FACTORY.get_adapter_constraint_support(name)
 
 
 @contextmanager

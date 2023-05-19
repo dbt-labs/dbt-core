@@ -1,11 +1,14 @@
 import pytest
+import json
+from pathlib import Path
+
 
 from dbt.contracts.results import RunResult
 from dbt.tests.util import run_dbt
 
 
 models__one_sql = """
-select 1 /failed
+select 1
 """
 
 models__two_sql = """
@@ -28,6 +31,12 @@ class TestFastFailingDuringRun(FailFastBase):
         res = run_dbt(["run", "--fail-fast", "--threads", "1"], expect_pass=False)
         # a RunResult contains only one node so we can be sure only one model was run
         assert type(res) == RunResult
+        run_results_file = Path(project.project_root) / "target/run_results.json"
+        assert run_results_file.is_file()
+        with run_results_file.open() as run_results_str:
+            run_results = json.loads(run_results_str.read())
+            assert run_results["results"][0]["status"] == "success"
+            assert run_results["results"][1]["status"] == "error"
 
 
 class TestFailFastFromConfig(FailFastBase):

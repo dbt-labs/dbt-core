@@ -22,7 +22,7 @@ class GenericTestParser(BaseParser[GenericTestNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def parse_generic_test(
+    def create_generic_test_macro(
         self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str
     ) -> Macro:
         unique_id = self.generate_unique_id(name)
@@ -76,7 +76,7 @@ class GenericTestParser(BaseParser[GenericTestNode]):
                 continue
 
             name: str = generic_test_name.replace(MACRO_PREFIX, "")
-            node = self.parse_generic_test(block, base_node, name)
+            node = self.create_generic_test_macro(block, base_node, name)
             yield node
 
     def parse_file(self, block: FileBlock):
