@@ -982,7 +982,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         return resolved_refs
 
-    # TODO: Simplify this function by passing the ref (target) instead of the ref's properties
     # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(

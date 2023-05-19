@@ -193,7 +193,7 @@ class ConfiguredParser(
             language = ModelLanguage.python
             config.add_config_call({"materialized": "table"})
         else:
-            # this is not ideal, but we have a lot of tests to adjust if don't do it
+            # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql
 
         dct = {
@@ -212,7 +212,6 @@ class ConfiguredParser(
             "config": self.config_dict(config),
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
-
         dct.update(kwargs)
         try:
             return self.parse_from_dict(dct, validate=True)

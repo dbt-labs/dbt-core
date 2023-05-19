@@ -516,8 +516,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # We're not passing the ParsedNodePatch around anymore, so we
         # could possibly skip creating one. Leaving here for now for
         # code consistency.
+        deprecation_date: Optional[datetime.datetime] = None
         if isinstance(block.target, UnparsedModelUpdate):
-            deprecation_date: Optional[datetime.datetime] = block.target.deprecation_date
+            deprecation_date = block.target.deprecation_date
 
         patch = ParsedNodePatch(
             name=block.target.name,
@@ -788,6 +789,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         super().patch_node_properties(node, patch)
         node.version = patch.version
         node.latest_version = patch.latest_version
+        node.deprecation_date = patch.deprecation_date
         if patch.access:
             if AccessType.is_valid(patch.access):
                 node.access = AccessType(patch.access)
