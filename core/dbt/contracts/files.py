@@ -110,17 +110,23 @@ class FileHash(dbtClassMixin):
 
     @classmethod
     def from_path(cls, path: str, name="sha256") -> "FileHash":
-        """Create a file hash from the file at given path. It always uses
-        utf-8 encoding to give similar hashes as `FileHash.from_contents`.
+        """Create a file hash from the file at given path. The hash is always the
+        utf-8 encoding of the contents which is stripped to give similar hashes
+        as `FileHash.from_contents`.
         """
         path = convert_path(path)
         chunk_size = 1 * 1024 * 1024
         file_hash = hashlib.new(name)
         with open(path, "r") as handle:
-            chunk = handle.read(chunk_size)
+            # Left and rightstrip start and end of contents to give identical
+            # results as the seed hashing implementation with from_contents
+            chunk = handle.read(chunk_size).lstrip()
             while chunk:
+                next_chunk = handle.read(chunk_size)
+                if not next_chunk:
+                    chunk = chunk.rstrip()
                 file_hash.update(chunk.encode("utf-8"))
-                chunk = handle.read(chunk_size)
+                chunk = next_chunk
         return cls(name=name, checksum=file_hash.hexdigest())
 
 
