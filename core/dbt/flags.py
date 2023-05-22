@@ -3,6 +3,7 @@ from os import getenv as os_getenv
 from argparse import Namespace
 from multiprocessing import get_context
 from typing import Optional
+from pathlib import Path
 
 
 # for setting up logger for legacy logger
