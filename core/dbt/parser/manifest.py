@@ -194,10 +194,12 @@ class ManifestLoader:
         all_projects: Mapping[str, Project],
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
         file_diff: Optional[FileDiff] = None,
+        publications: Optional[List[PublicationArtifact]] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
         self.file_diff = file_diff
+        self.publications = publications
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
@@ -235,6 +237,7 @@ class ManifestLoader:
         file_diff: Optional[FileDiff] = None,
         reset: bool = False,
         write_perf_info=False,
+        publications: Optional[List[PublicationArtifact]] = None,
     ) -> Manifest:
 
         adapter = get_adapter(config)  # type: ignore
@@ -257,7 +260,13 @@ class ManifestLoader:
             start_load_all = time.perf_counter()
 
             projects = config.load_dependencies()
-            loader = cls(config, projects, macro_hook=macro_hook, file_diff=file_diff)
+            loader = cls(
+                config,
+                projects,
+                macro_hook=macro_hook,
+                file_diff=file_diff,
+                publications=publications,
+            )
 
             manifest = loader.load()
 
@@ -458,8 +467,7 @@ class ManifestLoader:
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
-            # load the publication artifacts and create the external nodes
-            # This also loads manifest.dependencies
+            # load manifest.dependencies and associated publication artifacts to create the external nodes
             public_nodes_changed = self.build_public_nodes()
             if public_nodes_changed:
                 self.manifest.rebuild_ref_lookup()
@@ -751,28 +759,19 @@ class ManifestLoader:
 
     def load_new_public_nodes(self):
         for project in self.manifest.project_dependencies.projects:
-            # look for a <project_name>_publication.json file for every project in the 'publications' dir
-            publication_file_name = f"{project.name}_publication.json"
-            # TODO: eventually we'll implement publications_dir config
-            path = os.path.join("publications", publication_file_name)
-            if os.path.exists(path):
-                contents = load_file_contents(path)
-                pub_dict = load_yaml_text(contents)
-                PublicationArtifact.validate(pub_dict)
-                # separate out the public_models
-                public_models = pub_dict.pop("public_models")
-                # Create the PublicationConfig to store in internal manifest
-                pub_config = PublicationConfig.from_dict(pub_dict)
-                self.manifest.publications[project.name] = pub_config
+            publication = (
+                next(p for p in self.publications if p.project_name == project.name)
+                if self.publications
+                else None
+            )
+            if publication:
+                publication_config = PublicationConfig.from_publication(publication)
+                self.manifest.publications[project.name] = publication_config
                 # Add to dictionary of public_nodes and save id in PublicationConfig
-                for public_model_dict in public_models.values():
-                    public_node = PublicModel.from_dict(public_model_dict)
+                for public_node in publication.public_models.values():
                     self.manifest.public_nodes[public_node.unique_id] = public_node
-                    pub_config.public_node_ids.append(public_node.unique_id)
             else:
-                raise PublicationConfigNotFound(
-                    project=project.name, file_name=publication_file_name
-                )
+                raise PublicationConfigNotFound(project=project.name)
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to

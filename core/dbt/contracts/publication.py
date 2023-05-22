@@ -114,3 +114,12 @@ class PublicationConfig(ArtifactMixin, PublicationMandatory):
     # list of project name strings
     dependencies: List[str] = field(default_factory=list)
     public_node_ids: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_publication(cls, publication: PublicationArtifact):
+        return cls(
+            project_name=publication.project_name,
+            metadata=publication.metadata,
+            dependencies=publication.dependencies,
+            public_node_ids=list(publication.public_models.keys()),
+        )

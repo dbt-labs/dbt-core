@@ -20,6 +20,7 @@ from dbt.events.functions import (
 )
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
+from dbt.contracts.publication import PublicationArtifact
 
 
 # =============================================================================
@@ -69,7 +70,11 @@ from dbt.events.types import Note
 #   run_dbt(["run", "--vars", "seed_name: base"])
 # If the command is expected to fail, pass in "expect_pass=False"):
 #   run_dbt("test"], expect_pass=False)
-def run_dbt(args: List[str] = None, expect_pass=True):
+def run_dbt(
+    args: List[str] = None,
+    expect_pass: bool = True,
+    publications: List[PublicationArtifact] = None,
+):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
 
@@ -94,7 +99,7 @@ def run_dbt(args: List[str] = None, expect_pass=True):
         args.extend(["--profiles-dir", profiles_dir])
 
     dbt = dbtRunner()
-    res = dbt.invoke(args)
+    res = dbt.invoke(args, publications=publications)
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`

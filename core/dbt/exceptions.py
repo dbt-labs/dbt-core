@@ -408,14 +408,13 @@ class DbtProfileError(DbtConfigError):
 class PublicationConfigNotFound(DbtConfigError):
     def __init__(self, project=None, file_name=None):
         self.project = project
-        self.file_name = file_name
         msg = self.message()
         super().__init__(msg, project=project)
 
     def message(self):
         return (
             f"A dependency on project {self.project} was specified, "
-            f"but file {self.file_name} was not found."
+            f"but a publication for {self.project} was not found."
         )
 
 
