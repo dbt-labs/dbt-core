@@ -559,7 +559,7 @@ class ManifestLoader:
                     fire_event(
                         DeprecatedModel(
                             model_name=node.name,
-                            model_version=str(node.version),
+                            model_version=node.version,
                             deprecation_date=node.deprecation_date.isoformat(),
                         )
                     )
@@ -579,7 +579,7 @@ class ManifestLoader:
                                 model_name=node.name,
                                 ref_model_package=resolved_ref.package_name,
                                 ref_model_name=resolved_ref.name,
-                                ref_model_version=str(resolved_ref.version),
+                                ref_model_version=resolved_ref.version,
                                 ref_model_latest_version=str(resolved_ref.latest_version),
                                 ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
                             )

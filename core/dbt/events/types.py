@@ -1153,7 +1153,7 @@ class DeprecatedModel(WarnLevel):
     def message(self) -> str:
         version = ".v" + self.model_version if self.model_version else ""
         return (
-            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}."
+            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
             "This model should be disabled or removed."
         )
 
