@@ -4,7 +4,7 @@ from datetime import datetime
 import dbt
 import jsonschema
 
-from dbt.tests.util import run_dbt, get_artifact, check_datetime_between
+from dbt.tests.util import run_dbt, get_artifact, check_datetime_between, run_dbt_and_capture
 from tests.functional.artifacts.expected_manifest import (
     expected_seeded_manifest,
     expected_references_manifest,
@@ -17,7 +17,7 @@ from tests.functional.artifacts.expected_run_results import (
 )
 
 from dbt.contracts.graph.manifest import WritableManifest
-from dbt.contracts.results import RunResultsArtifact
+from dbt.contracts.results import RunResultsArtifact, RunStatus
 
 models__schema_yml = """
 version: 2
@@ -129,6 +129,17 @@ models__model_sql = """
 select * from {{ ref('seed') }}
 """
 
+models__model_with_pre_hook_sql = """
+{{
+    config(
+        pre_hook={
+            "sql": "{{ alter_timezone(timezone='Etc/UTC') }}"
+        }
+    )
+}}
+select current_setting('timezone') as timezone
+"""
+
 seed__schema_yml = """
 version: 2
 seeds:
@@ -182,6 +193,17 @@ macros__dummy_test_sql = """
 select 0
 
 {% endtest %}
+"""
+
+macros__alter_timezone_sql = """
+{% macro alter_timezone(timezone='America/Los_Angeles') %}
+{% set sql %}
+    SET TimeZone='{{ timezone }}';
+{% endset %}
+
+{% do run_query(sql) %}
+{% do log("Timezone set to: " + timezone, info=True) %}
+{% endmacro %}
 """
 
 snapshot__snapshot_seed_sql = """
@@ -327,7 +349,6 @@ A description of the complex exposure
 {% enddocs %}
 
 """
-
 
 versioned_models__schema_yml = """
 version: 2
@@ -508,7 +529,7 @@ def verify_run_results(project, expected_run_results, start_time, run_results_sc
     # sort the results so we can make reasonable assertions
     run_results["results"].sort(key=lambda r: r["unique_id"])
     assert run_results["results"] == expected_run_results
-    set(run_results) == {"elapsed_time", "results", "metadata"}
+    assert set(run_results) == {"elapsed_time", "results", "metadata"}
 
 
 class BaseVerifyProject:
@@ -649,3 +670,28 @@ class TestVerifyArtifactsVersions(BaseVerifyProject):
         verify_run_results(
             project, expected_versions_run_results(), start_time, run_results_schema_path
         )
+
+
+class TestVerifyRunOperation(BaseVerifyProject):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"alter_timezone.sql": macros__alter_timezone_sql}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_with_pre_hook.sql": models__model_with_pre_hook_sql,
+        }
+
+    def test_run_operation(self, project):
+        results, log_output = run_dbt_and_capture(["run-operation", "alter_timezone"])
+        assert len(results) == 1
+        assert results[0].status == RunStatus.Success
+        assert results[0].unique_id == "operation.test.alter_timezone"
+        assert "Timezone set to: America/Los_Angeles" in log_output
+
+    def test_run_model(self, project):
+        results, log_output = run_dbt_and_capture(["run", "--select", "model_with_pre_hook"])
+        assert len(results) == 1
+        assert results[0].status == RunStatus.Success
+        assert "Timezone set to: Etc/UTC" in log_output
