@@ -529,7 +529,7 @@ def verify_run_results(project, expected_run_results, start_time, run_results_sc
     # sort the results so we can make reasonable assertions
     run_results["results"].sort(key=lambda r: r["unique_id"])
     assert run_results["results"] == expected_run_results
-    assert set(run_results) == {"elapsed_time", "results", "metadata"}
+    assert set(run_results) == {"elapsed_time", "results", "metadata", "args"}
 
 
 class BaseVerifyProject:
