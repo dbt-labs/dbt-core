@@ -28,5 +28,4 @@ jobs:
     with:
       add_label: "triage"
       remove_label: "awaiting_response"
-    secrets:
-      GH_TOKEN: inherit
+    secrets: inherit
