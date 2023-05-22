@@ -29,4 +29,4 @@ jobs:
       add_label: "triage"
       remove_label: "awaiting_response"
     secrets:
-      GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
+      GH_TOKEN: inherit
