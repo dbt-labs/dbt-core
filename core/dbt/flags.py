@@ -95,6 +95,8 @@ def get_flag_dict():
 def get_flag_obj():
     new_flags = Namespace()
     for key, val in get_flag_dict().items():
+        if isinstance(val, Path):
+            val = str(val)
         setattr(new_flags, key.upper(), val)
     # The following 3 are CLI arguments only so they're not full-fledged flags,
     # but we put in flags for users.
