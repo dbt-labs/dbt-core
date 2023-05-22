@@ -145,17 +145,17 @@ class InitTask(BaseTask):
         This will overwrite any profile with a matching name."""
         # Create the profile directory if it doesn't exist
         profiles_filepath = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
+
+        profiles = {profile_name: profile}
+
         if profiles_filepath.exists():
-            with open(profiles_filepath, "r+") as f:
+            with open(profiles_filepath, "r") as f:
                 profiles = yaml.safe_load(f) or {}
                 profiles[profile_name] = profile
-                f.seek(0)
-                yaml.dump(profiles, f)
-                f.truncate()
-        else:
-            profiles = {profile_name: profile}
-            with open(profiles_filepath, "w") as f:
-                yaml.dump(profiles, f)
+
+        # Write the profiles dictionary to a brand-new or pre-existing file
+        with open(profiles_filepath, "w") as f:
+            yaml.dump(profiles, f)
 
     def create_profile_from_profile_template(self, profile_template: dict, profile_name: str):
         """Create and write a profile using the supplied profile_template."""
