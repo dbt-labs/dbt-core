@@ -250,11 +250,10 @@ class InitTask(BaseTask):
     def create_new_project(self, project_name: str):
         self.copy_starter_repo(project_name)
         os.chdir(project_name)
-        with open("dbt_project.yml", "r+") as f:
+        with open("dbt_project.yml", "r") as f:
             content = f"{f.read()}".format(project_name=project_name, profile_name=project_name)
-            f.seek(0)
+        with open("dbt_project.yml", "w") as f:
             f.write(content)
-            f.truncate()
         fire_event(
             ProjectCreated(
                 project_name=project_name,
