@@ -589,7 +589,7 @@ class TestInitInvalidProjectNameCLI(TestInitOutsideOfProjectBase):
         manager.prompt.side_effect = [valid_name]
         mock_get_adapter.return_value = [project.adapter.type()]
 
-        run_dbt(["init", invalid_name, "-s"])
+        run_dbt(["init", invalid_name, "--skip-profile-setup"])
         manager.assert_has_calls(
             [
                 call.prompt("Enter a name for your project (letters, digits, underscore)"),
@@ -613,7 +613,7 @@ class TestInitInvalidProjectNamePrompt(TestInitOutsideOfProjectBase):
         manager.prompt.side_effect = [invalid_name, valid_name]
         mock_get_adapter.return_value = [project.adapter.type()]
 
-        run_dbt(["init", "-s"])
+        run_dbt(["init", "--skip-profile-setup"])
         manager.assert_has_calls(
             [
                 call.prompt("Enter a name for your project (letters, digits, underscore)"),
@@ -645,7 +645,7 @@ class TestInitProvidedProjectNameAndSkipProfileSetup(TestInitOutsideOfProjectBas
         mock_get.return_value = [project.adapter.type()]
 
         # provide project name through the init command
-        run_dbt(["init", project_name, "-s"])
+        run_dbt(["init", project_name, "--skip-profile-setup"])
         assert len(manager.mock_calls) == 0
 
         with open(os.path.join(project.project_root, project_name, "dbt_project.yml"), "r") as f:
@@ -706,5 +706,5 @@ class TestInitInsideProjectAndSkipProfileSetup(TestInitInsideOfProjectBase):
         assert Path("dbt_project.yml").exists()
 
         # skip interactive profile setup
-        run_dbt(["init", "-s"])
+        run_dbt(["init", "--skip-profile-setup"])
         assert len(manager.mock_calls) == 0
