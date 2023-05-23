@@ -221,7 +221,7 @@ class InitTask(BaseTask):
         """Ask the user which adapter (database) they'd like to use."""
         available_adapters = list(_get_adapter_plugin_names())
 
-        if not len(available_adapters):
+        if not available_adapters:
             raise dbt.exceptions.NoAdaptersAvailableError()
 
         prompt_msg = (
