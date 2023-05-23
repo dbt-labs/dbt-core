@@ -360,6 +360,7 @@ models:
     versions:
       - v: 1
         defined_in: arbitrary_file_name
+        deprecation_date: 2022-07-11
       - v: 2
         config:
           materialized: view

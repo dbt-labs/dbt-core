@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -568,6 +569,7 @@ class ModelNode(CompiledNode):
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
+    deprecation_date: Optional[datetime] = None
     state_relation: Optional[StateRelation] = None
 
     @property
@@ -1415,6 +1417,7 @@ class ParsedNodePatch(ParsedPatch):
     version: Optional[NodeVersion]
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
+    deprecation_date: Optional[datetime]
 
 
 @dataclass
