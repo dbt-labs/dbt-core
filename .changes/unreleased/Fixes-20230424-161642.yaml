@@ -4,4 +4,4 @@ body: If --profile specified with dbt-init, create the project with the specifie
 time: 2023-04-24T16:16:42.994547-04:00
 custom:
   Author: ezraerb
-  Issue: CT-1418
+  Issue: "6154"
