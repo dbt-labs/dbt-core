@@ -45,6 +45,7 @@ class PublicModel(dbtClassMixin, ManifestOrPublicNode):
     # list of model unique_ids
     public_node_dependencies: List[str] = field(default_factory=list)
     generated_at: datetime = field(default_factory=datetime.utcnow)
+    deprecation_date: Optional[datetime] = None
 
     @property
     def is_latest_version(self) -> bool:

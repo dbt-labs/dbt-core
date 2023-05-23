@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from dbt import deprecations
@@ -154,6 +155,7 @@ class UnparsedVersion(dbtClassMixin):
     columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
         default_factory=list
     )
+    deprecation_date: Optional[datetime.datetime] = None
 
     def __lt__(self, other):
         try:
@@ -192,6 +194,8 @@ class UnparsedVersion(dbtClassMixin):
             else:
                 self._unparsed_columns.append(column)
 
+        self.deprecation_date = normalize_date(self.deprecation_date)
+
 
 @dataclass
 class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMetadata):
@@ -210,6 +214,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     access: Optional[str] = None
     latest_version: Optional[NodeVersion] = None
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
+    deprecation_date: Optional[datetime.datetime] = None
 
     def __post_init__(self):
         if self.latest_version:
@@ -228,6 +233,8 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
             seen_versions.add(str(version.v))
 
         self._version_map = {version.v: version for version in self.versions}
+
+        self.deprecation_date = normalize_date(self.deprecation_date)
 
     def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
         if version not in self._version_map:
@@ -652,3 +659,18 @@ class UnparsedGroup(dbtClassMixin, Replaceable):
         super(UnparsedGroup, cls).validate(data)
         if data["owner"].get("name") is None and data["owner"].get("email") is None:
             raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
+
+
+def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
+    """Convert date to datetime (at midnight), and add local time zone if naive"""
+    if d is None:
+        return None
+
+    # convert date to datetime
+    dt = d if type(d) == datetime.datetime else datetime.datetime(d.year, d.month, d.day)
+
+    if not dt.tzinfo:
+        # date is naive, re-interpret as system time zone
+        dt = dt.astimezone()
+
+    return dt

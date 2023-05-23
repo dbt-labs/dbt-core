@@ -1174,6 +1174,49 @@ message UnpinnedRefNewVersionAvailableMsg {
     UnpinnedRefNewVersionAvailable data = 2;
 }
 
+// I065
+message DeprecatedModel {
+    string model_name = 1;
+    string model_version = 2;
+    string deprecation_date = 3;
+}
+
+message DeprecatedModelMsg {
+    EventInfo info = 1;
+    DeprecatedModel data = 2;
+}
+
+// I066
+message UpcomingReferenceDeprecation {
+    string model_name = 1;
+    string ref_model_package = 2;
+    string ref_model_name = 3;
+    string ref_model_version = 4;
+    string ref_model_latest_version = 5;
+    string ref_model_deprecation_date = 6;
+}
+
+message UpcomingReferenceDeprecationMsg {
+    EventInfo info = 1;
+    UpcomingReferenceDeprecation data = 2;
+}
+
+// I067
+message DeprecatedReference {
+    string model_name = 1;
+    string ref_model_package = 2;
+    string ref_model_name = 3;
+    string ref_model_version = 4;
+    string ref_model_latest_version = 5;
+    string ref_model_deprecation_date = 6;
+}
+
+message DeprecatedReferenceMsg {
+    EventInfo info = 1;
+    DeprecatedReference data = 2;
+}
+
+
 // M - Deps generation
 
 // M001
