@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import sys
 from typing import Optional
 
 import yaml
@@ -223,10 +222,7 @@ class InitTask(BaseTask):
         available_adapters = list(_get_adapter_plugin_names())
 
         if not len(available_adapters):
-            click.echo(
-                "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
-            )
-            sys.exit(1)
+            raise dbt.exceptions.NoAdaptersAvailableError()
 
         prompt_msg = (
             "Which database would you like to use?\n"
