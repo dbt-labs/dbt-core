@@ -17,7 +17,7 @@ from dbt.events.types import (
     LogDebugStackTrace,
 )
 from dbt.node_types import NodeType
-from .base import ConfiguredTask
+from dbt.task.base import ConfiguredTask
 
 RESULT_FILE_NAME = "run_results.json"
 
@@ -31,9 +31,6 @@ class RunOperationTask(ConfiguredTask):
             package_name = self.config.project_name
 
         return package_name, macro_name
-
-    def result_path(self):
-        return os.path.join(self.config.target_path, RESULT_FILE_NAME)
 
     def _run_unsafe(self) -> agate.Table:
         adapter = get_adapter(self.config)
@@ -103,7 +100,12 @@ class RunOperationTask(ConfiguredTask):
             },
             results=[run_result],
         )
-        results.write(self.result_path())
+
+        result_path = os.path.join(self.config.target_path, RESULT_FILE_NAME)
+
+        if self.args.write_json:
+            results.write(result_path)
+
         return results
 
     def interpret_results(self, results):
