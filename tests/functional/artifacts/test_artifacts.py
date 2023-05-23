@@ -691,7 +691,9 @@ class TestVerifyRunOperation(BaseVerifyProject):
         assert results[0].unique_id == "operation.test.alter_timezone"
         assert "Timezone set to: America/Los_Angeles" in log_output
 
-    def test_run_model(self, project):
+    def test_run_model_with_operation(self, project):
+        # pre-hooks are not included in run_results since they are an attribute of the node and not a node in their
+        # own right
         results, log_output = run_dbt_and_capture(["run", "--select", "model_with_pre_hook"])
         assert len(results) == 1
         assert results[0].status == RunStatus.Success
