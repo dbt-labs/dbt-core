@@ -165,6 +165,15 @@ def extended_msgpack_decoder(code, data):
         return msgpack.ExtType(code, data)
 
 
+def version_to_str(version: Optional[Union[str, int]]) -> str:
+    if isinstance(version, int):
+        return str(version)
+    elif isinstance(version, str):
+        return version
+
+    return ""
+
+
 class ReparseReason(StrEnum):
     version_mismatch = "01_version_mismatch"
     file_not_found = "02_file_not_found"
@@ -559,7 +568,7 @@ class ManifestLoader:
                     fire_event(
                         DeprecatedModel(
                             model_name=node.name,
-                            model_version=node.version,
+                            model_version=version_to_str(node.version),
                             deprecation_date=node.deprecation_date.isoformat(),
                         )
                     )
@@ -579,7 +588,7 @@ class ManifestLoader:
                                 model_name=node.name,
                                 ref_model_package=resolved_ref.package_name,
                                 ref_model_name=resolved_ref.name,
-                                ref_model_version=resolved_ref.version,
+                                ref_model_version=version_to_str(resolved_ref.version),
                                 ref_model_latest_version=str(resolved_ref.latest_version),
                                 ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
                             )
