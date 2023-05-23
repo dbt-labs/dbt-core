@@ -387,6 +387,12 @@ test:
             )
 
 
+class TestInitInsideOfProjectBase:
+    @pytest.fixture(scope="class")
+    def project_name(self, unique_schema):
+        return f"my_project_{unique_schema}"
+
+
 class TestInitOutsideOfProjectBase:
     @pytest.fixture(scope="class")
     def project_name(self, unique_schema):
@@ -684,3 +690,21 @@ models:
       +materialized: view
 """
             )
+
+
+class TestInitInsideProjectAndSkipProfileSetup(TestInitInsideOfProjectBase):
+    @mock.patch("dbt.task.init._get_adapter_plugin_names")
+    @mock.patch("click.confirm")
+    @mock.patch("click.prompt")
+    def test_init_inside_project_and_skip_profile_setup(
+        self, mock_prompt, mock_confirm, mock_get, project, project_name
+    ):
+        manager = mock.Mock()
+        manager.attach_mock(mock_prompt, "prompt")
+        manager.attach_mock(mock_confirm, "confirm")
+
+        assert Path("dbt_project.yml").exists()
+
+        # skip interactive profile setup
+        run_dbt(["init", "-s"])
+        manager.assert_not_called()
