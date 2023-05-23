@@ -646,7 +646,7 @@ class TestInitProvidedProjectNameAndSkipProfileSetup(TestInitOutsideOfProjectBas
 
         # provide project name through the init command
         run_dbt(["init", project_name, "-s"])
-        manager.assert_not_called()
+        assert len(manager.mock_calls) == 0
 
         with open(os.path.join(project.project_root, project_name, "dbt_project.yml"), "r") as f:
             assert (
@@ -707,4 +707,4 @@ class TestInitInsideProjectAndSkipProfileSetup(TestInitInsideOfProjectBase):
 
         # skip interactive profile setup
         run_dbt(["init", "-s"])
-        manager.assert_not_called()
+        assert len(manager.mock_calls) == 0
