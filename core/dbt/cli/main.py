@@ -421,7 +421,7 @@ def debug(ctx, **kwargs):
 @cli.command("deps")
 @click.pass_context
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.target
 @p.vars
@@ -443,7 +443,7 @@ def deps(ctx, **kwargs):
 # for backwards compatibility, accept 'project_name' as an optional positional argument
 @click.argument("project_name", required=False)
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
 @p.target
