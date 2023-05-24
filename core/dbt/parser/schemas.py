@@ -46,10 +46,11 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import warn_or_error
 from dbt.events.types import (
-    WrongResourceSchemaFile,
-    NoNodeForYamlKey,
     MacroNotFoundForPatch,
+    NoNodeForYamlKey,
     ValidationWarning,
+    UnsupportedConstraintMaterialization,
+    WrongResourceSchemaFile,
 )
 from dbt.node_types import NodeType, AccessType
 from dbt.parser.base import SimpleParser
@@ -806,6 +807,12 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         if contract_config.enforced is True:
             self._validate_constraint_prerequisites(node)
 
+            if node.config.materialized not in ["table", "incremental"] and constraints:
+                warn_or_error(
+                    UnsupportedConstraintMaterialization(materialization=node.config.materialized),
+                    node=node,
+                )
+
             if any(
                 c for c in constraints if "type" not in c or not ConstraintType.is_valid(c["type"])
             ):
@@ -823,17 +830,12 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 "Constraints must be defined in a `yml` schema configuration file like `schema.yml`."
             )
 
-        if model_node.config.materialized not in ["table", "view", "incremental"]:
-            errors.append(
-                f"Only table, view, and incremental materializations are supported for constraints, but found '{model_node.config.materialized}'"
-            )
-
         if str(model_node.language) != "sql":
             errors.append(f"Language Error: Expected 'sql' but found '{model_node.language}'")
 
         if errors:
             raise ParsingError(
-                f"Constraint validation failed for: ({model_node.original_file_path})\n"
+                f"Contract enforcement failed for: ({model_node.original_file_path})\n"
                 + "\n".join(errors)
             )
 
