@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal
@@ -82,7 +82,13 @@ def test_snapshot_hard_delete(project):
     for result in snapshotted[10:]:
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[-1], datetime)
-        assert result[-1].replace(tzinfo=pytz.UTC) >= invalidated_snapshot_datetime
+        # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
+        tolerance = timedelta(minutes=1)
+        assert (
+            result[-1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
+        ) and (
+            result[-1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
+        ), f"SQL timestamp {result[-1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {result[-1].replace(tzinfo=pytz.UTC).isoformat()}"
 
     # revive records
     # Timestamp must have microseconds for tests below to be meaningful
@@ -121,7 +127,13 @@ def test_snapshot_hard_delete(project):
     for result in invalidated_records:
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[1], datetime)
-        assert result[1].replace(tzinfo=pytz.UTC) >= invalidated_snapshot_datetime
+        # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
+        tolerance = timedelta(minutes=1)
+        assert (
+            result[1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
+        ) and (
+            result[1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
+        ), f"SQL timestamp {result[1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {result[1].replace(tzinfo=pytz.UTC).isoformat()}"
 
     # records which were revived (id = 10, 11)
     # dbt_valid_to is null
