@@ -88,7 +88,7 @@ def test_snapshot_hard_delete(project):
             result[-1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
         ) and (
             result[-1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
-        ), f"SQL timestamp {result[-1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {result[-1].replace(tzinfo=pytz.UTC).isoformat()}"
+        ), f"SQL timestamp {result[-1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
 
     # revive records
     # Timestamp must have microseconds for tests below to be meaningful
@@ -133,7 +133,7 @@ def test_snapshot_hard_delete(project):
             result[1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
         ) and (
             result[1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
-        ), f"SQL timestamp {result[1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {result[1].replace(tzinfo=pytz.UTC).isoformat()}"
+        ), f"SQL timestamp {result[1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
 
     # records which were revived (id = 10, 11)
     # dbt_valid_to is null
