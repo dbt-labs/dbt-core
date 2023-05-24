@@ -247,40 +247,6 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         write_json(path, self.to_dict(omit_none=False))
 
 
-@dataclass
-class RunOperationResult(ExecutionResult):
-    success: bool
-
-
-@dataclass
-class RunOperationResultMetadata(BaseArtifactMetadata):
-    dbt_schema_version: str = field(
-        default_factory=lambda: str(RunOperationResultsArtifact.dbt_schema_version)
-    )
-
-
-@dataclass
-@schema_version("run-operation-result", 1)
-class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
-    @classmethod
-    def from_success(
-        cls,
-        success: bool,
-        elapsed_time: float,
-        generated_at: datetime,
-    ):
-        meta = RunOperationResultMetadata(
-            dbt_schema_version=str(cls.dbt_schema_version),
-            generated_at=generated_at,
-        )
-        return cls(
-            metadata=meta,
-            results=[],
-            elapsed_time=elapsed_time,
-            success=success,
-        )
-
-
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
 

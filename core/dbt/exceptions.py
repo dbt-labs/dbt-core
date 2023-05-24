@@ -698,6 +698,15 @@ class UnknownGitCloningProblemError(DbtRuntimeError):
         return msg
 
 
+class NoAdaptersAvailableError(DbtRuntimeError):
+    def __init__(self):
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+        return msg
+
+
 class BadSpecError(DbtInternalError):
     def __init__(self, repo, revision, error):
         self.repo = repo

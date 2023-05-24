@@ -1146,6 +1146,62 @@ class UnpinnedRefNewVersionAvailable(InfoLevel):
         return msg
 
 
+class DeprecatedModel(WarnLevel):
+    def code(self):
+        return "I065"
+
+    def message(self) -> str:
+        version = ".v" + self.model_version if self.model_version else ""
+        return (
+            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
+            "This model should be disabled or removed."
+        )
+
+
+class UpcomingReferenceDeprecation(WarnLevel):
+    def code(self):
+        return "I066"
+
+    def message(self) -> str:
+        ref_model_version = ".v" + self.ref_model_version if self.ref_model_version else ""
+        msg = (
+            f"While compiling '{self.model_name}': Found a reference to {self.ref_model_name}{ref_model_version}, "
+            f"which is slated for deprecation on '{self.ref_model_deprecation_date}'. "
+        )
+
+        if self.ref_model_version and self.ref_model_version != self.ref_model_latest_version:
+            coda = (
+                f"A new version of '{self.ref_model_name}' is available. Try it out: "
+                f"{{{{ ref('{self.ref_model_package}', '{self.ref_model_name}', "
+                f"v='{self.ref_model_latest_version}') }}}}."
+            )
+            msg = msg + coda
+
+        return msg
+
+
+class DeprecatedReference(WarnLevel):
+    def code(self):
+        return "I067"
+
+    def message(self) -> str:
+        ref_model_version = ".v" + self.ref_model_version if self.ref_model_version else ""
+        msg = (
+            f"While compiling '{self.model_name}': Found a reference to {self.ref_model_name}{ref_model_version}, "
+            f"which was deprecated on '{self.ref_model_deprecation_date}'. "
+        )
+
+        if self.ref_model_version and self.ref_model_version != self.ref_model_latest_version:
+            coda = (
+                f"A new version of '{self.ref_model_name}' is available. Migrate now: "
+                f"{{{{ ref('{self.ref_model_package}', '{self.ref_model_name}', "
+                f"v='{self.ref_model_latest_version}') }}}}."
+            )
+            msg = msg + coda
+
+        return msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================

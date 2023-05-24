@@ -19,7 +19,6 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     CatalogArtifact,
     RunExecutionResult,
-    RunOperationResultsArtifact,
 )
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
@@ -53,8 +52,7 @@ class dbtRunnerResult:
         List[str],  # list/ls
         Manifest,  # parse
         None,  # clean, deps, init, source
-        RunExecutionResult,  # build, compile, run, seed, snapshot, test
-        RunOperationResultsArtifact,  # run-operation
+        RunExecutionResult,  # build, compile, run, seed, snapshot, test, run-operation
     ] = None
 
 

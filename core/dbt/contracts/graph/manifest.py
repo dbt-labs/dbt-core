@@ -965,6 +965,23 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
 
+    def resolve_refs(
+        self, source_node: GraphMemberNode, current_project: str
+    ) -> List[MaybeNonSource]:
+        resolved_refs: List[MaybeNonSource] = []
+        for ref in source_node.refs:
+            resolved = self.resolve_ref(
+                source_node,
+                ref.name,
+                ref.package,
+                ref.version,
+                current_project,
+                source_node.package_name,
+            )
+            resolved_refs.append(resolved)
+
+        return resolved_refs
+
     # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
