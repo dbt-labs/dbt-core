@@ -8,6 +8,7 @@ import yaml
 
 from pathlib import Path
 from unittest import mock
+from contextlib import contextmanager
 
 import dbt.semver
 import dbt.config
@@ -82,6 +83,16 @@ macros__macro_override_schema_sql = """
 """
 
 
+@contextmanager
+def up_one():
+    current_path = Path.cwd()
+    os.chdir("../")
+    try:
+        yield
+    finally:
+        os.chdir(current_path)
+
+
 class BaseDependencyTest(object):
     @pytest.fixture(scope="class")
     def macros(self):
@@ -152,16 +163,33 @@ class TestSimpleDependency(BaseDependencyTest):
             [f"{project.test_schema}.dep_source_model", f"{project.test_schema}.seed"],
         )
 
+    def test_no_dependency_paths(self, project):
+        run_dbt(["deps"])
+        run_dbt(["seed"])
+
+        # prove dependency does not exist as model in project
+        dep_path = os.path.join("models_local", "model_to_import.sql")
+        results = run_dbt(
+            ["run", "--models", f"+{dep_path}"],
+        )
+        assert len(results) == 0
+
+        # prove model can run when importing that dependency
+        local_path = Path("models") / "my_model.sql"
+        results = run_dbt(
+            ["run", "--models", f"+{local_path}"],
+        )
+        assert len(results) == 2
+
 
 class TestSimpleDependencyRelativePath(BaseDependencyTest):
     def test_local_dependency_relative_path(self, project):
         last_dir = Path(project.project_root).name
-        os.chdir("../")
-        _, stdout = run_dbt_and_capture(["deps", "--project-dir", last_dir])
-        assert (
-            "Installed from <local @ local_dependency>" in stdout
-        ), "Test output didn't contain expected string"
-        os.chdir(project.project_root)
+        with up_one():
+            _, stdout = run_dbt_and_capture(["deps", "--project-dir", last_dir])
+            assert (
+                "Installed from <local @ local_dependency>" in stdout
+            ), "Test output didn't contain expected string"
 
 
 class TestMissingDependency(object):
