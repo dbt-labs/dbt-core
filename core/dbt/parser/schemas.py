@@ -807,7 +807,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         if contract_config.enforced is True:
             self._validate_constraint_prerequisites(node)
 
-            if node.config.materialized not in ["table", "incremental"] and constraints:
+            breakpoint()
+            if any(
+                c for c in constraints if c.get("warn_unsupported")
+            ) and node.config.materialized not in ["table", "incremental"]:
                 warn_or_error(
                     UnsupportedConstraintMaterialization(materialization=node.config.materialized),
                     node=node,
