@@ -80,7 +80,9 @@ class GraphRunnableTask(ConfiguredTask):
     def set_previous_state(self):
         if self.args.state is not None:
             self.previous_state = PreviousState(
-                path=self.args.state, current_path=Path(self.config.project_target_path)
+                state_path=self.args.state,
+                target_path=Path(self.config.target_path),
+                project_root=Path(self.config.project_root),
             )
 
     def index_offset(self, value: int) -> int:
