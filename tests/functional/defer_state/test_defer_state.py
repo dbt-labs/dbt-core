@@ -303,6 +303,23 @@ class TestDeferStateFlag(BaseDeferState):
             expect_pass=False,
         )
 
+        # this will fail because we haven't passed in --state
+        with pytest.raises(
+            DbtRuntimeError, match="Got a state selector method, but no comparison manifest"
+        ):
+            run_dbt(
+                [
+                    "run",
+                    "--select",
+                    "state:modified",
+                    "--defer",
+                    "--defer-state",
+                    "target_otherschema",
+                    "--favor-state",
+                ],
+                expect_pass=False,
+            )
+
         # this will succeed because we've loaded the seed in other schema and are successfully deferring to it instead
         results = run_dbt(
             [

@@ -426,7 +426,7 @@ empty_catalog = click.option(
 state = click.option(
     "--state",
     envvar="DBT_STATE",
-    help="If set, use the state from this directory for both state comparison and deferral.",
+    help="Unless overridden, use this state directory for both state comparison and deferral.",
     type=click.Path(
         dir_okay=True,
         file_okay=False,
@@ -439,7 +439,7 @@ state = click.option(
 defer_state = click.option(
     "--defer-state",
     envvar="DBT_DEFER_STATE",
-    help="If set, use the state from this directory for deferral only.",
+    help="Override the state directory for deferral only.",
     type=click.Path(
         dir_okay=True,
         file_okay=False,
