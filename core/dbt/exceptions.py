@@ -1,7 +1,9 @@
 import builtins
 import json
 import re
-from typing import Any, Dict, List, Mapping, Optional, Union
+import io
+import agate
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
@@ -205,22 +207,75 @@ class CompilationError(DbtRuntimeError):
             )
 
 
-class ModelContractError(DbtRuntimeError):
+class ContractBreakingChangeError(DbtRuntimeError):
     CODE = 10016
-    MESSAGE = "Contract Error"
+    MESSAGE = "Breaking Change to Contract"
 
-    def __init__(self, reasons, node=None):
-        self.reasons = reasons
+    def __init__(
+        self,
+        contract_enforced_disabled: bool,
+        columns_removed: List[str],
+        column_type_changes: List[Tuple[str, str, str]],
+        enforced_column_constraint_removed: List[Tuple[str, str]],
+        enforced_model_constraint_removed: List[Tuple[str, List[str]]],
+        materialization_changed: List[str],
+        node=None,
+    ):
+        self.contract_enforced_disabled = contract_enforced_disabled
+        self.columns_removed = columns_removed
+        self.column_type_changes = column_type_changes
+        self.enforced_column_constraint_removed = enforced_column_constraint_removed
+        self.enforced_model_constraint_removed = enforced_model_constraint_removed
+        self.materialization_changed = materialization_changed
         super().__init__(self.message(), node)
 
     @property
     def type(self):
-        return "Contract"
+        return "Breaking Change to Contract"
 
     def message(self):
+        breaking_changes = []
+        if self.contract_enforced_disabled:
+            breaking_changes.append("The contract's enforcement has been disabled.")
+        if self.columns_removed:
+            columns_removed_str = "\n  - ".join(self.columns_removed)
+            breaking_changes.append(f"Columns were removed: \n - {columns_removed_str}")
+        if self.column_type_changes:
+            column_type_changes_str = "\n  - ".join(
+                [f"{c[0]} ({c[1]} -> {c[2]})" for c in self.column_type_changes]
+            )
+            breaking_changes.append(
+                f"Columns with data_type changes: \n - {column_type_changes_str}"
+            )
+        if self.enforced_column_constraint_removed:
+            column_constraint_changes_str = "\n  - ".join(
+                [f"{c[0]} ({c[1]})" for c in self.enforced_column_constraint_removed]
+            )
+            breaking_changes.append(
+                f"Enforced column level constraints were removed: \n - {column_constraint_changes_str}"
+            )
+        if self.enforced_model_constraint_removed:
+            model_constraint_changes_str = "\n  - ".join(
+                [f"{c[0]} -> {c[1]}" for c in self.enforced_model_constraint_removed]
+            )
+            breaking_changes.append(
+                f"Enforced model level constraints were removed: \n - {model_constraint_changes_str}"
+            )
+        if self.materialization_changed:
+            materialization_changes_str = "\n  - ".join(
+                f"{self.materialization_changed[0]} -> {self.materialization_changed[1]}"
+            )
+            breaking_changes.append(
+                f"Materialization changed with enforced constraints: \n - {materialization_changes_str}"
+            )
+
+        reasons = "\n\n".join(breaking_changes)
+
         return (
-            f"There is a breaking change in the model contract because {self.reasons}; "
-            "you may need to create a new version. See: https://docs.getdbt.com/docs/collaborate/publish/model-versions"
+            "While comparing to previous project state, dbt detected a breaking change to an enforced contract."
+            f"\n\n{reasons}\n\n"
+            "Consider making an additive (non-breaking) change instead, if possible.\n"
+            "Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
         )
 
 
@@ -348,6 +403,19 @@ class DbtSelectorsError(DbtConfigError):
 
 class DbtProfileError(DbtConfigError):
     pass
+
+
+class PublicationConfigNotFound(DbtConfigError):
+    def __init__(self, project=None, file_name=None):
+        self.project = project
+        msg = self.message()
+        super().__init__(msg, project=project)
+
+    def message(self):
+        return (
+            f"A dependency on project {self.project} was specified, "
+            f"but a publication for {self.project} was not found."
+        )
 
 
 class SemverError(Exception):
@@ -630,6 +698,15 @@ class UnknownGitCloningProblemError(DbtRuntimeError):
         return msg
 
 
+class NoAdaptersAvailableError(DbtRuntimeError):
+    def __init__(self):
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+        return msg
+
+
 class BadSpecError(DbtInternalError):
     def __init__(self, repo, revision, error):
         self.repo = repo
@@ -833,6 +910,19 @@ class SecretEnvVarLocationError(ParsingError):
         return msg
 
 
+class ProjectDependencyCycleError(ParsingError):
+    def __init__(self, pub_project_name, project_name):
+        self.pub_project_name = pub_project_name
+        self.project_name = project_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        return (
+            f"A project dependency cycle has been detected. The current project {self.project_name} "
+            f"depends on {self.pub_project_name} which also depends on the current project."
+        )
+
+
 class MacroArgTypeError(CompilationError):
     def __init__(self, method_name: str, arg_name: str, got_value: Any, expected_type):
         self.method_name = method_name
@@ -890,7 +980,8 @@ class MetricArgsError(CompilationError):
 class RefBadContextError(CompilationError):
     def __init__(self, node, args):
         self.node = node
-        self.args = args
+        self.args = args.positional_args  # type: ignore
+        self.kwargs = args.keyword_args  # type: ignore
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
@@ -904,7 +995,15 @@ class RefBadContextError(CompilationError):
             model_name = self.node.name
 
         ref_args = ", ".join("'{}'".format(a) for a in self.args)
-        ref_string = f"{{{{ ref({ref_args}) }}}}"
+
+        keyword_args = ""
+        if self.kwargs:
+            keyword_args = ", ".join(
+                "{}='{}'".format(k, v) for k, v in self.kwargs.items()  # type: ignore
+            )
+            keyword_args = "," + keyword_args
+
+        ref_string = f"{{{{ ref({ref_args}{keyword_args}) }}}}"
 
         msg = f"""dbt was unable to infer all dependencies for the model "{model_name}".
 This typically happens when ref() is placed within a conditional block.
@@ -982,6 +1081,17 @@ class DuplicateMacroNameError(CompilationError):
             f"change the name of one of these macros:\n- {self.node_1.unique_id} "
             f"({self.node_1.original_file_path})\n- {self.node_2.unique_id} ({self.node_2.original_file_path})"
         )
+
+        return msg
+
+
+class MacroResultAlreadyLoadedError(CompilationError):
+    def __init__(self, result_name):
+        self.result_name = result_name
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"The 'statement' result named '{self.result_name}' has already been loaded into a variable"
 
         return msg
 
@@ -1287,12 +1397,14 @@ class TargetNotFoundError(CompilationError):
         target_name: str,
         target_kind: str,
         target_package: Optional[str] = None,
+        target_version: Optional[Union[str, float]] = None,
         disabled: Optional[bool] = None,
     ):
         self.node = node
         self.target_name = target_name
         self.target_kind = target_kind
         self.target_package = target_package
+        self.target_version = target_version
         self.disabled = disabled
         super().__init__(msg=self.get_message())
 
@@ -1308,13 +1420,17 @@ class TargetNotFoundError(CompilationError):
         else:
             reason = "was not found"
 
+        target_version_string = ""
+        if self.target_version is not None:
+            target_version_string = f"with version '{self.target_version}' "
+
         target_package_string = ""
         if self.target_package is not None:
-            target_package_string = f"in package '{self.target_package}' "
+            target_package_string = f"in package or project '{self.target_package}' "
 
         msg = (
             f"{resource_type_title} '{unique_id}' ({original_file_path}) depends on a "
-            f"{self.target_kind} named '{self.target_name}' {target_package_string}which {reason}"
+            f"{self.target_kind} named '{self.target_name}' {target_version_string}{target_package_string}which {reason}"
         )
         return msg
 
@@ -1911,6 +2027,23 @@ class AmbiguousAliasError(CompilationError):
         return msg
 
 
+class AmbiguousResourceNameRefError(CompilationError):
+    def __init__(self, duped_name, unique_ids, node=None):
+        self.duped_name = duped_name
+        self.unique_ids = unique_ids
+        self.packages = [unique_id.split(".")[1] for unique_id in unique_ids]
+        super().__init__(msg=self.get_message(), node=node)
+
+    def get_message(self) -> str:
+        formatted_unique_ids = "'{0}'".format("', '".join(self.unique_ids))
+        formatted_packages = "'{0}'".format("' or '".join(self.packages))
+        msg = (
+            f"When referencing '{self.duped_name}', dbt found nodes in multiple packages: {formatted_unique_ids}"
+            f"\nTo fix this, use two-argument 'ref', with the package name first: {formatted_packages}"
+        )
+        return msg
+
+
 class AmbiguousCatalogMatchError(CompilationError):
     def __init__(self, unique_id: str, match_1, match_2):
         self.unique_id = unique_id
@@ -2106,6 +2239,26 @@ To fix this, change the name of one of these resources:
         return msg
 
 
+class DuplicateVersionedUnversionedError(ParsingError):
+    def __init__(self, versioned_node, unversioned_node):
+        self.versioned_node = versioned_node
+        self.unversioned_node = unversioned_node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"""
+dbt found versioned and unversioned models with the name "{self.versioned_node.name}".
+
+Since these resources have the same name, dbt will be unable to find the correct resource
+when looking for ref('{self.versioned_node.name}').
+
+To fix this, change the name of the unversioned resource
+{self.unversioned_node.unique_id} ({self.unversioned_node.original_file_path})
+or add the unversioned model to the versions in {self.versioned_node.patch_path}
+    """.strip()
+        return msg
+
+
 class PropertyYMLError(CompilationError):
     def __init__(self, path: str, issue: str):
         self.path = path
@@ -2145,14 +2298,65 @@ class ContractError(CompilationError):
         self.sql_columns = sql_columns
         super().__init__(msg=self.get_message())
 
+    def get_mismatches(self) -> agate.Table:
+        # avoid a circular import
+        from dbt.clients.agate_helper import table_from_data_flat
+
+        column_names = ["column_name", "definition_type", "contract_type", "mismatch_reason"]
+        # list of mismatches
+        mismatches: List[Dict[str, str]] = []
+        # track sql cols so we don't need another for loop later
+        sql_col_set = set()
+        # for each sql col list
+        for sql_col in self.sql_columns:
+            # add sql col to set
+            sql_col_set.add(sql_col["name"])
+            # for each yaml col list
+            for i, yaml_col in enumerate(self.yaml_columns):
+                # if name matches
+                if sql_col["name"] == yaml_col["name"]:
+                    # if type matches
+                    if sql_col["data_type"] == yaml_col["data_type"]:
+                        # its a perfect match! don't include in mismatch table
+                        break
+                    else:
+                        # same name, diff type
+                        row = [
+                            sql_col["name"],
+                            sql_col["data_type"],
+                            yaml_col["data_type"],
+                            "data type mismatch",
+                        ]
+                        mismatches += [dict(zip(column_names, row))]
+                        break
+                # if last loop, then no name match
+                if i == len(self.yaml_columns) - 1:
+                    row = [sql_col["name"], sql_col["data_type"], "", "missing in contract"]
+                    mismatches += [dict(zip(column_names, row))]
+
+        # now add all yaml cols without a match
+        for yaml_col in self.yaml_columns:
+            if yaml_col["name"] not in sql_col_set:
+                row = [yaml_col["name"], "", yaml_col["data_type"], "missing in definition"]
+                mismatches += [dict(zip(column_names, row))]
+
+        mismatches_sorted = sorted(mismatches, key=lambda d: d["column_name"])
+        return table_from_data_flat(mismatches_sorted, column_names)
+
     def get_message(self) -> str:
+        table: agate.Table = self.get_mismatches()
+        # Hack to get Agate table output as string
+        output = io.StringIO()
+        table.print_table(output=output, max_rows=None, max_column_width=50)  # type: ignore
+        mismatches = output.getvalue()
+
         msg = (
-            "Contracts are enabled for this model. "
-            "Please ensure the name, data_type, and number of columns in your `yml` file "
-            "match the columns in your SQL file.\n"
-            f"Schema File Columns: {self.yaml_columns}\n"
-            f"SQL File Columns: {self.sql_columns}"
+            "This model has an enforced contract that failed.\n"
+            "Please ensure the name, data_type, and number of columns in your contract "
+            "match the columns in your model's definition.\n\n"
+            f"{mismatches}"
         )
+
         return msg
 
 

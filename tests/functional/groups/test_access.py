@@ -10,8 +10,6 @@ another_model_sql = "select 1234 as notfun"
 yet_another_model_sql = "select 999 as weird"
 
 schema_yml = """
-version: 2
-
 models:
   - name: my_model
     description: "my model"
@@ -21,8 +19,6 @@ models:
 """
 
 v2_schema_yml = """
-version: 2
-
 models:
   - name: my_model
     description: "my model"
@@ -39,8 +35,6 @@ ref_my_model_sql = """
 """
 
 groups_yml = """
-version: 2
-
 groups:
   - name: analytics
     owner:
@@ -52,8 +46,6 @@ groups:
 
 
 v3_schema_yml = """
-version: 2
-
 models:
   - name: my_model
     description: "my model"
@@ -67,8 +59,6 @@ models:
 """
 
 v4_schema_yml = """
-version: 2
-
 models:
   - name: my_model
     description: "my model"
@@ -82,8 +72,6 @@ models:
 """
 
 simple_exposure_yml = """
-version: 2
-
 exposures:
   - name: simple_exposure
     label: simple exposure label
@@ -95,8 +83,6 @@ exposures:
 """
 
 v5_schema_yml = """
-version: 2
-
 models:
   - name: my_model
     description: "my model"
@@ -125,8 +111,6 @@ select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favo
 """
 
 people_metric_yml = """
-version: 2
-
 metrics:
 
   - name: number_of_people
@@ -147,8 +131,6 @@ metrics:
 """
 
 v2_people_metric_yml = """
-version: 2
-
 metrics:
 
   - name: number_of_people

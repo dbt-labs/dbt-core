@@ -25,6 +25,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Metric,
     Group,
+    RefArgs,
 )
 
 from dbt.contracts.graph.unparsed import (
@@ -36,6 +37,7 @@ from dbt.contracts.graph.unparsed import (
 )
 
 from dbt.events.functions import reset_metadata_vars
+from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 
 from dbt.node_types import NodeType
@@ -88,6 +90,11 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "relation_name",
         "contract",
         "access",
+        "version",
+        "latest_version",
+        "constraints",
+        "deprecation_date",
+        "state_relation",
     }
 )
 
@@ -133,7 +140,7 @@ class ManifestTest(unittest.TestCase):
                 maturity=MaturityType.High,
                 url="hhtp://mydashboard.com",
                 depends_on=DependsOn(nodes=["model.root.multi"]),
-                refs=[["multi"]],
+                refs=[RefArgs(name="multi")],
                 sources=[],
                 fqn=["root", "my_exposure"],
                 unique_id="exposure.root.my_exposure",
@@ -166,7 +173,7 @@ class ManifestTest(unittest.TestCase):
                 window=MetricTime(),
                 resource_type=NodeType.Metric,
                 depends_on=DependsOn(nodes=["model.root.multi"]),
-                refs=[["multi"]],
+                refs=[RefArgs(name="multi")],
                 sources=[],
                 metrics=[],
                 fqn=["root", "my_metric"],
@@ -243,7 +250,7 @@ class ManifestTest(unittest.TestCase):
                 unique_id="model.root.dep",
                 fqn=["root", "dep"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 metrics=[],
                 depends_on=DependsOn(nodes=["model.root.events"]),
@@ -265,7 +272,7 @@ class ManifestTest(unittest.TestCase):
                 unique_id="model.root.nested",
                 fqn=["root", "nested"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 metrics=[],
                 depends_on=DependsOn(nodes=["model.root.dep"]),
@@ -287,7 +294,7 @@ class ManifestTest(unittest.TestCase):
                 unique_id="model.root.sibling",
                 fqn=["root", "sibling"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 metrics=[],
                 depends_on=DependsOn(nodes=["model.root.events"]),
@@ -309,7 +316,7 @@ class ManifestTest(unittest.TestCase):
                 unique_id="model.root.multi",
                 fqn=["root", "multi"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 metrics=[],
                 depends_on=DependsOn(nodes=["model.root.nested", "model.root.sibling"]),
@@ -388,13 +395,14 @@ class ManifestTest(unittest.TestCase):
                 "group_map": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v10.json",
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
                 },
                 "docs": {},
                 "disabled": {},
+                "public_nodes": {},
             },
         )
 
@@ -411,6 +419,7 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
+            public_nodes={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
@@ -479,7 +488,8 @@ class ManifestTest(unittest.TestCase):
         flat_nodes = flat_graph["nodes"]
         flat_sources = flat_graph["sources"]
         self.assertEqual(
-            set(flat_graph), set(["exposures", "groups", "nodes", "sources", "metrics"])
+            set(flat_graph),
+            set(["exposures", "groups", "nodes", "sources", "metrics", "public_nodes"]),
         )
         self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_groups), set(self.groups))
@@ -550,7 +560,7 @@ class ManifestTest(unittest.TestCase):
                 "docs": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v10.json",
                     "dbt_version": dbt.version.__version__,
                     "project_id": "098f6bcd4621d373cade4e832627b4f6",
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
@@ -560,6 +570,7 @@ class ManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "disabled": {},
+                "public_nodes": {},
             },
         )
 
@@ -733,13 +744,56 @@ class MixedManifestTest(unittest.TestCase):
                 unique_id="model.root.dep",
                 fqn=["root", "dep"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 depends_on=DependsOn(nodes=["model.root.events"]),
                 config=self.model_config,
                 tags=[],
                 path="multi.sql",
                 original_file_path="multi.sql",
+                meta={},
+                language="sql",
+                raw_code="does not matter",
+                checksum=FileHash.empty(),
+            ),
+            "model.root.versioned.v1": ModelNode(
+                name="versioned",
+                database="dbt",
+                schema="analytics",
+                alias="dep",
+                resource_type=NodeType.Model,
+                unique_id="model.root.versioned.v1",
+                fqn=["root", "dep"],
+                package_name="root",
+                refs=[],
+                sources=[],
+                depends_on=DependsOn(),
+                config=self.model_config,
+                tags=[],
+                path="versioned.sql",
+                original_file_path="versioned.sql",
+                meta={},
+                language="sql",
+                raw_code="does not matter",
+                checksum=FileHash.empty(),
+                version=1,
+            ),
+            "model.root.dep_version": ModelNode(
+                name="dep_version",
+                database="dbt",
+                schema="analytics",
+                alias="dep",
+                resource_type=NodeType.Model,
+                unique_id="model.root.dep_version",
+                fqn=["root", "dep"],
+                package_name="root",
+                refs=[RefArgs(name="versioned", version=1)],
+                sources=[],
+                depends_on=DependsOn(nodes=["model.root.versioned.v1"]),
+                config=self.model_config,
+                tags=[],
+                path="dep_version.sql",
+                original_file_path="dep_version.sql",
                 meta={},
                 language="sql",
                 raw_code="does not matter",
@@ -754,7 +808,7 @@ class MixedManifestTest(unittest.TestCase):
                 unique_id="model.root.nested",
                 fqn=["root", "nested"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 depends_on=DependsOn(nodes=["model.root.dep"]),
                 config=self.model_config,
@@ -775,7 +829,7 @@ class MixedManifestTest(unittest.TestCase):
                 unique_id="model.root.sibling",
                 fqn=["root", "sibling"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 depends_on=DependsOn(nodes=["model.root.events"]),
                 config=self.model_config,
@@ -796,7 +850,7 @@ class MixedManifestTest(unittest.TestCase):
                 unique_id="model.root.multi",
                 fqn=["root", "multi"],
                 package_name="root",
-                refs=[["events"]],
+                refs=[RefArgs(name="events")],
                 sources=[],
                 depends_on=DependsOn(nodes=["model.root.nested", "model.root.sibling"]),
                 config=self.model_config,
@@ -845,13 +899,14 @@ class MixedManifestTest(unittest.TestCase):
                 "group_map": {},
                 "metadata": {
                     "generated_at": "2018-02-14T09:15:13Z",
-                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+                    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v10.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "docs": {},
                 "disabled": {},
+                "public_nodes": {},
             },
         )
 
@@ -924,7 +979,8 @@ class MixedManifestTest(unittest.TestCase):
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph["nodes"]
         self.assertEqual(
-            set(flat_graph), set(["exposures", "groups", "metrics", "nodes", "sources"])
+            set(flat_graph),
+            set(["exposures", "groups", "metrics", "nodes", "sources", "public_nodes"]),
         )
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
@@ -1279,14 +1335,14 @@ def test_find_materialization_by_name(macros, adapter_type, expected):
         assert result.package_name == expected_package
 
 
-FindNodeSpec = namedtuple("FindNodeSpec", "nodes,sources,package,expected")
+FindNodeSpec = namedtuple("FindNodeSpec", "nodes,sources,package,version,expected")
 
 
 def _refable_parameter_sets():
     sets = [
         # empties
-        FindNodeSpec(nodes=[], sources=[], package=None, expected=None),
-        FindNodeSpec(nodes=[], sources=[], package="root", expected=None),
+        FindNodeSpec(nodes=[], sources=[], package=None, version=None, expected=None),
+        FindNodeSpec(nodes=[], sources=[], package="root", version=None, expected=None),
     ]
     sets.extend(
         # only one model, no package specified -> find it in any package
@@ -1294,6 +1350,7 @@ def _refable_parameter_sets():
             nodes=[MockNode(project, "my_model")],
             sources=[],
             package=None,
+            version=None,
             expected=(project, "my_model"),
         )
         for project in ["root", "dep"]
@@ -1305,19 +1362,72 @@ def _refable_parameter_sets():
                 nodes=[MockNode("root", "my_model")],
                 sources=[],
                 package="root",
+                version=None,
                 expected=("root", "my_model"),
             ),
             FindNodeSpec(
                 nodes=[MockNode("dep", "my_model")],
                 sources=[],
                 package="root",
+                version=None,
                 expected=None,
+            ),
+            # versioned model lookups
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="2")],
+                sources=[],
+                package="root",
+                version="2",
+                expected=("root", "my_model", "2"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="2")],
+                sources=[],
+                package="root",
+                version=2,
+                expected=("root", "my_model", "2"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="3")],
+                sources=[],
+                package="root",
+                version="2",
+                expected=None,
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="3", is_latest_version=True)],
+                sources=[],
+                package="root",
+                version=None,
+                expected=("root", "my_model", "3"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="3", is_latest_version=False)],
+                sources=[],
+                package="root",
+                version=None,
+                expected=None,
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="0", is_latest_version=False)],
+                sources=[],
+                package="root",
+                version=None,
+                expected=None,
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model", version="0", is_latest_version=True)],
+                sources=[],
+                package="root",
+                version=None,
+                expected=("root", "my_model", "0"),
             ),
             # a source with that name exists, but not a refable
             FindNodeSpec(
                 nodes=[],
                 sources=[MockSource("root", "my_source", "my_model")],
                 package=None,
+                version=None,
                 expected=None,
             ),
             # a source with that name exists, and a refable
@@ -1325,22 +1435,89 @@ def _refable_parameter_sets():
                 nodes=[MockNode("root", "my_model")],
                 sources=[MockSource("root", "my_source", "my_model")],
                 package=None,
+                version=None,
                 expected=("root", "my_model"),
             ),
             FindNodeSpec(
                 nodes=[MockNode("root", "my_model")],
                 sources=[MockSource("root", "my_source", "my_model")],
                 package="root",
+                version=None,
                 expected=("root", "my_model"),
             ),
             FindNodeSpec(
                 nodes=[MockNode("root", "my_model")],
                 sources=[MockSource("root", "my_source", "my_model")],
                 package="dep",
+                version=None,
                 expected=None,
+            ),
+            # duplicate node name across package
+            FindNodeSpec(
+                nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+                sources=[],
+                package="project_a",
+                version=None,
+                expected=("project_a", "my_model"),
+            ),
+            # duplicate node name across package: root node preferred to package node
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package=None,
+                version=None,
+                expected=("root", "my_model"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package="root",
+                version=None,
+                expected=("root", "my_model"),
+            ),
+            FindNodeSpec(
+                nodes=[MockNode("root", "my_model"), MockNode("project_a", "my_model")],
+                sources=[],
+                package="project_a",
+                version=None,
+                expected=("project_a", "my_model"),
+            ),
+            # duplicate node name across package: resolved by version
+            FindNodeSpec(
+                nodes=[
+                    MockNode("project_a", "my_model", version="1"),
+                    MockNode("project_b", "my_model", version="2"),
+                ],
+                sources=[],
+                package=None,
+                version="1",
+                expected=("project_a", "my_model", "1"),
             ),
         ]
     )
+    return sets
+
+
+def _ambiguous_ref_parameter_sets():
+    sets = [
+        FindNodeSpec(
+            nodes=[MockNode("project_a", "my_model"), MockNode("project_b", "my_model")],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+        FindNodeSpec(
+            nodes=[
+                MockNode("project_a", "my_model", version="2", is_latest_version=True),
+                MockNode("project_b", "my_model", version="1", is_latest_version=True),
+            ],
+            sources=[],
+            package=None,
+            version=None,
+            expected=None,
+        ),
+    ]
     return sets
 
 
@@ -1353,15 +1530,17 @@ def id_nodes(arg):
 
 
 @pytest.mark.parametrize(
-    "nodes,sources,package,expected",
+    "nodes,sources,package,version,expected",
     _refable_parameter_sets(),
     ids=id_nodes,
 )
-def test_resolve_ref(nodes, sources, package, expected):
+def test_resolve_ref(nodes, sources, package, version, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_ref(
+        source_node=None,
         target_model_name="my_model",
         target_model_package=package,
+        target_model_version=version,
         current_project="root",
         node_package="root",
     )
@@ -1369,17 +1548,45 @@ def test_resolve_ref(nodes, sources, package, expected):
         assert result is expected
     else:
         assert result is not None
-        assert len(expected) == 2
-        expected_package, expected_name = expected
+        assert len(expected) in (2, 3)
+
+        if len(expected) == 2:
+            expected_package, expected_name = expected
+        elif len(expected) == 3:
+            expected_package, expected_name, expected_version = expected
+            assert result.version == expected_version
         assert result.name == expected_name
         assert result.package_name == expected_package
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _ambiguous_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_ambiguous_resource_name_across_packages(
+    nodes, sources, package, version, expected
+):
+    manifest = make_manifest(
+        nodes=nodes,
+        sources=sources,
+    )
+    with pytest.raises(AmbiguousResourceNameRefError):
+        manifest.resolve_ref(
+            source_node=None,
+            target_model_name="my_model",
+            target_model_package=None,
+            target_model_version=version,
+            current_project="root",
+            node_package="root",
+        )
 
 
 def _source_parameter_sets():
     sets = [
         # empties
-        FindNodeSpec(nodes=[], sources=[], package="dep", expected=None),
-        FindNodeSpec(nodes=[], sources=[], package="root", expected=None),
+        FindNodeSpec(nodes=[], sources=[], package="dep", version=None, expected=None),
+        FindNodeSpec(nodes=[], sources=[], package="root", version=None, expected=None),
     ]
     sets.extend(
         # models with the name, but not sources
@@ -1387,6 +1594,7 @@ def _source_parameter_sets():
             nodes=[MockNode("root", name)],
             sources=[],
             package=project,
+            version=None,
             expected=None,
         )
         for project in ("root", "dep")
@@ -1398,6 +1606,7 @@ def _source_parameter_sets():
             nodes=[MockNode("root", "my_source"), MockNode("root", "my_table")],
             sources=[MockSource("root", "my_source", "my_table")],
             package=project,
+            version=None,
             expected=("root", "my_source", "my_table"),
         )
         for project in ("root", "dep")
@@ -1408,6 +1617,7 @@ def _source_parameter_sets():
             nodes=[],
             sources=[MockSource("root", "my_other_source", "my_table")],
             package=project,
+            version=None,
             expected=None,
         )
         for project in ("root", "dep")
@@ -1418,6 +1628,7 @@ def _source_parameter_sets():
             nodes=[],
             sources=[MockSource("root", "my_source", "my_other_table")],
             package=project,
+            version=None,
             expected=None,
         )
         for project in ("root", "dep")
@@ -1428,6 +1639,7 @@ def _source_parameter_sets():
             nodes=[],
             sources=[MockSource("other", "my_source", "my_table")],
             package="root",
+            version=None,
             expected=("other", "my_source", "my_table"),
         )
     )
@@ -1437,6 +1649,7 @@ def _source_parameter_sets():
             nodes=[],
             sources=[MockSource("root", "my_source", "my_table")],
             package=project,
+            version=None,
             expected=("root", "my_source", "my_table"),
         )
         for project in ("root", "dep")
@@ -1446,11 +1659,11 @@ def _source_parameter_sets():
 
 
 @pytest.mark.parametrize(
-    "nodes,sources,package,expected",
+    "nodes,sources,package,version,expected",
     _source_parameter_sets(),
     ids=id_nodes,
 )
-def test_resolve_source(nodes, sources, package, expected):
+def test_resolve_source(nodes, sources, package, version, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_source(
         target_source_name="my_source",

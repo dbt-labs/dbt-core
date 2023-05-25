@@ -28,7 +28,7 @@ nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
 def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
-    EVENT_MANAGER.add_callbacks(callbacks=callbacks)
+    EVENT_MANAGER.callbacks = callbacks.copy()
 
     if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(
@@ -251,6 +251,11 @@ def fire_event_if(
 ) -> None:
     if conditional:
         fire_event(lazy_e(), level=level)
+
+
+# a special case of fire_event_if, to only fire events in our unit/functional tests
+def fire_event_if_test(lazy_e: Callable[[], BaseEvent], level: EventLevel = None) -> None:
+    fire_event_if(conditional=("pytest" in sys.modules), lazy_e=lazy_e, level=level)
 
 
 # top-level method for accessing the new eventing system

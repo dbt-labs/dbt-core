@@ -261,6 +261,37 @@ models:
         data_type: text
 """
 
+constrained_model_schema_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+    constraints:
+      - type: check
+        expression: (id > 0)
+      - type: primary_key
+        columns: [ id ]
+      - type: unique
+        columns: [ color, date_day ]
+        name: strange_uniqueness_requirement
+    columns:
+      - name: id
+        quote: true
+        data_type: integer
+        description: hello
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: color
+        data_type: text
+      - name: date_day
+        data_type: text
+"""
+
+
 model_data_type_schema_yml = """
 version: 2
 models:

@@ -7,13 +7,10 @@ from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.nodes import Macro
 from dbt.contracts.files import FilePath, SourceFile
 from dbt.exceptions import ParsingError
-from dbt.events.functions import fire_event
-from dbt.events.types import MacroFileParse
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
 from dbt.utils import MACRO_PREFIX
-from dbt.flags import get_flags
 
 
 class MacroParser(BaseParser[Macro]):
@@ -93,8 +90,6 @@ class MacroParser(BaseParser[Macro]):
         source_file = block.file
         assert isinstance(source_file.contents, str)
         original_file_path = source_file.path.original_file_path
-        if get_flags().MACRO_DEBUGGING:
-            fire_event(MacroFileParse(path=original_file_path))
 
         # this is really only used for error messages
         base_node = UnparsedMacro(

@@ -216,9 +216,9 @@ class TestBuildRunResultsState(BaseRunResultsState):
         results = run_dbt(
             ["build", "--select", "result:fail+", "--state", "./state"], expect_pass=False
         )
-        assert len(results) == 2
+        assert len(results) == 1
         nodes = set([elem.node.name for elem in results])
-        assert nodes == {"table_model", "unique_view_model_id"}
+        assert nodes == {"unique_view_model_id"}
 
         results = run_dbt(["ls", "--select", "result:fail+", "--state", "./state"])
         assert len(results) == 1
@@ -240,9 +240,9 @@ class TestBuildRunResultsState(BaseRunResultsState):
         results = run_dbt(
             ["build", "--select", "result:warn+", "--state", "./state"], expect_pass=True
         )
-        assert len(results) == 2  # includes table_model to be run
+        assert len(results) == 1
         nodes = set([elem.node.name for elem in results])
-        assert nodes == {"table_model", "unique_view_model_id"}
+        assert nodes == {"unique_view_model_id"}
 
         results = run_dbt(["ls", "--select", "result:warn+", "--state", "./state"])
         assert len(results) == 1
@@ -483,12 +483,11 @@ class TestConcurrentSelectionBuildRunResultsState(BaseRunResultsState):
             ],
             expect_pass=False,
         )
-        assert len(results) == 5
+        assert len(results) == 4
         nodes = set([elem.node.name for elem in results])
         assert nodes == {
             "error_model",
             "downstream_of_error_model",
             "table_model_modified_example",
-            "table_model",
             "unique_view_model_id",
         }

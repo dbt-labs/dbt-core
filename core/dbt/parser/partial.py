@@ -821,18 +821,17 @@ class PartialParsing:
     def delete_schema_mssa_links(self, schema_file, dict_key, elem):
         # find elem node unique_id in node_patches
         prefix = key_to_prefix[dict_key]
-        elem_unique_id = ""
+        elem_unique_ids = []
         for unique_id in schema_file.node_patches:
             if not unique_id.startswith(prefix):
                 continue
             parts = unique_id.split(".")
-            elem_name = parts[-1]
+            elem_name = parts[2]
             if elem_name == elem["name"]:
-                elem_unique_id = unique_id
-                break
+                elem_unique_ids.append(unique_id)
 
         # remove elem node and remove unique_id from node_patches
-        if elem_unique_id:
+        for elem_unique_id in elem_unique_ids:
             # might have been already removed
             if (
                 elem_unique_id in self.saved_manifest.nodes
@@ -852,6 +851,12 @@ class PartialParsing:
                     if self.saved_files[file_id]:
                         source_file = self.saved_files[file_id]
                         self.add_to_pp_files(source_file)
+                    # if the node's group has changed - need to reparse all referencing nodes to ensure valid ref access
+                    if node.group != elem.get("group"):
+                        self.schedule_referencing_nodes_for_parsing(node.unique_id)
+                    # if the node's latest version has changed - need to reparse all referencing nodes to ensure correct ref resolution
+                    if node.is_versioned and node.latest_version != elem.get("latest_version"):
+                        self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)
 

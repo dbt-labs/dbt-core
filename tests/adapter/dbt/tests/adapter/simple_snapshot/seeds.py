@@ -30,4 +30,4 @@ id,first_name,last_name,email,gender,ip_address,updated_at
 28,Marie,Medina,mmedinar@nhs.uk,Female,188.119.125.67,2015-10-08
 29,Kelly,Edwards,kedwardss@phoca.cz,Female,47.121.157.66,2015-09-15
 30,Carl,Coleman,ccolemant@wikipedia.org,Male,82.227.154.83,2016-05-26
-""".strip()
+""".lstrip()

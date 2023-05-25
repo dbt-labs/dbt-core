@@ -124,3 +124,68 @@ def expected_references_run_results():
             "failures": ANY,
         },
     ]
+
+
+def expected_versions_run_results():
+    return [
+        {
+            "status": "success",
+            "message": None,
+            "execution_time": AnyFloat(),
+            "unique_id": "model.test.ref_versioned_model",
+            "adapter_response": ANY,
+            "thread_id": ANY,
+            "timing": [ANY, ANY],
+            "failures": ANY,
+        },
+        {
+            "status": "success",
+            "message": None,
+            "execution_time": AnyFloat(),
+            "unique_id": "model.test.versioned_model.v1",
+            "adapter_response": ANY,
+            "thread_id": ANY,
+            "timing": [ANY, ANY],
+            "failures": ANY,
+        },
+        {
+            "status": "success",
+            "message": None,
+            "execution_time": AnyFloat(),
+            "unique_id": "model.test.versioned_model.v2",
+            "adapter_response": ANY,
+            "thread_id": ANY,
+            "timing": [ANY, ANY],
+            "failures": ANY,
+        },
+        {
+            "status": "success",
+            "message": None,
+            "execution_time": AnyFloat(),
+            "unique_id": "test.test.unique_versioned_model_v1_count.0b4c0b688a",
+            "adapter_response": ANY,
+            "thread_id": ANY,
+            "timing": [ANY, ANY],
+            "failures": ANY,
+        },
+        {
+            "status": "success",
+            "message": None,
+            "execution_time": AnyFloat(),
+            "unique_id": "test.test.unique_versioned_model_v1_first_name.6138195dec",
+            "adapter_response": ANY,
+            "thread_id": ANY,
+            "timing": [ANY, ANY],
+            "failures": ANY,
+        },
+        {
+            "status": "success",
+            "message": None,
+            "execution_time": AnyFloat(),
+            "unique_id": "test.test.unique_versioned_model_v2_first_name.998430d28e",
+            "adapter_response": ANY,
+            "thread_id": ANY,
+            "timing": [ANY, ANY],
+            "failures": ANY,
+        },
+    ]

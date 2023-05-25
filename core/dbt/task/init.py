@@ -146,17 +146,17 @@ class InitTask(BaseTask):
         This will overwrite any profile with a matching name."""
         # Create the profile directory if it doesn't exist
         profiles_filepath = Path(get_flags().PROFILES_DIR) / Path("profiles.yml")
+
+        profiles = {profile_name: profile}
+
         if profiles_filepath.exists():
-            with open(profiles_filepath, "r+") as f:
+            with open(profiles_filepath, "r") as f:
                 profiles = yaml.safe_load(f) or {}
                 profiles[profile_name] = profile
-                f.seek(0)
-                yaml.dump(profiles, f)
-                f.truncate()
-        else:
-            profiles = {profile_name: profile}
-            with open(profiles_filepath, "w") as f:
-                yaml.dump(profiles, f)
+
+        # Write the profiles dictionary to a brand-new or pre-existing file
+        with open(profiles_filepath, "w") as f:
+            yaml.dump(profiles, f)
 
     def create_profile_from_profile_template(self, profile_template: dict, profile_name: str):
         """Create and write a profile using the supplied profile_template."""
@@ -222,6 +222,10 @@ class InitTask(BaseTask):
     def ask_for_adapter_choice(self) -> str:
         """Ask the user which adapter (database) they'd like to use."""
         available_adapters = list(_get_adapter_plugin_names())
+
+        if not available_adapters:
+            raise dbt.exceptions.NoAdaptersAvailableError()
+
         prompt_msg = (
             "Which database would you like to use?\n"
             + "\n".join([f"[{n+1}] {v}" for n, v in enumerate(available_adapters)])
@@ -245,6 +249,21 @@ class InitTask(BaseTask):
 
         return name
 
+    def create_new_project(self, project_name: str, profile_name: str):
+        self.copy_starter_repo(project_name)
+        os.chdir(project_name)
+        with open("dbt_project.yml", "r") as f:
+            content = f"{f.read()}".format(project_name=project_name, profile_name=profile_name)
+        with open("dbt_project.yml", "w") as f:
+            f.write(content)
+        fire_event(
+            ProjectCreated(
+                project_name=project_name,
+                docs_url=DOCS_URL,
+                slack_url=SLACK_URL,
+            )
+        )
+
     def run(self):
         """Entry point for the init task."""
         profiles_dir = get_flags().PROFILES_DIR
@@ -267,8 +286,36 @@ class InitTask(BaseTask):
 
             # When dbt init is run inside an existing project,
             # just setup the user's profile.
-            fire_event(SettingUpProfile())
             profile_name = self.get_profile_name_from_current_project()
+            profile_specified = False
+        else:
+            # When dbt init is run outside of an existing project,
+            # create a new project and set up the user's profile.
+            project_name = self.get_valid_project_name()
+            project_path = Path(project_name)
+            if project_path.exists():
+                fire_event(ProjectNameAlreadyExists(name=project_name))
+                return
+
+            # If the user specified an existing profile to use, use it instead of generating a new one
+            user_profile_name = getattr(get_flags(), "PROFILE", None)
+            if user_profile_name:
+                # Verify it exists. Can't use the regular profile validation routine because it assumes
+                # the project file exists
+                raw_profiles = read_profile(profiles_dir)
+                if user_profile_name not in raw_profiles:
+                    print("Could not find profile named '{}'".format(user_profile_name))
+                    sys.exit(1)
+                profile_name = user_profile_name
+                profile_specified = True
+            else:
+                profile_name = project_name
+                profile_specified = False
+            self.create_new_project(project_name, profile_name)
+
+        # Ask for adapter only if skip_profile_setup flag is not provided and no profile to use was specified.
+        if not self.args.skip_profile_setup and not profile_specified:
+            fire_event(SettingUpProfile())
             if not self.check_if_can_write_profile(profile_name=profile_name):
                 return
             # If a profile_template.yml exists in the project root, that effectively
@@ -284,52 +331,3 @@ class InitTask(BaseTask):
                     fire_event(InvalidProfileTemplateYAML())
             adapter = self.ask_for_adapter_choice()
             self.create_profile_from_target(adapter, profile_name=profile_name)
-            return
-
-        # When dbt init is run outside of an existing project,
-        # create a new project and set up the user's profile.
-        available_adapters = list(_get_adapter_plugin_names())
-        if not len(available_adapters):
-            print("No adapters available. Go to https://docs.getdbt.com/docs/available-adapters")
-            sys.exit(1)
-        project_name = self.get_valid_project_name()
-        project_path = Path(project_name)
-        if project_path.exists():
-            fire_event(ProjectNameAlreadyExists(name=project_name))
-            return
-
-        # If the user specified an existing profile to use, use it instead of generating a new one
-        user_profile_name = getattr(get_flags(), "PROFILE", None)
-        if user_profile_name:
-            # Verify it exists. Can't use the regular profile validation routine because it assumes
-            # the project file exists
-            raw_profiles = read_profile(profiles_dir)
-            if user_profile_name not in raw_profiles:
-                print("Could not find profile named '{}'".format(user_profile_name))
-                sys.exit(1)
-
-        self.copy_starter_repo(project_name)
-        os.chdir(project_name)
-        with open("dbt_project.yml", "r+") as f:
-            content = f"{f.read()}".format(
-                project_name=project_name,
-                profile_name=user_profile_name if user_profile_name else project_name,
-            )
-            f.seek(0)
-            f.write(content)
-            f.truncate()
-
-        # If an existing profile to use was not provided, generate a profile
-        # Ask for adapter only if skip_profile_setup flag is not provided.
-        if not user_profile_name and not self.args.skip_profile_setup:
-            if not self.check_if_can_write_profile(profile_name=project_name):
-                return
-            adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_target(adapter, profile_name=project_name)
-            fire_event(
-                ProjectCreated(
-                    project_name=project_name,
-                    docs_url=DOCS_URL,
-                    slack_url=SLACK_URL,
-                )
-            )

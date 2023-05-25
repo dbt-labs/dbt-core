@@ -17,7 +17,9 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     ResultNode,
     ManifestNode,
+    ModelNode,
 )
+from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     DbtInternalError,
@@ -48,15 +50,21 @@ class MethodName(StrEnum):
     Result = "result"
     SourceStatus = "source_status"
     Wildcard = "wildcard"
+    Version = "version"
 
 
-def is_selected_node(
-    fqn: List[str],
-    node_selector: str,
-) -> bool:
+def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
     # If qualified_name exactly matches model name (fqn's leaf), return True
-    if fqn[-1] == node_selector:
-        return True
+    if is_versioned:
+        flat_node_selector = node_selector.split(".")
+        if fqn[-2] == node_selector:
+            return True
+        # If this is a versioned model, then the last two segments should be allowed to exactly match
+        elif fqn[-2:] == flat_node_selector[-2:]:
+            return True
+    else:
+        if fqn[-1] == node_selector:
+            return True
     # Flatten node parts. Dots in model names act as namespace separators
     flat_fqn = [item for segment in fqn for item in segment.split(".")]
     # Selector components cannot be more than fqn's
@@ -178,7 +186,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 
 
 class QualifiedNameSelectorMethod(SelectorMethod):
-    def node_is_match(self, qualified_name: str, fqn: List[str]) -> bool:
+    def node_is_match(self, qualified_name: str, fqn: List[str], is_versioned: bool) -> bool:
         """Determine if a qualified name matches an fqn for all package
         names in the graph.
 
@@ -187,10 +195,10 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         """
         unscoped_fqn = fqn[1:]
 
-        if is_selected_node(fqn, qualified_name):
+        if is_selected_node(fqn, qualified_name, is_versioned):
             return True
         # Match nodes across different packages
-        elif is_selected_node(unscoped_fqn, qualified_name):
+        elif is_selected_node(unscoped_fqn, qualified_name, is_versioned):
             return True
 
         return False
@@ -202,7 +210,7 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         """
         parsed_nodes = list(self.parsed_nodes(included_nodes))
         for node, real_node in parsed_nodes:
-            if self.node_is_match(selector, real_node.fqn):
+            if self.node_is_match(selector, real_node.fqn, real_node.is_versioned):
                 yield node
 
 
@@ -312,7 +320,12 @@ class PathSelectorMethod(SelectorMethod):
             ofp = Path(real_node.original_file_path)
             if ofp in paths:
                 yield node
-            elif any(parent in paths for parent in ofp.parents):
+            if hasattr(real_node, "patch_path") and real_node.patch_path:  # type: ignore
+                pfp = real_node.patch_path.split("://")[1]  # type: ignore
+                ymlfp = Path(pfp)
+                if ymlfp in paths:
+                    yield node
+            if any(parent in paths for parent in ofp.parents):
                 yield node
 
 
@@ -501,12 +514,19 @@ class StateSelectorMethod(SelectorMethod):
             return self.recursively_check_macros_modified(node, visited_macros)
 
     # TODO check modifed_content and check_modified macro seems a bit redundent
-    def check_modified_content(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        different_contents = not new.same_contents(old)  # type: ignore
+    def check_modified_content(
+        self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
+    ) -> bool:
+        if isinstance(new, (SourceDefinition, Exposure, Metric)):
+            # these all overwrite `same_contents`
+            different_contents = not new.same_contents(old)  # type: ignore
+        else:
+            different_contents = not new.same_contents(old, adapter_type)  # type: ignore
+
         upstream_macro_change = self.check_macros_modified(new)
         return different_contents or upstream_macro_change
 
-    def check_modified_macros(self, _, new: SelectorTarget) -> bool:
+    def check_modified_macros(self, old, new: SelectorTarget) -> bool:
         return self.check_macros_modified(new)
 
     @staticmethod
@@ -523,6 +543,21 @@ class StateSelectorMethod(SelectorMethod):
 
         return check_modified_things
 
+    @staticmethod
+    def check_modified_contract(
+        compare_method: str,
+        adapter_type: Optional[str],
+    ) -> Callable[[Optional[SelectorTarget], SelectorTarget], bool]:
+        # get a function that compares two selector target based on compare method provided
+        def check_modified_contract(old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+            if hasattr(new, compare_method):
+                # when old body does not exist or old and new are not the same
+                return not old or not getattr(new, compare_method)(old, adapter_type)  # type: ignore
+            else:
+                return False
+
+        return check_modified_contract
+
     def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return old is None
 
@@ -530,9 +565,11 @@ class StateSelectorMethod(SelectorMethod):
         if self.previous_state is None or self.previous_state.manifest is None:
             raise DbtRuntimeError("Got a state selector method, but no comparison manifest")
 
+        adapter_type = self.manifest.metadata.adapter_type
+
         state_checks = {
             # it's new if there is no old version
-            "new": lambda old, _: old is None,
+            "new": lambda old, new: old is None,
             # use methods defined above to compare properties of old + new
             "modified": self.check_modified_content,
             "modified.body": self.check_modified_factory("same_body"),
@@ -542,7 +579,7 @@ class StateSelectorMethod(SelectorMethod):
             ),
             "modified.relation": self.check_modified_factory("same_database_representation"),
             "modified.macros": self.check_modified_macros,
-            "modified.contract": self.check_modified_factory("same_contract"),
+            "modified.contract": self.check_modified_contract("same_contract", adapter_type),
         }
         if selector in state_checks:
             checker = state_checks[selector]
@@ -555,6 +592,7 @@ class StateSelectorMethod(SelectorMethod):
 
         for node, real_node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
+
             if node in manifest.nodes:
                 previous_node = manifest.nodes[node]
             elif node in manifest.sources:
@@ -564,7 +602,11 @@ class StateSelectorMethod(SelectorMethod):
             elif node in manifest.metrics:
                 previous_node = manifest.metrics[node]
 
-            if checker(previous_node, real_node):
+            keyword_args = {}
+            if checker.__name__ in ["same_contract", "check_modified_content"]:
+                keyword_args["adapter_type"] = adapter_type  # type: ignore
+
+            if checker(previous_node, real_node, **keyword_args):  # type: ignore
                 yield node
 
 
@@ -634,6 +676,38 @@ class SourceStatusSelectorMethod(SelectorMethod):
                 yield node
 
 
+class VersionSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if isinstance(real_node, ModelNode):
+                if selector == "latest":
+                    if real_node.is_latest_version:
+                        yield node
+                elif selector == "prerelease":
+                    if (
+                        real_node.version
+                        and real_node.latest_version
+                        and UnparsedVersion(v=real_node.version)
+                        > UnparsedVersion(v=real_node.latest_version)
+                    ):
+                        yield node
+                elif selector == "old":
+                    if (
+                        real_node.version
+                        and real_node.latest_version
+                        and UnparsedVersion(v=real_node.version)
+                        < UnparsedVersion(v=real_node.latest_version)
+                    ):
+                        yield node
+                elif selector == "none":
+                    if real_node.version is None:
+                        yield node
+                else:
+                    raise DbtRuntimeError(
+                        f'Invalid version type selector {selector}: expected one of: "latest", "prerelease", "old", or "none"'
+                    )
+
+
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
@@ -652,6 +726,7 @@ class MethodManager:
         MethodName.Metric: MetricSelectorMethod,
         MethodName.Result: ResultSelectorMethod,
         MethodName.SourceStatus: SourceStatusSelectorMethod,
+        MethodName.Version: VersionSelectorMethod,
     }
 
     def __init__(

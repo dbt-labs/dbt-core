@@ -20,7 +20,6 @@ from dbt.contracts.graph.nodes import (
     GenericTestNode,
     SnapshotNode,
     IntermediateSnapshotNode,
-    ParsedNodePatch,
     Macro,
     Exposure,
     Metric,
@@ -150,7 +149,7 @@ def base_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": []},
+        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -184,6 +183,7 @@ def base_parsed_model_dict():
         "unrendered_config": {},
         "config_call_dict": {},
         "access": AccessType.Protected.value,
+        "constraints": [],
     }
 
 
@@ -255,7 +255,7 @@ def complex_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "public_nodes": []},
         "database": "test_db",
         "deferred": True,
         "description": "My parsed node",
@@ -301,6 +301,7 @@ def complex_parsed_model_dict():
         },
         "config_call_dict": {},
         "access": AccessType.Protected.value,
+        "constraints": [],
     }
 
 
@@ -482,13 +483,13 @@ changed_nodes = [
 @pytest.mark.parametrize("func", unchanged_nodes)
 def test_compare_unchanged_parsed_model(func, basic_parsed_model_object):
     node, compare = func(basic_parsed_model_object)
-    assert node.same_contents(compare)
+    assert node.same_contents(compare, "postgres")
 
 
 @pytest.mark.parametrize("func", changed_nodes)
 def test_compare_changed_model(func, basic_parsed_model_object):
     node, compare = func(basic_parsed_model_object)
-    assert not node.same_contents(compare)
+    assert not node.same_contents(compare, "postgres")
 
 
 @pytest.fixture
@@ -751,95 +752,13 @@ changed_seeds = [
 @pytest.mark.parametrize("func", unchanged_seeds)
 def test_compare_unchanged_parsed_seed(func, basic_parsed_seed_object):
     node, compare = func(basic_parsed_seed_object)
-    assert node.same_contents(compare)
+    assert node.same_contents(compare, "postgres")
 
 
 @pytest.mark.parametrize("func", changed_seeds)
 def test_compare_changed_seed(func, basic_parsed_seed_object):
     node, compare = func(basic_parsed_seed_object)
-    assert not node.same_contents(compare)
-
-
-@pytest.fixture
-def basic_parsed_model_patch_dict():
-    return {
-        "name": "foo",
-        "description": "The foo model",
-        "original_file_path": "path/to/schema.yml",
-        "docs": {"show": True},
-        "meta": {},
-        "yaml_key": "models",
-        "package_name": "test",
-        "columns": {
-            "a": {
-                "name": "a",
-                "description": "a text field",
-                "meta": {},
-                "tags": [],
-                "constraints": [],
-            },
-        },
-        "config": {},
-        "access": "public",
-    }
-
-
-@pytest.fixture
-def basic_parsed_model_patch_object():
-    return ParsedNodePatch(
-        name="foo",
-        yaml_key="models",
-        package_name="test",
-        description="The foo model",
-        original_file_path="path/to/schema.yml",
-        columns={"a": ColumnInfo(name="a", description="a text field", meta={})},
-        docs=Docs(),
-        meta={},
-        config={},
-        access="public",
-    )
-
-
-@pytest.fixture
-def patched_model_object():
-    return ModelNode(
-        package_name="test",
-        path="/root/x/path.sql",
-        original_file_path="/root/path.sql",
-        language="sql",
-        raw_code="select * from wherever",
-        name="foo",
-        resource_type=NodeType.Model,
-        unique_id="model.test.foo",
-        fqn=["test", "models", "foo"],
-        refs=[],
-        sources=[],
-        metrics=[],
-        depends_on=DependsOn(),
-        description="The foo model",
-        database="test_db",
-        schema="test_schema",
-        alias="bar",
-        tags=[],
-        meta={},
-        config=NodeConfig(),
-        patch_path="test://path/to/schema.yml",
-        columns={"a": ColumnInfo(name="a", description="a text field", meta={})},
-        docs=Docs(),
-        checksum=FileHash.from_contents(""),
-        unrendered_config={},
-        access=AccessType.Public,
-    )
-
-
-def test_patch_parsed_model(
-    basic_parsed_model_object, basic_parsed_model_patch_object, patched_model_object
-):
-    pre_patch = basic_parsed_model_object
-    pre_patch.patch(basic_parsed_model_patch_object)
-    pre_patch.created_at = 1.0
-    patched_model_object.created_at = 1.0
-    assert patched_model_object == pre_patch
+    assert not node.same_contents(compare, "postgres")
 
 
 @pytest.fixture
@@ -880,7 +799,7 @@ def base_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": []},
+        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
         "database": "test_db",
         "deferred": False,
         "description": "",
@@ -961,7 +880,7 @@ def complex_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "public_nodes": []},
         "deferred": False,
         "database": "test_db",
         "description": "My parsed node",
@@ -1119,7 +1038,7 @@ def basic_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": []},
+        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
         "deferred": False,
         "database": "test_db",
         "description": "",
@@ -1198,7 +1117,7 @@ def complex_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "public_nodes": []},
         "database": "test_db",
         "deferred": False,
         "description": "My parsed node",
@@ -1568,7 +1487,7 @@ def basic_timestamp_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": []},
+        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
         "deferred": False,
         "database": "test_db",
         "description": "",
@@ -1715,7 +1634,7 @@ def basic_check_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": []},
+        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
         "database": "test_db",
         "deferred": False,
         "description": "",
@@ -1884,56 +1803,6 @@ def test_invalid_snapshot_bad_resource_type(basic_timestamp_snapshot_dict):
     bad_resource_type = basic_timestamp_snapshot_dict
     bad_resource_type["resource_type"] = str(NodeType.Model)
     assert_fails_validation(bad_resource_type, SnapshotNode)
-
-
-def test_basic_parsed_node_patch(basic_parsed_model_patch_object, basic_parsed_model_patch_dict):
-    assert_symmetric(basic_parsed_model_patch_object, basic_parsed_model_patch_dict)
-
-
-@pytest.fixture
-def populated_parsed_node_patch_dict():
-    return {
-        "name": "foo",
-        "description": "The foo model",
-        "original_file_path": "path/to/schema.yml",
-        "columns": {
-            "a": {
-                "name": "a",
-                "description": "a text field",
-                "meta": {},
-                "tags": [],
-                "constraints": [],
-            },
-        },
-        "docs": {"show": False},
-        "meta": {"key": ["value"]},
-        "yaml_key": "models",
-        "package_name": "test",
-        "config": {},
-        "access": "public",
-    }
-
-
-@pytest.fixture
-def populated_parsed_node_patch_object():
-    return ParsedNodePatch(
-        name="foo",
-        description="The foo model",
-        original_file_path="path/to/schema.yml",
-        columns={"a": ColumnInfo(name="a", description="a text field", meta={})},
-        meta={"key": ["value"]},
-        yaml_key="models",
-        package_name="test",
-        docs=Docs(show=False),
-        config={},
-        access="public",
-    )
-
-
-def test_populated_parsed_node_patch(
-    populated_parsed_node_patch_dict, populated_parsed_node_patch_object
-):
-    assert_symmetric(populated_parsed_node_patch_object, populated_parsed_node_patch_dict)
 
 
 class TestParsedMacro(ContractTestCase):
@@ -2286,6 +2155,7 @@ def basic_parsed_exposure_dict():
         "depends_on": {
             "nodes": [],
             "macros": [],
+            "public_nodes": [],
         },
         "refs": [],
         "sources": [],
@@ -2345,6 +2215,7 @@ def complex_parsed_exposure_dict():
         "depends_on": {
             "nodes": ["models.test.my_model"],
             "macros": [],
+            "public_nodes": [],
         },
         "refs": [],
         "sources": [],
@@ -2478,6 +2349,7 @@ def basic_parsed_metric_dict():
         "depends_on": {
             "nodes": [],
             "macros": [],
+            "public_nodes": [],
         },
     }
 
