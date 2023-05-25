@@ -84,7 +84,8 @@ def test_snapshot_hard_delete(project):
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[-1], datetime)
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
-        # naive only(Because in the case of aware, it is not possible to compare the time of DB and Python)
+        # There are two types of datetime objects: naive and aware. In this case, we are testing only with naive objects
+        # because in the case of aware, it is not possible to compare the time between DB and Python
         if is_naive(result[-1]):
             tolerance = timedelta(minutes=1)
             assert (
@@ -131,7 +132,8 @@ def test_snapshot_hard_delete(project):
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[1], datetime)
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
-        # naive only(Because in the case of aware, it is not possible to compare the time of DB and Python)
+        # There are two types of datetime objects: naive and aware. In this case, we are testing only with naive objects
+        # because in the case of aware, it is not possible to compare the time between DB and Python
         if is_naive(result[1]):
             tolerance = timedelta(minutes=1)
             assert (
