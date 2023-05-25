@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import pytz
 import pytest
 from dbt.tests.util import run_dbt, check_relations_equal
+from dbt.tests.adapter.utils.test_current_timestamp import is_naive
 from tests.functional.simple_snapshot.fixtures import (
     models__schema_yml,
     models__ref_snapshot_sql,
@@ -83,12 +84,14 @@ def test_snapshot_hard_delete(project):
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[-1], datetime)
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
-        tolerance = timedelta(minutes=1)
-        assert (
-            result[-1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
-        ) and (
-            result[-1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
-        ), f"SQL timestamp {result[-1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
+        # naive only(Because in the case of aware, it is not possible to compare the time of DB and Python)
+        if is_naive(result[-1]):
+            tolerance = timedelta(minutes=1)
+            assert (
+                result[-1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
+            ) and (
+                result[-1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
+            ), f"SQL timestamp {result[-1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
 
     # revive records
     # Timestamp must have microseconds for tests below to be meaningful
@@ -128,12 +131,14 @@ def test_snapshot_hard_delete(project):
         # result is a tuple, the dbt_valid_to column is the latest
         assert isinstance(result[1], datetime)
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
-        tolerance = timedelta(minutes=1)
-        assert (
-            result[1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
-        ) and (
-            result[1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
-        ), f"SQL timestamp {result[1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
+        # naive only(Because in the case of aware, it is not possible to compare the time of DB and Python)
+        if is_naive(result[1]):
+            tolerance = timedelta(minutes=1)
+            assert (
+                result[1].replace(tzinfo=pytz.UTC) > (invalidated_snapshot_datetime - tolerance)
+            ) and (
+                result[1].replace(tzinfo=pytz.UTC) < (invalidated_snapshot_datetime + tolerance)
+            ), f"SQL timestamp {result[1].replace(tzinfo=pytz.UTC).isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
 
     # records which were revived (id = 10, 11)
     # dbt_valid_to is null
