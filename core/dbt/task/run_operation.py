@@ -101,7 +101,7 @@ class RunOperationTask(ConfiguredTask):
             results=[run_result],
         )
 
-        result_path = os.path.join(self.config.target_path, RESULT_FILE_NAME)
+        result_path = os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
 
         if self.args.write_json:
             results.write(result_path)

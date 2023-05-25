@@ -125,7 +125,7 @@ class CompileTask(GraphRunnableTask):
             favor_state=bool(self.args.favor_state),
         )
         # TODO: is it wrong to write the manifest here? I think it's right...
-        write_manifest(self.manifest, self.config.target_path)
+        write_manifest(self.manifest, self.config.project_target_path)
 
     def _runtime_initialize(self):
         if getattr(self.args, "inline", None):

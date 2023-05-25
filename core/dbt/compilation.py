@@ -272,7 +272,7 @@ class Compiler:
         self.config = config
 
     def initialize(self):
-        make_directory(self.config.target_path)
+        make_directory(self.config.project_target_path)
         make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
@@ -512,7 +512,9 @@ class Compiler:
             # including the test edges.
             summaries["with_test_edges"] = linker.get_graph_summary(manifest)
 
-        with open(os.path.join(self.config.target_path, "graph_summary.json"), "w") as out_stream:
+        with open(
+            os.path.join(self.config.project_target_path, "graph_summary.json"), "w"
+        ) as out_stream:
             try:
                 out_stream.write(json.dumps(summaries))
             except Exception as e:  # This is non-essential information, so merely note failures.
@@ -539,7 +541,7 @@ class Compiler:
 
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
-        graph_path = os.path.join(self.config.target_path, filename)
+        graph_path = os.path.join(self.config.project_target_path, filename)
         flags = get_flags()
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
@@ -555,7 +557,7 @@ class Compiler:
 
         if node.compiled_code:
             node.compiled_path = node.write_node(
-                self.config.target_path, "compiled", node.compiled_code
+                self.config.project_target_path, "compiled", node.compiled_code
             )
         return node
 
