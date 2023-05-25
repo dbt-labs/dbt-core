@@ -556,9 +556,8 @@ class Compiler:
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
-            node.compiled_path = node.write_node(
-                self.config.project_target_path, "compiled", node.compiled_code
-            )
+            node.compiled_path = node.get_compiled_path(self.config.target_path, "compiled")
+            node.write_node(self.config.project_root, node.compiled_path, node.compiled_code)
         return node
 
     def compile_node(

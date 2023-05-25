@@ -703,5 +703,8 @@ class Project:
 
     @property
     def project_target_path(self):
-        path = os.path.join(self.project_root, self.target_path)
-        return path
+        if os.path.isabs(self.target_path):
+            return self.target_path
+        else:
+            path = os.path.join(self.project_root, self.target_path)
+            return path
