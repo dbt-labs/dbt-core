@@ -1506,6 +1506,18 @@ message NoNodesForSelectionCriteriaMsg {
     NoNodesForSelectionCriteria data = 2;
 }
 
+// P - Artifacts
+
+// P001
+message PublicationArtifactAvailable {
+    google.protobuf.Struct pub_artifact = 1;
+}
+
+message PublicationArtifactAvailableMsg {
+    EventInfo info = 1;
+    PublicationArtifactAvailable data = 2;
+}
+
 // Q - Node execution
 
 // Q001

@@ -31,6 +31,7 @@ from dbt.node_types import NodeType
 # | E    | DB adapter          |
 # | I    | Project parsing     |
 # | M    | Deps generation     |
+# | P    | Artifacts           |
 # | Q    | Node execution      |
 # | W    | Node testing        |
 # | Z    | Misc                |
@@ -1447,6 +1448,19 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
     def message(self) -> str:
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+
+
+# =======================================================
+# Q - Node execution
+# =======================================================
+
+
+class PublicationArtifactAvailable(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return "Publication artifact available"
 
 
 # =======================================================

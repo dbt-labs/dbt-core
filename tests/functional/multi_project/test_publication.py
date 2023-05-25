@@ -2,7 +2,12 @@ import json
 import pytest
 import os
 
-from dbt.tests.util import run_dbt, get_artifact, write_file
+from dbt.tests.util import (
+    run_dbt,
+    write_file,
+    run_dbt_and_capture,
+    get_logging_events,
+)
 from dbt.contracts.publication import PublicationArtifact, PublicModel
 from dbt.exceptions import (
     PublicationConfigNotFound,
@@ -102,10 +107,11 @@ class TestPublicationArtifact:
         }
 
     def test_publication_artifact(self, project):
-        results = run_dbt(["run"])
+        results, log_output = run_dbt_and_capture(["--debug", "--log-format=json", "run"])
         assert len(results) == 3
 
-        publication_dict = get_artifact(project.project_root, "target", "test_publication.json")
+        pub_available_events = get_logging_events(log_output, "PublicationArtifactAvailable")
+        publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert publication
         assert len(publication.public_models) == 2
@@ -134,13 +140,16 @@ class TestPublicationArtifacts:
         # Provide publication and try again
         m_pub_json = marketing_pub_json.replace("test_schema", project.test_schema)
         publications = [PublicationArtifact.from_dict(json.loads(m_pub_json))]
-        manifest = run_dbt(["parse"], publications=publications)
+        manifest, log_output = run_dbt_and_capture(
+            ["--debug", "--log-format=json", "parse"], publications=publications
+        )
         assert manifest.publications
         assert "marketing" in manifest.publications
         assert "model.marketing.fct_one" in manifest.publications["marketing"].public_node_ids
 
         # Check dependencies in publication_artifact
-        publication_dict = get_artifact(project.project_root, "target", "test_publication.json")
+        pub_available_events = get_logging_events(log_output, "PublicationArtifactAvailable")
+        publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert publication.dependencies == ["marketing"]
 
@@ -234,13 +243,14 @@ class TestMultiProjects:
         # run the alternate project by using the alternate project root
         # (There is currently a bug where project-dir requires a chdir to work.)
         os.chdir(project_alt.project_root)
-        results = run_dbt(["run", "--project-dir", str(project_alt.project_root)])
+        results, log_output = run_dbt_and_capture(
+            ["--debug", "--log-format=json", "run", "--project-dir", str(project_alt.project_root)]
+        )
         assert len(results) == 1
 
         # Check publication artifact
-        publication_dict = get_artifact(
-            project_alt.project_root, "target", "test_alt_publication.json"
-        )
+        pub_available_events = get_logging_events(log_output, "PublicationArtifactAvailable")
+        publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert len(publication.public_models) == 1
 

@@ -52,6 +52,7 @@ from dbt.events.types import (
     StateCheckVarsHash,
     Note,
     PublicationArtifactChanged,
+    PublicationArtifactAvailable,
     DeprecatedModel,
     DeprecatedReference,
     UpcomingReferenceDeprecation,
@@ -550,7 +551,7 @@ class ManifestLoader:
 
         if not skip_parsing or public_nodes_changed:
             # Write out the <project_name>_publication.json file for this project
-            write_publication_artifact(self.root_project, self.manifest)
+            log_publication_artifact(self.root_project, self.manifest)
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
@@ -1757,7 +1758,7 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_docs_for_node(ctx, node)
 
 
-def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
+def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     # The manifest.json is written out in a task, so we're not writing it here
 
     # build publication metadata
@@ -1824,10 +1825,8 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
         public_models=public_models,
         dependencies=dependencies,
     )
-    # write out publication artifact <project_name>_publication.json
-    publication_file_name = f"{root_project.project_name}_publication.json"
-    path = os.path.join(root_project.target_path, publication_file_name)
-    publication.write(path)
+
+    fire_event(PublicationArtifactAvailable(pub_artifact=publication.to_dict()))
 
 
 def write_manifest(manifest: Manifest, target_path: str):
