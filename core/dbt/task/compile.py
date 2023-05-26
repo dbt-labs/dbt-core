@@ -100,14 +100,14 @@ class CompileTask(GraphRunnableTask):
         if not self.args.defer:
             return None
 
-        state = self.previous_state
-        if state is None:
+        state = self.previous_defer_state or self.previous_state
+        if not state:
             raise DbtRuntimeError(
                 "Received a --defer argument, but no value was provided to --state"
             )
 
-        if state.manifest is None:
-            raise DbtRuntimeError(f'Could not find manifest in --state path: "{self.args.state}"')
+        if not state.manifest:
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
         return state.manifest
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):

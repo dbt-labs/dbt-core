@@ -60,7 +60,6 @@ RUNNING_STATE = DbtProcessState("running")
 
 
 class GraphRunnableTask(ConfiguredTask):
-
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
 
     def __init__(self, args, config, manifest):
@@ -72,17 +71,20 @@ class GraphRunnableTask(ConfiguredTask):
         self.node_results = []
         self.num_nodes: int = 0
         self.previous_state: Optional[PreviousState] = None
+        self.previous_defer_state: Optional[PreviousState] = None
         self.run_count: int = 0
         self.started_at: float = 0
 
-        self.set_previous_state()
-
-    def set_previous_state(self):
-        if self.args.state is not None:
+        if self.args.state:
             self.previous_state = PreviousState(
                 state_path=self.args.state,
                 target_path=Path(self.config.target_path),
                 project_root=Path(self.config.project_root),
+            )
+
+        if self.args.defer_state:
+            self.previous_defer_state = PreviousState(
+                path=self.args.defer_state, current_path=Path(self.config.target_path)
             )
 
     def index_offset(self, value: int) -> int:

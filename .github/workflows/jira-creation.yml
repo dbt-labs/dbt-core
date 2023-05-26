@@ -18,7 +18,7 @@ permissions:
   issues: write
 
 jobs:
-  call-label-action:
+  call-creation-action:
     uses: dbt-labs/actions/.github/workflows/jira-creation-actions.yml@main
     secrets:
       JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
