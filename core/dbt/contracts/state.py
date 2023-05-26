@@ -43,7 +43,7 @@ class PreviousState:
                 exc.add_filename(str(sources_path))
                 raise
 
-        sources_current_path = self.target_path / "sources.json"
+        sources_current_path = self.project_root / self.target_path / "sources.json"
         if sources_current_path.exists() and sources_current_path.is_file():
             try:
                 self.sources_current = FreshnessExecutionResultArtifact.read_and_check_versions(
