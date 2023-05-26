@@ -84,7 +84,9 @@ class GraphRunnableTask(ConfiguredTask):
 
         if self.args.defer_state:
             self.previous_defer_state = PreviousState(
-                path=self.args.defer_state, current_path=Path(self.config.target_path)
+                state_path=self.args.defer_state,
+                target_path=Path(self.config.target_path),
+                project_root=Path(self.config.project_root),
             )
 
     def index_offset(self, value: int) -> int:
