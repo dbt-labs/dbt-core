@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Set
+import agate
 
 from dbt.dataclass_schema import ValidationError
 
@@ -227,10 +228,14 @@ class GenerateTask(CompileTask):
         if self.manifest is None:
             raise DbtInternalError("self.manifest was None in run!")
 
-        adapter = get_adapter(self.config)
-        with adapter.connection_named("generate_catalog"):
-            fire_event(BuildingCatalog())
-            catalog_table, exceptions = adapter.get_catalog(self.manifest)
+        if self.args.empty_catalog:
+            catalog_table: agate.Table = agate.Table([])
+            exceptions: List[Exception] = []
+        else:
+            adapter = get_adapter(self.config)
+            with adapter.connection_named("generate_catalog"):
+                fire_event(BuildingCatalog())
+                catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))

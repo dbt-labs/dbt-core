@@ -185,7 +185,7 @@ def _deep_map_render(
     value: Any,
     keypath: Tuple[Union[str, int], ...],
 ) -> Any:
-    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool)
+    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool, datetime.date)
 
     ret: Any
 

@@ -26,6 +26,14 @@ message TimingInfoMsg {
     google.protobuf.Timestamp completed_at = 3;
 }
 
+// NodeRelation
+message NodeRelation {
+    string database = 10;
+    string schema = 11;
+    string alias = 12;
+    string relation_name = 13;
+}
+
 // NodeInfo
 message NodeInfo {
     string node_path = 1;
@@ -37,6 +45,7 @@ message NodeInfo {
     string node_started_at = 7;
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
+    NodeRelation node_relation = 10;
 }
 
 // RunResult
@@ -55,11 +64,6 @@ message ReferenceKeyMsg {
     string database = 1;
     string schema = 2;
     string identifier = 3;
-}
-
-// ListOfStrings
-message ListOfStrings {
-   repeated string value = 1;
 }
 
 // GenericMessage, used for deserializing only
@@ -379,6 +383,15 @@ message ConfigTargetPathDeprecation {
 message ConfigTargetPathDeprecationMsg {
     EventInfo info = 1;
     ConfigTargetPathDeprecation data = 2;
+}
+
+// D012
+message CollectFreshnessReturnSignature {
+}
+
+message CollectFreshnessReturnSignatureMsg {
+    EventInfo info = 1;
+    CollectFreshnessReturnSignature data = 2;
 }
 
 // E - DB Adapter
@@ -792,6 +805,28 @@ message FinishedRunningStatsMsg {
     FinishedRunningStats data = 2;
 }
 
+// E048
+message ConstraintNotEnforced {
+    string constraint = 1;
+    string adapter = 2;
+}
+
+message ConstraintNotEnforcedMsg {
+    EventInfo info = 1;
+    ConstraintNotEnforced data = 2;
+}
+
+// E049
+message ConstraintNotSupported {
+    string constraint = 1;
+    string adapter = 2;
+}
+
+message ConstraintNotSupportedMsg {
+    EventInfo info = 1;
+    ConstraintNotSupported data = 2;
+}
+
 // I - Project parsing
 
 // I001
@@ -803,6 +838,18 @@ message InputFileDiffError {
 message InputFileDiffErrorMsg {
     EventInfo info = 1;
     InputFileDiffError data = 2;
+}
+
+// I002
+message PublicationArtifactChanged {
+    string project_name = 1;
+    string action = 2;
+    google.protobuf.Timestamp generated_at = 3;
+}
+
+message PublicationArtifactChangedMsg {
+    EventInfo info = 1;
+    PublicationArtifactChanged data = 2;
 }
 
 // Skipping I002, I003, I004, I005, I006, I007
@@ -838,26 +885,6 @@ message ParsePerfInfoPath {
 message ParsePerfInfoPathMsg {
     EventInfo info = 1;
     ParsePerfInfoPath data = 2;
-}
-
-// I011
-message GenericTestFileParse {
-    string path = 1;
-}
-
-message GenericTestFileParseMsg {
-    EventInfo info = 1;
-    GenericTestFileParse data = 2;
-}
-
-// I012
-message MacroFileParse {
-    string path = 1;
-}
-
-message MacroFileParseMsg {
-    EventInfo info = 1;
-    MacroFileParse data = 2;
 }
 
 // Skipping I013
@@ -1119,7 +1146,7 @@ message JinjaLogInfo {
 
 message  JinjaLogInfoMsg {
     EventInfo info = 1;
-     JinjaLogInfo data = 2;
+    JinjaLogInfo data = 2;
 }
 
 // I063
@@ -1132,6 +1159,63 @@ message JinjaLogDebugMsg {
     EventInfo info = 1;
     JinjaLogDebug data = 2;
 }
+
+// I064
+message UnpinnedRefNewVersionAvailable {
+    NodeInfo node_info = 1;
+    string ref_node_name  = 2;
+    string ref_node_package = 3;
+    string ref_node_version = 4;
+    string ref_max_version = 5;
+}
+
+message UnpinnedRefNewVersionAvailableMsg {
+    EventInfo info = 1;
+    UnpinnedRefNewVersionAvailable data = 2;
+}
+
+// I065
+message DeprecatedModel {
+    string model_name = 1;
+    string model_version = 2;
+    string deprecation_date = 3;
+}
+
+message DeprecatedModelMsg {
+    EventInfo info = 1;
+    DeprecatedModel data = 2;
+}
+
+// I066
+message UpcomingReferenceDeprecation {
+    string model_name = 1;
+    string ref_model_package = 2;
+    string ref_model_name = 3;
+    string ref_model_version = 4;
+    string ref_model_latest_version = 5;
+    string ref_model_deprecation_date = 6;
+}
+
+message UpcomingReferenceDeprecationMsg {
+    EventInfo info = 1;
+    UpcomingReferenceDeprecation data = 2;
+}
+
+// I067
+message DeprecatedReference {
+    string model_name = 1;
+    string ref_model_package = 2;
+    string ref_model_name = 3;
+    string ref_model_version = 4;
+    string ref_model_latest_version = 5;
+    string ref_model_deprecation_date = 6;
+}
+
+message DeprecatedReferenceMsg {
+    EventInfo info = 1;
+    DeprecatedReference data = 2;
+}
+
 
 // M - Deps generation
 
@@ -1301,7 +1385,7 @@ message DepsListSubdirectoryMsg {
 
 // M019
 message DepsNotifyUpdatesAvailable {
-    ListOfStrings packages = 1;
+    repeated string packages = 1;
 }
 
 message DepsNotifyUpdatesAvailableMsg {
@@ -1420,6 +1504,18 @@ message NoNodesForSelectionCriteria {
 message NoNodesForSelectionCriteriaMsg {
     EventInfo info = 1;
     NoNodesForSelectionCriteria data = 2;
+}
+
+// P - Artifacts
+
+// P001
+message PublicationArtifactAvailable {
+    google.protobuf.Struct pub_artifact = 1;
+}
+
+message PublicationArtifactAvailableMsg {
+    EventInfo info = 1;
+    PublicationArtifactAvailable data = 2;
 }
 
 // Q - Node execution
@@ -1643,17 +1739,6 @@ message ConcurrencyLineMsg {
     ConcurrencyLine data = 2;
 }
 
-// Q028
-message CompiledNode {
-    string node_name = 1;
-    string compiled = 2;
-}
-
-message CompiledNodeMsg {
-    EventInfo info = 1;
-    CompiledNode data = 2;
-}
-
 // Q029
 message WritingInjectedSQLForNode {
     NodeInfo node_info = 1;
@@ -1779,6 +1864,34 @@ message CommandCompleted {
 message CommandCompletedMsg {
     EventInfo info = 1;
     CommandCompleted data = 2;
+}
+
+// Q041
+message ShowNode {
+    string node_name = 1;
+    string preview = 2;
+    bool is_inline = 3;
+    string output_format = 4;
+    string unique_id = 5;
+}
+
+message ShowNodeMsg {
+    EventInfo info = 1;
+    ShowNode data = 2;
+}
+
+// Q042
+message CompiledNode {
+    string node_name = 1;
+    string compiled = 2;
+    bool is_inline = 3;
+    string output_format = 4;
+    string unique_id = 5;
+}
+
+message CompiledNodeMsg {
+    EventInfo info = 1;
+    CompiledNode data = 2;
 }
 
 // W - Node testing

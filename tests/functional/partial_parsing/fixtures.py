@@ -26,7 +26,6 @@ seeds:
 """
 
 local_dependency__models__schema_yml = """
-version: 2
 sources:
   - name: seed_source
     schema: "{{ var('schema_override', target.schema) }}"
@@ -56,12 +55,10 @@ local_dependency__seeds__seed_csv = """id
 """
 
 empty_schema_with_version_yml = """
-version: 2
 
 """
 
 schema_sources5_yml = """
-version: 2
 
 sources:
   - name: seed_sources
@@ -135,7 +132,6 @@ from source_data
 """
 
 schema_sources4_yml = """
-version: 2
 
 sources:
   - name: seed_sources
@@ -169,7 +165,6 @@ seeds:
 """
 
 env_var_schema_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -189,7 +184,6 @@ empty_schema_yml = """
 """
 
 schema_models_c_yml = """
-version: 2
 
 sources:
   - name: seed_source
@@ -207,7 +201,6 @@ sources:
 """
 
 env_var_sources_yml = """
-version: 2
 sources:
   - name: seed_sources
     schema: "{{ target.schema }}"
@@ -258,7 +251,6 @@ from validation_errors
 """
 
 schema_sources1_yml = """
-version: 2
 sources:
   - name: seed_sources
     schema: "{{ target.schema }}"
@@ -279,7 +271,6 @@ sources:
 """
 
 schema_sources3_yml = """
-version: 2
 
 sources:
   - name: seed_sources
@@ -316,7 +307,6 @@ select * from customers
 """
 
 schema_sources2_yml = """
-version: 2
 
 sources:
   - name: seed_sources
@@ -354,7 +344,6 @@ select 'blue' as fun
 """
 
 my_metric_yml = """
-version: 2
 metrics:
   - name: new_customers
     label: New Customers
@@ -381,7 +370,6 @@ metrics:
 """
 
 env_var_schema2_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -416,7 +404,6 @@ select 1 as fun
 """
 
 env_var_schema3_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -441,7 +428,6 @@ exposures:
 """
 
 env_var_metrics_yml = """
-version: 2
 
 metrics:
 
@@ -598,7 +584,6 @@ custom_schema_tests1_sql = """
 """
 
 people_metrics_yml = """
-version: 2
 
 metrics:
 
@@ -643,6 +628,11 @@ select 1 as id, 101 as user_id, 'pending' as status
 
 """
 
+orders_downstream_sql = """
+select * from {{ ref('orders') }}
+
+"""
+
 model_a_sql = """
 select 1 as fun
 
@@ -665,7 +655,6 @@ from source_data
 """
 
 models_schema2b_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -680,7 +669,6 @@ models:
 """
 
 env_var_macros_yml = """
-version: 2
 macros:
     - name: do_something
       description: "This is a test macro"
@@ -691,7 +679,6 @@ macros:
 """
 
 models_schema4_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -713,7 +700,6 @@ select 1 as notfun
 """
 
 generic_test_schema_yml = """
-version: 2
 
 models:
   - name: orders
@@ -754,7 +740,6 @@ from source_data
 """
 
 macros_yml = """
-version: 2
 macros:
     - name: do_something
       description: "This is a test macro"
@@ -773,7 +758,6 @@ test_color_sql = """
 """
 
 models_schema2_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -798,7 +782,6 @@ gsm_override2_sql = """
 """
 
 models_schema3_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -843,7 +826,6 @@ from validation_errors
 """
 
 env_var_model_test_yml = """
-version: 2
 models:
   - name: model_color
     columns:
@@ -879,7 +861,6 @@ ref_override2_sql = """
 """
 
 models_schema1_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -889,7 +870,6 @@ models:
 
 macros_schema_yml = """
 
-version: 2
 
 models:
     - name: model_a
@@ -897,6 +877,39 @@ models:
         - type_one
         - type_two
 
+"""
+
+models_versions_schema_yml = """
+
+models:
+    - name: model_one
+      description: "The first model"
+      versions:
+        - v: 1
+        - v: 2
+"""
+
+models_versions_defined_in_schema_yml = """
+
+models:
+    - name: model_one
+      description: "The first model"
+      versions:
+        - v: 1
+        - v: 2
+          defined_in: model_one_different
+"""
+
+models_versions_updated_schema_yml = """
+
+models:
+    - name: model_one
+      latest_version: 1
+      description: "The first model"
+      versions:
+        - v: 1
+        - v: 2
+          defined_in: model_one_different
 """
 
 my_macro_sql = """
@@ -944,7 +957,6 @@ select * from {{ ref('orders') }}
 """
 
 models_schema4b_yml = """
-version: 2
 
 models:
     - name: model_one
@@ -970,7 +982,6 @@ test_macro_sql = """
 """
 
 people_metrics2_yml = """
-version: 2
 
 metrics:
 
@@ -1004,7 +1015,6 @@ metrics:
 """
 
 generic_schema_yml = """
-version: 2
 
 models:
   - name: orders
@@ -1018,7 +1028,6 @@ models:
 
 
 groups_schema_yml_one_group = """
-version: 2
 
 groups:
   - name: test_group
@@ -1032,7 +1041,6 @@ models:
 
 
 groups_schema_yml_two_groups = """
-version: 2
 
 groups:
   - name: test_group
@@ -1047,8 +1055,48 @@ models:
     description: "Some order data"
 """
 
+
+groups_schema_yml_two_groups_private_orders_valid_access = """
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    group: test_group
+    access: private
+    description: "Some order data"
+  - name: orders_downstream
+    group: test_group
+    description: "Some order data"
+"""
+
+groups_schema_yml_two_groups_private_orders_invalid_access = """
+
+groups:
+  - name: test_group
+    owner:
+      name: test_group_owner
+  - name: test_group2
+    owner:
+      name: test_group_owner2
+
+models:
+  - name: orders
+    group: test_group2
+    access: private
+    description: "Some order data"
+  - name: orders_downstream
+    group: test_group
+    description: "Some order data"
+"""
+
 groups_schema_yml_one_group_model_in_group2 = """
-version: 2
 
 groups:
   - name: test_group
@@ -1063,7 +1111,6 @@ models:
 """
 
 groups_schema_yml_two_groups_edited = """
-version: 2
 
 groups:
   - name: test_group
@@ -1127,7 +1174,6 @@ sources_tests2_sql = """
 """
 
 people_metrics3_yml = """
-version: 2
 
 metrics:
 

@@ -26,6 +26,12 @@ union all
 select 2 as fun
 """
 
+model_multiline_jinja = """
+select {{
+    1 + 1
+}} as fun
+"""
+
 schema_yml = """
 version: 2
 

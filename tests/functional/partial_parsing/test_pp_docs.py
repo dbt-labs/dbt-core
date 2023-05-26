@@ -223,7 +223,7 @@ class TestDocsRemoveReplace:
         }
 
     def test_remove_replace(self, project):
-        run_dbt(["parse", "--write-manifest"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         doc_id = "doc.test.whatever"
         assert doc_id in manifest.docs
@@ -243,7 +243,7 @@ class TestDocsRemoveReplace:
         rm_file(project.project_root, "models", "my_model.md")
         # remove description from schema file
         write_file(my_model_no_description_yml, project.project_root, "models", "my_model.yml")
-        run_dbt(["parse", "--write-manifest"])
+        run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         assert doc_id not in manifest.docs
         # The bug was that the file still existed in manifest.files

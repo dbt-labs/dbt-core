@@ -2,7 +2,7 @@ from dbt.constants import METADATA_ENV_PREFIX
 from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
 from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.events.types import Formatting
+from dbt.events.types import Formatting, Note
 from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
 from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
 from functools import partial
@@ -28,7 +28,7 @@ nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
 def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
     cleanup_event_logger()
     make_log_dir_if_missing(flags.LOG_PATH)
-    EVENT_MANAGER.add_callbacks(callbacks=callbacks)
+    EVENT_MANAGER.callbacks = callbacks.copy()
 
     if ENABLE_LEGACY_LOGGER:
         EVENT_MANAGER.add_logger(
@@ -219,7 +219,9 @@ def msg_to_dict(msg: EventMsg) -> dict:
         )
     except Exception as exc:
         event_type = type(msg).__name__
-        raise Exception(f"type {event_type} is not serializable. {str(exc)}")
+        fire_event(
+            Note(msg=f"type {event_type} is not serializable. {str(exc)}"), level=EventLevel.WARN
+        )
     # We don't want an empty NodeInfo in output
     if (
         "data" in msg_dict
@@ -249,6 +251,11 @@ def fire_event_if(
 ) -> None:
     if conditional:
         fire_event(lazy_e(), level=level)
+
+
+# a special case of fire_event_if, to only fire events in our unit/functional tests
+def fire_event_if_test(lazy_e: Callable[[], BaseEvent], level: EventLevel = None) -> None:
+    fire_event_if(conditional=("pytest" in sys.modules), lazy_e=lazy_e, level=level)
 
 
 # top-level method for accessing the new eventing system

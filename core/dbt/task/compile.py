@@ -3,8 +3,9 @@ from typing import AbstractSet, Optional
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import RunStatus, RunResult
+from dbt.events.base_types import EventLevel
 from dbt.events.functions import fire_event
-from dbt.events.types import CompileComplete, CompiledNode
+from dbt.events.types import CompiledNode, Note
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
@@ -39,6 +40,10 @@ class CompileRunner(BaseRunner):
 
 
 class CompileTask(GraphRunnableTask):
+    # We add a new inline node to the manifest during initialization
+    # it should be removed before the task is complete
+    _inline_node_id = None
+
     def raise_on_first_error(self):
         return True
 
@@ -61,23 +66,35 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        if getattr(self.args, "inline", None):
-            result = results[0]
+        is_inline = bool(getattr(self.args, "inline", None))
+        output_format = getattr(self.args, "output", "text")
+
+        if is_inline:
+            matched_results = [result for result in results if result.node.name == "inline_query"]
+        elif self.selection_arg:
+            matched_results = []
+            for result in results:
+                if result.node.name in self.selection_arg[0]:
+                    matched_results.append(result)
+                else:
+                    fire_event(
+                        Note(msg=f"Excluded node '{result.node.name}' from results"),
+                        EventLevel.DEBUG,
+                    )
+        # No selector passed, compiling all nodes
+        else:
+            matched_results = []
+
+        for result in matched_results:
             fire_event(
-                CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
-            )
-
-        if self.selection_arg:
-            matched_results = [
-                result for result in results if result.node.name == self.selection_arg[0]
-            ]
-            if len(matched_results) == 1:
-                result = matched_results[0]
-                fire_event(
-                    CompiledNode(node_name=result.node.name, compiled=result.node.compiled_code)
+                CompiledNode(
+                    node_name=result.node.name,
+                    compiled=result.node.compiled_code,
+                    is_inline=is_inline,
+                    output_format=output_format,
+                    unique_id=result.node.unique_id,
                 )
-
-        fire_event(CompileComplete())
+            )
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
         if not self.args.defer:
@@ -117,5 +134,24 @@ class CompileTask(GraphRunnableTask):
             )
             sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
             process_node(self.config, self.manifest, sql_node)
+            # keep track of the node added to the manifest
+            self._inline_node_id = sql_node.unique_id
 
         super()._runtime_initialize()
+
+    def after_run(self, adapter, results):
+        # remove inline node from manifest
+        if self._inline_node_id:
+            self.manifest.nodes.pop(self._inline_node_id)
+            self._inline_node_id = None
+        super().after_run(adapter, results)
+
+    def _handle_result(self, result):
+        super()._handle_result(result)
+
+        if (
+            result.node.is_ephemeral_model
+            and type(self) is CompileTask
+            and (self.args.select or getattr(self.args, "inline", None))
+        ):
+            self.node_results.append(result)

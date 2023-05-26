@@ -1,3 +1,5 @@
+import json
+
 from dbt.ui import line_wrap_message, warning_tag, red, green, yellow
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
@@ -8,7 +10,7 @@ from dbt.events.base_types import (
     ErrorLevel,
     EventLevel,
 )
-from dbt.events.format import format_fancy_output_line, pluralize
+from dbt.events.format import format_fancy_output_line, pluralize, timestamp_to_datetime_string
 
 from dbt.node_types import NodeType
 
@@ -29,6 +31,7 @@ from dbt.node_types import NodeType
 # | E    | DB adapter          |
 # | I    | Project parsing     |
 # | M    | Deps generation     |
+# | P    | Artifacts           |
 # | Q    | Node execution      |
 # | W    | Node testing        |
 # | Z    | Misc                |
@@ -405,6 +408,19 @@ class ConfigTargetPathDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class CollectFreshnessReturnSignature(WarnLevel):
+    def code(self):
+        return "D012"
+
+    def message(self):
+        description = (
+            "The 'collect_freshness' macro signature has changed to return the full "
+            "query result, rather than just a table of values. See the v1.5 migration guide "
+            "for details on how to update your custom macro: https://docs.getdbt.com/guides/migration/versions/upgrading-to-v1.5"
+        )
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # E - DB Adapter
 # =======================================================
@@ -522,7 +538,8 @@ class ListRelations(DebugLevel):
         return "E014"
 
     def message(self) -> str:
-        return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
+        identifiers_str = ", ".join(r.identifier for r in self.relations)
+        return f"While listing relations in database={self.database}, schema={self.schema}, found: {identifiers_str}"
 
 
 class ConnectionUsed(DebugLevel):
@@ -746,6 +763,32 @@ class FinishedRunningStats(InfoLevel):
         return f"Finished running {self.stat_line}{self.execution} ({self.execution_time:0.2f}s)."
 
 
+class ConstraintNotEnforced(WarnLevel):
+    def code(self):
+        return "E048"
+
+    def message(self) -> str:
+        msg = (
+            f"The constraint type {self.constraint} is not enforced by {self.adapter}. "
+            "The constraint will be included in this model's DDL statement, but it will not "
+            "guarantee anything about the underlying data. Set 'warn_unenforced: false' on "
+            "this constraint to ignore this warning."
+        )
+        return line_wrap_message(warning_tag(msg))
+
+
+class ConstraintNotSupported(WarnLevel):
+    def code(self):
+        return "E049"
+
+    def message(self) -> str:
+        msg = (
+            f"The constraint type {self.constraint} is not supported by {self.adapter}, and will "
+            "be ignored. Set 'warn_unsupported: false' on this constraint to ignore this warning."
+        )
+        return line_wrap_message(warning_tag(msg))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
@@ -759,7 +802,15 @@ class InputFileDiffError(DebugLevel):
         return f"Error processing file diff: {self.category}, {self.file_id}"
 
 
-# Skipping I002, I003, I004, I005, I006, I007
+class PublicationArtifactChanged(DebugLevel):
+    def code(self):
+        return "I002"
+
+    def message(self) -> str:
+        return f"The publication artifact for {self.project_name} has been {self.action}."
+
+
+# Skipping I003, I004, I005, I006, I007
 
 
 class InvalidValueForField(WarnLevel):
@@ -786,20 +837,10 @@ class ParsePerfInfoPath(InfoLevel):
         return f"Performance info: {self.path}"
 
 
-class GenericTestFileParse(DebugLevel):
-    def code(self):
-        return "I011"
-
-    def message(self) -> str:
-        return f"Parsing {self.path}"
+# Removed I011: GenericTestFileParse
 
 
-class MacroFileParse(DebugLevel):
-    def code(self):
-        return "I012"
-
-    def message(self) -> str:
-        return f"Parsing {self.path}"
+# Removed I012: MacroFileParse
 
 
 # Skipping I013
@@ -1089,6 +1130,79 @@ class JinjaLogDebug(DebugLevel):
         return self.msg
 
 
+class UnpinnedRefNewVersionAvailable(InfoLevel):
+    def code(self):
+        return "I064"
+
+    def message(self) -> str:
+        msg = (
+            f"While compiling '{self.node_info.node_name}':\n"
+            f"Found an unpinned reference to versioned model '{self.ref_node_name}' in project '{self.ref_node_package}'.\n"
+            f"Resolving to latest version: {self.ref_node_name}.v{self.ref_node_version}\n"
+            f"A prerelease version {self.ref_max_version} is available. It has not yet been marked 'latest' by its maintainer.\n"
+            f"When that happens, this reference will resolve to {self.ref_node_name}.v{self.ref_max_version} instead.\n\n"
+            f"  Try out v{self.ref_max_version}: {{{{ ref('{self.ref_node_package}', '{self.ref_node_name}', v='{self.ref_max_version}') }}}}\n"
+            f"  Pin to  v{self.ref_node_version}: {{{{ ref('{self.ref_node_package}', '{self.ref_node_name}', v='{self.ref_node_version}') }}}}\n"
+        )
+        return msg
+
+
+class DeprecatedModel(WarnLevel):
+    def code(self):
+        return "I065"
+
+    def message(self) -> str:
+        version = ".v" + self.model_version if self.model_version else ""
+        return (
+            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
+            "This model should be disabled or removed."
+        )
+
+
+class UpcomingReferenceDeprecation(WarnLevel):
+    def code(self):
+        return "I066"
+
+    def message(self) -> str:
+        ref_model_version = ".v" + self.ref_model_version if self.ref_model_version else ""
+        msg = (
+            f"While compiling '{self.model_name}': Found a reference to {self.ref_model_name}{ref_model_version}, "
+            f"which is slated for deprecation on '{self.ref_model_deprecation_date}'. "
+        )
+
+        if self.ref_model_version and self.ref_model_version != self.ref_model_latest_version:
+            coda = (
+                f"A new version of '{self.ref_model_name}' is available. Try it out: "
+                f"{{{{ ref('{self.ref_model_package}', '{self.ref_model_name}', "
+                f"v='{self.ref_model_latest_version}') }}}}."
+            )
+            msg = msg + coda
+
+        return msg
+
+
+class DeprecatedReference(WarnLevel):
+    def code(self):
+        return "I067"
+
+    def message(self) -> str:
+        ref_model_version = ".v" + self.ref_model_version if self.ref_model_version else ""
+        msg = (
+            f"While compiling '{self.model_name}': Found a reference to {self.ref_model_name}{ref_model_version}, "
+            f"which was deprecated on '{self.ref_model_deprecation_date}'. "
+        )
+
+        if self.ref_model_version and self.ref_model_version != self.ref_model_latest_version:
+            coda = (
+                f"A new version of '{self.ref_model_name}' is available. Migrate now: "
+                f"{{{{ ref('{self.ref_model_package}', '{self.ref_model_name}', "
+                f"v='{self.ref_model_latest_version}') }}}}."
+            )
+            msg = msg + coda
+
+        return msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1230,7 +1344,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
         return "M019"
 
     def message(self) -> str:
-        return f"Updates available for packages: {self.packages.value} \
+        return f"Updates available for packages: {self.packages} \
                 \nUpdate your versions in packages.yml, then run dbt deps"
 
 
@@ -1334,6 +1448,19 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
     def message(self) -> str:
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+
+
+# =======================================================
+# Q - Node execution
+# =======================================================
+
+
+class PublicationArtifactAvailable(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return "Publication artifact available"
 
 
 # =======================================================
@@ -1605,14 +1732,6 @@ class ConcurrencyLine(InfoLevel):
         return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
-class CompiledNode(InfoLevel):
-    def code(self):
-        return "Q028"
-
-    def message(self) -> str:
-        return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
-
-
 class WritingInjectedSQLForNode(DebugLevel):
     def code(self):
         return "Q029"
@@ -1716,7 +1835,44 @@ class CommandCompleted(DebugLevel):
 
     def message(self) -> str:
         status = "succeeded" if self.success else "failed"
-        return f"Command `{self.command}` {status} at {self.completed_at} after {self.elapsed:0.2f} seconds"
+        completed_at = timestamp_to_datetime_string(self.completed_at)
+        return f"Command `{self.command}` {status} at {completed_at} after {self.elapsed:0.2f} seconds"
+
+
+class ShowNode(InfoLevel):
+    def code(self):
+        return "Q041"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"show": json.loads(self.preview)}, indent=2)
+            else:
+                return json.dumps(
+                    {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
+                )
+        else:
+            if self.is_inline:
+                return f"Previewing inline node:\n{self.preview}"
+            else:
+                return f"Previewing node '{self.node_name}':\n{self.preview}"
+
+
+class CompiledNode(InfoLevel):
+    def code(self):
+        return "Q042"
+
+    def message(self) -> str:
+        if self.output_format == "json":
+            if self.is_inline:
+                return json.dumps({"compiled": self.compiled}, indent=2)
+            else:
+                return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
+        else:
+            if self.is_inline:
+                return f"Compiled inline node is:\n{self.compiled}"
+            else:
+                return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
 
 
 # =======================================================
@@ -1856,7 +2012,9 @@ class TimingInfoCollected(DebugLevel):
         return "Z010"
 
     def message(self) -> str:
-        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {self.timing_info.started_at} => {self.timing_info.completed_at}"
+        started_at = timestamp_to_datetime_string(self.timing_info.started_at)
+        completed_at = timestamp_to_datetime_string(self.timing_info.completed_at)
+        return f"Timing info for {self.node_info.unique_id} ({self.timing_info.name}): {started_at} => {completed_at}"
 
 
 # This prints the stack trace at the debug level while allowing just the nice exception message
