@@ -243,7 +243,11 @@ class ManifestLoader:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
         self.file_diff = file_diff
-        self.publications = publications
+        self.publications: Mapping[str, PublicationArtifact] = (
+            {publication.project_name: publication for publication in publications}
+            if publications
+            else {}
+        )
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
@@ -841,11 +845,7 @@ class ManifestLoader:
 
     def load_new_public_nodes(self):
         for project in self.manifest.project_dependencies.projects:
-            publication = (
-                next(p for p in self.publications if p.project_name == project.name)
-                if self.publications
-                else None
-            )
+            publication = self.publications.get(project.name)
             if publication:
                 publication_config = PublicationConfig.from_publication(publication)
                 self.manifest.publications[project.name] = publication_config

@@ -133,9 +133,13 @@ class TestPublicationArtifacts:
     def test_pub_artifacts(self, project):
         write_file(dependencies_yml, "dependencies.yml")
 
-        # Dependencies lists "marketing" project, but no publication file found
+        # Dependencies lists "marketing" project, but no publications provided
         with pytest.raises(PublicationConfigNotFound):
             run_dbt(["parse"])
+
+        # Dependencies lists "marketing" project, but no "marketing" publication provided
+        with pytest.raises(PublicationConfigNotFound):
+            run_dbt(["parse"], publications=[PublicationArtifact(project_name="not_marketing")])
 
         # Provide publication and try again
         m_pub_json = marketing_pub_json.replace("test_schema", project.test_schema)

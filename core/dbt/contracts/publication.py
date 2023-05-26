@@ -97,8 +97,6 @@ class PublicationMandatory:
 @dataclass
 @schema_version("publication", 1)
 class PublicationArtifact(ArtifactMixin, PublicationMandatory):
-    """This represents the <project_name>_publication.json artifact"""
-
     public_models: Dict[str, PublicModel] = field(default_factory=dict)
     metadata: PublicationMetadata = field(default_factory=PublicationMetadata)
     # list of project name strings
