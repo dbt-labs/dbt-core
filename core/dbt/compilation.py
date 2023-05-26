@@ -167,7 +167,7 @@ class Compiler:
         self.config = config
 
     def initialize(self):
-        make_directory(self.config.target_path)
+        make_directory(self.config.project_target_path)
         make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
@@ -387,7 +387,7 @@ class Compiler:
 
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
-        graph_path = os.path.join(self.config.target_path, filename)
+        graph_path = os.path.join(self.config.project_target_path, filename)
         flags = get_flags()
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
@@ -506,9 +506,8 @@ class Compiler:
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
-            node.compiled_path = node.write_node(
-                self.config.target_path, "compiled", node.compiled_code
-            )
+            node.compiled_path = node.get_target_write_path(self.config.target_path, "compiled")
+            node.write_node(self.config.project_root, node.compiled_path, node.compiled_code)
         return node
 
     def compile_node(

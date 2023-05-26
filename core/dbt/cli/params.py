@@ -424,7 +424,7 @@ state = click.option(
         dir_okay=True,
         file_okay=False,
         readable=True,
-        resolve_path=True,
+        resolve_path=False,
         path_type=Path,
     ),
 )

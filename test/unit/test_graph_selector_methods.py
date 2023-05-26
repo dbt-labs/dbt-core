@@ -1200,7 +1200,9 @@ def test_select_metric(manifest):
 def previous_state(manifest):
     writable = copy.deepcopy(manifest).writable_manifest()
     state = PreviousState(
-        path=Path("/path/does/not/exist"), current_path=Path("/path/does/not/exist")
+        state_path=Path("/path/does/not/exist"),
+        target_path=Path("/path/does/not/exist"),
+        project_root=Path("/path/does/not/exist"),
     )
     state.manifest = writable
     return state
