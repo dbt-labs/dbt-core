@@ -1,6 +1,5 @@
 import json
 import pytest
-import os
 
 from dbt.tests.util import (
     run_dbt,
@@ -241,8 +240,6 @@ class TestMultiProjects:
 
     def test_multi_projects(self, project, project_alt):
         # run the alternate project by using the alternate project root
-        # (There is currently a bug where project-dir requires a chdir to work.)
-        os.chdir(project_alt.project_root)
         results, log_output = run_dbt_and_capture(
             ["--debug", "--log-format=json", "run", "--project-dir", str(project_alt.project_root)]
         )
@@ -255,7 +252,6 @@ class TestMultiProjects:
         assert len(publication.public_models) == 1
 
         # run the base project
-        os.chdir(project.project_root)
         write_file(dependencies_alt_yml, project.project_root, "dependencies.yml")
         results = run_dbt(
             ["run", "--project-dir", str(project.project_root)], publications=[publication]
