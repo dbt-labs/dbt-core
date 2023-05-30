@@ -845,15 +845,17 @@ class ManifestLoader:
 
     def load_new_public_nodes(self):
         for project in self.manifest.project_dependencies.projects:
-            publication = self.publications.get(project.name)
-            if publication:
-                publication_config = PublicationConfig.from_publication(publication)
-                self.manifest.publications[project.name] = publication_config
-                # Add to dictionary of public_nodes and save id in PublicationConfig
-                for public_node in publication.public_models.values():
-                    self.manifest.public_nodes[public_node.unique_id] = public_node
-            else:
+            try:
+                publication = self.publications[project.name]
+            except KeyError:
                 raise PublicationConfigNotFound(project=project.name)
+
+            publication_config = PublicationConfig.from_publication(publication)
+            self.manifest.publications[project.name] = publication_config
+
+            # Add to dictionary of public_nodes and save id in PublicationConfig
+            for public_node in publication.public_models.values():
+                self.manifest.public_nodes[public_node.unique_id] = public_node
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
