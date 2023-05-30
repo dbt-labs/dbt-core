@@ -315,10 +315,10 @@ class PartialProject(RenderComponents):
             # this field is no longer supported, but many projects may specify it with the default value
             # if so, let's only raise this deprecation warning if they set a custom value
             if not default_value or project_dict[deprecated_path] != default_value:
-                deprecations.warn(
-                    f"project-config-{deprecated_path}",
-                    deprecated_path=deprecated_path,
-                )
+                kwargs = {"deprecated_path": deprecated_path}
+                if expected_path:
+                    kwargs.update({"exp_path": expected_path})
+                deprecations.warn(f"project-config-{deprecated_path}", **kwargs)
 
     def create_project(self, rendered: RenderComponents) -> "Project":
         unrendered = RenderComponents(
