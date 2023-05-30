@@ -233,7 +233,7 @@ class GroupSelectorMethod(SelectorMethod):
 
 class AccessSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        """yields nodes from included in the specified group"""
+        """yields model nodes matching the specified access level"""
         for node, real_node in self.parsed_nodes(included_nodes):
             if not isinstance(real_node, ModelNode):
                 continue
