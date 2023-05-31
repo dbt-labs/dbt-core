@@ -64,6 +64,7 @@ select
   '2019-01-01' as date_day
 """
 
+# force dependency on foreign_key_model so that foreign key constraint is enforceable
 my_model_wrong_order_depends_on_fk_sql = """
 {{
   config(
@@ -106,6 +107,7 @@ select
   '2019-01-01' as date_day
 """
 
+# force dependency on foreign_key_model so that foreign key constraint is enforceable
 my_model_incremental_wrong_order_depends_on_fk_sql = """
 {{
   config(
