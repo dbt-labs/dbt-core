@@ -374,7 +374,7 @@ class BaseContractSqlHeader:
         assert model_config.contract.enforced
 
 
-class TestTableContractSqlHeader(BaseContractSqlHeader):
+class BaseTableContractSqlHeader(BaseContractSqlHeader):
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -383,13 +383,21 @@ class TestTableContractSqlHeader(BaseContractSqlHeader):
         }
 
 
-class TestIncrementalContractSqlHeader(BaseContractSqlHeader):
+class BaseIncrementalContractSqlHeader(BaseContractSqlHeader):
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "my_model_contract_sql_header.sql": my_model_incremental_contract_sql_header_sql,
             "constraints_schema.yml": model_contract_header_schema_yml,
         }
+
+
+class TestTableContractSqlHeader(BaseTableContractSqlHeader):
+    pass
+
+
+class TestIncrementalContractSqlHeader(BaseIncrementalContractSqlHeader):
+    pass
 
 
 class BaseModelConstraintsRuntimeEnforcement:
