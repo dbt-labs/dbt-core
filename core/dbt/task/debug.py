@@ -118,15 +118,15 @@ class DebugTask(BaseTask):
         fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
 
-        # some users want to test connection without verifying upstream dependencies
-        breakpoint()
+        # Skip upstream dependency checks for users who want to test their connection only
         if self.args.test_connection_only:
             fire_event(DebugCmdOut(msg="Skipping steps before connection verification"))
-            project_status = self._load_project()
+            self._load_project()  # would be called in test_configuration
         else:
-            self.test_configuration()
+            self.test_configuration(profile_status)
             self.test_dependencies()
 
+        # Test connection
         self.test_connection()
 
         if self.any_failure:
@@ -145,13 +145,15 @@ class DebugTask(BaseTask):
         return results
 
     def _get_adapter(self, profile):
-        '''Using profile, return the adapter instance.'''
+        """Using profile, return the adapter instance."""
         register_adapter(profile)
         return get_adapter(profile)
 
     def _read_adapter_info(self, cls):
-        '''Read the adapter name and version from the setup.py file of the adapter plugin.'''
-        current_adapter_plugin = next(filter(lambda x: x.adapter == cls, get_adapter_plugins(None)))
+        """Read the adapter name and version from the setup.py file of the adapter plugin."""
+        current_adapter_plugin = next(
+            filter(lambda x: x.adapter == cls, get_adapter_plugins(None))
+        )
         adapter_setup_script = current_adapter_plugin.include_path / Path("../../../setup.py")
 
         try:
@@ -170,8 +172,6 @@ class DebugTask(BaseTask):
             version_str = match.group(1) if match else red("ERROR not found")
 
         return adapter_name, version_str
-
-
 
     def _load_project(self):
         if not os.path.exists(self.project_path):
@@ -335,12 +335,9 @@ class DebugTask(BaseTask):
         logline_msg = self.test_git()
         fire_event(DebugCmdResult(msg=f" - git [{logline_msg}]\n"))
 
-    def test_configuration(self):
+    def test_configuration(self, profile_status):
         fire_event(DebugCmdOut(msg="Configuration:"))
-
-        # profile_status = self._load_profile()
-        # fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status}]"))
-
+        fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status}]"))
         project_status = self._load_project()
         fire_event(DebugCmdOut(msg=f"  dbt_project.yml file [{project_status}]"))
 
@@ -397,6 +394,7 @@ class DebugTask(BaseTask):
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named("debug"):
+                breakpoint()
                 adapter.debug_query()
         except Exception as exc:
             return COULD_NOT_CONNECT_MESSAGE.format(

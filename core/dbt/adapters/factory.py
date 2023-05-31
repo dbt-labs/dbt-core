@@ -168,6 +168,7 @@ FACTORY: AdapterContainer = AdapterContainer()
 def get_adapter_plugins(name: Optional[str]) -> List[AdapterPlugin]:
     return FACTORY.get_adapter_plugins(name)
 
+
 def register_adapter(config: AdapterRequiredConfig) -> None:
     FACTORY.register_adapter(config)
 
