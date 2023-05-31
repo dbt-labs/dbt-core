@@ -784,14 +784,15 @@ class ManifestLoader:
             for project in self.manifest.project_dependencies.projects:
                 project_dependency_names.append(project.name)
 
-        # clean up previous publications that are no longer specified
-        # and save previous publications, for later removal of references
-        saved_manifest_publications: MutableMapping[str, PublicationConfig] = {}
+        # Save previous publications, for later removal of references
+        saved_manifest_publications: MutableMapping[str, PublicationConfig] = deepcopy(
+            self.manifest.publications
+        )
         if self.manifest.publications:
             for project_name, publication in self.manifest.publications.items():
                 if project_name not in project_dependency_names:
                     remove_dependent_project_references(self.manifest, publication)
-                    self.manifest.publications.pop(project_name)
+                    saved_manifest_publications.pop(project_name)
                     fire_event(
                         PublicationArtifactChanged(
                             action="removed",
@@ -802,7 +803,8 @@ class ManifestLoader:
                         )
                     )
                     public_nodes_changed = True
-            saved_manifest_publications = self.manifest.publications
+
+            # clean up previous publications that are no longer specified
             self.manifest.publications = {}
             # Empty public_nodes since we're re-generating them all
             self.manifest.public_nodes = {}
