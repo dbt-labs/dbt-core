@@ -394,7 +394,6 @@ class DebugTask(BaseTask):
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named("debug"):
-                breakpoint()
                 adapter.debug_query()
         except Exception as exc:
             return COULD_NOT_CONNECT_MESSAGE.format(
