@@ -404,12 +404,13 @@ def show(ctx, **kwargs):
 @p.profiles_dir_exists_false
 @p.project_dir
 @p.target
+@p.test_connection_only
 @p.vars
 @p.version_check
 @requires.postflight
 @requires.preflight
 def debug(ctx, **kwargs):
-    """Test the database connection and show information for debugging purposes. Not to be confused with the --debug option which increases verbosity."""
+    """Show information on the current dbt environment and check dependencies, then test the database connection. Not to be confused with the --debug option which increases verbosity."""
 
     task = DebugTask(
         ctx.obj["flags"],

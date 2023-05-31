@@ -1,7 +1,9 @@
 # coding=utf-8
+import re
 import os
 import platform
 import sys
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from dbt.events.functions import fire_event
@@ -12,7 +14,7 @@ from dbt.events.types import (
 )
 import dbt.clients.system
 import dbt.exceptions
-from dbt.adapters.factory import get_adapter, register_adapter
+from dbt.adapters.factory import get_adapter, register_adapter, get_adapter_plugins
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.clients.yaml_helper import load_yaml_text
@@ -101,14 +103,30 @@ class DebugTask(BaseTask):
             return not self.any_failure
 
         version = get_installed_version().to_version_string(skip_matcher=True)
+
+        # Collect metadata needed to log debug information
+        profile_status = self._load_profile()
+        adapter = self._get_adapter(self.profile)
+        adapter_type, adapter_version = self._read_adapter_info(adapter.__class__)
+
         fire_event(DebugCmdOut(msg="dbt version: {}".format(version)))
+        fire_event(DebugCmdOut(msg="adapter type: {}".format(adapter_type)))
+        fire_event(DebugCmdOut(msg="adapter version: {}".format(adapter_version)))
         fire_event(DebugCmdOut(msg="python version: {}".format(sys.version.split()[0])))
         fire_event(DebugCmdOut(msg="python path: {}".format(sys.executable)))
         fire_event(DebugCmdOut(msg="os info: {}".format(platform.platform())))
         fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
-        self.test_configuration()
-        self.test_dependencies()
+
+        # some users want to test connection without verifying upstream dependencies
+        breakpoint()
+        if self.args.test_connection_only:
+            fire_event(DebugCmdOut(msg="Skipping steps before connection verification"))
+            project_status = self._load_project()
+        else:
+            self.test_configuration()
+            self.test_dependencies()
+
         self.test_connection()
 
         if self.any_failure:
@@ -125,6 +143,35 @@ class DebugTask(BaseTask):
 
     def interpret_results(self, results):
         return results
+
+    def _get_adapter(self, profile):
+        '''Using profile, return the adapter instance.'''
+        register_adapter(profile)
+        return get_adapter(profile)
+
+    def _read_adapter_info(self, cls):
+        '''Read the adapter name and version from the setup.py file of the adapter plugin.'''
+        current_adapter_plugin = next(filter(lambda x: x.adapter == cls, get_adapter_plugins(None)))
+        adapter_setup_script = current_adapter_plugin.include_path / Path("../../../setup.py")
+
+        try:
+            with open(adapter_setup_script.resolve()) as f:
+                adapter_setup_code = f.read()
+        except FileNotFoundError:
+            adapter_name = red("ERROR not found")
+            version_str = red("ERROR not found")
+        else:
+            pattern = r'package_name = "(.*)"\n'
+            match = re.search(pattern, adapter_setup_code)
+            adapter_name = match.group(1) if match else red("ERROR not found")
+
+            pattern = r'package_version = "(.*)"\n'
+            match = re.search(pattern, adapter_setup_code)
+            version_str = match.group(1) if match else red("ERROR not found")
+
+        return adapter_name, version_str
+
+
 
     def _load_project(self):
         if not os.path.exists(self.project_path):
@@ -291,8 +338,8 @@ class DebugTask(BaseTask):
     def test_configuration(self):
         fire_event(DebugCmdOut(msg="Configuration:"))
 
-        profile_status = self._load_profile()
-        fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status}]"))
+        # profile_status = self._load_profile()
+        # fire_event(DebugCmdOut(msg=f"  profiles.yml file [{profile_status}]"))
 
         project_status = self._load_project()
         fire_event(DebugCmdOut(msg=f"  dbt_project.yml file [{project_status}]"))
