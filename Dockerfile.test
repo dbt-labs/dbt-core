@@ -3,7 +3,7 @@
 #  See `/docker` for a generic and production-ready docker file
 ##
 
-FROM ubuntu:23.04
+FROM ubuntu:23.10
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -33,13 +33,6 @@ RUN apt-get update \
     python \
     python-dev \
     python3-pip \
-    python3.6 \
-    python3.6-dev \
-    python3-pip \
-    python3.6-venv \
-    python3.7 \
-    python3.7-dev \
-    python3.7-venv \
     python3.8 \
     python3.8-dev \
     python3.8-venv \

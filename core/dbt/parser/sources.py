@@ -29,7 +29,8 @@ from dbt.events.types import UnusedTables
 from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 
-from dbt.parser.schemas import SchemaParser, ParserRef
+from dbt.parser.common import ParserRef
+from dbt.parser.schema_generic_tests import SchemaGenericTestParser
 
 
 # An UnparsedSourceDefinition is taken directly from the yaml
@@ -48,7 +49,7 @@ class SourcePatcher:
     ) -> None:
         self.root_project = root_project
         self.manifest = manifest
-        self.schema_parsers: Dict[str, SchemaParser] = {}
+        self.generic_test_parsers: Dict[str, SchemaGenericTestParser] = {}
         self.patches_used: Dict[SourceKey, Set[str]] = {}
         self.sources: Dict[str, SourceDefinition] = {}
 
@@ -188,18 +189,18 @@ class SourcePatcher:
         parsed_source.relation_name = self._get_relation_name(parsed_source)
         return parsed_source
 
-    # This code uses the SchemaParser because it shares the '_parse_generic_test'
-    # code. It might be nice to separate out the generic test code
-    # and make it common to the schema parser and source patcher.
-    def get_schema_parser_for(self, package_name: str) -> "SchemaParser":
-        if package_name in self.schema_parsers:
-            schema_parser = self.schema_parsers[package_name]
+    # Use the SchemaGenericTestParser to parse the source tests
+    def get_generic_test_parser_for(self, package_name: str) -> "SchemaGenericTestParser":
+        if package_name in self.generic_test_parsers:
+            generic_test_parser = self.generic_test_parsers[package_name]
         else:
             all_projects = self.root_project.load_dependencies()
             project = all_projects[package_name]
-            schema_parser = SchemaParser(project, self.manifest, self.root_project)
-            self.schema_parsers[package_name] = schema_parser
-        return schema_parser
+            generic_test_parser = SchemaGenericTestParser(
+                project, self.manifest, self.root_project
+            )
+            self.generic_test_parsers[package_name] = generic_test_parser
+        return generic_test_parser
 
     def get_source_tests(self, target: UnpatchedSourceDefinition) -> Iterable[GenericTestNode]:
         for test, column in target.get_tests():
@@ -226,7 +227,7 @@ class SourcePatcher:
             self.patches_used[key].add(unpatched.table.name)
         return patch
 
-    # This calls _parse_generic_test in the SchemaParser
+    # This calls parse_generic_test in the SchemaGenericTestParser
     def parse_source_test(
         self,
         target: UnpatchedSourceDefinition,
@@ -247,10 +248,8 @@ class SourcePatcher:
             tags_sources.append(column.tags)
         tags = list(itertools.chain.from_iterable(tags_sources))
 
-        # TODO: make the generic_test code common so we don't need to
-        # create schema parsers to handle the tests
-        schema_parser = self.get_schema_parser_for(target.package_name)
-        node = schema_parser._parse_generic_test(
+        generic_test_parser = self.get_generic_test_parser_for(target.package_name)
+        node = generic_test_parser.parse_generic_test(
             target=target,
             test=test,
             tags=tags,

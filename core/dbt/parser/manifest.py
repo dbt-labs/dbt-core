@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
-from datetime import datetime
+import datetime
 import os
 import traceback
 from typing import (
@@ -22,6 +22,7 @@ import time
 from dbt.events.base_types import EventLevel
 import json
 import pprint
+import msgpack
 
 import dbt.exceptions
 import dbt.tracking
@@ -51,6 +52,10 @@ from dbt.events.types import (
     StateCheckVarsHash,
     Note,
     PublicationArtifactChanged,
+    PublicationArtifactAvailable,
+    DeprecatedModel,
+    DeprecatedReference,
+    UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
@@ -93,6 +98,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     ManifestNode,
     ResultNode,
+    ModelNode,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
@@ -128,6 +134,45 @@ from dbt.dataclass_schema import StrEnum, dbtClassMixin
 
 PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
+
+
+def extended_mashumaro_encoder(data):
+    return msgpack.packb(data, default=extended_msgpack_encoder, use_bin_type=True)
+
+
+def extended_msgpack_encoder(obj):
+    if type(obj) is datetime.date:
+        date_bytes = msgpack.ExtType(1, obj.isoformat().encode())
+        return date_bytes
+    elif type(obj) is datetime.datetime:
+        datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
+        return datetime_bytes
+
+    return obj
+
+
+def extended_mashumuro_decoder(data):
+    return msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False)
+
+
+def extended_msgpack_decoder(code, data):
+    if code == 1:
+        d = datetime.date.fromisoformat(data.decode())
+        return d
+    elif code == 2:
+        dt = datetime.datetime.fromisoformat(data.decode())
+        return dt
+    else:
+        return msgpack.ExtType(code, data)
+
+
+def version_to_str(version: Optional[Union[str, int]]) -> str:
+    if isinstance(version, int):
+        return str(version)
+    elif isinstance(version, str):
+        return version
+
+    return ""
 
 
 class ReparseReason(StrEnum):
@@ -193,10 +238,16 @@ class ManifestLoader:
         all_projects: Mapping[str, Project],
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
         file_diff: Optional[FileDiff] = None,
+        publications: Optional[List[PublicationArtifact]] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
         self.file_diff = file_diff
+        self.publications: Mapping[str, PublicationArtifact] = (
+            {publication.project_name: publication for publication in publications}
+            if publications
+            else {}
+        )
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
@@ -234,6 +285,7 @@ class ManifestLoader:
         file_diff: Optional[FileDiff] = None,
         reset: bool = False,
         write_perf_info=False,
+        publications: Optional[List[PublicationArtifact]] = None,
     ) -> Manifest:
 
         adapter = get_adapter(config)  # type: ignore
@@ -256,7 +308,13 @@ class ManifestLoader:
             start_load_all = time.perf_counter()
 
             projects = config.load_dependencies()
-            loader = cls(config, projects, macro_hook=macro_hook, file_diff=file_diff)
+            loader = cls(
+                config,
+                projects,
+                macro_hook=macro_hook,
+                file_diff=file_diff,
+                publications=publications,
+            )
 
             manifest = loader.load()
 
@@ -272,7 +330,7 @@ class ManifestLoader:
             loader.track_project_load()
 
             if write_perf_info:
-                loader.write_perf_info(config.target_path)
+                loader.write_perf_info(config.project_target_path)
 
         return manifest
 
@@ -457,8 +515,7 @@ class ManifestLoader:
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
-            # load the publication artifacts and create the external nodes
-            # This also loads manifest.dependencies
+            # load manifest.dependencies and associated publication artifacts to create the external nodes
             public_nodes_changed = self.build_public_nodes()
             if public_nodes_changed:
                 self.manifest.rebuild_ref_lookup()
@@ -498,11 +555,49 @@ class ManifestLoader:
 
         if not skip_parsing or public_nodes_changed:
             # Write out the <project_name>_publication.json file for this project
-            write_publication_artifact(self.root_project, self.manifest)
+            log_publication_artifact(self.root_project, self.manifest)
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
+        self.check_for_model_deprecations()
+
         return self.manifest
+
+    def check_for_model_deprecations(self):
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode):
+                if (
+                    node.deprecation_date
+                    and node.deprecation_date < datetime.datetime.now().astimezone()
+                ):
+                    fire_event(
+                        DeprecatedModel(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            deprecation_date=node.deprecation_date.isoformat(),
+                        )
+                    )
+
+                resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
+                resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
+                for resolved_ref in resolved_model_refs:
+                    if resolved_ref.deprecation_date:
+
+                        if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
+                            event_cls = DeprecatedReference
+                        else:
+                            event_cls = UpcomingReferenceDeprecation
+
+                        fire_event(
+                            event_cls(
+                                model_name=node.name,
+                                ref_model_package=resolved_ref.package_name,
+                                ref_model_name=resolved_ref.name,
+                                ref_model_version=version_to_str(resolved_ref.version),
+                                ref_model_latest_version=str(resolved_ref.latest_version),
+                                ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
+                            )
+                        )
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -638,9 +733,7 @@ class ManifestLoader:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
     def write_manifest_for_partial_parse(self):
-        path = os.path.join(
-            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
-        )
+        path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
         try:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
@@ -649,7 +742,7 @@ class ManifestLoader:
                     UnableToPartialParse(reason="saved manifest contained the wrong version")
                 )
                 self.manifest.metadata.dbt_version = __version__
-            manifest_msgpack = self.manifest.to_msgpack()
+            manifest_msgpack = self.manifest.to_msgpack(extended_mashumaro_encoder)
             make_directory(os.path.dirname(path))
             with open(path, "wb") as fp:
                 fp.write(manifest_msgpack)
@@ -750,28 +843,17 @@ class ManifestLoader:
 
     def load_new_public_nodes(self):
         for project in self.manifest.project_dependencies.projects:
-            # look for a <project_name>_publication.json file for every project in the 'publications' dir
-            publication_file_name = f"{project.name}_publication.json"
-            # TODO: eventually we'll implement publications_dir config
-            path = os.path.join("publications", publication_file_name)
-            if os.path.exists(path):
-                contents = load_file_contents(path)
-                pub_dict = load_yaml_text(contents)
-                PublicationArtifact.validate(pub_dict)
-                # separate out the public_models
-                public_models = pub_dict.pop("public_models")
-                # Create the PublicationConfig to store in internal manifest
-                pub_config = PublicationConfig.from_dict(pub_dict)
-                self.manifest.publications[project.name] = pub_config
-                # Add to dictionary of public_nodes and save id in PublicationConfig
-                for public_model_dict in public_models.values():
-                    public_node = PublicModel.from_dict(public_model_dict)
-                    self.manifest.public_nodes[public_node.unique_id] = public_node
-                    pub_config.public_node_ids.append(public_node.unique_id)
-            else:
-                raise PublicationConfigNotFound(
-                    project=project.name, file_name=publication_file_name
-                )
+            try:
+                publication = self.publications[project.name]
+            except KeyError:
+                raise PublicationConfigNotFound(project=project.name)
+
+            publication_config = PublicationConfig.from_publication(publication)
+            self.manifest.publications[project.name] = publication_config
+
+            # Add to dictionary of public_nodes and save id in PublicationConfig
+            for public_node in publication.public_models.values():
+                self.manifest.public_nodes[public_node.unique_id] = public_node
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
@@ -862,9 +944,7 @@ class ManifestLoader:
         if not get_flags().PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
-        path = os.path.join(
-            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
-        )
+        path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
 
         reparse_reason = None
 
@@ -872,14 +952,14 @@ class ManifestLoader:
             try:
                 with open(path, "rb") as fp:
                     manifest_mp = fp.read()
-                manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore
+                manifest: Manifest = Manifest.from_msgpack(manifest_mp, decoder=extended_mashumuro_decoder)  # type: ignore
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
                 is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parsable:
                     # We don't want to have stale generated_at dates
-                    manifest.metadata.generated_at = datetime.utcnow()
+                    manifest.metadata.generated_at = datetime.datetime.utcnow()
                     # or invocation_ids
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
@@ -1403,10 +1483,7 @@ def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposur
             )
 
             continue
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             # Exposures do not have a group and so can never reference private models
             raise dbt.exceptions.DbtReferenceError(
                 unique_id=exposure.unique_id,
@@ -1455,10 +1532,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: M
                 should_warn_if_disabled=False,
             )
             continue
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             if not metric.group or metric.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=metric.unique_id,
@@ -1562,10 +1636,7 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             continue
 
         # Handle references to models that are private
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-        ):
+        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
             if not node.group or node.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=node.unique_id,
@@ -1685,7 +1756,7 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_docs_for_node(ctx, node)
 
 
-def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
+def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     # The manifest.json is written out in a task, so we're not writing it here
 
     # build publication metadata
@@ -1698,7 +1769,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     public_node_ids = {
         node.unique_id
         for node in manifest.nodes.values()
-        if node.resource_type == NodeType.Model and node.access == AccessType.Public
+        if isinstance(node, ModelNode) and node.access == AccessType.Public
     }
 
     # Get the Graph object from the Linker
@@ -1710,6 +1781,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     public_models = {}
     for unique_id in public_node_ids:
         model = manifest.nodes[unique_id]
+        assert isinstance(model, ModelNode)
         # public_node_dependencies is the intersection of all parent nodes plus public nodes
         parents: Set[UniqueId] = graph.select_parents({UniqueId(unique_id)})
         public_node_dependencies: Set[UniqueId] = parents.intersection(public_node_ids)
@@ -1726,6 +1798,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
             latest_version=model.latest_version,
             public_node_dependencies=list(public_node_dependencies),
             generated_at=metadata.generated_at,
+            deprecation_date=model.deprecation_date,
         )
         public_models[unique_id] = public_model
 
@@ -1750,10 +1823,8 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
         public_models=public_models,
         dependencies=dependencies,
     )
-    # write out publication artifact <project_name>_publication.json
-    publication_file_name = f"{root_project.project_name}_publication.json"
-    path = os.path.join(root_project.target_path, publication_file_name)
-    publication.write(path)
+
+    fire_event(PublicationArtifactAvailable(pub_artifact=publication.to_dict()))
 
 
 def write_manifest(manifest: Manifest, target_path: str):

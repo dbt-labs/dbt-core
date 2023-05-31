@@ -1,10 +1,17 @@
 import pytest
 from dbt.tests.util import run_dbt
 
+macros__equals_sql = """
+{% macro equals(actual, expected) %}
+{# -- actual is not distinct from expected #}
+(({{ actual }} = {{ expected }}) or ({{ actual }} is null and {{ expected }} is null))
+{% endmacro %}
+"""
+
 macros__test_assert_equal_sql = """
 {% test assert_equal(model, actual, expected) %}
-select * from {{ model }} where {{ actual }} != {{ expected }}
-
+select * from {{ model }}
+where not {{ equals(actual, expected) }}
 {% endtest %}
 """
 
@@ -13,7 +20,10 @@ class BaseUtils:
     # setup
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"test_assert_equal.sql": macros__test_assert_equal_sql}
+        return {
+            "equals.sql": macros__equals_sql,
+            "test_assert_equal.sql": macros__test_assert_equal_sql,
+        }
 
     # make it possible to dynamically update the macro call with a namespace
     # (e.g.) 'dateadd', 'dbt.dateadd', 'dbt_utils.dateadd'

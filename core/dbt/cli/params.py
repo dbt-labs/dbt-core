@@ -426,12 +426,25 @@ empty_catalog = click.option(
 state = click.option(
     "--state",
     envvar="DBT_STATE",
-    help="If set, use the given directory as the source for JSON files to compare with this project.",
+    help="Unless overridden, use this state directory for both state comparison and deferral.",
     type=click.Path(
         dir_okay=True,
         file_okay=False,
         readable=True,
-        resolve_path=True,
+        resolve_path=False,
+        path_type=Path,
+    ),
+)
+
+defer_state = click.option(
+    "--defer-state",
+    envvar="DBT_DEFER_STATE",
+    help="Override the state directory for deferral only.",
+    type=click.Path(
+        dir_okay=True,
+        file_okay=False,
+        readable=True,
+        resolve_path=False,
         path_type=Path,
     ),
 )

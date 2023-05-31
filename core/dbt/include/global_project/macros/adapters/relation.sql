@@ -31,16 +31,6 @@
     {{ return(backup_relation) }}
 {% endmacro %}
 
-{% macro drop_relation(relation) -%}
-  {{ return(adapter.dispatch('drop_relation', 'dbt')(relation)) }}
-{% endmacro %}
-
-{% macro default__drop_relation(relation) -%}
-  {% call statement('drop_relation', auto_begin=False) -%}
-    drop {{ relation.type }} if exists {{ relation }} cascade
-  {%- endcall %}
-{% endmacro %}
-
 
 {% macro truncate_relation(relation) -%}
   {{ return(adapter.dispatch('truncate_relation', 'dbt')(relation)) }}

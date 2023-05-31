@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -40,13 +41,12 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
-from dbt.exceptions import ParsingError, InvalidAccessTypeError, ContractBreakingChangeError
+from dbt.exceptions import ParsingError, ContractBreakingChangeError
 from dbt.events.types import (
     SeedIncreased,
     SeedExceedsLimitSamePath,
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
-    ValidationWarning,
 )
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
@@ -271,6 +271,17 @@ class DependsOn(MacroDependsOn):
 
 
 @dataclass
+class StateRelation(dbtClassMixin):
+    alias: str
+    database: Optional[str]
+    schema: str
+
+    @property
+    def identifier(self):
+        return self.alias
+
+
+@dataclass
 class ParsedNodeMandatory(GraphNode, HasRelationMetadata, Replaceable):
     alias: str
     checksum: FileHash
@@ -334,17 +345,23 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     relation_name: Optional[str] = None
     raw_code: str = ""
 
-    def write_node(self, target_path: str, subdirectory: str, payload: str):
+    def get_target_write_path(self, target_path: str, subdirectory: str):
+        # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
             path = self.original_file_path
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
-        full_path = os.path.join(target_path, subdirectory, self.package_name, path)
+        target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
+        return target_write_path
 
-        write_file(full_path, payload)
-        return full_path
+    def write_node(self, project_root: str, compiled_path, compiled_code: str):
+        if os.path.isabs(compiled_path):
+            full_path = compiled_path
+        else:
+            full_path = os.path.join(project_root, compiled_path)
+        write_file(full_path, compiled_code)
 
     def _serialize(self):
         return self.to_dict()
@@ -442,63 +459,6 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     def same_contract(self, old, adapter_type=None) -> bool:
         # This would only apply to seeds
         return True
-
-    def patch(self, patch: "ParsedNodePatch"):
-        """Given a ParsedNodePatch, add the new information to the node."""
-        # NOTE: Constraint patching is awkwardly done in the parse_patch function
-        # which calls this one. We need to combine the logic.
-
-        # explicitly pick out the parts to update so we don't inadvertently
-        # step on the model name or anything
-        # Note: config should already be updated
-        self.patch_path: Optional[str] = patch.file_id
-        # update created_at so process_docs will run in partial parsing
-        self.created_at = time.time()
-        self.description = patch.description
-        self.columns = patch.columns
-        self.name = patch.name
-
-        # TODO: version, latest_version, and access are specific to ModelNodes, consider splitting out to ModelNode
-        if self.resource_type != NodeType.Model:
-            if patch.version:
-                warn_or_error(
-                    ValidationWarning(
-                        field_name="version",
-                        resource_type=self.resource_type.value,
-                        node_name=patch.name,
-                    )
-                )
-            if patch.latest_version:
-                warn_or_error(
-                    ValidationWarning(
-                        field_name="latest_version",
-                        resource_type=self.resource_type.value,
-                        node_name=patch.name,
-                    )
-                )
-        self.version = patch.version
-        self.latest_version = patch.latest_version
-
-        # This might not be the ideal place to validate the "access" field,
-        # but at this point we have the information we need to properly
-        # validate and we don't before this.
-        if patch.access:
-            if self.resource_type == NodeType.Model:
-                if AccessType.is_valid(patch.access):
-                    self.access = AccessType(patch.access)
-                else:
-                    raise InvalidAccessTypeError(
-                        unique_id=self.unique_id,
-                        field_value=patch.access,
-                    )
-            else:
-                warn_or_error(
-                    ValidationWarning(
-                        field_name="access",
-                        resource_type=self.resource_type.value,
-                        node_name=patch.name,
-                    )
-                )
 
     def same_contents(self, old, adapter_type) -> bool:
         if old is None:
@@ -615,6 +575,8 @@ class ModelNode(CompiledNode):
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
+    deprecation_date: Optional[datetime] = None
+    state_relation: Optional[StateRelation] = None
 
     @property
     def is_latest_version(self) -> bool:
@@ -797,6 +759,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
+    state_relation: Optional[StateRelation] = None
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -995,6 +958,7 @@ class IntermediateSnapshotNode(CompiledNode):
 class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
+    state_relation: Optional[StateRelation] = None
 
 
 # ====================================
@@ -1014,14 +978,6 @@ class Macro(BaseNode):
     arguments: List[MacroArgument] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     supported_languages: Optional[List[ModelLanguage]] = None
-
-    def patch(self, patch: "ParsedMacroPatch"):
-        self.patch_path: Optional[str] = patch.file_id
-        self.description = patch.description
-        self.created_at = time.time()
-        self.meta = patch.meta
-        self.docs = patch.docs
-        self.arguments = patch.arguments
 
     def same_contents(self, other: Optional["Macro"]) -> bool:
         if other is None:
@@ -1466,6 +1422,8 @@ class ParsedNodePatch(ParsedPatch):
     access: Optional[str]
     version: Optional[NodeVersion]
     latest_version: Optional[NodeVersion]
+    constraints: List[Dict[str, Any]]
+    deprecation_date: Optional[datetime]
 
 
 @dataclass

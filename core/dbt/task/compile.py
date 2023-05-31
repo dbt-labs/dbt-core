@@ -100,14 +100,14 @@ class CompileTask(GraphRunnableTask):
         if not self.args.defer:
             return None
 
-        state = self.previous_state
-        if state is None:
+        state = self.previous_defer_state or self.previous_state
+        if not state:
             raise DbtRuntimeError(
                 "Received a --defer argument, but no value was provided to --state"
             )
 
-        if state.manifest is None:
-            raise DbtRuntimeError(f'Could not find manifest in --state path: "{self.args.state}"')
+        if not state.manifest:
+            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state}"')
         return state.manifest
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
@@ -125,7 +125,7 @@ class CompileTask(GraphRunnableTask):
             favor_state=bool(self.args.favor_state),
         )
         # TODO: is it wrong to write the manifest here? I think it's right...
-        write_manifest(self.manifest, self.config.target_path)
+        write_manifest(self.manifest, self.config.project_target_path)
 
     def _runtime_initialize(self):
         if getattr(self.args, "inline", None):

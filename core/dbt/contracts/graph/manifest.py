@@ -38,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     BaseNode,
     ManifestOrPublicNode,
+    ModelNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -188,7 +189,13 @@ class RefableLookup(dbtClassMixin):
             # If this is an unpinned ref (no 'version' arg was passed),
             # AND this is a versioned node,
             # AND this ref is being resolved at runtime -- get_node_info != {}
-            if version is None and node.is_versioned and get_node_info():
+            # Only ModelNodes can be versioned.
+            if (
+                isinstance(node, ModelNode)
+                and version is None
+                and node.is_versioned
+                and get_node_info()
+            ):
                 # Check to see if newer versions are available, and log an "FYI" if so
                 max_version: UnparsedVersion = max(
                     [
@@ -958,6 +965,23 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
 
+    def resolve_refs(
+        self, source_node: GraphMemberNode, current_project: str
+    ) -> List[MaybeNonSource]:
+        resolved_refs: List[MaybeNonSource] = []
+        for ref in source_node.refs:
+            resolved = self.resolve_ref(
+                source_node,
+                ref.name,
+                ref.package,
+                ref.version,
+                current_project,
+                source_node.package_name,
+            )
+            resolved_refs.append(resolved)
+
+        return resolved_refs
+
     # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
@@ -1316,6 +1340,8 @@ class WritableManifest(ArtifactMixin):
         for unique_id, node in dct["nodes"].items():
             if "config_call_dict" in node:
                 del node["config_call_dict"]
+            if "state_relation" in node:
+                del node["state_relation"]
         return dct
 
 
