@@ -564,6 +564,30 @@ class CompiledNode(ParsedNode):
         return self.depends_on.macros
 
 
+@dataclass
+class FileSlice(dbtClassMixin, Replaceable):
+    """Provides file slice level context about what something was created from.
+
+    Implementation of the dbt-semantic-interfaces `FileSlice` protocol
+    """
+
+    filename: str
+    content: str
+    start_line_number: int
+    end_line_number: int
+
+
+@dataclass
+class Metadata(dbtClassMixin, Replaceable):
+    """Provides file context about what something was created from.
+
+    Implementation of the dbt-semantic-interfaces `Metadata` protocol
+    """
+
+    repo_file_path: str
+    file_slice: FileSlice
+
+
 # ====================================
 # CompiledNode subclasses
 # ====================================
