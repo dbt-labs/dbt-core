@@ -25,6 +25,9 @@ from dbt.tests.adapter.constraints.fixtures import (
     my_model_incremental_with_nulls_sql,
     model_schema_yml,
     constrained_model_schema_yml,
+    my_model_contract_sql_header_sql,
+    my_model_incremental_contract_sql_header_sql,
+    model_contract_header_schema_yml,
 )
 
 
@@ -355,6 +358,45 @@ class TestIncrementalConstraintsRuntimeDdlEnforcement(
 
 
 class TestIncrementalConstraintsRollback(BaseIncrementalConstraintsRollback):
+    pass
+
+
+class BaseContractSqlHeader:
+    """Tests a contracted model with a sql header dependency."""
+
+    def test__contract_sql_header(self, project):
+        run_dbt(["run", "-s", "my_model_contract_sql_header"])
+
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.my_model_contract_sql_header"
+        model_config = manifest.nodes[model_id].config
+
+        assert model_config.contract.enforced
+
+
+class BaseTableContractSqlHeader(BaseContractSqlHeader):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_contract_sql_header.sql": my_model_contract_sql_header_sql,
+            "constraints_schema.yml": model_contract_header_schema_yml,
+        }
+
+
+class BaseIncrementalContractSqlHeader(BaseContractSqlHeader):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_contract_sql_header.sql": my_model_incremental_contract_sql_header_sql,
+            "constraints_schema.yml": model_contract_header_schema_yml,
+        }
+
+
+class TestTableContractSqlHeader(BaseTableContractSqlHeader):
+    pass
+
+
+class TestIncrementalContractSqlHeader(BaseIncrementalContractSqlHeader):
     pass
 
 
