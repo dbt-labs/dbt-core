@@ -569,9 +569,6 @@ class StateSelectorMethod(SelectorMethod):
 
         return check_modified_contract
 
-    def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return old is None
-
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
             raise DbtRuntimeError("Got a state selector method, but no comparison manifest")
