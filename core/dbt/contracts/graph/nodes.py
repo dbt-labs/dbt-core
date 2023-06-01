@@ -29,8 +29,6 @@ from dbt.contracts.graph.unparsed import (
     HasYamlMetadata,
     MacroArgument,
     MaturityType,
-    MetricFilter,
-    MetricTime,
     Owner,
     Quoting,
     TestDef,
@@ -51,6 +49,10 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
+from dbt_semantic_interfaces.references import MeasureReference
+from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
+from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from .model_config import (
     NodeConfig,
@@ -1322,6 +1324,60 @@ class Exposure(GraphNode):
 
 
 @dataclass
+class WhereFilter(dbtClassMixin, Replaceable):
+    where_sql_template: str
+
+
+@dataclass
+class MetricInputMeasure(dbtClassMixin, Replaceable):
+    name: str
+    filter: Optional[WhereFilter]
+    alias: Optional[str]
+
+    def measure_reference(self) -> MeasureReference:
+        return MeasureReference(element_name=self.name)
+
+    def post_aggregation_measure_referenc(self) -> MeasureReference:
+        return MeasureReference(element_name=self.alias or self.name)
+
+
+@dataclass
+class MetricTimeWindow(dbtClassMixin, Replaceable):
+    count: int
+    granularity: TimeGranularity
+
+
+@dataclass
+class MetricInput(dbtClassMixin, Replaceable):
+    name: str
+    filter: Optional[WhereFilter]
+    alias: Optional[str]
+    offset_window: Optional[MetricTimeWindow]
+    offset_to_grain: Optional[TimeGranularity]
+
+    def as_reference(self) -> DSIMetricReference:
+        pass
+
+
+@dataclass
+class MetricTypeParams(dbtClassMixin, Replaceable):
+    measure: Optional[MetricInputMeasure]
+    measures: Optional[Sequence[MetricInputMeasure]]
+    numerator: Optional[MetricInputMeasure]
+    denominator: Optional[MetricInputMeasure]
+    expr: Optional[str]
+    window: Optional[MetricTimeWindow]
+    grain_to_date: Optional[TimeGranularity]
+    metrics: Optional[Sequence[MetricInput]]
+
+    def numerator_measure_reference(self) -> Optional[MeasureReference]:
+        pass
+
+    def denominator_measure_reference(self) -> Optional[MeasureReference]:
+        pass
+
+
+@dataclass
 class MetricReference(dbtClassMixin, Replaceable):
     sql: Optional[Union[str, int]]
     unique_id: Optional[str]
@@ -1332,16 +1388,11 @@ class Metric(GraphNode):
     name: str
     description: str
     label: str
-    calculation_method: str
-    expression: str
-    filters: List[MetricFilter]
-    time_grains: List[str]
-    dimensions: List[str]
+    type: MetricType
+    type_params: MetricTypeParams
+    filter: Optional[WhereFilter]
+    metadata: Metadata
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
-    timestamp: Optional[str] = None
-    window: Optional[MetricTime] = None
-    model: Optional[str] = None
-    model_unique_id: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
@@ -1365,17 +1416,17 @@ class Metric(GraphNode):
     def search_name(self):
         return self.name
 
-    def same_model(self, old: "Metric") -> bool:
-        return self.model == old.model
+    @property
+    def input_measures(self) -> Sequence[MetricInputMeasure]:
+        pass
 
-    def same_window(self, old: "Metric") -> bool:
-        return self.window == old.window
+    @property
+    def measure_references(self) -> Sequence[MeasureReference]:
+        pass
 
-    def same_dimensions(self, old: "Metric") -> bool:
-        return self.dimensions == old.dimensions
-
-    def same_filters(self, old: "Metric") -> bool:
-        return self.filters == old.filters
+    @property
+    def input_metrics(self) -> Sequence[MetricInput]:
+        pass
 
     def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
@@ -1383,23 +1434,23 @@ class Metric(GraphNode):
     def same_label(self, old: "Metric") -> bool:
         return self.label == old.label
 
-    def same_calculation_method(self, old: "Metric") -> bool:
-        return self.calculation_method == old.calculation_method
-
-    def same_expression(self, old: "Metric") -> bool:
-        return self.expression == old.expression
-
-    def same_timestamp(self, old: "Metric") -> bool:
-        return self.timestamp == old.timestamp
-
-    def same_time_grains(self, old: "Metric") -> bool:
-        return self.time_grains == old.time_grains
-
     def same_config(self, old: "Metric") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
+
+    def same_filter(self, old: "Metric") -> bool:
+        return True  # TODO
+
+    def same_metadata(self, old: "Metric") -> bool:
+        return True  # TODO
+
+    def same_type(self, old: "Metric") -> bool:
+        return self.type == old.type
+
+    def same_type_params(self, old: "Metric") -> bool:
+        return True  # TODO
 
     def same_contents(self, old: Optional["Metric"]) -> bool:
         # existing when it didn't before is a change!
@@ -1408,16 +1459,12 @@ class Metric(GraphNode):
             return True
 
         return (
-            self.same_model(old)
-            and self.same_window(old)
-            and self.same_dimensions(old)
-            and self.same_filters(old)
+            self.same_filter(old)
+            and self.same_metadata(old)
+            and self.same_type(old)
+            and self.same_type_params(old)
             and self.same_description(old)
             and self.same_label(old)
-            and self.same_calculation_method(old)
-            and self.same_expression(old)
-            and self.same_timestamp(old)
-            and self.same_time_grains(old)
             and self.same_config(old)
             and True
         )
