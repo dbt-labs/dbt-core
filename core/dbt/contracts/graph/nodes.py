@@ -1331,8 +1331,8 @@ class WhereFilter(dbtClassMixin, Replaceable):
 @dataclass
 class MetricInputMeasure(dbtClassMixin, Replaceable):
     name: str
-    filter: Optional[WhereFilter]
-    alias: Optional[str]
+    filter: Optional[WhereFilter] = None
+    alias: Optional[str] = None
 
     def measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)
@@ -1350,10 +1350,10 @@ class MetricTimeWindow(dbtClassMixin, Replaceable):
 @dataclass
 class MetricInput(dbtClassMixin, Replaceable):
     name: str
-    filter: Optional[WhereFilter]
-    alias: Optional[str]
-    offset_window: Optional[MetricTimeWindow]
-    offset_to_grain: Optional[TimeGranularity]
+    filter: Optional[WhereFilter] = None
+    alias: Optional[str] = None
+    offset_window: Optional[MetricTimeWindow] = None
+    offset_to_grain: Optional[TimeGranularity] = None
 
     def as_reference(self) -> DSIMetricReference:
         pass
@@ -1361,14 +1361,14 @@ class MetricInput(dbtClassMixin, Replaceable):
 
 @dataclass
 class MetricTypeParams(dbtClassMixin, Replaceable):
-    measure: Optional[MetricInputMeasure]
-    measures: Optional[Sequence[MetricInputMeasure]]
-    numerator: Optional[MetricInputMeasure]
-    denominator: Optional[MetricInputMeasure]
-    expr: Optional[str]
-    window: Optional[MetricTimeWindow]
-    grain_to_date: Optional[TimeGranularity]
-    metrics: Optional[Sequence[MetricInput]]
+    measure: Optional[MetricInputMeasure] = None
+    measures: Optional[Sequence[MetricInputMeasure]] = None
+    numerator: Optional[MetricInputMeasure] = None
+    denominator: Optional[MetricInputMeasure] = None
+    expr: Optional[str] = None
+    window: Optional[MetricTimeWindow] = None
+    grain_to_date: Optional[TimeGranularity] = None
+    metrics: Optional[Sequence[MetricInput]] = None
 
     def numerator_measure_reference(self) -> Optional[MeasureReference]:
         pass
@@ -1379,8 +1379,8 @@ class MetricTypeParams(dbtClassMixin, Replaceable):
 
 @dataclass
 class MetricReference(dbtClassMixin, Replaceable):
-    sql: Optional[Union[str, int]]
-    unique_id: Optional[str]
+    sql: Optional[Union[str, int]] = None
+    unique_id: Optional[str] = None
 
 
 @dataclass
@@ -1390,8 +1390,8 @@ class Metric(GraphNode):
     label: str
     type: MetricType
     type_params: MetricTypeParams
-    filter: Optional[WhereFilter]
-    metadata: Metadata
+    filter: Optional[WhereFilter] = None
+    metadata: Optional[Metadata] = None
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
