@@ -21,7 +21,11 @@ models:
     columns:
       - name: bar
         tests:
-          - not_null
+          - accepted_values:
+              values: [3]
+              quote: false
+              config:
+                severity: warn
   - name: union_model
     columns:
       - name: sum3

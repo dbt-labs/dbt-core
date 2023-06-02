@@ -41,7 +41,7 @@ class TestRetry:
             "second_model": RunStatus.Success,
             "union_model": RunStatus.Skipped,
             "accepted_values_sample_model_foo__False__3": RunStatus.Skipped,
-            "not_null_second_model_bar": TestStatus.Pass,
+            "accepted_values_second_model_bar__False__3": TestStatus.Warn,
             "accepted_values_union_model_sum3__False__3": RunStatus.Skipped,
         }
 
@@ -73,3 +73,25 @@ class TestRetry:
         }
 
         assert {n.node.name: n.status for n in results.results} == expected_statuses
+
+        # No failures in previous run, nothing to retry
+        results = run_dbt(["retry"])
+        expected_statuses = {}
+        assert {n.node.name: n.status for n in results.results} == expected_statuses
+
+    def test_warn_error(self, project):
+        # Regular build
+        results = run_dbt(["--warn-error", "build", "--select", "second_model"], expect_pass=False)
+
+        expected_statuses = {
+            "second_model": RunStatus.Success,
+            "accepted_values_second_model_bar__False__3": TestStatus.Fail,
+        }
+
+        assert {n.node.name: n.status for n in results.results} == expected_statuses
+
+        # Retry regular, should pass
+        run_dbt(["retry"])
+
+        # Retry with --warn-error, should fail
+        run_dbt(["--warn-error", "retry"], expect_pass=False)

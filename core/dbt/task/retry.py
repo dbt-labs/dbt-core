@@ -86,6 +86,11 @@ class RetryTask(ConfiguredTask):
         if "resource_types" in self.previous_args and self.previous_args["resource_types"] == []:
             del self.previous_args["resource_types"]
 
+        if "warn_error_options" in self.previous_args and self.previous_args[
+            "warn_error_options"
+        ] == {"exclude": [], "include": []}:
+            del self.previous_args["warn_error_options"]
+
         retry_flags = Flags.from_dict(cli_command, self.previous_args)
         retry_config = get_runtime_config(retry_flags)
 
