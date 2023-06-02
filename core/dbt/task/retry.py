@@ -80,6 +80,12 @@ class RetryTask(ConfiguredTask):
 
         cli_command = CMD_DICT.get(self.previous_command_name)
 
+        if "show" in self.previous_args:
+            del self.previous_args["show"]
+
+        if "resource_types" in self.previous_args and self.previous_args["resource_types"] == []:
+            del self.previous_args["resource_types"]
+
         retry_flags = Flags.from_dict(cli_command, self.previous_args)
         retry_config = get_runtime_config(retry_flags)
 
