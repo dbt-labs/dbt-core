@@ -95,3 +95,32 @@ class TestRetry:
 
         # Retry with --warn-error, should fail
         run_dbt(["--warn-error", "retry"], expect_pass=False)
+
+    def test_custom_target(self, project):
+        run_dbt(["build", "--select", "second_model"])
+        run_dbt(
+            ["build", "--select", "sample_model", "--target-path", "target2"], expect_pass=False
+        )
+
+        # Regular retry
+        results = run_dbt(["retry"])
+        expected_statuses = {}
+        assert {n.node.name: n.status for n in results.results} == expected_statuses
+
+        # Retry with custom target
+        fixed_sql = "select 1 as id, 1 as foo"
+        write_file(fixed_sql, "models", "sample_model.sql")
+
+        results = run_dbt(["retry", "--state", "target2"])
+        expected_statuses = {
+            "sample_model": RunStatus.Success,
+            "accepted_values_sample_model_foo__False__3": TestStatus.Warn,
+        }
+
+        assert {n.node.name: n.status for n in results.results} == expected_statuses
+
+    def test_run_operation(self, project):
+        pass
+
+    def fail_fast(self, project):
+        pass
