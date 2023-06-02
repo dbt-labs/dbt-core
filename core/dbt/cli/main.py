@@ -580,26 +580,14 @@ def run(ctx, **kwargs):
 # dbt run
 @cli.command("retry")
 @click.pass_context
-@p.defer
-@p.deprecated_defer
-@p.favor_state
-@p.deprecated_favor_state
-@p.exclude
-@p.fail_fast
-@p.full_refresh
-@p.profile
-@p.profiles_dir
 @p.project_dir
-@p.select
-@p.selector
-@p.state
-@p.defer_state
-@p.deprecated_state
-@p.target
-@p.target_path
-@p.threads
+@p.profiles_dir
 @p.vars
-@p.version_check
+@p.profile
+@p.target
+@p.state
+@p.threads
+@p.fail_fast
 @requires.postflight
 @requires.preflight
 @requires.profile
@@ -607,7 +595,7 @@ def run(ctx, **kwargs):
 @requires.runtime_config
 @requires.manifest
 def retry(ctx, **kwargs):
-    """Compile SQL and execute against the current target database."""
+    """Retry the nodes that failed in the previous run."""
     task = RetryTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
