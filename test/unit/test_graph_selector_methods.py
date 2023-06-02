@@ -14,6 +14,8 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     Exposure,
     Metric,
+    MetricTypeParams,
+    MetricInputMeasure,
     Group,
     SeedNode,
     SingularTestNode,
@@ -24,7 +26,7 @@ from dbt.contracts.graph.nodes import (
     ColumnInfo,
 )
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
-from dbt.contracts.graph.unparsed import ExposureType, Owner, MetricFilter, MetricTime
+from dbt.contracts.graph.unparsed import ExposureType, Owner
 from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
@@ -47,6 +49,7 @@ from dbt.graph.selector_methods import (
 )
 import dbt.exceptions
 import dbt.contracts.graph.nodes
+from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 from .utils import replace_config
 
 
@@ -401,21 +404,9 @@ def make_metric(pkg, name, path=None):
         unique_id=f"metric.{pkg}.{name}",
         fqn=[pkg, "metrics", name],
         label="New Customers",
-        model='ref("multi")',
         description="New customers",
-        calculation_method="count",
-        expression="user_id",
-        timestamp="signup_date",
-        time_grains=["day", "week", "month"],
-        dimensions=["plan", "country"],
-        filters=[
-            MetricFilter(
-                field="is_paying",
-                value=True,
-                operator="=",
-            )
-        ],
-        window=MetricTime(),
+        type=MetricType.SIMPLE,
+        type_params=MetricTypeParams(measure=MetricInputMeasure(name="count_cats")),
         meta={"is_okr": True},
         tags=["okrs"],
     )
