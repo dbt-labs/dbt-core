@@ -8,6 +8,7 @@ from tests.functional.retry.fixtures import (
     models__union_model,
     schema_yml,
     models__second_model,
+    macros__alter_timezone_sql,
 )
 
 
@@ -20,6 +21,10 @@ class TestRetry:
             "union_model.sql": models__union_model,
             "schema.yml": schema_yml,
         }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"alter_timezone.sql": macros__alter_timezone_sql}
 
     def test_no_previous_run(self, project):
         with pytest.raises(
@@ -79,6 +84,8 @@ class TestRetry:
         expected_statuses = {}
         assert {n.node.name: n.status for n in results.results} == expected_statuses
 
+        write_file(models__sample_model, "models", "sample_model.sql")
+
     def test_warn_error(self, project):
         # Regular build
         results = run_dbt(["--warn-error", "build", "--select", "second_model"], expect_pass=False)
@@ -104,7 +111,7 @@ class TestRetry:
 
         # Regular retry
         results = run_dbt(["retry"])
-        expected_statuses = {}
+        expected_statuses = {"accepted_values_second_model_bar__False__3": TestStatus.Warn}
         assert {n.node.name: n.status for n in results.results} == expected_statuses
 
         # Retry with custom target
@@ -119,8 +126,34 @@ class TestRetry:
 
         assert {n.node.name: n.status for n in results.results} == expected_statuses
 
-    def test_run_operation(self, project):
-        pass
+        write_file(models__sample_model, "models", "sample_model.sql")
 
-    def fail_fast(self, project):
-        pass
+    def test_run_operation(self, project):
+        results = run_dbt(
+            ["run-operation", "alter_timezone", "--args", "{timezone: abc}"], expect_pass=False
+        )
+
+        expected_statuses = {
+            "operation.test.alter_timezone": RunStatus.Error,
+        }
+
+        assert {n.unique_id: n.status for n in results.results} == expected_statuses
+
+        results = run_dbt(["retry"], expect_pass=False)
+        assert {n.unique_id: n.status for n in results.results} == expected_statuses
+
+    def test_fail_fast(self, project):
+        result = run_dbt(["--warn-error", "build", "--fail-fast"], expect_pass=False)
+
+        assert result.status == RunStatus.Error
+        assert result.node.name == "sample_model"
+
+        results = run_dbt(["retry"], expect_pass=False)
+
+        assert len(results.results) == 1
+        assert results.results[0].status == RunStatus.Error
+        assert results.results[0].node.name == "sample_model"
+
+        result = run_dbt(["retry", "--fail-fast"], expect_pass=False)
+        assert result.status == RunStatus.Error
+        assert result.node.name == "sample_model"

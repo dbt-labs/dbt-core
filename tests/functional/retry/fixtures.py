@@ -34,3 +34,14 @@ models:
               values: [3]
               quote: false
 """
+
+macros__alter_timezone_sql = """
+{% macro alter_timezone(timezone='America/Los_Angeles') %}
+{% set sql %}
+    SET TimeZone='{{ timezone }}';
+{% endset %}
+
+{% do run_query(sql) %}
+{% do log("Timezone set to: " + timezone, info=True) %}
+{% endmacro %}
+"""

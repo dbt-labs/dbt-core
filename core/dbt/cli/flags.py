@@ -337,7 +337,9 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
 
         spinal_cased = k.replace("_", "-")
 
-        if v in (None, False):
+        if k == "macro" and command == CliCommand.RUN_OPERATION:
+            add_fn(v)
+        elif v in (None, False):
             add_fn(f"--no-{spinal_cased}")
         elif v is True:
             add_fn(f"--{spinal_cased}")

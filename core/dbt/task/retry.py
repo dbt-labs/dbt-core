@@ -2,10 +2,12 @@ from pathlib import Path
 
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
-from dbt.cli.utils import get_runtime_config
+from dbt.config import RuntimeConfig
+from dbt.config.runtime import load_project, load_profile
 from dbt.contracts.results import NodeStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import DbtRuntimeError
+from dbt.flags import get_flags
 from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
@@ -13,6 +15,7 @@ from dbt.task.compile import CompileTask
 from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
+from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
 from dbt.task.show import ShowTask
 from dbt.task.snapshot import SnapshotTask
@@ -30,6 +33,7 @@ TASK_DICT = {
     "show": ShowTask,
     "snapshot": SnapshotTask,
     "test": TestTask,
+    "run-operation": RunOperationTask,
 }
 
 CMD_DICT = {
@@ -42,6 +46,7 @@ CMD_DICT = {
     "show": CliCommand.SHOW,
     "snapshot": CliCommand.SNAPSHOT,
     "test": CliCommand.TEST,
+    "run-operation": CliCommand.RUN_OPERATION,
 }
 
 
@@ -80,19 +85,38 @@ class RetryTask(ConfiguredTask):
 
         cli_command = CMD_DICT.get(self.previous_command_name)
 
-        if "show" in self.previous_args:
-            del self.previous_args["show"]
+        bad_args = {
+            "show": lambda x: True,
+            "resource_types": lambda x: x == [],
+            "warn_error_options": lambda x: x == {"exclude": [], "include": []},
+        }
 
-        if "resource_types" in self.previous_args and self.previous_args["resource_types"] == []:
-            del self.previous_args["resource_types"]
-
-        if "warn_error_options" in self.previous_args and self.previous_args[
-            "warn_error_options"
-        ] == {"exclude": [], "include": []}:
-            del self.previous_args["warn_error_options"]
+        for k, v in bad_args.items():
+            if k in self.previous_args and v(self.previous_args[k]):
+                del self.previous_args[k]
 
         retry_flags = Flags.from_dict(cli_command, self.previous_args)
-        retry_config = get_runtime_config(retry_flags)
+
+        retry_profile = load_profile(
+            get_flags().PROJECT_DIR,
+            get_flags().VARS,
+            get_flags().PROFILE,
+            get_flags().TARGET,
+            get_flags().THREADS,
+        )
+
+        retry_project = load_project(
+            get_flags().PROJECT_DIR,
+            get_flags().VERSION_CHECK,
+            retry_profile,
+            get_flags().VARS,
+        )
+
+        retry_config = RuntimeConfig.from_parts(
+            args=retry_flags,
+            profile=retry_profile,
+            project=retry_project,
+        )
 
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):

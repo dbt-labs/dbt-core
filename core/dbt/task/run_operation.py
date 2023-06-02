@@ -49,6 +49,9 @@ class RunOperationTask(ConfiguredTask):
     def run(self) -> RunResultsArtifact:
         start = datetime.utcnow()
         self.compile_manifest()
+
+        success = True
+
         try:
             self._run_unsafe()
         except dbt.exceptions.Exception as exc:
@@ -59,8 +62,7 @@ class RunOperationTask(ConfiguredTask):
             fire_event(RunningOperationUncaughtError(exc=str(exc)))
             fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
             success = False
-        else:
-            success = True
+
         end = datetime.utcnow()
 
         package_name, macro_name = self._get_macro_parts()
@@ -108,5 +110,6 @@ class RunOperationTask(ConfiguredTask):
 
         return results
 
-    def interpret_results(self, results):
+    @classmethod
+    def interpret_results(cls, results):
         return results.results[0].status == RunStatus.Success
