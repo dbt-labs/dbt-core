@@ -1320,20 +1320,25 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
         rendering."""
         constraint_expression = constraint.expression or ""
+
+        rendered_column_constraint = None
         if constraint.type == ConstraintType.check and constraint_expression:
-            return f"check ({constraint_expression})"
+            rendered_column_constraint = f"check ({constraint_expression})"
         elif constraint.type == ConstraintType.not_null:
-            return f"not null {constraint_expression}".strip()
+            rendered_column_constraint = f"not null {constraint_expression}"
         elif constraint.type == ConstraintType.unique:
-            return f"unique {constraint_expression}".strip()
+            rendered_column_constraint = f"unique {constraint_expression}"
         elif constraint.type == ConstraintType.primary_key:
-            return f"primary key {constraint_expression}".strip()
+            rendered_column_constraint = f"primary key {constraint_expression}"
         elif constraint.type == ConstraintType.foreign_key and constraint_expression:
-            return f"references {constraint_expression}"
+            rendered_column_constraint = f"references {constraint_expression}"
         elif constraint.type == ConstraintType.custom and constraint_expression:
-            return constraint_expression
-        else:
-            return None
+            rendered_column_constraint = constraint_expression
+
+        if rendered_column_constraint:
+            rendered_column_constraint = rendered_column_constraint.strip()
+
+        return rendered_column_constraint
 
     @available
     @classmethod
@@ -1398,20 +1403,19 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
         rendering."""
         constraint_prefix = f"constraint {constraint.name} " if constraint.name else ""
-        constraint_expression = constraint.expression or ""
         column_list = ", ".join(constraint.columns)
-        if constraint.type == ConstraintType.check and constraint_expression:
-            return f"{constraint_prefix}check ({constraint_expression})"
+        if constraint.type == ConstraintType.check and constraint.expression:
+            return f"{constraint_prefix}check ({constraint.expression})"
         elif constraint.type == ConstraintType.unique:
-            constraint_expression = f" {constraint_expression}" if constraint_expression else ""
+            constraint_expression = f" {constraint.expression}" if constraint.expression else ""
             return f"{constraint_prefix}unique{constraint_expression} ({column_list})"
         elif constraint.type == ConstraintType.primary_key:
-            constraint_expression = f" {constraint_expression}" if constraint_expression else ""
+            constraint_expression = f" {constraint.expression}" if constraint.expression else ""
             return f"{constraint_prefix}primary key{constraint_expression} ({column_list})"
-        elif constraint.type == ConstraintType.foreign_key and constraint_expression:
-            return f"{constraint_prefix}foreign key ({column_list}) references {constraint_expression}"
-        elif constraint.type == ConstraintType.custom and constraint_expression:
-            return f"{constraint_prefix}{constraint_expression}"
+        elif constraint.type == ConstraintType.foreign_key and constraint.expression:
+            return f"{constraint_prefix}foreign key ({column_list}) references {constraint.expression}"
+        elif constraint.type == ConstraintType.custom and constraint.expression:
+            return f"{constraint_prefix}{constraint.expression}"
         else:
             return None
 
