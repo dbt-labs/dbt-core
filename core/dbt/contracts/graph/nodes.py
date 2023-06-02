@@ -187,6 +187,9 @@ class ConstraintType(str, Enum):
 class ColumnLevelConstraint(dbtClassMixin):
     type: ConstraintType
     name: Optional[str] = None
+    # expression is a user-provided field that will depend on the constraint type.
+    # It could be a predicate (check type), or a sequence sql keywords (e.g. unique type),
+    # so the vague naming of 'expression' is intended to capture this range.
     expression: Optional[str] = None
     warn_unenforced: bool = (
         True  # Warn if constraint cannot be enforced by platform but will be in DDL
