@@ -617,6 +617,7 @@ def retry(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.target_path
+@p.threads
 @p.vars
 @requires.postflight
 @requires.preflight

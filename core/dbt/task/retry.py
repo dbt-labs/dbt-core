@@ -3,11 +3,9 @@ from pathlib import Path
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
-from dbt.config.runtime import load_project, load_profile
 from dbt.contracts.results import NodeStatus
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import DbtRuntimeError
-from dbt.flags import get_flags
 from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
@@ -96,27 +94,7 @@ class RetryTask(ConfiguredTask):
                 del self.previous_args[k]
 
         retry_flags = Flags.from_dict(cli_command, self.previous_args)
-
-        retry_profile = load_profile(
-            get_flags().PROJECT_DIR,
-            get_flags().VARS,
-            get_flags().PROFILE,
-            get_flags().TARGET,
-            get_flags().THREADS,
-        )
-
-        retry_project = load_project(
-            get_flags().PROJECT_DIR,
-            get_flags().VERSION_CHECK,
-            retry_profile,
-            get_flags().VARS,
-        )
-
-        retry_config = RuntimeConfig.from_parts(
-            args=retry_flags,
-            profile=retry_profile,
-            project=retry_project,
-        )
+        retry_config = RuntimeConfig.from_args(args=retry_flags)
 
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):
