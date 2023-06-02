@@ -30,6 +30,7 @@ from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 from dbt.task.list import ListTask
+from dbt.task.retry import RetryTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
@@ -566,6 +567,48 @@ def parse(ctx, **kwargs):
 def run(ctx, **kwargs):
     """Compile SQL and execute against the current target database."""
     task = RunTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
+# dbt run
+@cli.command("retry")
+@click.pass_context
+@p.defer
+@p.deprecated_defer
+@p.favor_state
+@p.deprecated_favor_state
+@p.exclude
+@p.fail_fast
+@p.full_refresh
+@p.profile
+@p.profiles_dir
+@p.project_dir
+@p.select
+@p.selector
+@p.state
+@p.defer_state
+@p.deprecated_state
+@p.target
+@p.target_path
+@p.threads
+@p.vars
+@p.version_check
+@requires.postflight
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+def retry(ctx, **kwargs):
+    """Compile SQL and execute against the current target database."""
+    task = RetryTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
