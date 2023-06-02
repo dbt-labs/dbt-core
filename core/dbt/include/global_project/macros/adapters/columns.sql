@@ -17,15 +17,18 @@
 {% endmacro %}
 
 
-{% macro get_empty_subquery_sql(select_sql) -%}
-  {{ return(adapter.dispatch('get_empty_subquery_sql', 'dbt')(select_sql)) }}
+{% macro get_empty_subquery_sql(select_sql, select_sql_header=none) -%}
+  {{ return(adapter.dispatch('get_empty_subquery_sql', 'dbt')(select_sql, select_sql_header)) }}
 {% endmacro %}
 
 {#
   Builds a query that results in the same schema as the given select_sql statement, without necessitating a data scan.
   Useful for running a query in a 'pre-flight' context, such as model contract enforcement (assert_columns_equivalent macro).
 #}
-{% macro default__get_empty_subquery_sql(select_sql) %}
+{% macro default__get_empty_subquery_sql(select_sql, select_sql_header=none) %}
+    {%- if select_sql_header is not none -%}
+    {{ select_sql_header }}
+    {%- endif -%}
     select * from (
         {{ select_sql }}
     ) as __dbt_sbq
@@ -53,10 +56,10 @@
     {%- endif -%}
 {% endmacro %}
 
-{% macro get_column_schema_from_query(select_sql) -%}
+{% macro get_column_schema_from_query(select_sql, select_sql_header=none) -%}
     {% set columns = [] %}
     {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessitating a data scan.#}
-    {% set sql = get_empty_subquery_sql(select_sql) %}
+    {% set sql = get_empty_subquery_sql(select_sql, select_sql_header) %}
     {% set column_schema = adapter.get_column_schema_from_query(sql) %}
     {{ return(column_schema) }}
 {% endmacro %}
