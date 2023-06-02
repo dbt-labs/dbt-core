@@ -1210,10 +1210,10 @@ class UnsupportedConstraintMaterialization(WarnLevel):
     def message(self) -> str:
         msg = (
             f"Constraint types are not supported for {self.materialized} materializations and will "
-            "be ignored."
+            "be ignored.  Set 'warn_unsupported: false' on this constraint to ignore this warning."
         )
 
-        return msg
+        return line_wrap_message(warning_tag(msg))
 
 
 # =======================================================

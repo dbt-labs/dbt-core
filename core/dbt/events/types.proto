@@ -1218,7 +1218,7 @@ message DeprecatedReferenceMsg {
 
 // I068
 message UnsupportedConstraintMaterialization {
-    string materialization = 1;
+    string materialized = 1;
 }
 
 message UnsupportedConstraintMaterializationMsg {

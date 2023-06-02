@@ -807,15 +807,6 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         if contract_config.enforced is True:
             self._validate_constraint_prerequisites(node)
 
-            breakpoint()
-            if any(
-                c for c in constraints if c.get("warn_unsupported")
-            ) and node.config.materialized not in ["table", "incremental"]:
-                warn_or_error(
-                    UnsupportedConstraintMaterialization(materialization=node.config.materialized),
-                    node=node,
-                )
-
             if any(
                 c for c in constraints if "type" not in c or not ConstraintType.is_valid(c["type"])
             ):
@@ -827,6 +818,27 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
             node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
 
     def _validate_constraint_prerequisites(self, model_node: ModelNode):
+
+        column_warn_unsupported = [
+            constraint.warn_unsupported
+            for column in model_node.columns.values()
+            for constraint in column.constraints
+        ]
+        model_warn_unsupported = [
+            constraint.warn_unsupported for constraint in model_node.constraints
+        ]
+        warn_unsupported = column_warn_unsupported + model_warn_unsupported
+
+        # if any constraint has `warn_unsupported` as True then send the warning
+        if any(warn_unsupported) and model_node.config.materialized not in [
+            "table",
+            "incremental",
+        ]:
+            warn_or_error(
+                UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
+                node=model_node,
+            )
+
         errors = []
         if not model_node.columns:
             errors.append(
