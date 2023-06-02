@@ -1424,6 +1424,20 @@ class Group(BaseNode):
 
 
 # ====================================
+# SemanticModel
+# ====================================
+
+
+@dataclass
+class SemanticModel(GraphNode):
+    description: Optional[str]
+    # node_relation: NodeRelation
+    # entities: Sequence[Entity]
+    # measures: Sequence[Measure]
+    # dimensions: Sequence[Dimension]
+
+
+# ====================================
 # Patches
 # ====================================
 

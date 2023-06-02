@@ -33,6 +33,7 @@ class NodeType(StrEnum):
     Exposure = "exposure"
     Metric = "metric"
     Group = "group"
+    SemanticModel = "semantic model"
 
     @classmethod
     def executable(cls) -> List["NodeType"]:

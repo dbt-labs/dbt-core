@@ -1212,6 +1212,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
 
+    def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: Metric):
+        pass
+
     # end of methods formerly in ParseResult
 
     # Provide support for copy.deepcopy() - we just need to avoid the lock!

@@ -1,8 +1,13 @@
 from dbt.parser.schemas import YamlReader, SchemaParser
 from dbt.parser.common import YamlBlock
 from dbt.node_types import NodeType
-from dbt.contracts.graph.unparsed import UnparsedExposure, UnparsedMetric, UnparsedGroup
-from dbt.contracts.graph.nodes import Exposure, Metric, Group
+from dbt.contracts.graph.unparsed import (
+    UnparsedExposure,
+    UnparsedGroup,
+    UnparsedMetric,
+    UnparsedSemanticModel,
+)
+from dbt.contracts.graph.nodes import Exposure, Group, Metric, SemanticModel
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_metrics
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
@@ -269,3 +274,37 @@ class GroupParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_group(unparsed)
+
+
+class SemanticModelParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, "semantic_models")
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+
+        parsed = SemanticModel(
+            fqn=fqn,
+            name=unparsed.name,
+            package_name=package_name,
+            resource_type=NodeType.SemanticModel,
+        )
+
+        self.manifest.add_semantic_model(self.yaml.file, parsed)
+
+    def parse(self):
+        for data in self.get_key_dicts():
+            try:
+                UnparsedSemanticModel.validate(data)
+                unparsed = UnparsedSemanticModel.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+            self.parse_semantic_model(unparsed)

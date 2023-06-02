@@ -661,6 +661,63 @@ class UnparsedGroup(dbtClassMixin, Replaceable):
             raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
 
 
+#
+# semantic interfaces unparsed objects
+#
+
+
+@dataclass
+class UnparsedEntity(dbtClassMixin, Replaceable):
+    name: str
+    type: str  # actually an enum
+    description: Optional[str] = None
+    role: Optional[str] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedMeasureAggregationParameters(dbtClassMixin, Replaceable):
+    percentile: Optional[float] = None
+    use_discrete_percentile: bool = False
+    use_approximate_percentile: bool = False
+
+
+@dataclass
+class UnparsedMeasure(dbtClassMixin, Replaceable):
+    name: str
+    agg: str  # enum
+    description: Optional[str] = None
+    create_metric: Optional[bool] = None
+    expr: Optional[str] = None
+    agg_params: Optional[UnparsedMeasureAggregationParameters] = None
+    non_additive_dimension: Optional[Dict[str, Any]] = None  # TODO: Refine type as class?
+    agg_time_dimension: Optional[str] = None
+
+
+@dataclass
+class UnparsedDimension(dbtClassMixin, Replaceable):
+    name: str
+    description: Optional[str]
+    type: str  # actually an enum
+    is_partition: bool = False
+    type_params: Optional[Dict[str, Any]] = field(
+        default_factory=dict
+    )  # TODO: Refine type as class?
+    expr: Optional[str] = None
+    # TODO metadata: Optional[Metadata] (this would actually be the YML for the dimension)
+
+
+@dataclass
+class UnparsedSemanticModel(dbtClassMixin, Replaceable):
+    name: str
+    description: Optional[str]
+    model: str  # looks like ref(blah, blah) TODO: Further parsing for ref?
+    # node_relation:   # does not exist in YML, will be populated from "model"
+    entities: List[UnparsedEntity] = field(default_factory=list)
+    measures: List[UnparsedMeasure] = field(default_factory=list)
+    dimensions: List[UnparsedDimension] = field(default_factory=list)
+
+
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
     """Convert date to datetime (at midnight), and add local time zone if naive"""
     if d is None:
