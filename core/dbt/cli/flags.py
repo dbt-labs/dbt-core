@@ -384,6 +384,7 @@ def command_args(command: CliCommand) -> ArgsList:
         CliCommand.SNAPSHOT: cli.snapshot,
         CliCommand.SOURCE_FRESHNESS: cli.freshness,
         CliCommand.TEST: cli.test,
+        CliCommand.RETRY: cli.retry,
     }
     click_cmd: Optional[ClickCommand] = CMD_DICT.get(command, None)
     if click_cmd is None:
