@@ -540,14 +540,7 @@ class StateSelectorMethod(SelectorMethod):
     def check_unmodified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
-        if isinstance(new, (SourceDefinition, Exposure, Metric)):
-            # these all overwrite `same_contents`
-            different_contents = new.same_contents(old)  # type: ignore
-        else:
-            different_contents = new.same_contents(old, adapter_type)  # type: ignore
-
-        upstream_macro_change = self.check_macros_modified(new)
-        return different_contents or upstream_macro_change
+        return not self.check_modified_content(old, new, adapter_type)
 
     def check_modified_macros(self, old, new: SelectorTarget) -> bool:
         return self.check_macros_modified(new)
