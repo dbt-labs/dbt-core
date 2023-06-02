@@ -31,14 +31,13 @@ FLAGS_DEFAULTS = {
     "INTROSPECT": True,
 }
 
-FLAGS_NO_OPTIONS = {"show"}
-
 DEPRECATED_PARAMS = {
     "deprecated_defer": "defer",
     "deprecated_favor_state": "favor_state",
     "deprecated_print": "print",
     "deprecated_state": "state",
 }
+
 
 WHICH_KEY = "which"
 
@@ -296,9 +295,7 @@ class Flags:
 CommandParams = List[str]
 
 
-def command_params(
-    command: CliCommand, args_dict: Dict[str, Any], ignore_print_args=False
-) -> CommandParams:
+def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandParams:
     """Given a command and a dict, returns a list of strings representing
     the CLI params for that command. The order of this list is consistent with
     which flags are expected at the parent level vs the command level.
@@ -327,7 +324,7 @@ def command_params(
             continue
 
         # param was assigned from defaults and should not be included
-        if k not in cmd_args or k not in prnt_args or k in default_args:
+        if k not in (cmd_args | prnt_args) - default_args:
             continue
 
         # if the param is in parent args, it should come before the arg name
