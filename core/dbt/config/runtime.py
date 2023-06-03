@@ -271,7 +271,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         )
 
     def get_metadata(self) -> ManifestMetadata:
-        return ManifestMetadata(project_id=self.hashed_name(), adapter_type=self.credentials.type)
+        return ManifestMetadata(
+            project_name=self.project_name,
+            project_id=self.hashed_name(),
+            adapter_type=self.credentials.type,
+        )
 
     def _get_v2_config_paths(
         self,

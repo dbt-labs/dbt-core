@@ -484,6 +484,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
                 "project_id" in metadata
                 and metadata["project_id"] == "098f6bcd4621d373cade4e832627b4f6"
             )
+            assert "project_name" in metadata and metadata["project_name"] == "test"
             assert (
                 "send_anonymous_usage_stats" in metadata
                 and metadata["send_anonymous_usage_stats"] is False
