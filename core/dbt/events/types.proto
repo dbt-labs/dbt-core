@@ -2045,17 +2045,6 @@ message FinishedCleanPathsMsg {
     FinishedCleanPaths data = 2;
 }
 
-// Z016
-message OpenCommand {
-    string open_cmd = 1;
-    string profiles_dir = 2;
-}
-
-message OpenCommandMsg {
-    EventInfo info = 1;
-    OpenCommand data = 2;
-}
-
 // Z017
 message Formatting {
     string msg = 1;

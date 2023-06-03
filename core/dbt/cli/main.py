@@ -399,7 +399,6 @@ def show(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
-@p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
 @p.project_dir

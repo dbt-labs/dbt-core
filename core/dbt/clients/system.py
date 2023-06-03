@@ -323,18 +323,6 @@ def path_is_symlink(path: str) -> bool:
     return os.path.islink(path)
 
 
-def open_dir_cmd() -> str:
-    # https://docs.python.org/2/library/sys.html#sys.platform
-    if sys.platform == "win32":
-        return "start"
-
-    elif sys.platform == "darwin":
-        return "open"
-
-    else:
-        return "xdg-open"
-
-
 def _handle_posix_cwd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = "Directory does not exist"
