@@ -10,12 +10,10 @@ from dbt.graph import GraphQueue
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
 from dbt.task.compile import CompileTask
-from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
-from dbt.task.show import ShowTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 
@@ -24,26 +22,22 @@ RETRYABLE_STATUSES = {NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped, Nod
 TASK_DICT = {
     "build": BuildTask,
     "compile": CompileTask,
-    "freshness": FreshnessTask,
     "generate": GenerateTask,
-    "run": RunTask,
     "seed": SeedTask,
-    "show": ShowTask,
     "snapshot": SnapshotTask,
     "test": TestTask,
+    "run": RunTask,
     "run-operation": RunOperationTask,
 }
 
 CMD_DICT = {
     "build": CliCommand.BUILD,
     "compile": CliCommand.COMPILE,
-    "freshness": CliCommand.SOURCE_FRESHNESS,
     "generate": CliCommand.DOCS_GENERATE,
-    "run": CliCommand.RUN,
     "seed": CliCommand.SEED,
-    "show": CliCommand.SHOW,
     "snapshot": CliCommand.SNAPSHOT,
     "test": CliCommand.TEST,
+    "run": CliCommand.RUN,
     "run-operation": CliCommand.RUN_OPERATION,
 }
 
