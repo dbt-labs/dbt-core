@@ -368,10 +368,16 @@ class ManifestMetadata(BaseArtifactMetadata):
     dbt_schema_version: str = field(
         default_factory=lambda: str(WritableManifest.dbt_schema_version)
     )
+    project_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "description": "Name of the root project",
+        },
+    )
     project_id: Optional[str] = field(
         default=None,
         metadata={
-            "description": "A unique identifier for the project",
+            "description": "A unique identifier for the project, hashed from the project name",
         },
     )
     user_id: Optional[UUID] = field(
@@ -964,6 +970,23 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         if self._analysis_lookup is None:
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
+
+    def resolve_refs(
+        self, source_node: GraphMemberNode, current_project: str
+    ) -> List[MaybeNonSource]:
+        resolved_refs: List[MaybeNonSource] = []
+        for ref in source_node.refs:
+            resolved = self.resolve_ref(
+                source_node,
+                ref.name,
+                ref.package,
+                ref.version,
+                current_project,
+                source_node.package_name,
+            )
+            resolved_refs.append(resolved)
+
+        return resolved_refs
 
     # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
     # and dbt.parser.manifest._process_refs_for_node

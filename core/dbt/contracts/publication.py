@@ -45,6 +45,7 @@ class PublicModel(dbtClassMixin, ManifestOrPublicNode):
     # list of model unique_ids
     public_node_dependencies: List[str] = field(default_factory=list)
     generated_at: datetime = field(default_factory=datetime.utcnow)
+    deprecation_date: Optional[datetime] = None
 
     @property
     def is_latest_version(self) -> bool:
@@ -96,8 +97,6 @@ class PublicationMandatory:
 @dataclass
 @schema_version("publication", 1)
 class PublicationArtifact(ArtifactMixin, PublicationMandatory):
-    """This represents the <project_name>_publication.json artifact"""
-
     public_models: Dict[str, PublicModel] = field(default_factory=dict)
     metadata: PublicationMetadata = field(default_factory=PublicationMetadata)
     # list of project name strings

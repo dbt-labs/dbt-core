@@ -833,7 +833,8 @@ class ProviderContext(ManifestContext):
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
             raise MacrosSourcesUnWriteableError(node=self.model)
-        self.model.build_path = self.model.write_node(self.config.target_path, "run", payload)
+        self.model.build_path = self.model.get_target_write_path(self.config.target_path, "run")
+        self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
     @contextmember

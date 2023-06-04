@@ -233,6 +233,21 @@ sample_values = [
     types.UnpinnedRefNewVersionAvailable(
         ref_node_name="", ref_node_package="", ref_node_version="", ref_max_version=""
     ),
+    types.DeprecatedModel(model_name="", model_version="", deprecation_date=""),
+    types.DeprecatedReference(
+        model_name="",
+        ref_model_name="",
+        ref_model_package="",
+        ref_model_deprecation_date="",
+        ref_model_latest_version="",
+    ),
+    types.UpcomingReferenceDeprecation(
+        model_name="",
+        ref_model_name="",
+        ref_model_package="",
+        ref_model_deprecation_date="",
+        ref_model_latest_version="",
+    ),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),
@@ -260,6 +275,8 @@ sample_values = [
     types.RegistryResponseMissingNestedKeys(response=""),
     types.RegistryResponseExtraNestedKeys(response=""),
     types.DepsSetDownloadDirectory(path=""),
+    # P - Artifacts ===================
+    types.PublicationArtifactAvailable(),
     # Q - Node execution ======================
     types.RunningOperationCaughtError(exc=""),
     types.CompileComplete(),

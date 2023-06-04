@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
-from datetime import datetime
+import datetime
 import os
 import traceback
 from typing import (
@@ -22,6 +22,7 @@ import time
 from dbt.events.base_types import EventLevel
 import json
 import pprint
+import msgpack
 
 import dbt.exceptions
 import dbt.tracking
@@ -51,6 +52,10 @@ from dbt.events.types import (
     StateCheckVarsHash,
     Note,
     PublicationArtifactChanged,
+    PublicationArtifactAvailable,
+    DeprecatedModel,
+    DeprecatedReference,
+    UpcomingReferenceDeprecation,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
@@ -131,6 +136,45 @@ PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
 
 
+def extended_mashumaro_encoder(data):
+    return msgpack.packb(data, default=extended_msgpack_encoder, use_bin_type=True)
+
+
+def extended_msgpack_encoder(obj):
+    if type(obj) is datetime.date:
+        date_bytes = msgpack.ExtType(1, obj.isoformat().encode())
+        return date_bytes
+    elif type(obj) is datetime.datetime:
+        datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
+        return datetime_bytes
+
+    return obj
+
+
+def extended_mashumuro_decoder(data):
+    return msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False)
+
+
+def extended_msgpack_decoder(code, data):
+    if code == 1:
+        d = datetime.date.fromisoformat(data.decode())
+        return d
+    elif code == 2:
+        dt = datetime.datetime.fromisoformat(data.decode())
+        return dt
+    else:
+        return msgpack.ExtType(code, data)
+
+
+def version_to_str(version: Optional[Union[str, int]]) -> str:
+    if isinstance(version, int):
+        return str(version)
+    elif isinstance(version, str):
+        return version
+
+    return ""
+
+
 class ReparseReason(StrEnum):
     version_mismatch = "01_version_mismatch"
     file_not_found = "02_file_not_found"
@@ -199,7 +243,11 @@ class ManifestLoader:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
         self.file_diff = file_diff
-        self.publications = publications
+        self.publications: Mapping[str, PublicationArtifact] = (
+            {publication.project_name: publication for publication in publications}
+            if publications
+            else {}
+        )
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
@@ -282,7 +330,7 @@ class ManifestLoader:
             loader.track_project_load()
 
             if write_perf_info:
-                loader.write_perf_info(config.target_path)
+                loader.write_perf_info(config.project_target_path)
 
         return manifest
 
@@ -507,11 +555,49 @@ class ManifestLoader:
 
         if not skip_parsing or public_nodes_changed:
             # Write out the <project_name>_publication.json file for this project
-            write_publication_artifact(self.root_project, self.manifest)
+            log_publication_artifact(self.root_project, self.manifest)
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 
+        self.check_for_model_deprecations()
+
         return self.manifest
+
+    def check_for_model_deprecations(self):
+        for node in self.manifest.nodes.values():
+            if isinstance(node, ModelNode):
+                if (
+                    node.deprecation_date
+                    and node.deprecation_date < datetime.datetime.now().astimezone()
+                ):
+                    fire_event(
+                        DeprecatedModel(
+                            model_name=node.name,
+                            model_version=version_to_str(node.version),
+                            deprecation_date=node.deprecation_date.isoformat(),
+                        )
+                    )
+
+                resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
+                resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
+                for resolved_ref in resolved_model_refs:
+                    if resolved_ref.deprecation_date:
+
+                        if resolved_ref.deprecation_date < datetime.datetime.now().astimezone():
+                            event_cls = DeprecatedReference
+                        else:
+                            event_cls = UpcomingReferenceDeprecation
+
+                        fire_event(
+                            event_cls(
+                                model_name=node.name,
+                                ref_model_package=resolved_ref.package_name,
+                                ref_model_name=resolved_ref.name,
+                                ref_model_version=version_to_str(resolved_ref.version),
+                                ref_model_latest_version=str(resolved_ref.latest_version),
+                                ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
+                            )
+                        )
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -647,9 +733,7 @@ class ManifestLoader:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
     def write_manifest_for_partial_parse(self):
-        path = os.path.join(
-            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
-        )
+        path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
         try:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
@@ -658,7 +742,7 @@ class ManifestLoader:
                     UnableToPartialParse(reason="saved manifest contained the wrong version")
                 )
                 self.manifest.metadata.dbt_version = __version__
-            manifest_msgpack = self.manifest.to_msgpack()
+            manifest_msgpack = self.manifest.to_msgpack(extended_mashumaro_encoder)
             make_directory(os.path.dirname(path))
             with open(path, "wb") as fp:
                 fp.write(manifest_msgpack)
@@ -759,19 +843,17 @@ class ManifestLoader:
 
     def load_new_public_nodes(self):
         for project in self.manifest.project_dependencies.projects:
-            publication = (
-                next(p for p in self.publications if p.project_name == project.name)
-                if self.publications
-                else None
-            )
-            if publication:
-                publication_config = PublicationConfig.from_publication(publication)
-                self.manifest.publications[project.name] = publication_config
-                # Add to dictionary of public_nodes and save id in PublicationConfig
-                for public_node in publication.public_models.values():
-                    self.manifest.public_nodes[public_node.unique_id] = public_node
-            else:
+            try:
+                publication = self.publications[project.name]
+            except KeyError:
                 raise PublicationConfigNotFound(project=project.name)
+
+            publication_config = PublicationConfig.from_publication(publication)
+            self.manifest.publications[project.name] = publication_config
+
+            # Add to dictionary of public_nodes and save id in PublicationConfig
+            for public_node in publication.public_models.values():
+                self.manifest.public_nodes[public_node.unique_id] = public_node
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
@@ -862,9 +944,7 @@ class ManifestLoader:
         if not get_flags().PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
-        path = os.path.join(
-            self.root_project.project_root, self.root_project.target_path, PARTIAL_PARSE_FILE_NAME
-        )
+        path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
 
         reparse_reason = None
 
@@ -872,14 +952,14 @@ class ManifestLoader:
             try:
                 with open(path, "rb") as fp:
                     manifest_mp = fp.read()
-                manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore
+                manifest: Manifest = Manifest.from_msgpack(manifest_mp, decoder=extended_mashumuro_decoder)  # type: ignore
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
                 is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parsable:
                     # We don't want to have stale generated_at dates
-                    manifest.metadata.generated_at = datetime.utcnow()
+                    manifest.metadata.generated_at = datetime.datetime.utcnow()
                     # or invocation_ids
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
@@ -1676,7 +1756,7 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_docs_for_node(ctx, node)
 
 
-def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
+def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     # The manifest.json is written out in a task, so we're not writing it here
 
     # build publication metadata
@@ -1718,6 +1798,7 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
             latest_version=model.latest_version,
             public_node_dependencies=list(public_node_dependencies),
             generated_at=metadata.generated_at,
+            deprecation_date=model.deprecation_date,
         )
         public_models[unique_id] = public_model
 
@@ -1742,10 +1823,8 @@ def write_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
         public_models=public_models,
         dependencies=dependencies,
     )
-    # write out publication artifact <project_name>_publication.json
-    publication_file_name = f"{root_project.project_name}_publication.json"
-    path = os.path.join(root_project.target_path, publication_file_name)
-    publication.write(path)
+
+    fire_event(PublicationArtifactAvailable(pub_artifact=publication.to_dict()))
 
 
 def write_manifest(manifest: Manifest, target_path: str):

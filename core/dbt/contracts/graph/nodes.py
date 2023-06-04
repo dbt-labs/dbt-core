@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -192,6 +193,9 @@ class ConstraintType(str, Enum):
 class ColumnLevelConstraint(dbtClassMixin):
     type: ConstraintType
     name: Optional[str] = None
+    # expression is a user-provided field that will depend on the constraint type.
+    # It could be a predicate (check type), or a sequence sql keywords (e.g. unique type),
+    # so the vague naming of 'expression' is intended to capture this range.
     expression: Optional[str] = None
     warn_unenforced: bool = (
         True  # Warn if constraint cannot be enforced by platform but will be in DDL
@@ -344,17 +348,23 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     relation_name: Optional[str] = None
     raw_code: str = ""
 
-    def write_node(self, target_path: str, subdirectory: str, payload: str):
+    def get_target_write_path(self, target_path: str, subdirectory: str):
+        # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
             path = self.original_file_path
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
-        full_path = os.path.join(target_path, subdirectory, self.package_name, path)
+        target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
+        return target_write_path
 
-        write_file(full_path, payload)
-        return full_path
+    def write_node(self, project_root: str, compiled_path, compiled_code: str):
+        if os.path.isabs(compiled_path):
+            full_path = compiled_path
+        else:
+            full_path = os.path.join(project_root, compiled_path)
+        write_file(full_path, compiled_code)
 
     def _serialize(self):
         return self.to_dict()
@@ -568,6 +578,7 @@ class ModelNode(CompiledNode):
     constraints: List[ModelLevelConstraint] = field(default_factory=list)
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
+    deprecation_date: Optional[datetime] = None
     state_relation: Optional[StateRelation] = None
 
     @property
@@ -1415,6 +1426,7 @@ class ParsedNodePatch(ParsedPatch):
     version: Optional[NodeVersion]
     latest_version: Optional[NodeVersion]
     constraints: List[Dict[str, Any]]
+    deprecation_date: Optional[datetime]
 
 
 @dataclass

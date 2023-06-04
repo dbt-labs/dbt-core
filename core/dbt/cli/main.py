@@ -19,7 +19,6 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     CatalogArtifact,
     RunExecutionResult,
-    RunOperationResultsArtifact,
 )
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
@@ -53,8 +52,7 @@ class dbtRunnerResult:
         List[str],  # list/ls
         Manifest,  # parse
         None,  # clean, deps, init, source
-        RunExecutionResult,  # build, compile, run, seed, snapshot, test
-        RunOperationResultsArtifact,  # run-operation
+        RunExecutionResult,  # build, compile, run, seed, snapshot, test, run-operation
     ] = None
 
 
@@ -181,6 +179,7 @@ def cli(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.store_failures
 @p.target
@@ -252,6 +251,7 @@ def docs(ctx, **kwargs):
 @p.selector
 @p.empty_catalog
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -324,6 +324,7 @@ def docs_serve(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -370,6 +371,7 @@ def compile(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -478,6 +480,7 @@ def init(ctx, **kwargs):
 @p.raw_select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -547,6 +550,7 @@ def parse(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -614,6 +618,7 @@ def run_operation(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -652,6 +657,7 @@ def seed(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -694,6 +700,7 @@ def source(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -740,6 +747,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.store_failures
 @p.target

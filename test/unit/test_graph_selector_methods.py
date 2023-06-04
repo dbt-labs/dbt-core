@@ -32,6 +32,7 @@ from dbt.graph.selector_methods import (
     QualifiedNameSelectorMethod,
     TagSelectorMethod,
     GroupSelectorMethod,
+    AccessSelectorMethod,
     SourceSelectorMethod,
     PathSelectorMethod,
     FileSelectorMethod,
@@ -63,6 +64,7 @@ def make_model(
     depends_on_macros=None,
     version=None,
     latest_version=None,
+    access=None,
 ):
     if refs is None:
         refs = []
@@ -121,6 +123,7 @@ def make_model(
         checksum=FileHash.from_contents(""),
         version=version,
         latest_version=latest_version,
+        access=access,
     )
 
 
@@ -921,6 +924,22 @@ def test_select_group(manifest, view_model):
     assert not search_manifest_using_method(manifest, method, "not_my_group")
 
 
+def test_select_access(manifest, view_model):
+    change_node(
+        manifest,
+        view_model.replace(
+            access="public",
+        ),
+    )
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("access", [])
+    assert isinstance(method, AccessSelectorMethod)
+    assert method.arguments == []
+
+    assert search_manifest_using_method(manifest, method, "public") == {"view_model"}
+    assert not search_manifest_using_method(manifest, method, "private")
+
+
 def test_select_source(manifest):
     methods = MethodManager(manifest, None)
     method = methods.get_method("source", [])
@@ -1202,7 +1221,9 @@ def test_select_metric(manifest):
 def previous_state(manifest):
     writable = copy.deepcopy(manifest).writable_manifest()
     state = PreviousState(
-        path=Path("/path/does/not/exist"), current_path=Path("/path/does/not/exist")
+        state_path=Path("/path/does/not/exist"),
+        target_path=Path("/path/does/not/exist"),
+        project_root=Path("/path/does/not/exist"),
     )
     state.manifest = writable
     return state

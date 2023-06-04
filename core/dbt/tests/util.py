@@ -116,22 +116,37 @@ def run_dbt(
 # If you want the logs that are normally written to a file, you must
 # start with the "--debug" flag. The structured schema log CI test
 # will turn the logs into json, so you have to be prepared for that.
-def run_dbt_and_capture(args: List[str] = None, expect_pass=True):
+def run_dbt_and_capture(
+    args: List[str] = None,
+    expect_pass: bool = True,
+    publications: List[PublicationArtifact] = None,
+):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
-        res = run_dbt(args, expect_pass=expect_pass)
+        res = run_dbt(args, expect_pass=expect_pass, publications=publications)
         stdout = stringbuf.getvalue()
 
     finally:
         stop_capture_stdout_logs()
 
-    # Json logs will have lots of escape characters which will
-    # make checks for strings in the logs fail, so remove those.
-    if '{"code":' in stdout:
-        stdout = stdout.replace("\\", "")
-
     return res, stdout
+
+
+def get_logging_events(log_output, event_name):
+    logging_events = []
+    for log_line in log_output.split("\n"):
+        # skip empty lines
+        if len(log_line) == 0:
+            continue
+        # The adapter logging also shows up, so skip non-json lines
+        if not log_line.startswith("{"):
+            continue
+        if event_name in log_line:
+            log_dct = json.loads(log_line)
+            if log_dct["info"]["name"] == event_name:
+                logging_events.append(log_dct)
+    return logging_events
 
 
 # Used in test cases to get the manifest from the partial parsing file
