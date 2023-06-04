@@ -24,7 +24,6 @@ select *
 from data
 where
   {{ equals('x', 'y') }}
-  and expected = 'same'
 """
 
 
@@ -39,5 +38,4 @@ select *
 from data
 where
   not {{ equals('x', 'y') }}
-  and expected = 'different'
 """
