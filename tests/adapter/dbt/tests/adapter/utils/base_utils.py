@@ -17,6 +17,15 @@ where not {{ equals(actual, expected) }}
 {% endtest %}
 """
 
+macros__replace_empty_sql = """
+{% macro replace_empty(expr) -%}
+case
+    when {{ expr }} = 'EMPTY' then ''
+    else {{ expr }}
+end
+{% endmacro %}
+"""
+
 
 class BaseUtils:
     # setup
@@ -25,6 +34,7 @@ class BaseUtils:
         return {
             "equals.sql": macros__equals_sql,
             "test_assert_equal.sql": macros__test_assert_equal_sql,
+            "replace_empty.sql": macros__replace_empty_sql,
         }
 
     # make it possible to dynamically update the macro call with a namespace
