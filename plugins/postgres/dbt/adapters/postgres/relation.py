@@ -43,29 +43,22 @@ class PostgresRelation(BaseRelation):
 
         The only tracked changes for materialized views are indexes.
         """
-        config_change_collection_dict = {}
+        config_change_collection = PostgresMaterializedViewConfigChangeCollection()
 
-        existing_materialized_view_config = PostgresMaterializedViewConfig.parse_relation_results(
+        existing_materialized_view = PostgresMaterializedViewConfig.from_relation_results(
             relation_results
         )
-        existing_materialized_view = PostgresMaterializedViewConfig.from_dict(
-            existing_materialized_view_config
-        )
-
-        new_materialized_view_config = PostgresMaterializedViewConfig.parse_model_node(
+        new_materialized_view = PostgresMaterializedViewConfig.from_model_node(
             runtime_config.model
-        )
-        new_materialized_view = PostgresMaterializedViewConfig.from_dict(
-            new_materialized_view_config
         )
 
         if index_config_changes := self._get_index_config_changes(
             existing_materialized_view.indexes, new_materialized_view.indexes
         ):
-            config_change_collection_dict.update({"indexes": index_config_changes})
+            config_change_collection.indexes = index_config_changes
 
-        if config_change_collection_dict:
-            return PostgresMaterializedViewConfigChangeCollection(**config_change_collection_dict)
+        if config_change_collection.has_changes:
+            return config_change_collection
 
     def _get_index_config_changes(
         self, existing_indexes: Set[PostgresIndexConfig], new_indexes: Set[PostgresIndexConfig]

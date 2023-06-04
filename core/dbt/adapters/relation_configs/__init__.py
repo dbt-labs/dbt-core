@@ -1,14 +1,12 @@
-from dbt.adapters.relation_configs.base import (  # noqa: F401
+from dbt.adapters.relation_configs.config_base import (  # noqa: F401
     RelationConfigBase,
-    RelationConfig,
+    RelationResults,
+)
+from dbt.adapters.relation_configs.config_change import (  # noqa: F401
     RelationConfigChangeAction,
     RelationConfigChange,
-    RelationConfigChangeCollection,
-    RelationResults,
-    ValidationRule,
 )
-from dbt.adapters.relation_configs.materialized_view import (  # noqa: F401
-    MaterializedViewConfig,
-    MaterializedViewConfigChange,
-    MaterializedViewConfigChangeCollection,
+from dbt.adapters.relation_configs.config_validation import (  # noqa: F401
+    RelationConfigValidationMixin,
+    RelationConfigValidationRule,
 )

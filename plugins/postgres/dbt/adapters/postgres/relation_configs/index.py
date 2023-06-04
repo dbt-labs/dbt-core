@@ -1,15 +1,15 @@
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional, Set, Dict, Union, List, Tuple, Any
+from typing import Optional, Set, FrozenSet, Dict, Union, List
 
+from dbt.dataclass_schema import StrEnum
 from dbt.exceptions import DbtRuntimeError
-
 from dbt.adapters.relation_configs import (
-    RelationConfig,
+    RelationConfigBase,
+    RelationResults,
+    RelationConfigValidationMixin,
+    RelationConfigValidationRule,
     RelationConfigChangeAction,
     RelationConfigChange,
-    RelationResults,
-    ValidationRule,
 )
 
 
@@ -19,7 +19,7 @@ Columns = List[str]
 ModelNodeEntry = Dict[str, Union[Columns, bool, str]]
 
 
-class PostgresIndexMethod(str, Enum):
+class PostgresIndexMethod(StrEnum):
     btree = "btree"
     hash = "hash"
     gist = "gist"
@@ -32,8 +32,8 @@ class PostgresIndexMethod(str, Enum):
         return cls.btree
 
 
-@dataclass(frozen=True)
-class PostgresIndexConfig(RelationConfig):
+@dataclass(frozen=True, eq=True, unsafe_hash=True)
+class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
     """
     This config fallows the specs found here:
     https://www.postgresql.org/docs/current/sql-createindex.html
@@ -49,18 +49,32 @@ class PostgresIndexConfig(RelationConfig):
     - nulls_distinct: `True`
     """
 
-    name: Optional[str] = None
-    column_names: Optional[Set[str]] = field(default_factory=set)
-    unique: Optional[bool] = False
-    method: Optional[PostgresIndexMethod] = PostgresIndexMethod.btree
+    name: Optional[str] = field(default=None, hash=False, compare=False)
+    column_names: Optional[FrozenSet[str]] = field(default_factory=set, hash=True)
+    unique: Optional[bool] = field(default=False, hash=True)
+    method: Optional[PostgresIndexMethod] = field(default=PostgresIndexMethod.btree, hash=True)
 
-    def validation_rules(self) -> Set[ValidationRule]:
+    @property
+    def validation_rules(self) -> Set[RelationConfigValidationRule]:
         return {
-            (
-                self.column_names is not None,
-                DbtRuntimeError("Indexes require at least one column, but none were provided"),
+            RelationConfigValidationRule(
+                validation_check=self.column_names is not None,
+                validation_error=DbtRuntimeError(
+                    "Indexes require at least one column, but none were provided"
+                ),
             ),
         }
+
+    @classmethod
+    def from_dict(cls, kwargs_dict) -> "PostgresIndexConfig":
+        config_dict = {
+            "name": kwargs_dict.get("name"),
+            "method": kwargs_dict.get("method"),
+            "unique": kwargs_dict.get("unique"),
+            "column_names": frozenset(column for column in kwargs_dict.get("column_names", {})),
+        }
+        index: "PostgresIndexConfig" = super().from_dict(config_dict)  # type: ignore
+        return index
 
     @classmethod
     def parse_model_node(cls, model_node_entry: ModelNodeEntry) -> dict:
@@ -87,7 +101,8 @@ class PostgresIndexConfig(RelationConfig):
         }
         return index_config
 
-    def as_user_config(self):
+    @property
+    def as_node_config(self) -> dict:
         """
         Returns: a dictionary that can be passed into `get_create_index_sql()`
         """
@@ -98,31 +113,9 @@ class PostgresIndexConfig(RelationConfig):
         }
         return config
 
-    def __hash__(self) -> int:
-        return hash(
-            # don't include the name for hashing since we generate a time-specific name for indexes in Postgres
-            (
-                frozenset(self.column_names),
-                self.unique,
-                self.method,
-            )
-        )
 
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, PostgresIndexConfig):
-            # don't include the name for equality since we generate a time-specific name for indexes in Postgres
-            return all(
-                {
-                    self.column_names == other.column_names,
-                    self.unique == other.unique,
-                    self.method == other.method,
-                }
-            )
-        return False
-
-
-@dataclass(frozen=True)
-class PostgresIndexChange(RelationConfigChange):
+@dataclass(frozen=True, eq=True, unsafe_hash=True)
+class PostgresIndexChange(RelationConfigChange, RelationConfigValidationMixin):
     """
     Example of an index change:
     {
@@ -147,28 +140,34 @@ class PostgresIndexChange(RelationConfigChange):
 
     context: PostgresIndexConfig = None
 
+    @property
     def requires_full_refresh(self) -> bool:
         return False
 
-    def validation_rules(self) -> Set[Union[Tuple[bool, DbtRuntimeError], bool]]:
+    @property
+    def validation_rules(self) -> Set[RelationConfigValidationRule]:
         return {
-            (
-                self.action
+            RelationConfigValidationRule(
+                validation_check=self.action
                 in {RelationConfigChangeAction.create, RelationConfigChangeAction.drop},
-                DbtRuntimeError(
+                validation_error=DbtRuntimeError(
                     "Invalid operation, only `drop` and `create` changes are supported for indexes."
                 ),
             ),
-            (
-                not (self.action == RelationConfigChangeAction.drop and self.context.name is None),
-                DbtRuntimeError("Invalid operation, attempting to drop an index with no name."),
+            RelationConfigValidationRule(
+                validation_check=not (
+                    self.action == RelationConfigChangeAction.drop and self.context.name is None
+                ),
+                validation_error=DbtRuntimeError(
+                    "Invalid operation, attempting to drop an index with no name."
+                ),
             ),
-            (
-                not (
+            RelationConfigValidationRule(
+                validation_check=not (
                     self.action == RelationConfigChangeAction.create
                     and self.context.column_names == set()
                 ),
-                DbtRuntimeError(
+                validation_error=DbtRuntimeError(
                     "Invalid operations, attempting to create an index with no columns."
                 ),
             ),
