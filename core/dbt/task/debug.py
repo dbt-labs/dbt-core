@@ -60,6 +60,7 @@ documentation:
 
 FILE_NOT_FOUND = "file not found"
 
+
 SubtaskStatus = namedtuple(
     "SubtaskStatus", ["log_msg", "run_status", "details", "summary_message"]
 )
@@ -128,6 +129,7 @@ class DebugTask(BaseTask):
         load_project_status = self._load_project()
         if self.args.connection:
             fire_event(DebugCmdOut(msg="Skipping steps before connection verification"))
+            dependencies_statuses = []
         else:
             # this job's status not logged since already accounted for in _load_* commands
             self.test_configuration(load_profile_status.log_msg, load_project_status.log_msg)
@@ -243,9 +245,9 @@ class DebugTask(BaseTask):
         if self.raw_profile_data:
             profiles = [k for k in self.raw_profile_data if k != "config"]
             if project_profile is None:
-                summary_message = "Could not load dbt_project.yml"
+                summary_message = "Could not load dbt_project.yml\n"
             elif len(profiles) == 0:
-                summary_message = "The profiles.yml has no profiles"
+                summary_message = "The profiles.yml has no profiles\n"
             elif len(profiles) == 1:
                 summary_message = ONLY_PROFILE_MESSAGE.format(profiles[0])
             else:
