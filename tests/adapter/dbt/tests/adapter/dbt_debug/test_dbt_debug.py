@@ -51,6 +51,13 @@ class TestDebugPostgres(BaseDebug):
         run_dbt(["debug"])
         assert "ERROR" not in self.capsys.readouterr().out
 
+    def test_connection_flag(self, project):
+        run_dbt(["debug", "--connection"])
+
+        run_dbt(["debug", "--connection", "--target", "NONE"], expect_pass=False)
+
+        run_dbt(["debug", "--connection", "--profiles-dir", "NONE"], expect_pass=False)
+
     def test_nopass(self, project):
         run_dbt(["debug", "--target", "nopass"], expect_pass=False)
         self.assertGotValue(re.compile(r"\s+profiles\.yml file"), "ERROR invalid")
