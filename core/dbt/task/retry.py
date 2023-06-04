@@ -77,13 +77,14 @@ class RetryTask(ConfiguredTask):
 
         cli_command = CMD_DICT.get(self.previous_command_name)
 
-        bad_args = {
+        # Remove these args when their default values are present, otherwise they'll raise an exception
+        args_to_remove = {
             "show": lambda x: True,
             "resource_types": lambda x: x == [],
             "warn_error_options": lambda x: x == {"exclude": [], "include": []},
         }
 
-        for k, v in bad_args.items():
+        for k, v in args_to_remove.items():
             if k in self.previous_args and v(self.previous_args[k]):
                 del self.previous_args[k]
 

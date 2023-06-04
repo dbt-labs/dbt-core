@@ -1,8 +1,8 @@
 import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
-from dbt.exceptions import DbtRuntimeError
-from dbt.tests.util import run_dbt, write_file
+from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
+from dbt.tests.util import run_dbt, write_file, rm_file
 from tests.functional.retry.fixtures import (
     models__sample_model,
     models__union_model,
@@ -157,3 +157,15 @@ class TestRetry:
         result = run_dbt(["retry", "--fail-fast"], expect_pass=False)
         assert result.status == RunStatus.Error
         assert result.node.name == "sample_model"
+
+    def test_removed_file(self, project):
+        run_dbt(["build"], expect_pass=False)
+
+        rm_file("models", "sample_model.sql")
+
+        with pytest.raises(
+            TargetNotFoundError, match="depends on a node named 'sample_model' which was not found"
+        ):
+            run_dbt(["retry"], expect_pass=False)
+
+        write_file(models__sample_model, "models", "sample_model.sql")
