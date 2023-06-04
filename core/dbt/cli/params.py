@@ -484,10 +484,10 @@ target_path = click.option(
     type=click.Path(),
 )
 
-test_connection_only = click.option(
-    "--test-connection-only",
+debug_connection = click.option(
+    "--connection",
     envvar=None,
-    help="Test the connection to the database, then exit, without dependency checks.",
+    help="Test the connection to the target database independent of dependency checks.",
     is_flag=True,
 )
 

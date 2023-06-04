@@ -401,11 +401,11 @@ def show(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
+@p.debug_connection
 @p.profile
 @p.profiles_dir_exists_false
 @p.project_dir
 @p.target
-@p.test_connection_only
 @p.vars
 @p.version_check
 @requires.postflight
