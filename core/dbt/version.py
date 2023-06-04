@@ -222,7 +222,6 @@ def _get_adapter_plugin_names() -> Iterator[str]:
     if spec is None or spec.submodule_search_locations is None:
         return
 
-    print(spec.submodule_search_locations)
     for adapters_path in spec.submodule_search_locations:
         version_glob = os.path.join(adapters_path, "*", "__version__.py")
         for version_path in glob.glob(version_glob):
@@ -233,6 +232,5 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-# __version__ = "1.6.0b2"
 __version__ = "1.6.0b2"
 installed = get_installed_version()
