@@ -1318,6 +1318,9 @@ class WritableManifest(ArtifactMixin):
     public_nodes: Mapping[UniqueID, PublicModel] = field(
         metadata=dict(description=("The public models used in the dbt project"))
     )
+    semantic_models: Mapping[UniqueID, SemanticModel] = field(
+        metadata=dict(description=("The semantic models defined in the dbt project"))
+    )
     metadata: ManifestMetadata = field(
         metadata=dict(
             description="Metadata about the manifest",

@@ -283,7 +283,7 @@ class TestPreviousVersionState:
     # The actual test method. Run `dbt list --select state:modified --state ...`
     # once for each past manifest version. They all have the same content, but different
     # schema/structure, only some of which are forward-compatible with the
-    # current WriteableManifest class.
+    # current WritableManifest class.
     def compare_previous_state(
         self,
         project,
