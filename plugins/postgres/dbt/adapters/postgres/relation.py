@@ -11,7 +11,7 @@ from dbt.exceptions import DbtRuntimeError
 
 from dbt.adapters.postgres.relation_configs import (
     PostgresIndexConfig,
-    PostgresIndexChange,
+    PostgresIndexConfigChange,
     PostgresMaterializedViewConfig,
     PostgresMaterializedViewConfigChangeCollection,
 )
@@ -62,7 +62,7 @@ class PostgresRelation(BaseRelation):
 
     def _get_index_config_changes(
         self, existing_indexes: Set[PostgresIndexConfig], new_indexes: Set[PostgresIndexConfig]
-    ) -> Set[PostgresIndexChange]:
+    ) -> Set[PostgresIndexConfigChange]:
         """
         Get the index updates that will occur as a result of a new run
 
@@ -76,15 +76,15 @@ class PostgresRelation(BaseRelation):
         Returns: a set of index updates in the form {"action": "drop/create", "context": <IndexConfig>}
         """
         drop_changes = set(
-            PostgresIndexChange.from_dict(
+            PostgresIndexConfigChange.from_dict(
                 {"action": RelationConfigChangeAction.drop, "context": index}
             )
             for index in existing_indexes.difference(new_indexes)
         )
         create_changes = set(
-            PostgresIndexChange.from_dict(
+            PostgresIndexConfigChange.from_dict(
                 {"action": RelationConfigChangeAction.create, "context": index}
             )
             for index in new_indexes.difference(existing_indexes)
         )
-        return drop_changes.union(create_changes)
+        return set().union(drop_changes, create_changes)

@@ -66,56 +66,56 @@ class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
         }
 
     @classmethod
-    def from_dict(cls, kwargs_dict) -> "PostgresIndexConfig":
-        config_dict = {
-            "name": kwargs_dict.get("name"),
-            "method": kwargs_dict.get("method"),
-            "unique": kwargs_dict.get("unique"),
-            "column_names": frozenset(column for column in kwargs_dict.get("column_names", {})),
+    def from_dict(cls, config_dict) -> "PostgresIndexConfig":
+        kwargs_dict = {
+            "name": config_dict.get("name"),
+            "method": config_dict.get("method"),
+            "unique": config_dict.get("unique"),
+            "column_names": frozenset(column for column in config_dict.get("column_names", {})),
         }
-        index: "PostgresIndexConfig" = super().from_dict(config_dict)  # type: ignore
+        index: "PostgresIndexConfig" = super().from_dict(kwargs_dict)  # type: ignore
         return index
 
     @classmethod
     def parse_model_node(cls, model_node_entry: ModelNodeEntry) -> dict:
-        kwargs = {
+        config_dict = {
             "unique": model_node_entry.get("unique"),
             "method": model_node_entry.get("type"),
         }
 
         if column_names := model_node_entry.get("columns", []):
             # TODO: include the QuotePolicy instead of defaulting to lower()
-            kwargs.update({"column_names": set(column.lower() for column in column_names)})
+            config_dict.update({"column_names": set(column.lower() for column in column_names)})
 
-        return kwargs
+        return config_dict
 
     @classmethod
     def parse_relation_results(cls, relation_results: RelationResults) -> dict:
         index = relation_results.get("base", {})
-        index_config = {
+        config_dict = {
             "name": index.get("name"),
             # we shouldn't have to adjust the values from the database for the QuotePolicy
             "column_names": set(index.get("column_names", "").split(",")),
             "unique": index.get("unique"),
             "method": index.get("method"),
         }
-        return index_config
+        return config_dict
 
     @property
     def as_node_config(self) -> dict:
         """
         Returns: a dictionary that can be passed into `get_create_index_sql()`
         """
-        config = {
+        node_config = {
             "columns": list(self.column_names),
             "unique": self.unique,
             "type": self.method.value,
         }
-        return config
+        return node_config
 
 
 @dataclass(frozen=True, eq=True, unsafe_hash=True)
-class PostgresIndexChange(RelationConfigChange, RelationConfigValidationMixin):
+class PostgresIndexConfigChange(RelationConfigChange, RelationConfigValidationMixin):
     """
     Example of an index change:
     {
@@ -138,7 +138,7 @@ class PostgresIndexChange(RelationConfigChange, RelationConfigValidationMixin):
     }
     """
 
-    context: PostgresIndexConfig = None
+    context: PostgresIndexConfig
 
     @property
     def requires_full_refresh(self) -> bool:

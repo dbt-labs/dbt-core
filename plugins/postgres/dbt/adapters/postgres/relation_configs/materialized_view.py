@@ -10,7 +10,10 @@ from dbt.adapters.relation_configs import (
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import DbtRuntimeError
 
-from dbt.adapters.postgres.relation_configs.index import PostgresIndexConfig, PostgresIndexChange
+from dbt.adapters.postgres.relation_configs.index import (
+    PostgresIndexConfig,
+    PostgresIndexConfigChange,
+)
 
 
 @dataclass(frozen=True, eq=True, unsafe_hash=True)
@@ -47,15 +50,15 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         }
 
     @classmethod
-    def from_dict(cls, kwargs_dict) -> "PostgresMaterializedViewConfig":
-        config_dict = {
-            "table_name": kwargs_dict.get("table_name"),
-            "query": kwargs_dict.get("query"),
+    def from_dict(cls, config_dict: dict) -> "PostgresMaterializedViewConfig":
+        kwargs_dict = {
+            "table_name": config_dict.get("table_name"),
+            "query": config_dict.get("query"),
             "indexes": {
-                PostgresIndexConfig.from_dict(index) for index in kwargs_dict.get("indexes", {})
+                PostgresIndexConfig.from_dict(index) for index in config_dict.get("indexes", {})
             },
         }
-        materialized_view: "PostgresMaterializedViewConfig" = super().from_dict(config_dict)  # type: ignore
+        materialized_view: "PostgresMaterializedViewConfig" = super().from_dict(kwargs_dict)  # type: ignore
         return materialized_view
 
     @classmethod
@@ -69,7 +72,7 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         """
         Postgres-specific implementation of `RelationConfig.from_model_node()` for materialized views
         """
-        kwargs = {
+        config_dict = {
             "table_name": model_node.identifier,
             "query": model_node.compiled_code,
         }
@@ -77,9 +80,9 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         # create index objects for each index found in the config
         if indexes := model_node.config.extra.get("indexes"):
             index_configs = [PostgresIndexConfig.parse_model_node(index) for index in indexes]
-            kwargs.update({"indexes": index_configs})
+            config_dict.update({"indexes": index_configs})
 
-        return kwargs
+        return config_dict
 
     @classmethod
     def from_relation_results(
@@ -95,7 +98,7 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         Postgres-specific implementation of `RelationConfig.from_relation_results()` for materialized views
         """
         base_config = relation_results.get("base", {})
-        kwargs = {
+        config_dict = {
             "table_name": base_config.get("table_name"),
             "query": base_config.get("query"),
         }
@@ -106,14 +109,14 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
                 PostgresIndexConfig.parse_relation_results({"base": index})
                 for index in indexes.rows
             ]
-            kwargs.update({"indexes": index_configs})
+            config_dict.update({"indexes": index_configs})
 
-        return kwargs
+        return config_dict
 
 
 @dataclass
 class PostgresMaterializedViewConfigChangeCollection:
-    indexes: Optional[Set[PostgresIndexChange]] = None
+    indexes: Optional[Set[PostgresIndexConfigChange]] = None
 
     @property
     def requires_full_refresh(self) -> bool:

@@ -1,6 +1,6 @@
 from dbt.adapters.postgres.relation_configs.index import (  # noqa: F401
     PostgresIndexConfig,
-    PostgresIndexChange,
+    PostgresIndexConfigChange,
 )
 from dbt.adapters.postgres.relation_configs.materialized_view import (  # noqa: F401
     PostgresMaterializedViewConfig,
