@@ -69,11 +69,17 @@ from tests.functional.partial_parsing.fixtures import (
     groups_schema_yml_one_group_model_in_group2,
     groups_schema_yml_two_groups_private_orders_valid_access,
     groups_schema_yml_two_groups_private_orders_invalid_access,
+    dependencies_yml,
+    empty_dependencies_yml,
+    marketing_pub_json,
 )
 
 from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.contracts.publication import PublicationArtifact
+
+import json
 import re
 import os
 
@@ -804,3 +810,26 @@ class TestGroups:
         )
         with pytest.raises(ParsingError):
             results = run_dbt(["--partial-parse", "run"])
+
+
+class TestDependencies:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"orders.sql": orders_sql}
+
+    @pytest.fixture(scope="class")
+    def marketing_publication(self):
+        return PublicationArtifact.from_dict(json.loads(marketing_pub_json))
+
+    def test_dependencies(self, project, marketing_publication):
+        # initial run with dependencies
+        write_file(dependencies_yml, "dependencies.yml")
+        run_dbt(["run"], publications=[marketing_publication])
+        manifest = get_manifest(project.project_root)
+        assert len(manifest.project_dependencies.projects) == 1
+
+        # remove dependencies
+        write_file(empty_dependencies_yml, "dependencies.yml")
+        run_dbt(["run"], publications=[marketing_publication])
+        manifest = get_manifest(project.project_root)
+        assert len(manifest.project_dependencies.projects) == 0
