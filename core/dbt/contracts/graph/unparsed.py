@@ -594,18 +594,53 @@ class MetricTime(dbtClassMixin, Mergeable):
 
 
 @dataclass
+class UnparsedWhereFilter(dbtClassMixin, Replaceable):
+    where_sql_template: str
+
+
+@dataclass
+class UnparsedMetricInputMeasure(dbtClassMixin, Replaceable):
+    name: str
+    filter: Optional[UnparsedWhereFilter] = None
+    alias: Optional[str] = None
+
+
+@dataclass
+class UnparsedMetricTimeWindow(dbtClassMixin, Replaceable):
+    count: int
+    granularity: str  # an TimeGranularity Enum
+
+
+@dataclass
+class UnparsedMetricInput(dbtClassMixin, Replaceable):
+    name: str
+    filter: Optional[UnparsedWhereFilter] = None
+    alias: Optional[str] = None
+    offset_window: Optional[UnparsedMetricTimeWindow] = None
+    offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
+
+
+@dataclass
+class UnparsedMetricTypeParams(dbtClassMixin, Replaceable):
+    measure: Optional[UnparsedMetricInputMeasure] = None
+    measures: Optional[Sequence[UnparsedMetricInputMeasure]] = None
+    numerator: Optional[UnparsedMetricInputMeasure] = None
+    denominator: Optional[UnparsedMetricInputMeasure] = None
+    expr: Optional[str] = None
+    window: Optional[UnparsedMetricTimeWindow] = None
+    grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
+    metrics: Optional[Sequence[UnparsedMetricInput]] = None
+
+
+@dataclass
 class UnparsedMetric(dbtClassMixin, Replaceable):
     name: str
     label: str
-    calculation_method: str
-    expression: str
+    type: str
+    type_params: UnparsedMetricTypeParams
     description: str = ""
-    timestamp: Optional[str] = None
-    time_grains: List[str] = field(default_factory=list)
-    dimensions: List[str] = field(default_factory=list)
-    window: Optional[MetricTime] = None
-    model: Optional[str] = None
-    filters: List[MetricFilter] = field(default_factory=list)
+    filter: Optional[UnparsedWhereFilter] = None
+    # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
@@ -631,22 +666,6 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
                 raise ParsingError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
-
-        if data.get("timestamp") is None and data.get("time_grains") is not None:
-            raise ValidationError(
-                f"The metric '{data['name']} has time_grains defined but is missing a timestamp dimension."
-            )
-
-        if data.get("timestamp") is None and data.get("window") is not None:
-            raise ValidationError(
-                f"The metric '{data['name']} has a window defined but is missing a timestamp dimension."
-            )
-
-        if data.get("model") is None and data.get("calculation_method") != "derived":
-            raise ValidationError("Non-derived metrics require a 'model' property")
-
-        if data.get("model") is not None and data.get("calculation_method") == "derived":
-            raise ValidationError("Derived metrics cannot have a 'model' property")
 
 
 @dataclass
