@@ -703,7 +703,7 @@ class NoAdaptersAvailableError(DbtRuntimeError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/connect-adapters#install-using-the-cli"
         return msg
 
 
