@@ -169,3 +169,11 @@ class TestRetry:
             run_dbt(["retry"], expect_pass=False)
 
         write_file(models__sample_model, "models", "sample_model.sql")
+
+    def test_removed_file_leaf_node(self, project):
+        write_file(models__sample_model, "models", "third_model.sql")
+        run_dbt(["build"], expect_pass=False)
+
+        rm_file("models", "third_model.sql")
+        with pytest.raises(ValueError, match="Couldn't find model 'model.test.third_model'"):
+            run_dbt(["retry"], expect_pass=False)
