@@ -83,7 +83,7 @@ class RelationUpdate:
         )
         self.default_updater = MacroGenerator(default_macro, default_macro_context)
 
-        package_names = {macro.package_name for macro in manifest.macros.values()}
+        package_names = config.dependencies.keys() if config.dependencies else {}
         package_updaters = {}
         for package_name in package_names:
             package_macro = manifest.find_generate_macro_by_name(
