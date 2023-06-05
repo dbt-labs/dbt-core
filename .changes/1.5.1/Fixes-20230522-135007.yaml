@@ -1,6 +1,0 @@
-kind: Fixes
-body: Stringify flag paths for Jinja context
-time: 2023-05-22T13:50:07.897354-04:00
-custom:
-  Author: gshank
-  Issue: "7495"

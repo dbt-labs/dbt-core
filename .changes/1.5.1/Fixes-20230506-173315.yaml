@@ -1,6 +1,0 @@
-kind: Fixes
-body: Back-compat for previous return type of 'collect_freshness' macro
-time: 2023-05-06T17:33:15.104953+02:00
-custom:
-  Author: jtcohen6
-  Issue: "7489"

@@ -1,6 +1,0 @@
-kind: Fixes
-body: Do not rewrite manifest.json during 'docs serve' command
-time: 2023-05-08T14:25:18.376379-04:00
-custom:
-  Author: jtcohen6
-  Issue: "7553"

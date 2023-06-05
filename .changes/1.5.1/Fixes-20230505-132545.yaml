@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix inverted `--print/--no-print` flag
-time: 2023-05-05T13:25:45.949997-06:00
-custom:
-  Author: dbeatty10 thomasgjerdekog
-  Issue: "7517"
