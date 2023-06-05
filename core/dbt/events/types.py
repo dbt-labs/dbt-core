@@ -2065,6 +2065,18 @@ class FinishedCleanPaths(InfoLevel):
         return "Finished cleaning all paths."
 
 
+class OpenCommand(InfoLevel):
+    def code(self):
+        return "Z016"
+
+    def message(self) -> str:
+        msg = f"""To view your profiles.yml file, run:
+
+{self.open_cmd} {self.profiles_dir}"""
+
+        return msg
+
+
 # We use events to create console output, but also think of them as a sequence of important and
 # meaningful occurrences to be used for debugging and monitoring. The Formatting event helps eases
 # the tension between these two goals by allowing empty lines, heading separators, and other

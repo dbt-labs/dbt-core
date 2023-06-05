@@ -381,6 +381,7 @@ sample_values = [
     types.ConfirmCleanPath(path=""),
     types.ProtectedCleanPath(path=""),
     types.FinishedCleanPaths(),
+    types.OpenCommand(open_cmd="", profiles_dir=""),
     types.RunResultWarning(resource_type="", node_name="", path=""),
     types.RunResultFailure(resource_type="", node_name="", path=""),
     types.StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),

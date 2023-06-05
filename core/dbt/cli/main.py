@@ -402,6 +402,7 @@ def show(ctx, **kwargs):
 @cli.command("debug")
 @click.pass_context
 @p.debug_connection
+@p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
 @p.project_dir

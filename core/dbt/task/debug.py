@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any, List, Tuple
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
+    OpenCommand,
     DebugCmdOut,
     DebugCmdResult,
 )
@@ -104,8 +105,15 @@ class DebugTask(BaseTask):
             return None
         return self.project.profile_name
 
+    def path_info(self):
+        open_cmd = dbt.clients.system.open_dir_cmd()
+        fire_event(OpenCommand(open_cmd=open_cmd, profiles_dir=self.profiles_dir))
+
     def run(self):
-        # Basic info
+        if self.args.config_dir:
+            self.path_info()
+            return True
+
         version = get_installed_version().to_version_string(skip_matcher=True)
         fire_event(DebugCmdOut(msg="dbt version: {}".format(version)))
         fire_event(DebugCmdOut(msg="python version: {}".format(sys.version.split()[0])))

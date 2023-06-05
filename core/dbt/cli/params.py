@@ -40,6 +40,13 @@ compile_docs = click.option(
     default=True,
 )
 
+config_dir = click.option(
+    "--config-dir",
+    envvar=None,
+    help="Show the configured location for the profiles.yml file and exit",
+    is_flag=True,
+)
+
 debug = click.option(
     "--debug/--no-debug",
     "-d/ ",
