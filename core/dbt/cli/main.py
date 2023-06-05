@@ -19,7 +19,6 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     CatalogArtifact,
     RunExecutionResult,
-    RunOperationResultsArtifact,
 )
 from dbt.events.base_types import EventMsg
 from dbt.task.build import BuildTask
@@ -53,8 +52,7 @@ class dbtRunnerResult:
         List[str],  # list/ls
         Manifest,  # parse
         None,  # clean, deps, init, source
-        RunExecutionResult,  # build, compile, run, seed, snapshot, test
-        RunOperationResultsArtifact,  # run-operation
+        RunExecutionResult,  # build, compile, run, seed, snapshot, test, run-operation
     ] = None
 
 
@@ -77,6 +75,7 @@ class dbtRunner:
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
+                "_publications": kwargs.get("publications"),
             }
 
             for key, value in kwargs.items():
@@ -180,6 +179,7 @@ def cli(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.store_failures
 @p.target
@@ -213,6 +213,7 @@ def build(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -250,6 +251,7 @@ def docs(ctx, **kwargs):
 @p.selector
 @p.empty_catalog
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -284,19 +286,18 @@ def docs_generate(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
 @requires.profile
 @requires.project
 @requires.runtime_config
-@requires.manifest
 def docs_serve(ctx, **kwargs):
     """Serve the documentation website for your project"""
     task = ServeTask(
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
-        ctx.obj["manifest"],
     )
 
     results = task.run()
@@ -323,6 +324,7 @@ def docs_serve(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -369,6 +371,7 @@ def compile(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -424,7 +427,7 @@ def debug(ctx, **kwargs):
 @cli.command("deps")
 @click.pass_context
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.target
 @p.vars
@@ -446,7 +449,7 @@ def deps(ctx, **kwargs):
 # for backwards compatibility, accept 'project_name' as an optional positional argument
 @click.argument("project_name", required=False)
 @p.profile
-@p.profiles_dir
+@p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
 @p.target
@@ -477,8 +480,10 @@ def init(ctx, **kwargs):
 @p.raw_select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -545,6 +550,7 @@ def parse(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -579,6 +585,7 @@ def run(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.target
+@p.target_path
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -611,6 +618,7 @@ def run_operation(ctx, **kwargs):
 @p.selector
 @p.show
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -649,6 +657,7 @@ def seed(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
 @p.target_path
@@ -691,8 +700,10 @@ def source(ctx, **kwargs):
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.target
+@p.target_path
 @p.threads
 @p.vars
 @requires.postflight
@@ -736,6 +747,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.select
 @p.selector
 @p.state
+@p.defer_state
 @p.deprecated_state
 @p.store_failures
 @p.target

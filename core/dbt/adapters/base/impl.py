@@ -71,7 +71,7 @@ from dbt.adapters.base.relation import (
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.base import Credentials
 from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
-
+from dbt import deprecations
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
 FRESHNESS_MACRO_NAME = "collect_freshness"
@@ -274,7 +274,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
+        self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
     ) -> Tuple[AdapterResponse, agate.Table]:
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
@@ -283,10 +283,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
+        :param Optional[int] limit: If set, only fetch n number of rows
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
+        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch, limit=limit)
 
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
@@ -1104,7 +1105,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         loaded_at_field: str,
         filter: Optional[str],
         manifest: Optional[Manifest] = None,
-    ) -> Tuple[AdapterResponse, Dict[str, Any]]:
+    ) -> Tuple[Optional[AdapterResponse], Dict[str, Any]]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
             "source": source,
@@ -1113,8 +1114,19 @@ class BaseAdapter(metaclass=AdapterMeta):
         }
 
         # run the macro
+        # in older versions of dbt-core, the 'collect_freshness' macro returned the table of results directly
+        # starting in v1.5, by default, we return both the table and the adapter response (metadata about the query)
+        result: Union[
+            AttrDict,  # current: contains AdapterResponse + agate.Table
+            agate.Table,  # previous: just table
+        ]
         result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
-        adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
+        if isinstance(result, agate.Table):
+            deprecations.warn("collect-freshness-return-signature")
+            adapter_response = None
+            table = result
+        else:
+            adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
@@ -1307,20 +1319,26 @@ class BaseAdapter(metaclass=AdapterMeta):
     def render_column_constraint(cls, constraint: ColumnLevelConstraint) -> Optional[str]:
         """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
         rendering."""
-        if constraint.type == ConstraintType.check and constraint.expression:
-            return f"check {constraint.expression}"
+        constraint_expression = constraint.expression or ""
+
+        rendered_column_constraint = None
+        if constraint.type == ConstraintType.check and constraint_expression:
+            rendered_column_constraint = f"check ({constraint_expression})"
         elif constraint.type == ConstraintType.not_null:
-            return "not null"
+            rendered_column_constraint = f"not null {constraint_expression}"
         elif constraint.type == ConstraintType.unique:
-            return "unique"
+            rendered_column_constraint = f"unique {constraint_expression}"
         elif constraint.type == ConstraintType.primary_key:
-            return "primary key"
-        elif constraint.type == ConstraintType.foreign_key:
-            return "foreign key"
-        elif constraint.type == ConstraintType.custom and constraint.expression:
-            return constraint.expression
-        else:
-            return None
+            rendered_column_constraint = f"primary key {constraint_expression}"
+        elif constraint.type == ConstraintType.foreign_key and constraint_expression:
+            rendered_column_constraint = f"references {constraint_expression}"
+        elif constraint.type == ConstraintType.custom and constraint_expression:
+            rendered_column_constraint = constraint_expression
+
+        if rendered_column_constraint:
+            rendered_column_constraint = rendered_column_constraint.strip()
+
+        return rendered_column_constraint
 
     @available
     @classmethod
@@ -1387,13 +1405,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         constraint_prefix = f"constraint {constraint.name} " if constraint.name else ""
         column_list = ", ".join(constraint.columns)
         if constraint.type == ConstraintType.check and constraint.expression:
-            return f"{constraint_prefix}check {constraint.expression}"
+            return f"{constraint_prefix}check ({constraint.expression})"
         elif constraint.type == ConstraintType.unique:
-            return f"{constraint_prefix}unique ({column_list})"
+            constraint_expression = f" {constraint.expression}" if constraint.expression else ""
+            return f"{constraint_prefix}unique{constraint_expression} ({column_list})"
         elif constraint.type == ConstraintType.primary_key:
-            return f"{constraint_prefix}primary key ({column_list})"
-        elif constraint.type == ConstraintType.foreign_key:
-            return f"{constraint_prefix}foreign key ({column_list})"
+            constraint_expression = f" {constraint.expression}" if constraint.expression else ""
+            return f"{constraint_prefix}primary key{constraint_expression} ({column_list})"
+        elif constraint.type == ConstraintType.foreign_key and constraint.expression:
+            return f"{constraint_prefix}foreign key ({column_list}) references {constraint.expression}"
         elif constraint.type == ConstraintType.custom and constraint.expression:
             return f"{constraint_prefix}{constraint.expression}"
         else:

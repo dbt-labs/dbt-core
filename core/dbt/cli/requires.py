@@ -240,12 +240,14 @@ def manifest(*args0, write=True, write_perf_info=False):
             # a manifest has already been set on the context, so don't overwrite it
             if ctx.obj.get("manifest") is None:
                 manifest = ManifestLoader.get_full_manifest(
-                    runtime_config, write_perf_info=write_perf_info
+                    runtime_config,
+                    write_perf_info=write_perf_info,
+                    publications=ctx.obj.get("_publications"),
                 )
 
                 ctx.obj["manifest"] = manifest
                 if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, ctx.obj["runtime_config"].target_path)
+                    write_manifest(manifest, ctx.obj["runtime_config"].project_target_path)
 
             return func(*args, **kwargs)
 

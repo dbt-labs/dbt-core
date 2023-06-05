@@ -21,6 +21,12 @@ from tests.functional.defer_state.fixtures import (
     contract_schema_yml,
     modified_contract_schema_yml,
     disabled_contract_schema_yml,
+    constraint_schema_yml,
+    modified_column_constraint_schema_yml,
+    modified_model_constraint_schema_yml,
+    table_model_now_view_sql,
+    table_model_now_incremental_sql,
+    view_model_now_table_sql,
 )
 
 
@@ -315,6 +321,122 @@ class TestChangedContract(BaseModifiedState):
         write_file(disabled_contract_schema_yml, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+class TestChangedConstraint(BaseModifiedState):
+    def test_changed_constraint(self, project):
+        self.run_and_save_state()
+
+        # update constraint for table_model
+        write_file(constraint_schema_yml, "models", "schema.yml")
+
+        # This will find the table_model node modified both through adding constraint
+        # and by a non-breaking change to contract: true
+        results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+        manifest = get_manifest(project.project_root)
+        model_unique_id = "model.test.table_model"
+        model = manifest.nodes[model_unique_id]
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
+        assert model.unrendered_config == expected_unrendered_config
+
+        # Run it again with "state:modified:contract", still finds modified due to contract: true
+        results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        first_contract_checksum = model.contract.checksum
+        assert first_contract_checksum
+        # save a new state
+        self.copy_state()
+
+        # This should raise because a column level constraint was removed
+        write_file(modified_column_constraint_schema_yml, "models", "schema.yml")
+        # we don't have a way to know this failed unless we have a previous state to refer to, so the run succeeds
+        results = run_dbt(["run"])
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
+        with pytest.raises(ContractBreakingChangeError):
+            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # This should raise because a model level constraint was removed (primary_key on id)
+        write_file(modified_model_constraint_schema_yml, "models", "schema.yml")
+        # we don't have a way to know this failed unless we have a previous state to refer to, so the run succeeds
+        results = run_dbt(["run"])
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
+        with pytest.raises(ContractBreakingChangeError):
+            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+class TestChangedMaterializationConstraint(BaseModifiedState):
+    def test_changed_materialization(self, project):
+        self.run_and_save_state()
+
+        # update constraint for table_model
+        write_file(constraint_schema_yml, "models", "schema.yml")
+
+        # This will find the table_model node modified both through adding constraint
+        # and by a non-breaking change to contract: true
+        results = run_dbt(["run", "--models", "state:modified", "--state", "./state"])
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+        manifest = get_manifest(project.project_root)
+        model_unique_id = "model.test.table_model"
+        model = manifest.nodes[model_unique_id]
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
+        assert model.unrendered_config == expected_unrendered_config
+
+        # Run it again with "state:modified:contract", still finds modified due to contract: true
+        results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        first_contract_checksum = model.contract.checksum
+        assert first_contract_checksum
+        # save a new state
+        self.copy_state()
+
+        # This should raise because materialization changed from table to view
+        write_file(table_model_now_view_sql, "models", "table_model.sql")
+        # we don't have a way to know this failed unless we have a previous state to refer to, so the run succeeds
+        results = run_dbt(["run"])
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # double check different contract_checksums
+        assert first_contract_checksum != second_contract_checksum
+        with pytest.raises(ContractBreakingChangeError):
+            run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+        # This should not raise because materialization changed from table to incremental, both enforce constraints
+        write_file(table_model_now_incremental_sql, "models", "table_model.sql")
+        # we don't have a way to know this failed unless we have a previous state to refer to, so the run succeeds
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        # This should pass because materialization changed from view to table which is the same as just adding new constraint, not breaking
+        write_file(view_model_now_table_sql, "models", "view_model.sql")
+        write_file(table_model_sql, "models", "table_model.sql")
+        results = run_dbt(["run"])
+        assert len(results) == 2
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes[model_unique_id]
+        second_contract_checksum = model.contract.checksum
+        # contract_checksums should be equal because we only save constraint related changes if the materialization is table/incremental
+        assert first_contract_checksum == second_contract_checksum
+        run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+        assert len(results) == 2
 
 
 my_model_sql = """

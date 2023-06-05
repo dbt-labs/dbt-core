@@ -1233,3 +1233,11 @@ sources_tests1_sql = """
 
 
 """
+
+public_models_schema_yml = """
+
+models:
+  - name: orders
+    access: public
+    description: "Some order data"
+"""
