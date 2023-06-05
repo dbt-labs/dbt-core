@@ -6,29 +6,23 @@ from enum import Enum
 import hashlib
 
 from mashumaro.types import SerializableType
-from typing import (
-    Optional,
-    Union,
-    List,
-    Dict,
-    Any,
-    Sequence,
-    Tuple,
-    Iterator,
-)
+from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Protocol
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
+    Dimension,
     Docs,
+    Entity,
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
     MacroArgument,
     MaturityType,
+    Measure,
     MetricFilter,
     MetricTime,
     Owner,
@@ -62,12 +56,6 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
 )
-import sys
-
-if sys.version_info >= (3, 8):
-    from typing import Protocol
-else:
-    from typing_extensions import Protocol
 
 
 # =====================================================================
@@ -1424,17 +1412,25 @@ class Group(BaseNode):
 
 
 # ====================================
-# SemanticModel
+# SemanticModel and related classes
 # ====================================
+
+
+@dataclass
+class NodeRelation(dbtClassMixin, Replaceable):
+    alias: str
+    schema_name: str
+    relation_name: str
+    database: Optional[str] = None
 
 
 @dataclass
 class SemanticModel(GraphNode):
     description: Optional[str]
-    # node_relation: NodeRelation
-    # entities: Sequence[Entity]
-    # measures: Sequence[Measure]
-    # dimensions: Sequence[Dimension]
+    node_relation: NodeRelation
+    entities: Sequence[Entity]
+    measures: Sequence[Measure]
+    dimensions: Sequence[Dimension]
 
 
 # ====================================

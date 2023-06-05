@@ -667,7 +667,7 @@ class UnparsedGroup(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedEntity(dbtClassMixin, Replaceable):
+class Entity(dbtClassMixin, Replaceable):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
@@ -676,30 +676,30 @@ class UnparsedEntity(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedMeasureAggregationParameters(dbtClassMixin, Replaceable):
+class MeasureAggregationParameters(dbtClassMixin, Replaceable):
     percentile: Optional[float] = None
     use_discrete_percentile: bool = False
     use_approximate_percentile: bool = False
 
 
 @dataclass
-class UnparsedMeasure(dbtClassMixin, Replaceable):
+class Measure(dbtClassMixin, Replaceable):
     name: str
-    agg: str  # enum
+    agg: str  # actually an enum
     description: Optional[str] = None
     create_metric: Optional[bool] = None
     expr: Optional[str] = None
-    agg_params: Optional[UnparsedMeasureAggregationParameters] = None
+    agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[Dict[str, Any]] = None  # TODO: Refine type as class?
     agg_time_dimension: Optional[str] = None
 
 
 @dataclass
-class UnparsedDimension(dbtClassMixin, Replaceable):
+class Dimension(dbtClassMixin, Replaceable):
     name: str
-    description: Optional[str]
     type: str  # actually an enum
-    is_partition: bool = False
+    description: Optional[str] = None
+    is_partition: Optional[bool] = False
     type_params: Optional[Dict[str, Any]] = field(
         default_factory=dict
     )  # TODO: Refine type as class?
@@ -711,11 +711,10 @@ class UnparsedDimension(dbtClassMixin, Replaceable):
 class UnparsedSemanticModel(dbtClassMixin, Replaceable):
     name: str
     description: Optional[str]
-    model: str  # looks like ref(blah, blah) TODO: Further parsing for ref?
-    # node_relation:   # does not exist in YML, will be populated from "model"
-    entities: List[UnparsedEntity] = field(default_factory=list)
-    measures: List[UnparsedMeasure] = field(default_factory=list)
-    dimensions: List[UnparsedDimension] = field(default_factory=list)
+    model: str  # looks like "ref(...)"
+    entities: List[Entity] = field(default_factory=list)
+    measures: List[Measure] = field(default_factory=list)
+    dimensions: List[Dimension] = field(default_factory=list)
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:

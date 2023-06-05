@@ -25,20 +25,21 @@ from uuid import UUID
 from dbt.contracts.publication import ProjectDependencies, PublicationConfig, PublicModel
 
 from dbt.contracts.graph.nodes import (
-    Macro,
-    Documentation,
-    SourceDefinition,
-    GenericTestNode,
-    Exposure,
-    Metric,
-    Group,
-    UnpatchedSourceDefinition,
-    ManifestNode,
-    GraphMemberNode,
-    ResultNode,
     BaseNode,
+    Documentation,
+    Exposure,
+    GenericTestNode,
+    GraphMemberNode,
+    Group,
+    Macro,
+    ManifestNode,
     ManifestOrPublicNode,
+    Metric,
     ModelNode,
+    ResultNode,
+    SemanticModel,
+    SourceDefinition,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -689,6 +690,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     public_nodes: MutableMapping[str, PublicModel] = field(default_factory=dict)
     project_dependencies: Optional[ProjectDependencies] = None
     publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
+    semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -1212,8 +1214,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
 
-    def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: Metric):
-        pass
+    def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: SemanticModel):
+        _check_duplicates(semantic_model, self.semantic_models)
+        self.semantic_models[semantic_model.unique_id] = semantic_model
+        source_file.semantic_models.append(semantic_model.unique_id)
 
     # end of methods formerly in ParseResult
 
