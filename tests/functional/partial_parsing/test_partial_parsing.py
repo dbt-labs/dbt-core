@@ -817,19 +817,15 @@ class TestPublicationArtifactAvailable:
 
     def test_pp_publication_artifact_available(self, project):
         # initial run with public model logs PublicationArtifactAvailable
-        results, log_output = run_dbt_and_capture(["--debug", "--log-format", "json", "run"])
-        assert len(results) == 1
-        manifest = get_manifest(project.project_root)
+        manifest, log_output = run_dbt_and_capture(["--debug", "--log-format", "json", "parse"])
         orders_node = manifest.nodes["model.test.orders"]
         assert orders_node.access == "public"
         assert "PublicationArtifactAvailable" in log_output
 
         # unchanged project - partial parse run with public model logs PublicationArtifactAvailable
-        results, log_output = run_dbt_and_capture(
-            ["--partial-parse", "--debug", "--log-format", "json", "run"]
+        manifest, log_output = run_dbt_and_capture(
+            ["--partial-parse", "--debug", "--log-format", "json", "parse"]
         )
-        assert len(results) == 1
-        manifest = get_manifest(project.project_root)
         orders_node = manifest.nodes["model.test.orders"]
         assert orders_node.access == "public"
         assert "PublicationArtifactAvailable" in log_output
