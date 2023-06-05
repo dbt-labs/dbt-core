@@ -245,7 +245,7 @@ def manifest(*args0, write=True, write_perf_info=False):
 
                 ctx.obj["manifest"] = manifest
                 if write and ctx.obj["flags"].write_json:
-                    write_manifest(manifest, ctx.obj["runtime_config"].target_path)
+                    write_manifest(manifest, ctx.obj["runtime_config"].project_target_path)
 
             return func(*args, **kwargs)
 
