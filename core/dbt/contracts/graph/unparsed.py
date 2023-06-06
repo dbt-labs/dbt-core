@@ -8,7 +8,6 @@ from dbt.contracts.util import (
     Mergeable,
     Replaceable,
 )
-from dbt.contracts.graph.manifest_upgrade import rename_metric_attr
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
@@ -647,7 +646,6 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
 
     @classmethod
     def validate(cls, data):
-        data = rename_metric_attr(data, raise_deprecation_warning=True)
         super(UnparsedMetric, cls).validate(data)
         if "name" in data:
             errors = []
