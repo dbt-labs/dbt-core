@@ -294,9 +294,7 @@ class SemanticModelParser(YamlReader):
             description=unparsed.description,
             fqn=fqn,
             name=unparsed.name,
-            node_relation=NodeRelation(
-                alias="", database="", relation_name="", schema_name=""
-            ),  # TODO: arguments
+            node_relation=NodeRelation(alias="", database="", schema_name=""),  # TODO: arguments
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,
             path=path,

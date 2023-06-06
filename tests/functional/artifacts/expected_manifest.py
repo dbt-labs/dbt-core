@@ -890,6 +890,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
         },
         "disabled": {},
         "public_nodes": {},
+        "semantic_models": {},
     }
 
 
@@ -1453,6 +1454,7 @@ def expected_references_manifest(project):
                 ],
             }
         },
+        "semantic_models": {},
     }
 
 
@@ -1937,4 +1939,5 @@ def expected_versions_manifest(project):
         "disabled": {},
         "macros": {},
         "public_nodes": {},
+        "semantic_models": {},
     }

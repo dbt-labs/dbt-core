@@ -690,7 +690,7 @@ class Measure(dbtClassMixin, Replaceable):
     create_metric: Optional[bool] = None
     expr: Optional[str] = None
     agg_params: Optional[MeasureAggregationParameters] = None
-    non_additive_dimension: Optional[Dict[str, Any]] = None  # TODO: Refine type as class?
+    non_additive_dimension: Optional[Dict[str, Any]] = None
     agg_time_dimension: Optional[str] = None
 
 
@@ -700,9 +700,7 @@ class Dimension(dbtClassMixin, Replaceable):
     type: str  # actually an enum
     description: Optional[str] = None
     is_partition: Optional[bool] = False
-    type_params: Optional[Dict[str, Any]] = field(
-        default_factory=dict
-    )  # TODO: Refine type as class?
+    type_params: Optional[Dict[str, Any]] = None
     expr: Optional[str] = None
     # TODO metadata: Optional[Metadata] (this would actually be the YML for the dimension)
 

@@ -1417,10 +1417,9 @@ class Group(BaseNode):
 
 
 @dataclass
-class NodeRelation(dbtClassMixin, Replaceable):
+class NodeRelation(dbtClassMixin):
     alias: str
-    schema_name: str
-    relation_name: str
+    schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
     database: Optional[str] = None
 
 

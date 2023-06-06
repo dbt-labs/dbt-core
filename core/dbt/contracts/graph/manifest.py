@@ -879,7 +879,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
-    def writable_manifest(self):
+    def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
         self.build_group_map()
         return WritableManifest(
@@ -897,6 +897,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
+            semantic_models=self.semantic_models,
         )
 
     def write(self, path):
