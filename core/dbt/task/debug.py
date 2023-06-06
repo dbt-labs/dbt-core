@@ -73,6 +73,12 @@ class RunStatus(Enum):
     SKIP = 3
 
 
+DEBUG_RUN_STATUS: Dict[str, bool] = {
+    "pass": True,
+    "fail": False,
+}
+
+
 class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
@@ -109,35 +115,42 @@ class DebugTask(BaseTask):
         open_cmd = dbt.clients.system.open_dir_cmd()
         fire_event(OpenCommand(open_cmd=open_cmd, profiles_dir=self.profiles_dir))
 
-    def run(self):
+    def run(self) -> bool:
         if self.args.config_dir:
             self.path_info()
-            return True
+            return DEBUG_RUN_STATUS["pass"]
 
-        version = get_installed_version().to_version_string(skip_matcher=True)
+        version: str = get_installed_version().to_version_string(skip_matcher=True)
         fire_event(DebugCmdOut(msg="dbt version: {}".format(version)))
         fire_event(DebugCmdOut(msg="python version: {}".format(sys.version.split()[0])))
         fire_event(DebugCmdOut(msg="python path: {}".format(sys.executable)))
         fire_event(DebugCmdOut(msg="os info: {}".format(platform.platform())))
 
         # Load profile if possible, then load adapter info (which requires the profile)
-        load_profile_status = self._load_profile()
+        load_profile_status: SubtaskStatus = self._load_profile()
         fire_event(DebugCmdOut(msg="Using profiles dir at {}".format(self.profiles_dir)))
         fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
         if load_profile_status.run_status == RunStatus.PASS:
-            adapter_type = self.profile.credentials.type
-            adapter_version = self._read_adapter_version(
+            if self.profile is not None:
+                adapter_type: str = self.profile.credentials.type
+            else:
+                raise dbt.exceptions.DbtInternalError(
+                    "Profile should not be None if loading profile completed"
+                )
+
+            adapter_version: str = self._read_adapter_version(
                 f"dbt.adapters.{adapter_type}.__version__"
             )
             fire_event(DebugCmdOut(msg="adapter type: {}".format(adapter_type)))
             fire_event(DebugCmdOut(msg="adapter version: {}".format(adapter_version)))
 
         # Get project loaded to do additional checks
-        load_project_status = self._load_project()
+        load_project_status: SubtaskStatus = self._load_project()
+
+        dependencies_statuses: List[SubtaskStatus] = []
         if self.args.connection:
             fire_event(DebugCmdOut(msg="Skipping steps before connection verification"))
-            dependencies_statuses = []
         else:
             # this job's status not logged since already accounted for in _load_* commands
             self.test_configuration(load_profile_status.log_msg, load_project_status.log_msg)
@@ -147,17 +160,24 @@ class DebugTask(BaseTask):
         self.test_connection()
 
         # Log messages from any fails
-        all_statuses = [load_profile_status, load_project_status, *dependencies_statuses]
-        failure_count = sum(1 for status in all_statuses if status.run_status == RunStatus.FAIL)
+        all_statuses: List[SubtaskStatus] = [
+            load_profile_status,
+            load_project_status,
+            *dependencies_statuses,
+        ]
+        all_failing_statuses: List[SubtaskStatus] = list(
+            filter(lambda status: status.run_status == RunStatus.FAIL, all_statuses)
+        )
+
+        failure_count: int = len(all_failing_statuses)
         if failure_count > 0:
             fire_event(DebugCmdResult(msg=red(f"{(pluralize(failure_count, 'check'))} failed:")))
+            for status in all_failing_statuses:
+                fire_event(DebugCmdResult(msg=f"{status.summary_message}\n"))
+            return DEBUG_RUN_STATUS["fail"]
         else:
             fire_event(DebugCmdResult(msg=green("All checks passed!")))
-
-        for status in filter(lambda status: status.run_status == RunStatus.FAIL, all_statuses):
-            fire_event(DebugCmdResult(msg=f"{status.summary_message}\n"))
-
-        return failure_count == 0
+            return DEBUG_RUN_STATUS["pass"]
 
     # ==============================
     # Override for elsewhere in core
@@ -264,7 +284,7 @@ class DebugTask(BaseTask):
                 )
         return profiles, summary_message
 
-    def _read_adapter_version(self, module) -> Tuple[str]:
+    def _read_adapter_version(self, module) -> str:
         """read the version out of a standard adapter file"""
         try:
             version = importlib.import_module(module).version
