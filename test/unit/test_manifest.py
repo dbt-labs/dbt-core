@@ -1,13 +1,13 @@
 import os
 import unittest
+from argparse import Namespace
+from collections import namedtuple
+from copy import deepcopy
+from datetime import datetime
+from itertools import product
 from unittest import mock
 
-from argparse import Namespace
-import copy
-from collections import namedtuple
-from itertools import product
-from datetime import datetime
-
+import freezegun
 import pytest
 
 import dbt.flags
@@ -27,7 +27,6 @@ from dbt.contracts.graph.nodes import (
     Group,
     RefArgs,
 )
-
 from dbt.contracts.graph.unparsed import (
     ExposureType,
     Owner,
@@ -35,14 +34,10 @@ from dbt.contracts.graph.unparsed import (
     MetricFilter,
     MetricTime,
 )
-
 from dbt.events.functions import reset_metadata_vars
 from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
-
 from dbt.node_types import NodeType
-import freezegun
-
 from .utils import (
     MockMacro,
     MockDocumentation,
@@ -52,7 +47,6 @@ from .utils import (
     MockGenerateMacro,
     inject_plugin,
 )
-
 
 REQUIRED_PARSED_NODE_KEYS = frozenset(
     {
@@ -102,7 +96,6 @@ REQUIRED_COMPILED_NODE_KEYS = frozenset(
     REQUIRED_PARSED_NODE_KEYS
     | {"compiled", "extra_ctes_injected", "extra_ctes", "compiled_code", "relation_name"}
 )
-
 
 ENV_KEY_NAME = "KEY" if os.name == "nt" else "key"
 
@@ -365,7 +358,7 @@ class ManifestTest(unittest.TestCase):
         reset_metadata_vars()
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__no_nodes(self):
+    def test_no_nodes(self):
         manifest = Manifest(
             nodes={},
             sources={},
@@ -407,8 +400,8 @@ class ManifestTest(unittest.TestCase):
         )
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__nested_nodes(self):
-        nodes = copy.copy(self.nested_nodes)
+    def test_nested_nodes(self):
+        nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
             sources={},
@@ -462,12 +455,12 @@ class ManifestTest(unittest.TestCase):
         )
         self.assertEqual(child_map["model.snowplow.events"], [])
 
-    def test__build_flat_graph(self):
-        exposures = copy.copy(self.exposures)
-        metrics = copy.copy(self.metrics)
-        groups = copy.copy(self.groups)
-        nodes = copy.copy(self.nested_nodes)
-        sources = copy.copy(self.sources)
+    def test_build_flat_graph(self):
+        exposures = deepcopy(self.exposures)
+        metrics = deepcopy(self.metrics)
+        groups = deepcopy(self.groups)
+        nodes = deepcopy(self.nested_nodes)
+        sources = deepcopy(self.sources)
         manifest = Manifest(
             nodes=nodes,
             sources=sources,
@@ -588,7 +581,7 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(manifest.get_resource_fqns(), {})
 
     def test_get_resource_fqns(self):
-        nodes = copy.copy(self.nested_nodes)
+        nodes = deepcopy(self.nested_nodes)
         nodes["seed.root.seed"] = SeedNode(
             name="seed",
             database="dbt",
@@ -634,7 +627,7 @@ class ManifestTest(unittest.TestCase):
         resource_fqns = manifest.get_resource_fqns()
         self.assertEqual(resource_fqns, expect)
 
-    def test__deepcopy_copies_flat_graph(self):
+    def test_deepcopy_copies_flat_graph(self):
         test_node = ModelNode(
             name="events",
             database="dbt",
@@ -662,6 +655,41 @@ class ManifestTest(unittest.TestCase):
         original.build_flat_graph()
         copy = original.deepcopy()
         self.assertEqual(original.flat_graph, copy.flat_graph)
+
+    def test_add_from_artifact(self):
+        original_nodes = deepcopy(self.nested_nodes)
+        other_nodes = deepcopy(self.nested_nodes)
+
+        nested2 = other_nodes.pop("model.root.nested")
+        nested2.name = "nested2"
+        nested2.alias = "nested2"
+        nested2.fqn = ["root", "nested2"]
+
+        other_nodes["model.root.nested2"] = nested2
+
+        for k, v in other_nodes.items():
+            v.database = "other_" + v.database
+            v.schema = "other_" + v.schema
+            v.alias = "other_" + v.alias
+
+            other_nodes[k] = v
+
+        original_manifest = Manifest(nodes=original_nodes)
+        other_manifest = Manifest(nodes=other_nodes)
+        original_manifest.add_from_artifact(other_manifest.writable_manifest())
+
+        # new node added should not be in original manifest
+        assert "model.root.nested2" not in original_manifest.nodes
+
+        # old node removed should not have state relation in original manifest
+        assert original_manifest.nodes["model.root.nested"].state_relation is None
+
+        # for all other nodes, check that state relation is updated
+        for k, v in original_manifest.nodes.items():
+            if k != "model.root.nested":
+                self.assertEqual("other_" + v.database, v.state_relation.database)
+                self.assertEqual("other_" + v.schema, v.state_relation.schema)
+                self.assertEqual("other_" + v.alias, v.state_relation.alias)
 
 
 class MixedManifestTest(unittest.TestCase):
@@ -869,7 +897,7 @@ class MixedManifestTest(unittest.TestCase):
         del os.environ["DBT_ENV_CUSTOM_ENV_key"]
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__no_nodes(self):
+    def test_no_nodes(self):
         metadata = ManifestMetadata(
             generated_at=datetime.utcnow(), invocation_id="01234567-0123-0123-0123-0123456789ab"
         )
@@ -911,8 +939,8 @@ class MixedManifestTest(unittest.TestCase):
         )
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__nested_nodes(self):
-        nodes = copy.copy(self.nested_nodes)
+    def test_nested_nodes(self):
+        nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
             sources={},
@@ -963,8 +991,8 @@ class MixedManifestTest(unittest.TestCase):
         )
         self.assertEqual(child_map["model.snowplow.events"], [])
 
-    def test__build_flat_graph(self):
-        nodes = copy.copy(self.nested_nodes)
+    def test_build_flat_graph(self):
+        nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
             sources={},

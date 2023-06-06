@@ -260,6 +260,15 @@ class MacroDependsOn(dbtClassMixin, Replaceable):
 
 
 @dataclass
+class RelationalNode(HasRelationMetadata):
+    alias: str
+
+    @property
+    def identifier(self):
+        return self.alias
+
+
+@dataclass
 class DependsOn(MacroDependsOn):
     nodes: List[str] = field(default_factory=list)
     public_nodes: List[str] = field(default_factory=list)
