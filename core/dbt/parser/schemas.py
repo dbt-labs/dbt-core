@@ -76,8 +76,12 @@ from dbt.exceptions import (
     YamlParseListError,
 )
 from dbt.events.functions import warn_or_error
-from dbt.events.types import WrongResourceSchemaFile, NoNodeForYamlKey, MacroNotFoundForPatch
 from dbt.node_types import NodeType
+from dbt.events.types import (
+    MacroNotFoundForPatch,
+    NoNodeForYamlKey,
+    WrongResourceSchemaFile,
+)
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.parser.generic_test_builders import (
