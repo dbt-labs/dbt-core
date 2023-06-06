@@ -1254,12 +1254,15 @@ class DbtReferenceError(ParsingError):
 
 
 class InvalidAccessTypeError(ParsingError):
-    def __init__(self, unique_id: str, field_value: str):
+    def __init__(self, unique_id: str, field_value: str, materialization: Optional[str] = None):
         self.unique_id = unique_id
         self.field_value = field_value
-        msg = (
-            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        self.materialization = materialization
+
+        with_materialization = (
+            f"with '{self.materialization}' materialization " if self.materialization else ""
         )
+        msg = f"Node {self.unique_id} {with_materialization}has an invalid value ({self.field_value}) for the access field"
         super().__init__(msg=msg)
 
 

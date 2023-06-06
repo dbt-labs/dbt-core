@@ -114,6 +114,7 @@ from dbt.exceptions import (
     AmbiguousAliasError,
     PublicationConfigNotFound,
     ProjectDependencyCycleError,
+    InvalidAccessTypeError,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -529,6 +530,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.check_valid_group_config()
+            self.check_valid_access_property()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -1292,6 +1294,19 @@ class ManifestLoader:
                 f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
                 node=groupable_node,
             )
+
+    def check_valid_access_property(self):
+        for node in self.manifest.nodes.values():
+            if (
+                isinstance(node, ModelNode)
+                and node.access == AccessType.Public
+                and node.get_materialization() == "ephemeral"
+            ):
+                raise InvalidAccessTypeError(
+                    unique_id=node.unique_id,
+                    field_value=node.access,
+                    materialization=node.get_materialization(),
+                )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
