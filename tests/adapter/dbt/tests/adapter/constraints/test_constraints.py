@@ -228,7 +228,8 @@ insert into <model_identifier> (
         )
 
         results = run_dbt(["run", "-s", "+my_model"])
-        assert len(results) == 2
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
 
         # grab the sql and replace the model identifier to make it generic for all adapters
         # the name is not what we're testing here anyways and varies based on materialization
@@ -481,7 +482,8 @@ insert into <model_identifier> (
         )
 
         results = run_dbt(["run", "-s", "+my_model"])
-        assert len(results) == 2
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
         generated_sql_modified = _normalize_whitespace(generated_sql)
         generated_sql_generic = _find_and_replace(
