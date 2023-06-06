@@ -434,7 +434,7 @@ class TestModelLevelConstraintsWarningMessages:
         _, log_output = run_dbt_and_capture(["run"])
 
         expected_materialization_warning = (
-            "Constraint types are not supported for ephemeral materializations."
+            "Constraint types are not supported for view materializations"
         )
         assert expected_materialization_warning not in str(log_output)
 

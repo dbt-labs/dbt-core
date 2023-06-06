@@ -830,10 +830,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         warn_unsupported = column_warn_unsupported + model_warn_unsupported
 
         # if any constraint has `warn_unsupported` as True then send the warning
-        if any(warn_unsupported) and model_node.config.materialized not in [
-            "table",
-            "incremental",
-        ]:
+        if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
             warn_or_error(
                 UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
                 node=model_node,
