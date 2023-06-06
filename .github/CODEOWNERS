@@ -18,7 +18,6 @@
 /.github/                       @dbt-labs/guild-oss-tooling
 .bumpversion.cfg                @dbt-labs/guild-oss-tooling
 
-/.changes/                      @dbt-labs/guild-oss-tooling
 .changie.yaml                   @dbt-labs/guild-oss-tooling
 
 pre-commit-config.yaml          @dbt-labs/guild-oss-tooling

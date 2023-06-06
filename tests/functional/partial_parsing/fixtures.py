@@ -1287,3 +1287,10 @@ marketing_pub_json = """
   "dependencies": []
 }
 """
+
+public_models_schema_yml = """
+models:
+  - name: orders
+    access: public
+    description: "Some order data"
+"""

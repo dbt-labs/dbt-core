@@ -553,9 +553,10 @@ class ManifestLoader:
                 self.process_refs(self.root_project.project_name)
                 # parent and child maps will be rebuilt by write_manifest
 
-        if not skip_parsing or public_nodes_changed:
-            # Write out the <project_name>_publication.json file for this project
-            log_publication_artifact(self.root_project, self.manifest)
+        # Log the publication artifact for this project
+        log_publication_artifact(self.root_project, self.manifest)
+
+        if not skip_parsing:
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
 

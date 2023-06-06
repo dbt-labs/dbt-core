@@ -72,6 +72,7 @@ from tests.functional.partial_parsing.fixtures import (
     dependencies_yml,
     empty_dependencies_yml,
     marketing_pub_json,
+    public_models_schema_yml,
 )
 
 from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
@@ -833,3 +834,27 @@ class TestDependencies:
         run_dbt(["parse"], publications=[marketing_publication])
         manifest = get_manifest(project.project_root)
         assert len(manifest.project_dependencies.projects) == 0
+
+
+class TestPublicationArtifactAvailable:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "orders.sql": orders_sql,
+            "schema.yml": public_models_schema_yml,
+        }
+
+    def test_pp_publication_artifact_available(self, project):
+        # initial run with public model logs PublicationArtifactAvailable
+        manifest, log_output = run_dbt_and_capture(["--debug", "--log-format", "json", "parse"])
+        orders_node = manifest.nodes["model.test.orders"]
+        assert orders_node.access == "public"
+        assert "PublicationArtifactAvailable" in log_output
+
+        # unchanged project - partial parse run with public model logs PublicationArtifactAvailable
+        manifest, log_output = run_dbt_and_capture(
+            ["--partial-parse", "--debug", "--log-format", "json", "parse"]
+        )
+        orders_node = manifest.nodes["model.test.orders"]
+        assert orders_node.access == "public"
+        assert "PublicationArtifactAvailable" in log_output

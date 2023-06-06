@@ -36,6 +36,7 @@ class MethodName(StrEnum):
     FQN = "fqn"
     Tag = "tag"
     Group = "group"
+    Access = "access"
     Source = "source"
     Path = "path"
     File = "file"
@@ -227,6 +228,16 @@ class GroupSelectorMethod(SelectorMethod):
         """yields nodes from included in the specified group"""
         for node, real_node in self.groupable_nodes(included_nodes):
             if selector == real_node.config.get("group"):
+                yield node
+
+
+class AccessSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """yields model nodes matching the specified access level"""
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if not isinstance(real_node, ModelNode):
+                continue
+            if selector == real_node.access:
                 yield node
 
 
@@ -713,6 +724,7 @@ class MethodManager:
         MethodName.FQN: QualifiedNameSelectorMethod,
         MethodName.Tag: TagSelectorMethod,
         MethodName.Group: GroupSelectorMethod,
+        MethodName.Access: AccessSelectorMethod,
         MethodName.Source: SourceSelectorMethod,
         MethodName.Path: PathSelectorMethod,
         MethodName.File: FileSelectorMethod,

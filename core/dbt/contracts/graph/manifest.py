@@ -204,7 +204,7 @@ class RefableLookup(dbtClassMixin):
                         if v.name == node.name and v.version is not None
                     ]
                 )
-                assert node.latest_version  # for mypy, whenever i may find it
+                assert node.latest_version is not None  # for mypy, whenever i may find it
                 if max_version > UnparsedVersion(node.latest_version):
                     fire_event(
                         UnpinnedRefNewVersionAvailable(
@@ -368,10 +368,16 @@ class ManifestMetadata(BaseArtifactMetadata):
     dbt_schema_version: str = field(
         default_factory=lambda: str(WritableManifest.dbt_schema_version)
     )
+    project_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "description": "Name of the root project",
+        },
+    )
     project_id: Optional[str] = field(
         default=None,
         metadata={
-            "description": "A unique identifier for the project",
+            "description": "A unique identifier for the project, hashed from the project name",
         },
     )
     user_id: Optional[UUID] = field(
