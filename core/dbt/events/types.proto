@@ -1216,6 +1216,16 @@ message DeprecatedReferenceMsg {
     DeprecatedReference data = 2;
 }
 
+// I068
+message UnsupportedConstraintMaterialization {
+    string materialized = 1;
+}
+
+message UnsupportedConstraintMaterializationMsg {
+    EventInfo info = 1;
+    UnsupportedConstraintMaterialization data = 2;
+}
+
 
 // M - Deps generation
 
