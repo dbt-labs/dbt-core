@@ -353,7 +353,6 @@ models:
         enforced: true
     columns:
       - name: id
-        quote: true
         data_type: integer
         description: hello
         constraints:
@@ -504,7 +503,8 @@ version: 2
 models:
   - name: my_model
     config:
-      contract: {enforced: true}
+      contract:
+        enforced: true
       materialized: table
     constraints:
       - type: check

@@ -172,7 +172,7 @@ def _normalize_whitespace(input: str) -> str:
 
 
 def _find_and_replace(sql, find, replace):
-    sql_tokens = sql.split(" ")
+    sql_tokens = sql.split()
     for idx in [n for n, x in enumerate(sql_tokens) if find in x]:
         sql_tokens[idx] = replace
     return " ".join(sql_tokens)
@@ -231,7 +231,8 @@ insert into <model_identifier> (
         )
 
         results = run_dbt(["run", "-s", "+my_model"])
-        assert len(results) == 2
+        # assert at least my_model was run - additional upstreams may or may not be provided to the test setup via models fixture
+        assert len(results) >= 1
 
         # grab the sql and replace the model identifier to make it generic for all adapters
         # the name is not what we're testing here anyways and varies based on materialization
@@ -479,12 +480,14 @@ insert into <model_identifier> (
         )
 
         results = run_dbt(["run", "-s", "+my_model"])
-        assert len(results) == 2
+        assert len(results) >= 1
         generated_sql = read_file("target", "run", "test", "models", "my_model.sql")
+
         generated_sql_generic = _find_and_replace(generated_sql, "my_model", "<model_identifier>")
         generated_sql_generic = _find_and_replace(
             generated_sql_generic, "foreign_key_model", "<foreign_key_model_identifier>"
         )
+
         assert _normalize_whitespace(expected_sql) == _normalize_whitespace(generated_sql_generic)
 
 
@@ -507,7 +510,7 @@ create table <model_identifier> (
     id integer not null,
     "from" text not null,
     date_day text,
-    check ("from" = 'blue')
+    check (("from" = 'blue'))
 ) ;
 insert into <model_identifier> (
     id, "from", date_day
