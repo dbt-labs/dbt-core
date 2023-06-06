@@ -1148,15 +1148,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
             if current and (node.resource_type in refables and not node.is_ephemeral):
-                other_node = other.nodes[unique_id]
-                state_relation = RelationalNode(
-                    other_node.database, other_node.schema, other_node.alias
-                )
+                state_relation = RelationalNode(node.database, node.schema, node.alias)
                 self.nodes[unique_id] = current.replace(state_relation=state_relation)
-
-        # Rebuild the flat_graph, which powers the 'graph' context variable,
-        # now that we've deferred some nodes
-        self.build_flat_graph()
 
     # Methods that were formerly in ParseResult
 

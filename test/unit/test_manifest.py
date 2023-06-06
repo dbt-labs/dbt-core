@@ -2,10 +2,10 @@ import os
 import unittest
 from argparse import Namespace
 from collections import namedtuple
+from copy import deepcopy
 from datetime import datetime
 from itertools import product
 from unittest import mock
-from copy import deepcopy
 
 import freezegun
 import pytest
@@ -358,7 +358,7 @@ class ManifestTest(unittest.TestCase):
         reset_metadata_vars()
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__no_nodes(self):
+    def test_no_nodes(self):
         manifest = Manifest(
             nodes={},
             sources={},
@@ -400,7 +400,7 @@ class ManifestTest(unittest.TestCase):
         )
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__nested_nodes(self):
+    def test_nested_nodes(self):
         nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
@@ -455,7 +455,7 @@ class ManifestTest(unittest.TestCase):
         )
         self.assertEqual(child_map["model.snowplow.events"], [])
 
-    def test__build_flat_graph(self):
+    def test_build_flat_graph(self):
         exposures = deepcopy(self.exposures)
         metrics = deepcopy(self.metrics)
         groups = deepcopy(self.groups)
@@ -627,7 +627,7 @@ class ManifestTest(unittest.TestCase):
         resource_fqns = manifest.get_resource_fqns()
         self.assertEqual(resource_fqns, expect)
 
-    def test__deepcopy_copies_flat_graph(self):
+    def test_deepcopy_copies_flat_graph(self):
         test_node = ModelNode(
             name="events",
             database="dbt",
@@ -656,7 +656,7 @@ class ManifestTest(unittest.TestCase):
         copy = original.deepcopy()
         self.assertEqual(original.flat_graph, copy.flat_graph)
 
-    def test__add_from_artifact(self):
+    def test_add_from_artifact(self):
         original_nodes = deepcopy(self.nested_nodes)
         other_nodes = deepcopy(self.nested_nodes)
 
@@ -686,7 +686,7 @@ class ManifestTest(unittest.TestCase):
 
         # for all other nodes, check that state relation is updated
         for k, v in original_manifest.nodes.items():
-            if k not in ["model.root.nested", "model.root.nested2"]:
+            if k != "model.root.nested":
                 self.assertEqual("other_" + v.database, v.state_relation.database)
                 self.assertEqual("other_" + v.schema, v.state_relation.schema)
                 self.assertEqual("other_" + v.alias, v.state_relation.alias)
@@ -897,7 +897,7 @@ class MixedManifestTest(unittest.TestCase):
         del os.environ["DBT_ENV_CUSTOM_ENV_key"]
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__no_nodes(self):
+    def test_no_nodes(self):
         metadata = ManifestMetadata(
             generated_at=datetime.utcnow(), invocation_id="01234567-0123-0123-0123-0123456789ab"
         )
@@ -939,7 +939,7 @@ class MixedManifestTest(unittest.TestCase):
         )
 
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
-    def test__nested_nodes(self):
+    def test_nested_nodes(self):
         nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
@@ -991,7 +991,7 @@ class MixedManifestTest(unittest.TestCase):
         )
         self.assertEqual(child_map["model.snowplow.events"], [])
 
-    def test__build_flat_graph(self):
+    def test_build_flat_graph(self):
         nodes = deepcopy(self.nested_nodes)
         manifest = Manifest(
             nodes=nodes,
