@@ -15,19 +15,6 @@ class BaseEquals:
             "equals.sql": macros__equals_sql,
         }
 
-    # make it possible to dynamically update the macro call with a namespace
-    # (e.g.) 'dateadd', 'dbt.dateadd', 'dbt_utils.dateadd'
-    def macro_namespace(self):
-        return ""
-
-    def interpolate_macro_namespace(self, model_sql, macro_name):
-        macro_namespace = self.macro_namespace()
-        return (
-            model_sql.replace(f"{macro_name}(", f"{macro_namespace}.{macro_name}(")
-            if macro_namespace
-            else model_sql
-        )
-
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -37,12 +24,8 @@ class BaseEquals:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "equal_values.sql": self.interpolate_macro_namespace(
-                MODELS__EQUAL_VALUES_SQL, "equals"
-            ),
-            "not_equal_values.sql": self.interpolate_macro_namespace(
-                MODELS__NOT_EQUAL_VALUES_SQL, "equals"
-            ),
+            "equal_values.sql": MODELS__EQUAL_VALUES_SQL,
+            "not_equal_values.sql": MODELS__NOT_EQUAL_VALUES_SQL,
         }
 
     def test_equal_values(self, project):
