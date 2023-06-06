@@ -1,10 +1,27 @@
 from dbt.parser.schemas import YamlReader, SchemaParser
 from dbt.parser.common import YamlBlock
 from dbt.node_types import NodeType
-from dbt.contracts.graph.unparsed import UnparsedExposure, UnparsedMetric, UnparsedGroup
-from dbt.contracts.graph.nodes import Exposure, Metric, Group
+from dbt.contracts.graph.unparsed import (
+    UnparsedExposure,
+    UnparsedGroup,
+    UnparsedMetric,
+    UnparsedMetricInput,
+    UnparsedMetricInputMeasure,
+    UnparsedMetricTimeWindow,
+    UnparsedMetricTypeParams,
+)
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    Group,
+    Metric,
+    MetricInput,
+    MetricInputMeasure,
+    MetricTimeWindow,
+    MetricTypeParams,
+    WhereFilter,
+)
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
-from dbt.context.providers import generate_parse_exposure, generate_parse_metrics
+from dbt.context.providers import generate_parse_exposure
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -12,8 +29,10 @@ from dbt.context.context_config import (
     UnrenderedConfigGenerator,
 )
 from dbt.clients.jinja import get_rendered
-from typing import List
 from dbt.dataclass_schema import ValidationError
+from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from typing import List, Optional, Sequence
 
 
 class ExposureParser(YamlReader):
@@ -125,6 +144,102 @@ class MetricParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
+    def _get_input_measure(
+        self,
+        unparsed_input_measure: UnparsedMetricInputMeasure,
+    ) -> MetricInputMeasure:
+        filter: Optional[WhereFilter] = None
+        if unparsed_input_measure.filter is not None:
+            filter = WhereFilter(
+                where_sql_template=unparsed_input_measure.filter.where_sql_template
+            )
+
+        return MetricInputMeasure(
+            name=unparsed_input_measure.name,
+            filter=filter,
+            alias=unparsed_input_measure.alias,
+        )
+
+    def _get_optional_input_measure(
+        self,
+        unparsed_input_measure: Optional[UnparsedMetricInputMeasure],
+    ) -> Optional[MetricInputMeasure]:
+        if unparsed_input_measure is not None:
+            return self._get_input_measure(unparsed_input_measure)
+        else:
+            return None
+
+    def _get_input_measures(
+        self,
+        unparsed_input_measures: Optional[Sequence[UnparsedMetricInputMeasure]],
+    ) -> List[MetricInputMeasure]:
+        input_measures: List[MetricInputMeasure] = []
+        if unparsed_input_measures is not None:
+            for unparsed_input_measure in unparsed_input_measures:
+                input_measures.append(self._get_input_measure(unparsed_input_measure))
+            return input_measures
+
+        return input_measures
+
+    def _get_time_window(
+        self,
+        unparsed_window: Optional[UnparsedMetricTimeWindow],
+    ) -> Optional[MetricTimeWindow]:
+        if unparsed_window is not None:
+            return MetricTimeWindow(
+                count=unparsed_window.count,
+                granularity=TimeGranularity(unparsed_window.granularity),
+            )
+        else:
+            return None
+
+    def _get_metric_inputs(
+        self,
+        unparsed_metric_inputs: Optional[Sequence[UnparsedMetricInput]],
+    ) -> List[MetricInput]:
+        metric_inputs: List[MetricInput] = []
+        if unparsed_metric_inputs is not None:
+            for unparsed_metric_input in unparsed_metric_inputs:
+                offset_to_grain: Optional[TimeGranularity] = None
+                if unparsed_metric_input.offset_to_grain is not None:
+                    offset_to_grain = TimeGranularity(unparsed_metric_input.offset_to_grain)
+
+                filter: Optional[WhereFilter] = None
+                if unparsed_metric_input.filter is not None:
+                    filter = WhereFilter(
+                        where_sql_template=unparsed_metric_input.filter.where_sql_template
+                    )
+
+                metric_inputs.append(
+                    MetricInput(
+                        name=unparsed_metric_input.name,
+                        filter=filter,
+                        alias=unparsed_metric_input.alias,
+                        offset_window=self._get_time_window(
+                            unparsed_window=unparsed_metric_input.offset_window
+                        ),
+                        offset_to_grain=offset_to_grain,
+                    )
+                )
+
+        return metric_inputs
+
+    def _get_metric_type_params(self, type_params: UnparsedMetricTypeParams) -> MetricTypeParams:
+        grain_to_date: Optional[TimeGranularity] = None
+        if type_params.grain_to_date is not None:
+            grain_to_date = TimeGranularity(type_params.grain_to_date)
+
+        return MetricTypeParams(
+            measure=self._get_optional_input_measure(type_params.measure),
+            measures=self._get_input_measures(type_params.measures),
+            numerator=self._get_optional_input_measure(type_params.numerator),
+            denominator=self._get_optional_input_measure(type_params.denominator),
+            expr=type_params.expr,
+            window=self._get_time_window(type_params.window),
+            grain_to_date=grain_to_date,
+            metrics=self._get_metric_inputs(type_params.metrics),
+        )
+
     def parse_metric(self, unparsed: UnparsedMetric):
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
@@ -154,6 +269,10 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
+        filter: Optional[WhereFilter] = None
+        if unparsed.filter is not None:
+            filter = WhereFilter(where_sql_template=unparsed.filter.where_sql_template)
+
         parsed = Metric(
             resource_type=NodeType.Metric,
             package_name=package_name,
@@ -161,39 +280,17 @@ class MetricParser(YamlReader):
             original_file_path=self.yaml.path.original_file_path,
             unique_id=unique_id,
             fqn=fqn,
-            model=unparsed.model,
             name=unparsed.name,
             description=unparsed.description,
             label=unparsed.label,
-            calculation_method=unparsed.calculation_method,
-            expression=str(unparsed.expression),
-            timestamp=unparsed.timestamp,
-            dimensions=unparsed.dimensions,
-            window=unparsed.window,
-            time_grains=unparsed.time_grains,
-            filters=unparsed.filters,
+            type=MetricType(unparsed.type),
+            type_params=self._get_metric_type_params(unparsed.type_params),
+            filter=filter,
             meta=unparsed.meta,
             tags=unparsed.tags,
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
-        )
-
-        ctx = generate_parse_metrics(
-            parsed,
-            self.root_project,
-            self.schema_parser.manifest,
-            package_name,
-        )
-
-        if parsed.model is not None:
-            model_ref = "{{ " + parsed.model + " }}"
-            get_rendered(model_ref, ctx, parsed)
-
-        parsed.expression = get_rendered(
-            parsed.expression,
-            ctx,
-            node=parsed,
         )
 
         # if the metric is disabled we do not want it included in the manifest, only in the disabled dict
