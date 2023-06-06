@@ -34,7 +34,7 @@
 #}
 {% macro assert_columns_equivalent(sql) %}
   {#-- Obtain the column schema provided by sql file. #}
-  {%- set sql_file_provided_columns = get_column_schema_from_query(sql) -%}
+  {%- set sql_file_provided_columns = get_column_schema_from_query(sql, config.get('sql_header', none)) -%}
   {#--Obtain the column schema provided by the schema file by generating an 'empty schema' query from the model's columns. #}
   {%- set schema_file_provided_columns = get_column_schema_from_query(get_empty_schema_sql(model['columns'])) -%}
 

@@ -133,6 +133,33 @@ select
   {sql_value} as wrong_data_type_column_name
 """
 
+my_model_contract_sql_header_sql = """
+{{
+  config(
+    materialized = "table"
+  )
+}}
+
+{% call set_sql_header(config) %}
+set session time zone 'Asia/Kolkata';
+{%- endcall %}
+select current_setting('timezone') as column_name
+"""
+
+my_model_incremental_contract_sql_header_sql = """
+{{
+  config(
+    materialized = "incremental",
+    on_schema_change="append_new_columns"
+  )
+}}
+
+{% call set_sql_header(config) %}
+set session time zone 'Asia/Kolkata';
+{%- endcall %}
+select current_setting('timezone') as column_name
+"""
+
 # model breaking constraints
 my_model_with_nulls_sql = """
 {{
@@ -302,4 +329,16 @@ models:
     columns:
       - name: wrong_data_type_column_name
         data_type: {data_type}
+"""
+
+model_contract_header_schema_yml = """
+version: 2
+models:
+  - name: my_model_contract_sql_header
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: column_name
+        data_type: text
 """
