@@ -132,12 +132,12 @@ class DebugTask(BaseTask):
         fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
         if load_profile_status.run_status == RunStatus.PASS:
-            if self.profile is not None:
-                adapter_type: str = self.profile.credentials.type
-            else:
+            if self.profile is None:
                 raise dbt.exceptions.DbtInternalError(
                     "Profile should not be None if loading profile completed"
                 )
+            else:
+                adapter_type: str = self.profile.credentials.type
 
             adapter_version: str = self._read_adapter_version(
                 f"dbt.adapters.{adapter_type}.__version__"
@@ -448,7 +448,7 @@ class DebugTask(BaseTask):
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named("debug"):
-                # set in adapter repos
+                # is defined in adapter class
                 adapter.debug_query()
         except Exception as exc:
             return COULD_NOT_CONNECT_MESSAGE.format(

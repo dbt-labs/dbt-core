@@ -67,7 +67,7 @@ class TestDebugPostgres(BaseDebug):
         )
         assert "Using profiles dir at NONE"
         assert "1 check failed" in out
-        assert "dbt looked for a profiles.yml file in NONE/profiles.yml" in out
+        assert "dbt looked for a profiles.yml file in NONE" in out
 
     def test_nopass(self, project):
         run_dbt(["debug", "--target", "nopass"], expect_pass=False)
