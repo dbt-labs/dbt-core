@@ -16,6 +16,7 @@ from dbt.events.types import (
     RunningOperationUncaughtError,
     LogDebugStackTrace,
 )
+from dbt.exceptions import DbtRuntimeError
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 
@@ -28,7 +29,7 @@ class RunOperationTask(ConfiguredTask):
         if "." in macro_name:
             package_name, macro_name = macro_name.split(".", 1)
         else:
-            package_name = self.config.project_name
+            package_name = None
 
         return package_name, macro_name
 
@@ -66,8 +67,17 @@ class RunOperationTask(ConfiguredTask):
         end = datetime.utcnow()
 
         package_name, macro_name = self._get_macro_parts()
-        fqn = [NodeType.Operation, package_name, macro_name]
-        unique_id = ".".join(fqn)
+        macro = self.manifest.find_macro_by_name(  # type: ignore[union-attr]
+            macro_name, self.config.project_name, package_name
+        )
+
+        try:
+            unique_id = macro.unique_id  # type: ignore[union-attr]
+            fqn = unique_id.split(".")
+        except AttributeError:
+            raise DbtRuntimeError(
+                f"dbt could not find a macro with the name '{macro_name}' in any package"
+            )
 
         run_result = RunResult(
             adapter_response={},
