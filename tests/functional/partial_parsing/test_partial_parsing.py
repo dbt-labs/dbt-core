@@ -825,14 +825,12 @@ class TestDependencies:
     def test_dependencies(self, project, marketing_publication):
         # initial run with dependencies
         write_file(dependencies_yml, "dependencies.yml")
-        run_dbt(["parse"], publications=[marketing_publication])
-        manifest = get_manifest(project.project_root)
+        manifest = run_dbt(["parse"], publications=[marketing_publication])
         assert len(manifest.project_dependencies.projects) == 1
 
         # remove dependencies
         write_file(empty_dependencies_yml, "dependencies.yml")
-        run_dbt(["parse"], publications=[marketing_publication])
-        manifest = get_manifest(project.project_root)
+        manifest = run_dbt(["parse"], publications=[marketing_publication])
         assert len(manifest.project_dependencies.projects) == 0
 
 
