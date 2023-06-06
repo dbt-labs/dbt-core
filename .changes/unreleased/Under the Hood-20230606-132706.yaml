@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: 'generalize BaseModelConstraintsRuntimeEnforcement '
+time: 2023-06-06T13:27:06.025803-04:00
+custom:
+  Author: michelleark
+  Issue: "7804"
