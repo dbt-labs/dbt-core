@@ -22,6 +22,7 @@ class Command(Enum):
     SNAPSHOT = "snapshot"
     SOURCE_FRESHNESS = "freshness"
     TEST = "test"
+    RETRY = "retry"
 
     @classmethod
     def from_str(cls, s: str) -> "Command":
