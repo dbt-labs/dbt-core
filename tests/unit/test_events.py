@@ -248,6 +248,7 @@ sample_values = [
         ref_model_deprecation_date="",
         ref_model_latest_version="",
     ),
+    types.UnsupportedConstraintMaterialization(materialized=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

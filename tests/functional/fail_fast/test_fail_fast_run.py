@@ -12,6 +12,7 @@ select 1
 """
 
 models__two_sql = """
+-- depends_on: {{ ref('one') }}
 select 1 /failed
 """
 
@@ -35,6 +36,7 @@ class TestFastFailingDuringRun(FailFastBase):
         assert run_results_file.is_file()
         with run_results_file.open() as run_results_str:
             run_results = json.loads(run_results_str.read())
+            assert len(run_results["results"]) == 2
             assert run_results["results"][0]["status"] == "success"
             assert run_results["results"][1]["status"] == "error"
 

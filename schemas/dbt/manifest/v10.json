@@ -257,6 +257,17 @@
           },
           "default": {}
         },
+        "project_name": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of the root project"
+        },
         "project_id": {
           "oneOf": [
             {
@@ -266,7 +277,7 @@
               "type": "null"
             }
           ],
-          "description": "A unique identifier for the project"
+          "description": "A unique identifier for the project, hashed from the project name"
         },
         "user_id": {
           "oneOf": [

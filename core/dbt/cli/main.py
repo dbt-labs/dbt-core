@@ -30,6 +30,7 @@ from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.init import InitTask
 from dbt.task.list import ListTask
+from dbt.task.retry import RetryTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
@@ -576,6 +577,36 @@ def run(ctx, **kwargs):
     return results, success
 
 
+# dbt run
+@cli.command("retry")
+@click.pass_context
+@p.project_dir
+@p.profiles_dir
+@p.vars
+@p.profile
+@p.target
+@p.state
+@p.threads
+@p.fail_fast
+@requires.postflight
+@requires.preflight
+@requires.profile
+@requires.project
+@requires.runtime_config
+@requires.manifest
+def retry(ctx, **kwargs):
+    """Retry the nodes that failed in the previous run."""
+    task = RetryTask(
+        ctx.obj["flags"],
+        ctx.obj["runtime_config"],
+        ctx.obj["manifest"],
+    )
+
+    results = task.run()
+    success = task.interpret_results(results)
+    return results, success
+
+
 # dbt run operation
 @cli.command("run-operation")
 @click.pass_context
@@ -586,6 +617,7 @@ def run(ctx, **kwargs):
 @p.project_dir
 @p.target
 @p.target_path
+@p.threads
 @p.vars
 @requires.postflight
 @requires.preflight

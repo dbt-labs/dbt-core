@@ -1108,61 +1108,66 @@ def test_find_macro_by_name(macros, expectations):
             assert result.package_name == expected
 
 
-# these don't use a search package, so we don't need to do as much
 generate_name_parameter_sets = [
     # empty
     FindMacroSpec(
         macros=[],
-        expected=None,
+        expected={None: None, "root": None, "dep": None, "dbt": None},
     ),
     # just root
     FindMacroSpec(
         macros=[MockGenerateMacro("root")],
-        expected="root",
+        # "root" is not imported
+        expected={None: "root", "root": None, "dep": None, "dbt": None},
     ),
     # just dep
     FindMacroSpec(
         macros=[MockGenerateMacro("dep")],
-        expected=None,
+        expected={None: None, "root": None, "dep": "dep", "dbt": None},
     ),
     # just dbt
     FindMacroSpec(
         macros=[MockGenerateMacro("dbt")],
-        expected="dbt",
+        # "dbt" is not imported
+        expected={None: "dbt", "root": None, "dep": None, "dbt": None},
     ),
     # root overrides dep
     FindMacroSpec(
         macros=[MockGenerateMacro("root"), MockGenerateMacro("dep")],
-        expected="root",
+        expected={None: "root", "root": None, "dep": "dep", "dbt": None},
     ),
     # root overrides core
     FindMacroSpec(
         macros=[MockGenerateMacro("root"), MockGenerateMacro("dbt")],
-        expected="root",
+        expected={None: "root", "root": None, "dep": None, "dbt": None},
     ),
     # dep overrides core
     FindMacroSpec(
         macros=[MockGenerateMacro("dep"), MockGenerateMacro("dbt")],
-        expected="dbt",
+        expected={None: "dbt", "root": None, "dep": "dep", "dbt": None},
     ),
     # root overrides dep overrides core
     FindMacroSpec(
         macros=[MockGenerateMacro("root"), MockGenerateMacro("dep"), MockGenerateMacro("dbt")],
-        expected="root",
+        expected={None: "root", "root": None, "dep": "dep", "dbt": None},
     ),
 ]
 
 
-@pytest.mark.parametrize("macros,expected", generate_name_parameter_sets, ids=id_macro)
-def test_find_generate_macro_by_name(macros, expected):
+@pytest.mark.parametrize("macros,expectations", generate_name_parameter_sets, ids=id_macro)
+def test_find_generate_macros_by_name(macros, expectations):
     manifest = make_manifest(macros=macros)
     result = manifest.find_generate_macro_by_name(
         component="some_component", root_project_name="root"
     )
-    if expected is None:
-        assert result is expected
-    else:
-        assert result.package_name == expected
+    for package, expected in expectations.items():
+        result = manifest.find_generate_macro_by_name(
+            component="some_component", root_project_name="root", imported_package=package
+        )
+        if expected is None:
+            assert result is expected
+        else:
+            assert result.package_name == expected
 
 
 FindMaterializationSpec = namedtuple("FindMaterializationSpec", "macros,adapter_type,expected")
