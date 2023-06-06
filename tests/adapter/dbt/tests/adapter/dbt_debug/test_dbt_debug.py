@@ -54,7 +54,7 @@ class TestDebugPostgres(BaseDebug):
     def test_connection_flag(self, project):
         """Testing that the --connection flag works as expected, including that output is not lost"""
         _, out = run_dbt_and_capture(["debug", "--connection"])
-        assert "Skipping steps before connection verification"
+        assert "Skipping steps before connection verification" in out
 
         _, out = run_dbt_and_capture(
             ["debug", "--connection", "--target", "NONE"], expect_pass=False
@@ -118,3 +118,10 @@ class TestDebugInvalidProjectPostgres(BaseDebug):
         run_dbt(["debug", "--project-dir", "custom"], expect_pass=False)
         splitout = self.capsys.readouterr().out.split("\n")
         self.check_project(splitout)
+
+    def test_profile_not_found(self, project):
+        _, out = run_dbt_and_capture(
+            ["debug", "--connection", "--profile", "NONE"], expect_pass=False
+        )
+        assert "Profile loading failed for the following reason" in out
+        assert "Could not find profile named 'NONE'" in out

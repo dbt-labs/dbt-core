@@ -5,7 +5,7 @@ import platform
 import sys
 
 from collections import namedtuple
-from enum import Enum
+from enum import Flag
 from typing import Optional, Dict, Any, List, Tuple
 
 from dbt.events.functions import fire_event
@@ -19,6 +19,7 @@ import dbt.exceptions
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import PartialProject, Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
+from dbt.contracts.results import RunStatus
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
@@ -67,16 +68,9 @@ SubtaskStatus = namedtuple(
 )
 
 
-class RunStatus(Enum):
-    PASS = 1
-    FAIL = 2
-    SKIP = 3
-
-
-DEBUG_RUN_STATUS: Dict[str, bool] = {
-    "pass": True,
-    "fail": False,
-}
+class DebugRunStatus(Flag):
+    SUCCESS = True
+    FAIL = False
 
 
 class DebugTask(BaseTask):
@@ -98,12 +92,9 @@ class DebugTask(BaseTask):
 
         # set by _load_*
         self.profile: Optional[Profile] = None
-        self.profile_fail_details = ""
         self.raw_profile_data: Optional[Dict[str, Any]] = None
         self.profile_name: Optional[str] = None
         self.project: Optional[Project] = None
-        self.project_fail_details = ""
-        self.messages: List[str] = []
 
     @property
     def project_profile(self):
@@ -118,7 +109,7 @@ class DebugTask(BaseTask):
     def run(self) -> bool:
         if self.args.config_dir:
             self.path_info()
-            return DEBUG_RUN_STATUS["pass"]
+            return DebugRunStatus.SUCCESS.value
 
         version: str = get_installed_version().to_version_string(skip_matcher=True)
         fire_event(DebugCmdOut(msg="dbt version: {}".format(version)))
@@ -131,7 +122,7 @@ class DebugTask(BaseTask):
         fire_event(DebugCmdOut(msg="Using profiles dir at {}".format(self.profiles_dir)))
         fire_event(DebugCmdOut(msg="Using profiles.yml file at {}".format(self.profile_path)))
         fire_event(DebugCmdOut(msg="Using dbt_project.yml file at {}".format(self.project_path)))
-        if load_profile_status.run_status == RunStatus.PASS:
+        if load_profile_status.run_status == RunStatus.Success:
             if self.profile is None:
                 raise dbt.exceptions.DbtInternalError(
                     "Profile should not be None if loading profile completed"
@@ -166,7 +157,7 @@ class DebugTask(BaseTask):
             *dependencies_statuses,
         ]
         all_failing_statuses: List[SubtaskStatus] = list(
-            filter(lambda status: status.run_status == RunStatus.FAIL, all_statuses)
+            filter(lambda status: status.run_status == RunStatus.Error, all_statuses)
         )
 
         failure_count: int = len(all_failing_statuses)
@@ -174,10 +165,10 @@ class DebugTask(BaseTask):
             fire_event(DebugCmdResult(msg=red(f"{(pluralize(failure_count, 'check'))} failed:")))
             for status in all_failing_statuses:
                 fire_event(DebugCmdResult(msg=f"{status.summary_message}\n"))
-            return DEBUG_RUN_STATUS["fail"]
+            return DebugRunStatus.FAIL.value
         else:
             fire_event(DebugCmdResult(msg=green("All checks passed!")))
-            return DEBUG_RUN_STATUS["pass"]
+            return DebugRunStatus.SUCCESS.value
 
     # ==============================
     # Override for elsewhere in core
@@ -192,13 +183,14 @@ class DebugTask(BaseTask):
 
     def _load_profile(self) -> SubtaskStatus:
         """
-        Side effect: load self.profile
-        Side effect: load self.target_name
+        Side effects: load self.profile
+                      load self.target_name
+                      load self.raw_profile_data
         """
         if not os.path.exists(self.profile_path):
             return SubtaskStatus(
                 log_msg=red("ERROR not found"),
-                run_status=RunStatus.FAIL,
+                run_status=RunStatus.Error,
                 details=FILE_NOT_FOUND,
                 summary_message=MISSING_PROFILE_MESSAGE.format(
                     path=self.profile_path, url=ProfileConfigDocs
@@ -235,15 +227,18 @@ class DebugTask(BaseTask):
             details = "\n\n".join(profile_errors)
             return SubtaskStatus(
                 log_msg=red("ERROR invalid"),
-                run_status=RunStatus.FAIL,
+                run_status=RunStatus.Error,
                 details=details,
-                summary_message=summary_message
-                + (f"Profile loading failed for the following reason:" f"\n{details}" f"\n"),
+                summary_message=(
+                    summary_message + f"Profile loading failed for the following reason:"
+                    f"\n{details}"
+                    f"\n"
+                ),
             )
         else:
             return SubtaskStatus(
                 log_msg=green("OK found and valid"),
-                run_status=RunStatus.PASS,
+                run_status=RunStatus.Success,
                 details="",
                 summary_message="Profile is valid",
             )
@@ -331,7 +326,7 @@ class DebugTask(BaseTask):
         if not os.path.exists(self.project_path):
             return SubtaskStatus(
                 log_msg=red("ERROR not found"),
-                run_status=RunStatus.FAIL,
+                run_status=RunStatus.Error,
                 details=FILE_NOT_FOUND,
                 summary_message=(
                     f"Project loading failed for the following reason:"
@@ -350,7 +345,7 @@ class DebugTask(BaseTask):
         except dbt.exceptions.DbtConfigError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR invalid"),
-                run_status=RunStatus.FAIL,
+                run_status=RunStatus.Error,
                 details=str(exc),
                 summary_message=(
                     f"Project loading failed for the following reason:" f"\n{str(exc)}" f"\n"
@@ -359,7 +354,7 @@ class DebugTask(BaseTask):
         else:
             return SubtaskStatus(
                 log_msg=green("OK found and valid"),
-                run_status=RunStatus.PASS,
+                run_status=RunStatus.Success,
                 details="",
                 summary_message="Project is valid",
             )
@@ -399,14 +394,14 @@ class DebugTask(BaseTask):
         except dbt.exceptions.ExecutableError as exc:
             return SubtaskStatus(
                 log_msg=red("ERROR"),
-                run_status=RunStatus.FAIL,
+                run_status=RunStatus.Error,
                 details="git error",
                 summary_message="Error from git --help: {!s}".format(exc),
             )
         else:
             return SubtaskStatus(
                 log_msg=green("OK found"),
-                run_status=RunStatus.PASS,
+                run_status=RunStatus.Success,
                 details="",
                 summary_message="git is installed and on the path",
             )
@@ -462,7 +457,7 @@ class DebugTask(BaseTask):
             fire_event(DebugCmdOut(msg="Connection test skipped since no profile was found"))
             return SubtaskStatus(
                 log_msg=red("SKIPPED"),
-                run_status=RunStatus.SKIP,
+                run_status=RunStatus.Skipped,
                 details="No profile found",
                 summary_message="Connection test skipped since no profile was found",
             )
@@ -472,19 +467,19 @@ class DebugTask(BaseTask):
             fire_event(DebugCmdOut(msg=f"  {k}: {v}"))
 
         connection_result = self.attempt_connection(self.profile)
-        if connection_result is not None:
+        if connection_result is None:
             status = SubtaskStatus(
-                log_msg=red("ERROR"),
-                run_status=RunStatus.FAIL,
-                details="Failure in connecting to db",
-                summary_message=connection_result,
+                log_msg=green("OK connection ok"),
+                run_status=RunStatus.Success,
+                details="",
+                summary_message="Connection test passed",
             )
         else:
             status = SubtaskStatus(
-                log_msg=green("OK connection ok"),
-                run_status=RunStatus.PASS,
-                details="",
-                summary_message="Connection test passed",
+                log_msg=red("ERROR"),
+                run_status=RunStatus.Error,
+                details="Failure in connecting to db",
+                summary_message=connection_result,
             )
         fire_event(DebugCmdOut(msg=f"  Connection test: [{status.log_msg}]\n"))
         return status
