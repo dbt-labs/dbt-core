@@ -31,6 +31,7 @@ from dbt.node_types import NodeType
 # | E    | DB adapter          |
 # | I    | Project parsing     |
 # | M    | Deps generation     |
+# | P    | Artifacts           |
 # | Q    | Node execution      |
 # | W    | Node testing        |
 # | Z    | Misc                |
@@ -280,7 +281,7 @@ class ConfigSourcePathDeprecation(WarnLevel):
 
     def message(self):
         description = (
-            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`."
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
@@ -292,7 +293,7 @@ class ConfigDataPathDeprecation(WarnLevel):
 
     def message(self):
         description = (
-            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`."
+            f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
         )
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
@@ -1146,6 +1147,62 @@ class UnpinnedRefNewVersionAvailable(InfoLevel):
         return msg
 
 
+class DeprecatedModel(WarnLevel):
+    def code(self):
+        return "I065"
+
+    def message(self) -> str:
+        version = ".v" + self.model_version if self.model_version else ""
+        return (
+            f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
+            "This model should be disabled or removed."
+        )
+
+
+class UpcomingReferenceDeprecation(WarnLevel):
+    def code(self):
+        return "I066"
+
+    def message(self) -> str:
+        ref_model_version = ".v" + self.ref_model_version if self.ref_model_version else ""
+        msg = (
+            f"While compiling '{self.model_name}': Found a reference to {self.ref_model_name}{ref_model_version}, "
+            f"which is slated for deprecation on '{self.ref_model_deprecation_date}'. "
+        )
+
+        if self.ref_model_version and self.ref_model_version != self.ref_model_latest_version:
+            coda = (
+                f"A new version of '{self.ref_model_name}' is available. Try it out: "
+                f"{{{{ ref('{self.ref_model_package}', '{self.ref_model_name}', "
+                f"v='{self.ref_model_latest_version}') }}}}."
+            )
+            msg = msg + coda
+
+        return msg
+
+
+class DeprecatedReference(WarnLevel):
+    def code(self):
+        return "I067"
+
+    def message(self) -> str:
+        ref_model_version = ".v" + self.ref_model_version if self.ref_model_version else ""
+        msg = (
+            f"While compiling '{self.model_name}': Found a reference to {self.ref_model_name}{ref_model_version}, "
+            f"which was deprecated on '{self.ref_model_deprecation_date}'. "
+        )
+
+        if self.ref_model_version and self.ref_model_version != self.ref_model_latest_version:
+            coda = (
+                f"A new version of '{self.ref_model_name}' is available. Migrate now: "
+                f"{{{{ ref('{self.ref_model_package}', '{self.ref_model_name}', "
+                f"v='{self.ref_model_latest_version}') }}}}."
+            )
+            msg = msg + coda
+
+        return msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1391,6 +1448,19 @@ class NoNodesForSelectionCriteria(WarnLevel):
 
     def message(self) -> str:
         return f"The selection criterion '{self.spec_raw}' does not match any nodes"
+
+
+# =======================================================
+# Q - Node execution
+# =======================================================
+
+
+class PublicationArtifactAvailable(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return "Publication artifact available"
 
 
 # =======================================================

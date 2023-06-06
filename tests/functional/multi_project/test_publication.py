@@ -1,8 +1,12 @@
+import json
 import pytest
-import pathlib
-import os
 
-from dbt.tests.util import run_dbt, get_artifact, write_file, copy_file
+from dbt.tests.util import (
+    run_dbt,
+    write_file,
+    run_dbt_and_capture,
+    get_logging_events,
+)
 from dbt.contracts.publication import PublicationArtifact, PublicModel
 from dbt.exceptions import (
     PublicationConfigNotFound,
@@ -62,24 +66,24 @@ marketing_pub_json = """
       "name": "fct_one",
       "package_name": "marketing",
       "unique_id": "model.marketing.fct_one",
-      "relation_name": '"dbt"."test_schema"."fct_one"',
+      "relation_name": "\\"dbt\\".\\"test_schema\\".\\"fct_one\\"",
       "database": "dbt",
       "schema": "test_schema",
       "identifier": "fct_one",
       "version": null,
       "latest_version": null,
       "public_node_dependencies": [],
-      "generated_at": "2023-04-13T17:17:58.128706Z",
+      "generated_at": "2023-04-13T17:17:58.128706Z"
     },
     "model.marketing.fct_two": {
       "name": "fct_two",
       "package_name": "marketing",
       "unique_id": "model.marketing.fct_two",
-      "relation_name": '"dbt"."test_schema"."fct_two"',
+      "relation_name": "\\"dbt\\".\\"test_schema\\".\\"fct_two\\"",
       "version": null,
       "latest_version": null,
       "public_node_dependencies": ["model.test.fct_one"],
-      "generated_at": "2023-04-13T17:17:58.128706Z",
+      "generated_at": "2023-04-13T17:17:58.128706Z"
     }
   },
   "dependencies": []
@@ -102,10 +106,11 @@ class TestPublicationArtifact:
         }
 
     def test_publication_artifact(self, project):
-        results = run_dbt(["run"])
+        results, log_output = run_dbt_and_capture(["--debug", "--log-format=json", "run"])
         assert len(results) == 3
 
-        publication_dict = get_artifact(project.project_root, "target", "test_publication.json")
+        pub_available_events = get_logging_events(log_output, "PublicationArtifactAvailable")
+        publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert publication
         assert len(publication.public_models) == 2
@@ -127,22 +132,27 @@ class TestPublicationArtifacts:
     def test_pub_artifacts(self, project):
         write_file(dependencies_yml, "dependencies.yml")
 
-        # Dependencies lists "marketing" project, but no publication file found
+        # Dependencies lists "marketing" project, but no publications provided
         with pytest.raises(PublicationConfigNotFound):
             run_dbt(["parse"])
 
-        # Write out publication file and try again
-        m_pub_json = marketing_pub_json.replace("test_schema", project.test_schema)
-        (pathlib.Path(project.project_root) / "publications").mkdir(parents=True, exist_ok=True)
-        write_file(m_pub_json, project.project_root, "publications", "marketing_publication.json")
+        # Dependencies lists "marketing" project, but no "marketing" publication provided
+        with pytest.raises(PublicationConfigNotFound):
+            run_dbt(["parse"], publications=[PublicationArtifact(project_name="not_marketing")])
 
-        manifest = run_dbt(["parse"])
+        # Provide publication and try again
+        m_pub_json = marketing_pub_json.replace("test_schema", project.test_schema)
+        publications = [PublicationArtifact.from_dict(json.loads(m_pub_json))]
+        manifest, log_output = run_dbt_and_capture(
+            ["--debug", "--log-format=json", "parse"], publications=publications
+        )
         assert manifest.publications
         assert "marketing" in manifest.publications
         assert "model.marketing.fct_one" in manifest.publications["marketing"].public_node_ids
 
         # Check dependencies in publication_artifact
-        publication_dict = get_artifact(project.project_root, "target", "test_publication.json")
+        pub_available_events = get_logging_events(log_output, "PublicationArtifactAvailable")
+        publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert publication.dependencies == ["marketing"]
 
@@ -154,7 +164,7 @@ class TestPublicationArtifacts:
 
         # add new model that references external_node and parse
         write_file(ext_node_model_sql, project.project_root, "models", "test_model_one.sql")
-        manifest = run_dbt(["parse"])
+        manifest = run_dbt(["parse"], publications=publications)
 
         model_id = "model.test.test_model_one"
         public_model_id = "model.marketing.fct_one"
@@ -172,7 +182,7 @@ class TestPublicationArtifacts:
         # Create the relation for the public node (fct_one)
         project.run_sql(f'create table "{project.test_schema}"."fct_one" (id integer)')
         project.run_sql(f'insert into "{project.test_schema}"."fct_one" values (1), (2)')
-        results = run_dbt(["run"])
+        results = run_dbt(["run"], publications=publications)
         assert len(results) == 4
 
         # Test for only publication artifact has changed, no partial parsing
@@ -180,17 +190,17 @@ class TestPublicationArtifacts:
         m_pub_json = m_pub_json.replace("fct_one", "fct_three")
         # Change generated_at field
         m_pub_json = m_pub_json.replace("04-13", "04-24")
-        write_file(m_pub_json, project.project_root, "publications", "marketing_publication.json")
+        publications = [PublicationArtifact.from_dict(json.loads(m_pub_json))]
         # test_model_one references a missing public model
         with pytest.raises(TargetNotFoundError):
-            manifest = run_dbt(["parse"])
+            manifest = run_dbt(["parse"], publications=publications)
 
         # Add another public reference
         m_pub_json = m_pub_json.replace("fct_three", "fct_one")
         m_pub_json = m_pub_json.replace("04-13", "04-25")
-        write_file(m_pub_json, project.project_root, "publications", "marketing_publication.json")
+        publications = [PublicationArtifact.from_dict(json.loads(m_pub_json))]
         write_file(ext_node_model_sql, project.project_root, "models", "test_model_two.sql")
-        results = run_dbt(["run"])
+        results = run_dbt(["run"], publications=publications)
         assert len(results) == 5
 
 
@@ -234,32 +244,22 @@ class TestMultiProjects:
 
     def test_multi_projects(self, project, project_alt):
         # run the alternate project by using the alternate project root
-        # (There is currently a bug where project-dir requires a chdir to work.)
-        os.chdir(project_alt.project_root)
-        results = run_dbt(["run", "--project-dir", str(project_alt.project_root)])
+        results, log_output = run_dbt_and_capture(
+            ["--debug", "--log-format=json", "run", "--project-dir", str(project_alt.project_root)]
+        )
         assert len(results) == 1
 
         # Check publication artifact
-        publication_dict = get_artifact(
-            project_alt.project_root, "target", "test_alt_publication.json"
-        )
+        pub_available_events = get_logging_events(log_output, "PublicationArtifactAvailable")
+        publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert len(publication.public_models) == 1
 
-        # copy the publication artifact from test_alt to test project
-        (pathlib.Path(project.project_root) / "publications").mkdir(parents=True, exist_ok=True)
-        target_path = os.path.join(project_alt.project_root, "target")
-        copy_file(
-            target_path,
-            "test_alt_publication.json",
-            project.project_root,
-            ["publications", "test_alt_publication.json"],
-        )
-
         # run the base project
-        os.chdir(project.project_root)
         write_file(dependencies_alt_yml, project.project_root, "dependencies.yml")
-        results = run_dbt(["run", "--project-dir", str(project.project_root)])
+        results = run_dbt(
+            ["run", "--project-dir", str(project.project_root)], publications=[publication]
+        )
         assert len(results) == 4
 
 
@@ -274,8 +274,7 @@ class TestProjectCycles:
         write_file(dependencies_yml, "dependencies.yml")
         # Create a project dependency that's the same as the current project
         m_pub_json = marketing_pub_json.replace('"dependencies": []', '"dependencies": ["test"]')
-        (pathlib.Path(project.project_root) / "publications").mkdir(parents=True, exist_ok=True)
-        write_file(m_pub_json, project.project_root, "publications", "marketing_publication.json")
+        publication = PublicationArtifact.from_dict(json.loads(m_pub_json))
 
         with pytest.raises(ProjectDependencyCycleError):
-            run_dbt(["parse"])
+            run_dbt(["parse"], publications=[publication])
