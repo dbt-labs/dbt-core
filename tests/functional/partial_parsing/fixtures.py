@@ -349,17 +349,12 @@ metrics:
     label: New Customers
     model: customers
     description: "The number of paid customers who are using the product"
-    calculation_method: count
-    expression: user_id
-    timestamp: signup_date
-    time_grains: [day, week, month]
-    dimensions:
-      - plan
-      - country
-    filters:
-      - field: is_paying
-        value: True
-        operator: '='
+    type: simple
+    type_params:
+      measure:
+        name: customers
+        filter:
+          where_sql_template: "is_paying = True"
     +meta:
         is_okr: True
     tags:
@@ -431,32 +426,25 @@ env_var_metrics_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: '{{ env_var("ENV_VAR_METRICS") }}'
 
-  - model: "ref('people')"
-    name: collective_tenure
+  - name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: is
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
 
 """
 
@@ -587,32 +575,25 @@ people_metrics_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
-  - model: "ref('people')"
-    name: collective_tenure
+  - name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: is
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
 
 """
 
@@ -985,32 +966,25 @@ people_metrics2_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'replaced'
 
-  - model: "ref('people')"
-    name: collective_tenure
+  - name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: is
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
 
 """
 
@@ -1177,17 +1151,13 @@ people_metrics3_yml = """
 
 metrics:
 
-  - model: "ref('people')"
-    name: number_of_people
+  - name: number_of_people
     description: Total count of people
     label: "Number of people"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'replaced'
 

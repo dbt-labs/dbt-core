@@ -127,14 +127,10 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people_model')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: "people"
     meta:
         my_meta: 'testing'
     config:
@@ -147,14 +143,11 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
+    type: simple
+    type_params:
+      measure:
+        name: "people"
     model: "ref('people_model')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
     meta:
         my_meta: 'testing'
     config:

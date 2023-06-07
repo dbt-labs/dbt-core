@@ -30,45 +30,41 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
   - name: collective_tenure
     label: "Collective tenure"
     description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day, week, month]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+        filter:
+          where_sql_template: "loves_dbt is true"
 
   - name: average_tenure
     label: "Average tenure"
     description: "The average tenure per person"
-    calculation_method: derived
-    expression: "{{metric('collective_tenure')}} / {{metric('number_of_people')}} "
-    timestamp: created_at
-    time_grains: [day, week, month]
+    type: ratio
+    type_params:
+      numerator:
+        name: years_tenure
+      denominator:
+        name: people
 
   - name: average_tenure_plus_one
-    label: "Average tenure"
+    label: "Average tenure, plus 1"
     description: "The average tenure per person"
-    calculation_method: derived
-    expression: "{{metric('average_tenure')}} + 1 "
-    timestamp: created_at
-    time_grains: [day, week, month]
+    type: derived
+    type_params:
+      metrics:
+        - name: average_tenure
+      expr: "average_tenure + 1"
 """
 
 models_people_metrics_yml = """
@@ -79,45 +75,35 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
   - name: collective_tenure
     label: "Collective tenure"
     description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
 
   - name: collective_window
     label: "Collective window"
     description: Testing window
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    window:
-      count: 14
-      period: day
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
+      window:
+        count: 14
+        granularity: day
 
 """
 
@@ -212,14 +198,10 @@ metrics:
   - name: number of people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
@@ -233,14 +215,10 @@ metrics:
   - name: number_of_people!
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
@@ -255,14 +233,10 @@ metrics:
   - name: 1_number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
@@ -276,14 +250,10 @@ metrics:
   - name: this_name_is_going_to_contain_more_than_250_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen_and_repeat_this_name_is_going_to_contain_more_than_250_characters_but_be_otherwise_acceptable_and_then_will_throw_an_error_which_I_expect_to_happen
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 
@@ -319,12 +289,9 @@ downstream_model_sql = """
     {% for m in some_metrics %}
         name: {{ m.name }}
         label: {{ m.label }}
-        calculation_method: {{ m.calculation_method }}
-        expression: {{ m.expression }}
-        timestamp: {{ m.timestamp }}
-        time_grains: {{ m.time_grains }}
-        dimensions: {{ m.dimensions }}
-        filters: {{ m.filters }}
+        type: {{ m.type }}
+        type_params: {{ m.type_params }}
+        filters {{ m.filter }}
         window: {{ m.window }}
     {% endfor %}
 
@@ -378,77 +345,26 @@ version: 2
 metrics:
     - name: count_orders
       label: Count orders
-      model: ref('mock_purchase_data')
-
-      calculation_method: count
-      expression: "*"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
+      type: simple
+      type_params:
+        measure:
+          name: num_orders
 
     - name: sum_order_revenue
       label: Total order revenue
-      model: ref('mock_purchase_data')
-
-      calculation_method: sum
-      expression: "payment_total"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
+      type: simple
+      type_params:
+        measure:
+          name: order_revenue
 
     - name: average_order_value
       label: Average Order Value
-
-      calculation_method: derived
-      expression:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-"""
-
-derived_metric_old_attr_names_yml = """
-version: 2
-metrics:
-    - name: count_orders
-      label: Count orders
-      model: ref('mock_purchase_data')
-
-      type: count
-      sql: "*"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-
-    - name: sum_order_revenue
-      label: Total order revenue
-      model: ref('mock_purchase_data')
-
-      type: sum
-      sql: "payment_total"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-
-    - name: average_order_value
-      label: Average Order Value
-
-      type: expression
-      sql:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
+      type: derived
+      type_params:
+        numerator:
+          name: sum_order_revenue
+        denominator:
+          name: count_orders
 """
 
 disabled_metric_level_schema_yml = """
@@ -459,31 +375,24 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
+    type: simple
+    type_params:
+      measure:
+        name: people
     config:
       enabled: False
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
     meta:
         my_meta: 'testing'
 
   - name: collective_tenure
     label: "Collective tenure"
     description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
 
 """
 
@@ -495,31 +404,24 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
+    type: simple
+    type_params:
+      measure:
+        name: people
     config:
       enabled: True
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
     meta:
         my_meta: 'testing'
 
   - name: collective_tenure
     label: "Collective tenure"
     description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
+    type: simple
+    type_params:
+      measure:
+        name: years_tenure
+        filter:
+          where_sql_template: "loves_dbt is true"
 
 """
 
@@ -552,12 +454,9 @@ models_people_metrics_sql = """
     {% for m in some_metrics %}
         name: {{ m.name }}
         label: {{ m.label }}
-        calculation_method: {{ m.calculation_method }}
-        expression: {{ m.expression }}
-        timestamp: {{ m.timestamp }}
-        time_grains: {{ m.time_grains }}
-        dimensions: {{ m.dimensions }}
-        filters: {{ m.filters }}
+        type: {{ m.type }}
+        type_params: {{ m.type_params }}
+        filter: {{ m.filter }}
         window: {{ m.window }}
     {% endfor %}
 
@@ -572,13 +471,10 @@ version: 2
 metrics:
   - name: some_metric
     label: Some Metric
-    model: ref('model_a')
-
-    calculation_method: count
-    expression: id
-
-    timestamp: ts
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure:
+        name: some_measure
 """
 
 metrics_2_yml = """
@@ -587,13 +483,10 @@ version: 2
 metrics:
   - name: some_metric
     label: Some Metric
-    model: ref('model_a')
-
-    calculation_method: count
-    expression: user_id
-
-    timestamp: ts
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure:
+        name: some_measure
 """
 
 model_a_sql = """
@@ -631,14 +524,10 @@ metrics:
     config:
         enabled: True and False
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 """
@@ -650,12 +539,10 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: people
     meta:
         my_meta: 'testing'
 """

@@ -23,6 +23,8 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
     Metric,
+    MetricTypeParams,
+    MetricInputMeasure,
     SeedNode,
     Docs,
     MacroDependsOn,
@@ -44,6 +46,7 @@ from dbt import flags
 from argparse import Namespace
 
 from dbt.dataclass_schema import ValidationError
+from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 from .utils import (
     ContractTestCase,
     assert_symmetric,
@@ -2335,19 +2338,10 @@ def basic_parsed_metric_dict():
     return {
         "name": "new_customers",
         "label": "New Customers",
-        "model": 'ref("dim_customers")',
-        "calculation_method": "count",
-        "expression": "user_id",
-        "timestamp": "signup_date",
-        "time_grains": ["day", "week", "month"],
-        "dimensions": ["plan", "country"],
-        "filters": [
-            {
-                "field": "is_paying",
-                "value": "true",
-                "operator": "=",
-            }
-        ],
+        "type": "simple",
+        "type_params": {
+            "measure": {"name": "customers", "filter": {"where_sql_template": "is_new = true"}},
+        },
         "resource_type": "metric",
         "refs": [["dim_customers"]],
         "sources": [],
@@ -2357,7 +2351,7 @@ def basic_parsed_metric_dict():
         "package_name": "test",
         "path": "models/something.yml",
         "original_file_path": "models/something.yml",
-        "description": "",
+        "description": "New Customers",
         "meta": {},
         "tags": [],
         "created_at": 1.0,
@@ -2374,8 +2368,9 @@ def basic_parsed_metric_object():
     return Metric(
         name="my_metric",
         resource_type=NodeType.Metric,
-        calculation_method="count",
-        fqn=["test", "metrics", "my_metric"],
+        type=MetricType.SIMPLE,
+        type_params=MetricTypeParams(measure=MetricInputMeasure(name="a_measure")),
+        fqn=["test", "metrics", "myq_metric"],
         unique_id="metric.test.my_metric",
         package_name="test",
         path="models/something.yml",

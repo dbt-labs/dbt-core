@@ -18,7 +18,6 @@ from tests.functional.metrics.fixtures import (
     downstream_model_sql,
     invalid_derived_metric_contains_model_yml,
     derived_metric_yml,
-    derived_metric_old_attr_names_yml,
     metric_without_timestamp_or_timegrains_yml,
     invalid_metric_without_timestamp_with_time_grains_yml,
     invalid_metric_without_timestamp_with_window_yml,
@@ -265,25 +264,13 @@ class TestDerivedMetric:
             for property in [
                 "name",
                 "label",
-                "calculation_method",
-                "expression",
-                "timestamp",
-                "time_grains",
-                "dimensions",
-                "filters",
+                "type",
+                "type_params",
+                "filter",
                 "window",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code
-
-
-class TestDerivedMetricOldAttrNames(TestDerivedMetric):
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "derived_metric.yml": derived_metric_old_attr_names_yml,
-            "downstream_model.sql": downstream_model_sql,
-        }
 
 
 class TestInvalidTimestampTimeGrainsMetrics:

@@ -12,30 +12,22 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure:
+        name: "people"
     meta:
         my_meta: 'testing'
 
   - name: number_of_people
     label: "Collective tenure"
     description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
+    type: simple
+    type_params:
+      measure:
+        name: "years_tenure"
+        filter:
+          where_sql_template: "loves_dbt is true"
 """
 
 
