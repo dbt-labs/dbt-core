@@ -7,7 +7,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetric,
     UnparsedSemanticModel,
 )
-from dbt.contracts.graph.nodes import Exposure, Group, Metric, NodeRelation, SemanticModel
+from dbt.contracts.graph.nodes import Exposure, Group, Metric, SemanticModel
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure, generate_parse_metrics
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
@@ -293,8 +293,9 @@ class SemanticModelParser(YamlReader):
         parsed = SemanticModel(
             description=unparsed.description,
             fqn=fqn,
+            model=unparsed.model,
             name=unparsed.name,
-            node_relation=NodeRelation(alias="", database="", schema_name=""),  # TODO: arguments
+            node_relation=None,  # Resolved from the value of "model" after parsing
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,
             path=path,

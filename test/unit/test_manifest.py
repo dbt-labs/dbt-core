@@ -377,6 +377,7 @@ class ManifestTest(unittest.TestCase):
             metrics={},
             selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            semantic_models={},
         )
 
         invocation_id = dbt.events.functions.EVENT_MANAGER.invocation_id
@@ -403,6 +404,7 @@ class ManifestTest(unittest.TestCase):
                 "docs": {},
                 "disabled": {},
                 "public_nodes": {},
+                "semantic_models": {},
             },
         )
 
@@ -542,6 +544,7 @@ class ManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            semantic_models={},
         )
 
         self.assertEqual(
@@ -571,6 +574,7 @@ class ManifestTest(unittest.TestCase):
                 },
                 "disabled": {},
                 "public_nodes": {},
+                "semantic_models": {},
             },
         )
 
@@ -883,6 +887,7 @@ class MixedManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            semantic_models={},
         )
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
@@ -907,6 +912,7 @@ class MixedManifestTest(unittest.TestCase):
                 "docs": {},
                 "disabled": {},
                 "public_nodes": {},
+                "semantic_models": {},
             },
         )
 

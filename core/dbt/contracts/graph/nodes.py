@@ -1429,7 +1429,8 @@ class NodeRelation(dbtClassMixin):
 @dataclass
 class SemanticModel(GraphNode):
     description: Optional[str]
-    node_relation: NodeRelation
+    model: str
+    node_relation: Optional[NodeRelation]
     entities: Sequence[Entity]
     measures: Sequence[Measure]
     dimensions: Sequence[Dimension]

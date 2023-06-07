@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.cli.main import dbtRunner
+from dbt.contracts.graph.manifest import Manifest
 
 schema_yml = """models:
   - name: fct_revenue
@@ -49,3 +50,8 @@ class TestSemanticModelParsing:
         runner = dbtRunner()
         result = runner.invoke(["parse"])
         assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic model.test.revenue"]
+        assert semantic_model.node_relation.alias == "fct_revenue"
