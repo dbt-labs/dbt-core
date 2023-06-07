@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest import mock
 from unittest.mock import Mock, call
 
+from dbt.exceptions import DbtRuntimeError
+
 from dbt.tests.util import run_dbt
 
 
@@ -86,10 +88,9 @@ test:
             )
 
     def test_init_task_in_project_specifying_profile_errors(self):
-        # This triggers a call to sys.exit(), requring the following to test it
-        with pytest.raises(SystemExit) as error:
-            run_dbt(["init", "--profile", "test"])
-        assert error.value.code == 1
+        with pytest.raises(DbtRuntimeError) as error:
+            run_dbt(["init", "--profile", "test"], expect_pass=False)
+            assert "Can not init existing project with specified profile" in str(error)
 
 
 class TestInitProjectWithoutExistingProfilesYml:
@@ -176,10 +177,9 @@ class TestInitProjectWithoutExistingProfilesYml:
 
         # Even through no profiles.yml file exists, the init will not modify project.yml,
         # so this errors
-        # This triggers a call to sys.exit(), requring the following to test it
-        with pytest.raises(SystemExit) as error:
-            run_dbt(["init", "--profile", "test"])
-        assert error.value.code == 1
+        with pytest.raises(DbtRuntimeError) as error:
+            run_dbt(["init", "--profile", "test"], expect_pass=False)
+            assert "Could not find profile named test" in str(error)
 
 
 class TestInitProjectWithoutExistingProfilesYmlOrTemplate:
@@ -814,10 +814,9 @@ class TestInitOutsideOfProjectSpecifyingInvalidProfile(TestInitOutsideOfProjectB
         ]
         mock_get_adapter.return_value = [project.adapter.type()]
 
-        # This triggers a call to sys.exit(), requring the following to test it
-        with pytest.raises(SystemExit) as error:
-            run_dbt(["init", "--profile", "invalid"])
-        assert error.value.code == 1
+        with pytest.raises(DbtRuntimeError) as error:
+            run_dbt(["init", "--profile", "invalid"], expect_pass=False)
+            assert "Could not find profile named invalid" in str(error)
 
         manager.assert_has_calls(
             [
@@ -847,10 +846,9 @@ class TestInitOutsideOfProjectSpecifyingProfileNoProfilesYml(TestInitOutsideOfPr
                 os.path.basename(path), original_isfile(path)
             ),
         ):
-            # This triggers a call to sys.exit(), requring the following to test it
-            with pytest.raises(SystemExit) as error:
-                run_dbt(["init", "--profile", "test"])
-            assert error.value.code == 1
+            with pytest.raises(DbtRuntimeError) as error:
+                run_dbt(["init", "--profile", "test"], expect_pass=False)
+                assert "Could not find profile named invalid" in str(error)
 
         manager.assert_has_calls(
             [

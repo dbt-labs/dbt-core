@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import sys
 from typing import Optional
 
 import yaml
@@ -12,6 +11,7 @@ import click
 import dbt.config
 import dbt.clients.system
 from dbt.config.profile import read_profile
+from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
@@ -190,6 +190,15 @@ class InitTask(BaseTask):
             # sample_profiles.yml
             self.create_profile_from_sample(adapter, profile_name)
 
+    def check_if_profile_exists(self, profile_name: str) -> bool:
+        """
+        Validate that the specified profile exists. Can't use the regular profile validation
+        routine because it assumes the project file exists
+        """
+        profiles_dir = get_flags().PROFILES_DIR
+        raw_profiles = read_profile(profiles_dir)
+        return profile_name in raw_profiles
+
     def check_if_can_write_profile(self, profile_name: Optional[str] = None) -> bool:
         """Using either a provided profile name or that specified in dbt_project.yml,
         check if the profile already exists in profiles.yml, and if so ask the
@@ -235,6 +244,25 @@ class InitTask(BaseTask):
         numeric_choice = click.prompt(prompt_msg, type=click.INT)
         return available_adapters[numeric_choice - 1]
 
+    def setup_profile(self, profile_name: str) -> None:
+        """Set up a new profile for a project"""
+        fire_event(SettingUpProfile())
+        if not self.check_if_can_write_profile(profile_name=profile_name):
+            return
+        # If a profile_template.yml exists in the project root, that effectively
+        # overrides the profile_template.yml for the given target.
+        profile_template_path = Path("profile_template.yml")
+        if profile_template_path.exists():
+            try:
+                # This relies on a valid profile_template.yml from the user,
+                # so use a try: except to fall back to the default on failure
+                self.create_profile_using_project_profile_template(profile_name)
+                return
+            except Exception:
+                fire_event(InvalidProfileTemplateYAML())
+        adapter = self.ask_for_adapter_choice()
+        self.create_profile_from_target(adapter, profile_name=profile_name)
+
     def get_valid_project_name(self) -> str:
         """Returns a valid project name, either from CLI arg or user prompt."""
         name = self.args.project_name
@@ -278,16 +306,16 @@ class InitTask(BaseTask):
         if in_project:
             # If --profile was specified, it means use an existing profile, which is not
             # applicable to this case
-            if getattr(get_flags(), "PROFILE", None):
-                print(
-                    "Can not init existing project with specified profile, edit dbt_project.yml instead"
+            if self.args.profile:
+                raise DbtRuntimeError(
+                    msg="Can not init existing project with specified profile, edit dbt_project.yml instead"
                 )
-                sys.exit(1)
 
             # When dbt init is run inside an existing project,
             # just setup the user's profile.
-            profile_name = self.get_profile_name_from_current_project()
-            profile_specified = False
+            if not self.args.skip_profile_setup:
+                profile_name = self.get_profile_name_from_current_project()
+                self.setup_profile(profile_name)
         else:
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.
@@ -298,36 +326,19 @@ class InitTask(BaseTask):
                 return
 
             # If the user specified an existing profile to use, use it instead of generating a new one
-            user_profile_name = getattr(get_flags(), "PROFILE", None)
+            user_profile_name = self.args.profile
             if user_profile_name:
-                # Verify it exists. Can't use the regular profile validation routine because it assumes
-                # the project file exists
-                raw_profiles = read_profile(profiles_dir)
-                if user_profile_name not in raw_profiles:
-                    print("Could not find profile named '{}'".format(user_profile_name))
-                    sys.exit(1)
-                profile_name = user_profile_name
-                profile_specified = True
+                if not self.check_if_profile_exists(user_profile_name):
+                    raise DbtRuntimeError(
+                        msg="Could not find profile named '{}'".format(user_profile_name)
+                    )
+                self.create_new_project(project_name, user_profile_name)
             else:
                 profile_name = project_name
-                profile_specified = False
-            self.create_new_project(project_name, profile_name)
+                # Create the profile after creating the project to avoid leaving a random profile
+                # if the former fails.
+                self.create_new_project(project_name, profile_name)
 
-        # Ask for adapter only if skip_profile_setup flag is not provided and no profile to use was specified.
-        if not self.args.skip_profile_setup and not profile_specified:
-            fire_event(SettingUpProfile())
-            if not self.check_if_can_write_profile(profile_name=profile_name):
-                return
-            # If a profile_template.yml exists in the project root, that effectively
-            # overrides the profile_template.yml for the given target.
-            profile_template_path = Path("profile_template.yml")
-            if profile_template_path.exists():
-                try:
-                    # This relies on a valid profile_template.yml from the user,
-                    # so use a try: except to fall back to the default on failure
-                    self.create_profile_using_project_profile_template(profile_name)
-                    return
-                except Exception:
-                    fire_event(InvalidProfileTemplateYAML())
-            adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_target(adapter, profile_name=profile_name)
+                # Ask for adapter only if skip_profile_setup flag is not provided
+                if not self.args.skip_profile_setup:
+                    self.setup_profile(profile_name)
