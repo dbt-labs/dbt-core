@@ -491,6 +491,13 @@ target_path = click.option(
     type=click.Path(),
 )
 
+debug_connection = click.option(
+    "--connection",
+    envvar=None,
+    help="Test the connection to the target database independent of dependency checks.",
+    is_flag=True,
+)
+
 threads = click.option(
     "--threads",
     envvar=None,

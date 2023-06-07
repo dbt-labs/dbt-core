@@ -402,6 +402,7 @@ def show(ctx, **kwargs):
 # dbt debug
 @cli.command("debug")
 @click.pass_context
+@p.debug_connection
 @p.config_dir
 @p.profile
 @p.profiles_dir_exists_false
@@ -412,7 +413,7 @@ def show(ctx, **kwargs):
 @requires.postflight
 @requires.preflight
 def debug(ctx, **kwargs):
-    """Test the database connection and show information for debugging purposes. Not to be confused with the --debug option which increases verbosity."""
+    """Show information on the current dbt environment and check dependencies, then test the database connection. Not to be confused with the --debug option which increases verbosity."""
 
     task = DebugTask(
         ctx.obj["flags"],

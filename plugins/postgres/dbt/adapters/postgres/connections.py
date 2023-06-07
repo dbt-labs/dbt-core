@@ -51,9 +51,16 @@ class PostgresCredentials(Credentials):
             "user",
             "database",
             "schema",
+            "connect_timeout",
+            "role",
             "search_path",
             "keepalives_idle",
             "sslmode",
+            "sslcert",
+            "sslkey",
+            "sslrootcert",
+            "application_name",
+            "retries",
         )
 
 

@@ -114,6 +114,7 @@ from dbt.exceptions import (
     AmbiguousAliasError,
     PublicationConfigNotFound,
     ProjectDependencyCycleError,
+    InvalidAccessTypeError,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -529,6 +530,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.check_valid_group_config()
+            self.check_valid_access_property()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -785,14 +787,15 @@ class ManifestLoader:
             for project in self.manifest.project_dependencies.projects:
                 project_dependency_names.append(project.name)
 
-        # clean up previous publications that are no longer specified
-        # and save previous publications, for later removal of references
-        saved_manifest_publications: MutableMapping[str, PublicationConfig] = {}
+        # Save previous publications, for later removal of references
+        saved_manifest_publications: MutableMapping[str, PublicationConfig] = deepcopy(
+            self.manifest.publications
+        )
         if self.manifest.publications:
             for project_name, publication in self.manifest.publications.items():
                 if project_name not in project_dependency_names:
                     remove_dependent_project_references(self.manifest, publication)
-                    self.manifest.publications.pop(project_name)
+                    saved_manifest_publications.pop(project_name)
                     fire_event(
                         PublicationArtifactChanged(
                             action="removed",
@@ -803,7 +806,8 @@ class ManifestLoader:
                         )
                     )
                     public_nodes_changed = True
-            saved_manifest_publications = self.manifest.publications
+
+            # clean up previous publications that are no longer specified
             self.manifest.publications = {}
             # Empty public_nodes since we're re-generating them all
             self.manifest.public_nodes = {}
@@ -1292,6 +1296,19 @@ class ManifestLoader:
                 f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
                 node=groupable_node,
             )
+
+    def check_valid_access_property(self):
+        for node in self.manifest.nodes.values():
+            if (
+                isinstance(node, ModelNode)
+                and node.access == AccessType.Public
+                and node.get_materialization() == "ephemeral"
+            ):
+                raise InvalidAccessTypeError(
+                    unique_id=node.unique_id,
+                    field_value=node.access,
+                    materialization=node.get_materialization(),
+                )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
