@@ -60,9 +60,7 @@ setup(
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
         "click>=7.0,<9",
-        # TODO: Remove conditional <3.8 requirement, as part of removing py37 support (https://github.com/dbt-labs/dbt-core/issues/7082)
-        "networkx>=2.3,<2.8.1;python_version<'3.8'",
-        "networkx>=2.3,<3;python_version>='3.8'",
+        "networkx>=2.3,<3",
         # ----
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
