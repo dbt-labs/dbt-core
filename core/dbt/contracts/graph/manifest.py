@@ -61,6 +61,8 @@ from dbt.node_types import NodeType
 from dbt.flags import get_flags, MP_CONTEXT
 from dbt import tracking
 import dbt.utils
+from dbt_semantic_interfaces.implementations.metric import PydanticMetric
+from dbt_semantic_interfaces.implementations.semantic_manifest import PydanticSemanticManifest
 
 NodeEdgeMap = Dict[str, List[str]]
 PackageName = str
@@ -981,6 +983,19 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         if self._analysis_lookup is None:
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
+
+    @property
+    def pydantic_semantic_manifest(self) -> Optional[PydanticSemanticManifest]:
+        pydantic_semantic_manifest = PydanticSemanticManifest(metrics=[], semantic_models=[])
+
+        # TODO uncommet after getting changes from https://github.com/dbt-labs/dbt-core/pull/7769
+        # for semantic_model in manifest.semantic_models:
+        #     pydantic_semantic_manifest.metrics.append(PydanticSemanticManifest.parse_obj(semantic_model))
+
+        for metric in self.metrics:
+            pydantic_semantic_manifest.metrics.append(PydanticMetric.parse_obj(metric))
+
+        return pydantic_semantic_manifest
 
     def resolve_refs(
         self, source_node: GraphMemberNode, current_project: str

@@ -34,7 +34,12 @@ from dbt.adapters.factory import (
     get_relation_class_by_name,
     get_adapter_package_names,
 )
-from dbt.constants import DEPENDENCIES_FILE_NAME, MANIFEST_FILE_NAME, PARTIAL_PARSE_FILE_NAME
+from dbt.constants import (
+    DEPENDENCIES_FILE_NAME,
+    MANIFEST_FILE_NAME,
+    PARTIAL_PARSE_FILE_NAME,
+    SEMANTIC_MANIFEST_FILE_NAME,
+)
 from dbt.helper_types import PathSet
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
@@ -1845,6 +1850,15 @@ def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     fire_event(PublicationArtifactAvailable(pub_artifact=publication.to_dict()))
 
 
+def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
+    semantic_manifest = manifest.pydantic_semantic_manifest
+    if semantic_manifest is not None:
+        path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
+        write_file(path, semantic_manifest.json())
+
+
 def write_manifest(manifest: Manifest, target_path: str):
     path = os.path.join(target_path, MANIFEST_FILE_NAME)
     manifest.write(path)
+
+    write_semantic_manifest(manifest=manifest, target_path=target_path)
