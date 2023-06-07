@@ -1180,7 +1180,7 @@ class ManifestLoader:
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
     def process_semantic_models(self) -> None:
-        for semantic_model in self.manifest.semantic_models.values():
+        for semantic_model in self.manifest.semantic_nodes.values():
             if semantic_model.model:
                 statically_parsed = py_extract_from_source(f"{{{{ {semantic_model.model} }}}}")
                 if statically_parsed["refs"]:

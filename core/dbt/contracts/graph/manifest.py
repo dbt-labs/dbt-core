@@ -707,7 +707,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     public_nodes: MutableMapping[str, PublicModel] = field(default_factory=dict)
     project_dependencies: Optional[ProjectDependencies] = None
     publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
-    semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
+    semantic_nodes: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -914,7 +914,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
-            semantic_models=self.semantic_models,
+            semantic_nodes=self.semantic_nodes,
         )
 
     def write(self, path):
@@ -1250,9 +1250,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.docs.append(doc.unique_id)
 
     def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: SemanticModel):
-        _check_duplicates(semantic_model, self.semantic_models)
-        self.semantic_models[semantic_model.unique_id] = semantic_model
-        source_file.semantic_models.append(semantic_model.unique_id)
+        _check_duplicates(semantic_model, self.semantic_nodes)
+        self.semantic_nodes[semantic_model.unique_id] = semantic_model
+        source_file.semantic_nodes.append(semantic_model.unique_id)
 
     # end of methods formerly in ParseResult
 
@@ -1353,7 +1353,7 @@ class WritableManifest(ArtifactMixin):
     public_nodes: Mapping[UniqueID, PublicModel] = field(
         metadata=dict(description=("The public models used in the dbt project"))
     )
-    semantic_models: Mapping[UniqueID, SemanticModel] = field(
+    semantic_nodes: Mapping[UniqueID, SemanticModel] = field(
         metadata=dict(description=("The semantic models defined in the dbt project"))
     )
     metadata: ManifestMetadata = field(

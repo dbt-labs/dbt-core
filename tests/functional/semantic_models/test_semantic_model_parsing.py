@@ -52,6 +52,6 @@ class TestSemanticModelParsing:
         assert result.success
         assert isinstance(result.result, Manifest)
         manifest = result.result
-        assert len(manifest.semantic_models) == 1
-        semantic_model = manifest.semantic_models["semantic model.test.revenue"]
+        assert len(manifest.semantic_nodes) == 1
+        semantic_model = manifest.semantic_nodes["semantic model.test.revenue"]
         assert semantic_model.node_relation.alias == "fct_revenue"
