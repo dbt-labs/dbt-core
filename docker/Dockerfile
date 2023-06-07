@@ -109,7 +109,9 @@ RUN python -m pip install --no-cache-dir "git+https://github.com/dbt-labs/${dbt_
 # dbt-third-party
 ##
 FROM dbt-core as dbt-third-party
+RUN apt-get update  && apt-get install -y --no-install-recommends unixodbc-dev libodbc1 vim nano
 RUN python -m pip install --no-cache-dir "${dbt_third_party}"
+
 
 ##
 # dbt-all
