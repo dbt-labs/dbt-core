@@ -1353,7 +1353,14 @@ class WritableManifest(ArtifactMixin):
 
     @classmethod
     def compatible_previous_versions(self):
-        return []
+        return [
+            ("manifest", 4),
+            ("manifest", 5),
+            ("manifest", 6),
+            ("manifest", 7),
+            ("manifest", 8),
+            ("manifest", 9),
+        ]
 
     @classmethod
     def upgrade_schema_version(cls, data):
