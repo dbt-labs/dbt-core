@@ -1,22 +1,16 @@
 from dataclasses import dataclass, field
-from typing import Optional, Set, FrozenSet, Dict, Union, List
+from typing import Set, FrozenSet
 
+import agate
 from dbt.dataclass_schema import StrEnum
 from dbt.exceptions import DbtRuntimeError
 from dbt.adapters.relation_configs import (
     RelationConfigBase,
-    RelationResults,
     RelationConfigValidationMixin,
     RelationConfigValidationRule,
     RelationConfigChangeAction,
     RelationConfigChange,
 )
-
-
-# A `NodeConfig` instance can have multiple indexes, this is just one index
-# e.g. {"columns": ["column_a", "column_b"], "unique": True, "type": "hash"}
-Columns = List[str]
-ModelNodeEntry = Dict[str, Union[Columns, bool, str]]
 
 
 class PostgresIndexMethod(StrEnum):
@@ -49,10 +43,10 @@ class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
     - nulls_distinct: `True`
     """
 
-    name: Optional[str] = field(default=None, hash=False, compare=False)
-    column_names: Optional[FrozenSet[str]] = field(default_factory=set, hash=True)
-    unique: Optional[bool] = field(default=False, hash=True)
-    method: Optional[PostgresIndexMethod] = field(default=PostgresIndexMethod.btree, hash=True)
+    name: str = field(default=None, hash=False, compare=False)
+    column_names: FrozenSet[str] = field(default_factory=frozenset, hash=True)
+    unique: bool = field(default=False, hash=True)
+    method: PostgresIndexMethod = field(default=PostgresIndexMethod.default(), hash=True)
 
     @property
     def validation_rules(self) -> Set[RelationConfigValidationRule]:
@@ -67,37 +61,34 @@ class PostgresIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
 
     @classmethod
     def from_dict(cls, config_dict) -> "PostgresIndexConfig":
+        # TODO: include the QuotePolicy instead of defaulting to lower()
         kwargs_dict = {
             "name": config_dict.get("name"),
-            "method": config_dict.get("method"),
+            "column_names": frozenset(
+                column.lower() for column in config_dict.get("column_names", set())
+            ),
             "unique": config_dict.get("unique"),
-            "column_names": frozenset(column for column in config_dict.get("column_names", {})),
+            "method": config_dict.get("method"),
         }
         index: "PostgresIndexConfig" = super().from_dict(kwargs_dict)  # type: ignore
         return index
 
     @classmethod
-    def parse_model_node(cls, model_node_entry: ModelNodeEntry) -> dict:
+    def parse_model_node(cls, model_node_entry: dict) -> dict:
         config_dict = {
+            "column_names": set(model_node_entry.get("columns", set())),
             "unique": model_node_entry.get("unique"),
             "method": model_node_entry.get("type"),
         }
-
-        if column_names := model_node_entry.get("columns", []):
-            # TODO: include the QuotePolicy instead of defaulting to lower()
-            config_dict.update({"column_names": set(column.lower() for column in column_names)})
-
         return config_dict
 
     @classmethod
-    def parse_relation_results(cls, relation_results: RelationResults) -> dict:
-        index = relation_results.get("base", {})
+    def parse_relation_results(cls, relation_results_entry: agate.Row) -> dict:
         config_dict = {
-            "name": index.get("name"),
-            # we shouldn't have to adjust the values from the database for the QuotePolicy
-            "column_names": set(index.get("column_names", "").split(",")),
-            "unique": index.get("unique"),
-            "method": index.get("method"),
+            "name": relation_results_entry.get("name"),
+            "column_names": set(relation_results_entry.get("column_names", "").split(",")),
+            "unique": relation_results_entry.get("unique"),
+            "method": relation_results_entry.get("method"),
         }
         return config_dict
 

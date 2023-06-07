@@ -28,8 +28,7 @@ class RelationConfigBase:
         """
         This assumes the subclass of `RelationConfigBase` is flat, in the sense that no attribute is
         itself another subclass of `RelationConfigBase`. If that's not the case, this should be overriden
-        to manually manage that complexity. This can be automated in the future with something like
-        `mashumaro` or `pydantic`.
+        to manually manage that complexity.
 
         Args:
             kwargs_dict: the dict representation of this instance

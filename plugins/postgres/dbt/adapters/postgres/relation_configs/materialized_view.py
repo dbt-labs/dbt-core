@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Optional, Set, Iterable
+from typing import Set, FrozenSet, List
 
+import agate
 from dbt.adapters.relation_configs import (
     RelationConfigBase,
     RelationResults,
@@ -10,7 +11,7 @@ from dbt.adapters.relation_configs import (
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import DbtRuntimeError
 
-from dbt.adapters.postgres.relation_configs.constants import MAX_CHARACTERS_IN_OBJECT_PATH
+from dbt.adapters.postgres.relation_configs.constants import MAX_CHARACTERS_IN_IDENTIFIER
 from dbt.adapters.postgres.relation_configs.index import (
     PostgresIndexConfig,
     PostgresIndexConfigChange,
@@ -34,9 +35,9 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
     - with_data: `True`
     """
 
-    table_name: Optional[str] = None
-    query: Optional[str] = None
-    indexes: Set[PostgresIndexConfig] = field(default_factory=set)
+    table_name: str = ""
+    query: str = ""
+    indexes: FrozenSet[PostgresIndexConfig] = field(default_factory=frozenset)
 
     @property
     def validation_rules(self) -> Set[RelationConfigValidationRule]:
@@ -44,9 +45,10 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         return {
             RelationConfigValidationRule(
                 validation_check=self.table_name is None
-                or len(self.table_name) <= MAX_CHARACTERS_IN_OBJECT_PATH,
+                or len(self.table_name) <= MAX_CHARACTERS_IN_IDENTIFIER,
                 validation_error=DbtRuntimeError(
-                    f"The materialized view name is more than 63 characters: {self.table_name}"
+                    f"The materialized view name is more than {MAX_CHARACTERS_IN_IDENTIFIER} "
+                    f"characters: {self.table_name}"
                 ),
             ),
         }
@@ -56,9 +58,9 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         kwargs_dict = {
             "table_name": config_dict.get("table_name"),
             "query": config_dict.get("query"),
-            "indexes": {
+            "indexes": frozenset(
                 PostgresIndexConfig.from_dict(index) for index in config_dict.get("indexes", {})
-            },
+            ),
         }
         materialized_view: "PostgresMaterializedViewConfig" = super().from_dict(kwargs_dict)  # type: ignore
         return materialized_view
@@ -71,19 +73,12 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
 
     @classmethod
     def parse_model_node(cls, model_node: ModelNode) -> dict:
-        """
-        Postgres-specific implementation of `RelationConfig.from_model_node()` for materialized views
-        """
+        indexes: List[dict] = model_node.config.extra.get("indexes", [])
         config_dict = {
             "table_name": model_node.identifier,
             "query": model_node.compiled_code,
+            "indexes": [PostgresIndexConfig.parse_model_node(index) for index in indexes],
         }
-
-        # create index objects for each index found in the config
-        if indexes := model_node.config.extra.get("indexes"):
-            index_configs = [PostgresIndexConfig.parse_model_node(index) for index in indexes]
-            config_dict.update({"indexes": index_configs})
-
         return config_dict
 
     @classmethod
@@ -96,38 +91,23 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
 
     @classmethod
     def parse_relation_results(cls, relation_results: RelationResults) -> dict:
-        """
-        Postgres-specific implementation of `RelationConfig.from_relation_results()` for materialized views
-        """
-        base_config = relation_results.get("base", {})
+        indexes: agate.Table = relation_results.get("indexes", agate.Table(rows={}))
         config_dict = {
-            "table_name": base_config.get("table_name"),
-            "query": base_config.get("query"),
+            "indexes": [
+                PostgresIndexConfig.parse_relation_results(index) for index in indexes.rows
+            ],
         }
-
-        # create index objects for each index found in the config
-        if indexes := relation_results.get("indexes"):
-            index_configs = [
-                PostgresIndexConfig.parse_relation_results({"base": index})
-                for index in indexes.rows
-            ]
-            config_dict.update({"indexes": index_configs})
-
         return config_dict
 
 
 @dataclass
 class PostgresMaterializedViewConfigChangeCollection:
-    indexes: Optional[Set[PostgresIndexConfigChange]] = None
+    indexes: Set[PostgresIndexConfigChange] = field(default_factory=set)
 
     @property
     def requires_full_refresh(self) -> bool:
-        if isinstance(self.indexes, Iterable):
-            return any(index.requires_full_refresh for index in self.indexes)
-        return False
+        return any(index.requires_full_refresh for index in self.indexes)
 
     @property
     def has_changes(self) -> bool:
-        if isinstance(self.indexes, Iterable):
-            return any({index.is_change for index in self.indexes})
-        return False
+        return self.indexes != set()

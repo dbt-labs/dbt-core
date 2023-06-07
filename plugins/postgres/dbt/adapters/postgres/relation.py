@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Set
+from typing import Optional, Set, FrozenSet
 
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.relation_configs import (
@@ -14,7 +14,7 @@ from dbt.adapters.postgres.relation_configs import (
     PostgresIndexConfigChange,
     PostgresMaterializedViewConfig,
     PostgresMaterializedViewConfigChangeCollection,
-    MAX_CHARACTERS_IN_OBJECT_PATH,
+    MAX_CHARACTERS_IN_IDENTIFIER,
 )
 
 
@@ -34,16 +34,11 @@ class PostgresRelation(BaseRelation):
             )
 
     def relation_max_name_length(self):
-        return MAX_CHARACTERS_IN_OBJECT_PATH
+        return MAX_CHARACTERS_IN_IDENTIFIER
 
     def get_materialized_view_config_change_collection(
         self, relation_results: RelationResults, runtime_config: RuntimeConfigObject
     ) -> Optional[PostgresMaterializedViewConfigChangeCollection]:
-        """
-        Postgres-specific implementation of `BaseRelation.get_materialized_view_config_changes`.
-
-        The only tracked changes for materialized views are indexes.
-        """
         config_change_collection = PostgresMaterializedViewConfigChangeCollection()
 
         existing_materialized_view = PostgresMaterializedViewConfig.from_relation_results(
@@ -53,16 +48,21 @@ class PostgresRelation(BaseRelation):
             runtime_config.model
         )
 
-        if index_config_changes := self._get_index_config_changes(
+        config_change_collection.indexes = self._get_index_config_changes(
             existing_materialized_view.indexes, new_materialized_view.indexes
-        ):
-            config_change_collection.indexes = index_config_changes
+        )
 
+        # we return `None` instead of an empty `PostgresMaterializedViewConfigChangeCollection` object
+        # so that it's easier and more extensible to check in the materialization:
+        # `core/../materializations/materialized_view.sql` :
+        #     {% if configuration_changes is none %}
         if config_change_collection.has_changes:
             return config_change_collection
 
     def _get_index_config_changes(
-        self, existing_indexes: Set[PostgresIndexConfig], new_indexes: Set[PostgresIndexConfig]
+        self,
+        existing_indexes: FrozenSet[PostgresIndexConfig],
+        new_indexes: FrozenSet[PostgresIndexConfig],
     ) -> Set[PostgresIndexConfigChange]:
         """
         Get the index updates that will occur as a result of a new run

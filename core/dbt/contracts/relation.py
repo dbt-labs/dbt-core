@@ -20,10 +20,6 @@ class RelationType(StrEnum):
     MaterializedView = "materialized_view"
     External = "external"
 
-    @classmethod
-    def default(cls) -> "RelationType":
-        return cls.View
-
 
 class ComponentName(StrEnum):
     Database = "database"

@@ -21,7 +21,3 @@ class RelationConfigChange(RelationConfigBase, ABC):
     @abstractmethod
     def requires_full_refresh(self) -> bool:
         raise self._not_implemented_error()
-
-    @property
-    def is_change(self) -> bool:
-        return self.action is not None and self.context is not None
