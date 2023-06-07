@@ -49,7 +49,24 @@ def upgrade_seed_content(node_content):
         node_content.get("depends_on", {}).pop("nodes", None)
 
 
-def upgrade_manifest_json(manifest: dict) -> dict:
+def drop_v9_and_prior_metrics(manifest: dict) -> None:
+    manifest["metrics"] = {}
+    filtered_disabled_entries = {}
+    for entry_name, resource_list in manifest.get("disabled", {}).items():
+        filtered_resource_list = []
+        for resource in resource_list:
+            if resource.get("resource_type") != "metric":
+                filtered_resource_list.append(resource)
+        filtered_disabled_entries[entry_name] = filtered_resource_list
+
+    manifest["disabled"] = filtered_disabled_entries
+
+
+def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
+    # this should remain 9 while the check in `upgrade_schema_version` may change
+    if manifest_schema_version <= 9:
+        drop_v9_and_prior_metrics(manifest=manifest)
+
     for node_content in manifest.get("nodes", {}).values():
         upgrade_node_content(node_content)
         if node_content["resource_type"] == "seed":

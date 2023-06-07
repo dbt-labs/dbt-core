@@ -989,11 +989,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         pydantic_semantic_manifest = PydanticSemanticManifest(metrics=[], semantic_models=[])
 
         # TODO uncommet after getting changes from https://github.com/dbt-labs/dbt-core/pull/7769
-        # for semantic_model in manifest.semantic_models:
-        #     pydantic_semantic_manifest.metrics.append(PydanticSemanticManifest.parse_obj(semantic_model))
+        # for semantic_model in manifest.semantic_models.values():
+        #     pydantic_semantic_manifest.metrics.append(PydanticSemanticManifest.parse_obj(semantic_model.to_dict()))
 
-        for metric in self.metrics:
-            pydantic_semantic_manifest.metrics.append(PydanticMetric.parse_obj(metric))
+        for metric in self.metrics.values():
+            pydantic_semantic_manifest.metrics.append(PydanticMetric.parse_obj(metric.to_dict()))
 
         return pydantic_semantic_manifest
 
@@ -1381,8 +1381,9 @@ class WritableManifest(ArtifactMixin):
     def upgrade_schema_version(cls, data):
         """This overrides the "upgrade_schema_version" call in VersionedSchema (via
         ArtifactMixin) to modify the dictionary passed in from earlier versions of the manifest."""
-        if get_manifest_schema_version(data) <= 9:
-            data = upgrade_manifest_json(data)
+        manifest_schema_version = get_manifest_schema_version(data)
+        if manifest_schema_version <= 9:
+            data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
 
     def __post_serialize__(self, dct):
