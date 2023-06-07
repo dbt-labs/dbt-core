@@ -698,6 +698,15 @@ class UnknownGitCloningProblemError(DbtRuntimeError):
         return msg
 
 
+class NoAdaptersAvailableError(DbtRuntimeError):
+    def __init__(self):
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+        return msg
+
+
 class BadSpecError(DbtInternalError):
     def __init__(self, repo, revision, error):
         self.repo = repo
@@ -1245,12 +1254,15 @@ class DbtReferenceError(ParsingError):
 
 
 class InvalidAccessTypeError(ParsingError):
-    def __init__(self, unique_id: str, field_value: str):
+    def __init__(self, unique_id: str, field_value: str, materialization: Optional[str] = None):
         self.unique_id = unique_id
         self.field_value = field_value
-        msg = (
-            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        self.materialization = materialization
+
+        with_materialization = (
+            f"with '{self.materialization}' materialization " if self.materialization else ""
         )
+        msg = f"Node {self.unique_id} {with_materialization}has an invalid value ({self.field_value}) for the access field"
         super().__init__(msg=msg)
 
 

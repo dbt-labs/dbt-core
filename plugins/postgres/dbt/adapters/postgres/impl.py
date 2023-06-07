@@ -141,3 +141,6 @@ class PostgresAdapter(SQLAdapter):
         Not used to validate custom strategies defined by end users.
         """
         return ["append", "delete+insert"]
+
+    def debug_query(self):
+        self.execute("select 1 as id")

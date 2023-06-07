@@ -39,6 +39,7 @@ from dbt.contracts.graph.nodes import (
     BaseNode,
     ManifestOrPublicNode,
     ModelNode,
+    RelationalNode,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -204,7 +205,7 @@ class RefableLookup(dbtClassMixin):
                         if v.name == node.name and v.version is not None
                     ]
                 )
-                assert node.latest_version  # for mypy, whenever i may find it
+                assert node.latest_version is not None  # for mypy, whenever i may find it
                 if max_version > UnparsedVersion(node.latest_version):
                     fire_event(
                         UnpinnedRefNewVersionAvailable(
@@ -368,10 +369,16 @@ class ManifestMetadata(BaseArtifactMetadata):
     dbt_schema_version: str = field(
         default_factory=lambda: str(WritableManifest.dbt_schema_version)
     )
+    project_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "description": "Name of the root project",
+        },
+    )
     project_id: Optional[str] = field(
         default=None,
         metadata={
-            "description": "A unique identifier for the project",
+            "description": "A unique identifier for the project, hashed from the project name",
         },
     )
     user_id: Optional[UUID] = field(
@@ -602,26 +609,36 @@ class MacroMethods:
         return candidates.last()
 
     def find_generate_macro_by_name(
-        self, component: str, root_project_name: str
+        self, component: str, root_project_name: str, imported_package: Optional[str] = None
     ) -> Optional[Macro]:
         """
-        The `generate_X_name` macros are similar to regular ones, but ignore
-        imported packages.
+        The default `generate_X_name` macros are similar to regular ones, but only
+        includes imported packages when searching for a package.
+        - if package is not provided:
             - if there is a `generate_{component}_name` macro in the root
               project, return it
             - return the `generate_{component}_name` macro from the 'dbt'
               internal project
+        - if package is provided
+            - return the `generate_{component}_name` macro from the imported
+              package, if one exists
         """
 
         def filter(candidate: MacroCandidate) -> bool:
-            return candidate.locality != Locality.Imported
+            if imported_package:
+                return (
+                    candidate.locality == Locality.Imported
+                    and imported_package == candidate.macro.package_name
+                )
+            else:
+                return candidate.locality != Locality.Imported
 
         candidates: CandidateList = self._find_macros_by_name(
             name=f"generate_{component}_name",
             root_project_name=root_project_name,
-            # filter out imported packages
             filter=filter,
         )
+
         return candidates.last()
 
     def _find_macros_by_name(
@@ -965,6 +982,23 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._analysis_lookup = AnalysisLookup(self)
         return self._analysis_lookup
 
+    def resolve_refs(
+        self, source_node: GraphMemberNode, current_project: str
+    ) -> List[MaybeNonSource]:
+        resolved_refs: List[MaybeNonSource] = []
+        for ref in source_node.refs:
+            resolved = self.resolve_ref(
+                source_node,
+                ref.name,
+                ref.package,
+                ref.version,
+                current_project,
+                source_node.package_name,
+            )
+            resolved_refs.append(resolved)
+
+        return resolved_refs
+
     # Called by dbt.parser.manifest._process_refs_for_exposure, _process_refs_for_metric,
     # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
@@ -1109,6 +1143,23 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         # log up to 5 items
         sample = list(islice(merged, 5))
         fire_event(MergedFromState(num_merged=len(merged), sample=sample))
+
+    # Called by CloneTask.defer_to_manifest
+    def add_from_artifact(
+        self,
+        other: "WritableManifest",
+    ) -> None:
+        """Update this manifest by *adding* information about each node's location
+        in the other manifest.
+
+        Only non-ephemeral refable nodes are examined.
+        """
+        refables = set(NodeType.refable())
+        for unique_id, node in other.nodes.items():
+            current = self.nodes.get(unique_id)
+            if current and (node.resource_type in refables and not node.is_ephemeral):
+                state_relation = RelationalNode(node.database, node.schema, node.alias)
+                self.nodes[unique_id] = current.replace(state_relation=state_relation)
 
     # Methods that were formerly in ParseResult
 

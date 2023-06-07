@@ -1,7 +1,8 @@
+import datetime
 import time
 
 from abc import ABCMeta, abstractmethod
-from typing import Iterable, Dict, Any, List, Generic, TypeVar, Type, Callable
+from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 from dataclasses import dataclass, field
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
@@ -45,10 +46,11 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import warn_or_error
 from dbt.events.types import (
-    WrongResourceSchemaFile,
-    NoNodeForYamlKey,
     MacroNotFoundForPatch,
+    NoNodeForYamlKey,
     ValidationWarning,
+    UnsupportedConstraintMaterialization,
+    WrongResourceSchemaFile,
 )
 from dbt.node_types import NodeType, AccessType
 from dbt.parser.base import SimpleParser
@@ -515,6 +517,10 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # We're not passing the ParsedNodePatch around anymore, so we
         # could possibly skip creating one. Leaving here for now for
         # code consistency.
+        deprecation_date: Optional[datetime.datetime] = None
+        if isinstance(block.target, UnparsedModelUpdate):
+            deprecation_date = block.target.deprecation_date
+
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -529,6 +535,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             version=None,
             latest_version=None,
             constraints=block.target.constraints,
+            deprecation_date=deprecation_date,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -761,6 +768,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     version=unparsed_version.v,
                     latest_version=latest_version,
                     constraints=unparsed_version.constraints or target.constraints,
+                    deprecation_date=unparsed_version.deprecation_date,
                 )
                 # Node patched before config because config patching depends on model name,
                 # which may have been updated in the version patch
@@ -782,6 +790,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         super().patch_node_properties(node, patch)
         node.version = patch.version
         node.latest_version = patch.latest_version
+        node.deprecation_date = patch.deprecation_date
         if patch.access:
             if AccessType.is_valid(patch.access):
                 node.access = AccessType(patch.access)
@@ -809,15 +818,28 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
             node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
 
     def _validate_constraint_prerequisites(self, model_node: ModelNode):
+
+        column_warn_unsupported = [
+            constraint.warn_unsupported
+            for column in model_node.columns.values()
+            for constraint in column.constraints
+        ]
+        model_warn_unsupported = [
+            constraint.warn_unsupported for constraint in model_node.constraints
+        ]
+        warn_unsupported = column_warn_unsupported + model_warn_unsupported
+
+        # if any constraint has `warn_unsupported` as True then send the warning
+        if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
+            warn_or_error(
+                UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
+                node=model_node,
+            )
+
         errors = []
         if not model_node.columns:
             errors.append(
                 "Constraints must be defined in a `yml` schema configuration file like `schema.yml`."
-            )
-
-        if model_node.config.materialized not in ["table", "view", "incremental"]:
-            errors.append(
-                f"Only table, view, and incremental materializations are supported for constraints, but found '{model_node.config.materialized}'"
             )
 
         if str(model_node.language) != "sql":
@@ -825,7 +847,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         if errors:
             raise ParsingError(
-                f"Constraint validation failed for: ({model_node.original_file_path})\n"
+                f"Contract enforcement failed for: ({model_node.original_file_path})\n"
                 + "\n".join(errors)
             )
 
