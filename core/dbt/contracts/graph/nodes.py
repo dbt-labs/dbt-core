@@ -566,7 +566,7 @@ class FileSlice(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Metadata(dbtClassMixin, Replaceable):
+class SourceFileMetadata(dbtClassMixin, Replaceable):
     """Provides file context about what something was created from.
 
     Implementation of the dbt-semantic-interfaces `Metadata` protocol
