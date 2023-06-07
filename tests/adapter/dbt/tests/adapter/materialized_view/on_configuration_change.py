@@ -4,7 +4,6 @@ import pytest
 import yaml
 
 from dbt.tests.util import read_file, write_file, relation_from_name
-from dbt.contracts.graph.model_config import OnConfigurationChangeOption
 from dbt.contracts.results import RunStatus
 
 from dbt.tests.adapter.materialized_view.base import (
@@ -52,12 +51,7 @@ def assert_proper_scenario(
 
 class OnConfigurationChangeBase(Base):
 
-    on_configuration_change = OnConfigurationChangeOption.Apply
     base_materialized_view = "base_materialized_view"
-
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"models": {"on_configuration_change": str(self.on_configuration_change)}}
 
     @pytest.fixture(scope="function")
     def alter_message(self, project):

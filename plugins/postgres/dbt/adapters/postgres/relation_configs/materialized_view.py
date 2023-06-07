@@ -10,6 +10,7 @@ from dbt.adapters.relation_configs import (
 from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import DbtRuntimeError
 
+from dbt.adapters.postgres.relation_configs.constants import MAX_CHARACTERS_IN_OBJECT_PATH
 from dbt.adapters.postgres.relation_configs.index import (
     PostgresIndexConfig,
     PostgresIndexConfigChange,
@@ -42,7 +43,8 @@ class PostgresMaterializedViewConfig(RelationConfigBase, RelationConfigValidatio
         # index rules get run by default with the mixin
         return {
             RelationConfigValidationRule(
-                validation_check=self.table_name is None or len(self.table_name) <= 63,
+                validation_check=self.table_name is None
+                or len(self.table_name) <= MAX_CHARACTERS_IN_OBJECT_PATH,
                 validation_error=DbtRuntimeError(
                     f"The materialized view name is more than 63 characters: {self.table_name}"
                 ),
@@ -120,7 +122,9 @@ class PostgresMaterializedViewConfigChangeCollection:
 
     @property
     def requires_full_refresh(self) -> bool:
-        return any(index.requires_full_refresh for index in self.indexes)
+        if isinstance(self.indexes, Iterable):
+            return any(index.requires_full_refresh for index in self.indexes)
+        return False
 
     @property
     def has_changes(self) -> bool:

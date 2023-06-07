@@ -14,6 +14,7 @@ from dbt.adapters.postgres.relation_configs import (
     PostgresIndexConfigChange,
     PostgresMaterializedViewConfig,
     PostgresMaterializedViewConfigChangeCollection,
+    MAX_CHARACTERS_IN_OBJECT_PATH,
 )
 
 
@@ -33,7 +34,7 @@ class PostgresRelation(BaseRelation):
             )
 
     def relation_max_name_length(self):
-        return 63
+        return MAX_CHARACTERS_IN_OBJECT_PATH
 
     def get_materialized_view_config_change_collection(
         self, relation_results: RelationResults, runtime_config: RuntimeConfigObject

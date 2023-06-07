@@ -24,4 +24,4 @@ class RelationConfigChange(RelationConfigBase, ABC):
 
     @property
     def is_change(self) -> bool:
-        return self.action is not None or self.context is not None
+        return self.action is not None and self.context is not None

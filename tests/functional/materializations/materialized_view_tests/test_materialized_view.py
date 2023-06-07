@@ -1,3 +1,4 @@
+import pytest
 from dbt.contracts.graph.model_config import OnConfigurationChangeOption
 from dbt.contracts.results import RunStatus
 from dbt.contracts.relation import RelationType
@@ -67,13 +68,16 @@ class TestBasic(PostgresBasicBase):
         assert view_start == view_mid < view_end
 
 
-class OnConfigurationChangeCommon(PostgresOnConfigurationChangeBase):
+class TestOnConfigurationChangeApply(PostgresOnConfigurationChangeBase):
+    # we don't need to specify OnConfigurationChangeOption.Apply because it's the default
+    # this is part of the test
+
     def test_full_refresh_takes_precedence_over_any_configuration_changes(
         self, configuration_changes, replace_message, configuration_change_message
     ):
         results, logs = run_model("base_materialized_view", full_refresh=True)
         assert_proper_scenario(
-            self.on_configuration_change,
+            OnConfigurationChangeOption.Apply,
             results,
             logs,
             RunStatus.Success,
@@ -86,21 +90,19 @@ class OnConfigurationChangeCommon(PostgresOnConfigurationChangeBase):
     ):
         results, logs = run_model("base_materialized_view")
         assert_proper_scenario(
-            self.on_configuration_change,
+            OnConfigurationChangeOption.Apply,
             results,
             logs,
             RunStatus.Success,
             messages_in_logs=[refresh_message, configuration_change_message],
         )
 
-
-class TestOnConfigurationChangeApply(OnConfigurationChangeCommon):
     def test_model_applies_changes_with_configuration_changes(
         self, configuration_changes, alter_message, update_index_message
     ):
         results, logs = run_model("base_materialized_view")
         assert_proper_scenario(
-            self.on_configuration_change,
+            OnConfigurationChangeOption.Apply,
             results,
             logs,
             RunStatus.Success,
@@ -108,16 +110,42 @@ class TestOnConfigurationChangeApply(OnConfigurationChangeCommon):
         )
 
 
-class TestOnConfigurationChangeContinue(OnConfigurationChangeCommon):
+class TestOnConfigurationChangeContinue(PostgresOnConfigurationChangeBase):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"on_configuration_change": OnConfigurationChangeOption.Continue.value}}
 
-    on_configuration_change = OnConfigurationChangeOption.Continue
+    def test_full_refresh_takes_precedence_over_any_configuration_changes(
+        self, configuration_changes, replace_message, configuration_change_message
+    ):
+        results, logs = run_model("base_materialized_view", full_refresh=True)
+        assert_proper_scenario(
+            OnConfigurationChangeOption.Continue,
+            results,
+            logs,
+            RunStatus.Success,
+            messages_in_logs=[replace_message],
+            messages_not_in_logs=[configuration_change_message],
+        )
+
+    def test_model_is_refreshed_with_no_configuration_changes(
+        self, refresh_message, configuration_change_message
+    ):
+        results, logs = run_model("base_materialized_view")
+        assert_proper_scenario(
+            OnConfigurationChangeOption.Continue,
+            results,
+            logs,
+            RunStatus.Success,
+            messages_in_logs=[refresh_message, configuration_change_message],
+        )
 
     def test_model_is_not_refreshed_with_configuration_changes(
         self, configuration_changes, configuration_change_continue_message, refresh_message
     ):
         results, logs = run_model("base_materialized_view")
         assert_proper_scenario(
-            self.on_configuration_change,
+            OnConfigurationChangeOption.Continue,
             results,
             logs,
             RunStatus.Success,
@@ -126,16 +154,42 @@ class TestOnConfigurationChangeContinue(OnConfigurationChangeCommon):
         )
 
 
-class TestOnConfigurationChangeFail(OnConfigurationChangeCommon):
+class TestOnConfigurationChangeFail(PostgresOnConfigurationChangeBase):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"on_configuration_change": OnConfigurationChangeOption.Fail.value}}
 
-    on_configuration_change = OnConfigurationChangeOption.Fail
+    def test_full_refresh_takes_precedence_over_any_configuration_changes(
+        self, configuration_changes, replace_message, configuration_change_message
+    ):
+        results, logs = run_model("base_materialized_view", full_refresh=True)
+        assert_proper_scenario(
+            OnConfigurationChangeOption.Fail,
+            results,
+            logs,
+            RunStatus.Success,
+            messages_in_logs=[replace_message],
+            messages_not_in_logs=[configuration_change_message],
+        )
+
+    def test_model_is_refreshed_with_no_configuration_changes(
+        self, refresh_message, configuration_change_message
+    ):
+        results, logs = run_model("base_materialized_view")
+        assert_proper_scenario(
+            OnConfigurationChangeOption.Fail,
+            results,
+            logs,
+            RunStatus.Success,
+            messages_in_logs=[refresh_message, configuration_change_message],
+        )
 
     def test_run_fails_with_configuration_changes(
         self, configuration_changes, configuration_change_fail_message
     ):
         results, logs = run_model("base_materialized_view", expect_pass=False)
         assert_proper_scenario(
-            self.on_configuration_change,
+            OnConfigurationChangeOption.Fail,
             results,
             logs,
             RunStatus.Error,
