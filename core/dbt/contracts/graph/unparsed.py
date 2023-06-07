@@ -667,7 +667,7 @@ class UnparsedGroup(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Entity(dbtClassMixin, Replaceable):
+class Entity(dbtClassMixin):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
@@ -676,14 +676,14 @@ class Entity(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class MeasureAggregationParameters(dbtClassMixin, Replaceable):
+class MeasureAggregationParameters(dbtClassMixin):
     percentile: Optional[float] = None
     use_discrete_percentile: bool = False
     use_approximate_percentile: bool = False
 
 
 @dataclass
-class Measure(dbtClassMixin, Replaceable):
+class Measure(dbtClassMixin):
     name: str
     agg: str  # actually an enum
     description: Optional[str] = None
@@ -695,7 +695,7 @@ class Measure(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Dimension(dbtClassMixin, Replaceable):
+class Dimension(dbtClassMixin):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
@@ -706,7 +706,7 @@ class Dimension(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedSemanticModel(dbtClassMixin, Replaceable):
+class UnparsedSemanticModel(dbtClassMixin):
     name: str
     description: Optional[str]
     model: str  # looks like "ref(...)"
