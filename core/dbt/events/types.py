@@ -1148,6 +1148,19 @@ class UnpinnedRefNewVersionAvailable(InfoLevel):
         return msg
 
 
+class UnsupportedConstraintMaterialization(WarnLevel):
+    def code(self):
+        return "I068"
+
+    def message(self) -> str:
+        msg = (
+            f"Constraint types are not supported for {self.materialized} materializations and will "
+            "be ignored.  Set 'warn_unsupported: false' on this constraint to ignore this warning."
+        )
+
+        return line_wrap_message(warning_tag(msg))
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
