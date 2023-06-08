@@ -989,7 +989,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return self._analysis_lookup
 
     @property
-    def pydantic_semantic_manifest(self) -> Optional[PydanticSemanticManifest]:
+    def pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
         pydantic_semantic_manifest = PydanticSemanticManifest(metrics=[], semantic_models=[])
 
         for semantic_model in self.semantic_nodes.values():

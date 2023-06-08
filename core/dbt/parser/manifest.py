@@ -1876,10 +1876,8 @@ def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
 
 
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
-    semantic_manifest = manifest.pydantic_semantic_manifest
-    if semantic_manifest is not None:
-        path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
-        write_file(path, semantic_manifest.json())
+    path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
+    write_file(path, manifest.pydantic_semantic_manifest.json())
 
 
 def write_manifest(manifest: Manifest, target_path: str):
