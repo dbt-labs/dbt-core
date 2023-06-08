@@ -44,8 +44,7 @@ metrics:
     type_params:
       measure:
         name: "years_tenure"
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
   - name: average_tenure
     label: "Average tenure"
@@ -89,8 +88,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
   - name: collective_window
     label: "Collective window"
@@ -99,8 +97,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
       window:
         count: 14
         granularity: day
@@ -391,8 +388,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
 """
 
@@ -420,8 +416,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
 """
 

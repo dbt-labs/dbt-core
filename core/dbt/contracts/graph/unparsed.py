@@ -593,14 +593,9 @@ class MetricTime(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class UnparsedWhereFilter(dbtClassMixin):
-    where_sql_template: str
-
-
-@dataclass
 class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
-    filter: Optional[UnparsedWhereFilter] = None
+    filter: Optional[str] = None
     alias: Optional[str] = None
 
 
@@ -613,7 +608,7 @@ class UnparsedMetricTimeWindow(dbtClassMixin):
 @dataclass
 class UnparsedMetricInput(dbtClassMixin):
     name: str
-    filter: Optional[UnparsedWhereFilter] = None
+    filter: Optional[str] = None
     alias: Optional[str] = None
     offset_window: Optional[UnparsedMetricTimeWindow] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
@@ -638,7 +633,7 @@ class UnparsedMetric(dbtClassMixin):
     type: str
     type_params: UnparsedMetricTypeParams
     description: str = ""
-    filter: Optional[UnparsedWhereFilter] = None
+    filter: Optional[str] = None
     # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)

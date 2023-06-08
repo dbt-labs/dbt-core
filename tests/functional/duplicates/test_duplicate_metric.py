@@ -26,8 +26,7 @@ metrics:
     type_params:
       measure:
         name: "years_tenure"
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 """
 
 

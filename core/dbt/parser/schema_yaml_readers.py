@@ -150,9 +150,7 @@ class MetricParser(YamlReader):
     ) -> MetricInputMeasure:
         filter: Optional[WhereFilter] = None
         if unparsed_input_measure.filter is not None:
-            filter = WhereFilter(
-                where_sql_template=unparsed_input_measure.filter.where_sql_template
-            )
+            filter = WhereFilter(where_sql_template=unparsed_input_measure.filter)
 
         return MetricInputMeasure(
             name=unparsed_input_measure.name,
@@ -206,9 +204,7 @@ class MetricParser(YamlReader):
 
                 filter: Optional[WhereFilter] = None
                 if unparsed_metric_input.filter is not None:
-                    filter = WhereFilter(
-                        where_sql_template=unparsed_metric_input.filter.where_sql_template
-                    )
+                    filter = WhereFilter(where_sql_template=unparsed_metric_input.filter)
 
                 metric_inputs.append(
                     MetricInput(
@@ -271,7 +267,7 @@ class MetricParser(YamlReader):
 
         filter: Optional[WhereFilter] = None
         if unparsed.filter is not None:
-            filter = WhereFilter(where_sql_template=unparsed.filter.where_sql_template)
+            filter = WhereFilter(where_sql_template=unparsed.filter)
 
         parsed = Metric(
             resource_type=NodeType.Metric,

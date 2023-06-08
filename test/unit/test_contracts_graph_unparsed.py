@@ -23,7 +23,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetric,
     UnparsedMetricTypeParams,
     UnparsedMetricInputMeasure,
-    UnparsedWhereFilter,
     UnparsedVersion,
 )
 from dbt.contracts.results import FreshnessStatus
@@ -869,7 +868,7 @@ class TestUnparsedMetric(ContractTestCase):
             "type_params": {
                 "measure": {
                     "name": "customers",
-                    "filter": {"where_sql_template": "is_new = true"},
+                    "filter": "is_new = true",
                 },
             },
             "config": {},
@@ -886,7 +885,7 @@ class TestUnparsedMetric(ContractTestCase):
             type_params=UnparsedMetricTypeParams(
                 measure=UnparsedMetricInputMeasure(
                     name="customers",
-                    filter=UnparsedWhereFilter(where_sql_template="is_new = true"),
+                    filter="is_new = true",
                 )
             ),
             config={},
@@ -899,11 +898,6 @@ class TestUnparsedMetric(ContractTestCase):
     def test_bad_metric_no_type_params(self):
         tst = self.get_ok_dict()
         del tst["type_params"]
-        self.assert_fails_validation(tst)
-
-    def test_bad_filter_missing_things(self):
-        tst = self.get_ok_dict()
-        del tst["type_params"]["measure"]["filter"]["where_sql_template"]
         self.assert_fails_validation(tst)
 
     def test_bad_tags(self):

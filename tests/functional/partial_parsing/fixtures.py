@@ -353,8 +353,7 @@ metrics:
     type_params:
       measure:
         name: customers
-        filter:
-          where_sql_template: "is_paying = True"
+        filter: "loves_dbt is true"
     +meta:
         is_okr: True
     tags:
@@ -443,8 +442,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
 """
 
@@ -592,8 +590,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
 """
 
@@ -983,8 +980,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter:
-          where_sql_template: "loves_dbt is true"
+        filter: "loves_dbt is true"
 
 """
 
