@@ -593,25 +593,25 @@ class MetricTime(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class UnparsedWhereFilter(dbtClassMixin, Replaceable):
+class UnparsedWhereFilter(dbtClassMixin):
     where_sql_template: str
 
 
 @dataclass
-class UnparsedMetricInputMeasure(dbtClassMixin, Replaceable):
+class UnparsedMetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[UnparsedWhereFilter] = None
     alias: Optional[str] = None
 
 
 @dataclass
-class UnparsedMetricTimeWindow(dbtClassMixin, Replaceable):
+class UnparsedMetricTimeWindow(dbtClassMixin):
     count: int
     granularity: str  # an TimeGranularity Enum
 
 
 @dataclass
-class UnparsedMetricInput(dbtClassMixin, Replaceable):
+class UnparsedMetricInput(dbtClassMixin):
     name: str
     filter: Optional[UnparsedWhereFilter] = None
     alias: Optional[str] = None
@@ -620,7 +620,7 @@ class UnparsedMetricInput(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedMetricTypeParams(dbtClassMixin, Replaceable):
+class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[UnparsedMetricInputMeasure] = None
     measures: Optional[Sequence[UnparsedMetricInputMeasure]] = None
     numerator: Optional[UnparsedMetricInputMeasure] = None
@@ -632,7 +632,7 @@ class UnparsedMetricTypeParams(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class UnparsedMetric(dbtClassMixin, Replaceable):
+class UnparsedMetric(dbtClassMixin):
     name: str
     label: str
     type: str

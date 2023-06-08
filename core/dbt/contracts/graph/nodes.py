@@ -1324,12 +1324,12 @@ class Exposure(GraphNode):
 
 
 @dataclass
-class WhereFilter(dbtClassMixin, Replaceable):
+class WhereFilter(dbtClassMixin):
     where_sql_template: str
 
 
 @dataclass
-class MetricInputMeasure(dbtClassMixin, Replaceable):
+class MetricInputMeasure(dbtClassMixin):
     name: str
     filter: Optional[WhereFilter] = None
     alias: Optional[str] = None
@@ -1342,13 +1342,13 @@ class MetricInputMeasure(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class MetricTimeWindow(dbtClassMixin, Replaceable):
+class MetricTimeWindow(dbtClassMixin):
     count: int
     granularity: TimeGranularity
 
 
 @dataclass
-class MetricInput(dbtClassMixin, Replaceable):
+class MetricInput(dbtClassMixin):
     name: str
     filter: Optional[WhereFilter] = None
     alias: Optional[str] = None
@@ -1360,7 +1360,7 @@ class MetricInput(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class MetricTypeParams(dbtClassMixin, Replaceable):
+class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
     measures: Optional[Sequence[MetricInputMeasure]] = None
     numerator: Optional[MetricInputMeasure] = None
