@@ -22,8 +22,7 @@ metrics:
     label: "label"
     type: simple
     type_params:
-      measure:
-        name: "distinct_metrics"
+      measure: "distinct_metrics"
 """
 
 simple_exposure_yml = """

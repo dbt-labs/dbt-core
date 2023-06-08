@@ -616,14 +616,14 @@ class UnparsedMetricInput(dbtClassMixin):
 
 @dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
-    measure: Optional[UnparsedMetricInputMeasure] = None
-    measures: Optional[List[UnparsedMetricInputMeasure]] = None
-    numerator: Optional[UnparsedMetricInputMeasure] = None
-    denominator: Optional[UnparsedMetricInputMeasure] = None
+    measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    measures: Optional[List[Union[UnparsedMetricInputMeasure, str]]] = None
+    numerator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    denominator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     expr: Optional[str] = None
     window: Optional[UnparsedMetricTimeWindow] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
-    metrics: Optional[List[UnparsedMetricInput]] = None
+    metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
 
 
 @dataclass

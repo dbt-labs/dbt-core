@@ -32,7 +32,7 @@ from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
-from typing import List, Optional, Sequence
+from typing import List, Optional, Union
 
 
 class ExposureParser(YamlReader):
@@ -146,21 +146,24 @@ class MetricParser(YamlReader):
 
     def _get_input_measure(
         self,
-        unparsed_input_measure: UnparsedMetricInputMeasure,
+        unparsed_input_measure: Union[UnparsedMetricInputMeasure, str],
     ) -> MetricInputMeasure:
-        filter: Optional[WhereFilter] = None
-        if unparsed_input_measure.filter is not None:
-            filter = WhereFilter(where_sql_template=unparsed_input_measure.filter)
+        if isinstance(unparsed_input_measure, str):
+            return MetricInputMeasure(name=unparsed_input_measure)
+        else:
+            filter: Optional[WhereFilter] = None
+            if unparsed_input_measure.filter is not None:
+                filter = WhereFilter(where_sql_template=unparsed_input_measure.filter)
 
-        return MetricInputMeasure(
-            name=unparsed_input_measure.name,
-            filter=filter,
-            alias=unparsed_input_measure.alias,
-        )
+            return MetricInputMeasure(
+                name=unparsed_input_measure.name,
+                filter=filter,
+                alias=unparsed_input_measure.alias,
+            )
 
     def _get_optional_input_measure(
         self,
-        unparsed_input_measure: Optional[UnparsedMetricInputMeasure],
+        unparsed_input_measure: Optional[Union[UnparsedMetricInputMeasure, str]],
     ) -> Optional[MetricInputMeasure]:
         if unparsed_input_measure is not None:
             return self._get_input_measure(unparsed_input_measure)
@@ -169,13 +172,12 @@ class MetricParser(YamlReader):
 
     def _get_input_measures(
         self,
-        unparsed_input_measures: Optional[Sequence[UnparsedMetricInputMeasure]],
+        unparsed_input_measures: Optional[List[Union[UnparsedMetricInputMeasure, str]]],
     ) -> List[MetricInputMeasure]:
         input_measures: List[MetricInputMeasure] = []
         if unparsed_input_measures is not None:
             for unparsed_input_measure in unparsed_input_measures:
                 input_measures.append(self._get_input_measure(unparsed_input_measure))
-            return input_measures
 
         return input_measures
 
@@ -193,30 +195,33 @@ class MetricParser(YamlReader):
 
     def _get_metric_inputs(
         self,
-        unparsed_metric_inputs: Optional[Sequence[UnparsedMetricInput]],
+        unparsed_metric_inputs: Optional[List[Union[UnparsedMetricInput, str]]],
     ) -> List[MetricInput]:
         metric_inputs: List[MetricInput] = []
         if unparsed_metric_inputs is not None:
             for unparsed_metric_input in unparsed_metric_inputs:
-                offset_to_grain: Optional[TimeGranularity] = None
-                if unparsed_metric_input.offset_to_grain is not None:
-                    offset_to_grain = TimeGranularity(unparsed_metric_input.offset_to_grain)
+                if isinstance(unparsed_metric_input, str):
+                    metric_inputs.append(MetricInput(name=unparsed_metric_input))
+                else:
+                    offset_to_grain: Optional[TimeGranularity] = None
+                    if unparsed_metric_input.offset_to_grain is not None:
+                        offset_to_grain = TimeGranularity(unparsed_metric_input.offset_to_grain)
 
-                filter: Optional[WhereFilter] = None
-                if unparsed_metric_input.filter is not None:
-                    filter = WhereFilter(where_sql_template=unparsed_metric_input.filter)
+                    filter: Optional[WhereFilter] = None
+                    if unparsed_metric_input.filter is not None:
+                        filter = WhereFilter(where_sql_template=unparsed_metric_input.filter)
 
-                metric_inputs.append(
-                    MetricInput(
-                        name=unparsed_metric_input.name,
-                        filter=filter,
-                        alias=unparsed_metric_input.alias,
-                        offset_window=self._get_time_window(
-                            unparsed_window=unparsed_metric_input.offset_window
-                        ),
-                        offset_to_grain=offset_to_grain,
+                    metric_inputs.append(
+                        MetricInput(
+                            name=unparsed_metric_input.name,
+                            filter=filter,
+                            alias=unparsed_metric_input.alias,
+                            offset_window=self._get_time_window(
+                                unparsed_window=unparsed_metric_input.offset_window
+                            ),
+                            offset_to_grain=offset_to_grain,
+                        )
                     )
-                )
 
         return metric_inputs
 

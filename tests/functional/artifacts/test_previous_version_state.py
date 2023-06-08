@@ -132,16 +132,14 @@ metrics:
     label: Count records
     type: simple
     type_params:
-      measure:
-        name: customers
+      measure: customers
   - name: disabled_metric
     label: Count records
     config:
         enabled: False
     type: simple
     type_params:
-      measure:
-        name: customers
+      measure: customers
 
 sources:
   - name: my_source

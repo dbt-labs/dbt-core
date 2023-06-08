@@ -18,8 +18,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -49,8 +48,7 @@ metrics:
         enabled: false
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -80,8 +78,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 """

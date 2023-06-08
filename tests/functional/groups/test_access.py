@@ -129,8 +129,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: "people"
+      measure: "people"
     meta:
         my_meta: 'testing'
     config:
@@ -145,8 +144,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: "people"
+      measure: "people"
     meta:
         my_meta: 'testing'
     config:

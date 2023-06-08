@@ -430,8 +430,7 @@ metrics:
     label: "Number of people"
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: '{{ env_var("ENV_VAR_METRICS") }}'
 
@@ -578,8 +577,7 @@ metrics:
     label: "Number of people"
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -968,8 +966,7 @@ metrics:
     label: "Number of people"
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'replaced'
 
@@ -1152,8 +1149,7 @@ metrics:
     label: "Number of people"
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'replaced'
 

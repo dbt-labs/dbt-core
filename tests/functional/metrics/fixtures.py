@@ -32,8 +32,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -62,7 +61,7 @@ metrics:
     type: derived
     type_params:
       metrics:
-        - name: average_tenure
+        - average_tenure
       expr: "average_tenure + 1"
 """
 
@@ -76,8 +75,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -197,8 +195,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -214,8 +211,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -232,8 +228,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -249,8 +244,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -344,19 +338,17 @@ metrics:
       label: Count orders
       type: simple
       type_params:
-        measure:
-          name: num_orders
+        measure: num_orders
 
     - name: sum_order_revenue
       label: Total order revenue
       type: simple
       type_params:
-        measure:
-          name: order_revenue
+        measure: order_revenue
 
     - name: average_order_value
       label: Average Order Value
-      type: derived
+      type: ratio
       type_params:
         numerator:
           name: sum_order_revenue
@@ -374,8 +366,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     config:
       enabled: False
     meta:
@@ -402,8 +393,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     config:
       enabled: True
     meta:
@@ -468,8 +458,7 @@ metrics:
     label: Some Metric
     type: simple
     type_params:
-      measure:
-        name: some_measure
+      measure: some_measure
 """
 
 metrics_2_yml = """
@@ -480,8 +469,7 @@ metrics:
     label: Some Metric
     type: simple
     type_params:
-      measure:
-        name: some_measure
+      measure: some_measure
 """
 
 model_a_sql = """
@@ -521,8 +509,7 @@ metrics:
     description: Total count of people
     type: simple
     type_params:
-      measure:
-        name: people
+      measure: people
     meta:
         my_meta: 'testing'
 """
