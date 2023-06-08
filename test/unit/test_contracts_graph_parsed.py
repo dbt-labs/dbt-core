@@ -2318,7 +2318,8 @@ def test_compare_changed_exposure(func, basic_parsed_exposure_object):
 def minimal_parsed_metric_dict():
     return {
         "name": "my_metric",
-        "type": "count",
+        "type": "simple",
+        "type_params": {"measure": {"name": "my_measure"}},
         "timestamp": "created_at",
         "time_grains": ["day"],
         "fqn": ["test", "metrics", "my_metric"],
