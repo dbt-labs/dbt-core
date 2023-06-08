@@ -64,6 +64,7 @@ from dbt import tracking
 import dbt.utils
 from dbt_semantic_interfaces.implementations.metric import PydanticMetric
 from dbt_semantic_interfaces.implementations.semantic_manifest import PydanticSemanticManifest
+from dbt_semantic_interfaces.implementations.semantic_model import PydanticSemanticModel
 
 NodeEdgeMap = Dict[str, List[str]]
 PackageName = str
@@ -991,9 +992,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def pydantic_semantic_manifest(self) -> Optional[PydanticSemanticManifest]:
         pydantic_semantic_manifest = PydanticSemanticManifest(metrics=[], semantic_models=[])
 
-        # TODO uncommet after getting changes from https://github.com/dbt-labs/dbt-core/pull/7769
-        # for semantic_model in manifest.semantic_models.values():
-        #     pydantic_semantic_manifest.metrics.append(PydanticSemanticManifest.parse_obj(semantic_model.to_dict()))
+        for semantic_model in self.semantic_nodes.values():
+            pydantic_semantic_manifest.semantic_models.append(
+                PydanticSemanticModel.parse_obj(semantic_model.to_dict())
+            )
 
         for metric in self.metrics.values():
             pydantic_semantic_manifest.metrics.append(PydanticMetric.parse_obj(metric.to_dict()))
