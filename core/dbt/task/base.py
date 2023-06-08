@@ -76,7 +76,8 @@ class BaseTask(metaclass=ABCMeta):
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
-        cv_project_root.set(self.config.project_root)
+        if self.config:
+            cv_project_root.set(self.config.project_root)
 
     @classmethod
     def pre_init_hook(cls, args):
