@@ -77,6 +77,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock: RLock = flags.MP_CONTEXT.RLock()
         self.query_header: Optional[MacroQueryStringSetter] = None
+        self.reuse_connections: bool = getattr(profile.credentials, "reuse_connections", False)
 
     def set_query_header(self, manifest: Manifest) -> None:
         self.query_header = MacroQueryStringSetter(self.profile, manifest)
@@ -291,6 +292,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         raise dbt.exceptions.NotImplementedError("`open` is not implemented for this adapter!")
 
     def release(self) -> None:
+        if self.reuse_connections:
+            return
+
         with self.lock:
             conn = self.get_if_exists()
             if conn is None:
