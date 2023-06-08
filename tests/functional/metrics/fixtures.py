@@ -96,9 +96,7 @@ metrics:
       measure:
         name: years_tenure
         filter: "loves_dbt is true"
-      window:
-        count: 14
-        granularity: day
+      window: 14 days
 
 """
 

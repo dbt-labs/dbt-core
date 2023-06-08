@@ -7,7 +7,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetric,
     UnparsedMetricInput,
     UnparsedMetricInputMeasure,
-    UnparsedMetricTimeWindow,
     UnparsedMetricTypeParams,
 )
 from dbt.contracts.graph.nodes import (
@@ -183,12 +182,44 @@ class MetricParser(YamlReader):
 
     def _get_time_window(
         self,
-        unparsed_window: Optional[UnparsedMetricTimeWindow],
+        unparsed_window: Optional[str],
     ) -> Optional[MetricTimeWindow]:
         if unparsed_window is not None:
+            parts = unparsed_window.split(" ")
+            if len(parts) != 2:
+                raise YamlParseDictError(
+                    self.yaml.path,
+                    "window",
+                    {"window": unparsed_window},
+                    f"Invalid window ({unparsed_window}) in cumulative metric. Should be of the form `<count> <granularity>`, "
+                    "e.g., `28 days`",
+                )
+
+            granularity = parts[1]
+            # once we drop python 3.8 this could just be `granularity = parts[0].removesuffix('s')
+            if granularity.endswith("s"):
+                # months -> month
+                granularity = granularity[:-1]
+            if granularity not in [item.value for item in TimeGranularity]:
+                raise YamlParseDictError(
+                    self.yaml.path,
+                    "window",
+                    {"window": unparsed_window},
+                    f"Invalid time granularity {granularity} in cumulative metric window string: ({unparsed_window})",
+                )
+
+            count = parts[0]
+            if not count.isdigit():
+                raise YamlParseDictError(
+                    self.yaml.path,
+                    "window",
+                    {"window": unparsed_window},
+                    f"Invalid count ({count}) in cumulative metric window string: ({unparsed_window})",
+                )
+
             return MetricTimeWindow(
-                count=unparsed_window.count,
-                granularity=TimeGranularity(unparsed_window.granularity),
+                count=int(count),
+                granularity=TimeGranularity(granularity),
             )
         else:
             return None

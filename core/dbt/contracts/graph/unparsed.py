@@ -600,17 +600,11 @@ class UnparsedMetricInputMeasure(dbtClassMixin):
 
 
 @dataclass
-class UnparsedMetricTimeWindow(dbtClassMixin):
-    count: int
-    granularity: str  # an TimeGranularity Enum
-
-
-@dataclass
 class UnparsedMetricInput(dbtClassMixin):
     name: str
     filter: Optional[str] = None
     alias: Optional[str] = None
-    offset_window: Optional[UnparsedMetricTimeWindow] = None
+    offset_window: Optional[str] = None
     offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
 
 
@@ -621,7 +615,7 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     numerator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     denominator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     expr: Optional[str] = None
-    window: Optional[UnparsedMetricTimeWindow] = None
+    window: Optional[str] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
 
