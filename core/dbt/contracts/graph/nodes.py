@@ -1356,7 +1356,7 @@ class MetricInput(dbtClassMixin):
     offset_to_grain: Optional[TimeGranularity] = None
 
     def as_reference(self) -> DSIMetricReference:
-        pass
+        return DSIMetricReference(element_name=self.name)
 
 
 @dataclass
@@ -1371,10 +1371,10 @@ class MetricTypeParams(dbtClassMixin):
     metrics: Optional[List[MetricInput]] = None
 
     def numerator_measure_reference(self) -> Optional[MeasureReference]:
-        pass
+        return self.numerator.measure_reference() if self.numerator else None
 
     def denominator_measure_reference(self) -> Optional[MeasureReference]:
-        pass
+        return self.denominator.measure_reference() if self.denominator else None
 
 
 @dataclass
@@ -1418,15 +1418,24 @@ class Metric(GraphNode):
 
     @property
     def input_measures(self) -> List[MetricInputMeasure]:
-        pass
+        tp = self.type_params
+        res = tp.measures or []
+        if tp.measure:
+            res.append(tp.measure)
+        if tp.numerator:
+            res.append(tp.numerator)
+        if tp.denominator:
+            res.append(tp.denominator)
+
+        return res
 
     @property
     def measure_references(self) -> List[MeasureReference]:
-        pass
+        return [x.measure_reference() for x in self.input_measures]
 
     @property
     def input_metrics(self) -> List[MetricInput]:
-        pass
+        return self.type_params.metrics or []
 
     def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
