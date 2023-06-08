@@ -1362,13 +1362,13 @@ class MetricInput(dbtClassMixin):
 @dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
-    measures: Optional[Sequence[MetricInputMeasure]] = None
+    measures: Optional[List[MetricInputMeasure]] = None
     numerator: Optional[MetricInputMeasure] = None
     denominator: Optional[MetricInputMeasure] = None
     expr: Optional[str] = None
     window: Optional[MetricTimeWindow] = None
     grain_to_date: Optional[TimeGranularity] = None
-    metrics: Optional[Sequence[MetricInput]] = None
+    metrics: Optional[List[MetricInput]] = None
 
     def numerator_measure_reference(self) -> Optional[MeasureReference]:
         pass
@@ -1417,15 +1417,15 @@ class Metric(GraphNode):
         return self.name
 
     @property
-    def input_measures(self) -> Sequence[MetricInputMeasure]:
+    def input_measures(self) -> List[MetricInputMeasure]:
         pass
 
     @property
-    def measure_references(self) -> Sequence[MeasureReference]:
+    def measure_references(self) -> List[MeasureReference]:
         pass
 
     @property
-    def input_metrics(self) -> Sequence[MetricInput]:
+    def input_metrics(self) -> List[MetricInput]:
         pass
 
     def same_description(self, old: "Metric") -> bool:
