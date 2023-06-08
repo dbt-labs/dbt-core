@@ -16,6 +16,7 @@ node_type_pluralizations = {
     NodeType.Exposure: "exposures",
     NodeType.Metric: "metrics",
     NodeType.Group: "groups",
+    NodeType.SemanticModel: "semantic models",
 }
 
 

@@ -75,6 +75,7 @@ schema_file_keys = (
     "analyses",
     "exposures",
     "metrics",
+    "semantic_models",
 )
 
 
@@ -217,6 +218,12 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
                 group_parser = GroupParser(self, yaml_block)
                 group_parser.parse()
+
+            if "semantic_models" in dct:
+                from dbt.parser.schema_yaml_readers import SemanticModelParser
+
+                semantic_model_parser = SemanticModelParser(self, yaml_block)
+                semantic_model_parser.parse()
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)

@@ -8,6 +8,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMetricInput,
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
+    UnparsedSemanticModel,
 )
 from dbt.contracts.graph.nodes import (
     Exposure,
@@ -17,6 +18,7 @@ from dbt.contracts.graph.nodes import (
     MetricInputMeasure,
     MetricTimeWindow,
     MetricTypeParams,
+    SemanticModel,
     WhereFilter,
 )
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
@@ -398,3 +400,46 @@ class GroupParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_group(unparsed)
+
+
+class SemanticModelParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, "semantic_models")
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+
+        parsed = SemanticModel(
+            description=unparsed.description,
+            fqn=fqn,
+            model=unparsed.model,
+            name=unparsed.name,
+            node_relation=None,  # Resolved from the value of "model" after parsing
+            original_file_path=self.yaml.path.original_file_path,
+            package_name=package_name,
+            path=path,
+            resource_type=NodeType.SemanticModel,
+            unique_id=unique_id,
+            entities=unparsed.entities,
+            measures=unparsed.measures,
+            dimensions=unparsed.dimensions,
+        )
+
+        self.manifest.add_semantic_model(self.yaml.file, parsed)
+
+    def parse(self):
+        for data in self.get_key_dicts():
+            try:
+                UnparsedSemanticModel.validate(data)
+                unparsed = UnparsedSemanticModel.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+            self.parse_semantic_model(unparsed)

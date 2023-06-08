@@ -25,21 +25,22 @@ from uuid import UUID
 from dbt.contracts.publication import ProjectDependencies, PublicationConfig, PublicModel
 
 from dbt.contracts.graph.nodes import (
-    Macro,
-    Documentation,
-    SourceDefinition,
-    GenericTestNode,
-    Exposure,
-    Metric,
-    Group,
-    UnpatchedSourceDefinition,
-    ManifestNode,
-    GraphMemberNode,
-    ResultNode,
     BaseNode,
+    Documentation,
+    Exposure,
+    GenericTestNode,
+    GraphMemberNode,
+    Group,
+    Macro,
+    ManifestNode,
     ManifestOrPublicNode,
+    Metric,
     ModelNode,
     RelationalNode,
+    ResultNode,
+    SemanticModel,
+    SourceDefinition,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, NodeVersion, UnparsedVersion
 from dbt.contracts.graph.manifest_upgrade import upgrade_manifest_json
@@ -708,6 +709,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     public_nodes: MutableMapping[str, PublicModel] = field(default_factory=dict)
     project_dependencies: Optional[ProjectDependencies] = None
     publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
+    semantic_nodes: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -896,7 +898,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
-    def writable_manifest(self):
+    def writable_manifest(self) -> "WritableManifest":
         self.build_parent_and_child_maps()
         self.build_group_map()
         return WritableManifest(
@@ -914,6 +916,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
+            semantic_nodes=self.semantic_nodes,
         )
 
     def write(self, path):
@@ -1261,6 +1264,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
 
+    def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: SemanticModel):
+        _check_duplicates(semantic_model, self.semantic_nodes)
+        self.semantic_nodes[semantic_model.unique_id] = semantic_model
+        source_file.semantic_nodes.append(semantic_model.unique_id)
+
     # end of methods formerly in ParseResult
 
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
@@ -1359,6 +1367,9 @@ class WritableManifest(ArtifactMixin):
     )
     public_nodes: Mapping[UniqueID, PublicModel] = field(
         metadata=dict(description=("The public models used in the dbt project"))
+    )
+    semantic_nodes: Mapping[UniqueID, SemanticModel] = field(
+        metadata=dict(description=("The semantic models defined in the dbt project"))
     )
     metadata: ManifestMetadata = field(
         metadata=dict(
