@@ -568,7 +568,7 @@ class FileSlice(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Metadata(dbtClassMixin, Replaceable):
+class SourceFileMetadata(dbtClassMixin, Replaceable):
     """Provides file context about what something was created from.
 
     Implementation of the dbt-semantic-interfaces `Metadata` protocol
@@ -1379,7 +1379,7 @@ class Metric(GraphNode):
     type: MetricType
     type_params: MetricTypeParams
     filter: Optional[WhereFilter] = None
-    metadata: Optional[Metadata] = None
+    metadata: Optional[SourceFileMetadata] = None
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
