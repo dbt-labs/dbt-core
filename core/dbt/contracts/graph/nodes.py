@@ -12,8 +12,8 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
+from dbt.contracts.graph.semantic_models import Dimension, SourceFileMetadata
 from dbt.contracts.graph.unparsed import (
-    Dimension,
     Docs,
     Entity,
     ExposureType,
@@ -552,30 +552,6 @@ class CompiledNode(ParsedNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
-
-
-@dataclass
-class FileSlice(dbtClassMixin, Replaceable):
-    """Provides file slice level context about what something was created from.
-
-    Implementation of the dbt-semantic-interfaces `FileSlice` protocol
-    """
-
-    filename: str
-    content: str
-    start_line_number: int
-    end_line_number: int
-
-
-@dataclass
-class SourceFileMetadata(dbtClassMixin, Replaceable):
-    """Provides file context about what something was created from.
-
-    Implementation of the dbt-semantic-interfaces `Metadata` protocol
-    """
-
-    repo_file_path: str
-    file_slice: FileSlice
 
 
 # ====================================

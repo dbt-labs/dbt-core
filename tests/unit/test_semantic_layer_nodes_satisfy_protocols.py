@@ -6,14 +6,20 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     WhereFilter,
 )
-from dbt.contracts.graph.unparsed import Dimension, Entity, Measure
+from dbt.contracts.graph.semantic_models import (
+    Dimension,
+    DimensionTypeParams,
+)
+from dbt.contracts.graph.unparsed import Entity, Measure
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols.dimension import Dimension as DSIDimension
 from dbt_semantic_interfaces.protocols.entity import Entity as DSIEntitiy
 from dbt_semantic_interfaces.protocols.measure import Measure as DSIMeasure
 from dbt_semantic_interfaces.protocols.metric import Metric as DSIMetric
 from dbt_semantic_interfaces.protocols.semantic_model import SemanticModel as DSISemanticModel
+from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from typing import Protocol, runtime_checkable
 
 
@@ -68,8 +74,10 @@ def test_dimension_satisfies_protocol():
     dimension = Dimension(
         name="test_dimension",
         description="a test dimension",
-        type="categorical",
-        type_params={},
+        type=DimensionType.TIME,
+        type_params=DimensionTypeParams(
+            time_granularity=TimeGranularity.DAY,
+        ),
     )
     assert isinstance(dimension, RuntimeCheckableDimension)
 
