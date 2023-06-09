@@ -137,6 +137,10 @@ class DbtProjectYamlRenderer(BaseRenderer):
         package_renderer = self.get_package_renderer()
         return package_renderer.render_data(packages)
 
+    def render_dependent_projects(self, dependent_projects: Dict[str, Any]):
+        """This is a no-op to maintain regularity in the interfaces. We don't render dependencies.yml."""
+        return dependent_projects
+
     def render_selectors(self, selectors: Dict[str, Any]):
         return self.render_data(selectors)
 
