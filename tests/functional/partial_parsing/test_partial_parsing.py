@@ -826,12 +826,12 @@ class TestDependencies:
         # initial run with dependencies
         write_file(dependencies_yml, "dependencies.yml")
         manifest = run_dbt(["parse"], publications=[marketing_publication])
-        assert len(manifest.project_dependencies.projects) == 1
+        assert len(manifest.publications) == 1
 
         # remove dependencies
         write_file(empty_dependencies_yml, "dependencies.yml")
         manifest = run_dbt(["parse"], publications=[marketing_publication])
-        assert len(manifest.project_dependencies.projects) == 0
+        assert len(manifest.publications) == 0
 
 
 class TestPublicationArtifactAvailable:

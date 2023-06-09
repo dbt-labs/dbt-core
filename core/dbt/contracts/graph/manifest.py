@@ -708,7 +708,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     public_nodes: MutableMapping[str, PublicModel] = field(default_factory=dict)
-    project_dependencies: Optional[ProjectDependencies] = None
     publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
     semantic_nodes: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
