@@ -23,7 +23,9 @@ from dbt.exceptions import (
     PropertyYMLError,
     NotImplementedError,
     RelationWrongTypeError,
+    ContractError,
     ColumnTypeMissingError,
+    FailFastError,
 )
 
 
@@ -66,6 +68,10 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationError(msg, node)
 
 
+def raise_contract_error(yaml_columns, sql_columns) -> NoReturn:
+    raise ContractError(yaml_columns, sql_columns)
+
+
 def raise_database_error(msg, node=None) -> NoReturn:
     raise DbtDatabaseError(msg, node)
 
@@ -102,6 +108,10 @@ def column_type_missing(column_names) -> NoReturn:
     raise ColumnTypeMissingError(column_names)
 
 
+def raise_fail_fast_error(msg, node=None) -> NoReturn:
+    raise FailFastError(msg, node=node)
+
+
 # Update this when a new function should be added to the
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
@@ -124,7 +134,9 @@ CONTEXT_EXPORTS = {
         raise_invalid_property_yml_version,
         raise_not_implemented,
         relation_wrong_type,
+        raise_contract_error,
         column_type_missing,
+        raise_fail_fast_error,
     ]
 }
 

@@ -341,7 +341,6 @@ def verify_metadata(metadata, dbt_schema_version, start_time):
     assert metadata["dbt_version"] == dbt.version.__version__
     assert "dbt_schema_version" in metadata
     assert metadata["dbt_schema_version"] == dbt_schema_version
-    assert metadata["invocation_id"] == dbt.tracking.active_user.invocation_id
     key = "env_key"
     if os.name == "nt":
         key = key.upper()

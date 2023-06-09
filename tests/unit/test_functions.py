@@ -2,8 +2,8 @@ from argparse import Namespace
 import pytest
 
 import dbt.flags as flags
-from dbt.events.functions import warn_or_error
-from dbt.events.types import NoNodesForSelectionCriteria
+from dbt.events.functions import msg_to_dict, warn_or_error
+from dbt.events.types import InfoLevel, NoNodesForSelectionCriteria
 from dbt.exceptions import EventCompilationError
 
 
@@ -43,3 +43,19 @@ def test_warn_or_error_warn_error(warn_error, expect_compilation_exception):
             warn_or_error(NoNodesForSelectionCriteria())
     else:
         warn_or_error(NoNodesForSelectionCriteria())
+
+
+def test_msg_to_dict_handles_exceptions_gracefully():
+    class BadEvent(InfoLevel):
+        """A spoof Note event which breaks dictification"""
+
+        def __init__(self):
+            self.__class__.__name__ = "Note"
+
+    event = BadEvent()
+    try:
+        msg_to_dict(event)
+    except Exception as exc:
+        assert (
+            False
+        ), f"We expect `msg_to_dict` to gracefully handle exceptions, but it raised {exc}"

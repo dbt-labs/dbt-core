@@ -1,5 +1,6 @@
 import pytest
 
+from dbt.contracts.results import NodeStatus
 from dbt.tests.util import run_dbt
 
 macros_sql = """
@@ -30,4 +31,4 @@ class TestTypes:
 
     def test_nested_types(self, project):
         result = run_dbt(["run-operation", "test_array_results"])
-        assert result.success
+        assert result.results[0].status == NodeStatus.Success

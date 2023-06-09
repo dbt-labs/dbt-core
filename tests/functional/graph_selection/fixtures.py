@@ -48,6 +48,17 @@ models:
     - name: gender
       tests:
       - unique
+  - name: versioned
+    latest_version: 2
+    versions:
+      - v: 0
+      - v: 1
+      - v: 2
+      - v: 3
+      - v: 4.5
+      - v: "5.0"
+      - v: 21
+      - v: "test"
 
 sources:
   - name: raw
@@ -61,6 +72,7 @@ exposures:
     depends_on:
       - ref('users')
       - ref('users_rollup')
+      - ref('versioned', v=3)
     owner:
       email: nope@example.com
   - name: seed_ml_exposure
@@ -69,6 +81,15 @@ exposures:
       - source('raw', 'seed')
     owner:
       email: nope@example.com
+"""
+
+patch_path_selection_schema_yml = """
+version: 2
+
+models:
+  - name: subdir
+    description: submarine sandwich directory
+
 """
 
 base_users_sql = """
@@ -182,8 +203,10 @@ class SelectionFixtures:
     def models(self):
         return {
             "schema.yml": schema_yml,
+            "patch_path_selection_schema.yml": patch_path_selection_schema_yml,
             "base_users.sql": base_users_sql,
             "users.sql": users_sql,
+            "versioned_v3.sql": base_users_sql,
             "users_rollup.sql": users_rollup_sql,
             "users_rollup_dependency.sql": users_rollup_dependency_sql,
             "emails.sql": emails_sql,
@@ -192,7 +215,11 @@ class SelectionFixtures:
             "never_selected.sql": never_selected_sql,
             "test": {
                 "subdir.sql": subdir_sql,
-                "subdir": {"nested_users.sql": nested_users_sql},
+                "versioned_v2.sql": subdir_sql,
+                "subdir": {
+                    "nested_users.sql": nested_users_sql,
+                    "versioned_v1.sql": nested_users_sql,
+                },
             },
         }
 

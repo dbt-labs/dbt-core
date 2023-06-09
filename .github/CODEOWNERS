@@ -11,44 +11,24 @@
 
 # As a default for areas with no assignment,
 # the core team as a whole will be assigned
-*       @dbt-labs/core
+*       @dbt-labs/core-team
 
-# Changes to GitHub configurations including Actions
-/.github/ @leahwicz
+### OSS Tooling Guild
 
-### LANGUAGE
+/.github/                       @dbt-labs/guild-oss-tooling
+.bumpversion.cfg                @dbt-labs/guild-oss-tooling
 
-# Language core modules
-/core/dbt/config/               @dbt-labs/core-language
-/core/dbt/context/              @dbt-labs/core-language
-/core/dbt/contracts/            @dbt-labs/core-language
-/core/dbt/deps/                 @dbt-labs/core-language
-/core/dbt/events/               @dbt-labs/core-language  # structured logging
-/core/dbt/parser/               @dbt-labs/core-language
+.changie.yaml                   @dbt-labs/guild-oss-tooling
 
-# Language misc files
-/core/dbt/dataclass_schema.py   @dbt-labs/core-language
-/core/dbt/hooks.py              @dbt-labs/core-language
-/core/dbt/node_types.py         @dbt-labs/core-language
-/core/dbt/semver.py             @dbt-labs/core-language
+pre-commit-config.yaml          @dbt-labs/guild-oss-tooling
+pytest.ini                      @dbt-labs/guild-oss-tooling
+tox.ini                         @dbt-labs/guild-oss-tooling
 
-
-### EXECUTION
-
-# Execution core modules
-/core/dbt/graph/                @dbt-labs/core-execution
-/core/dbt/task/                 @dbt-labs/core-execution
-
-# Execution misc files
-/core/dbt/compilation.py        @dbt-labs/core-execution
-/core/dbt/flags.py              @dbt-labs/core-execution
-/core/dbt/lib.py                @dbt-labs/core-execution
-/core/dbt/main.py               @dbt-labs/core-execution
-/core/dbt/profiler.py           @dbt-labs/core-execution
-/core/dbt/selected_resources.py @dbt-labs/core-execution
-/core/dbt/tracking.py           @dbt-labs/core-execution
-/core/dbt/version.py            @dbt-labs/core-execution
-
+pyproject.toml                  @dbt-labs/guild-oss-tooling
+requirements.txt                @dbt-labs/guild-oss-tooling
+dev_requirements.txt            @dbt-labs/guild-oss-tooling
+/core/setup.py                  @dbt-labs/guild-oss-tooling
+/core/MANIFEST.in               @dbt-labs/guild-oss-tooling
 
 ### ADAPTERS
 
@@ -60,6 +40,7 @@
 
 # Postgres plugin
 /plugins/                       @dbt-labs/core-adapters
+/plugins/postgres/setup.py      @dbt-labs/core-adapters @dbt-labs/guild-oss-tooling
 
 # Functional tests for adapter plugins
 /tests/adapter                  @dbt-labs/core-adapters
@@ -71,5 +52,9 @@
 # Perf regression testing framework
 # This excludes the test project files itself since those aren't specific
 # framework changes (excluded by not setting an owner next to it- no owner)
-/performance @nathaniel-may
+/performance                    @nathaniel-may
 /performance/projects
+
+### ARTIFACTS
+
+/schemas/dbt                    @dbt-labs/cloud-artifacts

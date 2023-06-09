@@ -1,9 +1,7 @@
 import re
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import (
     Generic,
-    TypeVar,
     Dict,
     Any,
     Tuple,
@@ -14,11 +12,9 @@ from typing import (
 from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
-    TestDef,
-    UnparsedAnalysisUpdate,
-    UnparsedMacroUpdate,
+    NodeVersion,
     UnparsedNodeUpdate,
-    UnparsedExposure,
+    UnparsedModelUpdate,
 )
 from dbt.exceptions import (
     CustomMacroPopulatingConfigValueError,
@@ -33,7 +29,7 @@ from dbt.exceptions import (
     UnexpectedTestNamePatternError,
     UndefinedMacroError,
 )
-from dbt.parser.search import FileBlock
+from dbt.parser.common import Testable
 from dbt.utils import md5
 
 
@@ -80,118 +76,6 @@ def synthesize_generic_test_names(
     return short_name, full_name
 
 
-@dataclass
-class YamlBlock(FileBlock):
-    data: Dict[str, Any]
-
-    @classmethod
-    def from_file_block(cls, src: FileBlock, data: Dict[str, Any]):
-        return cls(
-            file=src.file,
-            data=data,
-        )
-
-
-Testable = TypeVar("Testable", UnparsedNodeUpdate, UnpatchedSourceDefinition)
-
-ColumnTarget = TypeVar(
-    "ColumnTarget",
-    UnparsedNodeUpdate,
-    UnparsedAnalysisUpdate,
-    UnpatchedSourceDefinition,
-)
-
-Target = TypeVar(
-    "Target",
-    UnparsedNodeUpdate,
-    UnparsedMacroUpdate,
-    UnparsedAnalysisUpdate,
-    UnpatchedSourceDefinition,
-    UnparsedExposure,
-)
-
-
-@dataclass
-class TargetBlock(YamlBlock, Generic[Target]):
-    target: Target
-
-    @property
-    def name(self):
-        return self.target.name
-
-    @property
-    def columns(self):
-        return []
-
-    @property
-    def tests(self) -> List[TestDef]:
-        return []
-
-    @classmethod
-    def from_yaml_block(cls, src: YamlBlock, target: Target) -> "TargetBlock[Target]":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=target,
-        )
-
-
-@dataclass
-class TargetColumnsBlock(TargetBlock[ColumnTarget], Generic[ColumnTarget]):
-    @property
-    def columns(self):
-        if self.target.columns is None:
-            return []
-        else:
-            return self.target.columns
-
-
-@dataclass
-class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
-    @property
-    def tests(self) -> List[TestDef]:
-        if self.target.tests is None:
-            return []
-        else:
-            return self.target.tests
-
-    @property
-    def quote_columns(self) -> Optional[bool]:
-        return self.target.quote_columns
-
-    @classmethod
-    def from_yaml_block(cls, src: YamlBlock, target: Testable) -> "TestBlock[Testable]":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=target,
-        )
-
-
-@dataclass
-class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
-    test: Dict[str, Any]
-    column_name: Optional[str]
-    tags: List[str]
-
-    @classmethod
-    def from_test_block(
-        cls,
-        src: TestBlock,
-        test: Dict[str, Any],
-        column_name: Optional[str],
-        tags: List[str],
-    ) -> "GenericTestBlock":
-        return cls(
-            file=src.file,
-            data=src.data,
-            target=src.target,
-            test=test,
-            column_name=column_name,
-            tags=tags,
-        )
-
-
 class TestBuilder(Generic[Testable]):
     """An object to hold assorted test settings and perform basic parsing
 
@@ -230,6 +114,7 @@ class TestBuilder(Generic[Testable]):
         package_name: str,
         render_ctx: Dict[str, Any],
         column_name: str = None,
+        version: Optional[NodeVersion] = None,
     ) -> None:
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args: Dict[str, Any] = test_args
@@ -237,6 +122,7 @@ class TestBuilder(Generic[Testable]):
             raise TestArgIncludesModelError()
         self.package_name: str = package_name
         self.target: Testable = target
+        self.version: Optional[NodeVersion] = version
 
         self.args["model"] = self.build_model_str()
 
@@ -435,7 +321,12 @@ class TestBuilder(Generic[Testable]):
 
     def get_synthetic_test_names(self) -> Tuple[str, str]:
         # Returns two names: shorter (for the compiled file), full (for the unique_id + FQN)
-        if isinstance(self.target, UnparsedNodeUpdate):
+        target_name = self.target.name
+        if isinstance(self.target, UnparsedModelUpdate):
+            name = self.name
+            if self.version:
+                target_name = f"{self.target.name}_v{self.version}"
+        elif isinstance(self.target, UnparsedNodeUpdate):
             name = self.name
         elif isinstance(self.target, UnpatchedSourceDefinition):
             name = "source_" + self.name
@@ -443,7 +334,7 @@ class TestBuilder(Generic[Testable]):
             raise self._bad_type()
         if self.namespace is not None:
             name = "{}_{}".format(self.namespace, name)
-        return synthesize_generic_test_names(name, self.target.name, self.args)
+        return synthesize_generic_test_names(name, target_name, self.args)
 
     def construct_config(self) -> str:
         configs = ",".join(
@@ -473,7 +364,12 @@ class TestBuilder(Generic[Testable]):
 
     def build_model_str(self):
         targ = self.target
-        if isinstance(self.target, UnparsedNodeUpdate):
+        if isinstance(self.target, UnparsedModelUpdate):
+            if self.version:
+                target_str = f"ref('{targ.name}', version='{self.version}')"
+            else:
+                target_str = f"ref('{targ.name}')"
+        elif isinstance(self.target, UnparsedNodeUpdate):
             target_str = f"ref('{targ.name}')"
         elif isinstance(self.target, UnpatchedSourceDefinition):
             target_str = f"source('{targ.source.name}', '{targ.table.name}')"

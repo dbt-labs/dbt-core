@@ -118,11 +118,15 @@ class TestGraphSelection(SelectionFixtures):
 
     def test_locally_qualified_name(self, project):
         results = run_dbt(["run", "--select", "test.subdir"])
-        check_result_nodes_by_name(results, ["nested_users", "subdir"])
+        check_result_nodes_by_name(results, ["nested_users", "subdir", "versioned"])
         assert_correct_schemas(project)
 
         results = run_dbt(["run", "--select", "models/test/subdir*"])
-        check_result_nodes_by_name(results, ["nested_users", "subdir"])
+        check_result_nodes_by_name(results, ["nested_users", "subdir", "versioned"])
+        assert_correct_schemas(project)
+
+        results = run_dbt(["build", "--select", "models/patch_path_selection_schema.yml"])
+        check_result_nodes_by_name(results, ["subdir"])
         assert_correct_schemas(project)
 
     def test_locally_qualified_name_model_with_dots(self, project):
@@ -163,6 +167,12 @@ class TestGraphSelection(SelectionFixtures):
         results = run_dbt(["run", "--select", "@emails_alt", "users_rollup"], expect_pass=False)
         check_result_nodes_by_name(results, ["users_rollup", "users", "emails_alt"])
 
+    def test_concat_multiple(self, project):
+        results = run_dbt(
+            ["run", "--select", "@emails_alt", "--select", "users_rollup"], expect_pass=False
+        )
+        check_result_nodes_by_name(results, ["users_rollup", "users", "emails_alt"])
+
     def test_concat_exclude(self, project):
         results = run_dbt(
             [
@@ -176,6 +186,22 @@ class TestGraphSelection(SelectionFixtures):
             expect_pass=False,
         )
         check_result_nodes_by_name(results, ["users_rollup", "users"])
+
+    def test_concat_exclude_multiple(self, project):
+        results = run_dbt(
+            [
+                "run",
+                "--select",
+                "@emails_alt",
+                "users_rollup",
+                "--exclude",
+                "users",
+                "--exclude",
+                "emails_alt",
+            ],
+            expect_pass=False,
+        )
+        check_result_nodes_by_name(results, ["users_rollup"])
 
     def test_concat_exclude_concat(self, project):
         results = run_dbt(
@@ -219,6 +245,7 @@ class TestGraphSelection(SelectionFixtures):
             "test.unique_users_rollup_gender",
             "test.users",
             "test.users_rollup",
+            "test.versioned.v3",
         ]
         results = run_dbt(["run", "-m", "+exposure:user_exposure"], expect_pass=False)
         check_result_nodes_by_name(

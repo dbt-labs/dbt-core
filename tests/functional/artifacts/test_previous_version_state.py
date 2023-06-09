@@ -130,21 +130,16 @@ models:
 metrics:
   - name: my_metric
     label: Count records
-    model: ref('my_model')
-
-    type: count
-    sql: "*"
-    timestamp: updated_at
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure: customers
   - name: disabled_metric
     label: Count records
-    model: ref('my_model')
     config:
         enabled: False
-    type: count
-    sql: "*"
-    timestamp: updated_at
-    time_grains: [day]
+    type: simple
+    type_params:
+      measure: customers
 
 sources:
   - name: my_source
@@ -204,7 +199,7 @@ seeds:
 
 
 class TestPreviousVersionState:
-    CURRENT_EXPECTED_MANIFEST_VERSION = 9
+    CURRENT_EXPECTED_MANIFEST_VERSION = 10
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -283,7 +278,7 @@ class TestPreviousVersionState:
     # The actual test method. Run `dbt list --select state:modified --state ...`
     # once for each past manifest version. They all have the same content, but different
     # schema/structure, only some of which are forward-compatible with the
-    # current WriteableManifest class.
+    # current WritableManifest class.
     def compare_previous_state(
         self,
         project,

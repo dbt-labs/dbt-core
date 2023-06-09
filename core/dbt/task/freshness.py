@@ -9,7 +9,6 @@ from .printer import (
 from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
-    FreshnessExecutionResultArtifact,
     FreshnessResult,
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
@@ -117,6 +116,11 @@ class FreshnessRunner(BaseRunner):
 
         status = compiled_node.freshness.status(freshness["age"])
 
+        # adapter_response was not returned in previous versions, so this will be None
+        # we cannot call to_dict() on NoneType
+        if adapter_response:
+            adapter_response = adapter_response.to_dict(omit_none=True)
+
         return SourceFreshnessResult(
             node=compiled_node,
             status=status,
@@ -124,7 +128,7 @@ class FreshnessRunner(BaseRunner):
             timing=[],
             execution_time=0,
             message=None,
-            adapter_response=adapter_response.to_dict(omit_none=True),
+            adapter_response=adapter_response or {},
             failures=None,
             **freshness,
         )
@@ -155,7 +159,7 @@ class FreshnessTask(GraphRunnableTask):
         if self.args.output:
             return os.path.realpath(self.args.output)
         else:
-            return os.path.join(self.config.target_path, RESULT_FILE_NAME)
+            return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
 
     def raise_on_first_error(self):
         return False
@@ -172,10 +176,6 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_runner_type(self, _):
         return FreshnessRunner
-
-    def write_result(self, result):
-        artifact = FreshnessExecutionResultArtifact.from_result(result)
-        artifact.write(self.result_path())
 
     def get_result(self, results, elapsed_time, generated_at):
         return FreshnessResult.from_node_results(

@@ -9,6 +9,7 @@ from argparse import Namespace
 import dbt.flags as flags
 
 from dbt.tests.util import (
+    run_dbt,
     run_dbt_and_capture,
     write_file,
     rm_file,
@@ -87,6 +88,15 @@ def environ(env):
                 del os.environ[key]
             else:
                 os.environ[key] = value
+
+
+class TestProfilesMayNotExist:
+    def test_debug(self, project):
+        # The database will not be able to connect; expect neither a pass or a failure (but not an exception)
+        run_dbt(["debug", "--profiles-dir", "does_not_exist"], expect_pass=None)
+
+    def test_deps(self, project):
+        run_dbt(["deps", "--profiles-dir", "does_not_exist"])
 
 
 class TestProfiles:

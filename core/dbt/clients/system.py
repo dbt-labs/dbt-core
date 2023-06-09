@@ -211,7 +211,7 @@ def _windows_rmdir_readonly(func: Callable[[str], Any], path: str, exc: Tuple[An
 
 def resolve_path_from_base(path_to_resolve: str, base_path: str) -> str:
     """
-    If path-to_resolve is a relative path, create an absolute path
+    If path_to_resolve is a relative path, create an absolute path
     with base_path as the base.
 
     If path_to_resolve is an absolute path or a user path (~), just
@@ -449,8 +449,8 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    fire_event(SystemStdOut(bmsg=out))
-    fire_event(SystemStdErr(bmsg=err))
+    fire_event(SystemStdOut(bmsg=str(out)))
+    fire_event(SystemStdErr(bmsg=str(err)))
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))

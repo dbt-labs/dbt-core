@@ -577,13 +577,7 @@ class PartialParsing:
         new_schema_file = deepcopy(self.new_files[file_id])
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
-        if "version" in new_yaml_dict:
-            # despite the fact that this goes in the saved_schema_file, it
-            # should represent the new yaml dictionary, and should produce
-            # an error if the updated yaml file doesn't have a version
-            saved_schema_file.pp_dict = {"version": new_yaml_dict["version"]}
-        else:
-            saved_schema_file.pp_dict = {}
+        saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
         # copy from new schema_file to saved_schema_file to preserve references
@@ -806,8 +800,8 @@ class PartialParsing:
 
     # Merge a patch file into the pp_dict in a schema file
     def merge_patch(self, schema_file, key, patch):
-        if not schema_file.pp_dict:
-            schema_file.pp_dict = {"version": schema_file.dict_from_yaml["version"]}
+        if schema_file.pp_dict is None:
+            schema_file.pp_dict = {}
         pp_dict = schema_file.pp_dict
         if key not in pp_dict:
             pp_dict[key] = [patch]
@@ -827,18 +821,17 @@ class PartialParsing:
     def delete_schema_mssa_links(self, schema_file, dict_key, elem):
         # find elem node unique_id in node_patches
         prefix = key_to_prefix[dict_key]
-        elem_unique_id = ""
+        elem_unique_ids = []
         for unique_id in schema_file.node_patches:
             if not unique_id.startswith(prefix):
                 continue
             parts = unique_id.split(".")
-            elem_name = parts[-1]
+            elem_name = parts[2]
             if elem_name == elem["name"]:
-                elem_unique_id = unique_id
-                break
+                elem_unique_ids.append(unique_id)
 
         # remove elem node and remove unique_id from node_patches
-        if elem_unique_id:
+        for elem_unique_id in elem_unique_ids:
             # might have been already removed
             if (
                 elem_unique_id in self.saved_manifest.nodes
@@ -858,6 +851,12 @@ class PartialParsing:
                     if self.saved_files[file_id]:
                         source_file = self.saved_files[file_id]
                         self.add_to_pp_files(source_file)
+                    # if the node's group has changed - need to reparse all referencing nodes to ensure valid ref access
+                    if node.group != elem.get("group"):
+                        self.schedule_referencing_nodes_for_parsing(node.unique_id)
+                    # if the node's latest version has changed - need to reparse all referencing nodes to ensure correct ref resolution
+                    if node.is_versioned and node.latest_version != elem.get("latest_version"):
+                        self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)
 
