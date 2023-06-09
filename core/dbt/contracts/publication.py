@@ -1,18 +1,25 @@
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 from datetime import datetime
-from dbt.dataclass_schema import dbtClassMixin
+
 
 from dataclasses import dataclass, field
 
-from dbt.contracts.util import BaseArtifactMetadata, ArtifactMixin, schema_version
+from dbt.contracts.util import (
+    AdditionalPropertiesMixin,
+    ArtifactMixin,
+    BaseArtifactMetadata,
+    schema_version,
+)
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.graph.nodes import ManifestOrPublicNode
-from dbt.node_types import NodeType, AccessType
+from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
+from dbt.node_types import AccessType, NodeType
 
 
 @dataclass
-class ProjectDependency(dbtClassMixin):
+class ProjectDependency(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     name: str
+    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
