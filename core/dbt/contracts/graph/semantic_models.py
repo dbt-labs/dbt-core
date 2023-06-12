@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from dbt.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.references import DimensionReference, TimeDimensionReference
+from dbt_semantic_interfaces.references import (
+    DimensionReference,
+    EntityReference,
+    TimeDimensionReference,
+)
 from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
+from dbt_semantic_interfaces.type_enums.entity_type import EntityType
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from typing import Optional
 
@@ -28,6 +33,11 @@ class SourceFileMetadata(dbtClassMixin):
 
     repo_file_path: str
     file_slice: FileSlice
+
+
+# ====================================
+# Dimension objects
+# ====================================
 
 
 @dataclass
@@ -69,3 +79,25 @@ class Dimension(dbtClassMixin):
             return self.type_params.validity_params
         else:
             return None
+
+
+# ====================================
+# Entity objects
+# ====================================
+
+
+@dataclass
+class Entity(dbtClassMixin):
+    name: str
+    type: EntityType
+    description: Optional[str] = None
+    role: Optional[str] = None
+    expr: Optional[str] = None
+
+    @property
+    def reference(self) -> EntityReference:
+        return EntityReference(element_name=self.name)
+
+    @property
+    def is_linkable_entity_type(self) -> bool:
+        return self.type in (EntityType.PRIMARY, EntityType.UNIQUE, EntityType.NATURAL)

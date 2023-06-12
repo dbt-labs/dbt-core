@@ -12,10 +12,9 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.semantic_models import Dimension, SourceFileMetadata
+from dbt.contracts.graph.semantic_models import Dimension, Entity, SourceFileMetadata
 from dbt.contracts.graph.unparsed import (
     Docs,
-    Entity,
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
