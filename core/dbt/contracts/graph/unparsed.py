@@ -674,9 +674,9 @@ class UnparsedGroup(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class Entity(dbtClassMixin):
+class UnparsedEntity(dbtClassMixin):
     name: str
-    type: str  # actually an enum
+    type: str  # EntityType enum
     description: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
@@ -722,7 +722,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     name: str
     description: Optional[str]
     model: str  # looks like "ref(...)"
-    entities: List[Entity] = field(default_factory=list)
+    entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[Measure] = field(default_factory=list)
     dimensions: List[UnparsedDimension] = field(default_factory=list)
 

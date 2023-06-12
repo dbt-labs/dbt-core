@@ -4,6 +4,7 @@ from dbt.node_types import NodeType
 from dbt.contracts.graph.unparsed import (
     UnparsedDimension,
     UnparsedDimensionTypeParams,
+    UnparsedEntity,
     UnparsedExposure,
     UnparsedGroup,
     UnparsedMetric,
@@ -23,7 +24,7 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     WhereFilter,
 )
-from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams
+from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
@@ -35,6 +36,7 @@ from dbt.context.context_config import (
 from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
 from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
+from dbt_semantic_interfaces.type_enums.entity_type import EntityType
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from typing import List, Optional, Union
@@ -439,6 +441,21 @@ class SemanticModelParser(YamlReader):
             )
         return dimensions
 
+    def _get_entities(self, unparsed_entities: List[UnparsedEntity]) -> List[Entity]:
+        entities: List[Entity] = []
+        for unparsed in unparsed_entities:
+            entities.append(
+                Entity(
+                    name=unparsed.name,
+                    type=EntityType(unparsed.type),
+                    description=unparsed.description,
+                    role=unparsed.role,
+                    expr=unparsed.expr,
+                )
+            )
+
+        return entities
+
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
@@ -458,7 +475,7 @@ class SemanticModelParser(YamlReader):
             path=path,
             resource_type=NodeType.SemanticModel,
             unique_id=unique_id,
-            entities=unparsed.entities,
+            entities=self._get_entities(unparsed.entities),
             measures=unparsed.measures,
             dimensions=self._get_dimensions(unparsed.dimensions),
         )
