@@ -3,6 +3,7 @@ import re
 
 from dbt import deprecations
 from dbt.node_types import NodeType
+from dbt.contracts.graph.semantic_models import DimensionValidityParams
 from dbt.contracts.util import (
     AdditionalPropertiesMixin,
     Mergeable,
@@ -701,14 +702,19 @@ class Measure(dbtClassMixin):
 
 
 @dataclass
-class Dimension(dbtClassMixin):
+class UnparsedDimensionTypeParams(dbtClassMixin):
+    time_granularity: str  # TimeGranularity enum
+    validity_params: Optional[DimensionValidityParams] = None
+
+
+@dataclass
+class UnparsedDimension(dbtClassMixin):
     name: str
     type: str  # actually an enum
     description: Optional[str] = None
-    is_partition: Optional[bool] = False
-    type_params: Optional[Dict[str, Any]] = None
+    is_partition: bool = False
+    type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
-    # TODO metadata: Optional[Metadata] (this would actually be the YML for the dimension)
 
 
 @dataclass
@@ -718,7 +724,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     model: str  # looks like "ref(...)"
     entities: List[Entity] = field(default_factory=list)
     measures: List[Measure] = field(default_factory=list)
-    dimensions: List[Dimension] = field(default_factory=list)
+    dimensions: List[UnparsedDimension] = field(default_factory=list)
 
 
 def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:

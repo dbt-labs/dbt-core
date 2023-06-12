@@ -2,6 +2,8 @@ from dbt.parser.schemas import YamlReader, SchemaParser
 from dbt.parser.common import YamlBlock
 from dbt.node_types import NodeType
 from dbt.contracts.graph.unparsed import (
+    UnparsedDimension,
+    UnparsedDimensionTypeParams,
     UnparsedExposure,
     UnparsedGroup,
     UnparsedMetric,
@@ -21,6 +23,7 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     WhereFilter,
 )
+from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
@@ -31,6 +34,7 @@ from dbt.context.context_config import (
 )
 from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
+from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from typing import List, Optional, Union
@@ -408,6 +412,33 @@ class SemanticModelParser(YamlReader):
         self.schema_parser = schema_parser
         self.yaml = yaml
 
+    def _get_dimension_type_params(
+        self, unparsed: Optional[UnparsedDimensionTypeParams]
+    ) -> Optional[DimensionTypeParams]:
+        if unparsed is not None:
+            return DimensionTypeParams(
+                time_granularity=TimeGranularity(unparsed.time_granularity),
+                validity_params=unparsed.validity_params,
+            )
+        else:
+            return None
+
+    def _get_dimensions(self, unparsed_dimensions: List[UnparsedDimension]) -> List[Dimension]:
+        dimensions: List[Dimension] = []
+        for unparsed in unparsed_dimensions:
+            dimensions.append(
+                Dimension(
+                    name=unparsed.name,
+                    type=DimensionType(unparsed.type),
+                    description=unparsed.description,
+                    is_partition=unparsed.is_partition,
+                    type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
+                    expr=unparsed.expr,
+                    metadata=None,  # TODO: requires a fair bit of parsing context
+                )
+            )
+        return dimensions
+
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
@@ -429,7 +460,7 @@ class SemanticModelParser(YamlReader):
             unique_id=unique_id,
             entities=unparsed.entities,
             measures=unparsed.measures,
-            dimensions=unparsed.dimensions,
+            dimensions=self._get_dimensions(unparsed.dimensions),
         )
 
         self.manifest.add_semantic_model(self.yaml.file, parsed)

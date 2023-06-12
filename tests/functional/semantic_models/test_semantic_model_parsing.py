@@ -22,7 +22,6 @@ semantic_models:
         type: time
         expr: created_at
         type_params:
-          is_primary: True
           time_granularity: day
 
     entities:
