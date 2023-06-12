@@ -6,8 +6,7 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     WhereFilter,
 )
-from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity
-from dbt.contracts.graph.unparsed import Measure
+from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity, Measure
 from dbt.node_types import NodeType
 from dbt_semantic_interfaces.protocols.dimension import Dimension as DSIDimension
 from dbt_semantic_interfaces.protocols.entity import Entity as DSIEntitiy
@@ -98,6 +97,7 @@ def test_measure_satisfies_protocol():
         agg="sum",
         create_metric=True,
         expr="amount",
+        agg_time_dimension="a_time_dimension",
     )
     assert isinstance(measure, RuntimeCheckableMeasure)
 

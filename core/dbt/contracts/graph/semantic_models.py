@@ -3,12 +3,14 @@ from dbt.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import (
     DimensionReference,
     EntityReference,
+    MeasureReference,
     TimeDimensionReference,
 )
+from dbt_semantic_interfaces.type_enums.aggregation_type import AggregationType
 from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
 from dbt_semantic_interfaces.type_enums.entity_type import EntityType
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass
@@ -101,3 +103,45 @@ class Entity(dbtClassMixin):
     @property
     def is_linkable_entity_type(self) -> bool:
         return self.type in (EntityType.PRIMARY, EntityType.UNIQUE, EntityType.NATURAL)
+
+
+# ====================================
+# Measure objects
+# ====================================
+
+
+@dataclass
+class MeasureAggregationParameters(dbtClassMixin):
+    percentile: Optional[float] = None
+    use_discrete_percentile: Optional[bool] = None
+    use_approximate_percentile: Optional[bool] = None
+
+
+@dataclass
+class NonAdditiveDimension(dbtClassMixin):
+    name: str
+    window_choice: AggregationType
+    window_grouples: List[str]
+
+
+@dataclass
+class Measure(dbtClassMixin):
+    name: str
+    agg: AggregationType
+    description: Optional[str] = None
+    create_metric: Optional[bool] = False
+    expr: Optional[str] = None
+    agg_params: Optional[MeasureAggregationParameters] = None
+    non_additive_dimension: Optional[NonAdditiveDimension] = None
+    agg_time_dimension: Optional[str] = None
+
+    @property
+    def checked_agg_time_dimension(self) -> TimeDimensionReference:
+        if self.agg_time_dimension is not None:
+            return TimeDimensionReference(element_name=self.agg_time_dimension)
+        else:
+            raise Exception("Measure is missing agg_time_dimension!")
+
+    @property
+    def reference(self) -> MeasureReference:
+        return MeasureReference(element_name=self.name)
