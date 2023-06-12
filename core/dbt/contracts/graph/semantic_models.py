@@ -37,6 +37,11 @@ class SourceFileMetadata(dbtClassMixin):
     file_slice: FileSlice
 
 
+@dataclass
+class Defaults(dbtClassMixin):
+    agg_time_dimension: Optional[str] = None
+
+
 # ====================================
 # Dimension objects
 # ====================================

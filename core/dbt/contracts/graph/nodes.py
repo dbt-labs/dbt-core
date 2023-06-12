@@ -12,7 +12,13 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.semantic_models import Dimension, Entity, Measure, SourceFileMetadata
+from dbt.contracts.graph.semantic_models import (
+    Defaults,
+    Dimension,
+    Entity,
+    Measure,
+    SourceFileMetadata,
+)
 from dbt.contracts.graph.unparsed import (
     Docs,
     ExposureType,
@@ -41,7 +47,11 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
-from dbt_semantic_interfaces.references import MeasureReference
+from dbt_semantic_interfaces.references import (
+    MeasureReference,
+    LinkableElementReference,
+    SemanticModelReference,
+)
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
@@ -677,7 +687,6 @@ class ModelNode(CompiledNode):
                 and old_value.constraints != self.columns[old_key].constraints
                 and old.materialization_enforces_constraints
             ):
-
                 for old_constraint in old_value.constraints:
                     if (
                         old_constraint not in self.columns[old_key].constraints
@@ -1467,12 +1476,63 @@ class NodeRelation(dbtClassMixin):
 
 @dataclass
 class SemanticModel(GraphNode):
-    description: Optional[str]
     model: str
     node_relation: Optional[NodeRelation]
-    entities: Sequence[Entity]
-    measures: Sequence[Measure]
-    dimensions: Sequence[Dimension]
+    description: Optional[str] = None
+    defaults: Optional[Defaults] = None
+    entities: Sequence[Entity] = field(default_factory=list)
+    measures: Sequence[Measure] = field(default_factory=list)
+    dimensions: Sequence[Dimension] = field(default_factory=list)
+    metadata: Optional[SourceFileMetadata] = None
+
+    @property
+    def entity_references(self) -> List[LinkableElementReference]:
+        return [entity.reference for entity in self.entities]
+
+    @property
+    def dimension_references(self) -> List[LinkableElementReference]:
+        return [dimension.reference for dimension in self.dimensions]
+
+    @property
+    def measure_references(self) -> List[MeasureReference]:
+        return [measure.reference for measure in self.measures]
+
+    @property
+    def has_validity_dimensions(self) -> bool:
+        return any([dim.validity_params is not None for dim in self.dimensions])
+
+    @property
+    def validity_start_dimension(self) -> Optional[Dimension]:
+        validity_start_dims = [
+            dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_start
+        ]
+        if not validity_start_dims:
+            return None
+        return validity_start_dims[0]
+
+    @property
+    def validity_end_dimension(self) -> Optional[Dimension]:
+        validity_end_dims = [
+            dim for dim in self.dimensions if dim.validity_params and dim.validity_params.is_end
+        ]
+        if not validity_end_dims:
+            return None
+        return validity_end_dims[0]
+
+    @property
+    def partitions(self) -> List[Dimension]:  # noqa: D
+        return [dim for dim in self.dimensions or [] if dim.is_partition]
+
+    @property
+    def partition(self) -> Optional[Dimension]:
+        partitions = self.partitions
+        if not partitions:
+            return None
+        return partitions[0]
+
+    @property
+    def reference(self) -> SemanticModelReference:
+        return SemanticModelReference(semantic_model_name=self.name)
 
 
 # ====================================
