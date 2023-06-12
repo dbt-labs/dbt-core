@@ -3,7 +3,10 @@ import re
 
 from dbt import deprecations
 from dbt.node_types import NodeType
-from dbt.contracts.graph.semantic_models import DimensionValidityParams
+from dbt.contracts.graph.semantic_models import (
+    DimensionValidityParams,
+    MeasureAggregationParameters,
+)
 from dbt.contracts.util import (
     AdditionalPropertiesMixin,
     Mergeable,
@@ -683,21 +686,21 @@ class UnparsedEntity(dbtClassMixin):
 
 
 @dataclass
-class MeasureAggregationParameters(dbtClassMixin):
-    percentile: Optional[float] = None
-    use_discrete_percentile: bool = False
-    use_approximate_percentile: bool = False
+class UnparsedNonAdditiveDimension(dbtClassMixin):
+    name: str
+    window_choice: str  # AggregationType enum
+    window_grouples: List[str]
 
 
 @dataclass
-class Measure(dbtClassMixin):
+class UnparsedMeasure(dbtClassMixin):
     name: str
     agg: str  # actually an enum
     description: Optional[str] = None
-    create_metric: Optional[bool] = None
+    create_metric: bool = False
     expr: Optional[str] = None
     agg_params: Optional[MeasureAggregationParameters] = None
-    non_additive_dimension: Optional[Dict[str, Any]] = None
+    non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
 
 
@@ -723,7 +726,7 @@ class UnparsedSemanticModel(dbtClassMixin):
     description: Optional[str]
     model: str  # looks like "ref(...)"
     entities: List[UnparsedEntity] = field(default_factory=list)
-    measures: List[Measure] = field(default_factory=list)
+    measures: List[UnparsedMeasure] = field(default_factory=list)
     dimensions: List[UnparsedDimension] = field(default_factory=list)
 
 

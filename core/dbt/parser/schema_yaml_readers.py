@@ -7,10 +7,12 @@ from dbt.contracts.graph.unparsed import (
     UnparsedEntity,
     UnparsedExposure,
     UnparsedGroup,
+    UnparsedMeasure,
     UnparsedMetric,
     UnparsedMetricInput,
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
+    UnparsedNonAdditiveDimension,
     UnparsedSemanticModel,
 )
 from dbt.contracts.graph.nodes import (
@@ -24,7 +26,13 @@ from dbt.contracts.graph.nodes import (
     SemanticModel,
     WhereFilter,
 )
-from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity
+from dbt.contracts.graph.semantic_models import (
+    Dimension,
+    DimensionTypeParams,
+    Entity,
+    Measure,
+    NonAdditiveDimension,
+)
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
 from dbt.context.providers import generate_parse_exposure
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
@@ -35,6 +43,7 @@ from dbt.context.context_config import (
 )
 from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
+from dbt_semantic_interfaces.type_enums.aggregation_type import AggregationType
 from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
 from dbt_semantic_interfaces.type_enums.entity_type import EntityType
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
@@ -456,6 +465,37 @@ class SemanticModelParser(YamlReader):
 
         return entities
 
+    def _get_non_additive_dimension(
+        self, unparsed: Optional[UnparsedNonAdditiveDimension]
+    ) -> Optional[NonAdditiveDimension]:
+        if unparsed is not None:
+            return NonAdditiveDimension(
+                name=unparsed.name,
+                window_choice=AggregationType(unparsed.window_choice),
+                window_grouples=unparsed.window_grouples,
+            )
+        else:
+            return None
+
+    def _get_measures(self, unparsed_measures: List[UnparsedMeasure]) -> List[Measure]:
+        measures: List[Measure] = []
+        for unparsed in unparsed_measures:
+            measures.append(
+                Measure(
+                    name=unparsed.name,
+                    agg=AggregationType(unparsed.agg),
+                    description=unparsed.description,
+                    create_metric=unparsed.create_metric,
+                    expr=unparsed.expr,
+                    agg_params=unparsed.agg_params,
+                    non_additive_dimension=self._get_non_additive_dimension(
+                        unparsed.non_additive_dimension
+                    ),
+                    agg_time_dimension=unparsed.agg_time_dimension,
+                )
+            )
+        return measures
+
     def parse_semantic_model(self, unparsed: UnparsedSemanticModel):
         package_name = self.project.project_name
         unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
@@ -476,7 +516,7 @@ class SemanticModelParser(YamlReader):
             resource_type=NodeType.SemanticModel,
             unique_id=unique_id,
             entities=self._get_entities(unparsed.entities),
-            measures=unparsed.measures,
+            measures=self._get_measures(unparsed.measures),
             dimensions=self._get_dimensions(unparsed.dimensions),
         )
 

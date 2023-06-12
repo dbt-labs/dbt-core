@@ -129,7 +129,7 @@ class Measure(dbtClassMixin):
     name: str
     agg: AggregationType
     description: Optional[str] = None
-    create_metric: Optional[bool] = False
+    create_metric: bool = False
     expr: Optional[str] = None
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[NonAdditiveDimension] = None
