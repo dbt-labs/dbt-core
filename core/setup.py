@@ -53,7 +53,7 @@ setup(
         "hologram>=0.0.14,<=0.0.16",
         "isodate>=0.6,<0.7",
         "logbook>=1.5,<1.6",
-        "mashumaro[msgpack]==3.6",
+        "mashumaro[msgpack]==3.7",
         "minimal-snowplow-tracker==0.0.2",
         "networkx>=2.3,<3",
         "packaging>20.9",
