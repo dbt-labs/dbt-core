@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Setting DBT_DATABRICKS_CONNECTOR_DEBUG_LOGGING to True enables debug logs for
+  databricks-sql-connector.
+time: 2023-06-13T14:34:33.923627-05:00
+custom:
+  Author: susodapop
+  Issue: "7859"
