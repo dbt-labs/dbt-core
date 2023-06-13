@@ -22,7 +22,7 @@ from typing import (
 from typing_extensions import Protocol
 from uuid import UUID
 
-from dbt.contracts.publication import ProjectDependencies, PublicationConfig, PublicModel
+from dbt.contracts.publication import PublicationConfig, PublicModel
 
 from dbt.contracts.graph.nodes import (
     BaseNode,
