@@ -7,7 +7,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     get_logging_events,
 )
-from dbt.contracts.publication import PublicationArtifact, PublicModel
+from dbt.contracts.publication import ProjectDependency, PublicationArtifact, PublicModel
 from dbt.exceptions import (
     PublicationConfigNotFound,
     TargetNotFoundError,
@@ -43,6 +43,7 @@ models:
 dependencies_yml = """
 projects:
     - name: marketing
+      custom_field: some value
 """
 
 marketing_pub_json = """
@@ -155,6 +156,14 @@ class TestPublicationArtifacts:
         publication_dict = pub_available_events[0]["data"]["pub_artifact"]
         publication = PublicationArtifact.from_dict(publication_dict)
         assert publication.dependencies == ["marketing"]
+
+        # check project_dependencies in manifest
+        project_dependencies = manifest.project_dependencies
+        assert project_dependencies
+        project_dependency = project_dependencies.projects[0]
+        assert isinstance(project_dependency, ProjectDependency)
+        assert project_dependency.name == "marketing"
+        assert "custom_field" in project_dependency._extra
 
         # source_node, target_model_name, target_model_package, target_model_version, current_project, node_package
         resolved_node = manifest.resolve_ref(None, "fct_one", "marketing", None, "test", "test")

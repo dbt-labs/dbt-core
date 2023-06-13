@@ -9,14 +9,14 @@ node_type_pluralizations = {
     NodeType.Operation: "operations",
     NodeType.Seed: "seeds",
     NodeType.RPCCall: "rpcs",
-    NodeType.SqlOperation: "sql operations",
+    NodeType.SqlOperation: "sqloperations",
     NodeType.Documentation: "docs",
     NodeType.Source: "sources",
     NodeType.Macro: "macros",
     NodeType.Exposure: "exposures",
     NodeType.Metric: "metrics",
     NodeType.Group: "groups",
-    NodeType.SemanticModel: "semantic models",
+    NodeType.SemanticModel: "semanticmodels",
 }
 
 

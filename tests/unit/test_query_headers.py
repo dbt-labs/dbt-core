@@ -3,7 +3,7 @@ from unittest import TestCase, mock
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 
-from test.unit.utils import config_from_parts_or_dicts
+from tests.unit.utils import config_from_parts_or_dicts
 
 
 class TestQueryHeaders(TestCase):
