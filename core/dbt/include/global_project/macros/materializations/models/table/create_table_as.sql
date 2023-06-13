@@ -36,15 +36,24 @@
   );
 {%- endmacro %}
 
+
+{% macro default__get_column_names() %}
+  {#- loop through user_provided_columns to get column names -#}
+    {%- set user_provided_columns = model['columns'] -%}
+    {%- for i in user_provided_columns %}
+      {%- set col = user_provided_columns[i] -%}
+      {%- set col_name = adapter.quote(col['name']) if col.get('quote') else col['name'] -%}
+      {{ col_name }}{{ ", " if not loop.last }}
+    {%- endfor -%}
+{% endmacro %}
+
+
 {% macro get_select_subquery(sql) %}
   {{ return(adapter.dispatch('get_select_subquery', 'dbt')(sql)) }}
 {% endmacro %}
 
 {% macro default__get_select_subquery(sql) %}
-    select
-    {% for column in model['columns'] %}
-      {{ column }}{{ ", " if not loop.last }}
-    {% endfor %}
+    select {{ adapter.dispatch('get_column_names', 'dbt')() }}
     from (
         {{ sql }}
     ) as model_subq
