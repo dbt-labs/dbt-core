@@ -499,6 +499,7 @@ def _env_log_level(var_name: str) -> int:
 
 LOG_LEVEL_GOOGLE = _env_log_level("DBT_GOOGLE_DEBUG_LOGGING")
 LOG_LEVEL_SNOWFLAKE = _env_log_level("DBT_SNOWFLAKE_CONNECTOR_DEBUG_LOGGING")
+LOG_LEVEL_DATABRICKS = _env_log_level("DBT_DATABRICKS_CONNECTOR_DEBUG_LOGGING")
 LOG_LEVEL_BOTOCORE = _env_log_level("DBT_BOTOCORE_DEBUG_LOGGING")
 LOG_LEVEL_HTTP = _env_log_level("DBT_HTTP_DEBUG_LOGGING")
 LOG_LEVEL_WERKZEUG = _env_log_level("DBT_WERKZEUG_DEBUG_LOGGING")
@@ -508,6 +509,7 @@ logging.getLogger("requests").setLevel(LOG_LEVEL_HTTP)
 logging.getLogger("urllib3").setLevel(LOG_LEVEL_HTTP)
 logging.getLogger("google").setLevel(LOG_LEVEL_GOOGLE)
 logging.getLogger("snowflake.connector").setLevel(LOG_LEVEL_SNOWFLAKE)
+logging.getLogger("databricks.sql").setLevel(LOG_LEVEL_DATABRICKS)
 
 logging.getLogger("parsedatetime").setLevel(logging.ERROR)
 logging.getLogger("werkzeug").setLevel(LOG_LEVEL_WERKZEUG)
