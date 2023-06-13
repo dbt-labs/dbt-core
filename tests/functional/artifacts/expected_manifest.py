@@ -29,6 +29,7 @@ def get_rendered_model_config(**updates):
         "persist_docs": {},
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "unique_key": None,
         "grants": {},
@@ -59,6 +60,7 @@ def get_rendered_seed_config(**updates):
         "quote_columns": True,
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "database": None,
         "schema": None,
         "alias": None,
@@ -96,6 +98,7 @@ def get_rendered_snapshot_config(**updates):
         "persist_docs": {},
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "strategy": "check",
         "check_cols": "all",
         "unique_key": "id",
@@ -890,6 +893,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
         },
         "disabled": {},
         "public_nodes": {},
+        "semantic_nodes": {},
     }
 
 
@@ -1453,6 +1457,7 @@ def expected_references_manifest(project):
                 ],
             }
         },
+        "semantic_nodes": {},
     }
 
 
@@ -1937,4 +1942,5 @@ def expected_versions_manifest(project):
         "disabled": {},
         "macros": {},
         "public_nodes": {},
+        "semantic_nodes": {},
     }

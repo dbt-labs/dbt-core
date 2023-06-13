@@ -34,7 +34,12 @@ from dbt.adapters.factory import (
     get_relation_class_by_name,
     get_adapter_package_names,
 )
-from dbt.constants import DEPENDENCIES_FILE_NAME, MANIFEST_FILE_NAME, PARTIAL_PARSE_FILE_NAME
+from dbt.constants import (
+    DEPENDENCIES_FILE_NAME,
+    MANIFEST_FILE_NAME,
+    PARTIAL_PARSE_FILE_NAME,
+    SEMANTIC_MANIFEST_FILE_NAME,
+)
 from dbt.helper_types import PathSet
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
@@ -57,6 +62,7 @@ from dbt.events.types import (
     DeprecatedReference,
     UpcomingReferenceDeprecation,
 )
+from dbt_extractor import py_extract_from_source  # type: ignore
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
@@ -99,6 +105,7 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     ResultNode,
     ModelNode,
+    NodeRelation,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
@@ -529,6 +536,7 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.process_semantic_models()
             self.check_valid_group_config()
             self.check_valid_access_property()
 
@@ -1179,6 +1187,28 @@ class ManifestLoader:
             if exposure.created_at < self.started_at:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
+
+    def process_semantic_models(self) -> None:
+        for semantic_model in self.manifest.semantic_nodes.values():
+            if semantic_model.model:
+                statically_parsed = py_extract_from_source(f"{{{{ {semantic_model.model} }}}}")
+                if statically_parsed["refs"]:
+
+                    ref = statically_parsed["refs"][0]
+                    if len(ref) == 2:
+                        input_package_name, input_model_name = ref
+                    else:
+                        input_package_name, input_model_name = None, ref[0]
+
+                    refd_node = self.manifest.ref_lookup.find(
+                        input_model_name, input_package_name, None, self.manifest
+                    )
+                    if isinstance(refd_node, ModelNode):
+                        semantic_model.node_relation = NodeRelation(
+                            alias=refd_node.alias,
+                            schema_name=refd_node.schema,
+                            database=refd_node.database,
+                        )
 
     # nodes: node and column descriptions
     # sources: source and table descriptions, column descriptions
@@ -1845,6 +1875,13 @@ def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     fire_event(PublicationArtifactAvailable(pub_artifact=publication.to_dict()))
 
 
+def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
+    path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
+    write_file(path, manifest.pydantic_semantic_manifest.json())
+
+
 def write_manifest(manifest: Manifest, target_path: str):
     path = os.path.join(target_path, MANIFEST_FILE_NAME)
     manifest.write(path)
+
+    write_semantic_manifest(manifest=manifest, target_path=target_path)

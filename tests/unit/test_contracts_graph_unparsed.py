@@ -21,9 +21,8 @@ from dbt.contracts.graph.unparsed import (
     Owner,
     ExposureType,
     UnparsedMetric,
-    MetricFilter,
-    MetricTime,
-    MetricTimePeriod,
+    UnparsedMetricTypeParams,
+    UnparsedMetricInputMeasure,
     UnparsedVersion,
 )
 from dbt.contracts.results import FreshnessStatus
@@ -864,40 +863,16 @@ class TestUnparsedMetric(ContractTestCase):
         return {
             "name": "new_customers",
             "label": "New Customers",
-            "model": 'ref("dim_customers")',
             "description": "New customers",
-            "calculation_method": "count",
-            "expression": "user_id",
+            "type": "simple",
+            "type_params": {
+                "measure": {
+                    "name": "customers",
+                    "filter": "is_new = true",
+                },
+            },
             "config": {},
-            "timestamp": "signup_date",
-            "time_grains": ["day", "week", "month"],
-            "dimensions": ["plan", "country"],
-            "filters": [
-                {
-                    "field": "is_paying",
-                    "value": "True",
-                    "operator": "=",
-                }
-            ],
-            "window": {"count": 14, "period": "day"},
             "tags": [],
-            "meta": {"is_okr": True},
-        }
-
-    def get_ok_derived_dict(self):
-        return {
-            "name": "arpc",
-            "label": "revenue per customer",
-            "description": "",
-            "calculation_method": "derived",
-            "expression": "{{ metric('revenue') }} / {{ metric('customers') }}",
-            "config": {},
-            "time_grains": ["day", "week", "month"],
-            "timestamp": "signup_date",
-            "dimensions": [],
-            "filters": [],
-            "tags": [],
-            "window": {},
             "meta": {"is_okr": True},
         }
 
@@ -905,63 +880,24 @@ class TestUnparsedMetric(ContractTestCase):
         metric = self.ContractType(
             name="new_customers",
             label="New Customers",
-            model='ref("dim_customers")',
             description="New customers",
-            calculation_method="count",
-            expression="user_id",
-            config={},
-            timestamp="signup_date",
-            time_grains=["day", "week", "month"],
-            dimensions=["plan", "country"],
-            filters=[
-                MetricFilter(
-                    field="is_paying",
-                    value="True",
-                    operator="=",
+            type="simple",
+            type_params=UnparsedMetricTypeParams(
+                measure=UnparsedMetricInputMeasure(
+                    name="customers",
+                    filter="is_new = true",
                 )
-            ],
-            window=MetricTime(count=14, period=MetricTimePeriod.day),
+            ),
+            config={},
             meta={"is_okr": True},
         )
         dct = self.get_ok_dict()
         self.assert_symmetric(metric, dct)
         pickle.loads(pickle.dumps(metric))
 
-    def test_ok_metric_no_model(self):
-        # Derived metrics do not have model properties
-        metric = self.ContractType(
-            name="arpc",
-            label="revenue per customer",
-            model=None,
-            description="",
-            calculation_method="derived",
-            expression="{{ metric('revenue') }} / {{ metric('customers') }}",
-            timestamp="signup_date",
-            config={},
-            time_grains=["day", "week", "month"],
-            window=MetricTime(),
-            dimensions=[],
-            meta={"is_okr": True},
-        )
-        dct = self.get_ok_derived_dict()
-        self.assert_symmetric(metric, dct)
-        pickle.loads(pickle.dumps(metric))
-
-    def test_bad_metric_no_calculation_method(self):
+    def test_bad_metric_no_type_params(self):
         tst = self.get_ok_dict()
-        del tst["calculation_method"]
-        self.assert_fails_validation(tst)
-
-    def test_bad_metric_no_model(self):
-        tst = self.get_ok_dict()
-        # Metrics with calculation_type='derived' do not have model props
-        tst["model"] = None
-        tst["calculation_method"] = "sum"
-        self.assert_fails_validation(tst)
-
-    def test_bad_filter_missing_things(self):
-        tst = self.get_ok_dict()
-        del tst["filters"][0]["operator"]
+        del tst["type_params"]
         self.assert_fails_validation(tst)
 
     def test_bad_tags(self):

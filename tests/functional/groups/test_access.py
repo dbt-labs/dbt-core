@@ -127,14 +127,9 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people_model')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: "people"
     meta:
         my_meta: 'testing'
     config:
@@ -147,14 +142,9 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people_model')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: "people"
     meta:
         my_meta: 'testing'
     config:
@@ -243,9 +233,3 @@ class TestAccess:
         manifest = get_manifest(project.project_root)
         metric_id = "metric.test.number_of_people"
         assert manifest.metrics[metric_id].group == "analytics"
-
-        # Change group of metric
-        write_file(v2_people_metric_yml, "models", "people_metric.yml")
-        # Should raise a reference error
-        with pytest.raises(DbtReferenceError):
-            run_dbt(["parse"])

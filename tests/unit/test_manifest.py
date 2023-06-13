@@ -24,6 +24,9 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Exposure,
     Metric,
+    MetricInputMeasure,
+    MetricTypeParams,
+    WhereFilter,
     Group,
     RefArgs,
 )
@@ -31,13 +34,13 @@ from dbt.contracts.graph.unparsed import (
     ExposureType,
     Owner,
     MaturityType,
-    MetricFilter,
-    MetricTime,
 )
 from dbt.events.functions import reset_metadata_vars
 from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
+from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+
 from .utils import (
     MockMacro,
     MockDocumentation,
@@ -147,28 +150,18 @@ class ManifestTest(unittest.TestCase):
             "metric.root.my_metric": Metric(
                 name="new_customers",
                 label="New Customers",
-                model='ref("multi")',
                 description="New customers",
-                calculation_method="count",
-                expression="user_id",
-                timestamp="signup_date",
-                time_grains=["day", "week", "month"],
-                dimensions=["plan", "country"],
-                filters=[
-                    MetricFilter(
-                        field="is_paying",
-                        value="True",
-                        operator="=",
-                    )
-                ],
                 meta={"is_okr": True},
                 tags=["okrs"],
-                window=MetricTime(),
+                type=MetricType.SIMPLE,
+                type_params=MetricTypeParams(
+                    measure=MetricInputMeasure(
+                        name="customers", filter=WhereFilter(where_sql_template="is_new = True")
+                    )
+                ),
                 resource_type=NodeType.Metric,
-                depends_on=DependsOn(nodes=["model.root.multi"]),
-                refs=[RefArgs(name="multi")],
-                sources=[],
-                metrics=[],
+                depends_on=DependsOn(nodes=["semantic_model.root.customers"]),
+                refs=[RefArgs(name="customers")],
                 fqn=["root", "my_metric"],
                 unique_id="metric.root.my_metric",
                 package_name="root",
@@ -370,6 +363,7 @@ class ManifestTest(unittest.TestCase):
             metrics={},
             selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            semantic_nodes={},
         )
 
         invocation_id = dbt.events.functions.EVENT_MANAGER.invocation_id
@@ -396,6 +390,7 @@ class ManifestTest(unittest.TestCase):
                 "docs": {},
                 "disabled": {},
                 "public_nodes": {},
+                "semantic_nodes": {},
             },
         )
 
@@ -535,6 +530,7 @@ class ManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            semantic_nodes={},
         )
 
         self.assertEqual(
@@ -564,6 +560,7 @@ class ManifestTest(unittest.TestCase):
                 },
                 "disabled": {},
                 "public_nodes": {},
+                "semantic_nodes": {},
             },
         )
 
@@ -911,6 +908,7 @@ class MixedManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            semantic_nodes={},
         )
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
@@ -935,6 +933,7 @@ class MixedManifestTest(unittest.TestCase):
                 "docs": {},
                 "disabled": {},
                 "public_nodes": {},
+                "semantic_nodes": {},
             },
         )
 

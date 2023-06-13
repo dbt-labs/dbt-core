@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.6.0b2"
+package_version = "1.6.0b3"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -70,6 +70,7 @@ setup(
         "cffi>=1.9,<2.0.0",
         "pyyaml>=5.3",
         "urllib3~=1.0",
+        "dbt-semantic-interfaces==0.1.0.dev3",
     ],
     zip_safe=False,
     classifiers=[

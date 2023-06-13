@@ -6,31 +6,23 @@ from enum import Enum
 import hashlib
 
 from mashumaro.types import SerializableType
-from typing import (
-    Optional,
-    Union,
-    List,
-    Dict,
-    Any,
-    Sequence,
-    Tuple,
-    Iterator,
-)
+from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Protocol
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.unparsed import (
+    Dimension,
     Docs,
+    Entity,
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
     HasYamlMetadata,
     MacroArgument,
     MaturityType,
-    MetricFilter,
-    MetricTime,
+    Measure,
     Owner,
     Quoting,
     TestDef,
@@ -51,6 +43,10 @@ from dbt.events.types import (
 from dbt.events.contextvars import set_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
+from dbt_semantic_interfaces.references import MeasureReference
+from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
+from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from .model_config import (
     NodeConfig,
@@ -62,12 +58,6 @@ from .model_config import (
     EmptySnapshotConfig,
     SnapshotConfig,
 )
-import sys
-
-if sys.version_info >= (3, 8):
-    from typing import Protocol
-else:
-    from typing_extensions import Protocol
 
 
 # =====================================================================
@@ -562,6 +552,30 @@ class CompiledNode(ParsedNode):
     @property
     def depends_on_macros(self):
         return self.depends_on.macros
+
+
+@dataclass
+class FileSlice(dbtClassMixin, Replaceable):
+    """Provides file slice level context about what something was created from.
+
+    Implementation of the dbt-semantic-interfaces `FileSlice` protocol
+    """
+
+    filename: str
+    content: str
+    start_line_number: int
+    end_line_number: int
+
+
+@dataclass
+class SourceFileMetadata(dbtClassMixin, Replaceable):
+    """Provides file context about what something was created from.
+
+    Implementation of the dbt-semantic-interfaces `Metadata` protocol
+    """
+
+    repo_file_path: str
+    file_slice: FileSlice
 
 
 # ====================================
@@ -1298,9 +1312,63 @@ class Exposure(GraphNode):
 
 
 @dataclass
+class WhereFilter(dbtClassMixin):
+    where_sql_template: str
+
+
+@dataclass
+class MetricInputMeasure(dbtClassMixin):
+    name: str
+    filter: Optional[WhereFilter] = None
+    alias: Optional[str] = None
+
+    def measure_reference(self) -> MeasureReference:
+        return MeasureReference(element_name=self.name)
+
+    def post_aggregation_measure_referenc(self) -> MeasureReference:
+        return MeasureReference(element_name=self.alias or self.name)
+
+
+@dataclass
+class MetricTimeWindow(dbtClassMixin):
+    count: int
+    granularity: TimeGranularity
+
+
+@dataclass
+class MetricInput(dbtClassMixin):
+    name: str
+    filter: Optional[WhereFilter] = None
+    alias: Optional[str] = None
+    offset_window: Optional[MetricTimeWindow] = None
+    offset_to_grain: Optional[TimeGranularity] = None
+
+    def as_reference(self) -> DSIMetricReference:
+        return DSIMetricReference(element_name=self.name)
+
+
+@dataclass
+class MetricTypeParams(dbtClassMixin):
+    measure: Optional[MetricInputMeasure] = None
+    measures: Optional[List[MetricInputMeasure]] = None
+    numerator: Optional[MetricInputMeasure] = None
+    denominator: Optional[MetricInputMeasure] = None
+    expr: Optional[str] = None
+    window: Optional[MetricTimeWindow] = None
+    grain_to_date: Optional[TimeGranularity] = None
+    metrics: Optional[List[MetricInput]] = None
+
+    def numerator_measure_reference(self) -> Optional[MeasureReference]:
+        return self.numerator.measure_reference() if self.numerator else None
+
+    def denominator_measure_reference(self) -> Optional[MeasureReference]:
+        return self.denominator.measure_reference() if self.denominator else None
+
+
+@dataclass
 class MetricReference(dbtClassMixin, Replaceable):
-    sql: Optional[Union[str, int]]
-    unique_id: Optional[str]
+    sql: Optional[Union[str, int]] = None
+    unique_id: Optional[str] = None
 
 
 @dataclass
@@ -1308,16 +1376,11 @@ class Metric(GraphNode):
     name: str
     description: str
     label: str
-    calculation_method: str
-    expression: str
-    filters: List[MetricFilter]
-    time_grains: List[str]
-    dimensions: List[str]
+    type: MetricType
+    type_params: MetricTypeParams
+    filter: Optional[WhereFilter] = None
+    metadata: Optional[SourceFileMetadata] = None
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Metric]})
-    timestamp: Optional[str] = None
-    window: Optional[MetricTime] = None
-    model: Optional[str] = None
-    model_unique_id: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
@@ -1341,17 +1404,26 @@ class Metric(GraphNode):
     def search_name(self):
         return self.name
 
-    def same_model(self, old: "Metric") -> bool:
-        return self.model == old.model
+    @property
+    def input_measures(self) -> List[MetricInputMeasure]:
+        tp = self.type_params
+        res = tp.measures or []
+        if tp.measure:
+            res.append(tp.measure)
+        if tp.numerator:
+            res.append(tp.numerator)
+        if tp.denominator:
+            res.append(tp.denominator)
 
-    def same_window(self, old: "Metric") -> bool:
-        return self.window == old.window
+        return res
 
-    def same_dimensions(self, old: "Metric") -> bool:
-        return self.dimensions == old.dimensions
+    @property
+    def measure_references(self) -> List[MeasureReference]:
+        return [x.measure_reference() for x in self.input_measures]
 
-    def same_filters(self, old: "Metric") -> bool:
-        return self.filters == old.filters
+    @property
+    def input_metrics(self) -> List[MetricInput]:
+        return self.type_params.metrics or []
 
     def same_description(self, old: "Metric") -> bool:
         return self.description == old.description
@@ -1359,23 +1431,23 @@ class Metric(GraphNode):
     def same_label(self, old: "Metric") -> bool:
         return self.label == old.label
 
-    def same_calculation_method(self, old: "Metric") -> bool:
-        return self.calculation_method == old.calculation_method
-
-    def same_expression(self, old: "Metric") -> bool:
-        return self.expression == old.expression
-
-    def same_timestamp(self, old: "Metric") -> bool:
-        return self.timestamp == old.timestamp
-
-    def same_time_grains(self, old: "Metric") -> bool:
-        return self.time_grains == old.time_grains
-
     def same_config(self, old: "Metric") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
+
+    def same_filter(self, old: "Metric") -> bool:
+        return True  # TODO
+
+    def same_metadata(self, old: "Metric") -> bool:
+        return True  # TODO
+
+    def same_type(self, old: "Metric") -> bool:
+        return self.type == old.type
+
+    def same_type_params(self, old: "Metric") -> bool:
+        return True  # TODO
 
     def same_contents(self, old: Optional["Metric"]) -> bool:
         # existing when it didn't before is a change!
@@ -1384,16 +1456,12 @@ class Metric(GraphNode):
             return True
 
         return (
-            self.same_model(old)
-            and self.same_window(old)
-            and self.same_dimensions(old)
-            and self.same_filters(old)
+            self.same_filter(old)
+            and self.same_metadata(old)
+            and self.same_type(old)
+            and self.same_type_params(old)
             and self.same_description(old)
             and self.same_label(old)
-            and self.same_calculation_method(old)
-            and self.same_expression(old)
-            and self.same_timestamp(old)
-            and self.same_time_grains(old)
             and self.same_config(old)
             and True
         )
@@ -1409,6 +1477,28 @@ class Group(BaseNode):
     name: str
     owner: Owner
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Group]})
+
+
+# ====================================
+# SemanticModel and related classes
+# ====================================
+
+
+@dataclass
+class NodeRelation(dbtClassMixin):
+    alias: str
+    schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
+    database: Optional[str] = None
+
+
+@dataclass
+class SemanticModel(GraphNode):
+    description: Optional[str]
+    model: str
+    node_relation: Optional[NodeRelation]
+    entities: Sequence[Entity]
+    measures: Sequence[Measure]
+    dimensions: Sequence[Dimension]
 
 
 # ====================================
