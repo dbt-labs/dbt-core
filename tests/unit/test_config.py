@@ -575,6 +575,7 @@ def project_from_config_norender(
         project_dict=cfg,
         packages_dict=packages,
         selectors_dict={},
+        dependent_projects_dict={},
         verify_version=verify_version,
     )
     # no rendering
@@ -582,6 +583,7 @@ def project_from_config_norender(
         project_dict=partial.project_dict,
         packages_dict=partial.packages_dict,
         selectors_dict=partial.selectors_dict,
+        dependent_projects_dict=partial.dependent_projects_dict,
     )
     return partial.create_project(rendered)
 
@@ -596,6 +598,7 @@ def project_from_config_rendered(
         project_dict=cfg,
         packages_dict=packages,
         selectors_dict={},
+        dependent_projects_dict={},
         verify_version=verify_version,
     )
     return partial.render(empty_project_renderer())

@@ -822,9 +822,12 @@ class TestDependencies:
     def marketing_publication(self):
         return PublicationArtifact.from_dict(json.loads(marketing_pub_json))
 
+    @pytest.fixture(scope="class")
+    def dependencies(self):
+        return dependencies_yml
+
     def test_dependencies(self, project, marketing_publication):
         # initial run with dependencies
-        write_file(dependencies_yml, "dependencies.yml")
         manifest = run_dbt(["parse"], publications=[marketing_publication])
         assert len(manifest.publications) == 1
 

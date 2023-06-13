@@ -192,6 +192,24 @@ def dbt_project_yml(project_root, project_config_update):
     return project_config
 
 
+# Fixture to provide dependencies
+@pytest.fixture(scope="class")
+def dependencies():
+    return {}
+
+
+# Write out the dependencies.yml file
+# Write out the packages.yml file
+@pytest.fixture(scope="class")
+def dependencies_yml(project_root, dependencies):
+    if dependencies:
+        if isinstance(dependencies, str):
+            data = dependencies
+        else:
+            data = yaml.safe_dump(dependencies)
+        write_file(data, project_root, "dependencies.yml")
+
+
 # Fixture to provide packages as either yaml or dictionary
 @pytest.fixture(scope="class")
 def packages():
@@ -461,6 +479,7 @@ def project(
     profiles_yml,
     dbt_project_yml,
     packages_yml,
+    dependencies_yml,
     selectors_yml,
     adapter,
     project_files,

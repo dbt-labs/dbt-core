@@ -70,6 +70,7 @@ def project_from_dict(project, profile, packages=None, selectors=None, cli_vars=
         project_root=project_root,
         project_dict=project,
         packages_dict=packages,
+        dependent_projects_dict={},
         selectors_dict=selectors,
     )
     return partial.render(renderer)
