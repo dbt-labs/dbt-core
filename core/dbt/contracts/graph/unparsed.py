@@ -4,6 +4,7 @@ import re
 from dbt import deprecations
 from dbt.node_types import NodeType
 from dbt.contracts.graph.semantic_models import (
+    Defaults,
     DimensionValidityParams,
     MeasureAggregationParameters,
 )
@@ -723,8 +724,9 @@ class UnparsedDimension(dbtClassMixin):
 @dataclass
 class UnparsedSemanticModel(dbtClassMixin):
     name: str
-    description: Optional[str]
     model: str  # looks like "ref(...)"
+    description: Optional[str] = None
+    defaults: Optional[Defaults] = None
     entities: List[UnparsedEntity] = field(default_factory=list)
     measures: List[UnparsedMeasure] = field(default_factory=list)
     dimensions: List[UnparsedDimension] = field(default_factory=list)

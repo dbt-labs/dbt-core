@@ -518,6 +518,7 @@ class SemanticModelParser(YamlReader):
             entities=self._get_entities(unparsed.entities),
             measures=self._get_measures(unparsed.measures),
             dimensions=self._get_dimensions(unparsed.dimensions),
+            defaults=unparsed.defaults,
         )
 
         self.manifest.add_semantic_model(self.yaml.file, parsed)

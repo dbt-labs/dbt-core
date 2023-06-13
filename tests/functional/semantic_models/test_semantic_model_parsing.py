@@ -12,6 +12,9 @@ semantic_models:
     description: This is the revenue semantic model. It should be able to use doc blocks
     model: ref('fct_revenue')
 
+    defaults:
+      agg_time_dimension: ds
+
     measures:
       - name: txn_revenue
         expr: revenue
