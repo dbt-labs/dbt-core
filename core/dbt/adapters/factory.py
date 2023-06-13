@@ -9,7 +9,7 @@ from dbt.adapters.base.plugin import AdapterPlugin
 from dbt.adapters.protocol import AdapterConfig, AdapterProtocol, RelationProtocol
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.events.functions import fire_event
-from dbt.events.types import AdapterImportError, PluginLoadError
+from dbt.events.types import AdapterImportError, PluginLoadError, AdapterRegistered
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
@@ -89,7 +89,8 @@ class AdapterContainer:
     def register_adapter(self, config: AdapterRequiredConfig) -> None:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
-
+        adapter_version = import_module(f".{adapter_name}.__version__", "dbt.adapters").version
+        fire_event(AdapterRegistered(adapter_name=adapter_name, adapter_version=adapter_version))
         with self.lock:
             if adapter_name in self.adapters:
                 # this shouldn't really happen...
