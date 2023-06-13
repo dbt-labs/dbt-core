@@ -87,6 +87,7 @@ def get_flag_dict():
         "introspect",
         "target_path",
         "log_path",
+        "maximum_seed_size_mib",
     }
     return {key: getattr(GLOBAL_FLAGS, key.upper(), None) for key in flag_attr}
 

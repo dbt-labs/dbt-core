@@ -155,6 +155,7 @@ class dbtRunner:
 @p.warn_error
 @p.warn_error_options
 @p.write_json
+@p.maximum_seed_size_mib
 def cli(ctx, **kwargs):
     """An ELT tool for managing your SQL transformations and data models.
     For more documentation on these commands, visit: docs.getdbt.com

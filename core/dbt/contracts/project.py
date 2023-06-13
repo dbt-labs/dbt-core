@@ -251,6 +251,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     log_format_file: Optional[str] = None
     log_level: Optional[str] = None
     log_level_file: Optional[str] = None
+    maximum_seed_size_mib: Optional[int] = None
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None

@@ -562,7 +562,7 @@ warn_error_options = click.option(
     envvar="DBT_WARN_ERROR_OPTIONS",
     default="{}",
     help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
-    and missing sources/refs in tests. This argument should be a YAML string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'""",
+    and missing sources/refs in tests. This argument should be a JSON string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'""",
     type=WarnErrorOptionsType(),
 )
 
@@ -571,4 +571,12 @@ write_json = click.option(
     envvar="DBT_WRITE_JSON",
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
+)
+
+maximum_seed_size_mib = click.option(
+    "--maximum-seed-size-mib",
+    envvar="DBT_MAXIMUM_SEED_SIZE_MIB",
+    help="Specify max size (MiB) for seed files that will be hashed for state comparison.",
+    type=click.INT,
+    default=1,
 )
