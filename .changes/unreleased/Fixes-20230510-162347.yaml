@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add types to `quote`
+time: 2023-05-10T16:23:47.691015+02:00
+custom:
+  Author: Fokko
+  Issue: "7584"
