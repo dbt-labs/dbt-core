@@ -91,7 +91,7 @@ class AdapterContainer:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
         adapter_version = import_module(f".{adapter_name}.__version__", "dbt.adapters").version
-        adapter_version_specifier = VersionSpecifier.from_version_string(adapter_version)
+        adapter_version_specifier = VersionSpecifier.from_version_string(adapter_version).to_version_string()
         fire_event(
             AdapterRegistered(adapter_name=adapter_name, adapter_version=adapter_version_specifier)
         )
