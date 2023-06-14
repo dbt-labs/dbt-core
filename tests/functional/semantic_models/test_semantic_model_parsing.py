@@ -29,6 +29,18 @@ semantic_models:
       - name: has_revenue
         expr: true
         agg: sum_boolean
+      - name: discrete_order_value_p99
+        expr: order_total
+        agg: percentile
+        agg_params:
+          percentile: 0.99
+          use_discrete_percentile: True
+          use_approximate_percentile: False
+      - name: test_agg_params_optional_are_empty
+        expr: order_total
+        agg: percentile
+        agg_params:
+          percentile: 0.99
 
     dimensions:
       - name: ds
@@ -71,7 +83,7 @@ class TestSemanticModelParsing:
             semantic_model.node_relation.relation_name
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
-        assert len(semantic_model.measures) == 3
+        assert len(semantic_model.measures) == 5
 
     @pytest.mark.skip("Restore this test when partial parsing is implemented.")
     def test_semantic_model_partial_parsing(self, project):
