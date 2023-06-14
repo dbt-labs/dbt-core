@@ -700,3 +700,8 @@ class Project:
             if dispatch_entry["macro_namespace"] == macro_namespace:
                 return dispatch_entry["search_order"]
         return None
+
+    @property
+    def project_target_path(self):
+        # If target_path is absolute, project_root will not be included
+        return os.path.join(self.project_root, self.target_path)

@@ -77,12 +77,15 @@ class BaseDeferState:
         outputs["otherschema"]["schema"] = other_schema
         return {"test": {"outputs": outputs, "target": "default"}}
 
-    def copy_state(self):
-        if not os.path.exists("state"):
-            os.makedirs("state")
-        shutil.copyfile("target/manifest.json", "state/manifest.json")
+    def copy_state(self, project_root):
+        state_path = os.path.join(project_root, "state")
+        if not os.path.exists(state_path):
+            os.makedirs(state_path)
+        shutil.copyfile(
+            f"{project_root}/target/manifest.json", f"{project_root}/state/manifest.json"
+        )
 
-    def run_and_save_state(self):
+    def run_and_save_state(self, project_root):
         results = run_dbt(["seed"])
         assert len(results) == 1
         assert not any(r.node.deferred for r in results)
@@ -93,7 +96,7 @@ class BaseDeferState:
         assert len(results) == 2
 
         # copy files
-        self.copy_state()
+        self.copy_state(project_root)
 
 
 class TestDeferStateUnsupportedCommands(BaseDeferState):
@@ -110,9 +113,12 @@ class TestDeferStateUnsupportedCommands(BaseDeferState):
 
 class TestRunCompileState(BaseDeferState):
     def test_run_and_compile_defer(self, project):
-        self.run_and_save_state()
+        self.run_and_save_state(project.project_root)
 
         # defer test, it succeeds
+        # Change directory to ensure that state directory is underneath
+        # project directory.
+        os.chdir(project.profiles_dir)
         results = run_dbt(["compile", "--state", "state", "--defer"])
         assert len(results.results) == 6
         assert results.results[0].node.name == "seed"
@@ -120,11 +126,11 @@ class TestRunCompileState(BaseDeferState):
 
 class TestSnapshotState(BaseDeferState):
     def test_snapshot_state_defer(self, project):
-        self.run_and_save_state()
+        self.run_and_save_state(project.project_root)
         # snapshot succeeds without --defer
         run_dbt(["snapshot"])
         # copy files
-        self.copy_state()
+        self.copy_state(project.project_root)
         # defer test, it succeeds
         run_dbt(["snapshot", "--state", "state", "--defer"])
         # favor_state test, it succeeds
@@ -134,7 +140,7 @@ class TestSnapshotState(BaseDeferState):
 class TestRunDeferState(BaseDeferState):
     def test_run_and_defer(self, project, unique_schema, other_schema):
         project.create_test_schema(other_schema)
-        self.run_and_save_state()
+        self.run_and_save_state(project.project_root)
 
         # test tests first, because run will change things
         # no state, wrong schema, failure.
@@ -186,7 +192,7 @@ class TestRunDeferState(BaseDeferState):
 
 class TestRunDeferStateChangedModel(BaseDeferState):
     def test_run_defer_state_changed_model(self, project):
-        self.run_and_save_state()
+        self.run_and_save_state(project.project_root)
 
         # change "view_model"
         write_file(changed_view_model_sql, "models", "view_model.sql")
@@ -215,7 +221,7 @@ class TestRunDeferStateChangedModel(BaseDeferState):
 class TestRunDeferStateIFFNotExists(BaseDeferState):
     def test_run_defer_iff_not_exists(self, project, unique_schema, other_schema):
         project.create_test_schema(other_schema)
-        self.run_and_save_state()
+        self.run_and_save_state(project.project_root)
 
         results = run_dbt(["seed", "--target", "otherschema"])
         assert len(results) == 1
@@ -238,7 +244,7 @@ class TestRunDeferStateIFFNotExists(BaseDeferState):
 class TestDeferStateDeletedUpstream(BaseDeferState):
     def test_run_defer_deleted_upstream(self, project, unique_schema, other_schema):
         project.create_test_schema(other_schema)
-        self.run_and_save_state()
+        self.run_and_save_state(project.project_root)
 
         # remove "ephemeral_model" + change "table_model"
         rm_file("models", "ephemeral_model.sql")

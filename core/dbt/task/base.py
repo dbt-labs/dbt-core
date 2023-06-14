@@ -45,6 +45,7 @@ from dbt.flags import get_flags
 from dbt.graph import Graph
 from dbt.logger import log_manager
 from .printer import print_run_result_error
+from dbt.task.contextvars import cv_project_root
 
 
 class NoneConfig:
@@ -75,6 +76,8 @@ class BaseTask(metaclass=ABCMeta):
         self.args = args
         self.config = config
         self.project = config if isinstance(config, Project) else project
+        if self.config:
+            cv_project_root.set(self.config.project_root)
 
     @classmethod
     def pre_init_hook(cls, args):
