@@ -139,6 +139,7 @@ sample_values = [
     types.AdapterEventInfo(),
     types.AdapterEventWarning(),
     types.AdapterEventError(),
+    types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
     types.NewConnection(conn_type="", conn_name=""),
     types.ConnectionReused(conn_name=""),
     types.ConnectionLeftOpenInCleanup(conn_name=""),
