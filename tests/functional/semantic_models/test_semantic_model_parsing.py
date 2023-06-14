@@ -23,6 +23,12 @@ semantic_models:
       - name: txn_revenue
         expr: revenue
         agg: sum
+      - name: sum_of_things
+        expr: 2
+        agg: sum
+      - name: has_revenue
+        expr: true
+        agg: sum_boolean
 
     dimensions:
       - name: ds
@@ -65,6 +71,7 @@ class TestSemanticModelParsing:
             semantic_model.node_relation.relation_name
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
+        assert len(semantic_model.measures) == 3
 
     @pytest.mark.skip("Restore this test when partial parsing is implemented.")
     def test_semantic_model_partial_parsing(self, project):
