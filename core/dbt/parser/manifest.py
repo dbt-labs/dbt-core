@@ -1407,10 +1407,12 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             )
             continue
 
-        # Handle references to models that are private
+        # Handle references to models that are private, unless this is an 'ad hoc' query (SqlOperation, RPCCall)
         elif (
             target_model.resource_type == NodeType.Model
             and target_model.access == AccessType.Private
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
         ):
             if not node.group or node.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
