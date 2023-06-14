@@ -281,7 +281,9 @@ class InitTask(BaseTask):
         # create a new project and set up the user's profile.
         available_adapters = list(_get_adapter_plugin_names())
         if not len(available_adapters):
-            print("No adapters available. Go to https://docs.getdbt.com/docs/available-adapters")
+            print(
+                "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+            )
             sys.exit(1)
         project_name = self.get_valid_project_name()
         project_path = Path(project_name)
