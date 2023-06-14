@@ -415,7 +415,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return info_schema_name_map
 
     def _relations_cache_for_schemas(
-        self, manifest: Manifest, cache_schemas: Set[BaseRelation] = None
+        self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
     ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
@@ -451,7 +451,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self,
         manifest: Manifest,
         clear: bool = False,
-        required_schemas: Set[BaseRelation] = None,
+        required_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
@@ -986,7 +986,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         manifest: Optional[Manifest] = None,
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
-        kwargs: Dict[str, Any] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
         text_only_columns: Optional[Iterable[str]] = None,
     ) -> AttrDict:
         """Look macro_name up in the manifest and execute its results.

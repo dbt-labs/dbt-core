@@ -147,7 +147,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
-    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+    def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         assert isinstance(block.file, SchemaSourceFile)
 
         # If partially parsing, dct should be from pp_dict, otherwise

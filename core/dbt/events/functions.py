@@ -247,7 +247,7 @@ def warn_or_error(event, node=None):
 # an alternative to fire_event which only creates and logs the event value
 # if the condition is met. Does nothing otherwise.
 def fire_event_if(
-    conditional: bool, lazy_e: Callable[[], BaseEvent], level: EventLevel = None
+    conditional: bool, lazy_e: Callable[[], BaseEvent], level: Optional[EventLevel] = None
 ) -> None:
     if conditional:
         fire_event(lazy_e(), level=level)
@@ -262,7 +262,7 @@ def fire_event_if_test(lazy_e: Callable[[], BaseEvent], level: EventLevel = None
 # this is where all the side effects happen branched by event type
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
-def fire_event(e: BaseEvent, level: EventLevel = None) -> None:
+def fire_event(e: BaseEvent, level: Optional[EventLevel] = None) -> None:
     EVENT_MANAGER.fire_event(e, level=level)
 
 

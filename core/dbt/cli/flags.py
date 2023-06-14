@@ -5,6 +5,10 @@ from importlib import import_module
 from multiprocessing import get_context
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Set, List, Optional
+
+from click import Context, get_current_context
+from click.core import ParameterSource, Group
 
 from click import Context, get_current_context, Parameter
 from click.core import Command as ClickCommand, Group, ParameterSource
@@ -74,9 +78,9 @@ def args_to_context(args: List[str]) -> Context:
 
 @dataclass(frozen=True)
 class Flags:
-    """Primary configuration artifact for running dbt"""
-
-    def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
+    def __init__(
+        self, ctx: Optional[Context] = None, user_config: Optional[UserConfig] = None
+    ) -> None:
 
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():

@@ -61,8 +61,8 @@ class dbtRunnerResult:
 class dbtRunner:
     def __init__(
         self,
-        manifest: Manifest = None,
-        callbacks: List[Callable[[EventMsg], None]] = None,
+        manifest: Optional[Manifest] = None,
+        callbacks: Optional[List[Callable[[EventMsg], None]]] = None,
     ):
         self.manifest = manifest
 

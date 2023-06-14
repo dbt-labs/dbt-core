@@ -419,7 +419,7 @@ class PublicationConfigNotFound(DbtConfigError):
 
 
 class SemverError(Exception):
-    def __init__(self, msg: str = None):
+    def __init__(self, msg: Optional[str] = None):
         self.msg = msg
         if msg is not None:
             super().__init__(msg)
@@ -2419,7 +2419,7 @@ class RPCCompiling(DbtRuntimeError):
     CODE = 10010
     MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
-    def __init__(self, msg: str = None, node=None):
+    def __init__(self, msg: Optional[str] = None, node=None):
         if msg is None:
             msg = "compile in progress"
         super().__init__(msg, node)

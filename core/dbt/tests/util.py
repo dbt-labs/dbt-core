@@ -5,7 +5,7 @@ import yaml
 import json
 import warnings
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from contextlib import contextmanager
 from dbt.adapters.factory import Adapter
 
@@ -71,9 +71,9 @@ from dbt.contracts.publication import PublicationArtifact
 # If the command is expected to fail, pass in "expect_pass=False"):
 #   run_dbt("test"], expect_pass=False)
 def run_dbt(
-    args: List[str] = None,
+    args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: List[PublicationArtifact] = None,
+    publications: Optional[List[PublicationArtifact]] = None,
 ):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
@@ -117,9 +117,9 @@ def run_dbt(
 # start with the "--debug" flag. The structured schema log CI test
 # will turn the logs into json, so you have to be prepared for that.
 def run_dbt_and_capture(
-    args: List[str] = None,
+    args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: List[PublicationArtifact] = None,
+    publications: Optional[List[PublicationArtifact]] = None,
 ):
     try:
         stringbuf = StringIO()
