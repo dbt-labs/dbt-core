@@ -25,7 +25,7 @@ metrics:
     type_params:
       measure:
         name: "years_tenure"
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 """
 
 

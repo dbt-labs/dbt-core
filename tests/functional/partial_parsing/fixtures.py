@@ -353,7 +353,7 @@ metrics:
     type_params:
       measure:
         name: customers
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
     +meta:
         is_okr: True
     tags:
@@ -441,7 +441,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -588,7 +588,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -977,7 +977,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
