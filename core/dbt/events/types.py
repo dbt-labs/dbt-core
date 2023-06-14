@@ -660,7 +660,7 @@ class AdapterRegistered(InfoLevel):
         return "E034"
 
     def message(self) -> str:
-        return f"Registered adapter: {self.adapter_name}, " f"version: {self.adapter_version}"
+        return f"Registered adapter: {self.adapter_name}={self.adapter_version}"
 
 
 class AdapterImportError(InfoLevel):

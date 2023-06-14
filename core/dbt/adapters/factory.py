@@ -13,6 +13,7 @@ from dbt.events.types import AdapterImportError, PluginLoadError, AdapterRegiste
 from dbt.exceptions import DbtInternalError, DbtRuntimeError
 from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.semver import VersionSpecifier
 
 Adapter = AdapterProtocol
 
@@ -90,7 +91,10 @@ class AdapterContainer:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
         adapter_version = import_module(f".{adapter_name}.__version__", "dbt.adapters").version
-        fire_event(AdapterRegistered(adapter_name=adapter_name, adapter_version=adapter_version))
+        adapter_version_specifier = VersionSpecifier.from_version_string(adapter_version)
+        fire_event(
+            AdapterRegistered(adapter_name=adapter_name, adapter_version=adapter_version_specifier)
+        )
         with self.lock:
             if adapter_name in self.adapters:
                 # this shouldn't really happen...
