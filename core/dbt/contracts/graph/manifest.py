@@ -183,7 +183,7 @@ class RefableLookup(dbtClassMixin):
                         if v.name == node.name and v.version is not None
                     ]
                 )
-                assert node.latest_version  # for mypy, whenever i may find it
+                assert node.latest_version is not None  # for mypy, whenever i may find it
                 if max_version > UnparsedVersion(node.latest_version):
                     fire_event(
                         UnpinnedRefNewVersionAvailable(

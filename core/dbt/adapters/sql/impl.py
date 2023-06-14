@@ -197,6 +197,7 @@ class SQLAdapter(BaseAdapter):
             )
         return relations
 
+    @classmethod
     def quote(self, identifier):
         return '"{}"'.format(identifier)
 
