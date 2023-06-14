@@ -293,7 +293,7 @@ class MetricParser(YamlReader):
             measure=self._get_optional_input_measure(type_params.measure),
             numerator=self._get_optional_metric_input(type_params.numerator),
             denominator=self._get_optional_metric_input(type_params.denominator),
-            expr=type_params.expr,
+            expr=str(type_params.expr) if type_params.expr is not None else None,
             window=self._get_time_window(type_params.window),
             grain_to_date=grain_to_date,
             metrics=self._get_metric_inputs(type_params.metrics),
@@ -500,7 +500,7 @@ class SemanticModelParser(YamlReader):
                     agg=AggregationType(unparsed.agg),
                     description=unparsed.description,
                     create_metric=unparsed.create_metric,
-                    expr=unparsed.expr,
+                    expr=str(unparsed.expr) if unparsed.expr is not None else None,
                     agg_params=unparsed.agg_params,
                     non_additive_dimension=self._get_non_additive_dimension(
                         unparsed.non_additive_dimension
