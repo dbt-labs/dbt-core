@@ -8,6 +8,7 @@ class Command(Enum):
     BUILD = "build"
     CLEAN = "clean"
     COMPILE = "compile"
+    CLONE = "clone"
     DOCS_GENERATE = "generate"
     DOCS_SERVE = "serve"
     DEBUG = "debug"
