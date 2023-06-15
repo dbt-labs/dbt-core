@@ -159,6 +159,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             snapshots=project.snapshots,
             dbt_version=project.dbt_version,
             packages=project.packages,
+            dependent_projects=project.dependent_projects,
             manifest_selectors=project.manifest_selectors,
             selectors=project.selectors,
             query_comment=project.query_comment,

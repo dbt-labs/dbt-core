@@ -35,13 +35,11 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
 )
 from dbt.constants import (
-    DEPENDENCIES_FILE_NAME,
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
 from dbt.helper_types import PathSet
-from dbt.clients.yaml_helper import load_yaml_text
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.helpers import datetime_to_json_string
 from dbt.events.types import (
@@ -72,8 +70,6 @@ from dbt.clients.system import (
     path_exists,
     read_json,
     write_file,
-    resolve_path_from_base,
-    load_file_contents,
 )
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs_context
@@ -114,7 +110,6 @@ from dbt.contracts.publication import (
     PublicationArtifact,
     PublicationMetadata,
     PublicModel,
-    ProjectDependencies,
 )
 from dbt.exceptions import (
     TargetNotFoundError,
@@ -767,33 +762,27 @@ class ManifestLoader:
         public nodes have been rebuilt."""
         public_nodes_changed = False
 
-        # Load the dependencies from the dependencies.yml file
-        # TODO: dependencies might be better in the RuntimeConfig and
-        # loaded somewhere earlier, but leaving this here for later refactoring.
-        # Loading it elsewhere would make it harder to detect that there were
-        # no dependencies previously and still are none, though that could be
-        # inferred from the manifest publication configs.
-        dependencies_filepath = resolve_path_from_base(
-            DEPENDENCIES_FILE_NAME, self.root_project.project_root
-        )
-        saved_manifest_dependencies = self.manifest.project_dependencies
-        if path_exists(dependencies_filepath):
-            contents = load_file_contents(dependencies_filepath)
-            dependencies_dict = load_yaml_text(contents)
-            dependencies = ProjectDependencies.from_dict(dependencies_dict)
-            self.manifest.project_dependencies = dependencies
-        else:
-            self.manifest.project_dependencies = None
+        # Construct a dictionary of project_names to generated_at timestamps in
+        # order to determine what has changed. The dependent_projects in the RuntimeConfig
+        # are new for this run.
+        saved_dependent_projects = {}
+        for pub in self.manifest.publications.values():
+            saved_dependent_projects[pub.project_name] = pub.metadata.generated_at
 
         # Return False if there weren't any dependencies before and aren't any now.
-        if saved_manifest_dependencies is None and self.manifest.project_dependencies is None:
+        if (
+            len(saved_dependent_projects) == 0
+            and len(self.root_project.dependent_projects.projects) == 0
+        ):
             return False
 
-        # collect the names of the projects for later use
-        project_dependency_names = []
-        if self.manifest.project_dependencies:
-            for project in self.manifest.project_dependencies.projects:
-                project_dependency_names.append(project.name)
+        # Collect current dependent projects
+        current_dependent_projects = []
+        if (
+            self.root_project.dependent_projects
+        ):  # ManifestLoader has been passed some publication artifacts
+            for project in self.root_project.dependent_projects.projects:
+                current_dependent_projects.append(project.name)
 
         # Save previous publications, for later removal of references
         saved_manifest_publications: MutableMapping[str, PublicationConfig] = deepcopy(
@@ -801,7 +790,7 @@ class ManifestLoader:
         )
         if self.manifest.publications:
             for project_name, publication in self.manifest.publications.items():
-                if project_name not in project_dependency_names:
+                if project_name not in current_dependent_projects:
                     remove_dependent_project_references(self.manifest, publication)
                     saved_manifest_publications.pop(project_name)
                     fire_event(
@@ -820,7 +809,7 @@ class ManifestLoader:
             # Empty public_nodes since we're re-generating them all
             self.manifest.public_nodes = {}
 
-        if self.manifest.project_dependencies:
+        if len(self.root_project.dependent_projects.projects) > 0:
             self.load_new_public_nodes()
 
         # Now that we've loaded the current publications and public_nodes, look for
@@ -855,7 +844,7 @@ class ManifestLoader:
         return public_nodes_changed
 
     def load_new_public_nodes(self):
-        for project in self.manifest.project_dependencies.projects:
+        for project in self.root_project.dependent_projects.projects:
             try:
                 publication = self.publications[project.name]
             except KeyError:
@@ -864,7 +853,7 @@ class ManifestLoader:
             publication_config = PublicationConfig.from_publication(publication)
             self.manifest.publications[project.name] = publication_config
 
-            # Add to dictionary of public_nodes and save id in PublicationConfig
+            # Add public models to dictionary of public_nodes
             for public_node in publication.public_models.values():
                 self.manifest.public_nodes[public_node.unique_id] = public_node
 
@@ -1857,8 +1846,8 @@ def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
 
     dependencies = []
     # Get dependencies from dependencies.yml
-    if manifest.project_dependencies:
-        for dep_project in manifest.project_dependencies.projects:
+    if root_project.dependent_projects.projects:
+        for dep_project in root_project.dependent_projects.projects:
             dependencies.append(dep_project.name)
     # Get dependencies from publication dependencies
     for pub_project in manifest.publications.values():
