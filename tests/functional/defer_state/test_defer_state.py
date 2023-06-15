@@ -87,7 +87,7 @@ class BaseDeferState:
             f"{project_root}/target/manifest.json", f"{project_root}/state/manifest.json"
         )
 
-    def run_and_save_state(self, project_root):
+    def run_and_save_state(self, project_root, with_snapshot=False):
         results = run_dbt(["seed"])
         assert len(results) == 1
         assert not any(r.node.deferred for r in results)
@@ -96,6 +96,11 @@ class BaseDeferState:
         assert not any(r.node.deferred for r in results)
         results = run_dbt(["test"])
         assert len(results) == 2
+
+        if with_snapshot:
+            results = run_dbt(["snapshot"])
+            assert len(results) == 1
+            assert not any(r.node.deferred for r in results)
 
         # copy files
         self.copy_state(project_root)
@@ -373,16 +378,14 @@ class TestCloneToOther(BaseDeferState):
 
     def test_clone(self, project, unique_schema, other_schema):
         project.create_test_schema(other_schema)
-        self.run_and_save_state(project.project_root)
+        self.run_and_save_state(project.project_root, with_snapshot=True)
 
         clone_args = [
             "clone",
             "--state",
-            "target",
+            "state",
             "--target",
             "otherschema",
-            "--target-path",
-            "target_otherschema",
         ]
 
         results = run_dbt(clone_args)

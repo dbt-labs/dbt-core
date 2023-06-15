@@ -51,7 +51,7 @@
 
   {%- if not state_relation -%}
       -- nothing to do
-      {{ log("No relation found in state manifest for " ~ model.unique_id) }}
+      {{ log("No relation found in state manifest for " ~ model.unique_id, info=True) }}
       {{ return(relations) }}
   {%- endif -%}
 
@@ -59,7 +59,7 @@
 
   {%- if existing_relation and not flags.FULL_REFRESH -%}
       -- noop!
-      {{ log("Relation " ~ existing_relation ~ " already exists") }}
+      {{ log("Relation " ~ existing_relation ~ " already exists", info=True) }}
       {{ return(relations) }}
   {%- endif -%}
 
