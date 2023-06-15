@@ -150,6 +150,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             clean_targets=project.clean_targets,
             log_path=project.log_path,
             packages_install_path=project.packages_install_path,
+            packages_specified_path=project.packages_specified_path,
             quoting=quoting,
             models=project.models,
             on_run_start=project.on_run_start,
@@ -363,6 +364,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                     raise UninstalledPackagesFoundError(
                         count_packages_specified,
                         count_packages_installed,
+                        self.packages_specified_path,
                         self.packages_install_path,
                     )
                 project_paths = itertools.chain(internal_packages, self._get_project_directories())
