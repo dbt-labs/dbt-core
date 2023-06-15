@@ -57,3 +57,8 @@ class TestSemanticModelParsing:
         assert len(manifest.semantic_nodes) == 1
         semantic_model = manifest.semantic_nodes["semanticmodel.test.revenue"]
         assert semantic_model.node_relation.alias == "fct_revenue"
+
+        assert (
+            semantic_model.node_relation.relation_name
+            == f'"dbt"."{project.test_schema}"."fct_revenue"'
+        )

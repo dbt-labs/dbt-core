@@ -1288,6 +1288,10 @@ class Exposure(GraphNode):
             and True
         )
 
+    @property
+    def group(self):
+        return None
+
 
 # ====================================
 # Metric node
@@ -1472,6 +1476,7 @@ class NodeRelation(dbtClassMixin):
     alias: str
     schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
     database: Optional[str] = None
+    relation_name: Optional[str] = None
 
 
 @dataclass
@@ -1484,6 +1489,9 @@ class SemanticModel(GraphNode):
     measures: Sequence[Measure] = field(default_factory=list)
     dimensions: Sequence[Dimension] = field(default_factory=list)
     metadata: Optional[SourceFileMetadata] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[RefArgs] = field(default_factory=list)
+    created_at: float = field(default_factory=lambda: time.time())
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:
@@ -1533,6 +1541,10 @@ class SemanticModel(GraphNode):
     @property
     def reference(self) -> SemanticModelReference:
         return SemanticModelReference(semantic_model_name=self.name)
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
 
 
 # ====================================
