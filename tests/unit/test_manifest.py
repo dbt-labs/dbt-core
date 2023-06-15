@@ -389,7 +389,6 @@ class ManifestTest(unittest.TestCase):
                 },
                 "docs": {},
                 "disabled": {},
-                "public_nodes": {},
                 "semantic_nodes": {},
             },
         )
@@ -407,7 +406,6 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            public_nodes={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
@@ -477,7 +475,7 @@ class ManifestTest(unittest.TestCase):
         flat_sources = flat_graph["sources"]
         self.assertEqual(
             set(flat_graph),
-            set(["exposures", "groups", "nodes", "sources", "metrics", "public_nodes"]),
+            set(["exposures", "groups", "nodes", "sources", "metrics"]),
         )
         self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_groups), set(self.groups))
@@ -559,7 +557,6 @@ class ManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "disabled": {},
-                "public_nodes": {},
                 "semantic_nodes": {},
             },
         )
@@ -932,7 +929,6 @@ class MixedManifestTest(unittest.TestCase):
                 },
                 "docs": {},
                 "disabled": {},
-                "public_nodes": {},
                 "semantic_nodes": {},
             },
         )
@@ -1007,7 +1003,7 @@ class MixedManifestTest(unittest.TestCase):
         flat_nodes = flat_graph["nodes"]
         self.assertEqual(
             set(flat_graph),
-            set(["exposures", "groups", "metrics", "nodes", "sources", "public_nodes"]),
+            set(["exposures", "groups", "metrics", "nodes", "sources"]),
         )
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0

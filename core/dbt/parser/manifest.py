@@ -807,7 +807,8 @@ class ManifestLoader:
             # clean up previous publications that are no longer specified
             self.manifest.publications = {}
             # Empty public_nodes since we're re-generating them all
-            self.manifest.public_nodes = {}
+            for unique_id in self.manifest.external_node_unique_ids:
+                self.manifest.nodes.pop(unique_id)
 
         if len(self.root_project.dependent_projects.projects) > 0:
             self.load_new_public_nodes()
@@ -855,7 +856,31 @@ class ManifestLoader:
 
             # Add public models to dictionary of public_nodes
             for public_node in publication.public_models.values():
-                self.manifest.public_nodes[public_node.unique_id] = public_node
+                # node may already exist as package - we don't want to raise a DuplicateResourceNameError. Just avoid clobbering the existing package.
+                if public_node.unique_id not in self.manifest.nodes:
+                    self.manifest.add_node_nofile(
+                        ModelNode(
+                            resource_type=NodeType.Model,
+                            name=public_node.name,
+                            package_name=public_node.package_name,
+                            unique_id=public_node.unique_id,
+                            version=public_node.version,
+                            latest_version=public_node.latest_version,
+                            relation_name=public_node.relation_name,
+                            database=public_node.database,
+                            schema=public_node.schema,
+                            alias=public_node.identifier,
+                            # TODO
+                            # depends_on=public_node.public_node_dependencies,
+                            deprecation_date=public_node.deprecation_date,
+                            fqn=["model", public_node.package_name, public_node.name],
+                            checksum=FileHash.from_contents(
+                                f"{public_node.unique_id},{public_node.generated_at}"
+                            ),
+                            original_file_path="",
+                            path="",
+                        )
+                    )
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
@@ -1688,20 +1713,15 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
 
         target_model_id = target_model.unique_id
 
-        if target_model.is_public_node:
-            node.depends_on.add_public_node(target_model_id)
-        else:
-            node.depends_on.add_node(target_model_id)
+        node.depends_on.add_node(target_model_id)
 
 
 def remove_dependent_project_references(manifest: Manifest, publication: PublicationConfig):
     for unique_id in publication.public_node_ids:
         for child_id in manifest.child_map[unique_id]:
             node = manifest.expect(child_id)
-            if hasattr(node.depends_on, "public_nodes"):
-                node.depends_on.public_nodes.remove(unique_id)  # type: ignore
-                # set created_at so process_refs happens
-                node.created_at = time.time()
+            node.depends_on_nodes.remove(unique_id)
+            node.created_at = time.time()
 
 
 def _process_sources_for_exposure(manifest: Manifest, current_project: str, exposure: Exposure):
