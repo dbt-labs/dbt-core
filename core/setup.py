@@ -70,7 +70,7 @@ setup(
         "cffi>=1.9,<2.0.0",
         "pyyaml>=5.3",
         "urllib3~=1.0",
-        "dbt-semantic-interfaces==0.1.0.dev3",
+        "dbt-semantic-interfaces==0.1.0.dev5",
     ],
     zip_safe=False,
     classifiers=[
