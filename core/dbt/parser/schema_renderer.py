@@ -67,7 +67,7 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         elif self.key == "metrics":
-            # back compat: "expression" is new name, "sql" is old name
+            # This ensures all key paths that end in 'filter' for a metric are skipped
             if keypath[-1] == "filter":
                 return False
             elif self._is_norender_key(keypath[0:]):
