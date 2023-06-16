@@ -13,6 +13,7 @@ from dbt_semantic_interfaces.protocols import (
     Entity as DSIEntitiy,
     Measure as DSIMeasure,
     Metric as DSIMetric,
+    MetricTypeParams as DSIMetricTypeParams,
     SemanticModel as DSISemanticModel,
 )
 from dbt_semantic_interfaces.type_enums import (
@@ -46,6 +47,11 @@ class RuntimeCheckableMeasure(DSIMeasure, Protocol):
 
 @runtime_checkable
 class RuntimeCheckableMetric(DSIMetric, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableMetricTypeParams(DSIMetricTypeParams, Protocol):
     pass
 
 
@@ -125,3 +131,8 @@ def test_metric_node_satisfies_protocol():
         ),
     )
     assert isinstance(metric, RuntimeCheckableMetric)
+
+
+def test_metric_type_params_satisfies_protocol():
+    type_params = MetricTypeParams()
+    assert isinstance(type_params, RuntimeCheckableMetricTypeParams)
