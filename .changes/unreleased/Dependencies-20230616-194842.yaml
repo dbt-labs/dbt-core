@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump dbt-semantic-interfaces from 0.1.0.dev5 to 0.1.0.dev6 in /core"
+time: 2023-06-16T19:48:42.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 7894
