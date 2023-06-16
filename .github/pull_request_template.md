@@ -13,6 +13,13 @@ resolves #
   understand your changes. Include any tradeoffs you considered.
 -->
 
+### Interface Changes
+
+<!---
+  Describe the changes made in this PR to any user interfaces, and their
+  expected impact on users. 
+-->
+
 ### Checklist
 
 - [ ] I have read [the contributing guide](https://github.com/dbt-labs/dbt-core/blob/main/CONTRIBUTING.md) and understand what's expected of me
