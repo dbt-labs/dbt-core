@@ -870,10 +870,8 @@ class ManifestLoader:
                             database=public_node.database,
                             schema=public_node.schema,
                             alias=public_node.identifier,
-                            # TODO
-                            # depends_on=public_node.public_node_dependencies,
                             deprecation_date=public_node.deprecation_date,
-                            fqn=["model", public_node.package_name, public_node.name],
+                            fqn=[public_node.package_name, public_node.name],
                             checksum=FileHash.from_contents(
                                 f"{public_node.unique_id},{public_node.generated_at}"
                             ),
