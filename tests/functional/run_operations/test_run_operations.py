@@ -1,8 +1,9 @@
 import os
+
 import pytest
 import yaml
 
-from dbt.exceptions import DbtRuntimeError
+from dbt.exceptions import DbtInternalError
 from dbt.tests.util import (
     check_table_does_exist,
     run_dbt,
@@ -76,7 +77,7 @@ class TestOperations:
 
     def test_macro_missing(self, project):
         with pytest.raises(
-            DbtRuntimeError,
+            DbtInternalError,
             match="dbt could not find a macro with the name 'this_macro_does_not_exist' in any package",
         ):
             self.run_operation("this_macro_does_not_exist", False)

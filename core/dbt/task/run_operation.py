@@ -16,7 +16,7 @@ from dbt.events.types import (
     RunningOperationUncaughtError,
     LogDebugStackTrace,
 )
-from dbt.exceptions import DbtRuntimeError
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 
@@ -33,10 +33,9 @@ class RunOperationTask(ConfiguredTask):
 
         return package_name, macro_name
 
-    def _run_unsafe(self) -> agate.Table:
+    def _run_unsafe(self, package_name, macro_name) -> agate.Table:
         adapter = get_adapter(self.config)
 
-        package_name, macro_name = self._get_macro_parts()
         macro_kwargs = self.args.args
 
         with adapter.connection_named("macro_{}".format(macro_name)):
@@ -53,8 +52,10 @@ class RunOperationTask(ConfiguredTask):
 
         success = True
 
+        package_name, macro_name = self._get_macro_parts()
+
         try:
-            self._run_unsafe()
+            self._run_unsafe(package_name, macro_name)
         except dbt.exceptions.Exception as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
             fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
@@ -66,16 +67,17 @@ class RunOperationTask(ConfiguredTask):
 
         end = datetime.utcnow()
 
-        package_name, macro_name = self._get_macro_parts()
-        macro = self.manifest.find_macro_by_name(  # type: ignore[union-attr]
-            macro_name, self.config.project_name, package_name
+        macro = (
+            self.manifest.find_macro_by_name(macro_name, self.config.project_name, package_name)
+            if self.manifest
+            else None
         )
 
-        try:
-            unique_id = macro.unique_id  # type: ignore[union-attr]
+        if macro:
+            unique_id = macro.unique_id
             fqn = unique_id.split(".")
-        except AttributeError:
-            raise DbtRuntimeError(
+        else:
+            raise DbtInternalError(
                 f"dbt could not find a macro with the name '{macro_name}' in any package"
             )
 
