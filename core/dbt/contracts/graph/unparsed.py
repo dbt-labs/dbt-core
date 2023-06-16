@@ -616,7 +616,6 @@ class UnparsedMetricInput(dbtClassMixin):
 @dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
-    measures: Optional[List[Union[UnparsedMetricInputMeasure, str]]] = None
     numerator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     denominator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     expr: Optional[str] = None

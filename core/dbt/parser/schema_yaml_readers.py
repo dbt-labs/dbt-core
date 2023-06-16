@@ -282,13 +282,16 @@ class MetricParser(YamlReader):
 
         return MetricTypeParams(
             measure=self._get_optional_input_measure(type_params.measure),
-            measures=self._get_input_measures(type_params.measures),
             numerator=self._get_optional_input_measure(type_params.numerator),
             denominator=self._get_optional_input_measure(type_params.denominator),
             expr=type_params.expr,
             window=self._get_time_window(type_params.window),
             grain_to_date=grain_to_date,
             metrics=self._get_metric_inputs(type_params.metrics),
+            # TODO This is a compiled list of measure/numerator/denominator as
+            # well as the `input_measures` of included metrics. We're planning
+            # on doing this as part of CT-2707
+            # input_measures=?,
         )
 
     def parse_metric(self, unparsed: UnparsedMetric):

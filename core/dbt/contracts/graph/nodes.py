@@ -1332,7 +1332,7 @@ class MetricInput(dbtClassMixin):
 @dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
-    measures: Optional[List[MetricInputMeasure]] = None
+    input_measures: List[MetricInputMeasure] = field(default_factory=list)
     numerator: Optional[MetricInputMeasure] = None
     denominator: Optional[MetricInputMeasure] = None
     expr: Optional[str] = None
@@ -1388,16 +1388,7 @@ class Metric(GraphNode):
 
     @property
     def input_measures(self) -> List[MetricInputMeasure]:
-        tp = self.type_params
-        res = tp.measures or []
-        if tp.measure:
-            res.append(tp.measure)
-        if tp.numerator:
-            res.append(tp.numerator)
-        if tp.denominator:
-            res.append(tp.denominator)
-
-        return res
+        return self.type_params.input_measures
 
     @property
     def measure_references(self) -> List[MeasureReference]:
