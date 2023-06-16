@@ -39,7 +39,7 @@ from dbt.events.functions import reset_metadata_vars
 from dbt.exceptions import AmbiguousResourceNameRefError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums import MetricType
 
 from .utils import (
     MockMacro,

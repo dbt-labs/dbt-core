@@ -13,10 +13,12 @@ from dbt_semantic_interfaces.protocols.entity import Entity as DSIEntitiy
 from dbt_semantic_interfaces.protocols.measure import Measure as DSIMeasure
 from dbt_semantic_interfaces.protocols.metric import Metric as DSIMetric
 from dbt_semantic_interfaces.protocols.semantic_model import SemanticModel as DSISemanticModel
-from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
-from dbt_semantic_interfaces.type_enums.entity_type import EntityType
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
+)
 from typing import Protocol, runtime_checkable
 
 

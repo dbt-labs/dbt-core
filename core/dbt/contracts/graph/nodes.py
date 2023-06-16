@@ -53,8 +53,7 @@ from dbt_semantic_interfaces.references import (
     SemanticModelReference,
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
 
 from .model_config import (
     NodeConfig,

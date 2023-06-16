@@ -43,11 +43,13 @@ from dbt.context.context_config import (
 )
 from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums.aggregation_type import AggregationType
-from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
-from dbt_semantic_interfaces.type_enums.entity_type import EntityType
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
+)
 from typing import List, Optional, Union
 
 
