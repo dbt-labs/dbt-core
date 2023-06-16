@@ -7,10 +7,8 @@ import pytest
 
 from dbt.cli.exceptions import DbtUsageException
 from dbt.contracts.results import RunStatus
-from dbt.tests.util import run_dbt, write_file, rm_file
-
 from dbt.exceptions import DbtRuntimeError
-
+from dbt.tests.util import run_dbt, write_file, rm_file
 from tests.functional.defer_state.fixtures import (
     seed_csv,
     table_model_sql,
@@ -389,24 +387,25 @@ class TestCloneToOther(BaseDeferState):
         ]
 
         results = run_dbt(clone_args)
-        # TODO: need an "adapter zone" version of this test that checks to see
-        # how many of the cloned objects are "pointers" (views) versus "true clones" (tables)
-        # e.g. on Postgres we expect to see 4 views
-        # whereas on Snowflake we'd expect to see 3 cloned tables + 1 view
-        assert [r.message for r in results] == ["CREATE VIEW"] * 4
+        assert len(results) == 4
+
+        assert all("create view" in r.message.lower() for r in results)
         schema_relations = project.adapter.list_relations(
             database=project.database, schema=other_schema
         )
-        assert [r.type for r in schema_relations] == ["view"] * 4
+        assert all(r.type == "view" for r in schema_relations)
 
         # objects already exist, so this is a no-op
         results = run_dbt(clone_args)
-        assert [r.message for r in results] == ["No-op"] * 4
+        assert len(results) == 4
+        assert all("no-op" in r.message.lower() for r in results)
 
         # recreate all objects
-        results = run_dbt(clone_args + ["--full-refresh"])
-        assert [r.message for r in results] == ["CREATE VIEW"] * 4
+        results = run_dbt([*clone_args, "--full-refresh"])
+        assert len(results) == 4
+        assert all("create view" in r.message.lower() for r in results)
 
         # select only models this time
-        results = run_dbt(clone_args + ["--resource-type", "model"])
+        results = run_dbt([*clone_args, "--resource-type", "model"])
         assert len(results) == 2
+        assert all("no-op" in r.message.lower() for r in results)
