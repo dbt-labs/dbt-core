@@ -8,11 +8,13 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity, Measure
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.protocols.dimension import Dimension as DSIDimension
-from dbt_semantic_interfaces.protocols.entity import Entity as DSIEntitiy
-from dbt_semantic_interfaces.protocols.measure import Measure as DSIMeasure
-from dbt_semantic_interfaces.protocols.metric import Metric as DSIMetric
-from dbt_semantic_interfaces.protocols.semantic_model import SemanticModel as DSISemanticModel
+from dbt_semantic_interfaces.protocols import (
+    Dimension as DSIDimension,
+    Entity as DSIEntitiy,
+    Measure as DSIMeasure,
+    Metric as DSIMetric,
+    SemanticModel as DSISemanticModel,
+)
 from dbt_semantic_interfaces.type_enums import (
     DimensionType,
     EntityType,
