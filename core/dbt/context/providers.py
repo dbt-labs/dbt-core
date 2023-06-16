@@ -285,6 +285,7 @@ class BaseSourceResolver(BaseResolver):
 
 
 class BaseMetricResolver(BaseResolver):
+    @abc.abstractmethod
     def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
         ...
 
@@ -502,6 +503,9 @@ class RuntimeRefResolver(BaseRefResolver):
         elif (
             target_model.resource_type == NodeType.Model
             and target_model.access == AccessType.Private
+            # don't raise this reference error for ad hoc 'preview' queries
+            and self.model.resource_type != NodeType.SqlOperation
+            and self.model.resource_type != NodeType.RPCCall  # TODO: rm
         ):
             if not self.model.group or self.model.group != target_model.group:
                 raise DbtReferenceError(

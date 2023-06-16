@@ -76,7 +76,9 @@ def args_to_context(args: List[str]) -> Context:
 class Flags:
     """Primary configuration artifact for running dbt"""
 
-    def __init__(self, ctx: Context = None, user_config: UserConfig = None) -> None:
+    def __init__(
+        self, ctx: Optional[Context] = None, user_config: Optional[UserConfig] = None
+    ) -> None:
 
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():

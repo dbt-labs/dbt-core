@@ -381,7 +381,9 @@ class GraphRunnableTask(ConfiguredTask):
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
-    def populate_adapter_cache(self, adapter, required_schemas: Set[BaseRelation] = None):
+    def populate_adapter_cache(
+        self, adapter, required_schemas: Optional[Set[BaseRelation]] = None
+    ):
         if not self.args.populate_cache:
             return
 

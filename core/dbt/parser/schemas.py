@@ -75,6 +75,7 @@ schema_file_keys = (
     "analyses",
     "exposures",
     "metrics",
+    "semantic_models",
 )
 
 
@@ -146,7 +147,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
-    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+    def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         assert isinstance(block.file, SchemaSourceFile)
 
         # If partially parsing, dct should be from pp_dict, otherwise
@@ -217,6 +218,12 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
                 group_parser = GroupParser(self, yaml_block)
                 group_parser.parse()
+
+            if "semantic_models" in dct:
+                from dbt.parser.schema_yaml_readers import SemanticModelParser
+
+                semantic_model_parser = SemanticModelParser(self, yaml_block)
+                semantic_model_parser.parse()
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)

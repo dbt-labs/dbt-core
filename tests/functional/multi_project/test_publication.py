@@ -43,6 +43,7 @@ models:
 dependencies_yml = """
 projects:
     - name: marketing
+      custom_field: some value
 """
 
 marketing_pub_json = """
@@ -129,8 +130,11 @@ class TestPublicationArtifacts:
             "models.yml": models_yml,
         }
 
+    @pytest.fixture(scope="class")
+    def dependencies(self):
+        return dependencies_yml
+
     def test_pub_artifacts(self, project):
-        write_file(dependencies_yml, "dependencies.yml")
 
         # Dependencies lists "marketing" project, but no publications provided
         with pytest.raises(PublicationConfigNotFound):

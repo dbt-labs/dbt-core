@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar, Generic
+from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import BaseConfig, get_config_for, _listify
@@ -130,7 +130,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: Dict[str, Any] = None,
+        patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
 
@@ -166,7 +166,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: Dict[str, Any],
+        patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         ...
 
@@ -200,7 +200,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: dict = None,
+        patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         config = self.calculate_node_config(
             config_call_dict=config_call_dict,
@@ -225,7 +225,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: dict = None,
+        patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         # TODO CT-211
         return self.calculate_node_config(
@@ -318,7 +318,11 @@ class ContextConfig:
                 config_call_dict[k] = v
 
     def build_config_dict(
-        self, base: bool = False, *, rendered: bool = True, patch_config_dict: dict = None
+        self,
+        base: bool = False,
+        *,
+        rendered: bool = True,
+        patch_config_dict: Optional[dict] = None,
     ) -> Dict[str, Any]:
         if rendered:
             # TODO CT-211

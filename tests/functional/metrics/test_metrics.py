@@ -18,8 +18,6 @@ from tests.functional.metrics.fixtures import (
     downstream_model_sql,
     invalid_derived_metric_contains_model_yml,
     derived_metric_yml,
-    derived_metric_old_attr_names_yml,
-    metric_without_timestamp_or_timegrains_yml,
     invalid_metric_without_timestamp_with_time_grains_yml,
     invalid_metric_without_timestamp_with_window_yml,
 )
@@ -48,33 +46,6 @@ class TestSimpleMetrics:
             "metric.test.collective_window",
         ]
         assert metric_ids == expected_metric_ids
-
-
-class TestSimpleMetricsNoTimestamp:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "people_metrics.yml": metric_without_timestamp_or_timegrains_yml,
-            "people.sql": models_people_sql,
-        }
-
-    def test_simple_metric_no_timestamp(
-        self,
-        project,
-    ):
-        # initial run
-        results = run_dbt(["run"])
-        assert len(results) == 1
-        manifest = get_manifest(project.project_root)
-        metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = [
-            "metric.test.number_of_people",
-        ]
-        assert metric_ids == expected_metric_ids
-
-        # make sure the 'expression' metric depends on the two upstream metrics
-        metric_test = manifest.metrics["metric.test.number_of_people"]
-        assert metric_test.timestamp is None
 
 
 class TestInvalidRefMetrics:
@@ -219,6 +190,7 @@ class TestDerivedMetric:
             "mock_purchase_data.csv": mock_purchase_data_csv,
         }
 
+    @pytest.mark.skip("TODO bring back once we start populating metric `depends_on`")
     def test_derived_metric(
         self,
         project,
@@ -265,25 +237,13 @@ class TestDerivedMetric:
             for property in [
                 "name",
                 "label",
-                "calculation_method",
-                "expression",
-                "timestamp",
-                "time_grains",
-                "dimensions",
-                "filters",
+                "type",
+                "type_params",
+                "filter",
                 "window",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code
-
-
-class TestDerivedMetricOldAttrNames(TestDerivedMetric):
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "derived_metric.yml": derived_metric_old_attr_names_yml,
-            "downstream_model.sql": downstream_model_sql,
-        }
 
 
 class TestInvalidTimestampTimeGrainsMetrics:

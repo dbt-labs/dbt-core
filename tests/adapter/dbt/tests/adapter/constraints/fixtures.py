@@ -251,6 +251,16 @@ select
   '2019-01-01' as date_day
 """
 
+
+# 'from' is a reserved word, so it must be quoted
+my_model_with_quoted_column_name_sql = """
+select
+  'blue' as {{ adapter.quote('from') }},
+  1 as id,
+  '2019-01-01' as date_day
+"""
+
+
 model_schema_yml = """
 version: 2
 models:
@@ -260,7 +270,6 @@ models:
         enforced: true
     columns:
       - name: id
-        quote: true
         data_type: integer
         description: hello
         constraints:
@@ -344,7 +353,6 @@ models:
         enforced: true
     columns:
       - name: id
-        quote: true
         data_type: integer
         description: hello
         constraints:
@@ -454,7 +462,6 @@ models:
         expression: {schema}.foreign_key_model (id)
     columns:
       - name: id
-        quote: true
         data_type: integer
         description: hello
         constraints:
@@ -488,6 +495,37 @@ models:
     columns:
       - name: wrong_data_type_column_name
         data_type: {data_type}
+"""
+
+
+model_quoted_column_schema_yml = """
+version: 2
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: true
+      materialized: table
+    constraints:
+      - type: check
+        # this one is the on the user
+        expression: ("from" = 'blue')
+        columns: [ '"from"' ]
+    columns:
+      - name: id
+        data_type: integer
+        description: hello
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: from  # reserved word
+        quote: true
+        data_type: text
+        constraints:
+          - type: not_null
+      - name: date_day
+        data_type: text
 """
 
 model_contract_header_schema_yml = """

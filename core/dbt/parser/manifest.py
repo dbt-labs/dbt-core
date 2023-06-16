@@ -34,9 +34,12 @@ from dbt.adapters.factory import (
     get_relation_class_by_name,
     get_adapter_package_names,
 )
-from dbt.constants import DEPENDENCIES_FILE_NAME, MANIFEST_FILE_NAME, PARTIAL_PARSE_FILE_NAME
+from dbt.constants import (
+    MANIFEST_FILE_NAME,
+    PARTIAL_PARSE_FILE_NAME,
+    SEMANTIC_MANIFEST_FILE_NAME,
+)
 from dbt.helper_types import PathSet
-from dbt.clients.yaml_helper import load_yaml_text
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt.events.helpers import datetime_to_json_string
 from dbt.events.types import (
@@ -57,6 +60,7 @@ from dbt.events.types import (
     DeprecatedReference,
     UpcomingReferenceDeprecation,
 )
+from dbt_extractor import py_extract_from_source  # type: ignore
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType, AccessType
 from dbt.clients.jinja import get_rendered, MacroStack
@@ -66,8 +70,6 @@ from dbt.clients.system import (
     path_exists,
     read_json,
     write_file,
-    resolve_path_from_base,
-    load_file_contents,
 )
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs_context
@@ -99,6 +101,7 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     ResultNode,
     ModelNode,
+    NodeRelation,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
@@ -107,13 +110,13 @@ from dbt.contracts.publication import (
     PublicationArtifact,
     PublicationMetadata,
     PublicModel,
-    ProjectDependencies,
 )
 from dbt.exceptions import (
     TargetNotFoundError,
     AmbiguousAliasError,
     PublicationConfigNotFound,
     ProjectDependencyCycleError,
+    InvalidAccessTypeError,
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
@@ -528,7 +531,9 @@ class ManifestLoader:
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
+            self.process_semantic_models()
             self.check_valid_group_config()
+            self.check_valid_access_property()
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -757,42 +762,37 @@ class ManifestLoader:
         public nodes have been rebuilt."""
         public_nodes_changed = False
 
-        # Load the dependencies from the dependencies.yml file
-        # TODO: dependencies might be better in the RuntimeConfig and
-        # loaded somewhere earlier, but leaving this here for later refactoring.
-        # Loading it elsewhere would make it harder to detect that there were
-        # no dependencies previously and still are none, though that could be
-        # inferred from the manifest publication configs.
-        dependencies_filepath = resolve_path_from_base(
-            DEPENDENCIES_FILE_NAME, self.root_project.project_root
-        )
-        saved_manifest_dependencies = self.manifest.project_dependencies
-        if path_exists(dependencies_filepath):
-            contents = load_file_contents(dependencies_filepath)
-            dependencies_dict = load_yaml_text(contents)
-            dependencies = ProjectDependencies.from_dict(dependencies_dict)
-            self.manifest.project_dependencies = dependencies
-        else:
-            self.manifest.project_dependencies = None
+        # Construct a dictionary of project_names to generated_at timestamps in
+        # order to determine what has changed. The dependent_projects in the RuntimeConfig
+        # are new for this run.
+        saved_dependent_projects = {}
+        for pub in self.manifest.publications.values():
+            saved_dependent_projects[pub.project_name] = pub.metadata.generated_at
 
         # Return False if there weren't any dependencies before and aren't any now.
-        if saved_manifest_dependencies is None and self.manifest.project_dependencies is None:
+        if (
+            len(saved_dependent_projects) == 0
+            and len(self.root_project.dependent_projects.projects) == 0
+        ):
             return False
 
-        # collect the names of the projects for later use
-        project_dependency_names = []
-        if self.manifest.project_dependencies:
-            for project in self.manifest.project_dependencies.projects:
-                project_dependency_names.append(project.name)
+        # Collect current dependent projects
+        current_dependent_projects = []
+        if (
+            self.root_project.dependent_projects
+        ):  # ManifestLoader has been passed some publication artifacts
+            for project in self.root_project.dependent_projects.projects:
+                current_dependent_projects.append(project.name)
 
-        # clean up previous publications that are no longer specified
-        # and save previous publications, for later removal of references
-        saved_manifest_publications: MutableMapping[str, PublicationConfig] = {}
+        # Save previous publications, for later removal of references
+        saved_manifest_publications: MutableMapping[str, PublicationConfig] = deepcopy(
+            self.manifest.publications
+        )
         if self.manifest.publications:
             for project_name, publication in self.manifest.publications.items():
-                if project_name not in project_dependency_names:
+                if project_name not in current_dependent_projects:
                     remove_dependent_project_references(self.manifest, publication)
-                    self.manifest.publications.pop(project_name)
+                    saved_manifest_publications.pop(project_name)
                     fire_event(
                         PublicationArtifactChanged(
                             action="removed",
@@ -803,12 +803,13 @@ class ManifestLoader:
                         )
                     )
                     public_nodes_changed = True
-            saved_manifest_publications = self.manifest.publications
+
+            # clean up previous publications that are no longer specified
             self.manifest.publications = {}
             # Empty public_nodes since we're re-generating them all
             self.manifest.public_nodes = {}
 
-        if self.manifest.project_dependencies:
+        if len(self.root_project.dependent_projects.projects) > 0:
             self.load_new_public_nodes()
 
         # Now that we've loaded the current publications and public_nodes, look for
@@ -843,7 +844,7 @@ class ManifestLoader:
         return public_nodes_changed
 
     def load_new_public_nodes(self):
-        for project in self.manifest.project_dependencies.projects:
+        for project in self.root_project.dependent_projects.projects:
             try:
                 publication = self.publications[project.name]
             except KeyError:
@@ -852,7 +853,7 @@ class ManifestLoader:
             publication_config = PublicationConfig.from_publication(publication)
             self.manifest.publications[project.name] = publication_config
 
-            # Add to dictionary of public_nodes and save id in PublicationConfig
+            # Add public models to dictionary of public_nodes
             for public_node in publication.public_models.values():
                 self.manifest.public_nodes[public_node.unique_id] = public_node
 
@@ -1176,6 +1177,28 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
+    def process_semantic_models(self) -> None:
+        for semantic_model in self.manifest.semantic_nodes.values():
+            if semantic_model.model:
+                statically_parsed = py_extract_from_source(f"{{{{ {semantic_model.model} }}}}")
+                if statically_parsed["refs"]:
+
+                    ref = statically_parsed["refs"][0]
+                    if len(ref) == 2:
+                        input_package_name, input_model_name = ref
+                    else:
+                        input_package_name, input_model_name = None, ref[0]
+
+                    refd_node = self.manifest.ref_lookup.find(
+                        input_model_name, input_package_name, None, self.manifest
+                    )
+                    if isinstance(refd_node, ModelNode):
+                        semantic_model.node_relation = NodeRelation(
+                            alias=refd_node.alias,
+                            schema_name=refd_node.schema,
+                            database=refd_node.database,
+                        )
+
     # nodes: node and column descriptions
     # sources: source and table descriptions, column descriptions
     # macros: macro argument descriptions
@@ -1292,6 +1315,19 @@ class ManifestLoader:
                 f"Invalid group '{groupable_node_group}', expected one of {sorted(list(valid_group_names))}",
                 node=groupable_node,
             )
+
+    def check_valid_access_property(self):
+        for node in self.manifest.nodes.values():
+            if (
+                isinstance(node, ModelNode)
+                and node.access == AccessType.Public
+                and node.get_materialization() == "ephemeral"
+            ):
+                raise InvalidAccessTypeError(
+                    unique_id=node.unique_id,
+                    field_value=node.access,
+                    materialization=node.get_materialization(),
+                )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
@@ -1636,8 +1672,13 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
             )
             continue
 
-        # Handle references to models that are private
-        elif isinstance(target_model, ModelNode) and target_model.access == AccessType.Private:
+        # Handle references to models that are private, unless this is an 'ad hoc' query (SqlOperation, RPCCall)
+        elif (
+            isinstance(target_model, ModelNode)
+            and target_model.access == AccessType.Private
+            and node.resource_type != NodeType.SqlOperation
+            and node.resource_type != NodeType.RPCCall  # TODO: rm
+        ):
             if not node.group or node.group != target_model.group:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=node.unique_id,
@@ -1805,8 +1846,8 @@ def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
 
     dependencies = []
     # Get dependencies from dependencies.yml
-    if manifest.project_dependencies:
-        for dep_project in manifest.project_dependencies.projects:
+    if root_project.dependent_projects.projects:
+        for dep_project in root_project.dependent_projects.projects:
             dependencies.append(dep_project.name)
     # Get dependencies from publication dependencies
     for pub_project in manifest.publications.values():
@@ -1828,6 +1869,13 @@ def log_publication_artifact(root_project: RuntimeConfig, manifest: Manifest):
     fire_event(PublicationArtifactAvailable(pub_artifact=publication.to_dict()))
 
 
+def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
+    path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
+    write_file(path, manifest.pydantic_semantic_manifest.json())
+
+
 def write_manifest(manifest: Manifest, target_path: str):
     path = os.path.join(target_path, MANIFEST_FILE_NAME)
     manifest.write(path)
+
+    write_semantic_manifest(manifest=manifest, target_path=target_path)

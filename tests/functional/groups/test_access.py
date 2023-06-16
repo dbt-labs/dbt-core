@@ -18,6 +18,17 @@ models:
     description: "yet another model"
 """
 
+ephemeral_schema_yml = """
+models:
+  - name: my_model
+    description: "my model"
+    access: public
+    config:
+      materialized: ephemeral
+  - name: another_model
+    description: "yet another model"
+"""
+
 v2_schema_yml = """
 models:
   - name: my_model
@@ -116,14 +127,9 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people_model')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: "people"
     meta:
         my_meta: 'testing'
     config:
@@ -136,14 +142,9 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('people_model')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: "people"
     meta:
         my_meta: 'testing'
     config:
@@ -161,11 +162,9 @@ class TestAccess:
         }
 
     def test_access_attribute(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 2
 
-        results = run_dbt(["run"])
-        assert len(results) == 2
-
-        manifest = get_manifest(project.project_root)
         my_model_id = "model.test.my_model"
         another_model_id = "model.test.another_model"
         assert my_model_id in manifest.nodes
@@ -174,25 +173,34 @@ class TestAccess:
         assert manifest.nodes[my_model_id].access == AccessType.Public
         assert manifest.nodes[another_model_id].access == AccessType.Protected
 
+        # write a file with invalid materialization for public access value
+        write_file(ephemeral_schema_yml, project.project_root, "models", "schema.yml")
+        with pytest.raises(InvalidAccessTypeError):
+            run_dbt(["parse"])
+
         # write a file with an invalid access value
         write_file(yet_another_model_sql, project.project_root, "models", "yet_another_model.sql")
         write_file(v2_schema_yml, project.project_root, "models", "schema.yml")
 
         with pytest.raises(InvalidAccessTypeError):
-            run_dbt(["run"])
+            run_dbt(["parse"])
+
+        write_file(v2_schema_yml, project.project_root, "models", "schema.yml")
+        with pytest.raises(InvalidAccessTypeError):
+            run_dbt(["parse"])
 
         # Remove invalid access files and write out model that refs my_model
         rm_file(project.project_root, "models", "yet_another_model.sql")
         write_file(schema_yml, project.project_root, "models", "schema.yml")
         write_file(ref_my_model_sql, project.project_root, "models", "ref_my_model.sql")
-        results = run_dbt(["run"])
-        assert len(results) == 3
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 3
 
         # make my_model private, set same group on my_model and ref_my_model
         write_file(groups_yml, project.project_root, "models", "groups.yml")
         write_file(v3_schema_yml, project.project_root, "models", "schema.yml")
-        results = run_dbt(["run"])
-        assert len(results) == 3
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 3
         manifest = get_manifest(project.project_root)
         ref_my_model_id = "model.test.ref_my_model"
         assert manifest.nodes[my_model_id].group == "analytics"
@@ -201,18 +209,18 @@ class TestAccess:
         # Change group on ref_my_model and it should raise
         write_file(v4_schema_yml, project.project_root, "models", "schema.yml")
         with pytest.raises(DbtReferenceError):
-            run_dbt(["run"])
+            run_dbt(["parse"])
 
         # put back group on ref_my_model, add exposure with ref to private model
         write_file(v3_schema_yml, project.project_root, "models", "schema.yml")
         # verify it works again
-        results = run_dbt(["run"])
-        assert len(results) == 3
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 3
         # Write out exposure refing private my_model
         write_file(simple_exposure_yml, project.project_root, "models", "simple_exposure.yml")
         # Fails with reference error
         with pytest.raises(DbtReferenceError):
-            run_dbt(["run"])
+            run_dbt(["parse"])
 
         # Remove exposure and add people model and metric file
         write_file(v5_schema_yml, project.project_root, "models", "schema.yml")
@@ -220,14 +228,8 @@ class TestAccess:
         write_file(people_model_sql, "models", "people_model.sql")
         write_file(people_metric_yml, "models", "people_metric.yml")
         # Should succeed
-        results = run_dbt(["run"])
-        assert len(results) == 4
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 4
         manifest = get_manifest(project.project_root)
         metric_id = "metric.test.number_of_people"
         assert manifest.metrics[metric_id].group == "analytics"
-
-        # Change group of metric
-        write_file(v2_people_metric_yml, "models", "people_metric.yml")
-        # Should raise a reference error
-        with pytest.raises(DbtReferenceError):
-            run_dbt(["run"])

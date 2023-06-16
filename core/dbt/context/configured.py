@@ -119,7 +119,9 @@ class MacroResolvingContext(ConfiguredContext):
 
 
 def generate_schema_yml_context(
-    config: AdapterRequiredConfig, project_name: str, schema_yaml_vars: SchemaYamlVars = None
+    config: AdapterRequiredConfig,
+    project_name: str,
+    schema_yaml_vars: Optional[SchemaYamlVars] = None,
 ) -> Dict[str, Any]:
     ctx = SchemaYamlContext(config, project_name, schema_yaml_vars)
     return ctx.to_dict()

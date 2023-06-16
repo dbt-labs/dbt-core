@@ -16,14 +16,9 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('model_one')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -51,14 +46,9 @@ metrics:
     description: Total count of people
     config:
         enabled: false
-    model: "ref('model_one')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: 'testing'
 
@@ -86,14 +76,9 @@ metrics:
   - name: number_of_people
     label: "Number of people"
     description: Total count of people
-    model: "ref('model_one')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
+    type: simple
+    type_params:
+      measure: people
     meta:
         my_meta: 'testing'
 """
