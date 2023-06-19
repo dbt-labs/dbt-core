@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix query comment tests
+time: 2023-06-23T09:29:33.225649+02:00
+custom:
+  Author: damian3031
+  Issue: "7845"
