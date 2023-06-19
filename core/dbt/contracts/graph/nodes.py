@@ -1307,7 +1307,7 @@ class MetricInputMeasure(dbtClassMixin):
     def measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)
 
-    def post_aggregation_measure_referenc(self) -> MeasureReference:
+    def post_aggregation_measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.alias or self.name)
 
 
@@ -1327,6 +1327,9 @@ class MetricInput(dbtClassMixin):
 
     def as_reference(self) -> DSIMetricReference:
         return DSIMetricReference(element_name=self.name)
+
+    def post_aggregation_reference(self) -> DSIMetricReference:
+        return DSIMetricReference(element_name=self.alias or self.name)
 
 
 @dataclass
