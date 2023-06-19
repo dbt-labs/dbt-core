@@ -1,5 +1,6 @@
 from dbt.contracts.graph.nodes import (
     Metric,
+    MetricInput,
     MetricInputMeasure,
     MetricTypeParams,
     NodeRelation,
@@ -13,6 +14,8 @@ from dbt_semantic_interfaces.protocols import (
     Entity as DSIEntitiy,
     Measure as DSIMeasure,
     Metric as DSIMetric,
+    MetricInput as DSIMetricInput,
+    MetricInputMeasure as DSIMetricInputMeasure,
     MetricTypeParams as DSIMetricTypeParams,
     SemanticModel as DSISemanticModel,
 )
@@ -47,6 +50,16 @@ class RuntimeCheckableMeasure(DSIMeasure, Protocol):
 
 @runtime_checkable
 class RuntimeCheckableMetric(DSIMetric, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableMetricInput(DSIMetricInput, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableMetricInputMeasure(DSIMetricInputMeasure, Protocol):
     pass
 
 
@@ -131,6 +144,16 @@ def test_metric_node_satisfies_protocol():
         ),
     )
     assert isinstance(metric, RuntimeCheckableMetric)
+
+
+def test_metric_input():
+    metric_input = MetricInput(name="a_metric_input")
+    assert isinstance(metric_input, RuntimeCheckableMetricInput)
+
+
+def test_metric_input_measure():
+    metric_input_measure = MetricInputMeasure(name="a_metric_input_measure")
+    assert isinstance(metric_input_measure, RuntimeCheckableMetricInputMeasure)
 
 
 def test_metric_type_params_satisfies_protocol():
