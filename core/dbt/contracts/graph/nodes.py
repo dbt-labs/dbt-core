@@ -1333,18 +1333,12 @@ class MetricInput(dbtClassMixin):
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
     input_measures: List[MetricInputMeasure] = field(default_factory=list)
-    numerator: Optional[MetricInputMeasure] = None
-    denominator: Optional[MetricInputMeasure] = None
+    numerator: Optional[MetricInput] = None
+    denominator: Optional[MetricInput] = None
     expr: Optional[str] = None
     window: Optional[MetricTimeWindow] = None
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInput]] = None
-
-    def numerator_measure_reference(self) -> Optional[MeasureReference]:
-        return self.numerator.measure_reference() if self.numerator else None
-
-    def denominator_measure_reference(self) -> Optional[MeasureReference]:
-        return self.denominator.measure_reference() if self.denominator else None
 
 
 @dataclass
