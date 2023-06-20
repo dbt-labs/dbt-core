@@ -518,11 +518,7 @@ class RuntimeRefResolver(BaseRefResolver):
         return self.create_relation(target_model)
 
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
-        if target_model.is_external_node:
-            # Get quoting from publication artifact
-            pub_metadata = self.manifest.publications[target_model.package_name].metadata
-            return self.Relation.create_from_node(pub_metadata, target_model)
-        elif target_model.is_ephemeral_model:
+        if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from_node(self.config, target_model)
         else:

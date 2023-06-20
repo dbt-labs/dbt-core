@@ -102,6 +102,7 @@ from dbt.contracts.graph.nodes import (
     ResultNode,
     ModelNode,
     NodeRelation,
+    NodeConfig,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
@@ -877,6 +878,7 @@ class ManifestLoader:
                             ),
                             original_file_path="",
                             path="",
+                            config=NodeConfig(quoting=publication.metadata.quoting),
                         )
                     )
 
