@@ -42,9 +42,9 @@ class PublicModel(dbtClassMixin):
     package_name: str
     unique_id: str
     relation_name: str
+    identifier: str
+    schema: str
     database: Optional[str] = None
-    schema: Optional[str] = None
-    identifier: Optional[str] = None
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
     # list of model unique_ids
