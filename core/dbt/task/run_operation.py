@@ -16,6 +16,7 @@ from dbt.events.types import (
     RunningOperationUncaughtError,
     LogDebugStackTrace,
 )
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 
@@ -28,14 +29,13 @@ class RunOperationTask(ConfiguredTask):
         if "." in macro_name:
             package_name, macro_name = macro_name.split(".", 1)
         else:
-            package_name = self.config.project_name
+            package_name = None
 
         return package_name, macro_name
 
-    def _run_unsafe(self) -> agate.Table:
+    def _run_unsafe(self, package_name, macro_name) -> agate.Table:
         adapter = get_adapter(self.config)
 
-        package_name, macro_name = self._get_macro_parts()
         macro_kwargs = self.args.args
 
         with adapter.connection_named("macro_{}".format(macro_name)):
@@ -52,8 +52,10 @@ class RunOperationTask(ConfiguredTask):
 
         success = True
 
+        package_name, macro_name = self._get_macro_parts()
+
         try:
-            self._run_unsafe()
+            self._run_unsafe(package_name, macro_name)
         except dbt.exceptions.Exception as exc:
             fire_event(RunningOperationCaughtError(exc=str(exc)))
             fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
@@ -65,9 +67,19 @@ class RunOperationTask(ConfiguredTask):
 
         end = datetime.utcnow()
 
-        package_name, macro_name = self._get_macro_parts()
-        fqn = [NodeType.Operation, package_name, macro_name]
-        unique_id = ".".join(fqn)
+        macro = (
+            self.manifest.find_macro_by_name(macro_name, self.config.project_name, package_name)
+            if self.manifest
+            else None
+        )
+
+        if macro:
+            unique_id = macro.unique_id
+            fqn = unique_id.split(".")
+        else:
+            raise DbtInternalError(
+                f"dbt could not find a macro with the name '{macro_name}' in any package"
+            )
 
         run_result = RunResult(
             adapter_response={},

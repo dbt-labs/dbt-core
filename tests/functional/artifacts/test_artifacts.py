@@ -690,7 +690,7 @@ class TestVerifyRunOperation(BaseVerifyProject):
         results, log_output = run_dbt_and_capture(["run-operation", "alter_timezone"])
         assert len(results) == 1
         assert results[0].status == RunStatus.Success
-        assert results[0].unique_id == "operation.test.alter_timezone"
+        assert results[0].unique_id == "macro.test.alter_timezone"
         assert "Timezone set to: America/Los_Angeles" in log_output
 
     def test_run_model_with_operation(self, project):
