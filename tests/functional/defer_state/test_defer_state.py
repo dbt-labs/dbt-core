@@ -409,3 +409,19 @@ class TestCloneToOther(BaseDeferState):
         results = run_dbt([*clone_args, "--resource-type", "model"])
         assert len(results) == 2
         assert all("no-op" in r.message.lower() for r in results)
+
+    def test_clone_no_state(self, project, unique_schema, other_schema):
+        project.create_test_schema(other_schema)
+        self.run_and_save_state(project.project_root, with_snapshot=True)
+
+        clone_args = [
+            "clone",
+            "--target",
+            "otherschema",
+        ]
+
+        with pytest.raises(
+            DbtRuntimeError,
+            match="--state is required for cloning relations from another environment",
+        ):
+            run_dbt(clone_args)
