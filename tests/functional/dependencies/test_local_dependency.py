@@ -13,6 +13,7 @@ from contextlib import contextmanager
 import dbt.semver
 import dbt.config
 import dbt.exceptions
+from dbt.contracts.results import RunStatus
 
 from dbt.tests.util import check_relations_equal, run_dbt, run_dbt_and_capture
 
@@ -206,9 +207,9 @@ class TestMissingDependency(object):
         }
 
     def test_missing_dependency(self, project):
-        # dbt should raise a runtime exception
-        with pytest.raises(dbt.exceptions.DbtRuntimeError):
-            run_dbt(["compile"])
+        results = run_dbt(["compile"], expect_pass=False)
+        assert len(results) == 1
+        assert results[0].status == RunStatus.Error
 
 
 class TestSimpleDependencyWithSchema(BaseDependencyTest):
