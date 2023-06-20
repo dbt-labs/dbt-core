@@ -232,7 +232,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         **kwargs: Any,
     ) -> Self:
         if quote_policy is None:
-            quote_policy = node.config.quoting if hasattr(node.config, "quoting") else {}
+            quote_policy = {}
 
         quote_policy = dbt.utils.merge(config.quoting, quote_policy)
 
