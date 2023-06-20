@@ -38,6 +38,7 @@ from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 
 
+# Called by RuntimeConfig.collect_parts class method
 def load_project(
     project_root: str,
     version_check: bool,
@@ -237,6 +238,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         except ValidationError as e:
             raise ConfigContractBrokenError(e) from e
 
+    # Called by RuntimeConfig.from_args
     @classmethod
     def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
         # profile_name from the project
@@ -251,7 +253,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
         return project, profile
 
-    # Called in main.py, lib.py, task/base.py
+    # Called in task/base.py, in BaseTask.from_args
     @classmethod
     def from_args(cls, args: Any) -> "RuntimeConfig":
         """Given arguments, read in dbt_project.yml from the current directory,
