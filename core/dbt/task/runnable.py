@@ -369,11 +369,11 @@ class GraphRunnableTask(ConfiguredTask):
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
             raise
+        finally:
+            pool.close()
+            pool.join()
 
-        pool.close()
-        pool.join()
-
-        return self.node_results
+            return self.node_results
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
@@ -483,7 +483,7 @@ class GraphRunnableTask(ConfiguredTask):
                 NodeStatus.RuntimeErr,
                 NodeStatus.Error,
                 NodeStatus.Fail,
-                NodeStatus.Skipped,  # propogate error message causing skip
+                NodeStatus.Skipped,  # propagate error message causing skip
             )
         ]
         return len(failures) == 0
@@ -567,7 +567,7 @@ class GraphRunnableTask(ConfiguredTask):
                     create_futures.append(fut)
 
             for create_future in as_completed(create_futures):
-                # trigger/re-raise any excceptions while creating schemas
+                # trigger/re-raise any exceptions while creating schemas
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
