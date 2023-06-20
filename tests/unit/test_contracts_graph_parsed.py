@@ -46,7 +46,7 @@ from dbt import flags
 from argparse import Namespace
 
 from dbt.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import (
     ContractTestCase,
     assert_symmetric,
