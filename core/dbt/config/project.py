@@ -116,6 +116,7 @@ def package_and_project_data_from_root(project_root):
     dependent_projects_dict = {}
     if "packages" in dependencies_yml_dict:
         packages_dict["packages"] = dependencies_yml_dict["packages"]
+        packages_dict["packages_from_dependencies"] = True
     else:  # don't check for "packages" here so we capture invalid keys in packages.yml
         packages_dict = packages_yml_dict
     if "projects" in dependencies_yml_dict:
