@@ -1031,9 +1031,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 target_model_name, pkg, target_model_version, self, source_node
             )
 
-            if node is not None and (
-                (hasattr(node, "config") and node.config.enabled) or node.is_external_node
-            ):
+            if node is not None and hasattr(node, "config") and node.config.enabled:
                 return node
 
             # it's possible that the node is disabled
