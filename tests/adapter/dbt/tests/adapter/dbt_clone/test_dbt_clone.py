@@ -116,7 +116,6 @@ class BaseClonePossible(BaseClone):
         results = run_dbt(clone_args)
         assert len(results) == 4
 
-        # assert all("create view" in r.message.lower() for r in results)
         schema_relations = project.adapter.list_relations(
             database=project.database, schema=other_schema
         )
@@ -150,7 +149,7 @@ class BaseClonePossible(BaseClone):
 
         with pytest.raises(
             DbtRuntimeError,
-            match="--state is required for cloning relations from another environment",
+            match="--state or --defer-state are required for deferral, but neither was provided",
         ):
             run_dbt(clone_args)
 
