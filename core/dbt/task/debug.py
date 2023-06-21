@@ -102,13 +102,14 @@ class DebugTask(BaseTask):
             return None
         return self.project.profile_name
 
-    def path_info(self):
-        open_cmd = dbt.clients.system.open_dir_cmd()
-        fire_event(OpenCommand(open_cmd=open_cmd, profiles_dir=self.profiles_dir))
-
     def run(self) -> bool:
+        # WARN: this is a legacy workflow that is not compatible with other runtime flags
         if self.args.config_dir:
-            self.path_info()
+            fire_event(
+                OpenCommand(
+                    open_cmd=dbt.clients.system.open_dir_cmd(), profiles_dir=str(self.profiles_dir)
+                )
+            )
             return DebugRunStatus.SUCCESS.value
 
         version: str = get_installed_version().to_version_string(skip_matcher=True)
