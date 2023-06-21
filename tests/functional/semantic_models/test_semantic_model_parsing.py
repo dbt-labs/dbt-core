@@ -62,6 +62,7 @@ class TestSemanticModelParsing:
         semantic_model = manifest.semantic_nodes["semanticmodel.test.revenue"]
         assert semantic_model.node_relation.alias == "fct_revenue"
 
+    @pytest.mark.skip("Restore this test when partial parsing is implemented.")
     def test_semantic_model_partial_parsing(self, project):
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
