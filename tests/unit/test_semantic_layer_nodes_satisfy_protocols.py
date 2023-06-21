@@ -1,5 +1,6 @@
 from dbt.contracts.graph.nodes import (
     Metric,
+    MetricInput,
     MetricInputMeasure,
     MetricTypeParams,
     NodeRelation,
@@ -8,15 +9,22 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.semantic_models import Dimension, DimensionTypeParams, Entity, Measure
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.protocols.dimension import Dimension as DSIDimension
-from dbt_semantic_interfaces.protocols.entity import Entity as DSIEntitiy
-from dbt_semantic_interfaces.protocols.measure import Measure as DSIMeasure
-from dbt_semantic_interfaces.protocols.metric import Metric as DSIMetric
-from dbt_semantic_interfaces.protocols.semantic_model import SemanticModel as DSISemanticModel
-from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
-from dbt_semantic_interfaces.type_enums.entity_type import EntityType
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.protocols import (
+    Dimension as DSIDimension,
+    Entity as DSIEntitiy,
+    Measure as DSIMeasure,
+    Metric as DSIMetric,
+    MetricInput as DSIMetricInput,
+    MetricInputMeasure as DSIMetricInputMeasure,
+    MetricTypeParams as DSIMetricTypeParams,
+    SemanticModel as DSISemanticModel,
+)
+from dbt_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
+)
 from typing import Protocol, runtime_checkable
 
 
@@ -42,6 +50,21 @@ class RuntimeCheckableMeasure(DSIMeasure, Protocol):
 
 @runtime_checkable
 class RuntimeCheckableMetric(DSIMetric, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableMetricInput(DSIMetricInput, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableMetricInputMeasure(DSIMetricInputMeasure, Protocol):
+    pass
+
+
+@runtime_checkable
+class RuntimeCheckableMetricTypeParams(DSIMetricTypeParams, Protocol):
     pass
 
 
@@ -121,3 +144,18 @@ def test_metric_node_satisfies_protocol():
         ),
     )
     assert isinstance(metric, RuntimeCheckableMetric)
+
+
+def test_metric_input():
+    metric_input = MetricInput(name="a_metric_input")
+    assert isinstance(metric_input, RuntimeCheckableMetricInput)
+
+
+def test_metric_input_measure():
+    metric_input_measure = MetricInputMeasure(name="a_metric_input_measure")
+    assert isinstance(metric_input_measure, RuntimeCheckableMetricInputMeasure)
+
+
+def test_metric_type_params_satisfies_protocol():
+    type_params = MetricTypeParams()
+    assert isinstance(type_params, RuntimeCheckableMetricTypeParams)

@@ -53,8 +53,7 @@ from dbt_semantic_interfaces.references import (
     SemanticModelReference,
 )
 from dbt_semantic_interfaces.references import MetricReference as DSIMetricReference
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.type_enums import MetricType, TimeGranularity
 
 from .model_config import (
     NodeConfig,
@@ -1308,7 +1307,7 @@ class MetricInputMeasure(dbtClassMixin):
     def measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.name)
 
-    def post_aggregation_measure_referenc(self) -> MeasureReference:
+    def post_aggregation_measure_reference(self) -> MeasureReference:
         return MeasureReference(element_name=self.alias or self.name)
 
 
@@ -1329,23 +1328,20 @@ class MetricInput(dbtClassMixin):
     def as_reference(self) -> DSIMetricReference:
         return DSIMetricReference(element_name=self.name)
 
+    def post_aggregation_reference(self) -> DSIMetricReference:
+        return DSIMetricReference(element_name=self.alias or self.name)
+
 
 @dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
-    measures: Optional[List[MetricInputMeasure]] = None
-    numerator: Optional[MetricInputMeasure] = None
-    denominator: Optional[MetricInputMeasure] = None
+    input_measures: List[MetricInputMeasure] = field(default_factory=list)
+    numerator: Optional[MetricInput] = None
+    denominator: Optional[MetricInput] = None
     expr: Optional[str] = None
     window: Optional[MetricTimeWindow] = None
     grain_to_date: Optional[TimeGranularity] = None
     metrics: Optional[List[MetricInput]] = None
-
-    def numerator_measure_reference(self) -> Optional[MeasureReference]:
-        return self.numerator.measure_reference() if self.numerator else None
-
-    def denominator_measure_reference(self) -> Optional[MeasureReference]:
-        return self.denominator.measure_reference() if self.denominator else None
 
 
 @dataclass
@@ -1389,16 +1385,7 @@ class Metric(GraphNode):
 
     @property
     def input_measures(self) -> List[MetricInputMeasure]:
-        tp = self.type_params
-        res = tp.measures or []
-        if tp.measure:
-            res.append(tp.measure)
-        if tp.numerator:
-            res.append(tp.numerator)
-        if tp.denominator:
-            res.append(tp.denominator)
-
-        return res
+        return self.type_params.input_measures
 
     @property
     def measure_references(self) -> List[MeasureReference]:

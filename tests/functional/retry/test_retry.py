@@ -134,7 +134,7 @@ class TestRetry:
         )
 
         expected_statuses = {
-            "operation.test.alter_timezone": RunStatus.Error,
+            "macro.test.alter_timezone": RunStatus.Error,
         }
 
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
