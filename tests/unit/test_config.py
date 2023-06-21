@@ -918,6 +918,22 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.query_comment.comment, "run by user test")
         self.assertEqual(project.query_comment.append, True)
 
+    def test_packages_from_dependencies(self):
+        packages = {
+            "packages_from_dependencies": True,
+            "packages": [
+                {
+                    "git": "{{ env_var('some_package') }}",
+                    "warn-unpinned": True,
+                }
+            ],
+        }
+
+        project = project_from_config_rendered(self.default_project_data, packages)
+        git_package = project.packages.packages[0]
+        # packages did not render because of "packages_from_dependencies" key
+        assert git_package.git == "{{ env_var('some_package') }}"
+
 
 class TestProjectFile(BaseFileTest):
     def setUp(self):
