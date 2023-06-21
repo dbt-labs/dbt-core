@@ -1,20 +1,18 @@
 import threading
-from typing import AbstractSet, Optional, Any, List, Iterable, Set
+from typing import AbstractSet, Any, List, Iterable, Set
 
-from dbt.dataclass_schema import dbtClassMixin
-
-from dbt.contracts.graph.manifest import WritableManifest
+from dbt.adapters.base import BaseRelation
+from dbt.clients.jinja import MacroGenerator
+from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.results import RunStatus, RunResult
-from dbt.exceptions import DbtInternalError, DbtRuntimeError, CompilationError
+from dbt.dataclass_schema import dbtClassMixin
+from dbt.exceptions import DbtInternalError, CompilationError
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 from dbt.parser.manifest import write_manifest
 from dbt.task.base import BaseRunner
-from dbt.task.runnable import GraphRunnableTask
 from dbt.task.run import _validate_materialization_relations_dict
-from dbt.adapters.base import BaseRelation
-from dbt.clients.jinja import MacroGenerator
-from dbt.context.providers import generate_runtime_model_context
+from dbt.task.runnable import GraphRunnableTask
 
 
 class CloneRunner(BaseRunner):
@@ -156,17 +154,6 @@ class CloneTask(GraphRunnableTask):
 
     def get_runner_type(self, _):
         return CloneRunner
-
-    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
-        state = self.previous_state
-        if state is None:
-            raise DbtRuntimeError(
-                "--state is required for cloning relations from another environment"
-            )
-
-        if state.manifest is None:
-            raise DbtRuntimeError(f'Could not find manifest in --state path: "{self.args.state}"')
-        return state.manifest
 
     # Note that this is different behavior from --defer with other commands, which *merge*
     # selected nodes from this manifest + unselected nodes from the other manifest
