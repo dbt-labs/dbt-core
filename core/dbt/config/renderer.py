@@ -134,6 +134,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
 
     def render_packages(self, packages: Dict[str, Any]):
         """Render the given packages dict"""
+        packages = packages or {}  # Sometimes this is none in tests
         package_renderer = self.get_package_renderer()
         if "packages_from_dependencies" in packages:
             # We don't want to render the "packages" dictionary that came from dependencies.yml
