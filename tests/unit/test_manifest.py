@@ -91,7 +91,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "latest_version",
         "constraints",
         "deprecation_date",
-        "state_relation",
+        "defer_relation",
     }
 )
 
