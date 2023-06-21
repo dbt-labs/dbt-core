@@ -35,6 +35,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
 )
+from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
@@ -578,6 +579,28 @@ class ModelNode(CompiledNode):
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     state_relation: Optional[StateRelation] = None
+
+    @classmethod
+    def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
+        unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
+
+        return cls(
+            resource_type=NodeType.Model,
+            name=args.name,
+            package_name=args.package_name,
+            unique_id=unique_id,
+            fqn=[args.package_name, args.name],
+            version=args.version,
+            latest_version=args.latest_version,
+            relation_name=args.relation_name,
+            database=args.database,
+            schema=args.schema,
+            alias=args.identifier,
+            deprecation_date=args.deprecation_date,
+            checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
+            original_file_path="",
+            path="",
+        )
 
     @property
     def is_external_node(self) -> bool:

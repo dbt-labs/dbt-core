@@ -100,6 +100,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     NodeRelation,
 )
+from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
 from dbt.contracts.publication import (
@@ -752,9 +753,8 @@ class ManifestLoader:
         except Exception:
             raise
 
-    def build_external_nodes(self) -> List[ModelNode]:
-        # iterate over publication artifacts, return list of ModelNodes
-        new_public_nodes = []
+    def build_external_nodes(self) -> List[ModelNodeArgs]:
+        external_node_args = []
         for project in self.root_project.dependent_projects.projects:
             try:
                 publication = self.publications[project.name]
@@ -764,47 +764,39 @@ class ManifestLoader:
             publication_config = PublicationConfig.from_publication(publication)
             self.manifest.publications[project.name] = publication_config
 
-            # Add public models to dictionary of public_nodes
+            # Add public models to list of external nodes
             for public_node in publication.public_models.values():
-                # node may already exist as package - we don't want to raise a DuplicateResourceNameError. Just avoid clobbering the existing package.
-                new_public_nodes.append(
-                    ModelNode(
-                        resource_type=NodeType.Model,
+                external_node_args.append(
+                    ModelNodeArgs(
                         name=public_node.name,
                         package_name=public_node.package_name,
-                        unique_id=public_node.unique_id,
                         version=public_node.version,
                         latest_version=public_node.latest_version,
                         relation_name=public_node.relation_name,
                         database=public_node.database,
                         schema=public_node.schema,
-                        alias=public_node.identifier,
+                        identifier=public_node.identifier,
                         deprecation_date=public_node.deprecation_date,
-                        fqn=[public_node.package_name, public_node.name],
-                        checksum=FileHash.from_contents(
-                            f"{public_node.unique_id},{public_node.generated_at}"
-                        ),
-                        original_file_path="",
-                        path="",
                     )
                 )
 
-        return new_public_nodes
+        return external_node_args
 
     def inject_external_nodes(self) -> bool:
         # TODO: remove manifest.publications
         self.manifest.publications = {}
 
-        external_nodes = self.build_external_nodes()
-        manifest_nodes_modified = False
+        external_node_args = self.build_external_nodes()
 
         # Remove previously existing external nodes since we are regenerating them
+        manifest_nodes_modified = False
         for unique_id in self.manifest.external_node_unique_ids:
             self.manifest.nodes.pop(unique_id)
             remove_dependent_project_references(self.manifest, unique_id)
             manifest_nodes_modified = True
 
-        for node in external_nodes:
+        for node_arg in external_node_args:
+            node = ModelNode.from_args(node_arg)
             # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
             if node.unique_id not in self.manifest.nodes:
                 self.manifest.add_node_nofile(node)
