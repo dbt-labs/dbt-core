@@ -1,5 +1,5 @@
 kind: Features
-body: Added semantic models to the DAG and partial parsing module
+body: Further integrate semantic models into the DAG and partial parsing module
 time: 2023-06-16T16:30:45.513314-04:00
 custom:
   Author: peterallenwebb
