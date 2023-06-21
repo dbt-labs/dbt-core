@@ -280,7 +280,7 @@ class DependsOn(MacroDependsOn):
 
 
 @dataclass
-class StateRelation(dbtClassMixin):
+class DeferRelation(dbtClassMixin):
     alias: str
     database: Optional[str]
     schema: str
@@ -585,7 +585,7 @@ class ModelNode(CompiledNode):
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
     @property
     def is_latest_version(self) -> bool:
@@ -767,7 +767,7 @@ class SeedNode(ParsedNode):  # No SQLDefaults!
     # and we need the root_path to load the seed later
     root_path: Optional[str] = None
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
     def same_seeds(self, other: "SeedNode") -> bool:
         # for seeds, we check the hashes. If the hashes are different types,
@@ -966,7 +966,7 @@ class IntermediateSnapshotNode(CompiledNode):
 class SnapshotNode(CompiledNode):
     resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
-    state_relation: Optional[StateRelation] = None
+    defer_relation: Optional[DeferRelation] = None
 
 
 # ====================================

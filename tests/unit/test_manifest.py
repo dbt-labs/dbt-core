@@ -679,14 +679,14 @@ class ManifestTest(unittest.TestCase):
         assert "model.root.nested2" not in original_manifest.nodes
 
         # old node removed should not have state relation in original manifest
-        assert original_manifest.nodes["model.root.nested"].state_relation is None
+        assert original_manifest.nodes["model.root.nested"].defer_relation is None
 
         # for all other nodes, check that state relation is updated
         for k, v in original_manifest.nodes.items():
             if k != "model.root.nested":
-                self.assertEqual("other_" + v.database, v.state_relation.database)
-                self.assertEqual("other_" + v.schema, v.state_relation.schema)
-                self.assertEqual("other_" + v.alias, v.state_relation.alias)
+                self.assertEqual("other_" + v.database, v.defer_relation.database)
+                self.assertEqual("other_" + v.schema, v.defer_relation.schema)
+                self.assertEqual("other_" + v.alias, v.defer_relation.alias)
 
 
 class MixedManifestTest(unittest.TestCase):

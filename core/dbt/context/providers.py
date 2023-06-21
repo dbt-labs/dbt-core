@@ -1433,15 +1433,15 @@ class ModelContext(ProviderContext):
         return self.db_wrapper.Relation.create_from(self.config, self.model)
 
     @contextproperty
-    def state_relation(self) -> Optional[RelationProxy]:
+    def defer_relation(self) -> Optional[RelationProxy]:
         """
         For commands which add information about this node's corresponding
         production version (via a --state artifact), access the Relation
         object for that stateful other
         """
-        if getattr(self.model, "state_relation", None):
+        if getattr(self.model, "defer_relation", None):
             return self.db_wrapper.Relation.create_from_node(
-                self.config, self.model.state_relation  # type: ignore
+                self.config, self.model.defer_relation  # type: ignore
             )
         else:
             return None

@@ -2,7 +2,7 @@
 
   {%- set relations = {'relations': []} -%}
 
-  {%- if not state_relation -%}
+  {%- if not defer_relation -%}
       -- nothing to do
       {{ log("No relation found in state manifest for " ~ model.unique_id, info=True) }}
       {{ return(relations) }}
@@ -16,7 +16,7 @@
       {{ return(relations) }}
   {%- endif -%}
 
-  {%- set other_existing_relation = load_cached_relation(state_relation) -%}
+  {%- set other_existing_relation = load_cached_relation(defer_relation) -%}
 
   -- If this is a database that can do zero-copy cloning of tables, and the other relation is a table, then this will be a table
   -- Otherwise, this will be a view
@@ -33,7 +33,7 @@
 
       -- as a general rule, data platforms that can clone tables can also do atomic 'create or replace'
       {% call statement('main') %}
-          {{ create_or_replace_clone(target_relation, state_relation) }}
+          {{ create_or_replace_clone(target_relation, defer_relation) }}
       {% endcall %}
 
       {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
@@ -46,11 +46,9 @@
 
       {%- set target_relation = this.incorporate(type='view') -%}
 
-      -- TODO: this should probably be illegal
-      -- I'm just doing it out of convenience to reuse the 'view' materialization logic
       {%- do context.update({
-          'sql': get_clone_target(state_relation),
-          'compiled_code': get_clone_target(state_relation)
+          'sql': get_clone_target(defer_relation),
+          'compiled_code': get_clone_target(defer_relation)
       }) -%}
 
       -- reuse the view materialization
