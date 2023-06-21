@@ -422,6 +422,6 @@ class TestCloneToOther(BaseDeferState):
 
         with pytest.raises(
             DbtRuntimeError,
-            match="--state is required for cloning relations from another environment",
+            match="--state or --defer-state are required for deferral, but neither was provided",
         ):
             run_dbt(clone_args)

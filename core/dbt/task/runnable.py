@@ -586,7 +586,7 @@ class GraphRunnableTask(ConfiguredTask):
         state = self.previous_defer_state or self.previous_state
         if not state:
             raise DbtRuntimeError(
-                "Received a --defer argument, but no value was provided to --state"
+                "--state or --defer-state are required for deferral, but neither was provided"
             )
 
         if not state.manifest:
