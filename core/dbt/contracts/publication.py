@@ -11,9 +11,7 @@ from dbt.contracts.util import (
     schema_version,
 )
 from dbt.contracts.graph.unparsed import NodeVersion
-from dbt.contracts.graph.nodes import ManifestOrPublicNode
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
-from dbt.node_types import AccessType, NodeType
 
 
 @dataclass
@@ -37,63 +35,22 @@ class PublicationMetadata(BaseArtifactMetadata):
 
 
 @dataclass
-class PublicModel(dbtClassMixin, ManifestOrPublicNode):
+class PublicModel(dbtClassMixin):
     """Used to represent cross-project models"""
 
     name: str
     package_name: str
     unique_id: str
     relation_name: str
+    identifier: str
+    schema: str
     database: Optional[str] = None
-    schema: Optional[str] = None
-    identifier: Optional[str] = None
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
     # list of model unique_ids
     public_node_dependencies: List[str] = field(default_factory=list)
     generated_at: datetime = field(default_factory=datetime.utcnow)
     deprecation_date: Optional[datetime] = None
-
-    @property
-    def is_latest_version(self) -> bool:
-        return self.version is not None and self.version == self.latest_version
-
-    # Needed for ref resolution code
-    @property
-    def resource_type(self):
-        return NodeType.Model
-
-    # Needed for ref resolution code
-    @property
-    def access(self):
-        return AccessType.Public
-
-    @property
-    def search_name(self):
-        if self.version is None:
-            return self.name
-        else:
-            return f"{self.name}.v{self.version}"
-
-    @property
-    def depends_on_nodes(self):
-        return []
-
-    @property
-    def depends_on_public_nodes(self):
-        return []
-
-    @property
-    def is_public_node(self):
-        return True
-
-    @property
-    def is_versioned(self):
-        return self.version is not None
-
-    @property
-    def alias(self):
-        return self.identifier
 
 
 @dataclass

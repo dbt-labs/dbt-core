@@ -22,7 +22,7 @@ from typing import (
 from typing_extensions import Protocol
 from uuid import UUID
 
-from dbt.contracts.publication import PublicationConfig, PublicModel
+from dbt.contracts.publication import PublicationConfig
 
 from dbt.contracts.graph.nodes import (
     BaseNode,
@@ -33,7 +33,6 @@ from dbt.contracts.graph.nodes import (
     Group,
     Macro,
     ManifestNode,
-    ManifestOrPublicNode,
     Metric,
     ModelNode,
     RelationalNode,
@@ -162,7 +161,6 @@ class RefableLookup(dbtClassMixin):
     def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
-        self.populate_public_nodes(manifest)
 
     def get_unique_id(
         self,
@@ -206,7 +204,9 @@ class RefableLookup(dbtClassMixin):
                     [
                         UnparsedVersion(v.version)
                         for v in manifest.nodes.values()
-                        if v.name == node.name and v.version is not None
+                        if isinstance(v, ModelNode)
+                        and v.name == node.name
+                        and v.version is not None
                     ]
                 )
                 assert node.latest_version is not None  # for mypy, whenever i may find it
@@ -224,7 +224,7 @@ class RefableLookup(dbtClassMixin):
             return node
         return None
 
-    def add_node(self, node: ManifestOrPublicNode):
+    def add_node(self, node: ManifestNode):
         if node.resource_type in self._lookup_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
@@ -242,15 +242,9 @@ class RefableLookup(dbtClassMixin):
         for node in manifest.nodes.values():
             self.add_node(node)
 
-    def populate_public_nodes(self, manifest):
-        for node in manifest.public_nodes.values():
-            self.add_node(node)
-
-    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestOrPublicNode:
+    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
         if unique_id in manifest.nodes:
             node = manifest.nodes[unique_id]
-        elif unique_id in manifest.public_nodes:
-            node = manifest.public_nodes[unique_id]
         else:
             raise dbt.exceptions.DbtInternalError(
                 f"Node {unique_id} found in cache but not found in manifest"
@@ -436,7 +430,6 @@ def build_node_edges(nodes: List[ManifestNode]):
     forward_edges: Dict[str, List[str]] = {n.unique_id: [] for n in nodes}
     for node in nodes:
         backward_edges[node.unique_id] = node.depends_on_nodes[:]
-        backward_edges[node.unique_id].extend(node.depends_on_public_nodes[:])
         for unique_id in backward_edges[node.unique_id]:
             if unique_id in forward_edges.keys():
                 forward_edges[unique_id].append(node.unique_id)
@@ -707,7 +700,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
-    public_nodes: MutableMapping[str, PublicModel] = field(default_factory=dict)
     publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
     semantic_nodes: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
@@ -761,7 +753,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
             "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
             "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
-            "public_nodes": {k: v.to_dict(omit_none=False) for k, v in self.public_nodes.items()},
             "semantic_nodes": {
                 k: v.to_dict(omit_none=False) for k, v in self.semantic_nodes.items()
             },
@@ -858,7 +849,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
             metadata=self.metadata,
             disabled={k: _deepcopy(v) for k, v in self.disabled.items()},
-            public_nodes={k: _deepcopy(v) for k, v in self.public_nodes.items()},
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
             publications={k: _deepcopy(v) for k, v in self.publications.items()},
@@ -874,7 +864,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.sources.values(),
                 self.exposures.values(),
                 self.metrics.values(),
-                self.public_nodes.values(),
                 self.semantic_nodes.values(),
             )
         )
@@ -919,7 +908,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,
-            public_nodes=self.public_nodes,
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
@@ -1010,6 +998,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         return pydantic_semantic_manifest
 
+    @property
+    def external_node_unique_ids(self):
+        return [node.unique_id for node in self.nodes.values() if node.is_external_node]
+
     def resolve_refs(
         self,
         source_node: ModelNode,
@@ -1050,9 +1042,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 target_model_name, pkg, target_model_version, self, source_node
             )
 
-            if node is not None and (
-                (hasattr(node, "config") and node.config.enabled) or node.is_public_node
-            ):
+            if node is not None and hasattr(node, "config") and node.config.enabled:
                 return node
 
             # it's possible that the node is disabled
@@ -1307,7 +1297,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.source_patches,
             self.disabled,
             self.env_vars,
-            self.public_nodes,
             self.publications,
             self.semantic_nodes,
             self._doc_lookup,
@@ -1378,9 +1367,6 @@ class WritableManifest(ArtifactMixin):
         metadata=dict(
             description="A mapping from group names to their nodes",
         )
-    )
-    public_nodes: Mapping[UniqueID, PublicModel] = field(
-        metadata=dict(description=("The public models used in the dbt project"))
     )
     semantic_nodes: Mapping[UniqueID, SemanticModel] = field(
         metadata=dict(description=("The semantic models defined in the dbt project"))

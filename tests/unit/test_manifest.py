@@ -392,7 +392,6 @@ class ManifestTest(unittest.TestCase):
                 },
                 "docs": {},
                 "disabled": {},
-                "public_nodes": {},
                 "semantic_nodes": {},
             },
         )
@@ -410,7 +409,6 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            public_nodes={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
@@ -488,7 +486,6 @@ class ManifestTest(unittest.TestCase):
                     "nodes",
                     "sources",
                     "metrics",
-                    "public_nodes",
                     "semantic_nodes",
                 ]
             ),
@@ -574,7 +571,6 @@ class ManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "disabled": {},
-                "public_nodes": {},
                 "semantic_nodes": {},
             },
         )
@@ -947,7 +943,6 @@ class MixedManifestTest(unittest.TestCase):
                 },
                 "docs": {},
                 "disabled": {},
-                "public_nodes": {},
                 "semantic_nodes": {},
             },
         )
@@ -1030,7 +1025,6 @@ class MixedManifestTest(unittest.TestCase):
                     "metrics",
                     "nodes",
                     "sources",
-                    "public_nodes",
                     "semantic_nodes",
                 ]
             ),

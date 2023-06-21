@@ -15,7 +15,6 @@ from typing import (
     Union,
     Tuple,
     Set,
-    MutableMapping,
 )
 from itertools import chain
 import time
@@ -41,7 +40,6 @@ from dbt.constants import (
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt.events.helpers import datetime_to_json_string
 from dbt.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingError,
@@ -54,7 +52,6 @@ from dbt.events.types import (
     NodeNotFoundOrDisabled,
     StateCheckVarsHash,
     Note,
-    PublicationArtifactChanged,
     PublicationArtifactAvailable,
     DeprecatedModel,
     DeprecatedReference,
@@ -103,6 +100,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     NodeRelation,
 )
+from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
 from dbt.contracts.publication import (
@@ -519,8 +517,8 @@ class ManifestLoader:
             self.manifest.selectors = self.root_project.manifest_selectors
 
             # load manifest.dependencies and associated publication artifacts to create the external nodes
-            public_nodes_changed = self.build_public_nodes()
-            if public_nodes_changed:
+            external_nodes_modified = self.inject_external_nodes()
+            if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
 
             # update the refs, sources, docs and metrics depends_on.nodes
@@ -546,14 +544,14 @@ class ManifestLoader:
 
         # Load dependencies, load the publication artifacts and create the external nodes.
         # Reprocess refs if changes.
-        public_nodes_changed = False
+        external_nodes_modified = False
         if skip_parsing:
             # If we didn't skip parsing, this will have already run because it must run
             # before process_refs. If we did skip parsing, then it's possible that only
             # publications have changed and we need to run this to capture that.
             self.manifest.build_parent_and_child_maps()
-            public_nodes_changed = self.build_public_nodes()
-            if public_nodes_changed:
+            external_nodes_modified = self.inject_external_nodes()
+            if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
                 self.process_refs(self.root_project.project_name)
                 # parent and child maps will be rebuilt by write_manifest
@@ -756,95 +754,8 @@ class ManifestLoader:
         except Exception:
             raise
 
-    def build_public_nodes(self) -> bool:
-        """This method loads the dependencies from dependencies.yml, reads in the
-        the publication artifacts and adds the PublicModels to the manifest
-        "public_nodes" dictionary. It returns a boolean that indicates that
-        public nodes have been rebuilt."""
-        public_nodes_changed = False
-
-        # Construct a dictionary of project_names to generated_at timestamps in
-        # order to determine what has changed. The dependent_projects in the RuntimeConfig
-        # are new for this run.
-        saved_dependent_projects = {}
-        for pub in self.manifest.publications.values():
-            saved_dependent_projects[pub.project_name] = pub.metadata.generated_at
-
-        # Return False if there weren't any dependencies before and aren't any now.
-        if (
-            len(saved_dependent_projects) == 0
-            and len(self.root_project.dependent_projects.projects) == 0
-        ):
-            return False
-
-        # Collect current dependent projects
-        current_dependent_projects = []
-        if (
-            self.root_project.dependent_projects
-        ):  # ManifestLoader has been passed some publication artifacts
-            for project in self.root_project.dependent_projects.projects:
-                current_dependent_projects.append(project.name)
-
-        # Save previous publications, for later removal of references
-        saved_manifest_publications: MutableMapping[str, PublicationConfig] = deepcopy(
-            self.manifest.publications
-        )
-        if self.manifest.publications:
-            for project_name, publication in self.manifest.publications.items():
-                if project_name not in current_dependent_projects:
-                    remove_dependent_project_references(self.manifest, publication)
-                    saved_manifest_publications.pop(project_name)
-                    fire_event(
-                        PublicationArtifactChanged(
-                            action="removed",
-                            project_name=project_name,
-                            generated_at=datetime_to_json_string(
-                                publication.metadata.generated_at
-                            ),
-                        )
-                    )
-                    public_nodes_changed = True
-
-            # clean up previous publications that are no longer specified
-            self.manifest.publications = {}
-            # Empty public_nodes since we're re-generating them all
-            self.manifest.public_nodes = {}
-
-        if len(self.root_project.dependent_projects.projects) > 0:
-            self.load_new_public_nodes()
-
-        # Now that we've loaded the current publications and public_nodes, look for
-        # changed publications so we can reset the public_nodes references
-        for project_name, publication in self.manifest.publications.items():
-            if (
-                project_name in saved_manifest_publications
-                and publication.metadata.generated_at
-                != saved_manifest_publications[project_name].metadata.generated_at
-            ):
-                remove_dependent_project_references(
-                    self.manifest, saved_manifest_publications[project_name]
-                )
-                fire_event(
-                    PublicationArtifactChanged(
-                        action="updated",
-                        project_name=project_name,
-                        generated_at=datetime_to_json_string(publication.metadata.generated_at),
-                    )
-                )
-                public_nodes_changed = True
-            elif project_name not in saved_manifest_publications:
-                fire_event(
-                    PublicationArtifactChanged(
-                        action="added",
-                        project_name=project_name,
-                        generated_at=datetime_to_json_string(publication.metadata.generated_at),
-                    )
-                )
-                public_nodes_changed = True
-
-        return public_nodes_changed
-
-    def load_new_public_nodes(self):
+    def build_external_nodes(self) -> List[ModelNodeArgs]:
+        external_node_args = []
         for project in self.root_project.dependent_projects.projects:
             try:
                 publication = self.publications[project.name]
@@ -854,9 +765,45 @@ class ManifestLoader:
             publication_config = PublicationConfig.from_publication(publication)
             self.manifest.publications[project.name] = publication_config
 
-            # Add public models to dictionary of public_nodes
+            # Add public models to list of external nodes
             for public_node in publication.public_models.values():
-                self.manifest.public_nodes[public_node.unique_id] = public_node
+                external_node_args.append(
+                    ModelNodeArgs(
+                        name=public_node.name,
+                        package_name=public_node.package_name,
+                        version=public_node.version,
+                        latest_version=public_node.latest_version,
+                        relation_name=public_node.relation_name,
+                        database=public_node.database,
+                        schema=public_node.schema,
+                        identifier=public_node.identifier,
+                        deprecation_date=public_node.deprecation_date,
+                    )
+                )
+
+        return external_node_args
+
+    def inject_external_nodes(self) -> bool:
+        # TODO: remove manifest.publications
+        self.manifest.publications = {}
+
+        external_node_args = self.build_external_nodes()
+
+        # Remove previously existing external nodes since we are regenerating them
+        manifest_nodes_modified = False
+        for unique_id in self.manifest.external_node_unique_ids:
+            self.manifest.nodes.pop(unique_id)
+            remove_dependent_project_references(self.manifest, unique_id)
+            manifest_nodes_modified = True
+
+        for node_arg in external_node_args:
+            node = ModelNode.from_args(node_arg)
+            # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
+            if node.unique_id not in self.manifest.nodes:
+                self.manifest.add_node_nofile(node)
+                manifest_nodes_modified = True
+
+        return manifest_nodes_modified
 
     def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
@@ -1690,20 +1637,14 @@ def _process_refs_for_node(manifest: Manifest, current_project: str, node: Manif
 
         target_model_id = target_model.unique_id
 
-        if target_model.is_public_node:
-            node.depends_on.add_public_node(target_model_id)
-        else:
-            node.depends_on.add_node(target_model_id)
+        node.depends_on.add_node(target_model_id)
 
 
-def remove_dependent_project_references(manifest: Manifest, publication: PublicationConfig):
-    for unique_id in publication.public_node_ids:
-        for child_id in manifest.child_map[unique_id]:
-            node = manifest.expect(child_id)
-            if hasattr(node.depends_on, "public_nodes"):
-                node.depends_on.public_nodes.remove(unique_id)  # type: ignore
-                # set created_at so process_refs happens
-                node.created_at = time.time()
+def remove_dependent_project_references(manifest, external_node_unique_id):
+    for child_id in manifest.child_map[external_node_unique_id]:
+        node = manifest.expect(child_id)
+        node.depends_on_nodes.remove(external_node_unique_id)
+        node.created_at = time.time()
 
 
 def _process_sources_for_exposure(manifest: Manifest, current_project: str, exposure: Exposure):
