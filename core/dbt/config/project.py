@@ -101,9 +101,9 @@ def package_and_project_data_from_root(project_root):
     packages_yml_dict = {}
     dependencies_yml_dict = {}
     if path_exists(package_filepath):
-        packages_yml_dict = _load_yaml(package_filepath)
+        packages_yml_dict = _load_yaml(package_filepath) or {}
     if path_exists(dependencies_filepath):
-        dependencies_yml_dict = _load_yaml(dependencies_filepath)
+        dependencies_yml_dict = _load_yaml(dependencies_filepath) or {}
 
     if "packages" in packages_yml_dict and "packages" in dependencies_yml_dict:
         msg = "The 'packages' key cannot be specified in both packages.yml and dependencies.yml"

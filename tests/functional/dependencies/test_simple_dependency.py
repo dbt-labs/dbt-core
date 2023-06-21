@@ -127,6 +127,16 @@ class TestSimpleDependencyWithDependenciesFile(SimpleDependencyBase):
         assert len(results) == 4
 
 
+class TestSimpleDependencyWithEmptyPackagesFile(SimpleDependencyBase):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return " "
+
+    def test_dependency_with_empty_packages_file(self, run_deps, project):
+        # Tests that an empty packages file doesn't fail with a Python error
+        run_dbt(["deps"])
+
+
 class TestSimpleDependencyNoProfile(SimpleDependencyBase):
     """dbt deps and clean commands should not require a profile."""
 
