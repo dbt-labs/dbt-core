@@ -357,7 +357,6 @@ class GraphRunnableTask(ConfiguredTask):
 
         try:
             self.run_queue(pool)
-            pool.close()
         except FailFastError as failure:
             self._cancel_connections(pool)
             print_run_result_error(failure.result)
