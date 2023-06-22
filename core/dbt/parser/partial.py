@@ -412,7 +412,6 @@ class PartialParsing:
                     source_element = self.get_schema_element(sources, source.source_name)
                     if source_element:
                         self.delete_schema_source(schema_file, source_element)
-                        self.remove_tests(schema_file, "sources", source_element["name"])
                         self.merge_patch(schema_file, "sources", source_element)
             elif unique_id in self.saved_manifest.exposures:
                 exposure = self.saved_manifest.exposures[unique_id]
@@ -538,7 +537,6 @@ class PartialParsing:
                                     # This is a source patch; need to re-parse orig source
                                     self.remove_source_override_target(patch)
                                 self.delete_schema_source(schema_file, patch)
-                                self.remove_tests(schema_file, "sources", patch["name"])
                                 self.merge_patch(schema_file, "sources", patch)
                 else:
                     file_id = node.file_id
@@ -639,14 +637,12 @@ class PartialParsing:
                 if "overrides" in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, dict_key, source["name"])
                 self.merge_patch(schema_file, dict_key, source)
         if source_diff["deleted"]:
             for source in source_diff["deleted"]:
                 if "overrides" in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, dict_key, source["name"])
         if source_diff["added"]:
             for source in source_diff["added"]:
                 if "overrides" in source:  # This is a source patch; need to re-parse orig source
@@ -662,7 +658,6 @@ class PartialParsing:
                     if "overrides" in source:
                         self.remove_source_override_target(source)
                     self.delete_schema_source(schema_file, source)
-                    self.remove_tests(schema_file, dict_key, source["name"])
                     self.merge_patch(schema_file, dict_key, source)
 
         # macros
@@ -887,6 +882,8 @@ class PartialParsing:
                     schema_file.sources.remove(unique_id)
                     self.schedule_referencing_nodes_for_parsing(unique_id)
 
+        self.remove_tests(schema_file, "sources", source_name)
+
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
         macro_unique_id = None
@@ -970,7 +967,6 @@ class PartialParsing:
         (orig_file, orig_source) = self.get_source_override_file_and_dict(source_dict)
         if orig_source:
             self.delete_schema_source(orig_file, orig_source)
-            self.remove_tests(orig_file, "sources", orig_source["name"])
             self.merge_patch(orig_file, "sources", orig_source)
             self.add_to_pp_files(orig_file)
 
