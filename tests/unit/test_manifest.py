@@ -336,7 +336,7 @@ class ManifestTest(unittest.TestCase):
             ),
         }
 
-        self.semantic_nodes = {}
+        self.semantic_models = {}
 
         for exposure in self.exposures.values():
             exposure.validate(exposure.to_dict(omit_none=True))
@@ -366,7 +366,7 @@ class ManifestTest(unittest.TestCase):
             metrics={},
             selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
-            semantic_nodes={},
+            semantic_models={},
         )
 
         invocation_id = dbt.events.functions.EVENT_MANAGER.invocation_id
@@ -392,7 +392,7 @@ class ManifestTest(unittest.TestCase):
                 },
                 "docs": {},
                 "disabled": {},
-                "semantic_nodes": {},
+                "semantic_models": {},
             },
         )
 
@@ -476,7 +476,7 @@ class ManifestTest(unittest.TestCase):
         flat_metrics = flat_graph["metrics"]
         flat_nodes = flat_graph["nodes"]
         flat_sources = flat_graph["sources"]
-        flat_semantic_nodes = flat_graph["semantic_nodes"]
+        flat_semantic_models = flat_graph["semantic_models"]
         self.assertEqual(
             set(flat_graph),
             set(
@@ -486,7 +486,7 @@ class ManifestTest(unittest.TestCase):
                     "nodes",
                     "sources",
                     "metrics",
-                    "semantic_nodes",
+                    "semantic_models",
                 ]
             ),
         )
@@ -495,7 +495,7 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(set(flat_metrics), set(self.metrics))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         self.assertEqual(set(flat_sources), set(self.sources))
-        self.assertEqual(set(flat_semantic_nodes), set(self.semantic_nodes))
+        self.assertEqual(set(flat_semantic_models), set(self.semantic_models))
         for node in flat_nodes.values():
             self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
 
@@ -542,7 +542,7 @@ class ManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
-            semantic_nodes={},
+            semantic_models={},
         )
 
         self.assertEqual(
@@ -571,7 +571,7 @@ class ManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "disabled": {},
-                "semantic_nodes": {},
+                "semantic_models": {},
             },
         )
 
@@ -919,7 +919,7 @@ class MixedManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
-            semantic_nodes={},
+            semantic_models={},
         )
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
@@ -943,7 +943,7 @@ class MixedManifestTest(unittest.TestCase):
                 },
                 "docs": {},
                 "disabled": {},
-                "semantic_nodes": {},
+                "semantic_models": {},
             },
         )
 
@@ -1011,7 +1011,7 @@ class MixedManifestTest(unittest.TestCase):
             selectors={},
             files={},
             exposures={},
-            semantic_nodes={},
+            semantic_models={},
         )
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
@@ -1025,7 +1025,7 @@ class MixedManifestTest(unittest.TestCase):
                     "metrics",
                     "nodes",
                     "sources",
-                    "semantic_nodes",
+                    "semantic_models",
                 ]
             ),
         )

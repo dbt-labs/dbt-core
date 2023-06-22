@@ -1103,7 +1103,7 @@ class ManifestLoader:
             if metric.created_at < self.started_at:
                 continue
             _process_refs(self.manifest, current_project, metric)
-        for semantic_model in self.manifest.semantic_nodes.values():
+        for semantic_model in self.manifest.semantic_models.values():
             if semantic_model.created_at < self.started_at:
                 continue
             _process_refs(self.manifest, current_project, semantic_model)
