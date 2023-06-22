@@ -1,29 +1,21 @@
 import os
 import time
-from pathlib import Path
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
+from pathlib import Path
 from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
 
-from .printer import (
-    print_run_result_error,
-    print_run_end_messages,
-)
-
-from dbt.task.base import ConfiguredTask
+import dbt.exceptions
+import dbt.tracking
+import dbt.utils
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.logger import (
-    DbtProcessState,
-    TextOnly,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-    ModelMetadata,
-    NodeCount,
-)
+from dbt.contracts.graph.nodes import ResultNode
+from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
+from dbt.contracts.state import PreviousState
+from dbt.events.contextvars import log_contextvars
 from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     Formatting,
@@ -36,24 +28,29 @@ from dbt.events.types import (
     EndRunResult,
     NothingToDo,
 )
-from dbt.events.contextvars import log_contextvars
-from dbt.contracts.graph.nodes import ResultNode
-from dbt.contracts.results import NodeStatus, RunExecutionResult, RunningStatus
-from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     DbtInternalError,
     NotImplementedError,
     DbtRuntimeError,
     FailFastError,
 )
-
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference
-from dbt.parser.manifest import write_manifest
-import dbt.tracking
-
-import dbt.exceptions
 from dbt.flags import get_flags
-import dbt.utils
+from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference
+from dbt.logger import (
+    DbtProcessState,
+    TextOnly,
+    UniqueID,
+    TimestampNamed,
+    DbtModelState,
+    ModelMetadata,
+    NodeCount,
+)
+from dbt.parser.manifest import write_manifest
+from dbt.task.base import ConfiguredTask, skip_result
+from dbt.task.printer import (
+    print_run_result_error,
+    print_run_end_messages,
+)
 
 RESULT_FILE_NAME = "run_results.json"
 RUNNING_STATE = DbtProcessState("running")
@@ -357,23 +354,29 @@ class GraphRunnableTask(ConfiguredTask):
             fire_event(Formatting(""))
 
         pool = ThreadPool(num_threads)
+
         try:
             self.run_queue(pool)
-
+            pool.close()
         except FailFastError as failure:
             self._cancel_connections(pool)
             print_run_result_error(failure.result)
-            raise
 
+            # Mark all remaining queued/in-progress nodes as skipped
+            for node_id in self.job_queue.queued.union(self.job_queue.in_progress):
+                node = self.manifest.nodes[node_id]
+                self.node_results.append(skip_result(node, "Skipping due to fail-fast"))
+
+            raise
         except KeyboardInterrupt:
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
             raise
-        finally:
-            pool.close()
-            pool.join()
 
-            return self.node_results
+        pool.close()
+        pool.join()
+
+        return self.node_results
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
