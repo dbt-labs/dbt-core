@@ -583,9 +583,9 @@ class ModelNode(CompiledNode):
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
         unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
 
-        # build unrendered config
+        # build unrendered config -- for usage in ParsedNode.same_contents
         unrendered_config = {}
-        unrendered_config["identifier"] = args.identifier
+        unrendered_config["alias"] = args.identifier
         unrendered_config["schema"] = args.schema
         if args.database:
             unrendered_config["database"] = args.database
