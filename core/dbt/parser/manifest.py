@@ -1534,7 +1534,9 @@ def _process_metrics_for_node(
 def remove_dependent_project_references(manifest, external_node_unique_id):
     for child_id in manifest.child_map[external_node_unique_id]:
         node = manifest.expect(child_id)
-        node.depends_on_nodes.remove(external_node_unique_id)
+        # child node may have been modified and already recreated its depends_on.nodes list
+        if external_node_unique_id in node.depends_on_nodes:
+            node.depends_on_nodes.remove(external_node_unique_id)
         node.created_at = time.time()
 
 
