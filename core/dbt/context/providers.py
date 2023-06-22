@@ -518,11 +518,7 @@ class RuntimeRefResolver(BaseRefResolver):
         return self.create_relation(target_model)
 
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
-        if target_model.is_public_node:
-            # Get quoting from publication artifact
-            pub_metadata = self.manifest.publications[target_model.package_name].metadata
-            return self.Relation.create_from_node(pub_metadata, target_model)
-        elif target_model.is_ephemeral_model:
+        if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from_node(self.config, target_model)
         else:
@@ -535,10 +531,7 @@ class RuntimeRefResolver(BaseRefResolver):
         target_package: Optional[str],
         target_version: Optional[NodeVersion],
     ) -> None:
-        if (
-            resolved.unique_id not in self.model.depends_on.nodes
-            and resolved.unique_id not in self.model.depends_on.public_nodes
-        ):
+        if resolved.unique_id not in self.model.depends_on.nodes:
             args = self._repack_args(target_name, target_package, target_version)
             raise RefBadContextError(node=self.model, args=args)
 

@@ -99,22 +99,20 @@ class TestYamlRendering(unittest.TestCase):
         self.assertEqual(dct, expected)
 
     def test__metrics(self):
-        context = {"my_time_grains": "[day]"}
+        context = {"metric_name_end": "_metric"}
         renderer = SchemaYamlRenderer(context, "metrics")
 
         dct = {
-            "name": "my_source",
+            "name": "test{{ metric_name_end }}",
             "description": "{{ docs('my_doc') }}",
-            "expression": "select {{ var('my_var') }} from my_table",
-            "time_grains": "{{ my_time_grains }}",
+            "filter": "{{ dimension('my_dim') }} = false",
         }
         # We expect the expression and description will not be rendered, but
         # other fields will be
         expected = {
-            "name": "my_source",
+            "name": "test_metric",
             "description": "{{ docs('my_doc') }}",
-            "expression": "select {{ var('my_var') }} from my_table",
-            "time_grains": "[day]",
+            "filter": "{{ dimension('my_dim') }} = false",
         }
         dct = renderer.render_data(dct)
         self.assertEqual(dct, expected)

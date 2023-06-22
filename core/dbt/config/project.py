@@ -38,6 +38,7 @@ from dbt.contracts.project import (
     SemverString,
 )
 from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
+from dbt.contracts.publication import ProjectDependencies
 from dbt.dataclass_schema import ValidationError
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
@@ -93,17 +94,38 @@ def _load_yaml(path):
     return load_yaml_text(contents)
 
 
-def package_data_from_root(project_root):
+def package_and_project_data_from_root(project_root):
     package_filepath = resolve_path_from_base("packages.yml", project_root)
+    dependencies_filepath = resolve_path_from_base("dependencies.yml", project_root)
 
+    packages_yml_dict = {}
+    dependencies_yml_dict = {}
     if path_exists(package_filepath):
-        packages_dict = _load_yaml(package_filepath)
-    else:
-        packages_dict = None
-    return packages_dict
+        packages_yml_dict = _load_yaml(package_filepath) or {}
+    if path_exists(dependencies_filepath):
+        dependencies_yml_dict = _load_yaml(dependencies_filepath) or {}
+
+    if "packages" in packages_yml_dict and "packages" in dependencies_yml_dict:
+        msg = "The 'packages' key cannot be specified in both packages.yml and dependencies.yml"
+        raise DbtProjectError(msg)
+    if "projects" in packages_yml_dict:
+        msg = "The 'projects' key cannot be specified in packages.yml"
+        raise DbtProjectError(msg)
+
+    packages_dict = {}
+    dependent_projects_dict = {}
+    if "packages" in dependencies_yml_dict:
+        packages_dict["packages"] = dependencies_yml_dict["packages"]
+        packages_dict["packages_from_dependencies"] = True
+    else:  # don't check for "packages" here so we capture invalid keys in packages.yml
+        packages_dict = packages_yml_dict
+    if "projects" in dependencies_yml_dict:
+        dependent_projects_dict["projects"] = dependencies_yml_dict["projects"]
+
+    return packages_dict, dependent_projects_dict
 
 
-def package_config_from_data(packages_data: Dict[str, Any]):
+def package_config_from_data(packages_data: Dict[str, Any]) -> PackageConfig:
     if not packages_data:
         packages_data = {"packages": []}
 
@@ -113,6 +135,21 @@ def package_config_from_data(packages_data: Dict[str, Any]):
     except ValidationError as e:
         raise DbtProjectError(MALFORMED_PACKAGE_ERROR.format(error=str(e.message))) from e
     return packages
+
+
+def dependent_project_config_from_data(
+    dependent_projects_data: Dict[str, Any]
+) -> ProjectDependencies:
+    if not dependent_projects_data:
+        dependent_projects_data = {"projects": []}
+
+    try:
+        ProjectDependencies.validate(dependent_projects_data)
+        dependent_projects = ProjectDependencies.from_dict(dependent_projects_data)
+    except ValidationError as e:
+        msg = f"Malformed dependencies.yml: {e}"
+        raise DbtProjectError(msg)
+    return dependent_projects
 
 
 def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
@@ -239,11 +276,15 @@ def _get_required_version(
 class RenderComponents:
     project_dict: Dict[str, Any] = field(metadata=dict(description="The project dictionary"))
     packages_dict: Dict[str, Any] = field(metadata=dict(description="The packages dictionary"))
+    dependent_projects_dict: Dict[str, Any] = field(
+        metadata=dict(description="The dependent projects dictionary")
+    )
     selectors_dict: Dict[str, Any] = field(metadata=dict(description="The selectors dictionary"))
 
 
 @dataclass
 class PartialProject(RenderComponents):
+    # This class includes the project_dict, packages_dict, selectors_dict, etc from RenderComponents
     profile_name: Optional[str] = field(
         metadata=dict(description="The unrendered profile name in the project, if set")
     )
@@ -273,15 +314,19 @@ class PartialProject(RenderComponents):
 
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
         rendered_packages = renderer.render_packages(self.packages_dict)
+        rendered_dependent_projects = renderer.render_dependent_projects(
+            self.dependent_projects_dict
+        )
         rendered_selectors = renderer.render_selectors(self.selectors_dict)
 
         return RenderComponents(
             project_dict=rendered_project,
             packages_dict=rendered_packages,
+            dependent_projects_dict=rendered_dependent_projects,
             selectors_dict=rendered_selectors,
         )
 
-    # Called by 'collect_parts' in RuntimeConfig
+    # Called by Project.from_project_root (not PartialProject.from_project_root!)
     def render(self, renderer: DbtProjectYamlRenderer) -> "Project":
         try:
             rendered = self.get_rendered(renderer)
@@ -324,6 +369,7 @@ class PartialProject(RenderComponents):
         unrendered = RenderComponents(
             project_dict=self.project_dict,
             packages_dict=self.packages_dict,
+            dependent_projects_dict=self.dependent_projects_dict,
             selectors_dict=self.selectors_dict,
         )
         dbt_version = _get_required_version(
@@ -424,7 +470,10 @@ class PartialProject(RenderComponents):
 
         query_comment = _query_comment_from_cfg(cfg.query_comment)
 
-        packages = package_config_from_data(rendered.packages_dict)
+        packages: PackageConfig = package_config_from_data(rendered.packages_dict)
+        dependent_projects: ProjectDependencies = dependent_project_config_from_data(
+            rendered.dependent_projects_dict
+        )
         selectors = selector_config_from_data(rendered.selectors_dict)
         manifest_selectors: Dict[str, Any] = {}
         if rendered.selectors_dict and rendered.selectors_dict["selectors"]:
@@ -459,6 +508,7 @@ class PartialProject(RenderComponents):
             snapshots=snapshots,
             dbt_version=dbt_version,
             packages=packages,
+            dependent_projects=dependent_projects,
             manifest_selectors=manifest_selectors,
             selectors=selectors,
             query_comment=query_comment,
@@ -481,6 +531,7 @@ class PartialProject(RenderComponents):
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
+        dependent_projects_dict: Dict[str, Any],
         selectors_dict: Dict[str, Any],
         *,
         verify_version: bool = False,
@@ -489,12 +540,14 @@ class PartialProject(RenderComponents):
         project_name = project_dict.get("name")
         profile_name = project_dict.get("profile")
 
+        # Create a PartialProject
         return cls(
             profile_name=profile_name,
             project_name=project_name,
             project_root=project_root,
             project_dict=project_dict,
             packages_dict=packages_dict,
+            dependent_projects_dict=dependent_projects_dict,
             selectors_dict=selectors_dict,
             verify_version=verify_version,
         )
@@ -505,13 +558,15 @@ class PartialProject(RenderComponents):
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
         project_dict = load_raw_project(project_root)
-        packages_dict = package_data_from_root(project_root)
+        # Read packages.yml and dependencies.yml and pass dictionaries to "from_dicts" method
+        packages_dict, dependent_projects_dict = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
         return cls.from_dicts(
             project_root=project_root,
             project_dict=project_dict,
             selectors_dict=selectors_dict,
             packages_dict=packages_dict,
+            dependent_projects_dict=dependent_projects_dict,
             verify_version=verify_version,
         )
 
@@ -565,7 +620,8 @@ class Project:
     exposures: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
-    packages: Dict[str, Any]
+    packages: PackageConfig
+    dependent_projects: ProjectDependencies
     manifest_selectors: Dict[str, Any]
     selectors: SelectorConfig
     query_comment: QueryComment
@@ -663,6 +719,9 @@ class Project:
             verify_version=verify_version,
         )
 
+    # Called by:
+    # RtConfig.load_dependencies => RtConfig.load_projects => RtConfig.new_project => Project.from_project_root
+    # RtConfig.from_args => RtConfig.collect_parts => load_project => Project.from_project_root
     @classmethod
     def from_project_root(
         cls,

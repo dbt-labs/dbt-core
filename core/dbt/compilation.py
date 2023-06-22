@@ -179,6 +179,9 @@ class Linker:
     def link_graph(self, manifest: Manifest):
         for source in manifest.sources.values():
             self.add_node(source.unique_id)
+        for semantic_node in manifest.semantic_nodes.values():
+            self.add_node(semantic_node.unique_id)
+
         for node in manifest.nodes.values():
             self.link_node(node, manifest)
         for exposure in manifest.exposures.values():

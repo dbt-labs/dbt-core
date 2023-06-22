@@ -575,6 +575,7 @@ def project_from_config_norender(
         project_dict=cfg,
         packages_dict=packages,
         selectors_dict={},
+        dependent_projects_dict={},
         verify_version=verify_version,
     )
     # no rendering
@@ -582,6 +583,7 @@ def project_from_config_norender(
         project_dict=partial.project_dict,
         packages_dict=partial.packages_dict,
         selectors_dict=partial.selectors_dict,
+        dependent_projects_dict=partial.dependent_projects_dict,
     )
     return partial.create_project(rendered)
 
@@ -596,6 +598,7 @@ def project_from_config_rendered(
         project_dict=cfg,
         packages_dict=packages,
         selectors_dict={},
+        dependent_projects_dict={},
         verify_version=verify_version,
     )
     return partial.render(empty_project_renderer())
@@ -914,6 +917,22 @@ class TestProject(BaseConfigTest):
         project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.query_comment.comment, "run by user test")
         self.assertEqual(project.query_comment.append, True)
+
+    def test_packages_from_dependencies(self):
+        packages = {
+            "packages_from_dependencies": True,
+            "packages": [
+                {
+                    "git": "{{ env_var('some_package') }}",
+                    "warn-unpinned": True,
+                }
+            ],
+        }
+
+        project = project_from_config_rendered(self.default_project_data, packages)
+        git_package = project.packages.packages[0]
+        # packages did not render because of "packages_from_dependencies" key
+        assert git_package.git == "{{ env_var('some_package') }}"
 
 
 class TestProjectFile(BaseFileTest):

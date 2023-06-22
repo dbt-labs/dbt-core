@@ -353,7 +353,7 @@ metrics:
     type_params:
       measure:
         name: customers
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
     +meta:
         is_okr: True
     tags:
@@ -441,7 +441,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -588,7 +588,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -977,7 +977,7 @@ metrics:
     type_params:
       measure:
         name: years_tenure
-        filter: "loves_dbt is true"
+        filter: "{{dimension('loves_dbt')}} is true"
 
 """
 
@@ -1240,6 +1240,9 @@ marketing_pub_json = """
       "package_name": "marketing",
       "unique_id": "model.marketing.fct_two",
       "relation_name": "\\"dbt\\".\\"test_schema\\".\\"fct_two\\"",
+      "database": "dbt",
+      "schema": "test_schema",
+      "identifier": "fct_two",
       "version": null,
       "latest_version": null,
       "public_node_dependencies": ["model.test.fct_one"],
