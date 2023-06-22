@@ -1843,17 +1843,19 @@ class UninstalledPackagesFoundError(CompilationError):
         self,
         count_packages_specified: int,
         count_packages_installed: int,
+        packages_specified_path: str,
         packages_install_path: str,
     ):
         self.count_packages_specified = count_packages_specified
         self.count_packages_installed = count_packages_installed
+        self.packages_specified_path = packages_specified_path
         self.packages_install_path = packages_install_path
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         msg = (
             f"dbt found {self.count_packages_specified} package(s) "
-            "specified in packages.yml, but only "
+            f"specified in {self.packages_specified_path}, but only "
             f"{self.count_packages_installed} package(s) installed "
             f'in {self.packages_install_path}. Run "dbt deps" to '
             "install package dependencies."

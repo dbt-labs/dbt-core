@@ -12,6 +12,7 @@ from unittest import mock
 import yaml
 
 import dbt.config
+from dbt.constants import DEPENDENCIES_FILE_NAME, PACKAGES_FILE_NAME
 import dbt.exceptions
 import dbt.tracking
 from dbt import flags
@@ -589,7 +590,11 @@ def project_from_config_norender(
 
 
 def project_from_config_rendered(
-    cfg, packages=None, path="/invalid-root-path", verify_version=False
+    cfg,
+    packages=None,
+    path="/invalid-root-path",
+    verify_version=False,
+    packages_specified_path=PACKAGES_FILE_NAME,
 ):
     if packages is None:
         packages = {}
@@ -600,6 +605,7 @@ def project_from_config_rendered(
         selectors_dict={},
         dependent_projects_dict={},
         verify_version=verify_version,
+        packages_specified_path=packages_specified_path,
     )
     return partial.render(empty_project_renderer())
 
@@ -920,7 +926,6 @@ class TestProject(BaseConfigTest):
 
     def test_packages_from_dependencies(self):
         packages = {
-            "packages_from_dependencies": True,
             "packages": [
                 {
                     "git": "{{ env_var('some_package') }}",
@@ -929,9 +934,11 @@ class TestProject(BaseConfigTest):
             ],
         }
 
-        project = project_from_config_rendered(self.default_project_data, packages)
+        project = project_from_config_rendered(
+            self.default_project_data, packages, packages_specified_path=DEPENDENCIES_FILE_NAME
+        )
         git_package = project.packages.packages[0]
-        # packages did not render because of "packages_from_dependencies" key
+        # packages did not render because packages_specified_path=DEPENDENCIES_FILE_NAME
         assert git_package.git == "{{ env_var('some_package') }}"
 
 

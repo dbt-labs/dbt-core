@@ -99,6 +99,10 @@ ext_node_model_sql = """
 select * from {{ ref('marketing', 'fct_one') }}
 """
 
+ext_node_model_sql_modified = """
+select * from {{ ref('marketing', 'fct_three') }}
+"""
+
 
 class TestPublicationArtifact:
     @pytest.fixture(scope="class")
@@ -202,6 +206,14 @@ class TestPublicationArtifacts:
         # test_model_one references a missing public model
         with pytest.raises(TargetNotFoundError):
             manifest = run_dbt(["parse"], publications=publications)
+
+        # With public node changed from fct_one to fct_three, also update test_model_one's reference
+        write_file(
+            ext_node_model_sql_modified, project.project_root, "models", "test_model_one.sql"
+        )
+        manifest = run_dbt(["parse"], publications=publications)
+        # undo test_model_one changes
+        write_file(ext_node_model_sql, project.project_root, "models", "test_model_one.sql")
 
         # Add another public reference
         m_pub_json = m_pub_json.replace("fct_three", "fct_one")
