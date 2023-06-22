@@ -102,9 +102,9 @@ def package_and_project_data_from_root(project_root):
     packages_yml_dict = {}
     dependencies_yml_dict = {}
     if path_exists(package_filepath):
-        packages_yml_dict = _load_yaml(package_filepath)
+        packages_yml_dict = _load_yaml(package_filepath) or {}
     if path_exists(dependencies_filepath):
-        dependencies_yml_dict = _load_yaml(dependencies_filepath)
+        dependencies_yml_dict = _load_yaml(dependencies_filepath) or {}
 
     if "packages" in packages_yml_dict and "packages" in dependencies_yml_dict:
         msg = "The 'packages' key cannot be specified in both packages.yml and dependencies.yml"
@@ -286,6 +286,7 @@ class RenderComponents:
 
 @dataclass
 class PartialProject(RenderComponents):
+    # This class includes the project_dict, packages_dict, selectors_dict, etc from RenderComponents
     profile_name: Optional[str] = field(
         metadata=dict(description="The unrendered profile name in the project, if set")
     )
@@ -317,7 +318,9 @@ class PartialProject(RenderComponents):
     ) -> RenderComponents:
 
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
-        rendered_packages = renderer.render_packages(self.packages_dict)
+        rendered_packages = renderer.render_packages(
+            self.packages_dict, self.packages_specified_path
+        )
         rendered_dependent_projects = renderer.render_dependent_projects(
             self.dependent_projects_dict
         )
@@ -330,7 +333,7 @@ class PartialProject(RenderComponents):
             selectors_dict=rendered_selectors,
         )
 
-    # Called by 'collect_parts' in RuntimeConfig
+    # Called by Project.from_project_root (not PartialProject.from_project_root!)
     def render(self, renderer: DbtProjectYamlRenderer) -> "Project":
         try:
             rendered = self.get_rendered(renderer)
@@ -546,6 +549,7 @@ class PartialProject(RenderComponents):
         project_name = project_dict.get("name")
         profile_name = project_dict.get("profile")
 
+        # Create a PartialProject
         return cls(
             profile_name=profile_name,
             project_name=project_name,
@@ -730,6 +734,9 @@ class Project:
             verify_version=verify_version,
         )
 
+    # Called by:
+    # RtConfig.load_dependencies => RtConfig.load_projects => RtConfig.new_project => Project.from_project_root
+    # RtConfig.from_args => RtConfig.collect_parts => load_project => Project.from_project_root
     @classmethod
     def from_project_root(
         cls,

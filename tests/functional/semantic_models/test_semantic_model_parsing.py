@@ -1,7 +1,11 @@
 import pytest
 
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
+from dbt.tests.util import write_file
+
 
 schema_yml = """models:
   - name: fct_revenue
@@ -57,3 +61,23 @@ class TestSemanticModelParsing:
         assert len(manifest.semantic_nodes) == 1
         semantic_model = manifest.semantic_nodes["semanticmodel.test.revenue"]
         assert semantic_model.node_relation.alias == "fct_revenue"
+
+    @pytest.mark.skip("Restore this test when partial parsing is implemented.")
+    def test_semantic_model_partial_parsing(self, project):
+        # First, use the default schema.yml to define our semantic model, and
+        # run the dbt parse command
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+
+        # Next, modify the default schema.yml to change a detail of the semantic
+        # model.
+        modified_schema_yml = schema_yml.replace("time_granularity: day", "time_granularity: week")
+        write_file(modified_schema_yml, project.project_root, "models", "schema.yml")
+
+        # Now, run the dbt parse command again.
+        result = runner.invoke(["parse"])
+
+        # Finally, verify that the manifest reflects the partially parsed change
+        manifest = result.result
+        semantic_model = manifest.semantic_nodes["semanticmodel.test.revenue"]
+        assert semantic_model.dimensions[0].type_params.time_granularity == TimeGranularity.WEEK

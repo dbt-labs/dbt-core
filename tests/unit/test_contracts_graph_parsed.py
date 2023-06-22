@@ -46,7 +46,7 @@ from dbt import flags
 from argparse import Namespace
 
 from dbt.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import (
     ContractTestCase,
     assert_symmetric,
@@ -153,7 +153,7 @@ def base_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
         "schema": "test_schema",
@@ -260,7 +260,7 @@ def complex_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "deferred": True,
         "description": "My parsed node",
@@ -809,7 +809,7 @@ def base_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "deferred": False,
         "description": "",
@@ -891,7 +891,7 @@ def complex_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "deferred": False,
         "database": "test_db",
         "description": "My parsed node",
@@ -1050,7 +1050,7 @@ def basic_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": []},
         "deferred": False,
         "database": "test_db",
         "description": "",
@@ -1129,7 +1129,7 @@ def complex_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": ["model.test.bar"], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "deferred": False,
         "description": "My parsed node",
@@ -1503,7 +1503,7 @@ def basic_timestamp_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": []},
         "deferred": False,
         "database": "test_db",
         "description": "",
@@ -1651,7 +1651,7 @@ def basic_check_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
-        "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+        "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "deferred": False,
         "description": "",
@@ -2173,7 +2173,6 @@ def basic_parsed_exposure_dict():
         "depends_on": {
             "nodes": [],
             "macros": [],
-            "public_nodes": [],
         },
         "refs": [],
         "sources": [],
@@ -2233,7 +2232,6 @@ def complex_parsed_exposure_dict():
         "depends_on": {
             "nodes": ["models.test.my_model"],
             "macros": [],
-            "public_nodes": [],
         },
         "refs": [],
         "sources": [],
@@ -2359,7 +2357,6 @@ def basic_parsed_metric_dict():
         "depends_on": {
             "nodes": [],
             "macros": [],
-            "public_nodes": [],
         },
     }
 

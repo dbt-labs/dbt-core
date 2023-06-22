@@ -49,7 +49,7 @@ from dbt.graph.selector_methods import (
 )
 import dbt.exceptions
 import dbt.contracts.graph.nodes
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.type_enums import MetricType
 from .utils import replace_config
 
 
@@ -120,7 +120,6 @@ def make_model(
         depends_on=DependsOn(
             nodes=depends_on_nodes,
             macros=depends_on_macros,
-            public_nodes=[],
         ),
         resource_type=NodeType.Model,
         checksum=FileHash.from_contents(""),

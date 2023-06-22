@@ -103,6 +103,9 @@ class TestRetry:
         # Retry with --warn-error, should fail
         run_dbt(["--warn-error", "retry"], expect_pass=False)
 
+    @pytest.mark.skip(
+        "Issue #7831: This test fails intermittently. Further details in issue notes."
+    )
     def test_custom_target(self, project):
         run_dbt(["build", "--select", "second_model"])
         run_dbt(
@@ -134,7 +137,7 @@ class TestRetry:
         )
 
         expected_statuses = {
-            "operation.test.alter_timezone": RunStatus.Error,
+            "macro.test.alter_timezone": RunStatus.Error,
         }
 
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
