@@ -34,7 +34,8 @@ from dbt.contracts.graph.semantic_models import (
     NonAdditiveDimension,
 )
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
-from dbt.context.providers import generate_parse_exposure
+from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
+
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -534,6 +535,19 @@ class SemanticModelParser(YamlReader):
             defaults=unparsed.defaults,
         )
 
+        ctx = generate_parse_semantic_models(
+            parsed,
+            self.root_project,
+            self.schema_parser.manifest,
+            package_name,
+        )
+
+        if parsed.model is not None:
+            model_ref = "{{ " + parsed.model + " }}"
+            # This sets the "refs" in the SemanticModel from the MetricRefResolver in context/providers.py
+            get_rendered(model_ref, ctx, parsed)
+
+        # No ability to disable a semantic model at this time
         self.manifest.add_semantic_model(self.yaml.file, parsed)
 
     def parse(self):

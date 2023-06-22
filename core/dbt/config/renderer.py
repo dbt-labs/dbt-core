@@ -134,8 +134,14 @@ class DbtProjectYamlRenderer(BaseRenderer):
 
     def render_packages(self, packages: Dict[str, Any]):
         """Render the given packages dict"""
+        packages = packages or {}  # Sometimes this is none in tests
         package_renderer = self.get_package_renderer()
-        return package_renderer.render_data(packages)
+        if "packages_from_dependencies" in packages:
+            # We don't want to render the "packages" dictionary that came from dependencies.yml
+            packages.pop("packages_from_dependencies")
+            return packages
+        else:
+            return package_renderer.render_data(packages)
 
     def render_dependent_projects(self, dependent_projects: Dict[str, Any]):
         """This is a no-op to maintain regularity in the interfaces. We don't render dependencies.yml."""

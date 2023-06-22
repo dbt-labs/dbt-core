@@ -6,7 +6,7 @@ from enum import Enum
 import hashlib
 
 from mashumaro.types import SerializableType
-from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator, Protocol
+from typing import Optional, Union, List, Dict, Any, Sequence, Tuple, Iterator
 
 from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
@@ -35,6 +35,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     UnparsedColumn,
 )
+from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.events.functions import warn_or_error
 from dbt.exceptions import ParsingError, ContractBreakingChangeError
@@ -268,15 +269,10 @@ class RelationalNode(HasRelationMetadata):
 @dataclass
 class DependsOn(MacroDependsOn):
     nodes: List[str] = field(default_factory=list)
-    public_nodes: List[str] = field(default_factory=list)
 
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
-
-    def add_public_node(self, value: str):
-        if value not in self.public_nodes:
-            self.public_nodes.append(value)
 
 
 @dataclass
@@ -487,7 +483,7 @@ class ParsedNode(NodeInfoMixin, ParsedNodeMandatory, SerializableType):
         )
 
     @property
-    def is_public_node(self):
+    def is_external_node(self):
         return False
 
 
@@ -553,10 +549,6 @@ class CompiledNode(ParsedNode):
         return self.depends_on.nodes
 
     @property
-    def depends_on_public_nodes(self):
-        return self.depends_on.public_nodes
-
-    @property
     def depends_on_macros(self):
         return self.depends_on.macros
 
@@ -586,6 +578,32 @@ class ModelNode(CompiledNode):
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     defer_relation: Optional[DeferRelation] = None
+
+    @classmethod
+    def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
+        unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
+
+        return cls(
+            resource_type=NodeType.Model,
+            name=args.name,
+            package_name=args.package_name,
+            unique_id=unique_id,
+            fqn=[args.package_name, args.name],
+            version=args.version,
+            latest_version=args.latest_version,
+            relation_name=args.relation_name,
+            database=args.database,
+            schema=args.schema,
+            alias=args.identifier,
+            deprecation_date=args.deprecation_date,
+            checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
+            original_file_path="",
+            path="",
+        )
+
+    @property
+    def is_external_node(self) -> bool:
+        return not self.original_file_path and not self.path
 
     @property
     def is_latest_version(self) -> bool:
@@ -847,10 +865,6 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
 
     @property
     def depends_on_nodes(self):
-        return []
-
-    @property
-    def depends_on_public_nodes(self):
         return []
 
     @property
@@ -1181,10 +1195,6 @@ class SourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         return []
 
     @property
-    def depends_on_public_nodes(self):
-        return []
-
-    @property
     def depends_on(self):
         return DependsOn(macros=[], nodes=[])
 
@@ -1232,10 +1242,6 @@ class Exposure(GraphNode):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
-
-    @property
-    def depends_on_public_nodes(self):
-        return self.depends_on.public_nodes
 
     @property
     def search_name(self):
@@ -1286,6 +1292,10 @@ class Exposure(GraphNode):
             and self.same_config(old)
             and True
         )
+
+    @property
+    def group(self):
+        return None
 
 
 # ====================================
@@ -1376,10 +1386,6 @@ class Metric(GraphNode):
         return self.depends_on.nodes
 
     @property
-    def depends_on_public_nodes(self):
-        return self.depends_on.public_nodes
-
-    @property
     def search_name(self):
         return self.name
 
@@ -1459,6 +1465,7 @@ class NodeRelation(dbtClassMixin):
     alias: str
     schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
     database: Optional[str] = None
+    relation_name: Optional[str] = None
 
 
 @dataclass
@@ -1471,6 +1478,9 @@ class SemanticModel(GraphNode):
     measures: Sequence[Measure] = field(default_factory=list)
     dimensions: Sequence[Dimension] = field(default_factory=list)
     metadata: Optional[SourceFileMetadata] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[RefArgs] = field(default_factory=list)
+    created_at: float = field(default_factory=lambda: time.time())
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:
@@ -1521,6 +1531,14 @@ class SemanticModel(GraphNode):
     def reference(self) -> SemanticModelReference:
         return SemanticModelReference(semantic_model_name=self.name)
 
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def depends_on_macros(self):
+        return self.depends_on.macros
+
 
 # ====================================
 # Patches
@@ -1559,46 +1577,6 @@ class ParsedMacroPatch(ParsedPatch):
 # ====================================
 
 
-class ManifestOrPublicNode(Protocol):
-    name: str
-    package_name: str
-    unique_id: str
-    version: Optional[NodeVersion]
-    latest_version: Optional[NodeVersion]
-    relation_name: str
-    database: Optional[str]
-    schema: Optional[str]
-    identifier: Optional[str]
-
-    @property
-    def is_latest_version(self):
-        pass
-
-    @property
-    def resource_type(self):
-        pass
-
-    @property
-    def access(self):
-        pass
-
-    @property
-    def search_name(self):
-        pass
-
-    @property
-    def is_public_node(self):
-        pass
-
-    @property
-    def is_versioned(self):
-        pass
-
-    @property
-    def alias(self):
-        pass
-
-
 # ManifestNode without SeedNode, which doesn't have the
 # SQL related attributes
 ManifestSQLNode = Union[
@@ -1628,6 +1606,7 @@ GraphMemberNode = Union[
     ResultNode,
     Exposure,
     Metric,
+    SemanticModel,
 ]
 
 # All "nodes" (or node-like objects) in this file
