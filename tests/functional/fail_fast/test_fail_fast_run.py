@@ -1,10 +1,11 @@
+import pytest
 import json
 from pathlib import Path
 
-import pytest
 
-from dbt.contracts.results import RunExecutionResult, NodeStatus
+from dbt.contracts.results import RunResult
 from dbt.tests.util import run_dbt
+
 
 models__one_sql = """
 select 1
@@ -29,19 +30,15 @@ class TestFastFailingDuringRun(FailFastBase):
         models,  # noqa: F811
     ):
         res = run_dbt(["run", "--fail-fast", "--threads", "1"], expect_pass=False)
-
-        assert isinstance(res, RunExecutionResult)
-        assert len(res.results) == 2
-        assert res.results[0].status == NodeStatus.Success
-        assert res.results[1].status == NodeStatus.Error
-
+        # a RunResult contains only one node so we can be sure only one model was run
+        assert type(res) == RunResult
         run_results_file = Path(project.project_root) / "target/run_results.json"
         assert run_results_file.is_file()
         with run_results_file.open() as run_results_str:
             run_results = json.loads(run_results_str.read())
             assert len(run_results["results"]) == 2
-            assert run_results["results"][0]["status"] == NodeStatus.Success
-            assert run_results["results"][1]["status"] == NodeStatus.Error
+            assert run_results["results"][0]["status"] == "success"
+            assert run_results["results"][1]["status"] == "error"
 
 
 class TestFailFastFromConfig(FailFastBase):
@@ -60,7 +57,5 @@ class TestFailFastFromConfig(FailFastBase):
         models,  # noqa: F811
     ):
         res = run_dbt(["run", "--threads", "1"], expect_pass=False)
-        assert isinstance(res, RunExecutionResult)
-        assert len(res.results) == 2
-        assert res.results[0].status == NodeStatus.Success
-        assert res.results[1].status == NodeStatus.Error
+        # a RunResult contains only one node so we can be sure only one model was run
+        assert type(res) == RunResult
