@@ -582,6 +582,8 @@ class ModelNode(CompiledNode):
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
         unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
+        if args.version:
+            unique_id = f"{unique_id}.{args.version}"
 
         return cls(
             resource_type=NodeType.Model,
@@ -599,6 +601,8 @@ class ModelNode(CompiledNode):
             checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
             original_file_path="",
             path="",
+            depends_on=DependsOn(nodes=args.depends_on_nodes),
+            config=NodeConfig(enabled=args.enabled),
         )
 
     @property

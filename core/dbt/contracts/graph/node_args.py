@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from dbt.contracts.graph.unparsed import NodeVersion
 
@@ -17,3 +17,5 @@ class ModelNodeArgs:
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     generated_at: datetime = field(default_factory=datetime.utcnow)
+    depends_on_nodes: List[str] = field(default_factory=list)
+    enabled: bool = True
