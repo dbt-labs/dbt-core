@@ -583,6 +583,13 @@ class ModelNode(CompiledNode):
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
         unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
 
+        # build unrendered config
+        unrendered_config = {}
+        unrendered_config["identifier"] = args.identifier
+        unrendered_config["schema"] = args.schema
+        if args.database:
+            unrendered_config["database"] = args.database
+
         return cls(
             resource_type=NodeType.Model,
             name=args.name,
@@ -599,6 +606,7 @@ class ModelNode(CompiledNode):
             checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
             original_file_path="",
             path="",
+            unrendered_config=unrendered_config,
         )
 
     @property
