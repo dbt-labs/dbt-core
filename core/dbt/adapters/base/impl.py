@@ -384,7 +384,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return {
             self.Relation.create_from(self.config, node).without_identifier()
             for node in manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model)
+            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
         }
 
     def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
