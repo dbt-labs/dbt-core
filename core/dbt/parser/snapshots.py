@@ -3,15 +3,15 @@ from typing import List
 
 from dbt.dataclass_schema import ValidationError
 
-from dbt.contracts.graph.parsed import IntermediateSnapshotNode, ParsedSnapshotNode
-from dbt.exceptions import ParsingException, validator_error_message
+from dbt.contracts.graph.nodes import IntermediateSnapshotNode, SnapshotNode
+from dbt.exceptions import SnapshopConfigError
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
 from dbt.parser.search import BlockContents, BlockSearcher, FileBlock
 from dbt.utils import split_path
 
 
-class SnapshotParser(SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]):
+class SnapshotParser(SQLParser[IntermediateSnapshotNode, SnapshotNode]):
     def parse_from_dict(self, dct, validate=True) -> IntermediateSnapshotNode:
         if validate:
             IntermediateSnapshotNode.validate(dct)
@@ -38,6 +38,8 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]):
         # the target schema must be set if we got here, so overwrite the node's
         # schema
         node.schema = node.config.target_schema
+        # We need to set relation_name again, since database/schema might have changed
+        self._update_node_relation_name(node)
 
         return node
 
@@ -53,7 +55,7 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]):
         fqn.append(name)
         return fqn
 
-    def transform(self, node: IntermediateSnapshotNode) -> ParsedSnapshotNode:
+    def transform(self, node: IntermediateSnapshotNode) -> SnapshotNode:
         try:
             # The config_call_dict is not serialized, because normally
             # it is not needed after parsing. But since the snapshot node
@@ -61,12 +63,12 @@ class SnapshotParser(SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]):
             # the model config when there is also schema config.
             config_call_dict = node.config_call_dict
             dct = node.to_dict(omit_none=True)
-            parsed_node = ParsedSnapshotNode.from_dict(dct)
+            parsed_node = SnapshotNode.from_dict(dct)
             parsed_node.config_call_dict = config_call_dict
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
         except ValidationError as exc:
-            raise ParsingException(validator_error_message(exc), node)
+            raise SnapshopConfigError(exc, node)
 
     def parse_file(self, file_block: FileBlock) -> None:
         blocks = BlockSearcher(

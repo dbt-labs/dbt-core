@@ -1,16 +1,16 @@
 import dataclasses
-import os
 from datetime import datetime
 from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
 from dbt.exceptions import (
-    InternalException,
-    RuntimeException,
-    IncompatibleSchemaException,
+    DbtInternalError,
+    DbtRuntimeError,
+    IncompatibleSchemaError,
 )
 from dbt.version import __version__
-from dbt.events.functions import get_invocation_id
+
+from dbt.events.functions import get_invocation_id, get_metadata_vars
 from dbt.dataclass_schema import dbtClassMixin
 
 from dbt.dataclass_schema import (
@@ -123,7 +123,7 @@ class Readable:
         try:
             data = read_json(path)
         except (EnvironmentError, ValueError) as exc:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 
@@ -147,20 +147,6 @@ class SchemaVersion:
         return BASE_SCHEMAS_URL + self.path
 
 
-SCHEMA_VERSION_KEY = "dbt_schema_version"
-
-
-METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
-
-
-def get_metadata_env() -> Dict[str, str]:
-    return {
-        k[len(METADATA_ENV_PREFIX) :]: v
-        for k, v in os.environ.items()
-        if k.startswith(METADATA_ENV_PREFIX)
-    }
-
-
 # This is used in the ManifestMetadata, RunResultsMetadata, RunOperationResultMetadata,
 # FreshnessMetadata, and CatalogMetadata classes
 @dataclasses.dataclass
@@ -169,7 +155,7 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
-    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_env)
+    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
@@ -200,23 +186,6 @@ def schema_version(name: str, version: int):
     return inner
 
 
-def get_manifest_schema_version(dct: dict) -> int:
-    schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
-    if not schema_version:
-        raise ValueError("Manifest doesn't have schema version")
-    return int(schema_version.split(".")[-2][-1])
-
-
-def upgrade_manifest_json(manifest: dict) -> dict:
-    for node_content in manifest.get("nodes", {}).values():
-        if "raw_sql" in node_content:
-            node_content["raw_code"] = node_content.pop("raw_sql")
-        if "compiled_sql" in node_content:
-            node_content["compiled_code"] = node_content.pop("compiled_sql")
-        node_content["language"] = "sql"
-    return manifest
-
-
 # This is used in the ArtifactMixin and RemoteResult classes
 @dataclasses.dataclass
 class VersionedSchema(dbtClassMixin):
@@ -242,7 +211,7 @@ class VersionedSchema(dbtClassMixin):
         try:
             data = read_json(path)
         except (EnvironmentError, ValueError) as exc:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 
@@ -254,13 +223,19 @@ class VersionedSchema(dbtClassMixin):
                 previous_schema_version = data["metadata"]["dbt_schema_version"]
                 # cls.dbt_schema_version is a SchemaVersion object
                 if not cls.is_compatible_version(previous_schema_version):
-                    raise IncompatibleSchemaException(
+                    raise IncompatibleSchemaError(
                         expected=str(cls.dbt_schema_version),
                         found=previous_schema_version,
                     )
-        if get_manifest_schema_version(data) <= 6:
-            data = upgrade_manifest_json(data)
-        return cls.from_dict(data)  # type: ignore
+
+        return cls.upgrade_schema_version(data)
+
+    @classmethod
+    def upgrade_schema_version(cls, data):
+        """This will modify the data (dictionary) passed in to match the current
+        artifact schema code, if necessary. This is the default method, which
+        just returns the instantiated object via from_dict."""
+        return cls.from_dict(data)
 
 
 T = TypeVar("T", bound="ArtifactMixin")
@@ -279,7 +254,7 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
     def validate(cls, data):
         super().validate(data)
         if cls.dbt_schema_version is None:
-            raise InternalException("Cannot call from_dict with no schema version!")
+            raise DbtInternalError("Cannot call from_dict with no schema version!")
 
 
 class Identifier(ValidatedStringMixin):

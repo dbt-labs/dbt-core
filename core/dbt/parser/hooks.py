@@ -3,8 +3,8 @@ from typing import Iterable, Iterator, Union, List, Tuple
 
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
-from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.exceptions import InternalException
+from dbt.contracts.graph.nodes import HookNode
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType, RunHookType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
@@ -46,7 +46,7 @@ class HookSearcher(Iterable[HookBlock]):
         elif self.hook_type == RunHookType.End:
             hooks = self.project.on_run_end
         else:
-            raise InternalException(
+            raise DbtInternalError(
                 'hook_type must be one of "{}" or "{}" (got {})'.format(
                     RunHookType.Start, RunHookType.End, self.hook_type
                 )
@@ -65,7 +65,7 @@ class HookSearcher(Iterable[HookBlock]):
             )
 
 
-class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
+class HookParser(SimpleParser[HookBlock, HookNode]):
     def transform(self, node):
         return node
 
@@ -81,10 +81,10 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         )
         return path
 
-    def parse_from_dict(self, dct, validate=True) -> ParsedHookNode:
+    def parse_from_dict(self, dct, validate=True) -> HookNode:
         if validate:
-            ParsedHookNode.validate(dct)
-        return ParsedHookNode.from_dict(dct)
+            HookNode.validate(dct)
+        return HookNode.from_dict(dct)
 
     @classmethod
     def get_compiled_path(cls, block: HookBlock):
@@ -98,7 +98,7 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         fqn: List[str],
         name=None,
         **kwargs,
-    ) -> ParsedHookNode:
+    ) -> HookNode:
 
         return super()._create_parsetime_node(
             block=block,

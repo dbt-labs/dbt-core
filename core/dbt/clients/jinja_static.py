@@ -1,6 +1,6 @@
 import jinja2
 from dbt.clients.jinja import get_environment
-from dbt.exceptions import raise_compiler_error
+from dbt.exceptions import MacroNamespaceNotStringError, MacroNameNotStringError
 
 
 def statically_extract_macro_calls(string, ctx, db_wrapper=None):
@@ -15,7 +15,7 @@ def statically_extract_macro_calls(string, ctx, db_wrapper=None):
         if hasattr(func_call, "node") and hasattr(func_call.node, "name"):
             func_name = func_call.node.name
         else:
-            # func_call for dbt_utils.current_timestamp macro
+            # func_call for dbt.current_timestamp macro
             # Call(
             #   node=Getattr(
             #     node=Name(
@@ -117,20 +117,14 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
                     func_name = kwarg.value.value
                     possible_macro_calls.append(func_name)
                 else:
-                    raise_compiler_error(
-                        f"The macro_name parameter ({kwarg.value.value}) "
-                        "to adapter.dispatch was not a string"
-                    )
+                    raise MacroNameNotStringError(kwarg_value=kwarg.value.value)
             elif kwarg.key == "macro_namespace":
                 # This will remain to enable static resolution
                 kwarg_type = type(kwarg.value).__name__
                 if kwarg_type == "Const":
                     macro_namespace = kwarg.value.value
                 else:
-                    raise_compiler_error(
-                        "The macro_namespace parameter to adapter.dispatch "
-                        f"is a {kwarg_type}, not a string"
-                    )
+                    raise MacroNamespaceNotStringError(kwarg_type)
 
     # positional arguments
     if packages_arg:
@@ -147,7 +141,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
         macro = db_wrapper.dispatch(func_name, macro_namespace=macro_namespace).macro
         func_name = f"{macro.package_name}.{macro.name}"
         possible_macro_calls.append(func_name)
-    else:  # this is only for test/unit/test_macro_calls.py
+    else:  # this is only for tests/unit/test_macro_calls.py
         if macro_namespace:
             packages = [macro_namespace]
         else:

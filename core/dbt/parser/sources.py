@@ -1,6 +1,6 @@
 import itertools
 from pathlib import Path
-from typing import Iterable, Dict, Optional, Set, Any
+from typing import Iterable, Dict, Optional, Set, Any, List
 from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
@@ -10,10 +10,10 @@ from dbt.context.context_config import (
 )
 from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.model_config import SourceConfig
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.nodes import (
     UnpatchedSourceDefinition,
-    ParsedSourceDefinition,
-    ParsedGenericTestNode,
+    SourceDefinition,
+    GenericTestNode,
 )
 from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
@@ -24,11 +24,13 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
     Time,
 )
-from dbt.exceptions import warn_or_error, InternalException
+from dbt.events.functions import warn_or_error
+from dbt.events.types import UnusedTables
+from dbt.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 
-from dbt.parser.schemas import SchemaParser, ParserRef
-from dbt import ui
+from dbt.parser.common import ParserRef
+from dbt.parser.schema_generic_tests import SchemaGenericTestParser
 
 
 # An UnparsedSourceDefinition is taken directly from the yaml
@@ -37,7 +39,7 @@ from dbt import ui
 # generate multiple UnpatchedSourceDefinition nodes (one per
 # table) in the SourceParser.add_source_definitions. The
 # SourcePatcher takes an UnparsedSourceDefinition and the
-# SourcePatch and produces a ParsedSourceDefinition. Each
+# SourcePatch and produces a SourceDefinition. Each
 # SourcePatch can be applied to multiple UnpatchedSourceDefinitions.
 class SourcePatcher:
     def __init__(
@@ -47,23 +49,23 @@ class SourcePatcher:
     ) -> None:
         self.root_project = root_project
         self.manifest = manifest
-        self.schema_parsers: Dict[str, SchemaParser] = {}
+        self.generic_test_parsers: Dict[str, SchemaGenericTestParser] = {}
         self.patches_used: Dict[SourceKey, Set[str]] = {}
-        self.sources: Dict[str, ParsedSourceDefinition] = {}
+        self.sources: Dict[str, SourceDefinition] = {}
 
     # This method calls the 'parse_source' method which takes
     # the UnpatchedSourceDefinitions in the manifest and combines them
-    # with SourcePatches to produce ParsedSourceDefinitions.
+    # with SourcePatches to produce SourceDefinitions.
     def construct_sources(self) -> None:
         for unique_id, unpatched in self.manifest.sources.items():
             schema_file = self.manifest.files[unpatched.file_id]
-            if isinstance(unpatched, ParsedSourceDefinition):
-                # In partial parsing, there will be ParsedSourceDefinitions
+            if isinstance(unpatched, SourceDefinition):
+                # In partial parsing, there will be SourceDefinitions
                 # which must be retained.
                 self.sources[unpatched.unique_id] = unpatched
                 continue
             # returns None if there is no patch
-            patch = self.get_patch_for(unpatched)  # type: ignore[unreachable] # CT-564 / GH 5169
+            patch = self.get_patch_for(unpatched)
 
             # returns unpatched if there is no patch
             patched = self.patch_source(unpatched, patch)
@@ -79,7 +81,7 @@ class SourcePatcher:
                 test_from = {"key": "sources", "name": patched.source.name}
                 schema_file.add_test(test.unique_id, test_from)
 
-            # Convert UnpatchedSourceDefinition to a ParsedSourceDefinition
+            # Convert UnpatchedSourceDefinition to a SourceDefinition
             parsed = self.parse_source(patched)
             if parsed.config.enabled:
                 self.sources[unique_id] = parsed
@@ -117,8 +119,8 @@ class SourcePatcher:
         table = UnparsedSourceTableDefinition.from_dict(table_dct)
         return unpatched.replace(source=source, table=table, patch_path=patch_path)
 
-    # This converts an UnpatchedSourceDefinition to a ParsedSourceDefinition
-    def parse_source(self, target: UnpatchedSourceDefinition) -> ParsedSourceDefinition:
+    # This converts an UnpatchedSourceDefinition to a SourceDefinition
+    def parse_source(self, target: UnpatchedSourceDefinition) -> SourceDefinition:
         source = target.source
         table = target.table
         refs = ParserRef.from_target(table)
@@ -141,24 +143,25 @@ class SourcePatcher:
             rendered=True,
         )
 
+        config = config.finalize_and_validate()
+
         unrendered_config = self._generate_source_config(
             target=target,
             rendered=False,
         )
 
         if not isinstance(config, SourceConfig):
-            raise InternalException(
-                f"Calculated a {type(config)} for a source, but expected " f"a SourceConfig"
+            raise DbtInternalError(
+                f"Calculated a {type(config)} for a source, but expected a SourceConfig"
             )
 
         default_database = self.root_project.credentials.database
 
-        parsed_source = ParsedSourceDefinition(
+        parsed_source = SourceDefinition(
             package_name=target.package_name,
             database=(source.database or default_database),
             schema=(source.schema or source.name),
             identifier=(table.identifier or table.name),
-            root_path=target.root_path,
             path=target.path,
             original_file_path=target.original_file_path,
             columns=refs.column_info,
@@ -186,22 +189,20 @@ class SourcePatcher:
         parsed_source.relation_name = self._get_relation_name(parsed_source)
         return parsed_source
 
-    # This code uses the SchemaParser because it shares the '_parse_generic_test'
-    # code. It might be nice to separate out the generic test code
-    # and make it common to the schema parser and source patcher.
-    def get_schema_parser_for(self, package_name: str) -> "SchemaParser":
-        if package_name in self.schema_parsers:
-            schema_parser = self.schema_parsers[package_name]
+    # Use the SchemaGenericTestParser to parse the source tests
+    def get_generic_test_parser_for(self, package_name: str) -> "SchemaGenericTestParser":
+        if package_name in self.generic_test_parsers:
+            generic_test_parser = self.generic_test_parsers[package_name]
         else:
             all_projects = self.root_project.load_dependencies()
             project = all_projects[package_name]
-            schema_parser = SchemaParser(project, self.manifest, self.root_project)
-            self.schema_parsers[package_name] = schema_parser
-        return schema_parser
+            generic_test_parser = SchemaGenericTestParser(
+                project, self.manifest, self.root_project
+            )
+            self.generic_test_parsers[package_name] = generic_test_parser
+        return generic_test_parser
 
-    def get_source_tests(
-        self, target: UnpatchedSourceDefinition
-    ) -> Iterable[ParsedGenericTestNode]:
+    def get_source_tests(self, target: UnpatchedSourceDefinition) -> Iterable[GenericTestNode]:
         for test, column in target.get_tests():
             yield self.parse_source_test(
                 target=target,
@@ -213,8 +214,8 @@ class SourcePatcher:
         self,
         unpatched: UnpatchedSourceDefinition,
     ) -> Optional[SourcePatch]:
-        if isinstance(unpatched, ParsedSourceDefinition):  # type: ignore[unreachable] # CT-564 / GH 5169
-            return None  # type: ignore[unreachable] # CT-564 / GH 5169
+        if isinstance(unpatched, SourceDefinition):
+            return None
         key = (unpatched.package_name, unpatched.source.name)
         patch: Optional[SourcePatch] = self.manifest.source_patches.get(key)
         if patch is None:
@@ -226,13 +227,13 @@ class SourcePatcher:
             self.patches_used[key].add(unpatched.table.name)
         return patch
 
-    # This calls _parse_generic_test in the SchemaParser
+    # This calls parse_generic_test in the SchemaGenericTestParser
     def parse_source_test(
         self,
         target: UnpatchedSourceDefinition,
         test: Dict[str, Any],
         column: Optional[UnparsedColumn],
-    ) -> ParsedGenericTestNode:
+    ) -> GenericTestNode:
         column_name: Optional[str]
         if column is None:
             column_name = None
@@ -247,15 +248,14 @@ class SourcePatcher:
             tags_sources.append(column.tags)
         tags = list(itertools.chain.from_iterable(tags_sources))
 
-        # TODO: make the generic_test code common so we don't need to
-        # create schema parsers to handle the tests
-        schema_parser = self.get_schema_parser_for(target.package_name)
-        node = schema_parser._parse_generic_test(
+        generic_test_parser = self.get_generic_test_parser_for(target.package_name)
+        node = generic_test_parser.parse_generic_test(
             target=target,
             test=test,
             tags=tags,
             column_name=column_name,
             schema_file_id=target.file_id,
+            version=None,
         )
         return node
 
@@ -284,7 +284,7 @@ class SourcePatcher:
             patch_config_dict=precedence_configs,
         )
 
-    def _get_relation_name(self, node: ParsedSourceDefinition):
+    def _get_relation_name(self, node: SourceDefinition):
         adapter = get_adapter(self.root_project)
         relation_cls = adapter.Relation
         return str(relation_cls.create_from(self.root_project, node))
@@ -305,28 +305,27 @@ class SourcePatcher:
                     unused_tables[key] = unused
 
         if unused_tables:
-            msg = self.get_unused_msg(unused_tables)
-            warn_or_error(msg, log_fmt=ui.warning_tag("{}"))
+            unused_tables_formatted = self.get_unused_msg(unused_tables)
+            warn_or_error(UnusedTables(unused_tables=unused_tables_formatted))
 
         self.manifest.source_patches = {}
 
     def get_unused_msg(
         self,
         unused_tables: Dict[SourceKey, Optional[Set[str]]],
-    ) -> str:
-        msg = [
-            "During parsing, dbt encountered source overrides that had no " "target:",
-        ]
+    ) -> List:
+        unused_tables_formatted = []
         for key, table_names in unused_tables.items():
             patch = self.manifest.source_patches[key]
             patch_name = f"{patch.overrides}.{patch.name}"
             if table_names is None:
-                msg.append(f"  - Source {patch_name} (in {patch.path})")
+                unused_tables_formatted.append(f"  - Source {patch_name} (in {patch.path})")
             else:
                 for table_name in sorted(table_names):
-                    msg.append(f"  - Source table {patch_name}.{table_name} " f"(in {patch.path})")
-        msg.append("")
-        return "\n".join(msg)
+                    unused_tables_formatted.append(
+                        f"  - Source table {patch_name}.{table_name} " f"(in {patch.path})"
+                    )
+        return unused_tables_formatted
 
 
 def merge_freshness_time_thresholds(

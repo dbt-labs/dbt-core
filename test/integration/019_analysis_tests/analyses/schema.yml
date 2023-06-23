@@ -1,5 +1,0 @@
-version: 2
-
-analyses:
-  - name: my_analysis
-    description: "This is my analysis"

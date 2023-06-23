@@ -2,54 +2,63 @@ import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
+from enum import Enum
 import time
 from itertools import chain
 from typing import (
-    Optional,
-    Tuple,
-    Callable,
-    Iterable,
-    Type,
-    Dict,
     Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
     List,
     Mapping,
-    Iterator,
-    Union,
+    Optional,
     Set,
+    Tuple,
+    Type,
+    Union,
 )
+
+from dbt.contracts.graph.nodes import ColumnLevelConstraint, ConstraintType, ModelLevelConstraint
 
 import agate
 import pytz
 
 from dbt.exceptions import (
-    raise_database_error,
-    raise_compiler_error,
-    invalid_type_error,
-    get_relation_returned_multiple_results,
-    InternalException,
-    NotImplementedException,
-    RuntimeException,
+    DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
+    MacroArgTypeError,
+    MacroResultError,
+    NotImplementedError,
+    NullRelationCacheAttemptedError,
+    NullRelationDropAttemptedError,
+    QuoteConfigTypeError,
+    RelationReturnedMultipleResultsError,
+    RenameToNoneAttemptedError,
+    SnapshotTargetIncompleteError,
+    SnapshotTargetNotSnapshotTableError,
+    UnexpectedNonTimestampError,
+    UnexpectedNullError,
 )
 
-from dbt.adapters.protocol import (
-    AdapterConfig,
-    ConnectionManagerProtocol,
-)
+from dbt.adapters.protocol import AdapterConfig, ConnectionManagerProtocol
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
-from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
-from dbt.contracts.graph.parsed import ParsedSeedNode
-from dbt.exceptions import warn_or_error
-from dbt.events.functions import fire_event
+from dbt.contracts.graph.nodes import ResultNode
+from dbt.events.functions import fire_event, warn_or_error
 from dbt.events.types import (
     CacheMiss,
     ListRelations,
     CodeExecution,
     CodeExecutionStatus,
+    CatalogGenerationError,
+    ConstraintNotSupported,
+    ConstraintNotEnforced,
 )
-from dbt.utils import filter_null_values, executor
+from dbt.utils import filter_null_values, executor, cast_to_str, AttrDict
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
 from dbt.adapters.base.meta import AdapterMeta, available
@@ -60,19 +69,23 @@ from dbt.adapters.base.relation import (
     SchemaSearchMap,
 )
 from dbt.adapters.base import Column as BaseColumn
-from dbt.adapters.cache import RelationsCache, _make_key
-
-
-SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
-
+from dbt.adapters.base import Credentials
+from dbt.adapters.cache import RelationsCache, _make_ref_key_dict
+from dbt import deprecations
 
 GET_CATALOG_MACRO_NAME = "get_catalog"
 FRESHNESS_MACRO_NAME = "collect_freshness"
 
 
+class ConstraintSupport(str, Enum):
+    ENFORCED = "enforced"
+    NOT_ENFORCED = "not_enforced"
+    NOT_SUPPORTED = "not_supported"
+
+
 def _expect_row_value(key: str, row: agate.Row):
     if key not in row.keys():
-        raise InternalException(
+        raise DbtInternalError(
             'Got a row without "{}" column, columns: {}'.format(key, row.keys())
         )
     return row[key]
@@ -101,18 +114,10 @@ def _utc(dt: Optional[datetime], source: BaseRelation, field_name: str) -> datet
     assume the datetime is already for UTC and add the timezone.
     """
     if dt is None:
-        raise raise_database_error(
-            "Expected a non-null value when querying field '{}' of table "
-            " {} but received value 'null' instead".format(field_name, source)
-        )
+        raise UnexpectedNullError(field_name, source)
 
     elif not hasattr(dt, "tzinfo"):
-        raise raise_database_error(
-            "Expected a timestamp value when querying field '{}' of table "
-            "{} but received value of type '{}' instead".format(
-                field_name, source, type(dt).__name__
-            )
-        )
+        raise UnexpectedNonTimestampError(field_name, source, dt)
 
     elif dt.tzinfo:
         return dt.astimezone(pytz.UTC)
@@ -125,6 +130,35 @@ def _relation_name(rel: Optional[BaseRelation]) -> str:
         return "null relation"
     else:
         return str(rel)
+
+
+def log_code_execution(code_execution_function):
+    # decorator to log code and execution time
+    if code_execution_function.__name__ != "submit_python_job":
+        raise ValueError("this should be only used to log submit_python_job now")
+
+    def execution_with_log(*args):
+        self = args[0]
+        connection_name = self.connections.get_thread_connection().name
+        fire_event(CodeExecution(conn_name=connection_name, code_content=args[2]))
+        start_time = time.time()
+        response = code_execution_function(*args)
+        fire_event(
+            CodeExecutionStatus(
+                status=response._message, elapsed=round((time.time() - start_time), 2)
+            )
+        )
+        return response
+
+    return execution_with_log
+
+
+class PythonJobHelper:
+    def __init__(self, parsed_model: Dict, credential: Credentials) -> None:
+        raise NotImplementedError("PythonJobHelper is not implemented yet")
+
+    def submit(self, compiled_code: str) -> Any:
+        raise NotImplementedError("PythonJobHelper submit function is not implemented yet")
 
 
 class BaseAdapter(metaclass=AdapterMeta):
@@ -153,6 +187,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         - truncate_relation
         - rename_relation
         - get_columns_in_relation
+        - get_column_schema_from_query
         - expand_column_types
         - list_relations_without_caching
         - is_cancelable
@@ -178,6 +213,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
     AdapterSpecificConfigs: Type[AdapterConfig] = AdapterConfig
+
+    CONSTRAINT_SUPPORT = {
+        ConstraintType.check: ConstraintSupport.NOT_SUPPORTED,
+        ConstraintType.not_null: ConstraintSupport.ENFORCED,
+        ConstraintType.unique: ConstraintSupport.NOT_ENFORCED,
+        ConstraintType.primary_key: ConstraintSupport.NOT_ENFORCED,
+        ConstraintType.foreign_key: ConstraintSupport.ENFORCED,
+    }
 
     def __init__(self, config):
         self.config = config
@@ -213,9 +256,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return conn.name
 
     @contextmanager
-    def connection_named(
-        self, name: str, node: Optional[CompileResultNode] = None
-    ) -> Iterator[None]:
+    def connection_named(self, name: str, node: Optional[ResultNode] = None) -> Iterator[None]:
         try:
             if self.connections.query_header is not None:
                 self.connections.query_header.set(name, node)
@@ -227,13 +268,13 @@ class BaseAdapter(metaclass=AdapterMeta):
                 self.connections.query_header.reset()
 
     @contextmanager
-    def connection_for(self, node: CompileResultNode) -> Iterator[None]:
+    def connection_for(self, node: ResultNode) -> Iterator[None]:
         with self.connection_named(node.unique_id, node):
             yield
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
+        self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
     ) -> Tuple[AdapterResponse, agate.Table]:
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
@@ -242,10 +283,24 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
+        :param Optional[int] limit: If set, only fetch n number of rows
         :return: A tuple of the query status and results (empty if fetch=False).
         :rtype: Tuple[AdapterResponse, agate.Table]
         """
-        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
+        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch, limit=limit)
+
+    @available.parse(lambda *a, **k: [])
+    def get_column_schema_from_query(self, sql: str) -> List[BaseColumn]:
+        """Get a list of the Columns with names and data types from the given sql."""
+        _, cursor = self.connections.add_select_query(sql)
+        columns = [
+            self.Column.create(
+                column_name, self.connections.data_type_code_to_name(column_type_code)
+            )
+            # https://peps.python.org/pep-0249/#description
+            for column_name, column_type_code, *_ in cursor.description
+        ]
+        return columns
 
     @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(self, table: str) -> Tuple[agate.Table]:
@@ -313,7 +368,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             fire_event(
                 CacheMiss(
                     conn_name=self.nice_connection_name(),
-                    database=database,
+                    database=cast_to_str(database),
                     schema=schema,
                 )
             )
@@ -329,7 +384,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return {
             self.Relation.create_from(self.config, node).without_identifier()
             for node in manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model)
+            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
         }
 
     def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
@@ -342,7 +397,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        nodes: Iterator[CompileResultNode] = chain(
+        nodes: Iterator[ResultNode] = chain(
             [
                 node
                 for node in manifest.nodes.values()
@@ -360,7 +415,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return info_schema_name_map
 
     def _relations_cache_for_schemas(
-        self, manifest: Manifest, cache_schemas: Set[BaseRelation] = None
+        self, manifest: Manifest, cache_schemas: Optional[Set[BaseRelation]] = None
     ) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
@@ -396,7 +451,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self,
         manifest: Manifest,
         clear: bool = False,
-        required_schemas: Set[BaseRelation] = None,
+        required_schemas: Optional[Set[BaseRelation]] = None,
     ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
@@ -411,7 +466,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
             name = self.nice_connection_name()
-            raise_compiler_error("Attempted to cache a null relation for {}".format(name))
+            raise NullRelationCacheAttemptedError(name)
         self.cache.add(relation)
         # so jinja doesn't render things
         return ""
@@ -423,7 +478,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         if relation is None:
             name = self.nice_connection_name()
-            raise_compiler_error("Attempted to drop a null relation for {}".format(name))
+            raise NullRelationDropAttemptedError(name)
         self.cache.drop(relation)
         return ""
 
@@ -440,9 +495,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             name = self.nice_connection_name()
             src_name = _relation_name(from_relation)
             dst_name = _relation_name(to_relation)
-            raise_compiler_error(
-                "Attempted to rename {} to {} for {}".format(src_name, dst_name, name)
-            )
+            raise RenameToNoneAttemptedError(src_name, dst_name, name)
 
         self.cache.rename(from_relation, to_relation)
         return ""
@@ -454,12 +507,12 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
-        raise NotImplementedException("`date_function` is not implemented for this adapter!")
+        raise NotImplementedError("`date_function` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
     def is_cancelable(cls) -> bool:
-        raise NotImplementedException("`is_cancelable` is not implemented for this adapter!")
+        raise NotImplementedError("`is_cancelable` is not implemented for this adapter!")
 
     ###
     # Abstract methods about schemas
@@ -467,7 +520,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractmethod
     def list_schemas(self, database: str) -> List[str]:
         """Get a list of existing schemas in database"""
-        raise NotImplementedException("`list_schemas` is not implemented for this adapter!")
+        raise NotImplementedError("`list_schemas` is not implemented for this adapter!")
 
     @available.parse(lambda *a, **k: False)
     def check_schema_exists(self, database: str, schema: str) -> bool:
@@ -490,13 +543,13 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         *Implementors must call self.cache.drop() to preserve cache state!*
         """
-        raise NotImplementedException("`drop_relation` is not implemented for this adapter!")
+        raise NotImplementedError("`drop_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
     def truncate_relation(self, relation: BaseRelation) -> None:
         """Truncate the given relation."""
-        raise NotImplementedException("`truncate_relation` is not implemented for this adapter!")
+        raise NotImplementedError("`truncate_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
@@ -505,15 +558,13 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         Implementors must call self.cache.rename() to preserve cache state.
         """
-        raise NotImplementedException("`rename_relation` is not implemented for this adapter!")
+        raise NotImplementedError("`rename_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_list
     def get_columns_in_relation(self, relation: BaseRelation) -> List[BaseColumn]:
         """Get a list of the columns in the given Relation."""
-        raise NotImplementedException(
-            "`get_columns_in_relation` is not implemented for this adapter!"
-        )
+        raise NotImplementedError("`get_columns_in_relation` is not implemented for this adapter!")
 
     @available.deprecated("get_columns_in_relation", lambda *a, **k: [])
     def get_columns_in_table(self, schema: str, identifier: str) -> List[BaseColumn]:
@@ -535,7 +586,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param self.Relation current: A relation that currently exists in the
             database with columns of unspecified types.
         """
-        raise NotImplementedException(
+        raise NotImplementedError(
             "`expand_target_column_types` is not implemented for this adapter!"
         )
 
@@ -550,8 +601,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         :return: The relations in schema
         :rtype: List[self.Relation]
         """
-        raise NotImplementedException(
-            "`list_relations_without_caching` is not implemented for this " "adapter!"
+        raise NotImplementedError(
+            "`list_relations_without_caching` is not implemented for this adapter!"
         )
 
     ###
@@ -592,7 +643,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         to_relation.
         """
         if not isinstance(from_relation, self.Relation):
-            invalid_type_error(
+            raise MacroArgTypeError(
                 method_name="get_missing_columns",
                 arg_name="from_relation",
                 got_value=from_relation,
@@ -600,7 +651,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             )
 
         if not isinstance(to_relation, self.Relation):
-            invalid_type_error(
+            raise MacroArgTypeError(
                 method_name="get_missing_columns",
                 arg_name="to_relation",
                 got_value=to_relation,
@@ -621,11 +672,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         expected columns.
 
         :param Relation relation: The relation to check
-        :raises CompilationException: If the columns are
+        :raises InvalidMacroArgType: If the columns are
             incorrect.
         """
         if not isinstance(relation, self.Relation):
-            invalid_type_error(
+            raise MacroArgTypeError(
                 method_name="valid_snapshot_target",
                 arg_name="relation",
                 got_value=relation,
@@ -646,24 +697,16 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         if missing:
             if extra:
-                msg = (
-                    'Snapshot target has ("{}") but not ("{}") - is it an '
-                    "unmigrated previous version archive?".format(
-                        '", "'.join(extra), '", "'.join(missing)
-                    )
-                )
+                raise SnapshotTargetIncompleteError(extra, missing)
             else:
-                msg = 'Snapshot target is not a snapshot table (missing "{}")'.format(
-                    '", "'.join(missing)
-                )
-            raise_compiler_error(msg)
+                raise SnapshotTargetNotSnapshotTableError(missing)
 
     @available.parse_none
     def expand_target_column_types(
         self, from_relation: BaseRelation, to_relation: BaseRelation
     ) -> None:
         if not isinstance(from_relation, self.Relation):
-            invalid_type_error(
+            raise MacroArgTypeError(
                 method_name="expand_target_column_types",
                 arg_name="from_relation",
                 got_value=from_relation,
@@ -671,7 +714,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             )
 
         if not isinstance(to_relation, self.Relation):
-            invalid_type_error(
+            raise MacroArgTypeError(
                 method_name="expand_target_column_types",
                 arg_name="to_relation",
                 got_value=to_relation,
@@ -694,11 +737,23 @@ class BaseAdapter(metaclass=AdapterMeta):
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
         relations = self.list_relations_without_caching(schema_relation)
+
+        # if the cache is already populated, add this schema in
+        # otherwise, skip updating the cache and just ignore
+        if self.cache:
+            for relation in relations:
+                self.cache.add(relation)
+            if not relations:
+                # it's possible that there were no relations in some schemas. We want
+                # to insert the schemas we query into the cache's `.schemas` attribute
+                # so we can check it later
+                self.cache.update_schemas([(database, schema)])
+
         fire_event(
             ListRelations(
-                database=database,
+                database=cast_to_str(database),
                 schema=schema,
-                relations=[_make_key(x) for x in relations],
+                relations=[_make_ref_key_dict(x) for x in relations],
             )
         )
 
@@ -753,7 +808,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 "schema": schema,
                 "database": database,
             }
-            get_relation_returned_multiple_results(kwargs, matches)
+            raise RelationReturnedMultipleResultsError(kwargs, matches)
 
         elif matches:
             return matches[0]
@@ -775,20 +830,20 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse_none
     def create_schema(self, relation: BaseRelation):
         """Create the given schema if it does not exist."""
-        raise NotImplementedException("`create_schema` is not implemented for this adapter!")
+        raise NotImplementedError("`create_schema` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
     def drop_schema(self, relation: BaseRelation):
         """Drop the given schema (and everything in it) if it exists."""
-        raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
+        raise NotImplementedError("`drop_schema` is not implemented for this adapter!")
 
     @available
     @classmethod
     @abc.abstractmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
-        raise NotImplementedException("`quote` is not implemented for this adapter!")
+        raise NotImplementedError("`quote` is not implemented for this adapter!")
 
     @available
     def quote_as_configured(self, identifier: str, quote_key: str) -> str:
@@ -817,10 +872,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         elif quote_config is None:
             pass
         else:
-            raise_compiler_error(
-                f'The seed configuration value of "quote_columns" has an '
-                f"invalid type {type(quote_config)}"
-            )
+            raise QuoteConfigTypeError(quote_config)
 
         if quote_columns:
             return self.quote(column)
@@ -841,7 +893,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_text_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_text_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -853,7 +905,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_number_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_number_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -865,9 +917,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            "`convert_boolean_type` is not implemented for this adapter!"
-        )
+        raise NotImplementedError("`convert_boolean_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -879,9 +929,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            "`convert_datetime_type` is not implemented for this adapter!"
-        )
+        raise NotImplementedError("`convert_datetime_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -893,7 +941,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_date_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_date_type` is not implemented for this adapter!")
 
     @classmethod
     @abc.abstractmethod
@@ -905,7 +953,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException("`convert_time_type` is not implemented for this adapter!")
+        raise NotImplementedError("`convert_time_type` is not implemented for this adapter!")
 
     @available
     @classmethod
@@ -938,9 +986,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         manifest: Optional[Manifest] = None,
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
-        kwargs: Dict[str, Any] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
         text_only_columns: Optional[Iterable[str]] = None,
-    ) -> agate.Table:
+    ) -> AttrDict:
         """Look macro_name up in the manifest and execute its results.
 
         :param macro_name: The name of the macro to execute.
@@ -972,7 +1020,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             else:
                 package_name = 'the "{}" package'.format(project)
 
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 'dbt could not find a macro with the name "{}" in {}'.format(
                     macro_name, package_name
                 )
@@ -1025,7 +1073,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             manifest=manifest,
         )
 
-        results = self._catalog_filter_table(table, manifest)
+        results = self._catalog_filter_table(table, manifest)  # type: ignore[arg-type]
         return results
 
     def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
@@ -1057,7 +1105,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         loaded_at_field: str,
         filter: Optional[str],
         manifest: Optional[Manifest] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Optional[AdapterResponse], Dict[str, Any]]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
             "source": source,
@@ -1066,15 +1114,23 @@ class BaseAdapter(metaclass=AdapterMeta):
         }
 
         # run the macro
-        table = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
+        # in older versions of dbt-core, the 'collect_freshness' macro returned the table of results directly
+        # starting in v1.5, by default, we return both the table and the adapter response (metadata about the query)
+        result: Union[
+            AttrDict,  # current: contains AdapterResponse + agate.Table
+            agate.Table,  # previous: just table
+        ]
+        result = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
+        if isinstance(result, agate.Table):
+            deprecations.warn("collect-freshness-return-signature")
+            adapter_response = None
+            table = result
+        else:
+            adapter_response, table = result.response, result.table  # type: ignore[attr-defined]
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
-            raise_compiler_error(
-                'Got an invalid result from "{}" macro: {}'.format(
-                    FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
-                )
-            )
+            raise MacroResultError(FRESHNESS_MACRO_NAME, table)
         if table[0][0] is None:
             # no records in the table, so really the max_loaded_at was
             # infinitely long ago. Just call it 0:00 January 1 year UTC
@@ -1084,11 +1140,12 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         snapshotted_at = _utc(table[0][1], source, loaded_at_field)
         age = (snapshotted_at - max_loaded_at).total_seconds()
-        return {
+        freshness = {
             "max_loaded_at": max_loaded_at,
             "snapshotted_at": snapshotted_at,
             "age": age,
         }
+        return adapter_response, freshness
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Any:
         """A hook for running some operation before the model materialization
@@ -1151,7 +1208,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         elif location == "prepend":
             return f"'{value}' || {add_to}"
         else:
-            raise RuntimeException(f'Got an unexpected location value of "{location}"')
+            raise DbtRuntimeError(f'Got an unexpected location value of "{location}"')
 
     def get_rows_different_sql(
         self,
@@ -1182,9 +1239,36 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return sql
 
-    @available.parse_none
-    def submit_python_job(self, parsed_model: dict, compiled_code: str):
-        raise NotImplementedException("`submit_python_job` is not implemented for this adapter!")
+    @property
+    def python_submission_helpers(self) -> Dict[str, Type[PythonJobHelper]]:
+        raise NotImplementedError("python_submission_helpers is not specified")
+
+    @property
+    def default_python_submission_method(self) -> str:
+        raise NotImplementedError("default_python_submission_method is not specified")
+
+    @log_code_execution
+    def submit_python_job(self, parsed_model: dict, compiled_code: str) -> AdapterResponse:
+        submission_method = parsed_model["config"].get(
+            "submission_method", self.default_python_submission_method
+        )
+        if submission_method not in self.python_submission_helpers:
+            raise NotImplementedError(
+                "Submission method {} is not supported for current adapter".format(
+                    submission_method
+                )
+            )
+        job_helper = self.python_submission_helpers[submission_method](
+            parsed_model, self.connections.profile.credentials
+        )
+        submission_result = job_helper.submit(compiled_code)
+        # process submission result to generate adapter response
+        return self.generate_python_submission_response(submission_result)
+
+    def generate_python_submission_response(self, submission_result: Any) -> AdapterResponse:
+        raise NotImplementedError(
+            "Your adapter need to implement generate_python_submission_response"
+        )
 
     def valid_incremental_strategies(self):
         """The set of standard builtin strategies which this adapter supports out-of-the-box.
@@ -1206,7 +1290,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         valid_strategies.append("default")
         builtin_strategies = self.builtin_incremental_strategies()
         if strategy in builtin_strategies and strategy not in valid_strategies:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f"The incremental strategy '{strategy}' is not valid for this adapter"
             )
 
@@ -1214,7 +1298,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         macro_name = f"get_incremental_{strategy}_sql"
         # The model_context should have MacroGenerator callable objects for all macros
         if macro_name not in model_context:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 'dbt could not find an incremental strategy macro with the name "{}" in {}'.format(
                     macro_name, self.config.project_name
                 )
@@ -1222,6 +1306,119 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         # This returns a callable macro
         return model_context[macro_name]
+
+    @classmethod
+    def _parse_column_constraint(cls, raw_constraint: Dict[str, Any]) -> ColumnLevelConstraint:
+        try:
+            ColumnLevelConstraint.validate(raw_constraint)
+            return ColumnLevelConstraint.from_dict(raw_constraint)
+        except Exception:
+            raise DbtValidationError(f"Could not parse constraint: {raw_constraint}")
+
+    @classmethod
+    def render_column_constraint(cls, constraint: ColumnLevelConstraint) -> Optional[str]:
+        """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
+        rendering."""
+        constraint_expression = constraint.expression or ""
+
+        rendered_column_constraint = None
+        if constraint.type == ConstraintType.check and constraint_expression:
+            rendered_column_constraint = f"check ({constraint_expression})"
+        elif constraint.type == ConstraintType.not_null:
+            rendered_column_constraint = f"not null {constraint_expression}"
+        elif constraint.type == ConstraintType.unique:
+            rendered_column_constraint = f"unique {constraint_expression}"
+        elif constraint.type == ConstraintType.primary_key:
+            rendered_column_constraint = f"primary key {constraint_expression}"
+        elif constraint.type == ConstraintType.foreign_key and constraint_expression:
+            rendered_column_constraint = f"references {constraint_expression}"
+        elif constraint.type == ConstraintType.custom and constraint_expression:
+            rendered_column_constraint = constraint_expression
+
+        if rendered_column_constraint:
+            rendered_column_constraint = rendered_column_constraint.strip()
+
+        return rendered_column_constraint
+
+    @available
+    @classmethod
+    def render_raw_columns_constraints(cls, raw_columns: Dict[str, Dict[str, Any]]) -> List:
+        rendered_column_constraints = []
+
+        for v in raw_columns.values():
+            col_name = cls.quote(v["name"]) if v.get("quote") else v["name"]
+            rendered_column_constraint = [f"{col_name} {v['data_type']}"]
+            for con in v.get("constraints", None):
+                constraint = cls._parse_column_constraint(con)
+                c = cls.process_parsed_constraint(constraint, cls.render_column_constraint)
+                if c is not None:
+                    rendered_column_constraint.append(c)
+            rendered_column_constraints.append(" ".join(rendered_column_constraint))
+
+        return rendered_column_constraints
+
+    @classmethod
+    def process_parsed_constraint(
+        cls, parsed_constraint: Union[ColumnLevelConstraint, ModelLevelConstraint], render_func
+    ) -> Optional[str]:
+        if (
+            parsed_constraint.warn_unsupported
+            and cls.CONSTRAINT_SUPPORT[parsed_constraint.type] == ConstraintSupport.NOT_SUPPORTED
+        ):
+            warn_or_error(
+                ConstraintNotSupported(constraint=parsed_constraint.type.value, adapter=cls.type())
+            )
+        if (
+            parsed_constraint.warn_unenforced
+            and cls.CONSTRAINT_SUPPORT[parsed_constraint.type] == ConstraintSupport.NOT_ENFORCED
+        ):
+            warn_or_error(
+                ConstraintNotEnforced(constraint=parsed_constraint.type.value, adapter=cls.type())
+            )
+        if cls.CONSTRAINT_SUPPORT[parsed_constraint.type] != ConstraintSupport.NOT_SUPPORTED:
+            return render_func(parsed_constraint)
+
+        return None
+
+    @classmethod
+    def _parse_model_constraint(cls, raw_constraint: Dict[str, Any]) -> ModelLevelConstraint:
+        try:
+            ModelLevelConstraint.validate(raw_constraint)
+            c = ModelLevelConstraint.from_dict(raw_constraint)
+            return c
+        except Exception:
+            raise DbtValidationError(f"Could not parse constraint: {raw_constraint}")
+
+    @available
+    @classmethod
+    def render_raw_model_constraints(cls, raw_constraints: List[Dict[str, Any]]) -> List[str]:
+        return [c for c in map(cls.render_raw_model_constraint, raw_constraints) if c is not None]
+
+    @classmethod
+    def render_raw_model_constraint(cls, raw_constraint: Dict[str, Any]) -> Optional[str]:
+        constraint = cls._parse_model_constraint(raw_constraint)
+        return cls.process_parsed_constraint(constraint, cls.render_model_constraint)
+
+    @classmethod
+    def render_model_constraint(cls, constraint: ModelLevelConstraint) -> Optional[str]:
+        """Render the given constraint as DDL text. Should be overriden by adapters which need custom constraint
+        rendering."""
+        constraint_prefix = f"constraint {constraint.name} " if constraint.name else ""
+        column_list = ", ".join(constraint.columns)
+        if constraint.type == ConstraintType.check and constraint.expression:
+            return f"{constraint_prefix}check ({constraint.expression})"
+        elif constraint.type == ConstraintType.unique:
+            constraint_expression = f" {constraint.expression}" if constraint.expression else ""
+            return f"{constraint_prefix}unique{constraint_expression} ({column_list})"
+        elif constraint.type == ConstraintType.primary_key:
+            constraint_expression = f" {constraint.expression}" if constraint.expression else ""
+            return f"{constraint_prefix}primary key{constraint_expression} ({column_list})"
+        elif constraint.type == ConstraintType.foreign_key and constraint.expression:
+            return f"{constraint_prefix}foreign key ({column_list}) references {constraint.expression}"
+        elif constraint.type == ConstraintType.custom and constraint.expression:
+            return f"{constraint_prefix}{constraint.expression}"
+        else:
+            return None
 
 
 COLUMNS_EQUAL_SQL = """
@@ -1270,28 +1467,7 @@ def catch_as_completed(
         elif isinstance(exc, KeyboardInterrupt) or not isinstance(exc, Exception):
             raise exc
         else:
-            warn_or_error(f"Encountered an error while generating catalog: {str(exc)}")
+            warn_or_error(CatalogGenerationError(exc=str(exc)))
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions
-
-
-def log_code_execution(code_execution_function):
-    # decorator to log code and execution time
-    if code_execution_function.__name__ != "submit_python_job":
-        raise ValueError("this should be only used to log submit_python_job now")
-
-    def execution_with_log(*args):
-        self = args[0]
-        connection_name = self.connections.get_thread_connection().name
-        fire_event(CodeExecution(conn_name=connection_name, code_content=args[2]))
-        start_time = time.time()
-        response = code_execution_function(*args)
-        fire_event(
-            CodeExecutionStatus(
-                status=response._message, elapsed=round((time.time() - start_time), 2)
-            )
-        )
-        return response
-
-    return execution_with_log

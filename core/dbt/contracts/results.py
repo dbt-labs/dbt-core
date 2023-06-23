@@ -1,6 +1,5 @@
-from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.graph.unparsed import FreshnessThreshold
-from dbt.contracts.graph.parsed import ParsedSourceDefinition
+from dbt.contracts.graph.nodes import SourceDefinition, ResultNode
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
@@ -8,14 +7,13 @@ from dbt.contracts.util import (
     Replaceable,
     schema_version,
 )
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 from dbt.events.functions import fire_event
 from dbt.events.types import TimingInfoCollected
-from dbt.logger import (
-    TimingProcessor,
-    JsonOnly,
-)
-from dbt.utils import lowercase
+from dbt.events.contextvars import get_node_info
+from dbt.events.helpers import datetime_to_json_string
+from dbt.logger import TimingProcessor
+from dbt.utils import lowercase, cast_to_str, cast_to_int
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 import agate
@@ -23,13 +21,14 @@ import agate
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
-    Union,
+    Any,
+    Callable,
     Dict,
     List,
-    Optional,
-    Any,
     NamedTuple,
+    Optional,
     Sequence,
+    Union,
 )
 
 from dbt.clients.system import write_json
@@ -47,19 +46,34 @@ class TimingInfo(dbtClassMixin):
     def end(self):
         self.completed_at = datetime.utcnow()
 
+    def to_msg_dict(self):
+        msg_dict = {"name": self.name}
+        if self.started_at:
+            msg_dict["started_at"] = datetime_to_json_string(self.started_at)
+        if self.completed_at:
+            msg_dict["completed_at"] = datetime_to_json_string(self.completed_at)
+        return msg_dict
 
+
+# This is a context manager
 class collect_timing_info:
-    def __init__(self, name: str):
+    def __init__(self, name: str, callback: Callable[[TimingInfo], None]):
         self.timing_info = TimingInfo(name=name)
+        self.callback = callback
 
     def __enter__(self):
         self.timing_info.begin()
-        return self.timing_info
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
-        with JsonOnly(), TimingProcessor(self.timing_info):
-            fire_event(TimingInfoCollected())
+        self.callback(self.timing_info)
+        # Note: when legacy logger is removed, we can remove the following line
+        with TimingProcessor(self.timing_info):
+            fire_event(
+                TimingInfoCollected(
+                    timing_info=self.timing_info.to_msg_dict(), node_info=get_node_info()
+                )
+            )
 
 
 class RunningStatus(StrEnum):
@@ -119,10 +133,22 @@ class BaseResult(dbtClassMixin):
             data["failures"] = None
         return data
 
+    def to_msg_dict(self):
+        msg_dict = {
+            "status": str(self.status),
+            "message": cast_to_str(self.message),
+            "thread": self.thread_id,
+            "execution_time": self.execution_time,
+            "num_failures": cast_to_int(self.failures),
+            "timing_info": [ti.to_msg_dict() for ti in self.timing],
+            "adapter_response": self.adapter_response,
+        }
+        return msg_dict
+
 
 @dataclass
 class NodeResult(BaseResult):
-    node: CompileResultNode
+    node: ResultNode
 
 
 @dataclass
@@ -208,7 +234,9 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         generated_at: datetime,
         args: Dict,
     ):
-        processed_results = [process_run_result(result) for result in results]
+        processed_results = [
+            process_run_result(result) for result in results if isinstance(result, RunResult)
+        ]
         meta = RunResultsMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
@@ -219,47 +247,13 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         write_json(path, self.to_dict(omit_none=False))
 
 
-@dataclass
-class RunOperationResult(ExecutionResult):
-    success: bool
-
-
-@dataclass
-class RunOperationResultMetadata(BaseArtifactMetadata):
-    dbt_schema_version: str = field(
-        default_factory=lambda: str(RunOperationResultsArtifact.dbt_schema_version)
-    )
-
-
-@dataclass
-@schema_version("run-operation-result", 1)
-class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
-    @classmethod
-    def from_success(
-        cls,
-        success: bool,
-        elapsed_time: float,
-        generated_at: datetime,
-    ):
-        meta = RunOperationResultMetadata(
-            dbt_schema_version=str(cls.dbt_schema_version),
-            generated_at=generated_at,
-        )
-        return cls(
-            metadata=meta,
-            results=[],
-            elapsed_time=elapsed_time,
-            success=success,
-        )
-
-
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
 
 
 @dataclass
 class SourceFreshnessResult(NodeResult):
-    node: ParsedSourceDefinition
+    node: SourceDefinition
     status: FreshnessStatus
     max_loaded_at: datetime
     snapshotted_at: datetime
@@ -319,15 +313,15 @@ def process_freshness_result(result: FreshnessNodeResult) -> FreshnessNodeOutput
 
     # we know that this must be a SourceFreshnessResult
     if not isinstance(result, SourceFreshnessResult):
-        raise InternalException(
+        raise DbtInternalError(
             "Got {} instead of a SourceFreshnessResult for a "
             "non-error result in freshness execution!".format(type(result))
         )
     # if we're here, we must have a non-None freshness threshold
     criteria = result.node.freshness
     if criteria is None:
-        raise InternalException(
-            "Somehow evaluated a freshness result for a source " "that has no freshness criteria!"
+        raise DbtInternalError(
+            "Somehow evaluated a freshness result for a source that has no freshness criteria!"
         )
     return SourceFreshnessOutput(
         unique_id=unique_id,
@@ -364,6 +358,9 @@ class FreshnessResult(ExecutionResult):
     ):
         meta = FreshnessMetadata(generated_at=generated_at)
         return cls(metadata=meta, results=results, elapsed_time=elapsed_time)
+
+    def write(self, path):
+        FreshnessExecutionResultArtifact.from_result(self).write(path)
 
 
 @dataclass

@@ -2,13 +2,14 @@ import os
 import shutil
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Set
+import agate
 
 from dbt.dataclass_schema import ValidationError
 
 from .compile import CompileTask
 
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus,
@@ -22,7 +23,7 @@ from dbt.contracts.results import (
     ColumnMetadata,
     CatalogArtifact,
 )
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError, AmbiguousCatalogMatchError
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -31,7 +32,7 @@ from dbt.events.types import (
     CannotGenerateDocs,
     BuildingCatalog,
 )
-from dbt.parser.manifest import ManifestLoader
+from dbt.parser.manifest import write_manifest
 import dbt.utils
 import dbt.compilation
 import dbt.exceptions
@@ -81,7 +82,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                 str(data["table_name"]),
             )
         except KeyError as exc:
-            raise dbt.exceptions.CompilationException(
+            raise dbt.exceptions.CompilationError(
                 "Catalog information missing required key {} (got {})".format(exc, data)
             )
         table: CatalogTable
@@ -119,7 +120,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
                 if unique_id in sources:
-                    dbt.exceptions.raise_ambiguous_catalog_match(
+                    raise AmbiguousCatalogMatchError(
                         unique_id,
                         sources[unique_id].to_dict(omit_none=True),
                         table.to_dict(omit_none=True),
@@ -174,7 +175,7 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
     return stats_collector
 
 
-def mapping_key(node: CompileResultNode) -> CatalogKey:
+def mapping_key(node: ResultNode) -> CatalogKey:
     dkey = dbt.utils.lowercase(node.database)
     return CatalogKey(dkey, node.schema.lower(), node.identifier.lower())
 
@@ -199,11 +200,6 @@ def get_unique_id_mapping(
 
 
 class GenerateTask(CompileTask):
-    def _get_manifest(self) -> Manifest:
-        if self.manifest is None:
-            raise InternalException("manifest should not be None in _get_manifest")
-        return self.manifest
-
     def run(self) -> CatalogArtifact:
         compile_results = None
         if self.args.compile:
@@ -217,13 +213,13 @@ class GenerateTask(CompileTask):
                     errors=None,
                     compile_results=compile_results,
                 )
-        else:
-            self.manifest = ManifestLoader.get_full_manifest(self.config)
 
-        shutil.copyfile(DOCS_INDEX_FILE_PATH, os.path.join(self.config.target_path, "index.html"))
+        shutil.copyfile(
+            DOCS_INDEX_FILE_PATH, os.path.join(self.config.project_target_path, "index.html")
+        )
 
         for asset_path in self.config.asset_paths:
-            to_asset_path = os.path.join(self.config.target_path, asset_path)
+            to_asset_path = os.path.join(self.config.project_target_path, asset_path)
 
             if os.path.exists(to_asset_path):
                 shutil.rmtree(to_asset_path)
@@ -232,12 +228,16 @@ class GenerateTask(CompileTask):
                 shutil.copytree(asset_path, to_asset_path)
 
         if self.manifest is None:
-            raise InternalException("self.manifest was None in run!")
+            raise DbtInternalError("self.manifest was None in run!")
 
-        adapter = get_adapter(self.config)
-        with adapter.connection_named("generate_catalog"):
-            fire_event(BuildingCatalog())
-            catalog_table, exceptions = adapter.get_catalog(self.manifest)
+        if self.args.empty_catalog:
+            catalog_table: agate.Table = agate.Table([])
+            exceptions: List[Exception] = []
+        else:
+            adapter = get_adapter(self.config)
+            with adapter.connection_named("generate_catalog"):
+                fire_event(BuildingCatalog())
+                catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
@@ -259,10 +259,10 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
-        path = os.path.join(self.config.target_path, CATALOG_FILENAME)
+        path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
         results.write(path)
         if self.args.compile:
-            self.write_manifest()
+            write_manifest(self.manifest, self.config.project_target_path)
 
         if exceptions:
             fire_event(WriteCatalogFailure(num_exceptions=len(exceptions)))
@@ -285,6 +285,7 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
+    @classmethod
     def interpret_results(self, results: Optional[CatalogResults]) -> bool:
         if results is None:
             return False

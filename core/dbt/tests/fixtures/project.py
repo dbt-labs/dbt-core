@@ -6,10 +6,11 @@ from datetime import datetime
 import warnings
 import yaml
 
+from dbt.exceptions import CompilationError, DbtDatabaseError
 import dbt.flags as flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.adapters.factory import get_adapter, register_adapter, reset_adapters, get_adapter_by_type
-from dbt.events.functions import setup_event_logger
+from dbt.events.functions import setup_event_logger, cleanup_event_logger
 from dbt.tests.util import (
     write_file,
     run_sql_with_adapter,
@@ -25,7 +26,7 @@ from dbt.tests.util import (
 # schema in the testing database, and returns a `TestProjInfo` object that
 # contains information from the other fixtures for convenience.
 #
-# The models, macros, seeds, snapshots, tests, and analysis fixtures all
+# The models, macros, seeds, snapshots, tests, and analyses fixtures all
 # represent directories in a dbt project, and are all dictionaries with
 # file name keys and file contents values.
 #
@@ -176,13 +177,10 @@ def project_config_update():
 # Combines the project_config_update dictionary with project_config defaults to
 # produce a project_yml config and write it out as dbt_project.yml
 @pytest.fixture(scope="class")
-def dbt_project_yml(project_root, project_config_update, logs_dir):
+def dbt_project_yml(project_root, project_config_update):
     project_config = {
-        "config-version": 2,
         "name": "test",
-        "version": "0.1.0",
         "profile": "test",
-        "log-path": logs_dir,
     }
     if project_config_update:
         if isinstance(project_config_update, dict):
@@ -192,6 +190,24 @@ def dbt_project_yml(project_root, project_config_update, logs_dir):
             project_config.update(updates)
     write_file(yaml.safe_dump(project_config), project_root, "dbt_project.yml")
     return project_config
+
+
+# Fixture to provide dependencies
+@pytest.fixture(scope="class")
+def dependencies():
+    return {}
+
+
+# Write out the dependencies.yml file
+# Write out the packages.yml file
+@pytest.fixture(scope="class")
+def dependencies_yml(project_root, dependencies):
+    if dependencies:
+        if isinstance(dependencies, str):
+            data = dependencies
+        else:
+            data = yaml.safe_dump(dependencies)
+        write_file(data, project_root, "dependencies.yml")
 
 
 # Fixture to provide packages as either yaml or dictionary
@@ -228,6 +244,15 @@ def selectors_yml(project_root, selectors):
         write_file(data, project_root, "selectors.yml")
 
 
+# This fixture ensures that the logging infrastructure does not accidentally
+# reuse streams configured on previous test runs, which might now be closed.
+# It should be run before (and so included as a parameter by) any other fixture
+# which runs dbt-core functions that might fire events.
+@pytest.fixture(scope="class")
+def clean_up_logging():
+    cleanup_event_logger()
+
+
 # This creates an adapter that is used for running test setup, such as creating
 # the test schema, and sql commands that are run in tests prior to the first
 # dbt command. After a dbt command is run, the project.adapter property will
@@ -239,10 +264,16 @@ def selectors_yml(project_root, selectors):
 # otherwise this will fail. So to test errors in those areas, you need to copy the files
 # into the project in the tests instead of putting them in the fixtures.
 @pytest.fixture(scope="class")
-def adapter(unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml):
+def adapter(
+    unique_schema, project_root, profiles_root, profiles_yml, dbt_project_yml, clean_up_logging
+):
     # The profiles.yml and dbt_project.yml should already be written out
     args = Namespace(
-        profiles_dir=str(profiles_root), project_dir=str(project_root), target=None, profile=None
+        profiles_dir=str(profiles_root),
+        project_dir=str(project_root),
+        target=None,
+        profile=None,
+        threads=None,
     )
     flags.set_from_args(args, {})
     runtime_config = RuntimeConfig.from_args(args)
@@ -281,7 +312,7 @@ def write_project_files_recursively(path, file_dict):
             write_project_files_recursively(path.mkdir(name), value)
 
 
-# models, macros, seeds, snapshots, tests, analysis
+# models, macros, seeds, snapshots, tests, analyses
 # Provide a dictionary of file names to contents. Nested directories
 # are handle by nested dictionaries.
 
@@ -321,27 +352,30 @@ def tests():
     return {}
 
 
-# analysis directory
+# analyses directory
 @pytest.fixture(scope="class")
-def analysis():
+def analyses():
     return {}
 
 
-# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analysis
+# Write out the files provided by models, macros, properties, snapshots, seeds, tests, analyses
 @pytest.fixture(scope="class")
-def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analysis):
+def project_files(project_root, models, macros, snapshots, properties, seeds, tests, analyses):
     write_project_files(project_root, "models", {**models, **properties})
     write_project_files(project_root, "macros", macros)
     write_project_files(project_root, "snapshots", snapshots)
     write_project_files(project_root, "seeds", seeds)
     write_project_files(project_root, "tests", tests)
-    write_project_files(project_root, "analysis", analysis)
+    write_project_files(project_root, "analyses", analyses)
 
 
 # We have a separate logs dir for every test
 @pytest.fixture(scope="class")
 def logs_dir(request, prefix):
-    return os.path.join(request.config.rootdir, "logs", prefix)
+    dbt_log_dir = os.path.join(request.config.rootdir, "logs", prefix)
+    os.environ["DBT_LOG_PATH"] = str(dbt_log_dir)
+    yield dbt_log_dir
+    del os.environ["DBT_LOG_PATH"]
 
 
 # This fixture is for customizing tests that need overrides in adapter
@@ -437,6 +471,7 @@ class TestProjInfo:
 # to pull in the other fixtures individually to access their information.
 @pytest.fixture(scope="class")
 def project(
+    clean_up_logging,
     project_root,
     profiles_root,
     request,
@@ -444,6 +479,7 @@ def project(
     profiles_yml,
     dbt_project_yml,
     packages_yml,
+    dependencies_yml,
     selectors_yml,
     adapter,
     project_files,
@@ -455,7 +491,19 @@ def project(
     # Logbook warnings are ignored so we don't have to fork logbook to support python 3.10.
     # This _only_ works for tests in `tests/` that use the project fixture.
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
-    setup_event_logger(logs_dir)
+    log_flags = Namespace(
+        LOG_PATH=logs_dir,
+        LOG_FORMAT="json",
+        LOG_FORMAT_FILE="json",
+        USE_COLORS=False,
+        USE_COLORS_FILE=False,
+        LOG_LEVEL="info",
+        LOG_LEVEL_FILE="debug",
+        DEBUG=False,
+        LOG_CACHE_EVENTS=False,
+        QUIET=False,
+    )
+    setup_event_logger(log_flags)
     orig_cwd = os.getcwd()
     os.chdir(project_root)
     # Return whatever is needed later in tests but can only come from fixtures, so we can keep
@@ -481,8 +529,12 @@ def project(
     # See https://github.com/dbt-labs/dbt-core/issues/5041
     # The debug command also results in an AttributeError since `Profile` doesn't have
     # a `load_dependencies` method.
+    # Macros gets executed as part of drop_scheme in core/dbt/adapters/sql/impl.py.  When
+    # the macros have errors (which is what we're actually testing for...) they end up
+    # throwing CompilationErrorss or DatabaseErrors
     try:
         project.drop_test_schema()
-    except (KeyError, AttributeError):
+    except (KeyError, AttributeError, CompilationError, DbtDatabaseError):
         pass
     os.chdir(orig_cwd)
+    cleanup_event_logger()

@@ -1,76 +1,34 @@
 import pytest
 
 from dbt.tests.util import run_dbt, get_manifest
-from dbt.exceptions import ParsingException
-
-from tests.functional.metrics.fixture_metrics import mock_purchase_data_csv
+from dbt.exceptions import ParsingError
 
 
-models__people_metrics_yml = """
-version: 2
-
-metrics:
-
-  - name: number_of_people
-    label: "Number of people"
-    description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective_tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-  - name: collective_window
-    label: "Collective window"
-    description: Testing window
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    window:
-      count: 14
-      period: day
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
-
-models__people_sql = """
-select 1 as id, 'Drew' as first_name, 'Banin' as last_name, 'yellow' as favorite_color, true as loves_dbt, 5 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favorite_color, true as loves_dbt, 4 as tenure, current_timestamp as created_at
-union all
-select 1 as id, 'Callum' as first_name, 'McCann' as last_name, 'emerald' as favorite_color, true as loves_dbt, 0 as tenure, current_timestamp as created_at
-"""
+from tests.functional.metrics.fixtures import (
+    mock_purchase_data_csv,
+    models_people_sql,
+    models_people_metrics_yml,
+    invalid_models_people_metrics_yml,
+    invalid_metrics_missing_model_yml,
+    invalid_metrics_missing_expression_yml,
+    names_with_spaces_metrics_yml,
+    names_with_special_chars_metrics_yml,
+    names_with_leading_numeric_metrics_yml,
+    long_name_metrics_yml,
+    downstream_model_sql,
+    invalid_derived_metric_contains_model_yml,
+    derived_metric_yml,
+    invalid_metric_without_timestamp_with_time_grains_yml,
+    invalid_metric_without_timestamp_with_window_yml,
+)
 
 
 class TestSimpleMetrics:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people_metrics.yml": models__people_metrics_yml,
-            "people.sql": models__people_sql,
+            "people_metrics.yml": models_people_metrics_yml,
+            "people.sql": models_people_sql,
         }
 
     def test_simple_metric(
@@ -90,145 +48,60 @@ class TestSimpleMetrics:
         assert metric_ids == expected_metric_ids
 
 
-invalid_models__people_metrics_yml = """
-version: 2
-
-metrics:
-
-  - name: number_of_people
-    label: "Number of people"
-    description: Total count of people
-    model: "ref(people)"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective_tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref(people)"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
-
-
 class TestInvalidRefMetrics:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people_metrics.yml": invalid_models__people_metrics_yml,
-            "people.sql": models__people_sql,
+            "people_metrics.yml": invalid_models_people_metrics_yml,
+            "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
+    # tests that we get a ParsingError with an invalid model ref, where
     # the model name does not have quotes
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
-
-
-invalid_metrics__missing_model_yml = """
-version: 2
-
-metrics:
-
-  - name: number_of_people
-    label: "Number of people"
-    description: Total count of people
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective_tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
 
 
 class TestInvalidMetricMissingModel:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people_metrics.yml": invalid_metrics__missing_model_yml,
-            "people.sql": models__people_sql,
+            "people_metrics.yml": invalid_metrics_missing_model_yml,
+            "people.sql": models_people_sql,
         }
 
-    # tests that we get a ParsingException with an invalid model ref, where
+    # tests that we get a ParsingError with an invalid model ref, where
     # the model name does not have quotes
     def test_simple_metric(
         self,
         project,
     ):
         # initial run
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
 
 
-names_with_spaces_metrics_yml = """
-version: 2
+class TestInvalidMetricMissingExpression:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metrics_missing_expression_yml,
+            "people.sql": models_people_sql,
+        }
 
-metrics:
-
-  - name: number of people
-    label: "Number of people"
-    description: Total count of people
-    model: "ref('people')"
-    calculation_method: count
-    expression: "*"
-    timestamp: created_at
-    time_grains: [day, week, month]
-    dimensions:
-      - favorite_color
-      - loves_dbt
-    meta:
-        my_meta: 'testing'
-
-  - name: collective tenure
-    label: "Collective tenure"
-    description: Total number of years of team experience
-    model: "ref('people')"
-    calculation_method: sum
-    expression: tenure
-    timestamp: created_at
-    time_grains: [day]
-    filters:
-      - field: loves_dbt
-        operator: 'is'
-        value: 'true'
-
-"""
+    # tests that we get a ParsingError with a missing expression
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])
 
 
 class TestNamesWithSpaces:
@@ -236,150 +109,68 @@ class TestNamesWithSpaces:
     def models(self):
         return {
             "people_metrics.yml": names_with_spaces_metrics_yml,
-            "people.sql": models__people_sql,
+            "people.sql": models_people_sql,
         }
 
     def test_names_with_spaces(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError) as exc:
             run_dbt(["run"])
+        assert "cannot contain spaces" in str(exc.value)
 
 
-downstream_model_sql = """
--- this model will depend on these three metrics
-{% set some_metrics = [
-    metric('count_orders'),
-    metric('sum_order_revenue'),
-    metric('average_order_value')
-] %}
+class TestNamesWithSpecialChar:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": names_with_special_chars_metrics_yml,
+            "people.sql": models_people_sql,
+        }
 
-/*
-{% if not execute %}
+    def test_names_with_special_char(self, project):
+        with pytest.raises(ParsingError) as exc:
+            run_dbt(["run"])
+        assert "must contain only letters, numbers and underscores" in str(exc.value)
 
-    -- the only properties available to us at 'parse' time are:
-    --      'metric_name'
-    --      'package_name' (None if same package)
 
-    {% set metric_names = [] %}
-    {% for m in some_metrics %}
-        {% do metric_names.append(m.metric_name) %}
-    {% endfor %}
+class TestNamesWithLeandingNumber:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": names_with_leading_numeric_metrics_yml,
+            "people.sql": models_people_sql,
+        }
 
-    -- this config does nothing, but it lets us check these values below
-    {{ config(metric_names = metric_names) }}
+    def test_names_with_leading_number(self, project):
+        with pytest.raises(ParsingError) as exc:
+            run_dbt(["run"])
+        assert "must begin with a letter" in str(exc.value)
 
-{% else %}
 
-    -- these are the properties available to us at 'execution' time
+class TestLongName:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": long_name_metrics_yml,
+            "people.sql": models_people_sql,
+        }
 
-    {% for m in some_metrics %}
-        name: {{ m.name }}
-        label: {{ m.label }}
-        calculation_method: {{ m.calculation_method }}
-        expression: {{ m.expression }}
-        timestamp: {{ m.timestamp }}
-        time_grains: {{ m.time_grains }}
-        dimensions: {{ m.dimensions }}
-        filters: {{ m.filters }}
-        window: {{ m.window }}
-    {% endfor %}
-
-{% endif %}
-
-select 1 as id
-"""
-
-invalid_derived_metric__contains_model_yml = """
-version: 2
-metrics:
-    - name: count_orders
-      label: Count orders
-      model: ref('mock_purchase_data')
-
-      calculation_method: count
-      expression: "*"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-
-    - name: sum_order_revenue
-      label: Total order revenue
-      model: ref('mock_purchase_data')
-
-      calculation_method: sum
-      expression: "payment_total"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-
-    - name: average_order_value
-      label: Average Order Value
-
-      calculation_method: derived
-      expression:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
-      model: ref('mock_purchase_data')
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-"""
+    def test_long_name(self, project):
+        with pytest.raises(ParsingError) as exc:
+            run_dbt(["run"])
+        assert "cannot contain more than 250 characters" in str(exc.value)
 
 
 class TestInvalidDerivedMetrics:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "derived_metric.yml": invalid_derived_metric__contains_model_yml,
+            "derived_metric.yml": invalid_derived_metric_contains_model_yml,
             "downstream_model.sql": downstream_model_sql,
         }
 
     def test_invalid_derived_metrics(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             run_dbt(["run"])
-
-
-derived_metric_yml = """
-version: 2
-metrics:
-    - name: count_orders
-      label: Count orders
-      model: ref('mock_purchase_data')
-
-      calculation_method: count
-      expression: "*"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-
-    - name: sum_order_revenue
-      label: Total order revenue
-      model: ref('mock_purchase_data')
-
-      calculation_method: sum
-      expression: "payment_total"
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-
-    - name: average_order_value
-      label: Average Order Value
-
-      calculation_method: derived
-      expression:  "{{metric('sum_order_revenue')}} / {{metric('count_orders')}} "
-      timestamp: purchased_at
-      time_grains: [day, week, month, quarter, year]
-
-      dimensions:
-        - payment_type
-"""
 
 
 class TestDerivedMetric:
@@ -399,6 +190,7 @@ class TestDerivedMetric:
             "mock_purchase_data.csv": mock_purchase_data_csv,
         }
 
+    @pytest.mark.skip("TODO bring back once we start populating metric `depends_on`")
     def test_derived_metric(
         self,
         project,
@@ -445,13 +237,48 @@ class TestDerivedMetric:
             for property in [
                 "name",
                 "label",
-                "calculation_method",
-                "expression",
-                "timestamp",
-                "time_grains",
-                "dimensions",
-                "filters",
+                "type",
+                "type_params",
+                "filter",
                 "window",
             ]:
                 expected_value = getattr(parsed_metric_node, property)
                 assert f"{property}: {expected_value}" in compiled_code
+
+
+class TestInvalidTimestampTimeGrainsMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metric_without_timestamp_with_time_grains_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that we get a ParsingError with an invalid metric definition.
+    # This metric definition is missing timestamp but HAS a time_grains property
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])
+
+
+class TestInvalidTimestampWindowMetrics:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people_metrics.yml": invalid_metric_without_timestamp_with_window_yml,
+            "people.sql": models_people_sql,
+        }
+
+    # Tests that we get a ParsingError with an invalid metric definition.
+    # This metric definition is missing timestamp but HAS a window property
+    def test_simple_metric(
+        self,
+        project,
+    ):
+        # initial run
+        with pytest.raises(ParsingError):
+            run_dbt(["run"])

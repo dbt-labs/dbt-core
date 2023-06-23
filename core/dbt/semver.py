@@ -1,11 +1,8 @@
 from dataclasses import dataclass
 import re
-import warnings
 from typing import List
 
-from packaging import version as packaging_version
-
-from dbt.exceptions import VersionsNotCompatibleException
+from dbt.exceptions import VersionsNotCompatibleError
 import dbt.utils
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
@@ -70,6 +67,11 @@ $
 _VERSION_REGEX = re.compile(_VERSION_REGEX_PAT_STR, re.VERBOSE)
 
 
+def _cmp(a, b):
+    """Return negative if a<b, zero if a==b, positive if a>b."""
+    return (a > b) - (a < b)
+
+
 @dataclass
 class VersionSpecifier(VersionSpecification):
     def to_version_string(self, skip_matcher=False):
@@ -94,7 +96,7 @@ class VersionSpecifier(VersionSpecification):
         match = _VERSION_REGEX.match(version_string)
 
         if not match:
-            raise dbt.exceptions.SemverException(
+            raise dbt.exceptions.SemverError(
                 f'"{version_string}" is not a valid semantic version.'
             )
 
@@ -142,13 +144,19 @@ class VersionSpecifier(VersionSpecification):
                     return 1
                 if b is None:
                     return -1
-            # This suppresses the LegacyVersion deprecation warning
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=DeprecationWarning)
-                if packaging_version.parse(a) > packaging_version.parse(b):
+
+                # Check the prerelease component only
+                prcmp = self._nat_cmp(a, b)
+                if prcmp != 0:  # either -1 or 1
+                    return prcmp
+                # else is equal and will fall through
+
+            else:  # major/minor/patch, should all be numbers
+                if int(a) > int(b):
                     return 1
-                elif packaging_version.parse(a) < packaging_version.parse(b):
+                elif int(a) < int(b):
                     return -1
+                # else is equal and will fall through
 
         equal = (
             self.matcher == Matchers.GREATER_THAN_OR_EQUAL
@@ -212,6 +220,29 @@ class VersionSpecifier(VersionSpecification):
     def is_exact(self):
         return self.matcher == Matchers.EXACT
 
+    @classmethod
+    def _nat_cmp(cls, a, b):
+        def cmp_prerelease_tag(a, b):
+            if isinstance(a, int) and isinstance(b, int):
+                return _cmp(a, b)
+            elif isinstance(a, int):
+                return -1
+            elif isinstance(b, int):
+                return 1
+            else:
+                return _cmp(a, b)
+
+        a, b = a or "", b or ""
+        a_parts, b_parts = a.split("."), b.split(".")
+        a_parts = [int(x) if re.match(r"^\d+$", x) else x for x in a_parts]
+        b_parts = [int(x) if re.match(r"^\d+$", x) else x for x in b_parts]
+        for sub_a, sub_b in zip(a_parts, b_parts):
+            cmp_result = cmp_prerelease_tag(sub_a, sub_b)
+            if cmp_result != 0:
+                return cmp_result
+        else:
+            return _cmp(len(a), len(b))
+
 
 @dataclass
 class VersionRange:
@@ -222,7 +253,7 @@ class VersionRange:
         if a.compare(b) == 0:
             return a
         else:
-            raise VersionsNotCompatibleException()
+            raise VersionsNotCompatibleError()
 
     def _try_combine_lower_bound_with_exact(self, lower, exact):
         comparison = lower.compare(exact)
@@ -230,7 +261,7 @@ class VersionRange:
         if comparison < 0 or (comparison == 0 and lower.matcher == Matchers.GREATER_THAN_OR_EQUAL):
             return exact
 
-        raise VersionsNotCompatibleException()
+        raise VersionsNotCompatibleError()
 
     def _try_combine_lower_bound(self, a, b):
         if b.is_unbounded:
@@ -258,7 +289,7 @@ class VersionRange:
         if comparison > 0 or (comparison == 0 and upper.matcher == Matchers.LESS_THAN_OR_EQUAL):
             return exact
 
-        raise VersionsNotCompatibleException()
+        raise VersionsNotCompatibleError()
 
     def _try_combine_upper_bound(self, a, b):
         if b.is_unbounded:
@@ -291,7 +322,7 @@ class VersionRange:
             end = self._try_combine_upper_bound(self.end, other.end)
 
         if start.compare(end) > 0:
-            raise VersionsNotCompatibleException()
+            raise VersionsNotCompatibleError()
 
         return VersionRange(start=start, end=end)
 
@@ -379,8 +410,8 @@ def reduce_versions(*args):
 
         for version_specifier in version_specifiers:
             to_return = to_return.reduce(version_specifier.to_range())
-    except VersionsNotCompatibleException:
-        raise VersionsNotCompatibleException(
+    except VersionsNotCompatibleError:
+        raise VersionsNotCompatibleError(
             "Could not find a satisfactory version from options: {}".format([str(a) for a in args])
         )
 
@@ -394,7 +425,7 @@ def versions_compatible(*args):
     try:
         reduce_versions(*args)
         return True
-    except VersionsNotCompatibleException:
+    except VersionsNotCompatibleError:
         return False
 
 

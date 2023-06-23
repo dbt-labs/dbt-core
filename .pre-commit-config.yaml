@@ -1,12 +1,11 @@
 # Configuration for pre-commit hooks (see https://pre-commit.com/).
 # Eventually the hooks described here will be run as tests before merging each PR.
 
-# TODO: remove global exclusion of tests when testing overhaul is complete
-exclude: ^test/
+exclude: ^(core/dbt/docs/build/|core/dbt/events/types_pb2.py)
 
 # Force all unspecified python hooks to run python 3.8
 default_language_version:
-  python: python3.8
+  python: python3
 
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -24,18 +23,13 @@ repos:
   rev: 22.3.0
   hooks:
   - id: black
-    args:
-    - "--line-length=99"
-    - "--target-version=py38"
   - id: black
     alias: black-check
     stages: [manual]
     args:
-    - "--line-length=99"
-    - "--target-version=py38"
     - "--check"
     - "--diff"
-- repo: https://gitlab.com/pycqa/flake8
+- repo: https://github.com/pycqa/flake8
   rev: 4.0.1
   hooks:
   - id: flake8
@@ -43,7 +37,7 @@ repos:
     alias: flake8-check
     stages: [manual]
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.942
+  rev: v1.3.0
   hooks:
   - id: mypy
     # N.B.: Mypy is... a bit fragile.

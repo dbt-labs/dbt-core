@@ -4,7 +4,7 @@ import shutil
 import pytest
 from datetime import datetime, timedelta
 
-from dbt.exceptions import InternalException
+from dbt.exceptions import DbtInternalError
 
 
 from dbt.tests.util import AnyStringWith, AnyFloat
@@ -12,9 +12,9 @@ import dbt.version
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 
 from tests.functional.sources.fixtures import (
-    error_models__schema_yml,
-    models__newly_added_model_sql,
-    models__newly_added_error_model_sql,
+    error_models_schema_yml,
+    models_newly_added_model_sql,
+    models_newly_added_error_model_sql,
 )
 
 
@@ -90,7 +90,6 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
             == "https://schemas.getdbt.com/dbt/sources/v3.json"
         )
         assert data["metadata"]["dbt_version"] == dbt.version.__version__
-        assert data["metadata"]["invocation_id"] == dbt.tracking.active_user.invocation_id
         key = "key"
         if os.name == "nt":
             key = key.upper()
@@ -112,7 +111,7 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
                     "warn_after": {"count": 10, "period": "hour"},
                     "error_after": {"count": 18, "period": "hour"},
                 },
-                "adapter_response": {},
+                "adapter_response": {"_message": "SELECT 1", "code": "SELECT", "rows_affected": 1},
                 "thread_id": AnyStringWith("Thread-"),
                 "execution_time": AnyFloat(),
                 "timing": [
@@ -273,7 +272,7 @@ class TestSourceFresherBuildStateModified(SuccessfulSourceFreshnessTest):
         models_path = project_root.join("models/")
         assert os.path.exists(models_path)
         with open(f"{models_path}/newly_added_model.sql", "w") as fp:
-            fp.write(models__newly_added_model_sql)
+            fp.write(models_newly_added_model_sql)
 
         copy_to_previous_state()
         state_modified_results = self.run_dbt_with_vars(
@@ -305,7 +304,7 @@ class TestSourceFresherRuntimeError(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": error_models__schema_yml,
+            "schema.yml": error_models_schema_yml,
         }
 
     def test_runtime_error_states(self, project):
@@ -619,7 +618,7 @@ class TestSourceFresherNoPreviousState(SuccessfulSourceFreshnessTest):
     def test_intentional_failure_no_previous_state(self, project):
         self.run_dbt_with_vars(project, ["run"])
         # TODO add the current and previous but with previous as null
-        with pytest.raises(InternalException) as excinfo:
+        with pytest.raises(DbtInternalError) as excinfo:
             self.run_dbt_with_vars(
                 project,
                 ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
@@ -641,7 +640,7 @@ class TestSourceFresherNoCurrentState(SuccessfulSourceFreshnessTest):
         copy_to_previous_state()
         assert previous_state_results[0].max_loaded_at is not None
 
-        with pytest.raises(InternalException) as excinfo:
+        with pytest.raises(DbtInternalError) as excinfo:
             self.run_dbt_with_vars(
                 project,
                 ["run", "-s", "source_status:fresher", "--defer", "--state", "previous_state"],
@@ -656,7 +655,7 @@ class TestSourceFresherBuildResultSelectors(SuccessfulSourceFreshnessTest):
         models_path = project_root.join("models/")
         assert os.path.exists(models_path)
         with open(f"{models_path}/newly_added_error_model.sql", "w") as fp:
-            fp.write(models__newly_added_error_model_sql)
+            fp.write(models_newly_added_error_model_sql)
 
         self.run_dbt_with_vars(project, ["run"], expect_pass=False)
 

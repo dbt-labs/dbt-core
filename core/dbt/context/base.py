@@ -2,21 +2,25 @@ import json
 import os
 from typing import Any, Dict, NoReturn, Optional, Mapping, Iterable, Set, List
 
-from dbt import flags
+from dbt.flags import get_flags
+import dbt.flags as flags_module
 from dbt import tracking
+from dbt import utils
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
 from dbt.constants import SECRET_ENV_PREFIX, DEFAULT_ENV_PLACEHOLDER
-from dbt.contracts.graph.compiled import CompiledResource
+from dbt.contracts.graph.nodes import Resource
 from dbt.exceptions import (
-    CompilationException,
+    SecretEnvVarLocationError,
+    EnvVarMissingError,
     MacroReturn,
-    raise_compiler_error,
-    raise_parsing_error,
-    disallow_secret_env_var,
+    RequiredVarNotFoundError,
+    SetStrictWrongTypeError,
+    ZipStrictWrongTypeError,
 )
 from dbt.events.functions import fire_event, get_invocation_id
-from dbt.events.types import MacroEventInfo, MacroEventDebug
+from dbt.events.types import JinjaLogInfo, JinjaLogDebug
+from dbt.events.contextvars import get_node_info
 from dbt.version import __version__ as dbt_version
 
 # These modules are added to the context. Consider alternative
@@ -126,18 +130,17 @@ class ContextMeta(type):
 
 
 class Var:
-    UndefinedVarError = "Required var '{}' not found in config:\nVars " "supplied to {} = {}"
     _VAR_NOTSET = object()
 
     def __init__(
         self,
         context: Mapping[str, Any],
         cli_vars: Mapping[str, Any],
-        node: Optional[CompiledResource] = None,
+        node: Optional[Resource] = None,
     ) -> None:
         self._context: Mapping[str, Any] = context
         self._cli_vars: Mapping[str, Any] = cli_vars
-        self._node: Optional[CompiledResource] = node
+        self._node: Optional[Resource] = node
         self._merged: Mapping[str, Any] = self._generate_merged()
 
     def _generate_merged(self) -> Mapping[str, Any]:
@@ -151,10 +154,7 @@ class Var:
             return "<Configuration>"
 
     def get_missing_var(self, var_name):
-        dct = {k: self._merged[k] for k in self._merged}
-        pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
-        msg = self.UndefinedVarError.format(var_name, self.node_name, pretty_vars)
-        raise_compiler_error(msg, self._node)
+        raise RequiredVarNotFoundError(var_name, self._merged, self._node)
 
     def has_var(self, var_name: str):
         return var_name in self._merged
@@ -298,7 +298,7 @@ class BaseContext(metaclass=ContextMeta):
         """
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            disallow_secret_env_var(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -313,8 +313,7 @@ class BaseContext(metaclass=ContextMeta):
 
             return return_value
         else:
-            msg = f"Env var required but not provided: '{var}'"
-            raise_parsing_error(msg)
+            raise EnvVarMissingError(var)
 
     if os.environ.get("DBT_MACRO_DEBUGGING"):
 
@@ -495,7 +494,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return set(value)
         except TypeError as e:
-            raise CompilationException(e)
+            raise SetStrictWrongTypeError(e)
 
     @contextmember("zip")
     @staticmethod
@@ -539,7 +538,7 @@ class BaseContext(metaclass=ContextMeta):
         try:
             return zip(*args)
         except TypeError as e:
-            raise CompilationException(e)
+            raise ZipStrictWrongTypeError(e)
 
     @contextmember
     @staticmethod
@@ -557,9 +556,9 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
         if info:
-            fire_event(MacroEventInfo(msg=msg))
+            fire_event(JinjaLogInfo(msg=msg, node_info=get_node_info()))
         else:
-            fire_event(MacroEventDebug(msg=msg))
+            fire_event(JinjaLogDebug(msg=msg, node_info=get_node_info()))
         return ""
 
     @contextproperty
@@ -636,9 +635,8 @@ class BaseContext(metaclass=ContextMeta):
             {% endif %}
 
         This supports all flags defined in flags submodule (core/dbt/flags.py)
-        TODO: Replace with object that provides read-only access to flag values
         """
-        return flags
+        return flags_module.get_flag_obj()
 
     @contextmember
     @staticmethod
@@ -654,7 +652,7 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
 
-        if not flags.NO_PRINT:
+        if get_flags().PRINT:
             print(msg)
         return ""
 
@@ -686,6 +684,19 @@ class BaseContext(metaclass=ContextMeta):
             else:
                 dict_diff.update({k: dict_a[k]})
         return dict_diff
+
+    @contextmember
+    @staticmethod
+    def local_md5(value: str) -> str:
+        """Calculates an MD5 hash of the given string.
+        It's called "local_md5" to emphasize that it runs locally in dbt (in jinja context) and not an MD5 SQL command.
+
+        :param value: The value to hash
+
+        Usage:
+            {% set value_hash = local_md5("hello world") %}
+        """
+        return utils.md5(value)
 
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:

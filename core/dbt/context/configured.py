@@ -8,7 +8,7 @@ from dbt.utils import MultiDict
 
 from dbt.context.base import contextproperty, contextmember, Var
 from dbt.context.target import TargetContext
-from dbt.exceptions import raise_parsing_error, disallow_secret_env_var
+from dbt.exceptions import EnvVarMissingError, SecretEnvVarLocationError
 
 
 class ConfiguredContext(TargetContext):
@@ -16,7 +16,8 @@ class ConfiguredContext(TargetContext):
     config: AdapterRequiredConfig
 
     def __init__(self, config: AdapterRequiredConfig) -> None:
-        super().__init__(config, config.cli_vars)
+        super().__init__(config.to_target_dict(), config.cli_vars)
+        self.config = config
 
     @contextproperty
     def project_name(self) -> str:
@@ -51,10 +52,11 @@ class ConfiguredVar(Var):
         adapter_type = self._config.credentials.type
         lookup = FQNLookup(self._project_name)
         active_vars = self._config.vars.vars_for(lookup, adapter_type)
-        all_vars = MultiDict([active_vars])
 
+        all_vars = MultiDict()
         if self._config.project_name != my_config.project_name:
             all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
+        all_vars.add(active_vars)
 
         if var_name in all_vars:
             return all_vars[var_name]
@@ -86,7 +88,7 @@ class SchemaYamlContext(ConfiguredContext):
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            disallow_secret_env_var(var)
+            raise SecretEnvVarLocationError(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -104,8 +106,7 @@ class SchemaYamlContext(ConfiguredContext):
 
             return return_value
         else:
-            msg = f"Env var required but not provided: '{var}'"
-            raise_parsing_error(msg)
+            raise EnvVarMissingError(var)
 
 
 class MacroResolvingContext(ConfiguredContext):
@@ -118,7 +119,9 @@ class MacroResolvingContext(ConfiguredContext):
 
 
 def generate_schema_yml_context(
-    config: AdapterRequiredConfig, project_name: str, schema_yaml_vars: SchemaYamlVars = None
+    config: AdapterRequiredConfig,
+    project_name: str,
+    schema_yaml_vars: Optional[SchemaYamlVars] = None,
 ) -> Dict[str, Any]:
     ctx = SchemaYamlContext(config, project_name, schema_yaml_vars)
     return ctx.to_dict()

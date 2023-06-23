@@ -12,9 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any
 from mashumaro.types import SerializableType
 
-PIN_PACKAGE_URL = (
-    "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
-)
+
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
 
@@ -58,6 +56,12 @@ RawVersion = Union[str, float]
 
 
 @dataclass
+class TarballPackage(Package):
+    tarball: str
+    name: str
+
+
+@dataclass
 class GitPackage(Package):
     git: str
     revision: Optional[RawVersion] = None
@@ -84,12 +88,29 @@ class RegistryPackage(Package):
             return [str(self.version)]
 
 
-PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
+PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
 class PackageConfig(dbtClassMixin, Replaceable):
     packages: List[PackageSpec]
+
+    @classmethod
+    def validate(cls, data):
+        for package in data.get("packages", data):
+            if isinstance(package, dict) and package.get("package"):
+                if not package["version"]:
+                    raise ValidationError(
+                        f"{package['package']} is missing the version. When installing from the Hub "
+                        "package index, version is a required property"
+                    )
+
+                if "/" not in package["package"]:
+                    raise ValidationError(
+                        f"{package['package']} was not found in the package index. Packages on the index "
+                        "require a namespace, e.g dbt-labs/dbt_utils"
+                    )
+        super().validate(data)
 
 
 @dataclass
@@ -163,8 +184,8 @@ BANNED_PROJECT_NAMES = {
 @dataclass
 class Project(HyphenatedDbtClassMixin, Replaceable):
     name: Identifier
-    version: Union[SemverString, float]
-    config_version: int
+    config_version: Optional[int] = 2
+    version: Optional[Union[SemverString, float]] = None
     project_root: Optional[str] = None
     source_paths: Optional[List[str]] = None
     model_paths: Optional[List[str]] = None
@@ -192,6 +213,8 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     analyses: Dict[str, Any] = field(default_factory=dict)
     sources: Dict[str, Any] = field(default_factory=dict)
     tests: Dict[str, Any] = field(default_factory=dict)
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    exposures: Dict[str, Any] = field(default_factory=dict)
     vars: Optional[Dict[str, Any]] = field(
         default=None,
         metadata=dict(
@@ -199,7 +222,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
         ),
     )
     packages: List[PackageSpec] = field(default_factory=list)
-    query_comment: Optional[Union[QueryComment, NoValue, str]] = NoValue()
+    query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
 
     @classmethod
     def validate(cls, data):
@@ -220,20 +243,26 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
 
 @dataclass
 class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
-    send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-    use_colors: Optional[bool] = None
-    partial_parse: Optional[bool] = None
-    printer_width: Optional[int] = None
-    write_json: Optional[bool] = None
-    warn_error: Optional[bool] = None
-    log_format: Optional[str] = None
-    debug: Optional[bool] = None
-    version_check: Optional[bool] = None
-    fail_fast: Optional[bool] = None
-    use_experimental_parser: Optional[bool] = None
-    static_parser: Optional[bool] = None
-    indirect_selection: Optional[str] = None
     cache_selected_only: Optional[bool] = None
+    debug: Optional[bool] = None
+    fail_fast: Optional[bool] = None
+    indirect_selection: Optional[str] = None
+    log_format: Optional[str] = None
+    log_format_file: Optional[str] = None
+    log_level: Optional[str] = None
+    log_level_file: Optional[str] = None
+    partial_parse: Optional[bool] = None
+    populate_cache: Optional[bool] = None
+    printer_width: Optional[int] = None
+    send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+    static_parser: Optional[bool] = None
+    use_colors: Optional[bool] = None
+    use_colors_file: Optional[bool] = None
+    use_experimental_parser: Optional[bool] = None
+    version_check: Optional[bool] = None
+    warn_error: Optional[bool] = None
+    warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
+    write_json: Optional[bool] = None
 
 
 @dataclass

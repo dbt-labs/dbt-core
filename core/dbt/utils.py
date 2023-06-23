@@ -10,12 +10,13 @@ import jinja2
 import json
 import os
 import requests
+import sys
 from tarfile import ReadError
 import time
 from pathlib import PosixPath, WindowsPath
 
 from contextlib import contextmanager
-from dbt.exceptions import ConnectionException
+from dbt.exceptions import ConnectionError, DuplicateAliasError
 from dbt.events.functions import fire_event
 from dbt.events.types import RetryExternalCall, RecordRetryException
 from dbt import flags
@@ -92,13 +93,13 @@ DOCS_PREFIX = "dbt_docs__"
 
 def get_dbt_macro_name(name):
     if name is None:
-        raise dbt.exceptions.InternalException("Got None for a macro name!")
+        raise dbt.exceptions.DbtInternalError("Got None for a macro name!")
     return f"{MACRO_PREFIX}{name}"
 
 
 def get_dbt_docs_name(name):
     if name is None:
-        raise dbt.exceptions.InternalException("Got None for a doc name!")
+        raise dbt.exceptions.DbtInternalError("Got None for a doc name!")
     return f"{DOCS_PREFIX}{name}"
 
 
@@ -184,7 +185,7 @@ def _deep_map_render(
     value: Any,
     keypath: Tuple[Union[str, int], ...],
 ) -> Any:
-    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool)
+    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool, datetime.date)
 
     ret: Any
 
@@ -228,7 +229,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
         return _deep_map_render(func, value, ())
     except RuntimeError as exc:
         if "maximum recursion depth exceeded" in str(exc):
-            raise dbt.exceptions.RecursionException("Cycle detected in deep_map_render")
+            raise dbt.exceptions.RecursionError("Cycle detected in deep_map_render")
         raise
 
 
@@ -252,16 +253,19 @@ def get_pseudo_hook_path(hook_name):
     return os.path.join(*path_parts)
 
 
-def md5(string):
-    return hashlib.md5(string.encode("utf-8")).hexdigest()
+def md5(string, charset="utf-8"):
+    if sys.version_info >= (3, 9):
+        return hashlib.md5(string.encode(charset), usedforsecurity=False).hexdigest()
+    else:
+        return hashlib.md5(string.encode(charset)).hexdigest()
 
 
 def get_hash(model):
-    return hashlib.md5(model.unique_id.encode("utf-8")).hexdigest()
+    return md5(model.unique_id)
 
 
 def get_hashed_contents(model):
-    return hashlib.md5(model.raw_code.encode("utf-8")).hexdigest()
+    return md5(model.raw_code)
 
 
 def flatten_nodes(dep_list):
@@ -365,7 +369,7 @@ class Translator:
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                dbt.exceptions.raise_duplicate_alias(kwargs, self.aliases, canonical_key)
+                raise DuplicateAliasError(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 
@@ -385,7 +389,7 @@ class Translator:
             return self.translate_mapping(value)
         except RuntimeError as exc:
             if "maximum recursion depth exceeded" in str(exc):
-                raise dbt.exceptions.RecursionException(
+                raise dbt.exceptions.RecursionError(
                     "Cycle detected in a value passed to translate!"
                 )
             raise
@@ -403,7 +407,7 @@ def translate_aliases(
 
     :returns: A dict containing all the values in kwargs referenced by their
         canonical key.
-    :raises: `AliasException`, if a canonical key is defined more than once.
+    :raises: `AliasError`, if a canonical key is defined more than once.
     """
     translator = Translator(aliases, recurse)
     return translator.translate(kwargs)
@@ -453,26 +457,6 @@ class classproperty(object):
         return self.func(objtype)
 
 
-def format_bytes(num_bytes):
-    for unit in ["Bytes", "KB", "MB", "GB", "TB", "PB"]:
-        if abs(num_bytes) < 1024.0:
-            return f"{num_bytes:3.1f} {unit}"
-        num_bytes /= 1024.0
-
-    num_bytes *= 1024.0
-    return f"{num_bytes:3.1f} {unit}"
-
-
-def format_rows_number(rows_number):
-    for unit in ["", "k", "m", "b", "t"]:
-        if abs(rows_number) < 1000.0:
-            return f"{rows_number:3.1f}{unit}".strip()
-        rows_number /= 1000.0
-
-    rows_number *= 1000.0
-    return f"{rows_number:3.1f}{unit}".strip()
-
-
 class ConnectingExecutor(concurrent.futures.Executor):
     def submit_connected(self, adapter, conn_name, func, *args, **kwargs):
         def connected(conn_name, func, *args, **kwargs):
@@ -491,11 +475,11 @@ class SingleThreadedExecutor(ConnectingExecutor):
             self, fn, *args = args
         elif not args:
             raise TypeError(
-                "descriptor 'submit' of 'SingleThreadedExecutor' object needs " "an argument"
+                "descriptor 'submit' of 'SingleThreadedExecutor' object needs an argument"
             )
         else:
             raise TypeError(
-                "submit expected at least 1 positional argument, " "got %d" % (len(args) - 1)
+                "submit expected at least 1 positional argument, got %d" % (len(args) - 1)
             )
         fut = concurrent.futures.Future()
         try:
@@ -619,12 +603,12 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         ReadError,
     ) as exc:
         if attempt <= max_attempts - 1:
-            fire_event(RecordRetryException(exc=exc))
+            fire_event(RecordRetryException(exc=str(exc)))
             fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             return _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise ConnectionException("External connection exception occurred: " + str(exc))
+            raise ConnectionError("External connection exception occurred: " + str(exc))
 
 
 # This is used to serialize the args in the run_results and in the logs.
@@ -642,7 +626,10 @@ def args_to_dict(args):
     dict_args = {}
     # remove args keys that clutter up the dictionary
     for key in var_args:
-        if key == "cls":
+        if key.lower() in var_args and key == key.upper():
+            # skip all capped keys being introduced by Flags in dbt.cli.flags
+            continue
+        if key in ["cls", "mp_context"]:
             continue
         if var_args[key] is None:
             continue
@@ -657,12 +644,37 @@ def args_to_dict(args):
             "store_failures",
             "use_experimental_parser",
         )
+        default_empty_yaml_dict_keys = ("vars", "warn_error_options")
         if key in default_false_keys and var_args[key] is False:
             continue
-        if key == "vars" and var_args[key] == "{}":
+        if key in default_empty_yaml_dict_keys and var_args[key] == "{}":
             continue
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
             var_args[key] = str(var_args[key])
         dict_args[key] = var_args[key]
     return dict_args
+
+
+# This is useful for proto generated classes in particular, since
+# the default for protobuf for strings is the empty string, so
+# Optional[str] types don't work for generated Python classes.
+def cast_to_str(string: Optional[str]) -> str:
+    if string is None:
+        return ""
+    else:
+        return string
+
+
+def cast_to_int(integer: Optional[int]) -> int:
+    if integer is None:
+        return 0
+    else:
+        return integer
+
+
+def cast_dict_to_dict_of_strings(dct):
+    new_dct = {}
+    for k, v in dct.items():
+        new_dct[str(k)] = str(v)
+    return new_dct

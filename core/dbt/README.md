@@ -2,50 +2,59 @@
 
 ## The following are individual files in this directory.
 
-### deprecations.py
-
-### flags.py
-
-### main.py
-
-### tracking.py
-
-### version.py
-
-### lib.py
-
-### node_types.py
-
-### helper_types.py
-
-### links.py
-
-### semver.py
-
-### ui.py
-
 ### compilation.py
+
+### constants.py
 
 ### dataclass_schema.py
 
+### deprecations.py
+
 ### exceptions.py
+
+### flags.py
+
+### helper_types.py
 
 ### hooks.py
 
+### lib.py
+
+### links.py
+
 ### logger.py
+
+### main.py
+
+### node_types.py
 
 ### profiler.py
 
+### selected_resources.py
+
+### semver.py
+
+### tracking.py
+
+### ui.py
+
 ### utils.py
+
+### version.py
 
 
 ## The subdirectories will be documented in a README in the subdirectory
-* config
-* include
 * adapters
-* context
-* deps
-* graph
-* task
+* cli
 * clients
+* config
+* context
+* contracts
+* deps
+* docs
 * events
+* graph
+* include
+* parser
+* task
+* tests

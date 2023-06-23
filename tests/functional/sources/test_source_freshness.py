@@ -6,12 +6,14 @@ from datetime import datetime, timedelta
 import dbt.version
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
-    error_models__schema_yml,
-    error_models__model_sql,
-    filtered_models__schema_yml,
-    override_freshness_models__schema_yml,
+    error_models_schema_yml,
+    error_models_model_sql,
+    filtered_models_schema_yml,
+    override_freshness_models_schema_yml,
+    collect_freshness_macro_override_previous_return_signature,
 )
 from dbt.tests.util import AnyStringWith, AnyFloat
+from dbt import deprecations
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):
@@ -80,7 +82,6 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
             == "https://schemas.getdbt.com/dbt/sources/v3.json"
         )
         assert data["metadata"]["dbt_version"] == dbt.version.__version__
-        assert data["metadata"]["invocation_id"] == dbt.tracking.active_user.invocation_id
         key = "key"
         if os.name == "nt":
             key = key.upper()
@@ -103,7 +104,7 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
                     "warn_after": {"count": 10, "period": "hour"},
                     "error_after": {"count": 18, "period": "hour"},
                 },
-                "adapter_response": {},
+                "adapter_response": {"_message": "SELECT 1", "code": "SELECT", "rows_affected": 1},
                 "thread_id": AnyStringWith("Thread-"),
                 "execution_time": AnyFloat(),
                 "timing": [
@@ -188,8 +189,15 @@ class TestSourceSnapshotFreshness(SuccessfulSourceFreshnessTest):
 
 
 class TestSourceFreshnessSelection(SuccessfulSourceFreshnessTest):
-    def test_source_freshness_selection_select(self, project):
+    @pytest.fixture(scope="class")
+    def project_config_update(self, logs_dir):
+        return {
+            "target-path": logs_dir,
+        }
+
+    def test_source_freshness_selection_select(self, project, logs_dir):
         """Tests node selection using the --select argument."""
+        """Also validate that specify a target-path works as expected."""
         self._set_updated_at_to(project, timedelta(hours=-2))
         # select source directly
         results = self.run_dbt_with_vars(
@@ -199,13 +207,11 @@ class TestSourceFreshnessSelection(SuccessfulSourceFreshnessTest):
                 "freshness",
                 "--select",
                 "source:test_source.test_table",
-                "-o",
-                "target/pass_source.json",
             ],
         )
         assert len(results) == 1
         assert results[0].status == "pass"
-        self._assert_freshness_results("target/pass_source.json", "pass")
+        self._assert_freshness_results(f"{logs_dir}/sources.json", "pass")
 
 
 class TestSourceFreshnessExclude(SuccessfulSourceFreshnessTest):
@@ -256,8 +262,8 @@ class TestSourceFreshnessErrors(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": error_models__schema_yml,
-            "model.sql": error_models__model_sql,
+            "schema.yml": error_models_schema_yml,
+            "model.sql": error_models_model_sql,
         }
 
     def test_source_freshness_error(self, project):
@@ -269,7 +275,7 @@ class TestSourceFreshnessErrors(SuccessfulSourceFreshnessTest):
 class TestSourceFreshnessFilter(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"schema.yml": filtered_models__schema_yml}
+        return {"schema.yml": filtered_models_schema_yml}
 
     def test_source_freshness_all_records(self, project):
         # all records are filtered out
@@ -288,7 +294,7 @@ class TestSourceFreshnessFilter(SuccessfulSourceFreshnessTest):
 class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def models(self):
-        return {"schema.yml": override_freshness_models__schema_yml}
+        return {"schema.yml": override_freshness_models_schema_yml}
 
     @staticmethod
     def get_result_from_unique_id(data, unique_id):
@@ -349,3 +355,23 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
             "filter": None,
         }
         assert result_source_d["criteria"] == expected
+
+
+class TestSourceFreshnessMacroOverride(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "collect_freshness.sql": collect_freshness_macro_override_previous_return_signature
+        }
+
+    def test_source_freshness(self, project):
+        # ensure that the deprecation warning is raised
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == set()
+        self.run_dbt_with_vars(
+            project,
+            ["source", "freshness"],
+            expect_pass=False,
+        )
+        expected = {"collect-freshness-return-signature"}
+        assert expected == deprecations.active_deprecations

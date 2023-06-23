@@ -1,12 +1,13 @@
 import os
 from dataclasses import dataclass
-from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic
+from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic, Optional
+from pathspec import PathSpec  # type: ignore
 
 from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
 from dbt.config import Project
 from dbt.contracts.files import FilePath, AnySourceFile
-from dbt.exceptions import ParsingException, InternalException
+from dbt.exceptions import ParsingError, DbtInternalError
 
 
 # What's the point of wrapping a SourceFile with this class?
@@ -61,13 +62,18 @@ class FullBlock(FileBlock):
         return self.block.full_block
 
 
-def filesystem_search(project: Project, relative_dirs: List[str], extension: str):
+def filesystem_search(
+    project: Project,
+    relative_dirs: List[str],
+    extension: str,
+    ignore_spec: Optional[PathSpec] = None,
+):
     ext = "[!.#~]*" + extension
     root = project.project_root
     file_path_list = []
-    for result in find_matching(root, relative_dirs, ext):
+    for result in find_matching(root, relative_dirs, ext, ignore_spec):
         if "searched_path" not in result or "relative_path" not in result:
-            raise InternalException("Invalid result from find_matching: {}".format(result))
+            raise DbtInternalError("Invalid result from find_matching: {}".format(result))
         file_match = FilePath(
             searched_path=result["searched_path"],
             relative_path=result["relative_path"],
@@ -107,7 +113,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
                 assert isinstance(block, BlockTag)
                 yield block
 
-        except ParsingException as exc:
+        except ParsingError as exc:
             if exc.node is None:
                 exc.add_node(source_file)
             raise

@@ -67,7 +67,8 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         elif self.key == "metrics":
-            if keypath[0] == "expression":
+            # This ensures all key paths that end in 'filter' for a metric are skipped
+            if keypath[-1] == "filter":
                 return False
             elif self._is_norender_key(keypath[0:]):
                 return False

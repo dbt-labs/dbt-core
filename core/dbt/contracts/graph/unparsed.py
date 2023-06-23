@@ -1,9 +1,22 @@
+import datetime
+import re
+
+from dbt import deprecations
 from dbt.node_types import NodeType
-from dbt.contracts.util import AdditionalPropertiesMixin, Mergeable, Replaceable
+from dbt.contracts.graph.semantic_models import (
+    Defaults,
+    DimensionValidityParams,
+    MeasureAggregationParameters,
+)
+from dbt.contracts.util import (
+    AdditionalPropertiesMixin,
+    Mergeable,
+    Replaceable,
+)
 
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import CompilationError, ParsingError, DbtInternalError
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, ValidationError
 
@@ -16,7 +29,6 @@ from typing import Optional, List, Union, Dict, Any, Sequence
 @dataclass
 class UnparsedBaseNode(dbtClassMixin, Replaceable):
     package_name: str
-    root_path: str
     path: str
     original_file_path: str
 
@@ -81,11 +93,12 @@ class Docs(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
+class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
     _extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -94,27 +107,23 @@ TestDef = Union[Dict[str, Any], str]
 
 
 @dataclass
-class HasTests(HasDocs):
-    tests: Optional[List[TestDef]] = None
-
-    def __post_init__(self):
-        if self.tests is None:
-            self.tests = []
+class HasColumnAndTestProps(HasColumnProps):
+    tests: List[TestDef] = field(default_factory=list)
 
 
 @dataclass
-class UnparsedColumn(HasTests):
+class UnparsedColumn(HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
 
 
 @dataclass
 class HasColumnDocs(dbtClassMixin, Replaceable):
-    columns: Sequence[HasDocs] = field(default_factory=list)
+    columns: Sequence[HasColumnProps] = field(default_factory=list)
 
 
 @dataclass
-class HasColumnTests(HasColumnDocs):
+class HasColumnTests(dbtClassMixin, Replaceable):
     columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
@@ -134,14 +143,127 @@ class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasDocs, HasYamlMetadata):
-    pass
+NodeVersion = Union[str, float]
 
 
 @dataclass
-class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasTests, HasYamlMetadata):
+class UnparsedVersion(dbtClassMixin):
+    v: NodeVersion
+    defined_in: Optional[str] = None
+    description: str = ""
+    access: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+    constraints: List[Dict[str, Any]] = field(default_factory=list)
+    docs: Docs = field(default_factory=Docs)
+    tests: Optional[List[TestDef]] = None
+    columns: Sequence[Union[dbt.helper_types.IncludeExclude, UnparsedColumn]] = field(
+        default_factory=list
+    )
+    deprecation_date: Optional[datetime.datetime] = None
+
+    def __lt__(self, other):
+        try:
+            v = type(other.v)(self.v)
+            return v < other.v
+        except ValueError:
+            try:
+                other_v = type(self.v)(other.v)
+                return self.v < other_v
+            except ValueError:
+                return str(self.v) < str(other.v)
+
+    @property
+    def include_exclude(self) -> dbt.helper_types.IncludeExclude:
+        return self._include_exclude
+
+    @property
+    def unparsed_columns(self) -> List:
+        return self._unparsed_columns
+
+    @property
+    def formatted_v(self) -> str:
+        return f"v{self.v}"
+
+    def __post_init__(self):
+        has_include_exclude = False
+        self._include_exclude = dbt.helper_types.IncludeExclude(include="*")
+        self._unparsed_columns = []
+        for column in self.columns:
+            if isinstance(column, dbt.helper_types.IncludeExclude):
+                if not has_include_exclude:
+                    self._include_exclude = column
+                    has_include_exclude = True
+                else:
+                    raise ParsingError("version can have at most one include/exclude element")
+            else:
+                self._unparsed_columns.append(column)
+
+        self.deprecation_date = normalize_date(self.deprecation_date)
+
+
+@dataclass
+class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasColumnProps, HasYamlMetadata):
+    access: Optional[str] = None
+
+
+@dataclass
+class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYamlMetadata):
     quote_columns: Optional[bool] = None
+    access: Optional[str] = None
+
+
+@dataclass
+class UnparsedModelUpdate(UnparsedNodeUpdate):
+    quote_columns: Optional[bool] = None
+    access: Optional[str] = None
+    latest_version: Optional[NodeVersion] = None
+    versions: Sequence[UnparsedVersion] = field(default_factory=list)
+    deprecation_date: Optional[datetime.datetime] = None
+
+    def __post_init__(self):
+        if self.latest_version:
+            version_values = [version.v for version in self.versions]
+            if self.latest_version not in version_values:
+                raise ParsingError(
+                    f"latest_version: {self.latest_version} is not one of model '{self.name}' versions: {version_values} "
+                )
+
+        seen_versions: set[str] = set()
+        for version in self.versions:
+            if str(version.v) in seen_versions:
+                raise ParsingError(
+                    f"Found duplicate version: '{version.v}' in versions list of model '{self.name}'"
+                )
+            seen_versions.add(str(version.v))
+
+        self._version_map = {version.v: version for version in self.versions}
+
+        self.deprecation_date = normalize_date(self.deprecation_date)
+
+    def get_columns_for_version(self, version: NodeVersion) -> List[UnparsedColumn]:
+        if version not in self._version_map:
+            raise DbtInternalError(
+                f"get_columns_for_version called for version '{version}' not in version map"
+            )
+
+        version_columns = []
+        unparsed_version = self._version_map[version]
+        for base_column in self.columns:
+            if unparsed_version.include_exclude.includes(base_column.name):
+                version_columns.append(base_column)
+
+        for column in unparsed_version.unparsed_columns:
+            version_columns.append(column)
+
+        return version_columns
+
+    def get_tests_for_version(self, version: NodeVersion) -> List[TestDef]:
+        if version not in self._version_map:
+            raise DbtInternalError(
+                f"get_tests_for_version called for version '{version}' not in version map"
+            )
+        unparsed_version = self._version_map[version]
+        return unparsed_version.tests if unparsed_version.tests is not None else self.tests
 
 
 @dataclass
@@ -152,7 +274,7 @@ class MacroArgument(dbtClassMixin):
 
 
 @dataclass
-class UnparsedMacroUpdate(HasConfig, HasDocs, HasYamlMetadata):
+class UnparsedMacroUpdate(HasConfig, HasColumnProps, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
 
 
@@ -215,7 +337,7 @@ class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
 
     def __post_init__(self):
         if self.name == "" or self.data_type == "":
-            raise CompilationException("External partition columns must have names and data types")
+            raise CompilationError("External partition columns must have names and data types")
 
 
 @dataclass
@@ -224,7 +346,7 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
     file_format: Optional[str] = None
     row_format: Optional[str] = None
     tbl_properties: Optional[str] = None
-    partitions: Optional[List[ExternalPartition]] = None
+    partitions: Optional[Union[List[str], List[ExternalPartition]]] = None
 
     def __bool__(self):
         return self.location is not None
@@ -239,7 +361,7 @@ class Quoting(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
+class UnparsedSourceTableDefinition(HasColumnTests, HasColumnAndTestProps):
     config: Dict[str, Any] = field(default_factory=dict)
     loaded_at_field: Optional[str] = None
     identifier: Optional[str] = None
@@ -356,7 +478,6 @@ class SourcePatch(dbtClassMixin, Replaceable):
 @dataclass
 class UnparsedDocumentation(dbtClassMixin, Replaceable):
     package_name: str
-    root_path: str
     path: str
     original_file_path: str
 
@@ -418,8 +539,8 @@ class MaturityType(StrEnum):
 
 
 @dataclass
-class ExposureOwner(dbtClassMixin, Replaceable):
-    email: str
+class Owner(AdditionalPropertiesAllowed, Replaceable):
+    email: Optional[str] = None
     name: Optional[str] = None
 
 
@@ -427,13 +548,26 @@ class ExposureOwner(dbtClassMixin, Replaceable):
 class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
     type: ExposureType
-    owner: ExposureOwner
+    owner: Owner
     description: str = ""
+    label: Optional[str] = None
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedExposure, cls).validate(data)
+        if "name" in data:
+            # name can only contain alphanumeric chars and underscores
+            if not (re.match(r"[\w-]+$", data["name"])):
+                deprecations.warn("exposure-name", exposure=data["name"])
+
+        if data["owner"].get("name") is None and data["owner"].get("email") is None:
+            raise ValidationError("Exposure owner must have at least one of 'name' or 'email'.")
 
 
 @dataclass
@@ -464,39 +598,149 @@ class MetricTime(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class UnparsedMetric(dbtClassMixin, Replaceable):
-    # TODO : verify that this disallows metric names with spaces
-    # TODO: fix validation that you broke :p
-    # name: Identifier
+class UnparsedMetricInputMeasure(dbtClassMixin):
+    name: str
+    filter: Optional[str] = None
+    alias: Optional[str] = None
+
+
+@dataclass
+class UnparsedMetricInput(dbtClassMixin):
+    name: str
+    filter: Optional[str] = None
+    alias: Optional[str] = None
+    offset_window: Optional[str] = None
+    offset_to_grain: Optional[str] = None  # str is really a TimeGranularity Enum
+
+
+@dataclass
+class UnparsedMetricTypeParams(dbtClassMixin):
+    measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    numerator: Optional[Union[UnparsedMetricInput, str]] = None
+    denominator: Optional[Union[UnparsedMetricInput, str]] = None
+    expr: Optional[str] = None
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
+    metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+
+
+@dataclass
+class UnparsedMetric(dbtClassMixin):
     name: str
     label: str
-    calculation_method: str
-    timestamp: str
+    type: str
+    type_params: UnparsedMetricTypeParams
     description: str = ""
-    expression: Union[str, int] = ""
-    time_grains: List[str] = field(default_factory=list)
-    dimensions: List[str] = field(default_factory=list)
-    window: Optional[MetricTime] = None
-    model: Optional[str] = None
-    filters: List[MetricFilter] = field(default_factory=list)
+    filter: Optional[str] = None
+    # metadata: Optional[Unparsedetadata] = None # TODO
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
-        # super().validate(data)
-        # TODO: putting this back for now to get tests passing.  Do we want to implement name: Identifier?
         super(UnparsedMetric, cls).validate(data)
-        if "name" in data and " " in data["name"]:
-            raise ParsingException(f"Metrics name '{data['name']}' cannot contain spaces")
+        if "name" in data:
+            errors = []
+            if " " in data["name"]:
+                errors.append("cannot contain spaces")
+            # This handles failing queries due to too long metric names.
+            # It only occurs in BigQuery and Snowflake (Postgres/Redshift truncate)
+            if len(data["name"]) > 250:
+                errors.append("cannot contain more than 250 characters")
+            if not (re.match(r"^[A-Za-z]", data["name"])):
+                errors.append("must begin with a letter")
+            if not (re.match(r"[\w-]+$", data["name"])):
+                errors.append("must contain only letters, numbers and underscores")
 
-        if data.get("calculation_method") == "expression":
-            raise ValidationError(
-                "The metric calculation method expression has been deprecated and renamed to derived. Please update"
-            )
+            if errors:
+                raise ParsingError(
+                    f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
+                )
 
-        if data.get("model") is None and data.get("calculation_method") != "derived":
-            raise ValidationError("Non-derived metrics require a 'model' property")
 
-        if data.get("model") is not None and data.get("calculation_method") == "derived":
-            raise ValidationError("Derived metrics cannot have a 'model' property")
+@dataclass
+class UnparsedGroup(dbtClassMixin, Replaceable):
+    name: str
+    owner: Owner
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedGroup, cls).validate(data)
+        if data["owner"].get("name") is None and data["owner"].get("email") is None:
+            raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
+
+
+#
+# semantic interfaces unparsed objects
+#
+
+
+@dataclass
+class UnparsedEntity(dbtClassMixin):
+    name: str
+    type: str  # EntityType enum
+    description: Optional[str] = None
+    role: Optional[str] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedNonAdditiveDimension(dbtClassMixin):
+    name: str
+    window_choice: str  # AggregationType enum
+    window_grouples: List[str]
+
+
+@dataclass
+class UnparsedMeasure(dbtClassMixin):
+    name: str
+    agg: str  # actually an enum
+    description: Optional[str] = None
+    create_metric: bool = False
+    expr: Optional[str] = None
+    agg_params: Optional[MeasureAggregationParameters] = None
+    non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
+    agg_time_dimension: Optional[str] = None
+
+
+@dataclass
+class UnparsedDimensionTypeParams(dbtClassMixin):
+    time_granularity: str  # TimeGranularity enum
+    validity_params: Optional[DimensionValidityParams] = None
+
+
+@dataclass
+class UnparsedDimension(dbtClassMixin):
+    name: str
+    type: str  # actually an enum
+    description: Optional[str] = None
+    is_partition: bool = False
+    type_params: Optional[UnparsedDimensionTypeParams] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedSemanticModel(dbtClassMixin):
+    name: str
+    model: str  # looks like "ref(...)"
+    description: Optional[str] = None
+    defaults: Optional[Defaults] = None
+    entities: List[UnparsedEntity] = field(default_factory=list)
+    measures: List[UnparsedMeasure] = field(default_factory=list)
+    dimensions: List[UnparsedDimension] = field(default_factory=list)
+
+
+def normalize_date(d: Optional[datetime.date]) -> Optional[datetime.datetime]:
+    """Convert date to datetime (at midnight), and add local time zone if naive"""
+    if d is None:
+        return None
+
+    # convert date to datetime
+    dt = d if type(d) == datetime.datetime else datetime.datetime(d.year, d.month, d.day)
+
+    if not dt.tzinfo:
+        # date is naive, re-interpret as system time zone
+        dt = dt.astimezone()
+
+    return dt

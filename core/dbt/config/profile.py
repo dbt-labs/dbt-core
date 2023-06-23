@@ -4,17 +4,19 @@ import os
 
 from dbt.dataclass_schema import ValidationError
 
-from dbt import flags
+from dbt.flags import get_flags
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
-from dbt.exceptions import CompilationException
-from dbt.exceptions import DbtProfileError
-from dbt.exceptions import DbtProjectError
-from dbt.exceptions import ValidationException
-from dbt.exceptions import RuntimeException
-from dbt.exceptions import validator_error_message
+from dbt.exceptions import (
+    CompilationError,
+    DbtProfileError,
+    DbtProjectError,
+    DbtValidationError,
+    DbtRuntimeError,
+    ProfileConfigError,
+)
 from dbt.events.types import MissingProfileTarget
 from dbt.events.functions import fire_event
 from dbt.utils import coerce_dict_str
@@ -23,29 +25,11 @@ from .renderer import ProfileRenderer
 
 DEFAULT_THREADS = 1
 
-DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser("~"), ".dbt")
-
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
 
 {error_string}
 """
-
-
-NO_SUPPLIED_PROFILE_ERROR = """\
-dbt cannot run because no profile was specified for this dbt project.
-To specify a profile for this project, add a line like the this to
-your dbt_project.yml file:
-
-profile: [profile name]
-
-Here, [profile name] should be replaced with a profile name
-defined in your profiles.yml file. You can find profiles.yml here:
-
-{profiles_file}/profiles.yml
-""".format(
-    profiles_file=DEFAULT_PROFILES_DIR
-)
 
 
 def read_profile(profiles_dir: str) -> Dict[str, Any]:
@@ -60,9 +44,9 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
                 msg = f"The profiles.yml file at {path} is empty"
                 raise DbtProfileError(INVALID_PROFILE_MESSAGE.format(error_string=msg))
             return yaml_content
-        except ValidationException as e:
+        except DbtValidationError as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
-            raise ValidationException(msg) from e
+            raise DbtValidationError(msg) from e
 
     return {}
 
@@ -75,7 +59,7 @@ def read_user_config(directory: str) -> UserConfig:
             if user_config is not None:
                 UserConfig.validate(user_config)
                 return UserConfig.from_dict(user_config)
-    except (RuntimeException, ValidationError):
+    except (DbtRuntimeError, ValidationError):
         pass
     return UserConfig()
 
@@ -158,7 +142,7 @@ class Profile(HasCredentials):
             dct = self.to_profile_info(serialize_credentials=True)
             ProfileConfig.validate(dct)
         except ValidationError as exc:
-            raise DbtProfileError(validator_error_message(exc)) from exc
+            raise ProfileConfigError(exc) from exc
 
     @staticmethod
     def _credentials_from_profile(
@@ -182,8 +166,8 @@ class Profile(HasCredentials):
             data = cls.translate_aliases(profile)
             cls.validate(data)
             credentials = cls.from_dict(data)
-        except (RuntimeException, ValidationError) as e:
-            msg = str(e) if isinstance(e, RuntimeException) else e.message
+        except (DbtRuntimeError, ValidationError) as e:
+            msg = str(e) if isinstance(e, DbtRuntimeError) else e.message
             raise DbtProfileError(
                 'Credentials in profile "{}", target "{}" invalid: {}'.format(
                     profile_name, target_name, msg
@@ -197,10 +181,33 @@ class Profile(HasCredentials):
         args_profile_name: Optional[str],
         project_profile_name: Optional[str] = None,
     ) -> str:
+        # TODO: Duplicating this method as direct copy of the implementation in dbt.cli.resolvers
+        # dbt.cli.resolvers implementation can't be used because it causes a circular dependency.
+        # This should be removed and use a safe default access on the Flags module when
+        # https://github.com/dbt-labs/dbt-core/issues/6259 is closed.
+        def default_profiles_dir():
+            from pathlib import Path
+
+            return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
+
         profile_name = project_profile_name
         if args_profile_name is not None:
             profile_name = args_profile_name
         if profile_name is None:
+            NO_SUPPLIED_PROFILE_ERROR = """\
+dbt cannot run because no profile was specified for this dbt project.
+To specify a profile for this project, add a line like the this to
+your dbt_project.yml file:
+
+profile: [profile name]
+
+Here, [profile name] should be replaced with a profile name
+defined in your profiles.yml file. You can find profiles.yml here:
+
+{profiles_file}/profiles.yml
+""".format(
+                profiles_file=default_profiles_dir()
+            )
             raise DbtProjectError(NO_SUPPLIED_PROFILE_ERROR)
         return profile_name
 
@@ -299,7 +306,7 @@ class Profile(HasCredentials):
 
         try:
             profile_data = renderer.render_data(raw_profile_data)
-        except CompilationException as exc:
+        except CompilationError as exc:
             raise DbtProfileError(str(exc)) from exc
         return target_name, profile_data
 
@@ -401,11 +408,13 @@ class Profile(HasCredentials):
         )
 
     @classmethod
-    def render_from_args(
+    def render(
         cls,
-        args: Any,
         renderer: ProfileRenderer,
         project_profile_name: Optional[str],
+        profile_name_override: Optional[str] = None,
+        target_override: Optional[str] = None,
+        threads_override: Optional[int] = None,
     ) -> "Profile":
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
@@ -421,10 +430,9 @@ class Profile(HasCredentials):
             target could not be found.
         :returns Profile: The new Profile object.
         """
-        threads_override = getattr(args, "threads", None)
-        target_override = getattr(args, "target", None)
+        flags = get_flags()
         raw_profiles = read_profile(flags.PROFILES_DIR)
-        profile_name = cls.pick_profile_name(getattr(args, "profile", None), project_profile_name)
+        profile_name = cls.pick_profile_name(profile_name_override, project_profile_name)
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,
             profile_name=profile_name,

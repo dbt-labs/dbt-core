@@ -1,9 +1,17 @@
-from abc import ABCMeta, abstractproperty, abstractmethod
-from dataclasses import dataclass
-from dbt.events.serialization import EventSerialization
+from enum import Enum
 import os
 import threading
-from typing import Any, Dict
+from dbt.events import types_pb2
+import sys
+from google.protobuf.json_format import ParseDict, MessageToDict, MessageToJson
+from google.protobuf.message import Message
+from dbt.events.helpers import get_json_string_utcnow
+from typing import Optional
+
+if sys.version_info >= (3, 8):
+    from typing import Protocol
+else:
+    from typing_extensions import Protocol
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -12,112 +20,165 @@ from typing import Any, Dict
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-class Cache:
-    # Events with this class will only be logged when the `--log-cache-events` flag is passed
-    pass
+def get_global_metadata_vars() -> dict:
+    from dbt.events.functions import get_metadata_vars
+
+    return get_metadata_vars()
 
 
-@dataclass
-class ShowException:
-    # N.B.:
-    # As long as we stick with the current convention of setting the member vars in the
-    # `message` method of subclasses, this is a safe operation.
-    # If that ever changes we'll want to reassess.
-    def __post_init__(self):
-        self.exc_info: Any = True
-        self.stack_info: Any = None
-        self.extra: Any = None
+def get_invocation_id() -> str:
+    from dbt.events.functions import get_invocation_id
+
+    return get_invocation_id()
 
 
-# TODO add exhaustiveness checking for subclasses
-# top-level superclass for all events
-class Event(metaclass=ABCMeta):
-    # Do not define fields with defaults here
+# exactly one pid per concrete event
+def get_pid() -> int:
+    return os.getpid()
 
-    # four digit string code that uniquely identifies this type of event
-    # uniqueness and valid characters are enforced by tests
-    @abstractproperty
-    @staticmethod
-    def code() -> str:
+
+# in theory threads can change so we don't cache them.
+def get_thread_name() -> str:
+    return threading.current_thread().name
+
+
+# EventLevel is an Enum, but mixing in the 'str' type is suggested in the Python
+# documentation, and provides support for json conversion, which fails otherwise.
+class EventLevel(str, Enum):
+    DEBUG = "debug"
+    TEST = "test"
+    INFO = "info"
+    WARN = "warn"
+    ERROR = "error"
+
+
+class BaseEvent:
+    """BaseEvent for proto message generated python events"""
+
+    def __init__(self, *args, **kwargs):
+        class_name = type(self).__name__
+        msg_cls = getattr(types_pb2, class_name)
+        if class_name == "Formatting" and len(args) > 0:
+            kwargs["msg"] = args[0]
+            args = ()
+        assert (
+            len(args) == 0
+        ), f"[{class_name}] Don't use positional arguments when constructing logging events"
+        if "base_msg" in kwargs:
+            kwargs["base_msg"] = str(kwargs["base_msg"])
+        if "msg" in kwargs:
+            kwargs["msg"] = str(kwargs["msg"])
+        try:
+            self.pb_msg = ParseDict(kwargs, msg_cls())
+        except Exception:
+            # Imports need to be here to avoid circular imports
+            from dbt.events.types import Note
+            from dbt.events.functions import fire_event
+
+            error_msg = f"[{class_name}]: Unable to parse dict {kwargs}"
+            # If we're testing throw an error so that we notice failures
+            if "pytest" in sys.modules:
+                raise Exception(error_msg)
+            else:
+                fire_event(Note(msg=error_msg), level=EventLevel.WARN)
+                self.pb_msg = msg_cls()
+
+    def __setattr__(self, key, value):
+        if key == "pb_msg":
+            super().__setattr__(key, value)
+        else:
+            super().__getattribute__("pb_msg").__setattr__(key, value)
+
+    def __getattr__(self, key):
+        if key == "pb_msg":
+            return super().__getattribute__(key)
+        else:
+            return super().__getattribute__("pb_msg").__getattribute__(key)
+
+    def to_dict(self):
+        return MessageToDict(
+            self.pb_msg, preserving_proto_field_name=True, including_default_value_fields=True
+        )
+
+    def to_json(self):
+        return MessageToJson(
+            self.pb_msg, preserving_proto_field_name=True, including_default_valud_fields=True
+        )
+
+    def level_tag(self) -> EventLevel:
+        return EventLevel.DEBUG
+
+    def message(self) -> str:
+        raise Exception("message() not implemented for event")
+
+    def code(self) -> str:
         raise Exception("code() not implemented for event")
 
-    # The 'to_dict' method is added by mashumaro via the EventSerialization.
-    # It should be in all subclasses that are to record actual events.
-    @abstractmethod
-    def to_dict(self):
-        raise Exception("to_dict not implemented for Event")
 
-    # do not define this yourself. inherit it from one of the above level types.
-    @abstractmethod
-    def level_tag(self) -> str:
-        raise Exception("level_tag not implemented for Event")
-
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    # Must override yourself
-    @abstractmethod
-    def message(self) -> str:
-        raise Exception("msg not implemented for Event")
-
-    # exactly one pid per concrete event
-    def get_pid(self) -> int:
-        return os.getpid()
-
-    # in theory threads can change so we don't cache them.
-    def get_thread_name(self) -> str:
-        return threading.current_thread().name
-
-    @classmethod
-    def get_invocation_id(cls) -> str:
-        from dbt.events.functions import get_invocation_id
-
-        return get_invocation_id()
+class EventInfo(Protocol):
+    level: str
+    name: str
+    ts: str
+    code: str
 
 
-# in preparation for #3977
-@dataclass  # type: ignore[misc]
-class TestLevel(EventSerialization, Event):
-    def level_tag(self) -> str:
-        return "test"
+class EventMsg(Protocol):
+    info: EventInfo
+    data: Message
 
 
-@dataclass  # type: ignore[misc]
-class DebugLevel(EventSerialization, Event):
-    def level_tag(self) -> str:
-        return "debug"
+def msg_from_base_event(event: BaseEvent, level: Optional[EventLevel] = None):
+
+    msg_class_name = f"{type(event).__name__}Msg"
+    msg_cls = getattr(types_pb2, msg_class_name)
+
+    # level in EventInfo must be a string, not an EventLevel
+    msg_level: str = level.value if level else event.level_tag().value
+    assert msg_level is not None
+    event_info = {
+        "level": msg_level,
+        "msg": event.message(),
+        "invocation_id": get_invocation_id(),
+        "extra": get_global_metadata_vars(),
+        "ts": get_json_string_utcnow(),
+        "pid": get_pid(),
+        "thread": get_thread_name(),
+        "code": event.code(),
+        "name": type(event).__name__,
+    }
+    new_event = ParseDict({"info": event_info}, msg_cls())
+    new_event.data.CopyFrom(event.pb_msg)
+    return new_event
 
 
-@dataclass  # type: ignore[misc]
-class InfoLevel(EventSerialization, Event):
-    def level_tag(self) -> str:
-        return "info"
-
-
-@dataclass  # type: ignore[misc]
-class WarnLevel(EventSerialization, Event):
-    def level_tag(self) -> str:
-        return "warn"
-
-
-@dataclass  # type: ignore[misc]
-class ErrorLevel(EventSerialization, Event):
-    def level_tag(self) -> str:
-        return "error"
-
-
-# prevents an event from going to the file
-# This should rarely be used in core code. It is currently
-# only used in integration tests and for the 'clean' command.
-class NoFile:
+# DynamicLevel requires that the level be supplied on the
+# event construction call using the "info" function from functions.py
+class DynamicLevel(BaseEvent):
     pass
 
 
-# prevents an event from going to stdout
-class NoStdOut:
-    pass
+class TestLevel(BaseEvent):
+    __test__ = False
+
+    def level_tag(self) -> EventLevel:
+        return EventLevel.TEST
 
 
-# This class represents the node_info which is generated
-# by the NodeInfoMixin class in dbt.contracts.graph.parsed
-@dataclass
-class NodeInfo:
-    node_info: Dict[str, Any]
+class DebugLevel(BaseEvent):
+    def level_tag(self) -> EventLevel:
+        return EventLevel.DEBUG
+
+
+class InfoLevel(BaseEvent):
+    def level_tag(self) -> EventLevel:
+        return EventLevel.INFO
+
+
+class WarnLevel(BaseEvent):
+    def level_tag(self) -> EventLevel:
+        return EventLevel.WARN
+
+
+class ErrorLevel(BaseEvent):
+    def level_tag(self) -> EventLevel:
+        return EventLevel.ERROR

@@ -1,8 +1,9 @@
 import pytest
 import json
+import os
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 
 macros__validate_set_sql = """
 {% macro validate_set() %}
@@ -26,7 +27,16 @@ macros__validate_zip_sql = """
 
 macros__validate_invocation_sql = """
 {% macro validate_invocation(my_variable) %}
+    -- check a specific value
+    {{ log("use_colors: "~ invocation_args_dict['use_colors']) }}
+    -- whole dictionary (as string)
     {{ log("invocation_result: "~ invocation_args_dict) }}
+{% endmacro %}
+"""
+
+macros__validate_dbt_metadata_envs_sql = """
+{% macro validate_dbt_metadata_envs() %}
+    {{ log("dbt_metadata_envs_result:"~ dbt_metadata_envs) }}
 {% endmacro %}
 """
 
@@ -39,6 +49,30 @@ models__zip_exception_sql = """
 """
 
 
+def parse_json_logs(json_log_output):
+    parsed_logs = []
+    for line in json_log_output.split("\n"):
+        try:
+            log = json.loads(line)
+        except ValueError:
+            continue
+
+        parsed_logs.append(log)
+
+    return parsed_logs
+
+
+def find_result_in_parsed_logs(parsed_logs, result_name):
+    return next(
+        (
+            item["data"]["msg"]
+            for item in parsed_logs
+            if result_name in item["data"].get("msg", "msg")
+        ),
+        False,
+    )
+
+
 class TestContextBuiltins:
     @pytest.fixture(scope="class")
     def macros(self):
@@ -46,6 +80,7 @@ class TestContextBuiltins:
             "validate_set.sql": macros__validate_set_sql,
             "validate_zip.sql": macros__validate_zip_sql,
             "validate_invocation.sql": macros__validate_invocation_sql,
+            "validate_dbt_metadata_envs.sql": macros__validate_dbt_metadata_envs_sql,
         }
 
     def test_builtin_set_function(self, project):
@@ -75,32 +110,43 @@ class TestContextBuiltins:
             ]
         )
 
-        parsed_logs = []
-        for line in log_output.split("\n"):
-            try:
-                log = json.loads(line)
-            except ValueError:
-                continue
-
-            parsed_logs.append(log)
-
-        # Value of msg is a string
-        result = next(
-            (
-                item
-                for item in parsed_logs
-                if "invocation_result" in item["data"].get("msg", "msg")
-            ),
-            False,
+        parsed_logs = parse_json_logs(log_output)
+        use_colors = result = find_result_in_parsed_logs(parsed_logs, "use_colors")
+        assert use_colors == "use_colors: True"
+        invocation_dict = find_result_in_parsed_logs(parsed_logs, "invocation_result")
+        assert result
+        # The result should include a dictionary of all flags with values that aren't None
+        expected = (
+            "'send_anonymous_usage_stats': False",
+            "'quiet': False",
+            "'print': True",
+            "'cache_selected_only': False",
+            "'macro': 'validate_invocation'",
+            "'args': {'my_variable': 'test_variable'}",
+            "'which': 'run-operation'",
+            "'indirect_selection': 'eager'",
         )
+        assert all(element in invocation_dict for element in expected)
+
+    def test_builtin_dbt_metadata_envs_function(self, project, monkeypatch):
+        envs = {
+            "DBT_ENV_CUSTOM_ENV_RUN_ID": "1234",
+            "DBT_ENV_CUSTOM_ENV_JOB_ID": "5678",
+            "DBT_ENV_RUN_ID": "91011",
+            "RANDOM_ENV": "121314",
+        }
+        monkeypatch.setattr(os, "environ", envs)
+
+        _, log_output = run_dbt_and_capture(
+            ["--debug", "--log-format=json", "run-operation", "validate_dbt_metadata_envs"]
+        )
+
+        parsed_logs = parse_json_logs(log_output)
+        result = find_result_in_parsed_logs(parsed_logs, "dbt_metadata_envs_result")
 
         assert result
 
-        # Result is checked in two parts because profiles_dir is unique each test run
-        expected = "invocation_result: {'debug': True, 'log_format': 'json', 'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': "
-        assert expected in str(result)
-
-        expected = "'send_anonymous_usage_stats': False, 'event_buffer_size': 100000, 'quiet': False, 'no_print': False, 'macro': 'validate_invocation', 'args': '{my_variable: test_variable}', 'which': 'run-operation', 'rpc_method': 'run-operation', 'indirect_selection': 'eager'}"
+        expected = "dbt_metadata_envs_result:{'RUN_ID': '1234', 'JOB_ID': '5678'}"
         assert expected in str(result)
 
 
@@ -108,9 +154,9 @@ class TestContextBuiltinExceptions:
     # Assert compilation errors are raised with _strict equivalents
     def test_builtin_function_exception(self, project):
         write_file(models__set_exception_sql, project.project_root, "models", "raise.sql")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["compile"])
 
         write_file(models__zip_exception_sql, project.project_root, "models", "raise.sql")
-        with pytest.raises(CompilationException):
+        with pytest.raises(CompilationError):
             run_dbt(["compile"])

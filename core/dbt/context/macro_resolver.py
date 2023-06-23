@@ -1,10 +1,10 @@
 from typing import Dict, MutableMapping, Optional
-from dbt.contracts.graph.parsed import ParsedMacro
-from dbt.exceptions import raise_duplicate_macro_name, raise_compiler_error
+from dbt.contracts.graph.nodes import Macro
+from dbt.exceptions import DuplicateMacroNameError, PackageNotFoundForMacroError
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.clients.jinja import MacroGenerator
 
-MacroNamespace = Dict[str, ParsedMacro]
+MacroNamespace = Dict[str, Macro]
 
 
 # This class builds the MacroResolver by adding macros
@@ -21,7 +21,7 @@ MacroNamespace = Dict[str, ParsedMacro]
 class MacroResolver:
     def __init__(
         self,
-        macros: MutableMapping[str, ParsedMacro],
+        macros: MutableMapping[str, Macro],
         root_project_name: str,
         internal_package_names,
     ) -> None:
@@ -77,7 +77,7 @@ class MacroResolver:
     def _add_macro_to(
         self,
         package_namespaces: Dict[str, MacroNamespace],
-        macro: ParsedMacro,
+        macro: Macro,
     ):
         if macro.package_name in package_namespaces:
             namespace = package_namespaces[macro.package_name]
@@ -86,10 +86,10 @@ class MacroResolver:
             package_namespaces[macro.package_name] = namespace
 
         if macro.name in namespace:
-            raise_duplicate_macro_name(macro, macro, macro.package_name)
+            raise DuplicateMacroNameError(macro, macro, macro.package_name)
         package_namespaces[macro.package_name][macro.name] = macro
 
-    def add_macro(self, macro: ParsedMacro):
+    def add_macro(self, macro: Macro):
         macro_name: str = macro.name
 
         # internal macros (from plugins) will be processed separately from
@@ -109,9 +109,15 @@ class MacroResolver:
 
     def get_macro(self, local_package, macro_name):
         local_package_macros = {}
+        # If the macro is explicitly prefixed with an internal namespace
+        # (e.g. 'dbt.some_macro'), look there first
+        if local_package in self.internal_package_names:
+            local_package_macros = self.internal_packages[local_package]
+        # If the macro is explicitly prefixed with a different package name
+        # (e.g. 'dbt_utils.some_macro'), look there first
         if local_package not in self.internal_package_names and local_package in self.packages:
             local_package_macros = self.packages[local_package]
-        # First: search the local packages for this macro
+        # First: search the specified package for this macro
         if macro_name in local_package_macros:
             return local_package_macros[macro_name]
         # Now look up in the standard search order
@@ -181,7 +187,7 @@ class TestMacroNamespace:
         elif package_name in self.macro_resolver.packages:
             macro = self.macro_resolver.packages[package_name].get(name)
         else:
-            raise_compiler_error(f"Could not find package '{package_name}'")
+            raise PackageNotFoundForMacroError(package_name)
         if not macro:
             return None
         macro_func = MacroGenerator(macro, self.ctx, self.node, self.thread_ctx)

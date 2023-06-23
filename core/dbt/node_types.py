@@ -3,6 +3,20 @@ from typing import List
 from dbt.dataclass_schema import StrEnum
 
 
+class AccessType(StrEnum):
+    Protected = "protected"
+    Private = "private"
+    Public = "public"
+
+    @classmethod
+    def is_valid(cls, item):
+        try:
+            cls(item)
+        except ValueError:
+            return False
+        return True
+
+
 class NodeType(StrEnum):
     Model = "model"
     Analysis = "analysis"
@@ -12,12 +26,14 @@ class NodeType(StrEnum):
     Seed = "seed"
     # TODO: rm?
     RPCCall = "rpc"
-    SqlOperation = "sql operation"
-    Documentation = "docs block"
+    SqlOperation = "sqloperation"
+    Documentation = "doc"
     Source = "source"
     Macro = "macro"
     Exposure = "exposure"
     Metric = "metric"
+    Group = "group"
+    SemanticModel = "semanticmodel"
 
     @classmethod
     def executable(cls) -> List["NodeType"]:
@@ -39,6 +55,12 @@ class NodeType(StrEnum):
             cls.Model,
             cls.Seed,
             cls.Snapshot,
+        ]
+
+    @classmethod
+    def versioned(cls) -> List["NodeType"]:
+        return [
+            cls.Model,
         ]
 
     @classmethod

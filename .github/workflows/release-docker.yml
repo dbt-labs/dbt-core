@@ -36,14 +36,14 @@ jobs:
       latest: ${{ steps.latest.outputs.latest }}
       minor_latest: ${{ steps.latest.outputs.minor_latest }}
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
       - name: Split version
         id: version
         run: |
           IFS="." read -r MAJOR MINOR PATCH <<< ${{ github.event.inputs.version_number }}
-          echo "::set-output name=major::$MAJOR"
-          echo "::set-output name=minor::$MINOR"
-          echo "::set-output name=patch::$PATCH"
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "patch=$PATCH" >> $GITHUB_OUTPUT
 
       - name: Is pkg 'latest'
         id: latest
@@ -60,7 +60,7 @@ jobs:
     needs: [get_version_meta]
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
   build_and_push:
     name: Build images and push to GHCR
@@ -70,18 +70,20 @@ jobs:
       - name: Get docker build arg
         id: build_arg
         run: |
-          echo "::set-output name=build_arg_name::"$(echo ${{ github.event.inputs.package }} | sed 's/\-/_/g')
-          echo "::set-output name=build_arg_value::"$(echo ${{ github.event.inputs.package }} | sed 's/postgres/core/g')
+          BUILD_ARG_NAME=$(echo ${{ github.event.inputs.package }} | sed 's/\-/_/g')
+          BUILD_ARG_VALUE=$(echo ${{ github.event.inputs.package }} | sed 's/postgres/core/g')
+          echo "build_arg_name=$BUILD_ARG_NAME" >> $GITHUB_OUTPUT
+          echo "build_arg_value=$BUILD_ARG_VALUE" >> $GITHUB_OUTPUT
 
       - name: Log in to the GHCR
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push MAJOR.MINOR.PATCH tag
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         with:
           file: docker/Dockerfile
           push: True
@@ -92,7 +94,7 @@ jobs:
             ghcr.io/dbt-labs/${{ github.event.inputs.package }}:${{ github.event.inputs.version_number }}
 
       - name: Build and push MINOR.latest tag
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         if: ${{ needs.get_version_meta.outputs.minor_latest == 'True' }}
         with:
           file: docker/Dockerfile
@@ -104,7 +106,7 @@ jobs:
             ghcr.io/dbt-labs/${{ github.event.inputs.package }}:${{ needs.get_version_meta.outputs.major }}.${{ needs.get_version_meta.outputs.minor }}.latest
 
       - name: Build and push latest tag
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         if: ${{ needs.get_version_meta.outputs.latest == 'True' }}
         with:
           file: docker/Dockerfile

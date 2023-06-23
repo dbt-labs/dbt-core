@@ -1,346 +1,294 @@
-from colorama import Style
-import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.base_types import NoStdOut, Event, NoFile, ShowException, Cache
-from dbt.events.types import EventBufferFull, T_Event, MainReportVersion, EmptyLine
-import dbt.flags as flags
-from dbt.constants import SECRET_ENV_PREFIX
-
-# TODO this will need to move eventually
-from dbt.logger import make_log_dir_if_missing, GLOBAL_LOGGER
-from datetime import datetime
+from dbt.constants import METADATA_ENV_PREFIX
+from dbt.events.base_types import BaseEvent, EventLevel, EventMsg
+from dbt.events.eventmgr import EventManager, LoggerConfig, LineFormat, NoFilter
+from dbt.events.helpers import env_secrets, scrub_secrets
+from dbt.events.types import Formatting, Note
+from dbt.flags import get_flags, ENABLE_LEGACY_LOGGER
+from dbt.logger import GLOBAL_LOGGER, make_log_dir_if_missing
+from functools import partial
 import json
-import io
-from io import StringIO, TextIOWrapper
-import logbook
-import logging
-from logging import Logger
-import sys
-from logging.handlers import RotatingFileHandler
 import os
+import sys
+from typing import Callable, Dict, List, Optional, TextIO
 import uuid
-import threading
-from typing import Any, Dict, List, Optional, Union
-from collections import deque
-
-global LOG_VERSION
-LOG_VERSION = 2
-
-# create the global event history buffer with the default max size (10k)
-# python 3.7 doesn't support type hints on globals, but mypy requires them. hence the ignore.
-# TODO the flags module has not yet been resolved when this is created
-global EVENT_HISTORY
-EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
-
-# create the global file logger with no configuration
-global FILE_LOG
-FILE_LOG = logging.getLogger("default_file")
-null_handler = logging.NullHandler()
-FILE_LOG.addHandler(null_handler)
-
-# set up logger to go to stdout with defaults
-# setup_event_logger will be called once args have been parsed
-global STDOUT_LOG
-STDOUT_LOG = logging.getLogger("default_stdout")
-STDOUT_LOG.setLevel(logging.INFO)
-stdout_handler = logging.StreamHandler(sys.stdout)
-stdout_handler.setLevel(logging.INFO)
-STDOUT_LOG.addHandler(stdout_handler)
-
-format_color = True
-format_json = False
-invocation_id: Optional[str] = None
+from google.protobuf.json_format import MessageToDict
 
 
-def setup_event_logger(log_path, level_override=None):
-    # flags have been resolved, and log_path is known
-    global EVENT_HISTORY
-    EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
+LOG_VERSION = 3
+metadata_vars: Optional[Dict[str, str]] = None
 
-    make_log_dir_if_missing(log_path)
+# These are the logging events issued by the "clean" command,
+# where we can't count on having a log directory. We've removed
+# the "class" flags on the events in types.py. If necessary we
+# could still use class or method flags, but we'd have to get
+# the type class from the msg and then get the information from the class.
+nofile_codes = ["Z012", "Z013", "Z014", "Z015"]
 
-    this.format_json = flags.LOG_FORMAT == "json"
-    # USE_COLORS can be None if the app just started and the cli flags
-    # havent been applied yet
-    this.format_color = True if flags.USE_COLORS else False
-    # TODO this default should live somewhere better
-    log_dest = os.path.join(log_path, "dbt.log")
-    level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
-    # overwrite the STDOUT_LOG logger with the configured one
-    this.STDOUT_LOG = logging.getLogger("configured_std_out")
-    this.STDOUT_LOG.setLevel(level)
+def setup_event_logger(flags, callbacks: List[Callable[[EventMsg], None]] = []) -> None:
+    cleanup_event_logger()
+    make_log_dir_if_missing(flags.LOG_PATH)
+    EVENT_MANAGER.callbacks = callbacks.copy()
 
-    FORMAT = "%(message)s"
-    stdout_passthrough_formatter = logging.Formatter(fmt=FORMAT)
+    if ENABLE_LEGACY_LOGGER:
+        EVENT_MANAGER.add_logger(
+            _get_logbook_log_config(
+                flags.DEBUG, flags.USE_COLORS, flags.LOG_CACHE_EVENTS, flags.QUIET
+            )
+        )
+    else:
+        if flags.LOG_LEVEL != "none":
+            line_format = _line_format_from_str(flags.LOG_FORMAT, LineFormat.PlainText)
+            log_level = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL)
+            console_config = _get_stdout_config(
+                line_format,
+                flags.DEBUG,
+                flags.USE_COLORS,
+                log_level,
+                flags.LOG_CACHE_EVENTS,
+                flags.QUIET,
+            )
+            EVENT_MANAGER.add_logger(console_config)
 
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(stdout_passthrough_formatter)
-    stdout_handler.setLevel(level)
-    # clear existing stdout TextIOWrapper stream handlers
-    this.STDOUT_LOG.handlers = [
-        h
-        for h in this.STDOUT_LOG.handlers
-        if not (hasattr(h, "stream") and isinstance(h.stream, TextIOWrapper))  # type: ignore
-    ]
-    this.STDOUT_LOG.addHandler(stdout_handler)
+            if _CAPTURE_STREAM:
+                # Create second stdout logger to support test which want to know what's
+                # being sent to stdout.
+                console_config.output_stream = _CAPTURE_STREAM
+                EVENT_MANAGER.add_logger(console_config)
 
-    # overwrite the FILE_LOG logger with the configured one
-    this.FILE_LOG = logging.getLogger("configured_file")
-    this.FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
+        if flags.LOG_LEVEL_FILE != "none":
+            # create and add the file logger to the event manager
+            log_file = os.path.join(flags.LOG_PATH, "dbt.log")
+            log_file_format = _line_format_from_str(flags.LOG_FORMAT_FILE, LineFormat.DebugText)
+            log_level_file = EventLevel.DEBUG if flags.DEBUG else EventLevel(flags.LOG_LEVEL_FILE)
+            EVENT_MANAGER.add_logger(
+                _get_logfile_config(
+                    log_file, flags.USE_COLORS_FILE, log_file_format, log_level_file
+                )
+            )
 
-    file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
-    file_handler = RotatingFileHandler(
-        filename=log_dest, encoding="utf8", maxBytes=10 * 1024 * 1024, backupCount=5  # 10 mb
+def _line_format_from_str(format_str: str, default: LineFormat) -> LineFormat:
+    if format_str == "text":
+        return LineFormat.PlainText
+    elif format_str == "debug":
+        return LineFormat.DebugText
+    elif format_str == "json":
+        return LineFormat.Json
+
+    return default
+
+
+def _get_stdout_config(
+    line_format: LineFormat,
+    debug: bool,
+    use_colors: bool,
+    level: EventLevel,
+    log_cache_events: bool,
+    quiet: bool,
+) -> LoggerConfig:
+
+    return LoggerConfig(
+        name="stdout_log",
+        level=level,
+        use_colors=use_colors,
+        line_format=line_format,
+        scrubber=env_scrubber,
+        filter=partial(
+            _stdout_filter,
+            log_cache_events,
+            debug,
+            quiet,
+            line_format,
+        ),
+        output_stream=sys.stdout,
     )
-    file_handler.setFormatter(file_passthrough_formatter)
-    file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
-    this.FILE_LOG.handlers.clear()
-    this.FILE_LOG.addHandler(file_handler)
+
+
+def _stdout_filter(
+    log_cache_events: bool,
+    debug_mode: bool,
+    quiet_mode: bool,
+    line_format: LineFormat,
+    msg: EventMsg,
+) -> bool:
+    return (
+        (msg.info.name not in ["CacheAction", "CacheDumpGraph"] or log_cache_events)
+        and (EventLevel(msg.info.level) != EventLevel.DEBUG or debug_mode)
+        and (EventLevel(msg.info.level) == EventLevel.ERROR or not quiet_mode)
+        and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
+    )
+
+
+def _get_logfile_config(
+    log_path: str, use_colors: bool, line_format: LineFormat, level: EventLevel
+) -> LoggerConfig:
+    return LoggerConfig(
+        name="file_log",
+        line_format=line_format,
+        use_colors=use_colors,
+        level=level,  # File log is *always* debug level
+        scrubber=env_scrubber,
+        filter=partial(_logfile_filter, bool(get_flags().LOG_CACHE_EVENTS), line_format),
+        output_file_name=log_path,
+    )
+
+
+def _logfile_filter(log_cache_events: bool, line_format: LineFormat, msg: EventMsg) -> bool:
+    return (
+        msg.info.code not in nofile_codes
+        and not (msg.info.name in ["CacheAction", "CacheDumpGraph"] and not log_cache_events)
+        and not (line_format == LineFormat.Json and type(msg.data) == Formatting)
+    )
+
+
+def _get_logbook_log_config(
+    debug: bool, use_colors: bool, log_cache_events: bool, quiet: bool
+) -> LoggerConfig:
+    config = _get_stdout_config(
+        LineFormat.PlainText,
+        debug,
+        use_colors,
+        EventLevel.DEBUG if debug else EventLevel.INFO,
+        log_cache_events,
+        quiet,
+    )
+    config.name = "logbook_log"
+    config.filter = (
+        NoFilter
+        if log_cache_events
+        else lambda e: e.info.name not in ["CacheAction", "CacheDumpGraph"]
+    )
+    config.logger = GLOBAL_LOGGER
+    config.output_stream = None
+    return config
+
+
+def env_scrubber(msg: str) -> str:
+    return scrub_secrets(msg, env_secrets())
+
+
+def cleanup_event_logger():
+    # Reset to a no-op manager to release streams associated with logs. This is
+    # especially important for tests, since pytest replaces the stdout stream
+    # during test runs, and closes the stream after the test is over.
+    EVENT_MANAGER.loggers.clear()
+    EVENT_MANAGER.callbacks.clear()
+
+
+# Since dbt-rpc does not do its own log setup, and since some events can
+# currently fire before logs can be configured by setup_event_logger(), we
+# create a default configuration with default settings and no file output.
+EVENT_MANAGER: EventManager = EventManager()
+EVENT_MANAGER.add_logger(
+    _get_logbook_log_config(False, True, False, False)  # type: ignore
+    if ENABLE_LEGACY_LOGGER
+    else _get_stdout_config(LineFormat.PlainText, False, True, EventLevel.INFO, False, False)
+)
+
+# This global, and the following two functions for capturing stdout logs are
+# an unpleasant hack we intend to remove as part of API-ification. The GitHub
+# issue #6350 was opened for that work.
+_CAPTURE_STREAM: Optional[TextIO] = None
 
 
 # used for integration tests
-def capture_stdout_logs() -> StringIO:
-    capture_buf = io.StringIO()
-    stdout_capture_handler = logging.StreamHandler(capture_buf)
-    stdout_handler.setLevel(logging.DEBUG)
-    this.STDOUT_LOG.addHandler(stdout_capture_handler)
-    return capture_buf
+def capture_stdout_logs(stream: TextIO):
+    global _CAPTURE_STREAM
+    _CAPTURE_STREAM = stream
 
 
-# used for integration tests
-def stop_capture_stdout_logs() -> None:
-    this.STDOUT_LOG.handlers = [
-        h
-        for h in this.STDOUT_LOG.handlers
-        if not (hasattr(h, "stream") and isinstance(h.stream, StringIO))  # type: ignore
-    ]
-
-
-def env_secrets() -> List[str]:
-    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
-
-
-def scrub_secrets(msg: str, secrets: List[str]) -> str:
-    scrubbed = msg
-
-    for secret in secrets:
-        scrubbed = scrubbed.replace(secret, "*****")
-
-    return scrubbed
+def stop_capture_stdout_logs():
+    global _CAPTURE_STREAM
+    _CAPTURE_STREAM = None
 
 
 # returns a dictionary representation of the event fields.
 # the message may contain secrets which must be scrubbed at the usage site.
-def event_to_serializable_dict(
-    e: T_Event,
-) -> Dict[str, Any]:
+def msg_to_json(msg: EventMsg) -> str:
+    msg_dict = msg_to_dict(msg)
+    raw_log_line = json.dumps(msg_dict, sort_keys=True)
+    return raw_log_line
 
-    log_line = dict()
-    code: str
+
+def msg_to_dict(msg: EventMsg) -> dict:
+    msg_dict = dict()
     try:
-        log_line = e.to_dict()
-    except AttributeError as exc:
-        event_type = type(e).__name__
-        raise Exception(  # TODO this may hang async threads
-            f"type {event_type} is not serializable. {str(exc)}"
+        msg_dict = MessageToDict(
+            msg, preserving_proto_field_name=True, including_default_value_fields=True  # type: ignore
         )
-
-    # We get the code from the event object, so we don't need it in the data
-    if "code" in log_line:
-        del log_line["code"]
-
-    event_dict = {
-        "type": "log_line",
-        "log_version": LOG_VERSION,
-        "ts": get_ts_rfc3339(),
-        "pid": e.get_pid(),
-        "msg": e.message(),
-        "level": e.level_tag(),
-        "data": log_line,
-        "invocation_id": e.get_invocation_id(),
-        "thread_name": e.get_thread_name(),
-        "code": e.code,
-    }
-
-    return event_dict
-
-
-# translates an Event to a completely formatted text-based log line
-# type hinting everything as strings so we don't get any unintentional string conversions via str()
-def reset_color() -> str:
-    return "" if not this.format_color else Style.RESET_ALL
-
-
-def create_info_text_log_line(e: T_Event) -> str:
-    color_tag: str = reset_color()
-    ts: str = get_ts().strftime("%H:%M:%S")
-    scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
-    log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"
-    return log_line
-
-
-def create_debug_text_log_line(e: T_Event) -> str:
-    log_line: str = ""
-    # Create a separator if this is the beginning of an invocation
-    if type(e) == MainReportVersion:
-        separator = 30 * "="
-        log_line = f"\n\n{separator} {get_ts()} | {get_invocation_id()} {separator}\n"
-    color_tag: str = reset_color()
-    ts: str = get_ts().strftime("%H:%M:%S.%f")
-    scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
-    level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
-    thread = ""
-    if threading.current_thread().name:
-        thread_name = threading.current_thread().name
-        thread_name = thread_name[:10]
-        thread_name = thread_name.ljust(10, " ")
-        thread = f" [{thread_name}]:"
-    log_line = log_line + f"{color_tag}{ts} [{level}]{thread} {scrubbed_msg}"
-    return log_line
-
-
-# translates an Event to a completely formatted json log line
-def create_json_log_line(e: T_Event) -> Optional[str]:
-    if type(e) == EmptyLine:
-        return None  # will not be sent to logger
-    # using preformatted ts string instead of formatting it here to be extra careful about timezone
-    values = event_to_serializable_dict(e)
-    raw_log_line = json.dumps(values, sort_keys=True)
-    return scrub_secrets(raw_log_line, env_secrets())
-
-
-# calls create_stdout_text_log_line() or create_json_log_line() according to logger config
-def create_log_line(e: T_Event, file_output=False) -> Optional[str]:
-    if this.format_json:
-        return create_json_log_line(e)  # json output, both console and file
-    elif file_output is True or flags.DEBUG:
-        return create_debug_text_log_line(e)  # default file output
-    else:
-        return create_info_text_log_line(e)  # console output
-
-
-# allows for reuse of this obnoxious if else tree.
-# do not use for exceptions, it doesn't pass along exc_info, stack_info, or extra
-def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
-    if not log_line:
-        return
-    if level_tag == "test":
-        # TODO after implmenting #3977 send to new test level
-        l.debug(log_line)
-    elif level_tag == "debug":
-        l.debug(log_line)
-    elif level_tag == "info":
-        l.info(log_line)
-    elif level_tag == "warn":
-        l.warning(log_line)
-    elif level_tag == "error":
-        l.error(log_line)
-    else:
-        raise AssertionError(
-            f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
+    except Exception as exc:
+        event_type = type(msg).__name__
+        fire_event(
+            Note(msg=f"type {event_type} is not serializable. {str(exc)}"), level=EventLevel.WARN
         )
+    # We don't want an empty NodeInfo in output
+    if (
+        "data" in msg_dict
+        and "node_info" in msg_dict["data"]
+        and msg_dict["data"]["node_info"]["node_name"] == ""
+    ):
+        del msg_dict["data"]["node_info"]
+    return msg_dict
 
 
-def send_exc_to_logger(
-    l: Logger, level_tag: str, log_line: str, exc_info=True, stack_info=False, extra=False
-):
-    if level_tag == "test":
-        # TODO after implmenting #3977 send to new test level
-        l.debug(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
-    elif level_tag == "debug":
-        l.debug(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
-    elif level_tag == "info":
-        l.info(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
-    elif level_tag == "warn":
-        l.warning(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
-    elif level_tag == "error":
-        l.error(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+def warn_or_error(event, node=None):
+    flags = get_flags()
+    if flags.WARN_ERROR or flags.WARN_ERROR_OPTIONS.includes(type(event).__name__):
+
+        # TODO: resolve this circular import when at top
+        from dbt.exceptions import EventCompilationError
+
+        raise EventCompilationError(event.message(), node)
     else:
-        raise AssertionError(
-            f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
-        )
+        fire_event(event)
+
+
+# an alternative to fire_event which only creates and logs the event value
+# if the condition is met. Does nothing otherwise.
+def fire_event_if(
+    conditional: bool, lazy_e: Callable[[], BaseEvent], level: Optional[EventLevel] = None
+) -> None:
+    if conditional:
+        fire_event(lazy_e(), level=level)
+
+
+# a special case of fire_event_if, to only fire events in our unit/functional tests
+def fire_event_if_test(
+    lazy_e: Callable[[], BaseEvent], level: Optional[EventLevel] = None
+) -> None:
+    fire_event_if(conditional=("pytest" in sys.modules), lazy_e=lazy_e, level=level)
 
 
 # top-level method for accessing the new eventing system
 # this is where all the side effects happen branched by event type
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
-def fire_event(e: Event) -> None:
-    # skip logs when `--log-cache-events` is not passed
-    if isinstance(e, Cache) and not flags.LOG_CACHE_EVENTS:
-        return
+def fire_event(e: BaseEvent, level: Optional[EventLevel] = None) -> None:
+    EVENT_MANAGER.fire_event(e, level=level)
 
-    # if and only if the event history deque will be completely filled by this event
-    # fire warning that old events are now being dropped
-    global EVENT_HISTORY
-    if len(EVENT_HISTORY) == (flags.EVENT_BUFFER_SIZE - 1):
-        EVENT_HISTORY.append(e)
-        fire_event(EventBufferFull())
-    else:
-        EVENT_HISTORY.append(e)
 
-    # backwards compatibility for plugins that require old logger (dbt-rpc)
-    if flags.ENABLE_LEGACY_LOGGER:
-        # using Event::message because the legacy logger didn't differentiate messages by
-        # destination
-        log_line = create_log_line(e)
-        if log_line:
-            send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
-        return  # exit the function to avoid using the current logger as well
+def get_metadata_vars() -> Dict[str, str]:
+    global metadata_vars
+    if metadata_vars is None:
+        metadata_vars = {
+            k[len(METADATA_ENV_PREFIX) :]: v
+            for k, v in os.environ.items()
+            if k.startswith(METADATA_ENV_PREFIX)
+        }
+    return metadata_vars
 
-    # always logs debug level regardless of user input
-    if not isinstance(e, NoFile):
-        log_line = create_log_line(e, file_output=True)
-        # doesn't send exceptions to exception logger
-        if log_line:
-            send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
-    if not isinstance(e, NoStdOut):
-        # explicitly checking the debug flag here so that potentially expensive-to-construct
-        # log messages are not constructed if debug messages are never shown.
-        if e.level_tag() == "debug" and not flags.DEBUG:
-            return  # eat the message in case it was one of the expensive ones
-        if e.level_tag() != "error" and flags.QUIET:
-            return  # eat all non-exception messages in quiet mode
-
-        log_line = create_log_line(e)
-        if log_line:
-            if not isinstance(e, ShowException):
-                send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
-            else:
-                send_exc_to_logger(
-                    STDOUT_LOG,
-                    level_tag=e.level_tag(),
-                    log_line=log_line,
-                    exc_info=e.exc_info,
-                    stack_info=e.stack_info,
-                    extra=e.extra,
-                )
+def reset_metadata_vars() -> None:
+    global metadata_vars
+    metadata_vars = None
 
 
 def get_invocation_id() -> str:
-    global invocation_id
-    if invocation_id is None:
-        invocation_id = str(uuid.uuid4())
-    return invocation_id
+    return EVENT_MANAGER.invocation_id
 
 
 def set_invocation_id() -> None:
     # This is primarily for setting the invocation_id for separate
     # commands in the dbt servers. It shouldn't be necessary for the CLI.
-    global invocation_id
-    invocation_id = str(uuid.uuid4())
-
-
-# exactly one time stamp per concrete event
-def get_ts() -> datetime:
-    ts = datetime.utcnow()
-    return ts
-
-
-# preformatted time stamp
-def get_ts_rfc3339() -> str:
-    ts = get_ts()
-    ts_rfc3339 = ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    return ts_rfc3339
+    EVENT_MANAGER.invocation_id = str(uuid.uuid4())

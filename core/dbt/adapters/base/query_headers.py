@@ -5,9 +5,9 @@ from dbt.clients.jinja import QueryStringGenerator
 
 from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.connection import AdapterRequiredConfig, QueryComment
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import DbtRuntimeError
 
 
 class NodeWrapper:
@@ -48,7 +48,7 @@ class _QueryComment(local):
         if isinstance(comment, str) and "*/" in comment:
             # tell the user "no" so they don't hurt themselves by writing
             # garbage
-            raise RuntimeException(f'query comment contains illegal value "*/": {comment}')
+            raise DbtRuntimeError(f'query comment contains illegal value "*/": {comment}')
         self.query_comment = comment
         self.append = append
 
@@ -90,7 +90,7 @@ class MacroQueryStringSetter:
     def reset(self):
         self.set("master", None)
 
-    def set(self, name: str, node: Optional[CompileResultNode]):
+    def set(self, name: str, node: Optional[ResultNode]):
         wrapped: Optional[NodeWrapper] = None
         if node is not None:
             wrapped = NodeWrapper(node)

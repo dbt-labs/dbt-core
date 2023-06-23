@@ -11,6 +11,8 @@ __pycache__/
 env*/
 dbt_env/
 build/
+!tests/functional/build
+!core/dbt/docs/build
 develop-eggs/
 dist/
 downloads/
@@ -24,7 +26,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-*.mypy_cache/
+.mypy_cache/
+.dmypy.json
 logs/
 
 # PyInstaller
@@ -49,6 +52,7 @@ coverage.xml
 *,cover
 .hypothesis/
 test.env
+makefile.test.env
 *.pytest_cache/
 
 
@@ -95,7 +99,7 @@ venv/
 
 # vscode
 .vscode/
+*.code-workspace
 
 # poetry
-pyproject.toml
 poetry.lock

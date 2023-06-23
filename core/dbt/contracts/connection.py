@@ -1,6 +1,5 @@
 import abc
 import itertools
-import hashlib
 from dataclasses import dataclass, field
 from typing import (
     Any,
@@ -12,10 +11,11 @@ from typing import (
     List,
     Callable,
 )
-from dbt.exceptions import InternalException
-from dbt.utils import translate_aliases
+from dbt.exceptions import DbtInternalError
+from dbt.utils import translate_aliases, md5
 from dbt.events.functions import fire_event
 from dbt.events.types import NewConnectionOpening
+from dbt.events.contextvars import get_node_info
 from typing_extensions import Protocol
 from dbt.dataclass_schema import (
     dbtClassMixin,
@@ -93,8 +93,8 @@ class Connection(ExtensibleDbtClassMixin, Replaceable):
                 # this will actually change 'self._handle'.
                 self._handle.resolve(self)
             except RecursionError as exc:
-                raise InternalException(
-                    "A connection's open() method attempted to read the " "handle value"
+                raise DbtInternalError(
+                    "A connection's open() method attempted to read the handle value"
                 ) from exc
         return self._handle
 
@@ -112,7 +112,9 @@ class LazyHandle:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:
-        fire_event(NewConnectionOpening(connection_state=connection.state))
+        fire_event(
+            NewConnectionOpening(connection_state=connection.state, node_info=get_node_info())
+        )
         return self.opener(connection)
 
 
@@ -139,7 +141,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         raise NotImplementedError("unique_field not implemented for base credentials class")
 
     def hashed_unique_field(self) -> str:
-        return hashlib.md5(self.unique_field.encode("utf-8")).hexdigest()
+        return md5(self.unique_field)
 
     def connection_info(self, *, with_aliases: bool = False) -> Iterable[Tuple[str, Any]]:
         """Return an ordered iterator of key/value pairs for pretty-printing."""

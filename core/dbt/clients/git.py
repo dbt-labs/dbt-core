@@ -14,10 +14,10 @@ from dbt.events.types import (
 )
 from dbt.exceptions import (
     CommandResultError,
-    RuntimeException,
-    bad_package_spec,
-    raise_git_cloning_error,
-    raise_git_cloning_problem,
+    GitCheckoutError,
+    GitCloningError,
+    UnknownGitCloningProblemError,
+    DbtRuntimeError,
 )
 from packaging import version
 
@@ -25,16 +25,6 @@ from packaging import version
 def _is_commit(revision: str) -> bool:
     # match SHA-1 git commit
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
-
-
-def _raise_git_cloning_error(repo, revision, error):
-    stderr = error.stderr.strip()
-    if "usage: git" in stderr:
-        stderr = stderr.split("\nusage: git")[0]
-    if re.match("fatal: destination path '(.+)' already exists", stderr):
-        raise_git_cloning_error(error)
-
-    bad_package_spec(repo, revision, stderr)
 
 
 def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None):
@@ -64,7 +54,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
     try:
         result = run_cmd(cwd, clone_cmd, env={"LC_ALL": "C"})
     except CommandResultError as exc:
-        _raise_git_cloning_error(repo, revision, exc)
+        raise GitCloningError(repo, revision, exc)
 
     if subdirectory:
         cwd_subdir = os.path.join(cwd, dirname or "")
@@ -72,7 +62,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
         try:
             run_cmd(cwd_subdir, clone_cmd_subdir)
         except CommandResultError as exc:
-            _raise_git_cloning_error(repo, revision, exc)
+            raise GitCloningError(repo, revision, exc)
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, ".git"))
@@ -115,8 +105,7 @@ def checkout(cwd, repo, revision=None):
     try:
         return _checkout(cwd, repo, revision)
     except CommandResultError as exc:
-        stderr = exc.stderr.strip()
-        bad_package_spec(repo, revision, stderr)
+        raise GitCheckoutError(repo=repo, revision=revision, error=exc)
 
 
 def get_current_sha(cwd):
@@ -145,7 +134,7 @@ def clone_and_checkout(
         err = exc.stderr
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:
-            raise_git_cloning_problem(repo)
+            raise UnknownGitCloningProblemError(repo)
 
     directory = None
     start_sha = None
@@ -155,7 +144,7 @@ def clone_and_checkout(
     else:
         matches = re.match("Cloning into '(.+)'", err.decode("utf-8"))
         if matches is None:
-            raise RuntimeException(f'Error cloning {repo} - never saw "Cloning into ..." from git')
+            raise DbtRuntimeError(f'Error cloning {repo} - never saw "Cloning into ..." from git')
         directory = matches.group(1)
         fire_event(GitProgressPullingNewDependency(dir=directory))
     full_path = os.path.join(cwd, directory)

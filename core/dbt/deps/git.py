@@ -1,26 +1,22 @@
 import os
-import hashlib
 from typing import List, Optional
 
 from dbt.clients import git, system
-from dbt.config import Project
+from dbt.config.project import PartialProject, Project
+from dbt.config.renderer import PackageRenderer
 from dbt.contracts.project import (
     ProjectPackageMetadata,
     GitPackage,
 )
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
-from dbt.exceptions import ExecutableError, warn_or_error, raise_dependency_error
-from dbt.events.functions import fire_event
-from dbt.events.types import EnsureGitInstalled
-from dbt import ui
-
-PIN_PACKAGE_URL = (
-    "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"  # noqa
-)
+from dbt.exceptions import ExecutableError, MultipleVersionGitDepsError
+from dbt.events.functions import fire_event, warn_or_error
+from dbt.events.types import EnsureGitInstalled, DepsUnpinned
+from dbt.utils import md5
 
 
 def md5sum(s: str):
-    return hashlib.md5(s.encode("latin-1")).hexdigest()
+    return md5(s, "latin-1")
 
 
 class GitPackageMixin:
@@ -62,14 +58,6 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         else:
             return "revision {}".format(self.revision)
 
-    def unpinned_msg(self):
-        if self.revision == "HEAD":
-            return "not pinned, using HEAD (default branch)"
-        elif self.revision in ("main", "master"):
-            return f'pinned to the "{self.revision}" branch'
-        else:
-            return None
-
     def _checkout(self):
         """Performs a shallow clone of the repository into the downloads
         directory. This function can be called repeatedly. If the project has
@@ -89,19 +77,15 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             raise
         return os.path.join(get_downloads_path(), dir_)
 
-    def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
+    def _fetch_metadata(
+        self, project: Project, renderer: PackageRenderer
+    ) -> ProjectPackageMetadata:
         path = self._checkout()
 
-        if self.unpinned_msg() and self.warn_unpinned:
-            warn_or_error(
-                'The git package "{}" \n\tis {}.\n\tThis can introduce '
-                "breaking changes into your project without warning!\n\nSee {}".format(
-                    self.git, self.unpinned_msg(), PIN_PACKAGE_URL
-                ),
-                log_fmt=ui.yellow("WARNING: {}"),
-            )
-        loaded = Project.from_project_root(path, renderer)
-        return ProjectPackageMetadata.from_project(loaded)
+        if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
+            warn_or_error(DepsUnpinned(git=self.git))
+        partial = PartialProject.from_project_root(path)
+        return partial.render_package_metadata(renderer)
 
     def install(self, project, renderer):
         dest_path = self.get_installation_path(project, renderer)
@@ -162,10 +146,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         if len(requested) == 0:
             requested = {"HEAD"}
         elif len(requested) > 1:
-            raise_dependency_error(
-                "git dependencies should contain exactly one version. "
-                "{} contains: {}".format(self.git, requested)
-            )
+            raise MultipleVersionGitDepsError(self.git, requested)
 
         return GitPinnedPackage(
             git=self.git,

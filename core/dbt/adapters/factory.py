@@ -1,23 +1,19 @@
 import threading
-from pathlib import Path
+import traceback
+from contextlib import contextmanager
 from importlib import import_module
-from typing import Type, Dict, Any, List, Optional, Set
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Type
 
-from dbt.exceptions import RuntimeException, InternalException
-from dbt.include.global_project import (
-    PACKAGE_PATH as GLOBAL_PROJECT_PATH,
-    PROJECT_NAME as GLOBAL_PROJECT_NAME,
-)
-from dbt.events.functions import fire_event
-from dbt.events.types import AdapterImportError, PluginLoadError
-from dbt.contracts.connection import Credentials, AdapterRequiredConfig
-from dbt.adapters.protocol import (
-    AdapterProtocol,
-    AdapterConfig,
-    RelationProtocol,
-)
 from dbt.adapters.base.plugin import AdapterPlugin
-
+from dbt.adapters.protocol import AdapterConfig, AdapterProtocol, RelationProtocol
+from dbt.contracts.connection import AdapterRequiredConfig, Credentials
+from dbt.events.functions import fire_event
+from dbt.events.types import AdapterImportError, PluginLoadError, AdapterRegistered
+from dbt.exceptions import DbtInternalError, DbtRuntimeError
+from dbt.include.global_project import PACKAGE_PATH as GLOBAL_PROJECT_PATH
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.semver import VersionSpecifier
 
 Adapter = AdapterProtocol
 
@@ -39,7 +35,7 @@ class AdapterContainer:
             names = ", ".join(self.plugins.keys())
 
         message = f"Invalid adapter type {name}! Must be one of {names}"
-        raise RuntimeException(message)
+        raise DbtRuntimeError(message)
 
     def get_adapter_class_by_name(self, name: str) -> Type[Adapter]:
         plugin = self.get_plugin_by_name(name)
@@ -64,18 +60,18 @@ class AdapterContainer:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtime error
             if exc.name == "dbt.adapters." + name:
-                fire_event(AdapterImportError(exc=exc))
-                raise RuntimeException(f"Could not find adapter type {name}!")
+                fire_event(AdapterImportError(exc=str(exc)))
+                raise DbtRuntimeError(f"Could not find adapter type {name}!")
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
 
-            fire_event(PluginLoadError())
+            fire_event(PluginLoadError(exc_info=traceback.format_exc()))
             raise
         plugin: AdapterPlugin = mod.Plugin
         plugin_type = plugin.adapter.type()
 
         if plugin_type != name:
-            raise RuntimeException(
+            raise DbtRuntimeError(
                 f"Expected to find adapter with type named {name}, got "
                 f"adapter with type {plugin_type}"
             )
@@ -94,7 +90,13 @@ class AdapterContainer:
     def register_adapter(self, config: AdapterRequiredConfig) -> None:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
-
+        adapter_version = import_module(f".{adapter_name}.__version__", "dbt.adapters").version
+        adapter_version_specifier = VersionSpecifier.from_version_string(
+            adapter_version
+        ).to_version_string()
+        fire_event(
+            AdapterRegistered(adapter_name=adapter_name, adapter_version=adapter_version_specifier)
+        )
         with self.lock:
             if adapter_name in self.adapters:
                 # this shouldn't really happen...
@@ -137,7 +139,7 @@ class AdapterContainer:
             try:
                 plugin = self.plugins[plugin_name]
             except KeyError:
-                raise InternalException(f"No plugin found for {plugin_name}") from None
+                raise DbtInternalError(f"No plugin found for {plugin_name}") from None
             plugins.append(plugin)
             seen.add(plugin_name)
             for dep in plugin.dependencies:
@@ -156,12 +158,15 @@ class AdapterContainer:
             try:
                 path = self.packages[package_name]
             except KeyError:
-                raise InternalException(f"No internal package listing found for {package_name}")
+                raise DbtInternalError(f"No internal package listing found for {package_name}")
             paths.append(path)
         return paths
 
     def get_adapter_type_names(self, name: Optional[str]) -> List[str]:
         return [p.adapter.type() for p in self.get_adapter_plugins(name)]
+
+    def get_adapter_constraint_support(self, name: Optional[str]) -> List[str]:
+        return self.lookup_adapter(name).CONSTRAINT_SUPPORT  # type: ignore
 
 
 FACTORY: AdapterContainer = AdapterContainer()
@@ -217,3 +222,16 @@ def get_adapter_package_names(name: Optional[str]) -> List[str]:
 
 def get_adapter_type_names(name: Optional[str]) -> List[str]:
     return FACTORY.get_adapter_type_names(name)
+
+
+def get_adapter_constraint_support(name: Optional[str]) -> List[str]:
+    return FACTORY.get_adapter_constraint_support(name)
+
+
+@contextmanager
+def adapter_management():
+    reset_adapters()
+    try:
+        yield
+    finally:
+        cleanup_connections()

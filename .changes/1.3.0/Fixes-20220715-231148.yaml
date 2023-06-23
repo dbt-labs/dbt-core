@@ -1,7 +1,0 @@
-kind: Fixes
-body: Rename try to strict for more intuitiveness
-time: 2022-07-15T23:11:48.327928+12:00
-custom:
-  Author: jeremyyeo
-  Issue: "5475"
-  PR: "5477"

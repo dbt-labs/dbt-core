@@ -11,14 +11,11 @@ import dbt.exceptions
 import dbt.semver
 
 from dbt.ui import green, red, yellow
-from dbt import flags
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
 
 def get_version_information() -> str:
-    flags.USE_COLORS = True if not flags.USE_COLORS else None
-
     installed = get_installed_version()
     latest = get_latest_version()
 
@@ -45,7 +42,7 @@ def get_latest_version(
     version_url: str = PYPI_VERSION_URL,
 ) -> Optional[dbt.semver.VersionSpecifier]:
     try:
-        resp = requests.get(version_url)
+        resp = requests.get(version_url, timeout=1)
         data = resp.json()
         version_string = data["info"]["version"]
     except (json.JSONDecodeError, KeyError, requests.RequestException):
@@ -71,7 +68,7 @@ def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
     latest_line = ["latest", latest_s, green("Up to date!")]
 
     if installed > latest:
-        latest_line[2] = green("Ahead of latest version!")
+        latest_line[2] = yellow("Ahead of latest version!")
     elif installed < latest:
         latest_line[2] = yellow("Update available!")
         update_info = (
@@ -145,7 +142,7 @@ def _get_plugin_msg_info(
         compatibility_msg = yellow("Update available!")
         needs_update = True
     elif plugin > latest_plugin:
-        compatibility_msg = green("Ahead of latest version!")
+        compatibility_msg = yellow("Ahead of latest version!")
     else:
         compatibility_msg = green("Up to date!")
 
@@ -235,5 +232,5 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-__version__ = "1.3.0b2"
+__version__ = "1.6.0b5"
 installed = get_installed_version()

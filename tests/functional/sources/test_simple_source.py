@@ -1,7 +1,7 @@
 import os
 import pytest
 import yaml
-from dbt.exceptions import ParsingException
+from dbt.exceptions import ParsingError
 
 from dbt.tests.util import (
     run_dbt,
@@ -13,11 +13,11 @@ from tests.functional.sources.common_source_setup import (
     BaseSourcesTest,
 )
 from tests.functional.sources.fixtures import (
-    macros__macro_sql,
-    malformed_models__schema_yml,
-    malformed_models__descendant_model_sql,
-    malformed_schema_tests__schema_yml,
-    malformed_schema_tests__model_sql,
+    macros_macro_sql,
+    malformed_models_schema_yml,
+    malformed_models_descendant_model_sql,
+    malformed_schema_tests_schema_yml,
+    malformed_schema_tests_model_sql,
 )
 
 
@@ -33,7 +33,7 @@ class SuccessfulSourcesTest(BaseSourcesTest):
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"macro.sql": macros__macro_sql}
+        return {"macro.sql": macros_macro_sql}
 
     def _create_schemas(self, project):
         schema = self.alternative_schema(project.test_schema)
@@ -159,12 +159,12 @@ class TestMalformedSources(BaseSourcesTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": malformed_models__schema_yml,
-            "descendant_model.sql": malformed_models__descendant_model_sql,
+            "schema.yml": malformed_models_schema_yml,
+            "descendant_model.sql": malformed_models_descendant_model_sql,
         }
 
     def test_malformed_schema_will_break_run(self, project):
-        with pytest.raises(ParsingException):
+        with pytest.raises(ParsingError):
             self.run_dbt_with_vars(project, ["seed"])
 
 
@@ -172,8 +172,8 @@ class TestRenderingInSourceTests(BaseSourcesTest):
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": malformed_schema_tests__schema_yml,
-            "model.sql": malformed_schema_tests__model_sql,
+            "schema.yml": malformed_schema_tests_schema_yml,
+            "model.sql": malformed_schema_tests_model_sql,
         }
 
     def test_render_in_source_tests(self, project):

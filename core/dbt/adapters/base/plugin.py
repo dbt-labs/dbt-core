@@ -1,17 +1,17 @@
 from typing import List, Optional, Type
 
 from dbt.adapters.base import Credentials
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 from dbt.adapters.protocol import AdapterProtocol
 
 
 def project_name_from_path(include_path: str) -> str:
     # avoid an import cycle
-    from dbt.config.project import Project
+    from dbt.config.project import PartialProject
 
-    partial = Project.partial_load(include_path)
+    partial = PartialProject.from_project_root(include_path)
     if partial.project_name is None:
-        raise CompilationException(f"Invalid project at {include_path}: name not set!")
+        raise CompilationError(f"Invalid project at {include_path}: name not set!")
     return partial.project_name
 
 

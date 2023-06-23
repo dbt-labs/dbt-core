@@ -3,19 +3,20 @@
 # necessary for annotating constructors
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Tuple, AbstractSet, Union
+from hologram import FieldEncoder, JsonDict
+from mashumaro.types import SerializableType
+from typing import Callable, cast, Generic, Optional, TypeVar, List
 
 from dbt.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
     StrEnum,
 )
-from hologram import FieldEncoder, JsonDict
-from mashumaro.types import SerializableType
-from typing import Callable, cast, Generic, Optional, TypeVar
+import dbt.events.types as dbt_event_types
 
 
 class Port(int, SerializableType):
@@ -85,7 +86,50 @@ class NVEnum(StrEnum):
 class NoValue(dbtClassMixin):
     """Sometimes, you want a way to say none that isn't None"""
 
-    novalue: NVEnum = NVEnum.novalue
+    novalue: NVEnum = field(default_factory=lambda: NVEnum.novalue)
+
+
+@dataclass
+class IncludeExclude(dbtClassMixin):
+    INCLUDE_ALL = ("all", "*")
+
+    include: Union[str, List[str]]
+    exclude: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if isinstance(self.include, str) and self.include not in self.INCLUDE_ALL:
+            raise ValidationError(
+                f"include must be one of {self.INCLUDE_ALL} or a list of strings"
+            )
+
+        if self.exclude and self.include not in self.INCLUDE_ALL:
+            raise ValidationError(
+                f"exclude can only be specified if include is one of {self.INCLUDE_ALL}"
+            )
+
+        if isinstance(self.include, list):
+            self._validate_items(self.include)
+
+        if isinstance(self.exclude, list):
+            self._validate_items(self.exclude)
+
+    def includes(self, item_name: str):
+        return (
+            item_name in self.include or self.include in self.INCLUDE_ALL
+        ) and item_name not in self.exclude
+
+    def _validate_items(self, items: List[str]):
+        pass
+
+
+class WarnErrorOptions(IncludeExclude):
+    def _validate_items(self, items: List[str]):
+        valid_exception_names = set(
+            [name for name, cls in dbt_event_types.__dict__.items() if isinstance(cls, type)]
+        )
+        for item in items:
+            if item not in valid_exception_names:
+                raise ValidationError(f"{item} is not a valid dbt error name.")
 
 
 dbtClassMixin.register_field_encoders(

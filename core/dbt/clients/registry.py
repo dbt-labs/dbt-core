@@ -3,9 +3,9 @@ from typing import Any, Dict, List
 import requests
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    RegistryProgressMakingGETRequest,
+    RegistryProgressGETRequest,
     RegistryProgressGETResponse,
-    RegistryIndexProgressMakingGETRequest,
+    RegistryIndexProgressGETRequest,
     RegistryIndexProgressGETResponse,
     RegistryResponseUnexpectedType,
     RegistryResponseMissingTopKeys,
@@ -38,7 +38,7 @@ def _get_with_retries(package_name, registry_base_url=None):
 
 def _get(package_name, registry_base_url=None):
     url = _get_url(package_name, registry_base_url)
-    fire_event(RegistryProgressMakingGETRequest(url=url))
+    fire_event(RegistryProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here
     resp = requests.get(url, timeout=30)
     fire_event(RegistryProgressGETResponse(url=url, resp_code=resp.status_code))
@@ -162,7 +162,7 @@ def get_compatible_versions(package_name, dbt_version, should_version_check) -> 
 def _get_index(registry_base_url=None):
 
     url = _get_url("index", registry_base_url)
-    fire_event(RegistryIndexProgressMakingGETRequest(url=url))
+    fire_event(RegistryIndexProgressGETRequest(url=url))
     # all exceptions from requests get caught in the retry logic so no need to wrap this here
     resp = requests.get(url, timeout=30)
     fire_event(RegistryIndexProgressGETResponse(url=url, resp_code=resp.status_code))

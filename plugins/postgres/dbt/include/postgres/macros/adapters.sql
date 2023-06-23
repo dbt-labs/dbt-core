@@ -9,7 +9,18 @@
   {%- elif unlogged -%}
     unlogged
   {%- endif %} table {{ relation }}
-  as (
+  {% set contract_config = config.get('contract') %}
+  {% if contract_config.enforced %}
+    {{ get_assert_columns_equivalent(sql) }}
+    {{ get_table_columns_and_constraints() }} ;
+    insert into {{ relation }} (
+      {{ adapter.dispatch('get_column_names', 'dbt')() }}
+    )
+    {%- set sql = get_select_subquery(sql) %}
+  {% else %}
+    as
+  {% endif %}
+  (
     {{ sql }}
   );
 {%- endmacro %}
@@ -86,6 +97,14 @@
       'view' as type
     from pg_views
     where schemaname ilike '{{ schema_relation.schema }}'
+    union all
+    select
+      '{{ schema_relation.database }}' as database,
+      matviewname as name,
+      schemaname as schema,
+      'materialized_view' as type
+    from pg_matviews
+    where schemaname ilike '{{ schema_relation.schema }}'
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
@@ -117,23 +136,8 @@
   {{ return(load_result('check_schema_exists').table) }}
 {% endmacro %}
 
-
-{% macro postgres__current_timestamp() -%}
-  now()
-{%- endmacro %}
-
-{% macro postgres__snapshot_string_as_time(timestamp) -%}
-    {%- set result = "'" ~ timestamp ~ "'::timestamp without time zone" -%}
-    {{ return(result) }}
-{%- endmacro %}
-
-
-{% macro postgres__snapshot_get_time() -%}
-  {{ current_timestamp() }}::timestamp without time zone
-{%- endmacro %}
-
 {#
-  Postgres tables have a maximum length off 63 characters, anything longer is silently truncated.
+  Postgres tables have a maximum length of 63 characters, anything longer is silently truncated.
   Temp and backup relations add a lot of extra characters to the end of table names to ensure uniqueness.
   To prevent this going over the character limit, the base_relation name is truncated to ensure
   that name + suffix + uniquestring is < 63 characters.
@@ -215,3 +219,34 @@
 {% macro postgres__copy_grants() %}
     {{ return(False) }}
 {% endmacro %}
+
+
+{% macro postgres__get_show_indexes_sql(relation) %}
+    select
+        i.relname                                   as name,
+        m.amname                                    as method,
+        ix.indisunique                              as "unique",
+        array_to_string(array_agg(a.attname), ',')  as column_names
+    from pg_index ix
+    join pg_class i
+        on i.oid = ix.indexrelid
+    join pg_am m
+        on m.oid=i.relam
+    join pg_class t
+        on t.oid = ix.indrelid
+    join pg_namespace n
+        on n.oid = t.relnamespace
+    join pg_attribute a
+        on a.attrelid = t.oid
+        and a.attnum = ANY(ix.indkey)
+    where t.relname = '{{ relation.identifier }}'
+      and n.nspname = '{{ relation.schema }}'
+      and t.relkind in ('r', 'm')
+    group by 1, 2, 3
+    order by 1, 2, 3
+{% endmacro %}
+
+
+{%- macro postgres__get_drop_index_sql(relation, index_name) -%}
+    drop index if exists "{{ index_name }}"
+{%- endmacro -%}

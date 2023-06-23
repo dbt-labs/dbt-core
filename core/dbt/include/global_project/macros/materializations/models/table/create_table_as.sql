@@ -25,7 +25,36 @@
 
   create {% if temporary: -%}temporary{%- endif %} table
     {{ relation.include(database=(not temporary), schema=(not temporary)) }}
+  {% set contract_config = config.get('contract') %}
+  {% if contract_config.enforced %}
+    {{ get_assert_columns_equivalent(sql) }}
+    {{ get_table_columns_and_constraints() }}
+    {%- set sql = get_select_subquery(sql) %}
+  {% endif %}
   as (
     {{ sql }}
   );
+{%- endmacro %}
+
+
+{% macro default__get_column_names() %}
+  {#- loop through user_provided_columns to get column names -#}
+    {%- set user_provided_columns = model['columns'] -%}
+    {%- for i in user_provided_columns %}
+      {%- set col = user_provided_columns[i] -%}
+      {%- set col_name = adapter.quote(col['name']) if col.get('quote') else col['name'] -%}
+      {{ col_name }}{{ ", " if not loop.last }}
+    {%- endfor -%}
+{% endmacro %}
+
+
+{% macro get_select_subquery(sql) %}
+  {{ return(adapter.dispatch('get_select_subquery', 'dbt')(sql)) }}
+{% endmacro %}
+
+{% macro default__get_select_subquery(sql) %}
+    select {{ adapter.dispatch('get_column_names', 'dbt')() }}
+    from (
+        {{ sql }}
+    ) as model_subq
 {%- endmacro %}

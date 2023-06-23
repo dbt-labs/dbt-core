@@ -1,29 +1,31 @@
 import errno
-import functools
 import fnmatch
+import functools
 import json
 import os
 import os.path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
-import requests
-import stat
-from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NoReturn, Optional, Tuple, Type, Union
 
+import dbt.exceptions
+import requests
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SystemErrorRetrievingModTime,
     SystemCouldNotWrite,
     SystemExecutingCmd,
-    SystemStdOutMsg,
-    SystemStdErrMsg,
+    SystemStdOut,
+    SystemStdErr,
     SystemReportReturnCode,
 )
-import dbt.exceptions
+from dbt.exceptions import DbtInternalError
 from dbt.utils import _connection_exception_retry as connection_exception_retry
+from pathspec import PathSpec  # type: ignore
 
 if sys.platform == "win32":
     from ctypes import WinDLL, c_bool
@@ -36,6 +38,7 @@ def find_matching(
     root_path: str,
     relative_paths_to_search: List[str],
     file_pattern: str,
+    ignore_spec: Optional[PathSpec] = None,
 ) -> List[Dict[str, Any]]:
     """
     Given an absolute `root_path`, a list of relative paths to that
@@ -57,19 +60,26 @@ def find_matching(
     reobj = re.compile(regex, re.IGNORECASE)
 
     for relative_path_to_search in relative_paths_to_search:
+        # potential speedup for ignore_spec
+        # if ignore_spec.matches(relative_path_to_search):
+        #     continue
         absolute_path_to_search = os.path.join(root_path, relative_path_to_search)
         walk_results = os.walk(absolute_path_to_search)
 
         for current_path, subdirectories, local_files in walk_results:
+            # potential speedup for ignore_spec
+            # relative_dir = os.path.relpath(current_path, root_path) + os.sep
+            # if ignore_spec.match(relative_dir):
+            #     continue
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
                 relative_path = os.path.relpath(absolute_path, absolute_path_to_search)
-                modification_time = 0.0
-                try:
-                    modification_time = os.path.getmtime(absolute_path)
-                except OSError:
-                    fire_event(SystemErrorRetrievingModTime(path=absolute_path))
-                if reobj.match(local_file):
+                relative_path_to_root = os.path.join(relative_path_to_search, relative_path)
+
+                modification_time = os.path.getmtime(absolute_path)
+                if reobj.match(local_file) and (
+                    not ignore_spec or not ignore_spec.match_file(relative_path_to_root)
+                ):
                     matching.append(
                         {
                             "searched_path": relative_path_to_search,
@@ -93,12 +103,18 @@ def load_file_contents(path: str, strip: bool = True) -> str:
     return to_return
 
 
-def make_directory(path: str) -> None:
+@functools.singledispatch
+def make_directory(path=None) -> None:
     """
     Make a directory and any intermediate directories that don't already
     exist. This function handles the case where two threads try to create
     a directory at once.
     """
+    raise DbtInternalError(f"Can not create directory from {type(path)} ")
+
+
+@make_directory.register
+def _(path: str) -> None:
     path = convert_path(path)
     if not os.path.exists(path):
         # concurrent writes that try to create the same dir can fail
@@ -110,6 +126,11 @@ def make_directory(path: str) -> None:
                 pass
             else:
                 raise e
+
+
+@make_directory.register
+def _(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def make_file(path: str, contents: str = "", overwrite: bool = False) -> bool:
@@ -131,7 +152,8 @@ def make_symlink(source: str, link_path: str) -> None:
     Create a symlink at `link_path` referring to `source`.
     """
     if not supports_symlinks():
-        dbt.exceptions.system_error("create a symbolic link")
+        # TODO: why not import these at top?
+        raise dbt.exceptions.SymbolicLinkError()
 
     os.symlink(source, link_path)
 
@@ -164,7 +186,7 @@ def write_file(path: str, contents: str = "") -> bool:
                 reason = "Path was possibly too long"
             # all our hard work and the path was still too long. Log and
             # continue.
-            fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=exc))
+            fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=str(exc)))
         else:
             raise
     return True
@@ -189,7 +211,7 @@ def _windows_rmdir_readonly(func: Callable[[str], Any], path: str, exc: Tuple[An
 
 def resolve_path_from_base(path_to_resolve: str, base_path: str) -> str:
     """
-    If path-to_resolve is a relative path, create an absolute path
+    If path_to_resolve is a relative path, create an absolute path
     with base_path as the base.
 
     If path_to_resolve is an absolute path or a user path (~), just
@@ -398,7 +420,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         _handle_posix_error(exc, cwd, cmd)
 
     # this should not be reachable, raise _something_ at least!
-    raise dbt.exceptions.InternalException(
+    raise dbt.exceptions.DbtInternalError(
         "Unhandled exception in _interpret_oserror: {}".format(exc)
     )
 
@@ -427,8 +449,8 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    fire_event(SystemStdOutMsg(bmsg=out))
-    fire_event(SystemStdErrMsg(bmsg=err))
+    fire_event(SystemStdOut(bmsg=str(out)))
+    fire_event(SystemStdErr(bmsg=str(err)))
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))

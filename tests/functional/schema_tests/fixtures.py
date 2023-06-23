@@ -1,7 +1,3 @@
-import pytest
-from dbt.tests.fixtures.project import write_project_files
-
-
 wrong_specification_block__schema_yml = """
 version: 2
 models:
@@ -539,6 +535,10 @@ invalid_schema_models__model_sql = """
 select 1 as "Id"
 
 """
+
+all_quotes_schema__schema_yml = """# models/schema.yml
+# only comments here, which should be okay!
+# https://github.com/dbt-labs/dbt-core/issues/3568"""
 
 models_v2__render_test_cli_arg_models__schema_yml = """
 version: 2
@@ -1245,264 +1245,31 @@ select 1 as "Id"
 
 """
 
+alt_local_utils__macros__type_timestamp_sql = """
+{%- macro type_timestamp() -%}
+    {{ return(adapter.dispatch('type_timestamp', 'local_utils')()) }}
+{%- endmacro -%}
 
-@pytest.fixture(scope="class")
-def wrong_specification_block():
-    return {"schema.yml": wrong_specification_block__schema_yml}
+{% macro default__type_timestamp() %}
+    {{ return(adapter.dispatch('type_timestamp', 'dbt')()) }}
+{% endmacro %}
+"""
 
+macro_resolution_order_macros__my_custom_test_sql = """
+{% test my_custom_test(model) %}
+  select cast(current_timestamp as {{ dbt.type_timestamp() }})
+  limit 0
+{% endtest %}
+"""
 
-@pytest.fixture(scope="class")
-def test_context_where_subq_models():
-    return {
-        "schema.yml": test_context_where_subq_models__schema_yml,
-        "model_a.sql": test_context_where_subq_models__model_a_sql,
-    }
+macro_resolution_order_models__my_model_sql = """
+select 1 as id
+"""
 
-
-@pytest.fixture(scope="class")
-def test_utils():
-    return {
-        "dbt_project.yml": test_utils__dbt_project_yml,
-        "macros": {
-            "current_timestamp.sql": test_utils__macros__current_timestamp_sql,
-            "custom_test.sql": test_utils__macros__custom_test_sql,
-        },
-    }
-
-
-@pytest.fixture(scope="class")
-def local_dependency():
-    return {
-        "dbt_project.yml": local_dependency__dbt_project_yml,
-        "macros": {"equality.sql": local_dependency__macros__equality_sql},
-    }
-
-
-@pytest.fixture(scope="class")
-def case_sensitive_models():
-    return {
-        "schema.yml": case_sensitive_models__schema_yml,
-        "lowercase.sql": case_sensitive_models__lowercase_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def test_context_macros():
-    return {
-        "my_test.sql": test_context_macros__my_test_sql,
-        "test_my_datediff.sql": test_context_macros__test_my_datediff_sql,
-        "custom_schema_tests.sql": test_context_macros__custom_schema_tests_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def test_context_models_namespaced():
-    return {
-        "schema.yml": test_context_models_namespaced__schema_yml,
-        "model_c.sql": test_context_models_namespaced__model_c_sql,
-        "model_b.sql": test_context_models_namespaced__model_b_sql,
-        "model_a.sql": test_context_models_namespaced__model_a_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def macros_v2():
-    return {
-        "override_get_test_macros_fail": {
-            "get_test_sql.sql": macros_v2__override_get_test_macros_fail__get_test_sql_sql
-        },
-        "macros": {"tests.sql": macros_v2__macros__tests_sql},
-        "override_get_test_macros": {
-            "get_test_sql.sql": macros_v2__override_get_test_macros__get_test_sql_sql
-        },
-        "custom-configs": {"test.sql": macros_v2__custom_configs__test_sql},
-    }
-
-
-@pytest.fixture(scope="class")
-def test_context_macros_namespaced():
-    return {
-        "my_test.sql": test_context_macros_namespaced__my_test_sql,
-        "custom_schema_tests.sql": test_context_macros_namespaced__custom_schema_tests_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def seeds():
-    return {"some_seed.csv": seeds__some_seed_csv}
-
-
-@pytest.fixture(scope="class")
-def test_context_models():
-    return {
-        "schema.yml": test_context_models__schema_yml,
-        "model_c.sql": test_context_models__model_c_sql,
-        "model_b.sql": test_context_models__model_b_sql,
-        "model_a.sql": test_context_models__model_a_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def name_collision():
-    return {
-        "schema.yml": name_collision__schema_yml,
-        "base.sql": name_collision__base_sql,
-        "base_extension.sql": name_collision__base_extension_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def dupe_tests_collide():
-    return {
-        "schema.yml": dupe_generic_tests_collide__schema_yml,
-        "model_a.sql": dupe_generic_tests_collide__model_a,
-    }
-
-
-@pytest.fixture(scope="class")
-def custom_generic_test_config_custom_macros():
-    return {
-        "schema.yml": custom_generic_test_config_custom_macro__schema_yml,
-        "model_a.sql": custom_generic_test_config_custom_macro__model_a,
-    }
-
-
-@pytest.fixture(scope="class")
-def custom_generic_test_names():
-    return {
-        "schema.yml": custom_generic_test_names__schema_yml,
-        "model_a.sql": custom_generic_test_names__model_a,
-    }
-
-
-@pytest.fixture(scope="class")
-def custom_generic_test_names_alt_format():
-    return {
-        "schema.yml": custom_generic_test_names_alt_format__schema_yml,
-        "model_a.sql": custom_generic_test_names_alt_format__model_a,
-    }
-
-
-@pytest.fixture(scope="class")
-def test_context_where_subq_macros():
-    return {"custom_generic_test.sql": test_context_where_subq_macros__custom_generic_test_sql}
-
-
-@pytest.fixture(scope="class")
-def invalid_schema_models():
-    return {
-        "schema.yml": invalid_schema_models__schema_yml,
-        "model.sql": invalid_schema_models__model_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def all_models():
-    return {
-        "render_test_cli_arg_models": {
-            "schema.yml": models_v2__render_test_cli_arg_models__schema_yml,
-            "model.sql": models_v2__render_test_cli_arg_models__model_sql,
-        },
-        "override_get_test_models": {
-            "schema.yml": models_v2__override_get_test_models__schema_yml,
-            "my_model_warning.sql": models_v2__override_get_test_models__my_model_warning_sql,
-            "my_model_pass.sql": models_v2__override_get_test_models__my_model_pass_sql,
-            "my_model_failure.sql": models_v2__override_get_test_models__my_model_failure_sql,
-        },
-        "models": {
-            "schema.yml": models_v2__models__schema_yml,
-            "table_summary.sql": models_v2__models__table_summary_sql,
-            "table_failure_summary.sql": models_v2__models__table_failure_summary_sql,
-            "table_disabled.sql": models_v2__models__table_disabled_sql,
-            "table_failure_null_relation.sql": models_v2__models__table_failure_null_relation_sql,
-            "table_failure_copy.sql": models_v2__models__table_failure_copy_sql,
-            "table_copy.sql": models_v2__models__table_copy_sql,
-        },
-        "malformed": {
-            "schema.yml": models_v2__malformed__schema_yml,
-            "table_summary.sql": models_v2__malformed__table_summary_sql,
-            "table_copy.sql": models_v2__malformed__table_copy_sql,
-        },
-        "override_get_test_models_fail": {
-            "schema.yml": models_v2__override_get_test_models_fail__schema_yml,
-            "my_model.sql": models_v2__override_get_test_models_fail__my_model_sql,
-        },
-        "custom-configs": {
-            "schema.yml": models_v2__custom_configs__schema_yml,
-            "table_copy_another_one.sql": models_v2__custom_configs__table_copy_another_one_sql,
-            "table_copy.sql": models_v2__custom_configs__table_copy_sql,
-            "table.copy.with.dots.sql": models_v2__custom_configs__table_copy_with_dots_sql,
-        },
-        "render_test_configured_arg_models": {
-            "schema.yml": models_v2__render_test_configured_arg_models__schema_yml,
-            "model.sql": models_v2__render_test_configured_arg_models__model_sql,
-        },
-        "custom": {
-            "schema.yml": models_v2__custom__schema_yml,
-            "table_copy.sql": models_v2__custom__table_copy_sql,
-        },
-        "limit_null": {
-            "schema.yml": models_v2__limit_null__schema_yml,
-            "table_warning_limit_null.sql": models_v2__limit_null__table_warning_limit_null_sql,
-            "table_limit_null.sql": models_v2__limit_null__table_limit_null_sql,
-            "table_failure_limit_null.sql": models_v2__limit_null__table_failure_limit_null_sql,
-        },
-    }
-
-
-@pytest.fixture(scope="class")
-def local_utils():
-    return {
-        "dbt_project.yml": local_utils__dbt_project_yml,
-        "macros": {
-            "datediff.sql": local_utils__macros__datediff_sql,
-            "current_timestamp.sql": local_utils__macros__current_timestamp_sql,
-            "custom_test.sql": local_utils__macros__custom_test_sql,
-        },
-    }
-
-
-@pytest.fixture(scope="class")
-def ephemeral():
-    return {
-        "schema.yml": ephemeral__schema_yml,
-        "ephemeral.sql": ephemeral__ephemeral_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def quote_required_models():
-    return {
-        "schema.yml": quote_required_models__schema_yml,
-        "model_again.sql": quote_required_models__model_again_sql,
-        "model_noquote.sql": quote_required_models__model_noquote_sql,
-        "model.sql": quote_required_models__model_sql,
-    }
-
-
-@pytest.fixture(scope="class")
-def project_files(
-    project_root,
-    test_utils,
-    local_dependency,
-    test_context_macros,
-    macros_v2,
-    test_context_macros_namespaced,
-    seeds,
-    test_context_where_subq_macros,
-    models,
-    local_utils,
-):
-    write_project_files(project_root, "test_utils", test_utils)
-    write_project_files(project_root, "local_dependency", local_dependency)
-    write_project_files(project_root, "test-context-macros", test_context_macros)
-    write_project_files(project_root, "macros-v2", macros_v2)
-    write_project_files(
-        project_root, "test-context-macros-namespaced", test_context_macros_namespaced
-    )
-    write_project_files(project_root, "seeds", seeds)
-    write_project_files(
-        project_root, "test-context-where-subq-macros", test_context_where_subq_macros
-    )
-    write_project_files(project_root, "models", models)
-    write_project_files(project_root, "local_utils", local_utils)
+macro_resolution_order_models__config_yml = """
+version: 2
+models:
+  - name: my_model
+    tests:
+      - my_custom_test
+"""

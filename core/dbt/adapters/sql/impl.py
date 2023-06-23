@@ -1,11 +1,10 @@
 import agate
 from typing import Any, Optional, Tuple, Type, List
 
-import dbt.clients.agate_helper
 from dbt.contracts.connection import Connection
-import dbt.exceptions
+from dbt.exceptions import RelationTypeNullError
 from dbt.adapters.base import BaseAdapter, available
-from dbt.adapters.cache import _make_key
+from dbt.adapters.cache import _make_ref_key_dict
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.events.functions import fire_event
 from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
@@ -110,7 +109,7 @@ class SQLAdapter(BaseAdapter):
                     ColTypeChange(
                         orig_type=target_column.data_type,
                         new_type=new_type,
-                        table=_make_key(current),
+                        table=_make_ref_key_dict(current),
                     )
                 )
 
@@ -132,9 +131,7 @@ class SQLAdapter(BaseAdapter):
 
     def drop_relation(self, relation):
         if relation.type is None:
-            dbt.exceptions.raise_compiler_error(
-                "Tried to drop relation {}, but its type is null.".format(relation)
-            )
+            raise RelationTypeNullError(relation)
 
         self.cache_dropped(relation)
         self.execute_macro(DROP_RELATION_MACRO_NAME, kwargs={"relation": relation})
@@ -155,7 +152,7 @@ class SQLAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        fire_event(SchemaCreation(relation=_make_key(relation)))
+        fire_event(SchemaCreation(relation=_make_ref_key_dict(relation)))
         kwargs = {
             "relation": relation,
         }
@@ -166,7 +163,7 @@ class SQLAdapter(BaseAdapter):
 
     def drop_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        fire_event(SchemaDrop(relation=_make_key(relation)))
+        fire_event(SchemaDrop(relation=_make_ref_key_dict(relation)))
         kwargs = {
             "relation": relation,
         }
@@ -200,6 +197,7 @@ class SQLAdapter(BaseAdapter):
             )
         return relations
 
+    @classmethod
     def quote(self, identifier):
         return '"{}"'.format(identifier)
 

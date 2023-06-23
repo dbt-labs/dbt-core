@@ -1,5 +1,7 @@
+import traceback
 from dataclasses import dataclass
 from dbt.events.functions import fire_event
+from dbt.events.contextvars import get_node_info
 from dbt.events.types import (
     AdapterEventDebug,
     AdapterEventInfo,
@@ -8,61 +10,49 @@ from dbt.events.types import (
 )
 
 
+# N.B. No guarantees for what type param msg is.
 @dataclass
 class AdapterLogger:
     name: str
 
-    def debug(self, msg, *args, exc_info=None, extra=None, stack_info=False):
-        event = AdapterEventDebug(name=self.name, base_msg=msg, args=args)
-
-        event.exc_info = exc_info
-        event.extra = extra
-        event.stack_info = stack_info
-
+    def debug(self, msg, *args):
+        event = AdapterEventDebug(
+            name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
+        )
         fire_event(event)
 
-    def info(self, msg, *args, exc_info=None, extra=None, stack_info=False):
-        event = AdapterEventInfo(name=self.name, base_msg=msg, args=args)
-
-        event.exc_info = exc_info
-        event.extra = extra
-        event.stack_info = stack_info
-
+    def info(self, msg, *args):
+        event = AdapterEventInfo(
+            name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
+        )
         fire_event(event)
 
-    def warning(self, msg, *args, exc_info=None, extra=None, stack_info=False):
-        event = AdapterEventWarning(name=self.name, base_msg=msg, args=args)
-
-        event.exc_info = exc_info
-        event.extra = extra
-        event.stack_info = stack_info
-
+    def warning(self, msg, *args):
+        event = AdapterEventWarning(
+            name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
+        )
         fire_event(event)
 
-    def error(self, msg, *args, exc_info=None, extra=None, stack_info=False):
-        event = AdapterEventError(name=self.name, base_msg=msg, args=args)
-
-        event.exc_info = exc_info
-        event.extra = extra
-        event.stack_info = stack_info
-
+    def error(self, msg, *args):
+        event = AdapterEventError(
+            name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
+        )
         fire_event(event)
 
     # The default exc_info=True is what makes this method different
-    def exception(self, msg, *args, exc_info=True, extra=None, stack_info=False):
-        event = AdapterEventError(name=self.name, base_msg=msg, args=args)
-
-        event.exc_info = exc_info
-        event.extra = extra
-        event.stack_info = stack_info
-
+    def exception(self, msg, *args):
+        exc_info = str(traceback.format_exc())
+        event = AdapterEventError(
+            name=self.name,
+            base_msg=str(msg),
+            args=list(args),
+            node_info=get_node_info(),
+            exc_info=exc_info,
+        )
         fire_event(event)
 
-    def critical(self, msg, *args, exc_info=False, extra=None, stack_info=False):
-        event = AdapterEventError(name=self.name, base_msg=msg, args=args)
-
-        event.exc_info = exc_info
-        event.extra = extra
-        event.stack_info = stack_info
-
+    def critical(self, msg, *args):
+        event = AdapterEventError(
+            name=self.name, base_msg=str(msg), args=list(args), node_info=get_node_info()
+        )
         fire_event(event)

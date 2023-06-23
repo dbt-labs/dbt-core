@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt, update_config_file
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
 
 model_sql = """
 select 1 as id
@@ -27,7 +27,7 @@ class TestMissingVarGenerateNameMacro:
 
     def test_generate_schema_name_var(self, project):
         # var isn't set, so generate_name macro fails
-        with pytest.raises(CompilationException) as excinfo:
+        with pytest.raises(CompilationError) as excinfo:
             run_dbt(["compile"])
 
         assert "Required var 'somevar' not found in config" in str(excinfo.value)

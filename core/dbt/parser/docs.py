@@ -4,7 +4,7 @@ import re
 
 from dbt.clients.jinja import get_rendered
 from dbt.contracts.files import SourceFile
-from dbt.contracts.graph.parsed import ParsedDocumentation
+from dbt.contracts.graph.nodes import Documentation
 from dbt.node_types import NodeType
 from dbt.parser.base import Parser
 from dbt.parser.search import BlockContents, FileBlock, BlockSearcher
@@ -13,7 +13,7 @@ from dbt.parser.search import BlockContents, FileBlock, BlockSearcher
 SHOULD_PARSE_RE = re.compile(r"{[{%]")
 
 
-class DocumentationParser(Parser[ParsedDocumentation]):
+class DocumentationParser(Parser[Documentation]):
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Documentation
@@ -23,22 +23,21 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         return block.path.relative_path
 
     def generate_unique_id(self, resource_name: str, _: Optional[str] = None) -> str:
-        # because docs are in their own graph namespace, node type doesn't
-        # need to be part of the unique ID.
-        return "{}.{}".format(self.project.project_name, resource_name)
+        # For consistency, use the same format for doc unique_ids
+        return f"doc.{self.project.project_name}.{resource_name}"
 
-    def parse_block(self, block: BlockContents) -> Iterable[ParsedDocumentation]:
+    def parse_block(self, block: BlockContents) -> Iterable[Documentation]:
         unique_id = self.generate_unique_id(block.name)
         contents = get_rendered(block.contents, {}).strip()
 
-        doc = ParsedDocumentation(
-            root_path=self.project.project_root,
+        doc = Documentation(
             path=block.file.path.relative_path,
             original_file_path=block.path.original_file_path,
             package_name=self.project.project_name,
             unique_id=unique_id,
             name=block.name,
             block_contents=contents,
+            resource_type=NodeType.Documentation,
         )
         return [doc]
 

@@ -21,7 +21,7 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 ## Getting started
 
-- [Install dbt](https://docs.getdbt.com/docs/installation)
+- [Install dbt](https://docs.getdbt.com/docs/get-started/installation)
 - Read the [introduction](https://docs.getdbt.com/docs/introduction/) and [viewpoint](https://docs.getdbt.com/docs/about/viewpoint/)
 
 ## Join the dbt Community

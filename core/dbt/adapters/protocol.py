@@ -8,7 +8,6 @@ from typing import (
     Generic,
     TypeVar,
     Tuple,
-    Union,
     Dict,
     Any,
 )
@@ -17,8 +16,7 @@ from typing_extensions import Protocol
 import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
-from dbt.contracts.graph.compiled import CompiledNode, ManifestNode, NonSourceCompiledNode
-from dbt.contracts.graph.parsed import ParsedNode, ParsedSourceDefinition
+from dbt.contracts.graph.nodes import ResultNode, ManifestNode
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.relation import Policy, HasQuoting
@@ -48,11 +46,7 @@ class RelationProtocol(Protocol):
         ...
 
     @classmethod
-    def create_from(
-        cls: Type[Self],
-        config: HasQuoting,
-        node: Union[CompiledNode, ParsedNode, ParsedSourceDefinition],
-    ) -> Self:
+    def create_from(cls: Type[Self], config: HasQuoting, node: ResultNode) -> Self:
         ...
 
 
@@ -65,7 +59,7 @@ class CompilerProtocol(Protocol):
         node: ManifestNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
-    ) -> NonSourceCompiledNode:
+    ) -> ManifestNode:
         ...
 
 
@@ -88,7 +82,7 @@ class AdapterProtocol(  # type: ignore[misc]
     ],
 ):
     # N.B. Technically these are ClassVars, but mypy doesn't support putting type vars in a
-    # ClassVar due to the restirctiveness of PEP-526
+    # ClassVar due to the restrictiveness of PEP-526
     # See: https://github.com/python/mypy/issues/5144
     AdapterSpecificConfigs: Type[AdapterConfig_T]
     Column: Type[Column_T]

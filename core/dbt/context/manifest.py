@@ -4,6 +4,7 @@ from dbt.clients.jinja import MacroStack
 from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.context.macro_resolver import TestMacroNamespace
+from .base import contextproperty
 
 
 from .configured import ConfiguredContext
@@ -65,6 +66,10 @@ class ManifestContext(ConfiguredContext):
         else:
             dct.update(self.namespace)
         return dct
+
+    @contextproperty
+    def context_macro_stack(self):
+        return self.macro_stack
 
 
 class QueryHeaderContext(ManifestContext):

@@ -1,13 +1,19 @@
-import io
 import os
 import pytest
 import yaml
-from contextlib import contextmanager, redirect_stdout
+
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List
+from argparse import Namespace
 
 import dbt.flags as flags
-from dbt.tests.util import run_dbt, write_file, rm_file
+
+from dbt.tests.util import (
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
+    rm_file,
+)
 
 
 @pytest.fixture(scope="class")
@@ -84,20 +90,19 @@ def environ(env):
                 os.environ[key] = value
 
 
-# Use this if you need to capture the standard out in a test
-def run_dbt_and_capture_stdout(args: List[str] = None, expect_pass=True):
-    stringbuf = io.StringIO()
-    with redirect_stdout(stringbuf):
-        res = run_dbt(args, expect_pass=expect_pass)
-    stdout = stringbuf.getvalue()
+class TestProfilesMayNotExist:
+    def test_debug(self, project):
+        # The database will not be able to connect; expect neither a pass or a failure (but not an exception)
+        run_dbt(["debug", "--profiles-dir", "does_not_exist"], expect_pass=None)
 
-    return res, stdout
+    def test_deps(self, project):
+        run_dbt(["deps", "--profiles-dir", "does_not_exist"])
 
 
 class TestProfiles:
     def dbt_debug(self, project_dir_cli_arg=None, profiles_dir_cli_arg=None):
         # begin with no command-line args or user config (from profiles.yml)
-        flags.set_from_args({}, {})
+        flags.set_from_args(Namespace(), {})
         command = ["debug"]
 
         if project_dir_cli_arg:
@@ -106,8 +111,8 @@ class TestProfiles:
         if profiles_dir_cli_arg:
             command.extend(["--profiles-dir", str(profiles_dir_cli_arg)])
 
-        # get the output of `dbt debug` regarless of the exit code
-        return run_dbt_and_capture_stdout(command, expect_pass=None)
+        # get the output of `dbt debug` regardless of the exit code
+        return run_dbt_and_capture(command, expect_pass=None)
 
     @pytest.mark.parametrize(
         "project_dir_cli_arg, working_directory",
@@ -150,7 +155,6 @@ class TestProfiles:
         # start in the specified directory
         if working_directory is not None:
             os.chdir(working_directory)
-
         # default case with profiles.yml in the HOME directory
         _, stdout = self.dbt_debug(project_dir_cli_arg)
         assert f"Using profiles.yml file at {profiles_home_root}" in stdout

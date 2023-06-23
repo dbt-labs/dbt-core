@@ -1,6 +1,6 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict
+from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
 
 import agate
 
@@ -10,6 +10,8 @@ from dbt.adapters.base import BaseConnectionManager
 from dbt.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.events.functions import fire_event
 from dbt.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
+from dbt.events.contextvars import get_node_info
+from dbt.utils import cast_to_str
 
 
 class SQLConnectionManager(BaseConnectionManager):
@@ -25,9 +27,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def cancel(self, connection: Connection):
         """Cancel the given connection."""
-        raise dbt.exceptions.NotImplementedException(
-            "`cancel` is not implemented for this adapter!"
-        )
+        raise dbt.exceptions.NotImplementedError("`cancel` is not implemented for this adapter!")
 
     def cancel_open(self) -> List[str]:
         names = []
@@ -52,10 +52,17 @@ class SQLConnectionManager(BaseConnectionManager):
         bindings: Optional[Any] = None,
         abridge_sql_log: bool = False,
     ) -> Tuple[Connection, Any]:
+
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
-        fire_event(ConnectionUsed(conn_type=self.TYPE, conn_name=connection.name))
+        fire_event(
+            ConnectionUsed(
+                conn_type=self.TYPE,
+                conn_name=cast_to_str(connection.name),
+                node_info=get_node_info(),
+            )
+        )
 
         with self.exception_handler(sql):
             if abridge_sql_log:
@@ -63,7 +70,11 @@ class SQLConnectionManager(BaseConnectionManager):
             else:
                 log_sql = sql
 
-            fire_event(SQLQuery(conn_name=connection.name, sql=log_sql))
+            fire_event(
+                SQLQuery(
+                    conn_name=cast_to_str(connection.name), sql=log_sql, node_info=get_node_info()
+                )
+            )
             pre = time.time()
 
             cursor = connection.handle.cursor()
@@ -71,7 +82,9 @@ class SQLConnectionManager(BaseConnectionManager):
 
             fire_event(
                 SQLQueryStatus(
-                    status=str(self.get_response(cursor)), elapsed=round((time.time() - pre), 2)
+                    status=str(self.get_response(cursor)),
+                    elapsed=round((time.time() - pre)),
+                    node_info=get_node_info(),
                 )
             )
 
@@ -81,7 +94,7 @@ class SQLConnectionManager(BaseConnectionManager):
     @abc.abstractmethod
     def get_response(cls, cursor: Any) -> AdapterResponse:
         """Get the status of the cursor."""
-        raise dbt.exceptions.NotImplementedException(
+        raise dbt.exceptions.NotImplementedError(
             "`get_response` is not implemented for this adapter!"
         )
 
@@ -105,25 +118,36 @@ class SQLConnectionManager(BaseConnectionManager):
         return [dict(zip(column_names, row)) for row in rows]
 
     @classmethod
-    def get_result_from_cursor(cls, cursor: Any) -> agate.Table:
+    def get_result_from_cursor(cls, cursor: Any, limit: Optional[int]) -> agate.Table:
         data: List[Any] = []
         column_names: List[str] = []
 
         if cursor.description is not None:
             column_names = [col[0] for col in cursor.description]
-            rows = cursor.fetchall()
+            if limit:
+                rows = cursor.fetchmany(limit)
+            else:
+                rows = cursor.fetchall()
             data = cls.process_results(column_names, rows)
 
         return dbt.clients.agate_helper.table_from_data_flat(data, column_names)
 
+    @classmethod
+    def data_type_code_to_name(cls, type_code: Union[int, str]) -> str:
+        """Get the string representation of the data type from the type_code."""
+        # https://peps.python.org/pep-0249/#type-objects
+        raise dbt.exceptions.NotImplementedError(
+            "`data_type_code_to_name` is not implemented for this adapter!"
+        )
+
     def execute(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
+        self, sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
     ) -> Tuple[AdapterResponse, agate.Table]:
         sql = self._add_query_comment(sql)
         _, cursor = self.add_query(sql, auto_begin)
         response = self.get_response(cursor)
         if fetch:
-            table = self.get_result_from_cursor(cursor)
+            table = self.get_result_from_cursor(cursor, limit)
         else:
             table = dbt.clients.agate_helper.empty_table()
         return response, table
@@ -134,10 +158,14 @@ class SQLConnectionManager(BaseConnectionManager):
     def add_commit_query(self):
         return self.add_query("COMMIT", auto_begin=False)
 
+    def add_select_query(self, sql: str) -> Tuple[Connection, Any]:
+        sql = self._add_query_comment(sql)
+        return self.add_query(sql, auto_begin=False)
+
     def begin(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is True:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 'Tried to begin a new transaction on connection "{}", but '
                 "it already had one open!".format(connection.name)
             )
@@ -150,12 +178,12 @@ class SQLConnectionManager(BaseConnectionManager):
     def commit(self):
         connection = self.get_thread_connection()
         if connection.transaction_open is False:
-            raise dbt.exceptions.InternalException(
+            raise dbt.exceptions.DbtInternalError(
                 'Tried to commit transaction on connection "{}", but '
                 "it does not have one open!".format(connection.name)
             )
 
-        fire_event(SQLCommit(conn_name=connection.name))
+        fire_event(SQLCommit(conn_name=connection.name, node_info=get_node_info()))
         self.add_commit_query()
 
         connection.transaction_open = False
