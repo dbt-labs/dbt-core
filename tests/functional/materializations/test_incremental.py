@@ -42,11 +42,12 @@ def test_basic(project):
     assert macro_func
     assert type(macro_func).__name__ == "MacroGenerator"
 
-    # These two incremental strategies are not valid for Postgres
-    with pytest.raises(DbtRuntimeError) as excinfo:
-        macro_func = project.adapter.get_incremental_strategy_macro(context, "merge")
-    assert "merge" in str(excinfo.value)
+    # This incremental strategy only works for Postgres >= 15
+    macro_func = project.adapter.get_incremental_strategy_macro(context, "merge")
+    assert macro_func
+    assert type(macro_func).__name__ == "MacroGenerator"
 
+    # This incremental strategy is not valid for Postgres
     with pytest.raises(DbtRuntimeError) as excinfo:
         macro_func = project.adapter.get_incremental_strategy_macro(context, "insert_overwrite")
     assert "insert_overwrite" in str(excinfo.value)
