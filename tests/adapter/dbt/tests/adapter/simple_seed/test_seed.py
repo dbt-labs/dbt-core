@@ -213,13 +213,12 @@ class SeedUniqueDelimiterTestBase(SeedConfigBase):
 
 class TestSeedWithUniqueDelimiter(SeedUniqueDelimiterTestBase):
     def test_seed_with_unique_delimiter(self, project):
-        """"""
+        """Testing correct run of seeds with a unique delimiter (pipe in this case)"""
         self._build_relations_for_test(project)
         self._check_relation_end_state(run_result=run_dbt(["seed"]), project=project, exists=True)
 
 
 class TestSeedWithWrongDelimiter(SeedUniqueDelimiterTestBase):
-    """"""
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -231,6 +230,7 @@ class TestSeedWithWrongDelimiter(SeedUniqueDelimiterTestBase):
         }
 
     def test_seed_with_wrong_delimiter(self, project):
+        """Testing failure of running dbt seed with a wrongly configured delimiter"""
         seed_result = run_dbt(["seed"], expect_pass=False)
         assert "syntax error at or near \"|\"" in seed_result.results[0].message
 
