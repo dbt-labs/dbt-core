@@ -219,7 +219,6 @@ class TestSeedWithUniqueDelimiter(SeedUniqueDelimiterTestBase):
 
 
 class TestSeedWithWrongDelimiter(SeedUniqueDelimiterTestBase):
-
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
