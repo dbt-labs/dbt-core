@@ -206,6 +206,9 @@ class Flags:
             profiles_dir = getattr(self, "PROFILES_DIR", None)
             user_config = read_user_config(profiles_dir) if profiles_dir else None
 
+        # Add entire invocation command to flags
+        object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
+
         # Overwrite default assignments with user config if available.
         if user_config:
             param_assigned_from_default_copy = params_assigned_from_default.copy()
