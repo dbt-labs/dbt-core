@@ -392,6 +392,7 @@ class TestList:
                     "pre-hook": [],
                     "quoting": {},
                     "column_types": {},
+                    "delimiter": ",",
                     "persist_docs": {},
                     "quote_columns": False,
                     "full_refresh": None,

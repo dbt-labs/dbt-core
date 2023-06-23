@@ -55,6 +55,7 @@ def get_rendered_seed_config(**updates):
         "pre-hook": [],
         "post-hook": [],
         "column_types": {},
+        "delimiter": ",",
         "quoting": {},
         "tags": [],
         "quote_columns": True,
