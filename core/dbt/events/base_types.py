@@ -6,6 +6,7 @@ import sys
 from google.protobuf.json_format import ParseDict, MessageToDict, MessageToJson
 from google.protobuf.message import Message
 from dbt.events.helpers import get_json_string_utcnow
+from typing import Optional
 
 if sys.version_info >= (3, 8):
     from typing import Protocol
@@ -126,7 +127,7 @@ class EventMsg(Protocol):
     data: Message
 
 
-def msg_from_base_event(event: BaseEvent, level: EventLevel = None):
+def msg_from_base_event(event: BaseEvent, level: Optional[EventLevel] = None):
 
     msg_class_name = f"{type(event).__name__}Msg"
     msg_cls = getattr(types_pb2, msg_class_name)

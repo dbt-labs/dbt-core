@@ -8,7 +8,7 @@ select
 MODELS__TEST_MIXED_NULL_COMPARE_YML = """
 version: 2
 models:
-  - name: test_null_compare
+  - name: test_mixed_null_compare
     tests:
       - assert_equal:
           actual: actual

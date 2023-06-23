@@ -139,6 +139,7 @@ sample_values = [
     types.AdapterEventInfo(),
     types.AdapterEventWarning(),
     types.AdapterEventError(),
+    types.AdapterRegistered(adapter_name="dbt-awesome", adapter_version="1.2.3"),
     types.NewConnection(conn_type="", conn_name=""),
     types.ConnectionReused(conn_name=""),
     types.ConnectionLeftOpenInCleanup(conn_name=""),
@@ -183,9 +184,6 @@ sample_values = [
     types.ConstraintNotSupported(constraint="", adapter=""),
     # I - Project parsing ======================
     types.InputFileDiffError(category="testing", file_id="my_file"),
-    types.PublicationArtifactChanged(
-        action="updated", project_name="test", generated_at=get_json_string_utcnow()
-    ),
     types.InvalidValueForField(field_name="test", field_value="test"),
     types.ValidationWarning(resource_type="model", field_name="access", node_name="my_macro"),
     types.ParsePerfInfoPath(path=""),
@@ -248,6 +246,7 @@ sample_values = [
         ref_model_deprecation_date="",
         ref_model_latest_version="",
     ),
+    types.UnsupportedConstraintMaterialization(materialized=""),
     # M - Deps generation ======================
     types.GitSparseCheckoutSubdirectory(subdir=""),
     types.GitProgressCheckoutRevision(revision=""),

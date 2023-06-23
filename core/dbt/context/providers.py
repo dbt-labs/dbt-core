@@ -32,13 +32,13 @@ from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.nodes import (
     Macro,
     Exposure,
-    Metric,
     SeedNode,
     SourceDefinition,
     Resource,
     ManifestNode,
     RefArgs,
     AccessType,
+    SemanticModel,
 )
 from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.unparsed import NodeVersion
@@ -285,6 +285,7 @@ class BaseSourceResolver(BaseResolver):
 
 
 class BaseMetricResolver(BaseResolver):
+    @abc.abstractmethod
     def resolve(self, name: str, package: Optional[str] = None) -> MetricReference:
         ...
 
@@ -502,6 +503,9 @@ class RuntimeRefResolver(BaseRefResolver):
         elif (
             target_model.resource_type == NodeType.Model
             and target_model.access == AccessType.Private
+            # don't raise this reference error for ad hoc 'preview' queries
+            and self.model.resource_type != NodeType.SqlOperation
+            and self.model.resource_type != NodeType.RPCCall  # TODO: rm
         ):
             if not self.model.group or self.model.group != target_model.group:
                 raise DbtReferenceError(
@@ -514,11 +518,7 @@ class RuntimeRefResolver(BaseRefResolver):
         return self.create_relation(target_model)
 
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
-        if target_model.is_public_node:
-            # Get quoting from publication artifact
-            pub_metadata = self.manifest.publications[target_model.package_name].metadata
-            return self.Relation.create_from_node(pub_metadata, target_model)
-        elif target_model.is_ephemeral_model:
+        if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from_node(self.config, target_model)
         else:
@@ -531,10 +531,7 @@ class RuntimeRefResolver(BaseRefResolver):
         target_package: Optional[str],
         target_version: Optional[NodeVersion],
     ) -> None:
-        if (
-            resolved.unique_id not in self.model.depends_on.nodes
-            and resolved.unique_id not in self.model.depends_on.public_nodes
-        ):
+        if resolved.unique_id not in self.model.depends_on.nodes:
             args = self._repack_args(target_name, target_package, target_version)
             raise RefBadContextError(node=self.model, args=args)
 
@@ -833,7 +830,8 @@ class ProviderContext(ManifestContext):
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
             raise MacrosSourcesUnWriteableError(node=self.model)
-        self.model.build_path = self.model.write_node(self.config.target_path, "run", payload)
+        self.model.build_path = self.model.get_target_write_path(self.config.target_path, "run")
+        self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
     @contextmember
@@ -1534,7 +1532,8 @@ def generate_parse_exposure(
     }
 
 
-class MetricRefResolver(BaseResolver):
+# applies to SemanticModels
+class SemanticModelRefResolver(BaseResolver):
     def __call__(self, *args, **kwargs) -> str:
         package = None
         if len(args) == 1:
@@ -1547,34 +1546,30 @@ class MetricRefResolver(BaseResolver):
         version = kwargs.get("version") or kwargs.get("v")
         self.validate_args(name, package, version)
 
+        # "model" here is any node
         self.model.refs.append(RefArgs(package=package, name=name, version=version))
         return ""
 
     def validate_args(self, name, package, version):
         if not isinstance(name, str):
             raise ParsingError(
-                f"In a metrics section in {self.model.original_file_path} "
+                f"In a semantic model or metrics section in {self.model.original_file_path} "
                 "the name argument to ref() must be a string"
             )
 
 
-def generate_parse_metrics(
-    metric: Metric,
+# used for semantic models
+def generate_parse_semantic_models(
+    semantic_model: SemanticModel,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
     return {
-        "ref": MetricRefResolver(
+        "ref": SemanticModelRefResolver(
             None,
-            metric,
-            project,
-            manifest,
-        ),
-        "metric": ParseMetricResolver(
-            None,
-            metric,
+            semantic_model,
             project,
             manifest,
         ),

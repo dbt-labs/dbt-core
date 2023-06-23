@@ -26,6 +26,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
+from dbt.task.contextvars import cv_project_root
 
 
 SELECTOR_GLOB = "*"
@@ -36,6 +37,7 @@ class MethodName(StrEnum):
     FQN = "fqn"
     Tag = "tag"
     Group = "group"
+    Access = "access"
     Source = "source"
     Path = "path"
     File = "file"
@@ -230,6 +232,16 @@ class GroupSelectorMethod(SelectorMethod):
                 yield node
 
 
+class AccessSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """yields model nodes matching the specified access level"""
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if not isinstance(real_node, ModelNode):
+                continue
+            if selector == real_node.access:
+                yield node
+
+
 class SourceSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included are the specified source."""
@@ -313,8 +325,8 @@ class MetricSelectorMethod(SelectorMethod):
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given path."""
-        # use '.' and not 'root' for easy comparison
-        root = Path.cwd()
+        # get project root from contextvar
+        root = Path(cv_project_root.get())
         paths = set(p.relative_to(root) for p in root.glob(selector))
         for node, real_node in self.all_nodes(included_nodes):
             ofp = Path(real_node.original_file_path)
@@ -713,6 +725,7 @@ class MethodManager:
         MethodName.FQN: QualifiedNameSelectorMethod,
         MethodName.Tag: TagSelectorMethod,
         MethodName.Group: GroupSelectorMethod,
+        MethodName.Access: AccessSelectorMethod,
         MethodName.Source: SourceSelectorMethod,
         MethodName.Path: PathSelectorMethod,
         MethodName.File: FileSelectorMethod,

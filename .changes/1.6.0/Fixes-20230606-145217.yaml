@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix regression in `run-operation` to not require the name of the package to
+  run
+time: 2023-06-06T14:52:17.38538-07:00
+custom:
+  Author: aranke
+  Issue: "7753"

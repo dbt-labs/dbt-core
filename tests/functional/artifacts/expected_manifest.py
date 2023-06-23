@@ -29,6 +29,7 @@ def get_rendered_model_config(**updates):
         "persist_docs": {},
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "meta": {},
         "unique_key": None,
         "grants": {},
@@ -59,6 +60,7 @@ def get_rendered_seed_config(**updates):
         "quote_columns": True,
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "database": None,
         "schema": None,
         "alias": None,
@@ -96,6 +98,7 @@ def get_rendered_snapshot_config(**updates):
         "persist_docs": {},
         "full_refresh": None,
         "on_schema_change": "ignore",
+        "on_configuration_change": "apply",
         "strategy": "check",
         "check_cols": "all",
         "unique_key": "id",
@@ -262,7 +265,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "language": "sql",
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
-                "depends_on": {"nodes": ["seed.test.seed"], "macros": [], "public_nodes": []},
+                "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "deprecation_date": None,
                 "unique_id": "model.test.model",
                 "fqn": ["test", "model"],
@@ -355,7 +358,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "language": "sql",
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
-                "depends_on": {"nodes": ["seed.test.seed"], "macros": [], "public_nodes": []},
+                "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "deprecation_date": None,
                 "unique_id": "model.test.second_model",
                 "fqn": ["test", "second_model"],
@@ -523,7 +526,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {
                     "macros": ["macro.dbt.test_not_null", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
-                    "public_nodes": [],
                 },
                 "deferred": False,
                 "description": "",
@@ -579,7 +581,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["seed.test.seed"],
-                    "public_nodes": [],
                 },
                 "description": "",
                 "docs": {"node_color": None, "show": True},
@@ -627,7 +628,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {
                     "macros": ["macro.test.test_nothing", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
-                    "public_nodes": [],
                 },
                 "deferred": False,
                 "description": "",
@@ -681,7 +681,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
-                    "public_nodes": [],
                 },
                 "deferred": False,
                 "description": "",
@@ -780,7 +779,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["model.test.model", "model.test.second_model"],
-                    "public_nodes": [],
                 },
                 "description": "A description of the complex exposure\n",
                 "label": None,
@@ -813,7 +811,6 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["source.test.my_source.my_table", "model.test.model"],
-                    "public_nodes": [],
                 },
                 "description": "",
                 "label": None,
@@ -889,7 +886,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             "doc.test.macro_arg_info": ANY,
         },
         "disabled": {},
-        "public_nodes": {},
+        "semantic_models": {},
     }
 
 
@@ -925,7 +922,6 @@ def expected_references_manifest(project):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["source.test.my_source.my_table"],
-                    "public_nodes": [],
                 },
                 "deprecation_date": None,
                 "deferred": False,
@@ -992,7 +988,6 @@ def expected_references_manifest(project):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["model.test.ephemeral_copy"],
-                    "public_nodes": [],
                 },
                 "deprecation_date": None,
                 "deferred": False,
@@ -1062,7 +1057,6 @@ def expected_references_manifest(project):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["model.test.ephemeral_summary"],
-                    "public_nodes": [],
                 },
                 "deprecation_date": None,
                 "deferred": False,
@@ -1185,7 +1179,7 @@ def expected_references_manifest(project):
                 "contract": {"checksum": None, "enforced": False},
                 "database": model_database,
                 "deferred": False,
-                "depends_on": {"macros": [], "nodes": ["seed.test.seed"], "public_nodes": []},
+                "depends_on": {"macros": [], "nodes": ["seed.test.seed"]},
                 "description": "",
                 "docs": {"node_color": None, "show": True},
                 "extra_ctes": [],
@@ -1273,7 +1267,6 @@ def expected_references_manifest(project):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["model.test.view_summary"],
-                    "public_nodes": [],
                 },
                 "description": "A description of the complex exposure",
                 "label": None,
@@ -1405,7 +1398,6 @@ def expected_references_manifest(project):
                 "unique_id": "doc.test.macro_arg_info",
             },
         },
-        "public_nodes": {},
         "child_map": {
             "model.test.ephemeral_copy": ["model.test.ephemeral_summary"],
             "exposure.test.notebook_exposure": [],
@@ -1453,6 +1445,7 @@ def expected_references_manifest(project):
                 ],
             }
         },
+        "semantic_models": {},
     }
 
 
@@ -1511,7 +1504,7 @@ def expected_versions_manifest(project):
                 ),
                 "constraints": [],
                 "sources": [],
-                "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+                "depends_on": {"macros": [], "nodes": []},
                 "deferred": False,
                 "description": "A versioned model",
                 "deprecation_date": ANY,
@@ -1582,7 +1575,7 @@ def expected_versions_manifest(project):
                 "constraints": [],
                 "contract": {"checksum": None, "enforced": False},
                 "sources": [],
-                "depends_on": {"macros": [], "nodes": [], "public_nodes": []},
+                "depends_on": {"macros": [], "nodes": []},
                 "deferred": False,
                 "description": "A versioned model",
                 "deprecation_date": None,
@@ -1635,7 +1628,6 @@ def expected_versions_manifest(project):
                         "model.test.versioned_model.v2",
                         "model.test.versioned_model.v1",
                     ],
-                    "public_nodes": [],
                 },
                 "deprecation_date": None,
                 "deferred": False,
@@ -1694,7 +1686,6 @@ def expected_versions_manifest(project):
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v1"],
-                    "public_nodes": [],
                 },
                 "deferred": False,
                 "description": "",
@@ -1749,7 +1740,6 @@ def expected_versions_manifest(project):
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v1"],
-                    "public_nodes": [],
                 },
                 "deferred": False,
                 "description": "",
@@ -1804,7 +1794,6 @@ def expected_versions_manifest(project):
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v2"],
-                    "public_nodes": [],
                 },
                 "deferred": False,
                 "description": "",
@@ -1849,7 +1838,6 @@ def expected_versions_manifest(project):
                 "depends_on": {
                     "macros": [],
                     "nodes": ["model.test.versioned_model.v2"],
-                    "public_nodes": [],
                 },
                 "description": "notebook_info",
                 "label": None,
@@ -1936,5 +1924,5 @@ def expected_versions_manifest(project):
         },
         "disabled": {},
         "macros": {},
-        "public_nodes": {},
+        "semantic_models": {},
     }

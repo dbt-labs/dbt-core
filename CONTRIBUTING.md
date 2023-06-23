@@ -56,7 +56,7 @@ There are some tools that will be helpful to you in developing locally. While th
 
 These are the tools used in `dbt-core` development and testing:
 
-- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.7, 3.8, 3.9, 3.10 and 3.11
+- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.8, 3.9, 3.10 and 3.11
 - [`pytest`](https://docs.pytest.org/en/latest/) to define, discover, and run tests
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting
@@ -163,7 +163,7 @@ suites.
 
 #### `tox`
 
-[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.7, Python 3.8, Python 3.9, Python 3.10 and Python 3.11 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py37`. The configuration for these tests in located in `tox.ini`.
+[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.8, Python 3.9, Python 3.10 and Python 3.11 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py38`. The configuration for these tests in located in `tox.ini`.
 
 #### `pytest`
 
@@ -171,9 +171,9 @@ Finally, you can also run a specific test or group of tests using [`pytest`](htt
 
 ```sh
 # run all unit tests in a file
-python3 -m pytest test/unit/test_graph.py
+python3 -m pytest tests/unit/test_graph.py
 # run a specific unit test
-python3 -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
+python3 -m pytest tests/unit/test_graph.py::GraphTest::test__dependency_list
 # run specific Postgres integration tests (old way)
 python3 -m pytest -m profile_postgres test/integration/074_postgres_unlogged_table_tests
 # run specific Postgres integration tests (new way)
@@ -185,7 +185,7 @@ python3 -m pytest tests/functional/sources
 ### Unit, Integration, Functional?
 
 Here are some general rules for adding tests:
-* unit tests (`test/unit` & `tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
+* unit tests (`tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
 * functional tests (`test/integration` & `tests/functional`) cover anything that interacts with a database, namely adapter
 * *everything in* `test/*` *is being steadily migrated to* `tests/*`
 

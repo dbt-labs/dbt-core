@@ -1,0 +1,6 @@
+kind: Features
+body: Enable setting packages in dependencies.yml
+time: 2023-06-13T15:19:17.199297-04:00
+custom:
+  Author: gshank
+  Issue: 7372 7736

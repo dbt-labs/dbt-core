@@ -419,7 +419,7 @@ class PublicationConfigNotFound(DbtConfigError):
 
 
 class SemverError(Exception):
-    def __init__(self, msg: str = None):
+    def __init__(self, msg: Optional[str] = None):
         self.msg = msg
         if msg is not None:
             super().__init__(msg)
@@ -703,7 +703,7 @@ class NoAdaptersAvailableError(DbtRuntimeError):
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
-        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/supported-data-platforms#adapter-installation"
+        msg = "No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/connect-adapters#install-using-the-cli"
         return msg
 
 
@@ -1254,12 +1254,15 @@ class DbtReferenceError(ParsingError):
 
 
 class InvalidAccessTypeError(ParsingError):
-    def __init__(self, unique_id: str, field_value: str):
+    def __init__(self, unique_id: str, field_value: str, materialization: Optional[str] = None):
         self.unique_id = unique_id
         self.field_value = field_value
-        msg = (
-            f"Node {self.unique_id} has an invalid value ({self.field_value}) for the access field"
+        self.materialization = materialization
+
+        with_materialization = (
+            f"with '{self.materialization}' materialization " if self.materialization else ""
         )
+        msg = f"Node {self.unique_id} {with_materialization}has an invalid value ({self.field_value}) for the access field"
         super().__init__(msg=msg)
 
 
@@ -1840,17 +1843,19 @@ class UninstalledPackagesFoundError(CompilationError):
         self,
         count_packages_specified: int,
         count_packages_installed: int,
+        packages_specified_path: str,
         packages_install_path: str,
     ):
         self.count_packages_specified = count_packages_specified
         self.count_packages_installed = count_packages_installed
+        self.packages_specified_path = packages_specified_path
         self.packages_install_path = packages_install_path
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         msg = (
             f"dbt found {self.count_packages_specified} package(s) "
-            "specified in packages.yml, but only "
+            f"specified in {self.packages_specified_path}, but only "
             f"{self.count_packages_installed} package(s) installed "
             f'in {self.packages_install_path}. Run "dbt deps" to '
             "install package dependencies."
@@ -2416,7 +2421,7 @@ class RPCCompiling(DbtRuntimeError):
     CODE = 10010
     MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
-    def __init__(self, msg: str = None, node=None):
+    def __init__(self, msg: Optional[str] = None, node=None):
         if msg is None:
             msg = "compile in progress"
         super().__init__(msg, node)

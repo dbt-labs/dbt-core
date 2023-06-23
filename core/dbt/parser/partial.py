@@ -609,7 +609,7 @@ class PartialParsing:
             env_var_changes = self.env_vars_changed_schema_files[schema_file.file_id]
 
         # models, seeds, snapshots, analyses
-        for dict_key in ["models", "seeds", "snapshots", "analyses"]:
+        for dict_key in ["models", "seeds", "snapshots", "analyses", "semantic_models"]:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
             if key_diff["changed"]:
                 for elem in key_diff["changed"]:

@@ -67,7 +67,7 @@ class TestList:
             "json": {
                 "name": "my_snapshot",
                 "package_name": "test",
-                "depends_on": {"nodes": [], "macros": [], "public_nodes": []},
+                "depends_on": {"nodes": [], "macros": []},
                 "tags": [],
                 "config": {
                     "enabled": True,
@@ -90,6 +90,7 @@ class TestList:
                     "alias": None,
                     "check_cols": None,
                     "on_schema_change": "ignore",
+                    "on_configuration_change": "apply",
                     "meta": {},
                     "grants": {},
                     "packages": [],
@@ -113,7 +114,7 @@ class TestList:
             "json": {
                 "name": "a",
                 "package_name": "test",
-                "depends_on": {"nodes": [], "macros": [], "public_nodes": []},
+                "depends_on": {"nodes": [], "macros": []},
                 "tags": [],
                 "config": {
                     "enabled": True,
@@ -127,6 +128,7 @@ class TestList:
                     "persist_docs": {},
                     "full_refresh": None,
                     "on_schema_change": "ignore",
+                    "on_configuration_change": "apply",
                     "database": None,
                     "schema": None,
                     "alias": None,
@@ -155,7 +157,7 @@ class TestList:
                 {
                     "name": "ephemeral",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": [], "public_nodes": []},
+                    "depends_on": {"nodes": [], "macros": []},
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -170,6 +172,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -191,7 +194,6 @@ class TestList:
                     "depends_on": {
                         "nodes": ["seed.test.seed"],
                         "macros": ["macro.dbt.is_incremental"],
-                        "public_nodes": [],
                     },
                     "tags": [],
                     "config": {
@@ -207,6 +209,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -228,7 +231,6 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.outer"],
                         "macros": [],
-                        "public_nodes": [],
                     },
                     "tags": [],
                     "config": {
@@ -244,6 +246,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -265,7 +268,6 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.ephemeral"],
                         "macros": [],
-                        "public_nodes": [],
                     },
                     "tags": [],
                     "config": {
@@ -281,6 +283,7 @@ class TestList:
                         "full_refresh": None,
                         "unique_key": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -315,7 +318,7 @@ class TestList:
                 {
                     "name": "outer",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": [], "public_nodes": []},
+                    "depends_on": {"nodes": [], "macros": []},
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -328,6 +331,7 @@ class TestList:
                         "persist_docs": {},
                         "full_refresh": None,
                         "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
                         "database": None,
                         "schema": None,
                         "alias": None,
@@ -393,6 +397,7 @@ class TestList:
                     "full_refresh": None,
                     "unique_key": None,
                     "on_schema_change": "ignore",
+                    "on_configuration_change": "apply",
                     "database": None,
                     "schema": None,
                     "alias": None,
@@ -424,7 +429,6 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.outer"],
                         "macros": ["macro.dbt.test_not_null"],
-                        "public_nodes": [],
                     },
                     "tags": [],
                     "config": {
@@ -452,7 +456,7 @@ class TestList:
                 {
                     "name": "t",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": [], "public_nodes": []},
+                    "depends_on": {"nodes": [], "macros": []},
                     "tags": [],
                     "config": {
                         "enabled": True,
@@ -482,7 +486,6 @@ class TestList:
                     "depends_on": {
                         "nodes": ["model.test.outer"],
                         "macros": ["macro.dbt.test_unique"],
-                        "public_nodes": [],
                     },
                     "tags": [],
                     "config": {

@@ -1,6 +1,7 @@
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Set, List, Any
+
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig, ConstraintSupport
 from dbt.adapters.sql import SQLAdapter
@@ -140,3 +141,6 @@ class PostgresAdapter(SQLAdapter):
         Not used to validate custom strategies defined by end users.
         """
         return ["append", "delete+insert"]
+
+    def debug_query(self):
+        self.execute("select 1 as id")

@@ -1,6 +1,5 @@
 import json
 import pytest
-import os
 
 from dbt.tests.util import (
     run_dbt,
@@ -8,7 +7,8 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     get_logging_events,
 )
-from dbt.contracts.publication import PublicationArtifact, PublicModel
+from dbt.contracts.publication import PublicationArtifact
+from dbt.contracts.graph.nodes import ModelNode
 from dbt.exceptions import (
     PublicationConfigNotFound,
     TargetNotFoundError,
@@ -44,6 +44,7 @@ models:
 dependencies_yml = """
 projects:
     - name: marketing
+      custom_field: some value
 """
 
 marketing_pub_json = """
@@ -81,6 +82,9 @@ marketing_pub_json = """
       "package_name": "marketing",
       "unique_id": "model.marketing.fct_two",
       "relation_name": "\\"dbt\\".\\"test_schema\\".\\"fct_two\\"",
+      "database": "dbt",
+      "schema": "test_schema",
+      "identifier": "fct_two",
       "version": null,
       "latest_version": null,
       "public_node_dependencies": ["model.test.fct_one"],
@@ -93,6 +97,10 @@ marketing_pub_json = """
 
 ext_node_model_sql = """
 select * from {{ ref('marketing', 'fct_one') }}
+"""
+
+ext_node_model_sql_modified = """
+select * from {{ ref('marketing', 'fct_three') }}
 """
 
 
@@ -130,12 +138,19 @@ class TestPublicationArtifacts:
             "models.yml": models_yml,
         }
 
-    def test_pub_artifacts(self, project):
-        write_file(dependencies_yml, "dependencies.yml")
+    @pytest.fixture(scope="class")
+    def dependencies(self):
+        return dependencies_yml
 
-        # Dependencies lists "marketing" project, but no publication file found
+    def test_pub_artifacts(self, project):
+
+        # Dependencies lists "marketing" project, but no publications provided
         with pytest.raises(PublicationConfigNotFound):
             run_dbt(["parse"])
+
+        # Dependencies lists "marketing" project, but no "marketing" publication provided
+        with pytest.raises(PublicationConfigNotFound):
+            run_dbt(["parse"], publications=[PublicationArtifact(project_name="not_marketing")])
 
         # Provide publication and try again
         m_pub_json = marketing_pub_json.replace("test_schema", project.test_schema)
@@ -156,7 +171,7 @@ class TestPublicationArtifacts:
         # source_node, target_model_name, target_model_package, target_model_version, current_project, node_package
         resolved_node = manifest.resolve_ref(None, "fct_one", "marketing", None, "test", "test")
         assert resolved_node
-        assert isinstance(resolved_node, PublicModel)
+        assert isinstance(resolved_node, ModelNode)
         assert resolved_node.unique_id == "model.marketing.fct_one"
 
         # add new model that references external_node and parse
@@ -166,7 +181,7 @@ class TestPublicationArtifacts:
         model_id = "model.test.test_model_one"
         public_model_id = "model.marketing.fct_one"
         model = manifest.nodes[model_id]
-        assert model.depends_on.public_nodes == [public_model_id]
+        assert model.depends_on.nodes == [public_model_id]
         assert public_model_id in manifest.parent_map
         assert manifest.parent_map[model_id] == [public_model_id]
         # check that publication configs contain correct list of public model unique_ids
@@ -174,7 +189,7 @@ class TestPublicationArtifacts:
             "model.marketing.fct_one",
             "model.marketing.fct_two",
         ]
-        assert len(manifest.public_nodes) == 2
+        assert len([node for node in manifest.nodes.values() if node.is_external_node]) == 2
 
         # Create the relation for the public node (fct_one)
         project.run_sql(f'create table "{project.test_schema}"."fct_one" (id integer)')
@@ -191,6 +206,14 @@ class TestPublicationArtifacts:
         # test_model_one references a missing public model
         with pytest.raises(TargetNotFoundError):
             manifest = run_dbt(["parse"], publications=publications)
+
+        # With public node changed from fct_one to fct_three, also update test_model_one's reference
+        write_file(
+            ext_node_model_sql_modified, project.project_root, "models", "test_model_one.sql"
+        )
+        manifest = run_dbt(["parse"], publications=publications)
+        # undo test_model_one changes
+        write_file(ext_node_model_sql, project.project_root, "models", "test_model_one.sql")
 
         # Add another public reference
         m_pub_json = m_pub_json.replace("fct_three", "fct_one")
@@ -241,8 +264,6 @@ class TestMultiProjects:
 
     def test_multi_projects(self, project, project_alt):
         # run the alternate project by using the alternate project root
-        # (There is currently a bug where project-dir requires a chdir to work.)
-        os.chdir(project_alt.project_root)
         results, log_output = run_dbt_and_capture(
             ["--debug", "--log-format=json", "run", "--project-dir", str(project_alt.project_root)]
         )
@@ -255,7 +276,6 @@ class TestMultiProjects:
         assert len(publication.public_models) == 1
 
         # run the base project
-        os.chdir(project.project_root)
         write_file(dependencies_alt_yml, project.project_root, "dependencies.yml")
         results = run_dbt(
             ["run", "--project-dir", str(project.project_root)], publications=[publication]

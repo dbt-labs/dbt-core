@@ -179,6 +179,9 @@ class Linker:
     def link_graph(self, manifest: Manifest):
         for source in manifest.sources.values():
             self.add_node(source.unique_id)
+        for semantic_model in manifest.semantic_models.values():
+            self.add_node(semantic_model.unique_id)
+
         for node in manifest.nodes.values():
             self.link_node(node, manifest)
         for exposure in manifest.exposures.values():
@@ -272,7 +275,7 @@ class Compiler:
         self.config = config
 
     def initialize(self):
-        make_directory(self.config.target_path)
+        make_directory(self.config.project_target_path)
         make_directory(self.config.packages_install_path)
 
     # creates a ModelContext which is converted to
@@ -512,7 +515,9 @@ class Compiler:
             # including the test edges.
             summaries["with_test_edges"] = linker.get_graph_summary(manifest)
 
-        with open(os.path.join(self.config.target_path, "graph_summary.json"), "w") as out_stream:
+        with open(
+            os.path.join(self.config.project_target_path, "graph_summary.json"), "w"
+        ) as out_stream:
             try:
                 out_stream.write(json.dumps(summaries))
             except Exception as e:  # This is non-essential information, so merely note failures.
@@ -539,7 +544,7 @@ class Compiler:
 
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
-        graph_path = os.path.join(self.config.target_path, filename)
+        graph_path = os.path.join(self.config.project_target_path, filename)
         flags = get_flags()
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
@@ -554,9 +559,8 @@ class Compiler:
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
         if node.compiled_code:
-            node.compiled_path = node.write_node(
-                self.config.target_path, "compiled", node.compiled_code
-            )
+            node.compiled_path = node.get_target_write_path(self.config.target_path, "compiled")
+            node.write_node(self.config.project_root, node.compiled_path, node.compiled_code)
         return node
 
     def compile_node(

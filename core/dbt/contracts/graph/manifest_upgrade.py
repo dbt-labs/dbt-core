@@ -1,42 +1,3 @@
-from dbt import deprecations
-from dbt.dataclass_schema import ValidationError
-
-
-# we renamed these properties in v1.3
-# this method allows us to be nice to the early adopters
-def rename_metric_attr(data: dict, raise_deprecation_warning: bool = False) -> dict:
-    metric_name = data["name"]
-    if raise_deprecation_warning and (
-        "sql" in data.keys()
-        or "type" in data.keys()
-        or data.get("calculation_method") == "expression"
-    ):
-        deprecations.warn("metric-attr-renamed", metric_name=metric_name)
-    duplicated_attribute_msg = """\n
-The metric '{}' contains both the deprecated metric property '{}'
-and the up-to-date metric property '{}'. Please remove the deprecated property.
-"""
-    if "sql" in data.keys():
-        if "expression" in data.keys():
-            raise ValidationError(
-                duplicated_attribute_msg.format(metric_name, "sql", "expression")
-            )
-        else:
-            data["expression"] = data.pop("sql")
-    if "type" in data.keys():
-        if "calculation_method" in data.keys():
-            raise ValidationError(
-                duplicated_attribute_msg.format(metric_name, "type", "calculation_method")
-            )
-        else:
-            calculation_method = data.pop("type")
-            data["calculation_method"] = calculation_method
-    # we also changed "type: expression" -> "calculation_method: derived"
-    if data.get("calculation_method") == "expression":
-        data["calculation_method"] = "derived"
-    return data
-
-
 def rename_sql_attr(node_content: dict) -> dict:
     if "raw_sql" in node_content:
         node_content["raw_code"] = node_content.pop("raw_sql")
@@ -88,7 +49,24 @@ def upgrade_seed_content(node_content):
         node_content.get("depends_on", {}).pop("nodes", None)
 
 
-def upgrade_manifest_json(manifest: dict) -> dict:
+def drop_v9_and_prior_metrics(manifest: dict) -> None:
+    manifest["metrics"] = {}
+    filtered_disabled_entries = {}
+    for entry_name, resource_list in manifest.get("disabled", {}).items():
+        filtered_resource_list = []
+        for resource in resource_list:
+            if resource.get("resource_type") != "metric":
+                filtered_resource_list.append(resource)
+        filtered_disabled_entries[entry_name] = filtered_resource_list
+
+    manifest["disabled"] = filtered_disabled_entries
+
+
+def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
+    # this should remain 9 while the check in `upgrade_schema_version` may change
+    if manifest_schema_version <= 9:
+        drop_v9_and_prior_metrics(manifest=manifest)
+
     for node_content in manifest.get("nodes", {}).values():
         upgrade_node_content(node_content)
         if node_content["resource_type"] == "seed":
@@ -105,11 +83,8 @@ def upgrade_manifest_json(manifest: dict) -> dict:
         manifest["groups"] = {}
     if "group_map" not in manifest:
         manifest["group_map"] = {}
-    if "public_nodes" not in manifest:
-        manifest["public_nodes"] = {}
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
-        metric_content = rename_metric_attr(metric_content)
         metric_content = upgrade_ref_content(metric_content)
         if "root_path" in metric_content:
             del metric_content["root_path"]
@@ -127,4 +102,6 @@ def upgrade_manifest_json(manifest: dict) -> dict:
         if "root_path" in doc_content:
             del doc_content["root_path"]
         doc_content["resource_type"] = "doc"
+    if "semantic_models" not in manifest:
+        manifest["semantic_models"] = {}
     return manifest
