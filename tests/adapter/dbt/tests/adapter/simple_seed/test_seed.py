@@ -232,7 +232,23 @@ class TestSeedWithWrongDelimiter(SeedUniqueDelimiterTestBase):
     def test_seed_with_wrong_delimiter(self, project):
         """Testing failure of running dbt seed with a wrongly configured delimiter"""
         seed_result = run_dbt(["seed"], expect_pass=False)
-        assert "syntax error at or near \"|\"" in seed_result.results[0].message
+        assert "syntax error" in seed_result.results[0].message.lower()
+
+
+class TestSeedWithEmptyDelimiter(SeedUniqueDelimiterTestBase):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "seeds": {
+                "quote_columns": False,
+                "delimiter": ""
+            },
+        }
+
+    def test_seed_with_empty_delimiter(self, project):
+        """Testing failure of running dbt seed with an empty configured delimiter value"""
+        seed_result = run_dbt(["seed"], expect_pass=False)
+        assert "compilation error" in seed_result.results[0].message.lower()
 
 
 class TestSimpleSeedEnabledViaConfig(object):
