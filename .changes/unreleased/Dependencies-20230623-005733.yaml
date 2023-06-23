@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update mashumaro[msgpack] requirement from ~=3.7.0 to >=3.7,<3.9 in /core"
+time: 2023-06-23T00:57:33.00000Z
+custom:
+  Author: dependabot[bot]
+  PR: 7933
