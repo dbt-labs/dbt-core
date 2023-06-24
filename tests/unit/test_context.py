@@ -182,6 +182,7 @@ REQUIRED_BASE_KEYS = frozenset(
         "log",
         "run_started_at",
         "invocation_id",
+        "thread_id",
         "modules",
         "flags",
         "print",
