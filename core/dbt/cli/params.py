@@ -43,7 +43,7 @@ compile_docs = click.option(
 config_dir = click.option(
     "--config-dir",
     envvar=None,
-    help="Show the configured location for the profiles.yml file and exit",
+    help="Print a system-specific command to access the directory that the current dbt project is searching for a profiles.yml. Then, exit. This flag renders other debug step flags no-ops.",
     is_flag=True,
 )
 

@@ -616,10 +616,9 @@ class UnparsedMetricInput(dbtClassMixin):
 @dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
-    measures: Optional[List[Union[UnparsedMetricInputMeasure, str]]] = None
-    numerator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
-    denominator: Optional[Union[UnparsedMetricInputMeasure, str]] = None
-    expr: Optional[str] = None
+    numerator: Optional[Union[UnparsedMetricInput, str]] = None
+    denominator: Optional[Union[UnparsedMetricInput, str]] = None
+    expr: Optional[Union[str, bool]] = None
     window: Optional[str] = None
     grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
     metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
@@ -699,7 +698,7 @@ class UnparsedMeasure(dbtClassMixin):
     agg: str  # actually an enum
     description: Optional[str] = None
     create_metric: bool = False
-    expr: Optional[str] = None
+    expr: Optional[Union[str, bool, int]] = None
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None

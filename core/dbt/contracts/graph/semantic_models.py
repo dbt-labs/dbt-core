@@ -6,10 +6,12 @@ from dbt_semantic_interfaces.references import (
     MeasureReference,
     TimeDimensionReference,
 )
-from dbt_semantic_interfaces.type_enums.aggregation_type import AggregationType
-from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
-from dbt_semantic_interfaces.type_enums.entity_type import EntityType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    TimeGranularity,
+)
 from typing import List, Optional
 
 
@@ -118,8 +120,8 @@ class Entity(dbtClassMixin):
 @dataclass
 class MeasureAggregationParameters(dbtClassMixin):
     percentile: Optional[float] = None
-    use_discrete_percentile: Optional[bool] = None
-    use_approximate_percentile: Optional[bool] = None
+    use_discrete_percentile: bool = False
+    use_approximate_percentile: bool = False
 
 
 @dataclass

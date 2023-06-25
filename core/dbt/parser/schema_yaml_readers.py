@@ -34,7 +34,8 @@ from dbt.contracts.graph.semantic_models import (
     NonAdditiveDimension,
 )
 from dbt.exceptions import DbtInternalError, YamlParseDictError, JSONValidationError
-from dbt.context.providers import generate_parse_exposure
+from dbt.context.providers import generate_parse_exposure, generate_parse_semantic_models
+
 from dbt.contracts.graph.model_config import MetricConfig, ExposureConfig
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -43,11 +44,13 @@ from dbt.context.context_config import (
 )
 from dbt.clients.jinja import get_rendered
 from dbt.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums.aggregation_type import AggregationType
-from dbt_semantic_interfaces.type_enums.dimension_type import DimensionType
-from dbt_semantic_interfaces.type_enums.entity_type import EntityType
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
+)
 from typing import List, Optional, Union
 
 
@@ -241,6 +244,35 @@ class MetricParser(YamlReader):
         else:
             return None
 
+    def _get_metric_input(self, unparsed: Union[UnparsedMetricInput, str]) -> MetricInput:
+        if isinstance(unparsed, str):
+            return MetricInput(name=unparsed)
+        else:
+            offset_to_grain: Optional[TimeGranularity] = None
+            if unparsed.offset_to_grain is not None:
+                offset_to_grain = TimeGranularity(unparsed.offset_to_grain)
+
+            filter: Optional[WhereFilter] = None
+            if unparsed.filter is not None:
+                filter = WhereFilter(where_sql_template=unparsed.filter)
+
+            return MetricInput(
+                name=unparsed.name,
+                filter=filter,
+                alias=unparsed.alias,
+                offset_window=self._get_time_window(unparsed.offset_window),
+                offset_to_grain=offset_to_grain,
+            )
+
+    def _get_optional_metric_input(
+        self,
+        unparsed: Optional[Union[UnparsedMetricInput, str]],
+    ) -> Optional[MetricInput]:
+        if unparsed is not None:
+            return self._get_metric_input(unparsed)
+        else:
+            return None
+
     def _get_metric_inputs(
         self,
         unparsed_metric_inputs: Optional[List[Union[UnparsedMetricInput, str]]],
@@ -248,28 +280,7 @@ class MetricParser(YamlReader):
         metric_inputs: List[MetricInput] = []
         if unparsed_metric_inputs is not None:
             for unparsed_metric_input in unparsed_metric_inputs:
-                if isinstance(unparsed_metric_input, str):
-                    metric_inputs.append(MetricInput(name=unparsed_metric_input))
-                else:
-                    offset_to_grain: Optional[TimeGranularity] = None
-                    if unparsed_metric_input.offset_to_grain is not None:
-                        offset_to_grain = TimeGranularity(unparsed_metric_input.offset_to_grain)
-
-                    filter: Optional[WhereFilter] = None
-                    if unparsed_metric_input.filter is not None:
-                        filter = WhereFilter(where_sql_template=unparsed_metric_input.filter)
-
-                    metric_inputs.append(
-                        MetricInput(
-                            name=unparsed_metric_input.name,
-                            filter=filter,
-                            alias=unparsed_metric_input.alias,
-                            offset_window=self._get_time_window(
-                                unparsed_window=unparsed_metric_input.offset_window
-                            ),
-                            offset_to_grain=offset_to_grain,
-                        )
-                    )
+                metric_inputs.append(self._get_metric_input(unparsed=unparsed_metric_input))
 
         return metric_inputs
 
@@ -280,13 +291,16 @@ class MetricParser(YamlReader):
 
         return MetricTypeParams(
             measure=self._get_optional_input_measure(type_params.measure),
-            measures=self._get_input_measures(type_params.measures),
-            numerator=self._get_optional_input_measure(type_params.numerator),
-            denominator=self._get_optional_input_measure(type_params.denominator),
-            expr=type_params.expr,
+            numerator=self._get_optional_metric_input(type_params.numerator),
+            denominator=self._get_optional_metric_input(type_params.denominator),
+            expr=str(type_params.expr) if type_params.expr is not None else None,
             window=self._get_time_window(type_params.window),
             grain_to_date=grain_to_date,
             metrics=self._get_metric_inputs(type_params.metrics),
+            # TODO This is a compiled list of measure/numerator/denominator as
+            # well as the `input_measures` of included metrics. We're planning
+            # on doing this as part of CT-2707
+            # input_measures=?,
         )
 
     def parse_metric(self, unparsed: UnparsedMetric):
@@ -486,7 +500,7 @@ class SemanticModelParser(YamlReader):
                     agg=AggregationType(unparsed.agg),
                     description=unparsed.description,
                     create_metric=unparsed.create_metric,
-                    expr=unparsed.expr,
+                    expr=str(unparsed.expr) if unparsed.expr is not None else None,
                     agg_params=unparsed.agg_params,
                     non_additive_dimension=self._get_non_additive_dimension(
                         unparsed.non_additive_dimension
@@ -521,6 +535,19 @@ class SemanticModelParser(YamlReader):
             defaults=unparsed.defaults,
         )
 
+        ctx = generate_parse_semantic_models(
+            parsed,
+            self.root_project,
+            self.schema_parser.manifest,
+            package_name,
+        )
+
+        if parsed.model is not None:
+            model_ref = "{{ " + parsed.model + " }}"
+            # This sets the "refs" in the SemanticModel from the MetricRefResolver in context/providers.py
+            get_rendered(model_ref, ctx, parsed)
+
+        # No ability to disable a semantic model at this time
         self.manifest.add_semantic_model(self.yaml.file, parsed)
 
     def parse(self):

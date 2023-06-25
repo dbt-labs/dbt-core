@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Don't jinja render packages from dependencies.yml
+time: 2023-06-20T18:08:52.848093-04:00
+custom:
+  Author: gshank
+  Issue: "7905"

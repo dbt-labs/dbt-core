@@ -83,8 +83,6 @@ def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
         manifest["groups"] = {}
     if "group_map" not in manifest:
         manifest["group_map"] = {}
-    if "public_nodes" not in manifest:
-        manifest["public_nodes"] = {}
     for metric_content in manifest.get("metrics", {}).values():
         # handle attr renames + value translation ("expression" -> "derived")
         metric_content = upgrade_ref_content(metric_content)
@@ -104,6 +102,6 @@ def upgrade_manifest_json(manifest: dict, manifest_schema_version: int) -> dict:
         if "root_path" in doc_content:
             del doc_content["root_path"]
         doc_content["resource_type"] = "doc"
-    if "semantic_nodes" not in manifest:
-        manifest["semantic_nodes"] = {}
+    if "semantic_models" not in manifest:
+        manifest["semantic_models"] = {}
     return manifest
