@@ -1,4 +1,4 @@
-{% macro postgres_get_relations () -%}
+{% macro postgres__get_relations () -%}
 
   {#
       -- in pg_depend, objid is the dependent, refobjid is the referenced object
