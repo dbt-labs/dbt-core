@@ -54,7 +54,7 @@ macros__before_and_after = """
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}',
-    '{{ thread_id }}'\
+    '{{ thread_id }}'
    )
 
 {% endmacro %}
@@ -165,7 +165,7 @@ models__hooks_error = """
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}',\
-                '{{ thread_id }}'\
+                '{{ thread_id }}'
         )",
         "pre-hook": "\
             insert into {{this.schema}}.on_model_hook (\
@@ -193,7 +193,7 @@ models__hooks_error = """
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}',\
-                '{{ thread_id }}'\
+                '{{ thread_id }}'
         )",
         "post-hook": "\
             insert into {{this.schema}}.on_model_hook (\
@@ -273,7 +273,7 @@ models__hooks_kwargs = """
                 target_threads,\
                 run_started_at,\
                 invocation_id,\
-                thread_id
+                thread_id\
             ) VALUES (\
                 'end',\
                 '{{ target.dbname }}',\

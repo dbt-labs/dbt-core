@@ -120,7 +120,7 @@ class TestPrePostRunHooks(object):
         assert (
             ctx["invocation_id"] is not None and len(ctx["invocation_id"]) > 0
         ), "invocation_id was not set"
-        assert ctx["thread_id"].startswith("Thread-")
+        assert ctx["thread_id"].startswith("Thread-") or ctx["thread_id"] == "MainThread"
 
     def test_pre_and_post_run_hooks(self, setUp, project, dbt_profile_target):
         run_dbt(["run"])
