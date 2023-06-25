@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from typing import MutableMapping, Dict, List
+from typing import MutableMapping, Dict, List, Callable
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import (
     AnySourceFile,
@@ -660,96 +660,38 @@ class PartialParsing:
                     self.delete_schema_source(schema_file, source)
                     self.merge_patch(schema_file, dict_key, source)
 
-        # macros
-        dict_key = "macros"
-        macro_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
-        if macro_diff["changed"]:
-            for macro in macro_diff["changed"]:
-                self.delete_schema_macro_patch(schema_file, macro)
-                self.merge_patch(schema_file, dict_key, macro)
-        if macro_diff["deleted"]:
-            for macro in macro_diff["deleted"]:
-                self.delete_schema_macro_patch(schema_file, macro)
-        if macro_diff["added"]:
-            for macro in macro_diff["added"]:
-                self.merge_patch(schema_file, dict_key, macro)
-        # Handle schema file updates due to env_var changes
-        if dict_key in env_var_changes and dict_key in new_yaml_dict:
-            for name in env_var_changes[dict_key]:
-                if name in macro_diff["changed_or_deleted_names"]:
-                    continue
-                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
-                if elem:
-                    self.delete_schema_macro_patch(schema_file, elem)
-                    self.merge_patch(schema_file, dict_key, elem)
+        def handle_change(key: str, delete: Callable):
+            self._handle_element_change(
+                schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, key, delete
+            )
 
-        # exposures
-        dict_key = "exposures"
-        exposure_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
-        if exposure_diff["changed"]:
-            for exposure in exposure_diff["changed"]:
-                self.delete_schema_exposure(schema_file, exposure)
-                self.merge_patch(schema_file, dict_key, exposure)
-        if exposure_diff["deleted"]:
-            for exposure in exposure_diff["deleted"]:
-                self.delete_schema_exposure(schema_file, exposure)
-        if exposure_diff["added"]:
-            for exposure in exposure_diff["added"]:
-                self.merge_patch(schema_file, dict_key, exposure)
-        # Handle schema file updates due to env_var changes
-        if dict_key in env_var_changes and dict_key in new_yaml_dict:
-            for name in env_var_changes[dict_key]:
-                if name in exposure_diff["changed_or_deleted_names"]:
-                    continue
-                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
-                if elem:
-                    self.delete_schema_exposure(schema_file, elem)
-                    self.merge_patch(schema_file, dict_key, elem)
+        handle_change("macros", self.delete_schema_macro_patch)
+        handle_change("exposures", self.delete_schema_exposure)
+        handle_change("metrics", self.delete_schema_metric)
+        handle_change("groups", self.delete_schema_group)
 
-        # metrics
-        dict_key = "metrics"
-        metric_diff = self.get_diff_for("metrics", saved_yaml_dict, new_yaml_dict)
-        if metric_diff["changed"]:
-            for metric in metric_diff["changed"]:
-                self.delete_schema_metric(schema_file, metric)
-                self.merge_patch(schema_file, dict_key, metric)
-        if metric_diff["deleted"]:
-            for metric in metric_diff["deleted"]:
-                self.delete_schema_metric(schema_file, metric)
-        if metric_diff["added"]:
-            for metric in metric_diff["added"]:
-                self.merge_patch(schema_file, dict_key, metric)
+    def _handle_element_change(
+        self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
+    ):
+        element_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
+        if element_diff["changed"]:
+            for element in element_diff["changed"]:
+                delete(schema_file, element)
+                self.merge_patch(schema_file, dict_key, element)
+        if element_diff["deleted"]:
+            for element in element_diff["deleted"]:
+                delete(schema_file, element)
+        if element_diff["added"]:
+            for element in element_diff["added"]:
+                self.merge_patch(schema_file, dict_key, element)
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
             for name in env_var_changes[dict_key]:
-                if name in metric_diff["changed_or_deleted_names"]:
+                if name in element_diff["changed_or_deleted_names"]:
                     continue
                 elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if elem:
-                    self.delete_schema_metric(schema_file, elem)
-                    self.merge_patch(schema_file, dict_key, elem)
-
-        # groups
-        dict_key = "groups"
-        group_diff = self.get_diff_for("groups", saved_yaml_dict, new_yaml_dict)
-        if group_diff["changed"]:
-            for group in group_diff["changed"]:
-                self.delete_schema_group(schema_file, group)
-                self.merge_patch(schema_file, dict_key, group)
-        if group_diff["deleted"]:
-            for group in group_diff["deleted"]:
-                self.delete_schema_group(schema_file, group)
-        if group_diff["added"]:
-            for group in group_diff["added"]:
-                self.merge_patch(schema_file, dict_key, group)
-        # Handle schema file updates due to env_var changes
-        if dict_key in env_var_changes and dict_key in new_yaml_dict:
-            for name in env_var_changes[dict_key]:
-                if name in group_diff["changed_or_deleted_names"]:
-                    continue
-                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
-                if elem:
-                    self.delete_schema_group(schema_file, elem)
+                    delete(schema_file, elem)
                     self.merge_patch(schema_file, dict_key, elem)
 
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
