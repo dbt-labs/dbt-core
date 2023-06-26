@@ -328,7 +328,7 @@ class PathSelectorMethod(SelectorMethod):
         # get project root from contextvar
         project_root = get_project_root()
         if project_root:
-            root = Path(project_root())
+            root = Path(project_root)
         else:
             root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
