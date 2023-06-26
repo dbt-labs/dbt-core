@@ -258,8 +258,8 @@ def manifest(*args0, write=True, write_perf_info=False):
                         runtime_config.credentials.type,
                         runtime_config.quoting,
                     )
-                    for external_artifact in external_artifacts:
-                        external_artifact.artifact.write(external_artifact.path)
+                    for path, external_artifact in external_artifacts.items():
+                        external_artifact.write(path)
 
             return func(*args, **kwargs)
 

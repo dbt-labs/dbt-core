@@ -1,10 +1,10 @@
 import importlib
 import pkgutil
-from typing import Dict, List
+from typing import Dict
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtRuntimeError
-from dbt.plugins.contracts import ExternalArtifact
+from dbt.plugins.contracts import ExternalArtifacts
 from dbt.plugins.manifest import ExternalNodes
 
 
@@ -29,7 +29,7 @@ class dbtPlugin:
 
     def get_external_artifacts(
         self, manifest: Manifest, project_name: str, adapter_type: str, quoting: Dict[str, str]
-    ) -> List[ExternalArtifact]:
+    ) -> ExternalArtifacts:
         """TODO"""
         raise NotImplementedError
 
@@ -77,11 +77,11 @@ class PluginManager:
 
     def get_external_artifacts(
         self, manifest: Manifest, project_name: str, adapter_type: str, quoting: Dict[str, str]
-    ) -> List[ExternalArtifact]:
-        external_artifacts = []
+    ) -> ExternalArtifacts:
+        external_artifacts = {}
         for hook_method in self.hooks.get("get_external_artifacts", []):
             plugin_external_artifact = hook_method(manifest, project_name, adapter_type, quoting)
-            external_artifacts += plugin_external_artifact
+            external_artifacts.update(plugin_external_artifact)
         return external_artifacts
 
     def get_external_nodes(self) -> ExternalNodes:
