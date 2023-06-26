@@ -86,7 +86,6 @@ from dbt.contracts.graph.manifest import (
     ManifestStateCheck,
     ParsingInfo,
 )
-from dbt.graph.graph import UniqueId
 from dbt.contracts.graph.nodes import (
     SourceDefinition,
     Macro,
@@ -98,7 +97,6 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     NodeRelation,
 )
-from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import NodeVersion
 from dbt.contracts.util import Writable
 from dbt.exceptions import (
@@ -122,7 +120,7 @@ from dbt.parser.sources import SourcePatcher
 from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
-from dbt.plugins import setup_plugin_manager, get_plugin_manager
+from dbt.plugins import get_plugin_manager
 
 
 PARSING_STATE = DbtProcessState("parsing")

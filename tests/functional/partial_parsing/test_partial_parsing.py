@@ -69,10 +69,6 @@ from tests.functional.partial_parsing.fixtures import (
     groups_schema_yml_one_group_model_in_group2,
     groups_schema_yml_two_groups_private_orders_valid_access,
     groups_schema_yml_two_groups_private_orders_invalid_access,
-    dependencies_yml,
-    empty_dependencies_yml,
-    marketing_pub_json,
-    public_models_schema_yml,
 )
 
 from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError

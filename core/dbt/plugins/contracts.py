@@ -1,6 +1,4 @@
-from dataclasses import dataclass, field
-from pathlib import Path
-
-from dbt.contracts.util import ArtifactMixin as ExternalArtifact
-from dbt.contracts.util import BaseArtifactMetadata, schema_version, AdditionalPropertiesMixin
-from dbt.dataclass_schema import dbtClassMixin
+# just exports, they need "noqa" so flake8 will not complain.
+from dbt.contracts.util import ArtifactMixin as ExternalArtifact, schema_version  # noqa
+from dbt.contracts.util import BaseArtifactMetadata, AdditionalPropertiesMixin  # noqa
+from dbt.dataclass_schema import dbtClassMixin  # noqa
