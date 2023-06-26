@@ -26,7 +26,7 @@ from dbt.exceptions import (
     DbtRuntimeError,
 )
 from dbt.node_types import NodeType
-from dbt.task.contextvars import cv_project_root
+from dbt.events.contextvars import get_project_root
 
 
 SELECTOR_GLOB = "*"
@@ -326,7 +326,11 @@ class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given path."""
         # get project root from contextvar
-        root = Path(cv_project_root.get())
+        project_root = get_project_root()
+        if project_root:
+            root = Path(project_root())
+        else:
+            root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
         for node, real_node in self.all_nodes(included_nodes):
             ofp = Path(real_node.original_file_path)

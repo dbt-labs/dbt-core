@@ -30,11 +30,27 @@ def get_node_info():
         return {}
 
 
+def get_project_root():
+    cvars = get_contextvars(TASK_PREFIX)
+    if "project_root" in cvars:
+        return cvars["project_root"]
+    else:
+        return None
+
+
 def clear_contextvars(prefix: str) -> None:
     ctx = contextvars.copy_context()
     for k in ctx:
         if k.name.startswith(prefix):
             k.set(Ellipsis)
+
+
+def set_log_contextvars(**kwargs: Any) -> Mapping[str, contextvars.Token]:
+    return set_contextvars(LOG_PREFIX, **kwargs)
+
+
+def set_task_contextvars(**kwargs: Any) -> Mapping[str, contextvars.Token]:
+    return set_contextvars(TASK_PREFIX, **kwargs)
 
 
 # put keys and values into context. Returns the contextvar.Token mapping

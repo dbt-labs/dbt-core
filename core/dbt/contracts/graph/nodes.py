@@ -45,7 +45,7 @@ from dbt.events.types import (
     SeedExceedsLimitAndPathChanged,
     SeedExceedsLimitChecksumChanged,
 )
-from dbt.events.contextvars import set_contextvars
+from dbt.events.contextvars import set_log_contextvars
 from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType, AccessType
 from dbt_semantic_interfaces.references import (
@@ -327,7 +327,7 @@ class NodeInfoMixin:
     def update_event_status(self, **kwargs):
         for k, v in kwargs.items():
             self._event_status[k] = v
-        set_contextvars(node_info=self.node_info)
+        set_log_contextvars(node_info=self.node_info)
 
     def clear_event_status(self):
         self._event_status = dict()
