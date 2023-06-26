@@ -7,7 +7,7 @@ from .manager import dbtPlugin, dbt_hook  # noqa
 PLUGIN_MANAGER: Optional[PluginManager] = None
 
 
-def setup_plugin_manager():
+def set_up_plugin_manager():
     global PLUGIN_MANAGER
     PLUGIN_MANAGER = PluginManager()
 
@@ -15,7 +15,7 @@ def setup_plugin_manager():
 def get_plugin_manager() -> PluginManager:
     global PLUGIN_MANAGER
     if not PLUGIN_MANAGER:
-        setup_plugin_manager()
+        set_up_plugin_manager()
 
     assert PLUGIN_MANAGER
     return PLUGIN_MANAGER
