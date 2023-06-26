@@ -3,13 +3,20 @@ import pkgutil
 from typing import Dict, List
 
 from dbt.contracts.graph.manifest import Manifest
+from dbt.exceptions import DbtRuntimeError
 from dbt.plugins.contracts import ExternalArtifact
 from dbt.plugins.manifest import ExternalNodes
 
 
 def dbt_hook(func):
-    setattr(func, "is_dbt_hook", True)
-    return func
+    def inner(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            raise DbtRuntimeError(f"{func.__name__}: {e}")
+
+    setattr(inner, "is_dbt_hook", True)
+    return inner
 
 
 class dbtPlugin:
