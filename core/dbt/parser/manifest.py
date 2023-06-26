@@ -732,9 +732,6 @@ class ManifestLoader:
             raise
 
     def inject_external_nodes(self) -> bool:
-        pm = get_plugin_manager()
-        external_node_args = pm.build_external_nodes()
-
         # Remove previously existing external nodes since we are regenerating them
         manifest_nodes_modified = False
         for unique_id in self.manifest.external_node_unique_ids:
@@ -742,7 +739,10 @@ class ManifestLoader:
             remove_dependent_project_references(self.manifest, unique_id)
             manifest_nodes_modified = True
 
-        for node_arg in external_node_args:
+        # Inject any newly-available external nodes
+        pm = get_plugin_manager()
+        external_model_nodes = pm.get_external_nodes().models
+        for node_arg in external_model_nodes.values():
             node = ModelNode.from_args(node_arg)
             # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
             if node.unique_id not in self.manifest.nodes:

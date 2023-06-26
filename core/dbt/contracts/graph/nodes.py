@@ -581,7 +581,7 @@ class ModelNode(CompiledNode):
 
     @classmethod
     def from_args(cls, args: ModelNodeArgs) -> "ModelNode":
-        unique_id = f"{NodeType.Model}.{args.package_name}.{args.name}"
+        unique_id = args.unique_id
 
         return cls(
             resource_type=NodeType.Model,
