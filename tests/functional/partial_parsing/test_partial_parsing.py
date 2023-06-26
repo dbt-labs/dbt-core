@@ -78,9 +78,7 @@ from tests.functional.partial_parsing.fixtures import (
 from dbt.exceptions import CompilationError, ParsingError, DuplicateVersionedUnversionedError
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
-from dbt.contracts.publication import PublicationArtifact
 
-import json
 import re
 import os
 
@@ -811,51 +809,3 @@ class TestGroups:
         )
         with pytest.raises(ParsingError):
             results = run_dbt(["--partial-parse", "run"])
-
-
-class TestDependencies:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {"orders.sql": orders_sql}
-
-    @pytest.fixture(scope="class")
-    def marketing_publication(self):
-        return PublicationArtifact.from_dict(json.loads(marketing_pub_json))
-
-    @pytest.fixture(scope="class")
-    def dependencies(self):
-        return dependencies_yml
-
-    def test_dependencies(self, project, marketing_publication):
-        # initial run with dependencies
-        manifest = run_dbt(["parse"], publications=[marketing_publication])
-        assert len(manifest.publications) == 1
-
-        # remove dependencies
-        write_file(empty_dependencies_yml, "dependencies.yml")
-        manifest = run_dbt(["parse"], publications=[marketing_publication])
-        assert len(manifest.publications) == 0
-
-
-class TestPublicationArtifactAvailable:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "orders.sql": orders_sql,
-            "schema.yml": public_models_schema_yml,
-        }
-
-    def test_pp_publication_artifact_available(self, project):
-        # initial run with public model logs PublicationArtifactAvailable
-        manifest, log_output = run_dbt_and_capture(["--debug", "--log-format", "json", "parse"])
-        orders_node = manifest.nodes["model.test.orders"]
-        assert orders_node.access == "public"
-        assert "PublicationArtifactAvailable" in log_output
-
-        # unchanged project - partial parse run with public model logs PublicationArtifactAvailable
-        manifest, log_output = run_dbt_and_capture(
-            ["--partial-parse", "--debug", "--log-format", "json", "parse"]
-        )
-        orders_node = manifest.nodes["model.test.orders"]
-        assert orders_node.access == "public"
-        assert "PublicationArtifactAvailable" in log_output

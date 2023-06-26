@@ -1468,19 +1468,6 @@ class NoNodesForSelectionCriteria(WarnLevel):
 # =======================================================
 
 
-class PublicationArtifactAvailable(DebugLevel):
-    def code(self):
-        return "P001"
-
-    def message(self) -> str:
-        return "Publication artifact available"
-
-
-# =======================================================
-# Q - Node execution
-# =======================================================
-
-
 class RunningOperationCaughtError(ErrorLevel):
     def code(self):
         return "Q001"

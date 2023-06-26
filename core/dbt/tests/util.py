@@ -20,7 +20,6 @@ from dbt.events.functions import (
 )
 from dbt.events.base_types import EventLevel
 from dbt.events.types import Note
-from dbt.contracts.publication import PublicationArtifact
 
 
 # =============================================================================
@@ -73,7 +72,6 @@ from dbt.contracts.publication import PublicationArtifact
 def run_dbt(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: Optional[List[PublicationArtifact]] = None,
 ):
     # Ignore logbook warnings
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="logbook")
@@ -99,7 +97,7 @@ def run_dbt(
         args.extend(["--profiles-dir", profiles_dir])
 
     dbt = dbtRunner()
-    res = dbt.invoke(args, publications=publications)
+    res = dbt.invoke(args)
 
     # the exception is immediately raised to be caught in tests
     # using a pattern like `with pytest.raises(SomeException):`
@@ -119,12 +117,11 @@ def run_dbt(
 def run_dbt_and_capture(
     args: Optional[List[str]] = None,
     expect_pass: bool = True,
-    publications: Optional[List[PublicationArtifact]] = None,
 ):
     try:
         stringbuf = StringIO()
         capture_stdout_logs(stringbuf)
-        res = run_dbt(args, expect_pass=expect_pass, publications=publications)
+        res = run_dbt(args, expect_pass=expect_pass)
         stdout = stringbuf.getvalue()
 
     finally:

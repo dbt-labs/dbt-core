@@ -297,6 +297,11 @@ class ParsingError(DbtRuntimeError):
         return "Parsing"
 
 
+class dbtPluginError(DbtRuntimeError):
+    CODE = 10020
+    MESSAGE = "Plugin Error"
+
+
 # TODO: this isn't raised in the core codebase.  Is it raised elsewhere?
 class JSONValidationError(DbtValidationError):
     def __init__(self, typename, errors):
@@ -403,19 +408,6 @@ class DbtSelectorsError(DbtConfigError):
 
 class DbtProfileError(DbtConfigError):
     pass
-
-
-class PublicationConfigNotFound(DbtConfigError):
-    def __init__(self, project=None, file_name=None):
-        self.project = project
-        msg = self.message()
-        super().__init__(msg, project=project)
-
-    def message(self):
-        return (
-            f"A dependency on project {self.project} was specified, "
-            f"but a publication for {self.project} was not found."
-        )
 
 
 class SemverError(Exception):
@@ -908,19 +900,6 @@ class SecretEnvVarLocationError(ParsingError):
             f"Found '{self.env_var_name}' referenced elsewhere."
         )
         return msg
-
-
-class ProjectDependencyCycleError(ParsingError):
-    def __init__(self, pub_project_name, project_name):
-        self.pub_project_name = pub_project_name
-        self.project_name = project_name
-        super().__init__(msg=self.get_message())
-
-    def get_message(self) -> str:
-        return (
-            f"A project dependency cycle has been detected. The current project {self.project_name} "
-            f"depends on {self.pub_project_name} which also depends on the current project."
-        )
 
 
 class MacroArgTypeError(CompilationError):

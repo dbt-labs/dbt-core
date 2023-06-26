@@ -23,6 +23,7 @@ from dbt.parser.manifest import ManifestLoader, write_manifest
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import cast_dict_to_dict_of_strings
+from dbt.plugins import setup_plugin_manager, get_plugin_manager
 
 from click import Context
 from functools import update_wrapper
@@ -67,6 +68,9 @@ def preflight(func):
 
         # Adapter management
         ctx.with_resource(adapter_management())
+
+        # Plugins
+        setup_plugin_manager()
 
         return func(*args, **kwargs)
 
@@ -242,12 +246,15 @@ def manifest(*args0, write=True, write_perf_info=False):
                 manifest = ManifestLoader.get_full_manifest(
                     runtime_config,
                     write_perf_info=write_perf_info,
-                    publications=ctx.obj.get("_publications"),
                 )
 
                 ctx.obj["manifest"] = manifest
                 if write and ctx.obj["flags"].write_json:
                     write_manifest(manifest, ctx.obj["runtime_config"].project_target_path)
+                    pm = get_plugin_manager()
+                    artifacts = pm.get_external_artifacts(manifest, runtime_config)
+                    for path, artifact in artifacts.items():
+                        artifact.write(path)
 
             return func(*args, **kwargs)
 
