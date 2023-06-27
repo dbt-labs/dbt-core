@@ -597,6 +597,7 @@ class ModelNode(CompiledNode):
             alias=args.identifier,
             deprecation_date=args.deprecation_date,
             checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
+            access=AccessType(args.access),
             original_file_path="",
             path="",
         )
