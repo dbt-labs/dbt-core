@@ -1251,7 +1251,7 @@ class DbtReferenceError(ParsingError):
     def get_message(self) -> str:
         return (
             f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
-            f"which is not allowed because the referenced node is {self.access} to the {self.scope} {self.scope_type}."
+            f"which is not allowed because the referenced node is {self.access} to the '{self.scope}' {self.scope_type}."
         )
 
 

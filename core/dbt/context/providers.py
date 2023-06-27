@@ -500,39 +500,22 @@ class RuntimeRefResolver(BaseRefResolver):
                 target_version=target_version,
                 disabled=isinstance(target_model, Disabled),
             )
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Private
-            # don't raise this reference error for ad hoc 'preview' queries
-            and self.model.resource_type != NodeType.SqlOperation
-            and self.model.resource_type != NodeType.RPCCall  # TODO: rm
-        ):
-            if not self.model.group or self.model.group != target_model.group:
-                raise DbtReferenceError(
-                    unique_id=self.model.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    access=AccessType.Private,
-                    scope=cast_to_str(target_model.group),
-                )
-        elif (
-            target_model.resource_type == NodeType.Model
-            and target_model.access == AccessType.Protected
-            # don't raise this reference error for ad hoc 'preview' queries
-            and self.model.resource_type != NodeType.SqlOperation
-            and self.model.resource_type != NodeType.RPCCall  # TODO: rm
-        ):
-            dependencies = self.config.dependencies or {}
-            target_dependency = dependencies.get(target_model.package_name)
-            restrict_package_access = (
-                target_dependency.restrict_access if target_dependency else False
+        elif self.manifest.is_invalid_private_ref(self.model, target_model):
+            raise DbtReferenceError(
+                unique_id=self.model.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Private,
+                scope=cast_to_str(target_model.group),
             )
-            if self.model.package_name != target_model.package_name and restrict_package_access:
-                raise DbtReferenceError(
-                    unique_id=self.model.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    access=AccessType.Protected,
-                    scope=target_model.package_name,
-                )
+        elif self.manifest.is_invalid_protected_ref(
+            self.model, target_model, self.config.dependencies
+        ):
+            raise DbtReferenceError(
+                unique_id=self.model.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Protected,
+                scope=target_model.package_name,
+            )
 
         self.validate(target_model, target_name, target_package, target_version)
         return self.create_relation(target_model)

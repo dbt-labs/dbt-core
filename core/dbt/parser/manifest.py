@@ -1473,35 +1473,20 @@ def _process_refs(
             )
 
             continue
-        elif (
-            isinstance(target_model, ModelNode)
-            and target_model.access == AccessType.Private
-            and node.resource_type != NodeType.SqlOperation
-            and node.resource_type != NodeType.RPCCall  # TODO: rm
-        ):
-            if not node.group or node.group != target_model.group:
-                raise dbt.exceptions.DbtReferenceError(
-                    unique_id=node.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    access=AccessType.Private,
-                    scope=dbt.utils.cast_to_str(target_model.group),
-                )
-        elif (
-            isinstance(target_model, ModelNode)
-            and target_model.access == AccessType.Protected
-            # don't raise this reference error for ad hoc 'preview' queries
-            and node.resource_type != NodeType.SqlOperation
-            and node.resource_type != NodeType.RPCCall  # TODO: rm
-        ):
-            dependency = dependencies.get(target_model.package_name)
-            restrict_package_access = dependency.restrict_access if dependency else False
-            if node.package_name != target_model.package_name and restrict_package_access:
-                raise dbt.exceptions.DbtReferenceError(
-                    unique_id=node.unique_id,
-                    ref_unique_id=target_model.unique_id,
-                    access=AccessType.Protected,
-                    scope=target_model.package_name,
-                )
+        elif manifest.is_invalid_private_ref(node, target_model):
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=node.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Private,
+                scope=dbt.utils.cast_to_str(target_model.group),
+            )
+        elif manifest.is_invalid_protected_ref(node, target_model, dependencies):
+            raise dbt.exceptions.DbtReferenceError(
+                unique_id=node.unique_id,
+                ref_unique_id=target_model.unique_id,
+                access=AccessType.Protected,
+                scope=target_model.package_name,
+            )
 
         target_model_id = target_model.unique_id
         node.depends_on.add_node(target_model_id)
