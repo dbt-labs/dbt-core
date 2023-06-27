@@ -11,11 +11,11 @@ from dbt.graph.graph import UniqueId  # noqa
 
 
 @dataclass
-class ExternalNodes:
+class PluginNodes:
     models: Dict[str, ModelNodeArgs] = field(default_factory=dict)
 
     def add_model(self, model_args: ModelNodeArgs) -> None:
         self.models[model_args.unique_id] = model_args
 
-    def update(self, other: "ExternalNodes"):
+    def update(self, other: "PluginNodes"):
         self.models.update(other.models)

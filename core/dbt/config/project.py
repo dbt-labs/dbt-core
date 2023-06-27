@@ -727,13 +727,6 @@ class Project:
         except ValidationError as e:
             raise ProjectContractBrokenError(e) from e
 
-    @classmethod
-    def partial_load(cls, project_root: str, *, verify_version: bool = False) -> PartialProject:
-        return PartialProject.from_project_root(
-            project_root,
-            verify_version=verify_version,
-        )
-
     # Called by:
     # RtConfig.load_dependencies => RtConfig.load_projects => RtConfig.new_project => Project.from_project_root
     # RtConfig.from_args => RtConfig.collect_parts => load_project => Project.from_project_root

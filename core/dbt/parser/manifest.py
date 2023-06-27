@@ -740,9 +740,9 @@ class ManifestLoader:
             manifest_nodes_modified = True
 
         # Inject any newly-available external nodes
-        pm = get_plugin_manager()
-        external_model_nodes = pm.get_external_nodes().models
-        for node_arg in external_model_nodes.values():
+        pm = get_plugin_manager(self.root_project)
+        plugin_model_nodes = pm.get_nodes().models
+        for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)
             # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
             if node.unique_id not in self.manifest.nodes:
