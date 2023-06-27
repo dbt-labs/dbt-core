@@ -417,7 +417,7 @@ class PartialParsing:
                 self._schedule_for_parsing(
                     "metrics", metric, metric.name, self.delete_schema_metric
                 )
-            elif unique_id in self.saved_manifest.metrics:
+            elif unique_id in self.saved_manifest.semantic_models:
                 semantic_model = self.saved_manifest.semantic_models[unique_id]
                 self._schedule_for_parsing(
                     "semantic_models",
