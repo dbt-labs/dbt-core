@@ -1475,7 +1475,8 @@ def _process_refs(manifest: Manifest, current_project: str, node) -> None:
                 raise dbt.exceptions.DbtReferenceError(
                     unique_id=node.unique_id,
                     ref_unique_id=target_model.unique_id,
-                    group=dbt.utils.cast_to_str(target_model.group),
+                    access=AccessType.Private,
+                    scope=dbt.utils.cast_to_str(target_model.group),
                 )
 
         target_model_id = target_model.unique_id

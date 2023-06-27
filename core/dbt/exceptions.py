@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.dataclass_schema import ValidationError
 from dbt.events.helpers import env_secrets, scrub_secrets
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, AccessType
 from dbt.ui import line_wrap_message
 
 import dbt.dataclass_schema
@@ -1240,16 +1240,18 @@ class SnapshopConfigError(ParsingError):
 
 
 class DbtReferenceError(ParsingError):
-    def __init__(self, unique_id: str, ref_unique_id: str, group: str):
+    def __init__(self, unique_id: str, ref_unique_id: str, access: AccessType, scope: str):
         self.unique_id = unique_id
         self.ref_unique_id = ref_unique_id
-        self.group = group
+        self.access = access
+        self.scope = scope
+        self.scope_type = "group" if self.access == AccessType.Private else "package"
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
         return (
             f"Node {self.unique_id} attempted to reference node {self.ref_unique_id}, "
-            f"which is not allowed because the referenced node is private to the {self.group} group."
+            f"which is not allowed because the referenced node is {self.access} to the {self.scope} {self.scope_type}."
         )
 
 

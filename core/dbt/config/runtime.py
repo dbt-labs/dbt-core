@@ -173,6 +173,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             config_version=project.config_version,
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
+            restrict_access=project.restrict_access,
             profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
