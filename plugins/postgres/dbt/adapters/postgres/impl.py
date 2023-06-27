@@ -20,7 +20,6 @@ from dbt.exceptions import (
 import dbt.utils
 
 
-# note that this isn't an adapter macro, so just a single underscore
 GET_RELATIONS_MACRO_NAME = "postgres__get_relations"
 
 
