@@ -23,6 +23,24 @@ semantic_models:
       - name: txn_revenue
         expr: revenue
         agg: sum
+      - name: sum_of_things
+        expr: 2
+        agg: sum
+      - name: has_revenue
+        expr: true
+        agg: sum_boolean
+      - name: discrete_order_value_p99
+        expr: order_total
+        agg: percentile
+        agg_params:
+          percentile: 0.99
+          use_discrete_percentile: True
+          use_approximate_percentile: False
+      - name: test_agg_params_optional_are_empty
+        expr: order_total
+        agg: percentile
+        agg_params:
+          percentile: 0.99
 
     dimensions:
       - name: ds
@@ -58,13 +76,14 @@ class TestSemanticModelParsing:
         assert result.success
         assert isinstance(result.result, Manifest)
         manifest = result.result
-        assert len(manifest.semantic_nodes) == 1
-        semantic_model = manifest.semantic_nodes["semanticmodel.test.revenue"]
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semanticmodel.test.revenue"]
         assert semantic_model.node_relation.alias == "fct_revenue"
         assert (
             semantic_model.node_relation.relation_name
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
+        assert len(semantic_model.measures) == 5
 
     @pytest.mark.skip("Restore this test when partial parsing is implemented.")
     def test_semantic_model_partial_parsing(self, project):
@@ -83,5 +102,5 @@ class TestSemanticModelParsing:
 
         # Finally, verify that the manifest reflects the partially parsed change
         manifest = result.result
-        semantic_model = manifest.semantic_nodes["semanticmodel.test.revenue"]
+        semantic_model = manifest.semantic_models["semanticmodel.test.revenue"]
         assert semantic_model.dimensions[0].type_params.time_granularity == TimeGranularity.WEEK

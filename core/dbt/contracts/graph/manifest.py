@@ -701,7 +701,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     disabled: MutableMapping[str, List[GraphMemberNode]] = field(default_factory=dict)
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
     publications: MutableMapping[str, PublicationConfig] = field(default_factory=dict)
-    semantic_nodes: MutableMapping[str, SemanticModel] = field(default_factory=dict)
+    semantic_models: MutableMapping[str, SemanticModel] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -753,8 +753,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
             "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
             "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
-            "semantic_nodes": {
-                k: v.to_dict(omit_none=False) for k, v in self.semantic_nodes.items()
+            "semantic_models": {
+                k: v.to_dict(omit_none=False) for k, v in self.semantic_models.items()
             },
         }
 
@@ -816,7 +816,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.nodes.values(),
             self.sources.values(),
             self.metrics.values(),
-            self.semantic_nodes.values(),
+            self.semantic_models.values(),
         )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
@@ -852,7 +852,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
             publications={k: _deepcopy(v) for k, v in self.publications.items()},
-            semantic_nodes={k: _deepcopy(v) for k, v in self.semantic_nodes.items()},
+            semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
         )
         copy.build_flat_graph()
         return copy
@@ -864,7 +864,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 self.sources.values(),
                 self.exposures.values(),
                 self.metrics.values(),
-                self.semantic_nodes.values(),
+                self.semantic_models.values(),
             )
         )
         forward_edges, backward_edges = build_node_edges(edge_members)
@@ -911,7 +911,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             child_map=self.child_map,
             parent_map=self.parent_map,
             group_map=self.group_map,
-            semantic_nodes=self.semantic_nodes,
+            semantic_models=self.semantic_models,
         )
 
     def write(self, path):
@@ -928,8 +928,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.exposures[unique_id]
         elif unique_id in self.metrics:
             return self.metrics[unique_id]
-        elif unique_id in self.semantic_nodes:
-            return self.semantic_nodes[unique_id]
+        elif unique_id in self.semantic_models:
+            return self.semantic_models[unique_id]
         else:
             # something terrible has happened
             raise dbt.exceptions.DbtInternalError(
@@ -988,7 +988,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
         pydantic_semantic_manifest = PydanticSemanticManifest(metrics=[], semantic_models=[])
 
-        for semantic_model in self.semantic_nodes.values():
+        for semantic_model in self.semantic_models.values():
             pydantic_semantic_manifest.semantic_models.append(
                 PydanticSemanticModel.parse_obj(semantic_model.to_dict())
             )
@@ -1267,9 +1267,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.docs.append(doc.unique_id)
 
     def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: SemanticModel):
-        _check_duplicates(semantic_model, self.semantic_nodes)
-        self.semantic_nodes[semantic_model.unique_id] = semantic_model
-        source_file.semantic_nodes.append(semantic_model.unique_id)
+        _check_duplicates(semantic_model, self.semantic_models)
+        self.semantic_models[semantic_model.unique_id] = semantic_model
+        source_file.semantic_models.append(semantic_model.unique_id)
 
     # end of methods formerly in ParseResult
 
@@ -1298,7 +1298,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.disabled,
             self.env_vars,
             self.publications,
-            self.semantic_nodes,
+            self.semantic_models,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1368,7 +1368,7 @@ class WritableManifest(ArtifactMixin):
             description="A mapping from group names to their nodes",
         )
     )
-    semantic_nodes: Mapping[UniqueID, SemanticModel] = field(
+    semantic_models: Mapping[UniqueID, SemanticModel] = field(
         metadata=dict(description=("The semantic models defined in the dbt project"))
     )
     metadata: ManifestMetadata = field(
