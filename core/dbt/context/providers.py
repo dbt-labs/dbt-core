@@ -1367,20 +1367,26 @@ class ModelContext(ProviderContext):
     @contextproperty
     def sql(self) -> Optional[str]:
         # only doing this in sql model for backward compatible
-        if (
-            getattr(self.model, "extra_ctes_injected", None)
-            and self.model.language == ModelLanguage.sql  # type: ignore[union-attr]
-        ):
-            # TODO CT-211
-            return self.model.compiled_code  # type: ignore[union-attr]
-        return None
+        if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
+            if getattr(self.model, "defer_relation", None):
+                return f"select * from {self.model.defer_relation.database}.{self.model.defer_relation.schema}.{self.model.defer_relation.alias}"  # type: ignore[union-attr]
+            elif getattr(self.model, "extra_ctes_injected", None):
+                # TODO CT-211
+                return self.model.compiled_code  # type: ignore[union-attr]
+            else:
+                return None
+        else:
+            return None
 
     @contextproperty
     def compiled_code(self) -> Optional[str]:
-        if getattr(self.model, "extra_ctes_injected", None):
+        if getattr(self.model, "defer_relation", None):
+            return f"select * from {self.model.defer_relation.database}.{self.model.defer_relation.schema}.{self.model.defer_relation.alias}"  # type: ignore[union-attr]
+        elif getattr(self.model, "extra_ctes_injected", None):
             # TODO CT-211
             return self.model.compiled_code  # type: ignore[union-attr]
-        return None
+        else:
+            return None
 
     @contextproperty
     def database(self) -> str:

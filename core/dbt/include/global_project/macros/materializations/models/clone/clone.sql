@@ -46,11 +46,6 @@
 
       {%- set target_relation = this.incorporate(type='view') -%}
 
-      {%- do context.update({
-          'sql': get_clone_target(defer_relation),
-          'compiled_code': get_clone_target(defer_relation)
-      }) -%}
-
       -- reuse the view materialization
       -- TODO: support actual dispatch for materialization macros
       {% set search_name = "materialization_view_" ~ adapter.type() %}
